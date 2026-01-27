@@ -1,0 +1,42 @@
+name: 'Warden'
+description: 'Event-driven agent that analyzes GitHub PRs using Claude Code SDK'
+author: 'Functional Software, Inc.'
+
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  anthropic-api-key:
+    description: 'Anthropic API key for Claude Code SDK'
+    required: true
+  github-token:
+    description: 'GitHub token for API access (defaults to GITHUB_TOKEN)'
+    required: false
+    default: ${{ github.token }}
+  config-path:
+    description: 'Path to warden.toml config file (relative to repo root)'
+    required: false
+    default: 'warden.toml'
+  fail-on-findings:
+    description: 'Fail the action if findings with high/critical severity are found'
+    required: false
+    default: 'true'
+  max-findings:
+    description: 'Maximum number of findings to report (0 for unlimited)'
+    required: false
+    default: '50'
+
+outputs:
+  findings-count:
+    description: 'Total number of findings'
+  critical-count:
+    description: 'Number of critical severity findings'
+  high-count:
+    description: 'Number of high severity findings'
+  summary:
+    description: 'Summary of the analysis'
+
+runs:
+  using: 'node24'
+  main: 'dist/action/main.js'

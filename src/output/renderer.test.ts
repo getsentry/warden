@@ -39,13 +39,12 @@ describe('renderSkillReport', () => {
     const result = renderSkillReport(report);
 
     expect(result.review).toBeDefined();
-    const review = result.review;
-    if (!review) throw new Error('Expected review to be defined');
+    const review = result.review!;
     expect(review.event).toBe('REQUEST_CHANGES');
     expect(review.comments).toHaveLength(1);
-    expect(review.comments[0].path).toBe('src/db.ts');
-    expect(review.comments[0].line).toBe(45);
-    expect(review.comments[0].body).toContain('SQL Injection');
+    expect(review.comments[0]!.path).toBe('src/db.ts');
+    expect(review.comments[0]!.line).toBe(45);
+    expect(review.comments[0]!.body).toContain('SQL Injection');
   });
 
   it('renders suggested fixes as GitHub suggestions', () => {
@@ -75,10 +74,9 @@ describe('renderSkillReport', () => {
 
     const result = renderSkillReport(report);
 
-    const review = result.review;
-    if (!review) throw new Error('Expected review to be defined');
-    expect(review.comments[0].body).toContain('```suggestion');
-    expect(review.comments[0].body).toContain(
+    const review = result.review!;
+    expect(review.comments[0]!.body).toContain('```suggestion');
+    expect(review.comments[0]!.body).toContain(
       'const query = "SELECT * FROM users WHERE id = ?";'
     );
   });
@@ -168,9 +166,8 @@ describe('renderSkillReport', () => {
 
     const result = renderSkillReport(report);
 
-    const review = result.review;
-    if (!review) throw new Error('Expected review to be defined');
-    expect(review.comments[0].body).toContain('Critical Issue');
+    const review = result.review!;
+    expect(review.comments[0]!.body).toContain('Critical Issue');
   });
 
   it('requests changes for critical/high severity', () => {
@@ -216,12 +213,9 @@ describe('renderSkillReport', () => {
     const criticalResult = renderSkillReport(criticalReport);
     const highResult = renderSkillReport(highReport);
     const mediumResult = renderSkillReport(mediumReport);
-    if (!criticalResult.review) throw new Error('Expected review');
-    if (!highResult.review) throw new Error('Expected review');
-    if (!mediumResult.review) throw new Error('Expected review');
-    expect(criticalResult.review.event).toBe('REQUEST_CHANGES');
-    expect(highResult.review.event).toBe('REQUEST_CHANGES');
-    expect(mediumResult.review.event).toBe('COMMENT');
+    expect(criticalResult.review!.event).toBe('REQUEST_CHANGES');
+    expect(highResult.review!.event).toBe('REQUEST_CHANGES');
+    expect(mediumResult.review!.event).toBe('COMMENT');
   });
 
   it('respects maxFindings option', () => {
@@ -238,9 +232,7 @@ describe('renderSkillReport', () => {
 
     const result = renderSkillReport(report, { maxFindings: 3 });
 
-    const review = result.review;
-    if (!review) throw new Error('Expected review to be defined');
-    expect(review.comments).toHaveLength(3);
+    expect(result.review!.comments).toHaveLength(3);
   });
 
   it('handles findings without location', () => {
