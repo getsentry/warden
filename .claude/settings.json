@@ -1,0 +1,58 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(pwd:*)",
+      "Bash(find:*)",
+      "Bash(file:*)",
+      "Bash(stat:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(cat:*)",
+      "Bash(tree:*)",
+
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote:*)",
+      "Bash(git tag:*)",
+      "Bash(git stash list:*)",
+      "Bash(git rev-parse:*)",
+
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run logs:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
+
+      "Bash(node --version:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm why:*)",
+      "Bash(tsc --version:*)",
+
+      "Skill(sentry-skills:commit)",
+      "Skill(sentry-skills:create-pr)",
+      "Skill(sentry-skills:code-review)",
+      "Skill(sentry-skills:find-bugs)",
+      "Skill(sentry-skills:iterate-pr)",
+      "Skill(sentry-skills:claude-settings-audit)",
+      "Skill(sentry-skills:agents-md)",
+      "Skill(sentry-skills:brand-guidelines)",
+
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:cli.github.com)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:npmjs.com)"
+    ],
+    "deny": []
+  }
+}
