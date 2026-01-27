@@ -14,3 +14,6 @@ Co-Authored-By: (the agent model's name and attribution byline)
 - Zod for runtime validation
 - ESM modules (`"type": "module"`)
 - Vitest for testing
+
+## Task Management
+Use `/dex` to break down complex work, track progress across sessions, and coordinate multi-step implementations.

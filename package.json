@@ -1,0 +1,55 @@
+{
+  "name": "warden",
+  "version": "0.1.0",
+  "description": "Event-driven agent that reacts to GitHub events and executes skills via Claude Code SDK",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix"
+    ]
+  },
+  "keywords": [
+    "github",
+    "automation",
+    "claude",
+    "ai",
+    "code-review",
+    "security"
+  ],
+  "author": "Functional Software, Inc.",
+  "license": "FSL-1.1-ALv2",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.0",
+    "@octokit/rest": "^21.0.0",
+    "smol-toml": "^1.6.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "simple-git-hooks": "^2.11.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
