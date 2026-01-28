@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import Terminal from '../components/Terminal.astro';
+import PackageManagerTabs from '../components/PackageManagerTabs.astro';
 import { Code } from 'astro:components';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -20,19 +21,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <div class="step">
       <h3>Install</h3>
       <p>Install the CLI globally.</p>
-      <Terminal title="Terminal" showCopy={true}>
-        <Code
-          code="npm install -g @sentry/warden"
-          lang="bash"
-          theme="vitesse-black"
-        />
-      </Terminal>
+      <PackageManagerTabs
+        npm="npm install -g @sentry/warden"
+        pnpm="pnpm add -g @sentry/warden"
+        bun="bun add -g @sentry/warden"
+      />
     </div>
 
     <div class="step">
       <h3>Initialize</h3>
       <p>Scaffold your project with config and GitHub workflow.</p>
-      <Terminal title="Terminal" showCopy={false}>
+      <Terminal showCopy={false}>
         <pre class="cli-output"><span class="cli-dim">$</span> warden init
 
 <span class="cli-green">Created</span> warden.toml
@@ -47,21 +46,19 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
 
     <div class="step">
-      <h3>Add a Skill</h3>
+      <h3>Add some skills</h3>
       <p>Install a skill from the community. Vercel's React best practices is a great start.</p>
-      <Terminal title="Terminal" showCopy={true}>
-        <Code
-          code="npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-best-practices"
-          lang="bash"
-          theme="vitesse-black"
-        />
-      </Terminal>
+      <PackageManagerTabs
+        npm="npx skills add vercel-labs/agent-skills --skill vercel-react-best-practices"
+        pnpm="pnpx skills add vercel-labs/agent-skills --skill vercel-react-best-practices"
+        bun="bunx skills add vercel-labs/agent-skills --skill vercel-react-best-practices"
+      />
     </div>
 
     <div class="step">
       <h3>Run Locally</h3>
       <p>Catch issues before you push. Fix them immediately.</p>
-      <Terminal title="Terminal" showCopy={false}>
+      <Terminal showCopy={false}>
         <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill vercel-react-best-practices
 
 Analyzing changes from <span class="cli-cyan">HEAD</span>...

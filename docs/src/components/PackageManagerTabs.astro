@@ -1,0 +1,174 @@
+---
+interface Props {
+  npm: string;
+  pnpm: string;
+  bun: string;
+}
+
+const { npm, pnpm, bun } = Astro.props;
+---
+
+<div class="pm-tabs">
+  <div class="terminal">
+    <div class="terminal-header">
+      <div class="terminal-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="tab-buttons">
+        <button class="tab-btn active" data-pm="npm">npm</button>
+        <button class="tab-btn" data-pm="pnpm">pnpm</button>
+        <button class="tab-btn" data-pm="bun">bun</button>
+      </div>
+      <button class="copy-button" aria-label="Copy to clipboard">
+        <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </button>
+    </div>
+    <div class="terminal-body">
+      <pre class="tab-content cli-output" data-pm="npm"><span class="cli-dim">$</span> {npm}</pre>
+      <pre class="tab-content cli-output hidden" data-pm="pnpm"><span class="cli-dim">$</span> {pnpm}</pre>
+      <pre class="tab-content cli-output hidden" data-pm="bun"><span class="cli-dim">$</span> {bun}</pre>
+    </div>
+  </div>
+</div>
+
+<style>
+  .pm-tabs {
+    margin: 1.5rem 0;
+  }
+
+  .terminal {
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      0 20px 50px -10px rgba(0, 0, 0, 0.7);
+    position: relative;
+  }
+
+  .terminal-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #0a0a0a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 8px;
+  }
+
+  .terminal-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .dot.red {
+    background: #ff5f57;
+  }
+
+  .dot.yellow {
+    background: #febc2e;
+  }
+
+  .dot.green {
+    background: #28c840;
+  }
+
+  .tab-buttons {
+    display: flex;
+    gap: 2px;
+    margin-left: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    padding: 2px;
+  }
+
+  .tab-btn {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: #888;
+    background: transparent;
+    border: none;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+  }
+
+  .tab-btn:hover {
+    color: #ccc;
+  }
+
+  .tab-btn.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  .copy-button {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+  }
+
+  .copy-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
+  .copy-button .check-icon {
+    display: none;
+  }
+
+  .copy-button.copied {
+    border-color: #4ade80;
+    color: #4ade80;
+  }
+
+  .copy-button.copied .copy-icon {
+    display: none;
+  }
+
+  .copy-button.copied .check-icon {
+    display: block;
+  }
+
+  .terminal-body {
+    padding: 1rem 1.25rem;
+  }
+
+  /* Override global pre styles */
+  .terminal-body pre {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .tab-content.hidden {
+    display: none;
+  }
+</style>

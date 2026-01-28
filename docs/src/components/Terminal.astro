@@ -41,8 +41,21 @@ const { title, showCopy = false } = Astro.props;
       if (!button || !body) return;
 
       button.addEventListener('click', async () => {
-        // Extract text content from the terminal body
-        const content = body.textContent || '';
+        // Get only visible text content (respects display: none)
+        function getVisibleText(element: Element): string {
+          if (getComputedStyle(element).display === 'none') return '';
+          let text = '';
+          for (const node of element.childNodes) {
+            if (node.nodeType === Node.TEXT_NODE) {
+              text += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              text += getVisibleText(node as Element);
+            }
+          }
+          return text;
+        }
+
+        const content = getVisibleText(body);
 
         // Split into lines and process each line
         const lines = content.split('\n');
@@ -168,11 +181,6 @@ const { title, showCopy = false } = Astro.props;
 
   .terminal-body {
     padding: 1rem 1.25rem;
-    font-weight: 400;
-    letter-spacing: 0;
-    font-feature-settings: normal;
-    font-variant-ligatures: none;
-    overflow: hidden;
   }
 
   .terminal-body :global(pre),
@@ -183,7 +191,6 @@ const { title, showCopy = false } = Astro.props;
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
-    overflow: hidden !important;
   }
 
   .terminal-body :global(code) {
