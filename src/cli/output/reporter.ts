@@ -9,6 +9,7 @@ import {
   formatFindingCountsPlain,
   countBySeverity,
 } from './formatters.js';
+import { BoxRenderer } from './box.js';
 
 const VERSION = '0.1.0';
 
@@ -257,5 +258,41 @@ export class Reporter {
       return;
     }
     this.log('');
+  }
+
+  /**
+   * Render an empty state box (e.g., "No changes found").
+   */
+  renderEmptyState(message: string, tip?: string): void {
+    if (this.verbosity === Verbosity.Quiet) {
+      console.log(message);
+      return;
+    }
+
+    if (this.mode.isTTY) {
+      const box = new BoxRenderer({
+        title: 'warden',
+        mode: this.mode,
+      });
+
+      box.header();
+      box.blank();
+      box.content(`${chalk.yellow(figures.warning)}  ${message}`);
+      if (tip) {
+        box.blank();
+        box.content(chalk.dim(`Tip: ${tip}`));
+      }
+      box.blank();
+      box.footer();
+
+      for (const line of box.render()) {
+        this.log(line);
+      }
+    } else {
+      this.logCI(`WARN: ${message}`);
+      if (tip) {
+        this.logCI(`Tip: ${tip}`);
+      }
+    }
   }
 }

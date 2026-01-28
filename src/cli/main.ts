@@ -286,7 +286,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
 
   if (pullRequest.files.length === 0) {
     if (!options.json) {
-      reporter.warning('No changes found');
+      reporter.renderEmptyState('No changes found');
       reporter.blank();
     } else {
       console.log(renderJsonReport([]));
@@ -343,10 +343,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   if (pullRequest.files.length === 0) {
     if (!options.json) {
-      reporter.warning('No changes found');
-      if (!hasUncommittedChanges(repoPath)) {
-        reporter.tip('Specify a git ref: warden HEAD~3 --skill <name>');
-      }
+      const tip = !hasUncommittedChanges(repoPath)
+        ? 'Specify a git ref: warden HEAD~3 --skill <name>'
+        : undefined;
+      reporter.renderEmptyState('No changes found', tip);
       reporter.blank();
     } else {
       console.log(renderJsonReport([]));
