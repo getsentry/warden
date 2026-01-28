@@ -2,6 +2,7 @@ export { Verbosity, parseVerbosity } from './verbosity.js';
 export { type OutputMode, detectOutputMode, timestamp } from './tty.js';
 export { Reporter, type SkillRunnerCallbacks } from './reporter.js';
 export {
+  pluralize,
   formatDuration,
   formatElapsed,
   formatSeverityBadge,

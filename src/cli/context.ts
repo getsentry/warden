@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import type { EventContext, FileChange } from '../types/index.js';
+import { pluralize } from './output/index.js';
 import { expandAndCreateFileChanges } from './files.js';
 import {
   getChangedFilesWithPatches,
@@ -100,7 +101,7 @@ export async function buildFileEventContext(options: FileContextOptions): Promis
     pullRequest: {
       number: 0,
       title: 'File analysis',
-      body: `Analyzing ${files.length} file(s)`,
+      body: `Analyzing ${files.length} ${pluralize(files.length, 'file')}`,
       author: 'local',
       baseBranch: 'main',
       headBranch: 'file-analysis',

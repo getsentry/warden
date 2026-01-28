@@ -3,6 +3,18 @@ import figures from 'figures';
 import type { Severity, Finding, FileChange, UsageStats } from '../../types/index.js';
 
 /**
+ * Pluralize a word based on count.
+ * @example pluralize(1, 'file') // 'file'
+ * @example pluralize(2, 'file') // 'files'
+ * @example pluralize(1, 'fix', 'fixes') // 'fix'
+ * @example pluralize(2, 'fix', 'fixes') // 'fixes'
+ */
+export function pluralize(count: number, singular: string, plural?: string): string {
+  if (count === 1) return singular;
+  return plural ?? `${singular}s`;
+}
+
+/**
  * Format a duration in milliseconds to a human-readable string.
  */
 export function formatDuration(ms: number): string {

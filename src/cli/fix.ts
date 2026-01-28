@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import figures from 'figures';
 import type { Finding, SkillReport } from '../types/index.js';
 import { parsePatch, type DiffHunk } from '../diff/index.js';
-import type { Reporter } from './output/index.js';
+import { pluralize, type Reporter } from './output/index.js';
 import { Verbosity } from './output/verbosity.js';
 
 export interface FixResult {
@@ -250,7 +250,7 @@ export async function runInteractiveFixFlow(
   // Ask if user wants to apply fixes
   reporter.blank();
   const shouldProceed = await promptYN(
-    chalk.bold(`${findings.length} fix(es) available. Apply fixes? [y/N] `)
+    chalk.bold(`${findings.length} ${pluralize(findings.length, 'fix', 'fixes')} available. Apply fixes? [y/N] `)
   );
 
   if (!shouldProceed) {

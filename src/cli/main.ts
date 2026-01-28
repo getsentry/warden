@@ -18,6 +18,7 @@ import {
   parseVerbosity,
   Verbosity,
   runSkillTasks,
+  pluralize,
   type SkillTaskOptions,
 } from './output/index.js';
 import {
@@ -92,7 +93,7 @@ async function runSkills(
       reporter.error('No built-in skills found');
       return 1;
     }
-    reporter.success(`Found ${skillNames.length} skill(s): ${skillNames.join(', ')}`);
+    reporter.success(`Found ${skillNames.length} ${pluralize(skillNames.length, 'skill')}: ${skillNames.join(', ')}`);
     reporter.blank();
   }
 
@@ -143,7 +144,7 @@ async function runSkills(
       if (result.failOn && shouldFail(result.report, result.failOn)) {
         hasFailure = true;
         const count = countFindingsAtOrAbove(result.report, result.failOn);
-        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity issue(s)`);
+        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
       }
     }
   }
@@ -221,7 +222,7 @@ async function runFileMode(filePatterns: string[], options: CLIOptions, reporter
     return 0;
   }
 
-  reporter.success(`Found ${pullRequest.files.length} file(s)`);
+  reporter.success(`Found ${pullRequest.files.length} ${pluralize(pullRequest.files.length, 'file')}`);
   reporter.contextFiles(pullRequest.files);
 
   return runSkills(context, options, reporter);
@@ -366,7 +367,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Load config
   reporter.step('Loading configuration...');
   const config = loadWardenConfig(dirname(configPath));
-  reporter.success(`Loaded ${config.triggers.length} trigger(s)`);
+  reporter.success(`Loaded ${config.triggers.length} ${pluralize(config.triggers.length, 'trigger')}`);
 
   // Resolve triggers with defaults and match
   const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
@@ -391,7 +392,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 0;
   }
 
-  reporter.success(`${triggersToRun.length} trigger(s) matched`);
+  reporter.success(`${triggersToRun.length} ${pluralize(triggersToRun.length, 'trigger')} matched`);
   reporter.blank();
 
   // Check for API key
@@ -431,7 +432,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       if (result.failOn && shouldFail(result.report, result.failOn)) {
         hasFailure = true;
         const count = countFindingsAtOrAbove(result.report, result.failOn);
-        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity issue(s)`);
+        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
       }
     }
   }
