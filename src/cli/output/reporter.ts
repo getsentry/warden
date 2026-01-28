@@ -76,7 +76,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log('');
       for (const line of LOGO.split('\n')) {
-        this.log(chalk.cyan(line));
+        this.log(chalk.dim(line));
       }
       this.log(chalk.dim(`v${VERSION}`));
       this.log('');
