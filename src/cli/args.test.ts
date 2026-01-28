@@ -168,6 +168,34 @@ describe('parseCliArgs', () => {
     const result = parseCliArgs([]);
     expect(result.options.fix).toBe(false);
   });
+
+  it('parses add command', () => {
+    const result = parseCliArgs(['add']);
+    expect(result.command).toBe('add');
+  });
+
+  it('parses add command with skill argument', () => {
+    const result = parseCliArgs(['add', 'security-review']);
+    expect(result.command).toBe('add');
+    expect(result.options.skill).toBe('security-review');
+  });
+
+  it('parses add --list flag', () => {
+    const result = parseCliArgs(['add', '--list']);
+    expect(result.command).toBe('add');
+    expect(result.options.list).toBe(true);
+  });
+
+  it('parses add -l flag', () => {
+    const result = parseCliArgs(['add', '-l']);
+    expect(result.command).toBe('add');
+    expect(result.options.list).toBe(true);
+  });
+
+  it('defaults list to false', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.list).toBe(false);
+  });
 });
 
 describe('CLIOptionsSchema', () => {

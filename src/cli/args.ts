@@ -20,12 +20,14 @@ export const CLIOptionsSchema = z.object({
   fix: z.boolean().default(false),
   /** Overwrite existing files (for init command) */
   force: z.boolean().default(false),
+  /** List available skills (for add command) */
+  list: z.boolean().default(false),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'version';
+  command: 'run' | 'help' | 'init' | 'add' | 'version';
   options: CLIOptions;
 }
 
@@ -42,6 +44,7 @@ Analyze code for security issues and code quality.
 
 Commands:
   init                 Initialize warden.toml and GitHub workflow
+  add [skill]          Add a skill trigger to warden.toml
   (default)            Run analysis on targets or using warden.toml triggers
 
 Targets:
@@ -69,9 +72,15 @@ Init Options:
   -f, --force          Overwrite existing files
   --skill <name>       Default skill to configure (default: security-review)
 
+Add Options:
+  --list               List available skills
+
 Examples:
   warden init                             # Initialize warden configuration
   warden init --skill code-simplifier     # Initialize with specific skill
+  warden add                              # Interactive skill selection
+  warden add security-review              # Add specific skill trigger
+  warden add --list                       # List available skills
   warden                                  # Run triggers from warden.toml
   warden src/auth.ts                      # Run all skills on file
   warden src/auth.ts --skill security-review
@@ -163,6 +172,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'fail-on': { type: 'string' },
       fix: { type: 'boolean', default: false },
       force: { type: 'boolean', short: 'f', default: false },
+      list: { type: 'boolean', short: 'l', default: false },
       parallel: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'V', default: false },
@@ -189,7 +199,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
   // Filter out known commands from positionals
   const targets = positionals.filter(
-    (p) => p !== 'run' && p !== 'help' && p !== 'init' && p !== 'version'
+    (p) => p !== 'run' && p !== 'help' && p !== 'init' && p !== 'add' && p !== 'version'
   );
 
   // Handle explicit help command
@@ -223,6 +233,31 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       options: CLIOptionsSchema.parse({
         force: values.force,
         skill: values.skill,
+        quiet: values.quiet,
+        color: colorOption,
+      }),
+    };
+  }
+
+  // Handle add command
+  if (positionals.includes('add')) {
+    // Handle --color / --no-color
+    let colorOption: boolean | undefined;
+    if (values['no-color']) {
+      colorOption = false;
+    } else if (values.color) {
+      colorOption = true;
+    }
+
+    // First positional after 'add' is the skill name
+    const addIndex = positionals.indexOf('add');
+    const skillArg = positionals[addIndex + 1];
+
+    return {
+      command: 'add',
+      options: CLIOptionsSchema.parse({
+        skill: skillArg,
+        list: values.list,
         quiet: values.quiet,
         color: colorOption,
       }),

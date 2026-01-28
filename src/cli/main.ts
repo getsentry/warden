@@ -27,6 +27,7 @@ import {
   renderFixSummary,
 } from './fix.js';
 import { runInit } from './commands/init.js';
+import { runAdd } from './commands/add.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -535,6 +536,8 @@ export async function main(): Promise<void> {
 
   if (command === 'init') {
     exitCode = await runInit(options, reporter);
+  } else if (command === 'add') {
+    exitCode = await runAdd(options, reporter);
   } else {
     exitCode = await runCommand(options, reporter);
   }

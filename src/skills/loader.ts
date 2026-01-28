@@ -273,6 +273,48 @@ export async function getBuiltinSkillNames(): Promise<string[]> {
 }
 
 /**
+ * A discovered skill with source metadata.
+ */
+export interface DiscoveredSkill {
+  skill: SkillDefinition;
+  /** Relative directory path where the skill was found (e.g., "./.agents/skills") */
+  directory: string;
+  /** Full path to the skill */
+  path: string;
+}
+
+/**
+ * Discover all available skills from conventional directories.
+ *
+ * @param repoRoot - Repository root path for finding skills
+ * @returns Map of skill name to discovered skill info
+ */
+export async function discoverAllSkills(repoRoot?: string): Promise<Map<string, DiscoveredSkill>> {
+  const result = new Map<string, DiscoveredSkill>();
+
+  if (!repoRoot) {
+    return result;
+  }
+
+  // Scan conventional directories for skills
+  for (const dir of SKILL_DIRECTORIES) {
+    const dirPath = join(repoRoot, dir);
+    if (!existsSync(dirPath)) continue;
+
+    const skills = await loadSkillsFromDirectory(dirPath);
+    for (const [name, skill] of skills) {
+      result.set(name, {
+        skill,
+        directory: `./${dir}`,
+        path: join(dirPath, name),
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Resolve a skill by name or path.
  *
  * Resolution order:
