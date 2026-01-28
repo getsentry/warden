@@ -38,8 +38,14 @@ npx warden --fix
 ```
 
 This creates:
-- `warden.toml` — Configuration with the security-review skill
+- `warden.toml` — Configuration file for triggers
 - `.github/workflows/warden.yml` — GitHub Action for automated PR reviews
+
+Then add a skill:
+
+```bash
+npx warden add security-review
+```
 
 Add `ANTHROPIC_API_KEY` to your repository secrets, commit the files, and open a PR to see it in action.
 
@@ -51,9 +57,6 @@ npx warden src/auth.ts --skill security-review
 
 # Run on git changes
 npx warden HEAD~3
-
-# Initialize with a different default skill
-npx warden init --skill code-simplifier
 ```
 
 ## Configuration
@@ -123,7 +126,6 @@ Options:
 
 Init Options:
   --force              Overwrite existing files
-  --skill <name>       Default skill to configure (default: security-review)
 ```
 
 ## When to Use CLI vs Action

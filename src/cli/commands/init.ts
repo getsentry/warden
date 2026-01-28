@@ -2,21 +2,14 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import { getRepoRoot, getGitHubRepoUrl } from '../git.js';
-import { getBuiltinSkillNames } from '../../skills/loader.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
 
 /**
  * Template for warden.toml configuration file.
  */
-function generateWardenToml(skill: string): string {
+function generateWardenToml(): string {
   return `version = 1
-
-[[triggers]]
-name = "${skill}"
-event = "pull_request"
-actions = ["opened", "synchronize", "reopened"]
-skill = "${skill}"
 `;
 }
 
@@ -59,7 +52,6 @@ function checkExistingFiles(repoRoot: string): {
 
 export interface InitOptions {
   force: boolean;
-  skill?: string;
 }
 
 /**
@@ -80,17 +72,6 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   // Check for existing files
   const existing = checkExistingFiles(repoRoot);
 
-  // Determine skill (default to security-review)
-  const skill = options.skill ?? 'security-review';
-
-  // Validate skill exists (warn if not a builtin)
-  const builtinSkills = await getBuiltinSkillNames();
-  if (!builtinSkills.includes(skill)) {
-    reporter.warning(
-      `'${skill}' is not a built-in skill. Available: ${builtinSkills.join(', ')}`
-    );
-  }
-
   let filesCreated = 0;
 
   // Create warden.toml
@@ -98,7 +79,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   if (existing.hasWardenToml && !options.force) {
     reporter.skipped(relative(cwd, wardenTomlPath), 'already exists');
   } else {
-    const content = generateWardenToml(skill);
+    const content = generateWardenToml();
     writeFileSync(wardenTomlPath, content, 'utf-8');
     reporter.created(relative(cwd, wardenTomlPath));
     filesCreated++;
@@ -130,8 +111,9 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   // Print next steps
   reporter.blank();
   reporter.bold('Next steps:');
-  reporter.text(`  1. Set ${chalk.cyan('ANTHROPIC_API_KEY')} in .env.local`);
-  reporter.text(`  2. Add ${chalk.cyan('ANTHROPIC_API_KEY')} to repository secrets`);
+  reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
+  reporter.text(`  2. Set ${chalk.cyan('ANTHROPIC_API_KEY')} in .env.local`);
+  reporter.text(`  3. Add ${chalk.cyan('ANTHROPIC_API_KEY')} to repository secrets`);
 
   // Show GitHub secrets URL if available
   const githubUrl = getGitHubRepoUrl(repoRoot);
@@ -139,7 +121,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     reporter.text(`     ${chalk.dim(githubUrl + '/settings/secrets/actions')}`);
   }
 
-  reporter.text('  3. Commit and open a PR to test');
+  reporter.text('  4. Commit and open a PR to test');
 
   return 0;
 }

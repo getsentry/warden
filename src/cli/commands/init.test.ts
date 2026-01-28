@@ -60,8 +60,6 @@ describe('init command', () => {
 
       const content = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
       expect(content).toContain('version = 1');
-      expect(content).toContain('skill = "security-review"');
-      expect(content).toContain('event = "pull_request"');
     });
 
     it('creates workflow with correct content', async () => {
@@ -73,25 +71,6 @@ describe('init command', () => {
       expect(content).toContain('pull_request');
       expect(content).toContain('ANTHROPIC_API_KEY');
       expect(content).toContain('getsentry/warden@main');
-    });
-  });
-
-  describe('skill option', () => {
-    it('uses specified skill in config', async () => {
-      const reporter = createMockReporter();
-      await runInit(createOptions({ skill: 'code-simplifier' }), reporter);
-
-      const content = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
-      expect(content).toContain('skill = "code-simplifier"');
-      expect(content).toContain('name = "code-simplifier"');
-    });
-
-    it('defaults to security-review skill', async () => {
-      const reporter = createMockReporter();
-      await runInit(createOptions(), reporter);
-
-      const content = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
-      expect(content).toContain('skill = "security-review"');
     });
   });
 

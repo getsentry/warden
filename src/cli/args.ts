@@ -70,14 +70,12 @@ Options:
 
 Init Options:
   -f, --force          Overwrite existing files
-  --skill <name>       Default skill to configure (default: security-review)
 
 Add Options:
   --list               List available skills
 
 Examples:
   warden init                             # Initialize warden configuration
-  warden init --skill code-simplifier     # Initialize with specific skill
   warden add                              # Interactive skill selection
   warden add security-review              # Add specific skill trigger
   warden add --list                       # List available skills
@@ -232,7 +230,6 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       command: 'init',
       options: CLIOptionsSchema.parse({
         force: values.force,
-        skill: values.skill,
         quiet: values.quiet,
         color: colorOption,
       }),
