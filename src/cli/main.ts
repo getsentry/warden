@@ -12,6 +12,7 @@ import { parseCliArgs, showHelp, classifyTargets, type CLIOptions } from './args
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
 import { renderTerminalReport, renderJsonReport } from './terminal.js';
+import { Reporter, detectOutputMode, parseVerbosity } from './output/index.js';
 
 /**
  * Load environment variables from .env files in the given directory.
@@ -31,35 +32,13 @@ function loadEnvFiles(dir: string): void {
   }
 }
 
-// ANSI color codes for status messages
-const COLORS = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-};
-
-function log(message: string): void {
-  console.error(message);
-}
-
-function logStep(message: string): void {
-  console.error(`${COLORS.cyan}>${COLORS.reset} ${message}`);
-}
-
-function logSuccess(message: string): void {
-  console.error(`${COLORS.green}✓${COLORS.reset} ${message}`);
-}
-
-function logWarning(message: string): void {
-  console.error(`${COLORS.yellow}!${COLORS.reset} ${message}`);
-}
-
-function logError(message: string): void {
-  console.error(`${COLORS.red}✗${COLORS.reset} ${message}`);
+/**
+ * Create a Reporter instance from CLI options.
+ */
+function createReporter(options: CLIOptions): Reporter {
+  const outputMode = detectOutputMode(options.color);
+  const verbosity = parseVerbosity(options.quiet, options.verbose);
+  return new Reporter(outputMode, verbosity);
 }
 
 /**
@@ -69,14 +48,16 @@ function logError(message: string): void {
  */
 async function runSkills(
   context: Awaited<ReturnType<typeof buildLocalEventContext>>,
-  options: CLIOptions
+  options: CLIOptions,
+  reporter: Reporter
 ): Promise<number> {
   const cwd = process.cwd();
+  const startTime = Date.now();
 
   // Check for API key
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   if (!apiKey) {
-    logError('ANTHROPIC_API_KEY environment variable is required');
+    reporter.error('ANTHROPIC_API_KEY environment variable is required');
     return 1;
   }
 
@@ -87,11 +68,11 @@ async function runSkills(
   } else {
     skillNames = await getBuiltinSkillNames();
     if (skillNames.length === 0) {
-      logError('No built-in skills found');
+      reporter.error('No built-in skills found');
       return 1;
     }
-    logSuccess(`Found ${skillNames.length} skill(s): ${skillNames.join(', ')}`);
-    log('');
+    reporter.success(`Found ${skillNames.length} skill(s): ${skillNames.join(', ')}`);
+    reporter.blank();
   }
 
   // Try to load config for custom skills
@@ -112,9 +93,17 @@ async function runSkills(
     // Not in a git repo or no config - that's fine
   }
 
+  // Show skills section header
+  reporter.startSkills(skillNames);
+
   // Run skills in parallel
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
+  const reports: SkillReport[] = [];
+  let hasFailure = false;
   const failureReasons: string[] = [];
+
+  // Create callbacks for progress reporting
+  const callbacks = reporter.createCallbacks();
 
   interface SkillResult {
     skillName: string;
@@ -123,14 +112,14 @@ async function runSkills(
   }
 
   const runSingleSkill = async (skillName: string): Promise<SkillResult> => {
-    logStep(`Running ${skillName}...`);
+    reporter.startSkill(skillName);
     try {
       const skill = await resolveSkillAsync(skillName, customSkillsDir, skillsConfig);
-      const report = await runSkill(skill, context, { apiKey });
-      logSuccess(`${skillName}: Found ${report.findings.length} finding(s)`);
+      const report = await runSkill(skill, context, { apiKey, callbacks });
+      reporter.skillComplete(report);
       return { skillName, report };
     } catch (error) {
-      logError(`Skill ${skillName} failed: ${error}`);
+      reporter.error(`Skill ${skillName} failed: ${error}`);
       return { skillName, error };
     }
   };
@@ -138,9 +127,6 @@ async function runSkills(
   const results = await processInBatches(skillNames, runSingleSkill, concurrency);
 
   // Collect reports and check for failures
-  const reports: SkillReport[] = [];
-  let hasFailure = false;
-
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
@@ -154,17 +140,22 @@ async function runSkills(
   }
 
   // Output results
-  log('');
+  reporter.blank();
   if (options.json) {
     console.log(renderJsonReport(reports));
   } else {
     console.log(renderTerminalReport(reports));
   }
 
+  // Show summary
+  const totalDuration = Date.now() - startTime;
+  reporter.blank();
+  reporter.renderSummary(reports, totalDuration);
+
   // Determine exit code
   if (options.failOn && hasFailure) {
-    log('');
-    logError(`Failing due to: ${failureReasons.join(', ')}`);
+    reporter.blank();
+    reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
     return 1;
   }
 
@@ -174,14 +165,14 @@ async function runSkills(
 /**
  * Run in file mode: analyze specific files.
  */
-async function runFileMode(filePatterns: string[], options: CLIOptions): Promise<number> {
+async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
 
   // Load environment variables from .env files if they exist
   loadEnvFiles(cwd);
 
   // Build context from files
-  logStep('Building context from files...');
+  reporter.step('Building context from files...');
   const context = await buildFileEventContext({
     patterns: filePatterns,
     cwd,
@@ -189,24 +180,24 @@ async function runFileMode(filePatterns: string[], options: CLIOptions): Promise
 
   const pullRequest = context.pullRequest;
   if (!pullRequest) {
-    logError('Failed to build context');
+    reporter.error('Failed to build context');
     return 1;
   }
 
   if (pullRequest.files.length === 0) {
     if (!options.json) {
-      log('');
-      logWarning('No files matched the given patterns');
+      reporter.blank();
+      reporter.warning('No files matched the given patterns');
     } else {
       console.log(renderJsonReport([]));
     }
     return 0;
   }
 
-  logSuccess(`Found ${pullRequest.files.length} file(s)`);
-  log('');
+  reporter.success(`Found ${pullRequest.files.length} file(s)`);
+  reporter.contextFiles(pullRequest.files);
 
-  return runSkills(context, options);
+  return runSkills(context, options, reporter);
 }
 
 /**
@@ -224,7 +215,7 @@ function parseGitRef(ref: string): { base: string; head?: string } {
 /**
  * Run in git ref mode: analyze changes from a git ref.
  */
-async function runGitRefMode(gitRef: string, options: CLIOptions): Promise<number> {
+async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
   let repoPath: string;
 
@@ -232,7 +223,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions): Promise<numbe
   try {
     repoPath = getRepoRoot(cwd);
   } catch {
-    logError('Not a git repository');
+    reporter.error('Not a git repository');
     return 1;
   }
 
@@ -243,18 +234,18 @@ async function runGitRefMode(gitRef: string, options: CLIOptions): Promise<numbe
 
   // Validate base ref
   if (!refExists(base, repoPath)) {
-    logError(`Git ref does not exist: ${base}`);
+    reporter.error(`Git ref does not exist: ${base}`);
     return 1;
   }
 
   // Validate head ref if specified
   if (head && !refExists(head, repoPath)) {
-    logError(`Git ref does not exist: ${head}`);
+    reporter.error(`Git ref does not exist: ${head}`);
     return 1;
   }
 
   // Build context from local git
-  logStep(`Building context from git (${gitRef})...`);
+  reporter.startContext(`Analyzing changes from ${gitRef}...`);
   const context = buildLocalEventContext({
     base,
     head,
@@ -263,38 +254,38 @@ async function runGitRefMode(gitRef: string, options: CLIOptions): Promise<numbe
 
   const pullRequest = context.pullRequest;
   if (!pullRequest) {
-    logError('Failed to build context');
+    reporter.error('Failed to build context');
     return 1;
   }
 
   if (pullRequest.files.length === 0) {
     if (!options.json) {
-      log('');
-      logWarning('No changes found');
+      reporter.blank();
+      reporter.warning('No changes found');
     } else {
       console.log(renderJsonReport([]));
     }
     return 0;
   }
 
-  logSuccess(`Found ${pullRequest.files.length} changed file(s)`);
-  log('');
+  reporter.contextFiles(pullRequest.files);
 
-  return runSkills(context, options);
+  return runSkills(context, options, reporter);
 }
 
 /**
  * Run in config mode: use warden.toml triggers.
  */
-async function runConfigMode(options: CLIOptions): Promise<number> {
+async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
   let repoPath: string;
+  const startTime = Date.now();
 
   // Find repo root
   try {
     repoPath = getRepoRoot(cwd);
   } catch {
-    logError('Not a git repository');
+    reporter.error('Not a git repository');
     return 1;
   }
 
@@ -307,29 +298,29 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
     : resolve(repoPath, 'warden.toml');
 
   if (!existsSync(configPath)) {
-    logError(`Configuration file not found: ${configPath}`);
-    log(`${COLORS.dim}Tip: Create a warden.toml or specify targets: warden <files> --skill <name>${COLORS.reset}`);
+    reporter.error(`Configuration file not found: ${configPath}`);
+    reporter.tip('Create a warden.toml or specify targets: warden <files> --skill <name>');
     return 1;
   }
 
   // Build context from local git
-  logStep('Building context from git...');
+  reporter.startContext('Analyzing uncommitted changes...');
   const context = buildLocalEventContext({
     cwd: repoPath,
   });
 
   const pullRequest = context.pullRequest;
   if (!pullRequest) {
-    logError('Failed to build context');
+    reporter.error('Failed to build context');
     return 1;
   }
 
   if (pullRequest.files.length === 0) {
     if (!options.json) {
-      log('');
-      logWarning('No changes found');
+      reporter.blank();
+      reporter.warning('No changes found');
       if (!hasUncommittedChanges(repoPath)) {
-        log(`${COLORS.dim}Tip: Specify a git ref: warden HEAD~3 --skill <name>${COLORS.reset}`);
+        reporter.tip('Specify a git ref: warden HEAD~3 --skill <name>');
       }
     } else {
       console.log(renderJsonReport([]));
@@ -337,12 +328,12 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
     return 0;
   }
 
-  logSuccess(`Found ${pullRequest.files.length} changed file(s)`);
+  reporter.contextFiles(pullRequest.files);
 
   // Load config
-  logStep('Loading configuration...');
+  reporter.step('Loading configuration...');
   const config = loadWardenConfig(dirname(configPath));
-  logSuccess(`Loaded ${config.triggers.length} trigger(s)`);
+  reporter.success(`Loaded ${config.triggers.length} trigger(s)`);
 
   // Resolve triggers with defaults and match
   const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
@@ -355,11 +346,11 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
 
   if (triggersToRun.length === 0) {
     if (!options.json) {
-      log('');
+      reporter.blank();
       if (options.skill) {
-        logWarning(`No triggers matched for skill: ${options.skill}`);
+        reporter.warning(`No triggers matched for skill: ${options.skill}`);
       } else {
-        logWarning('No triggers matched for the changed files');
+        reporter.warning('No triggers matched for the changed files');
       }
     } else {
       console.log(renderJsonReport([]));
@@ -367,20 +358,29 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
     return 0;
   }
 
-  logSuccess(`${triggersToRun.length} trigger(s) matched`);
-  log('');
+  reporter.success(`${triggersToRun.length} trigger(s) matched`);
+  reporter.blank();
 
   // Check for API key
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   if (!apiKey) {
-    logError('ANTHROPIC_API_KEY environment variable is required');
+    reporter.error('ANTHROPIC_API_KEY environment variable is required');
     return 1;
   }
+
+  // Show skills section header
+  const skillNames = triggersToRun.map((t) => `${t.name} (${t.skill})`);
+  reporter.startSkills(skillNames);
 
   // Run triggers in parallel
   const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
   const customSkillsDir = join(repoPath, '.warden', 'skills');
+  const reports: SkillReport[] = [];
+  let hasFailure = false;
   const failureReasons: string[] = [];
+
+  // Create callbacks for progress reporting
+  const callbacks = reporter.createCallbacks();
 
   interface TriggerResult {
     triggerName: string;
@@ -389,15 +389,15 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
     error?: unknown;
   }
 
-  const runSingleTrigger = async (trigger: typeof triggersToRun[number]): Promise<TriggerResult> => {
-    logStep(`Running ${trigger.name} (${trigger.skill})...`);
+  const runSingleTrigger = async (trigger: (typeof triggersToRun)[number]): Promise<TriggerResult> => {
+    reporter.startSkill(`${trigger.name} (${trigger.skill})`);
     try {
       const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
-      const report = await runSkill(skill, context, { apiKey, model: trigger.model });
-      logSuccess(`${trigger.name}: Found ${report.findings.length} finding(s)`);
+      const report = await runSkill(skill, context, { apiKey, model: trigger.model, callbacks });
+      reporter.skillComplete(report);
       return { triggerName: trigger.name, report, failOn: trigger.output.failOn ?? options.failOn };
     } catch (error) {
-      logError(`Trigger ${trigger.name} failed: ${error}`);
+      reporter.error(`Trigger ${trigger.name} failed: ${error}`);
       return { triggerName: trigger.name, error };
     }
   };
@@ -405,9 +405,6 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
   const results = await processInBatches(triggersToRun, runSingleTrigger, concurrency);
 
   // Collect reports and check for failures
-  const reports: SkillReport[] = [];
-  let hasFailure = false;
-
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
@@ -421,27 +418,32 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
   }
 
   // Output results
-  log('');
+  reporter.blank();
   if (options.json) {
     console.log(renderJsonReport(reports));
   } else {
     console.log(renderTerminalReport(reports));
   }
 
+  // Show summary
+  const totalDuration = Date.now() - startTime;
+  reporter.blank();
+  reporter.renderSummary(reports, totalDuration);
+
   // Determine exit code
   if (options.failOn && hasFailure) {
-    log('');
-    logError(`Failing due to: ${failureReasons.join(', ')}`);
+    reporter.blank();
+    reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
     return 1;
   }
 
   return 0;
 }
 
-async function runCommand(options: CLIOptions): Promise<number> {
+async function runCommand(options: CLIOptions, reporter: Reporter): Promise<number> {
   // No targets → config mode
   if (!options.targets || options.targets.length === 0) {
-    return runConfigMode(options);
+    return runConfigMode(options, reporter);
   }
 
   // Classify targets
@@ -449,26 +451,26 @@ async function runCommand(options: CLIOptions): Promise<number> {
 
   // Can't mix git refs and file patterns
   if (gitRefs.length > 0 && filePatterns.length > 0) {
-    logError('Cannot mix git refs and file patterns');
-    log(`${COLORS.dim}Git refs: ${gitRefs.join(', ')}${COLORS.reset}`);
-    log(`${COLORS.dim}Files: ${filePatterns.join(', ')}${COLORS.reset}`);
+    reporter.error('Cannot mix git refs and file patterns');
+    reporter.debug(`Git refs: ${gitRefs.join(', ')}`);
+    reporter.debug(`Files: ${filePatterns.join(', ')}`);
     return 1;
   }
 
   // Multiple git refs not supported (yet)
   if (gitRefs.length > 1) {
-    logError('Only one git ref can be specified');
+    reporter.error('Only one git ref can be specified');
     return 1;
   }
 
   // Git ref mode
   const gitRef = gitRefs[0];
   if (gitRef) {
-    return runGitRefMode(gitRef, options);
+    return runGitRefMode(gitRef, options, reporter);
   }
 
   // File mode
-  return runFileMode(filePatterns, options);
+  return runFileMode(filePatterns, options, reporter);
 }
 
 export async function main(): Promise<void> {
@@ -479,6 +481,14 @@ export async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const exitCode = await runCommand(options);
+  // Create reporter based on options
+  const reporter = createReporter(options);
+
+  // Show header (unless JSON output or quiet)
+  if (!options.json) {
+    reporter.header();
+  }
+
+  const exitCode = await runCommand(options, reporter);
   process.exit(exitCode);
 }

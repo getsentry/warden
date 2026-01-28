@@ -13,6 +13,10 @@ export const CLIOptionsSchema = z.object({
   help: z.boolean().default(false),
   /** Max concurrent trigger/skill executions (default: 4) */
   parallel: z.number().int().positive().optional(),
+  // Verbosity options
+  quiet: z.boolean().default(false),
+  verbose: z.number().default(0),
+  color: z.boolean().optional(),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -40,6 +44,10 @@ Options:
   --fail-on <severity> Exit with code 1 if findings >= severity
                        (critical, high, medium, low, info)
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
+  --quiet              Errors and final summary only
+  -v, --verbose        Show real-time findings and hunk details
+  -vv                  Show debug info (token counts, latencies)
+  --color / --no-color Override color detection
   --help, -h           Show this help message
 
 Examples:
@@ -111,8 +119,22 @@ export function classifyTargets(targets: string[]): { gitRefs: string[]; filePat
 }
 
 export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs {
+  // Count -v flags before parsing (parseArgs doesn't handle multiple -v well)
+  let verboseCount = 0;
+  const filteredArgv = argv.filter((arg) => {
+    if (arg === '-v' || arg === '--verbose') {
+      verboseCount++;
+      return false;
+    }
+    if (arg === '-vv') {
+      verboseCount += 2;
+      return false;
+    }
+    return true;
+  });
+
   const { values, positionals } = parseArgs({
-    args: argv,
+    args: filteredArgv,
     options: {
       skill: { type: 'string' },
       config: { type: 'string' },
@@ -120,6 +142,9 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'fail-on': { type: 'string' },
       parallel: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
+      quiet: { type: 'boolean', default: false },
+      color: { type: 'boolean' },
+      'no-color': { type: 'boolean' },
     },
     allowPositionals: true,
   });
@@ -142,6 +167,14 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     };
   }
 
+  // Handle --color / --no-color
+  let colorOption: boolean | undefined;
+  if (values['no-color']) {
+    colorOption = false;
+  } else if (values.color) {
+    colorOption = true;
+  }
+
   const rawOptions = {
     targets: targets.length > 0 ? targets : undefined,
     skill: values.skill,
@@ -150,6 +183,9 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     failOn: values['fail-on'] as Severity | undefined,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,
     help: values.help,
+    quiet: values.quiet,
+    verbose: verboseCount,
+    color: colorOption,
   };
 
   const result = CLIOptionsSchema.safeParse(rawOptions);

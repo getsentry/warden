@@ -1,0 +1,31 @@
+/**
+ * Verbosity levels for CLI output.
+ */
+export enum Verbosity {
+  /** Errors + final summary only */
+  Quiet = 0,
+  /** Normal output with progress */
+  Normal = 1,
+  /** Real-time findings, hunk details */
+  Verbose = 2,
+  /** Token counts, latencies, debug info */
+  Debug = 3,
+}
+
+/**
+ * Parse verbosity from CLI flags.
+ * @param quiet - If true, return Quiet
+ * @param verboseCount - Number of -v flags (0, 1, or 2+)
+ */
+export function parseVerbosity(quiet: boolean, verboseCount: number): Verbosity {
+  if (quiet) {
+    return Verbosity.Quiet;
+  }
+  if (verboseCount >= 2) {
+    return Verbosity.Debug;
+  }
+  if (verboseCount === 1) {
+    return Verbosity.Verbose;
+  }
+  return Verbosity.Normal;
+}

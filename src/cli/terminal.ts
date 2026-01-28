@@ -1,59 +1,32 @@
+import chalk from 'chalk';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
+import { formatSeverityBadge, formatLocation, formatFindingCounts } from './output/index.js';
 
-// ANSI color codes
-const COLORS = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m',
-  bgRed: '\x1b[41m',
-  bgYellow: '\x1b[43m',
-  bgCyan: '\x1b[46m',
-  bgGray: '\x1b[100m',
-};
-
-const SEVERITY_COLORS: Record<Severity, string> = {
-  critical: COLORS.red + COLORS.bold,
-  high: COLORS.red,
-  medium: COLORS.yellow,
-  low: COLORS.cyan,
-  info: COLORS.gray,
-};
-
-const SEVERITY_BADGES: Record<Severity, string> = {
-  critical: `${COLORS.bgRed}${COLORS.white}${COLORS.bold} CRITICAL ${COLORS.reset}`,
-  high: `${COLORS.red}${COLORS.bold}[HIGH]${COLORS.reset}`,
-  medium: `${COLORS.yellow}[MEDIUM]${COLORS.reset}`,
-  low: `${COLORS.cyan}[LOW]${COLORS.reset}`,
-  info: `${COLORS.gray}[INFO]${COLORS.reset}`,
-};
-
-function formatLocation(finding: Finding): string {
+function formatFindingLocation(finding: Finding): string {
   if (!finding.location) {
     return '';
   }
-  const loc = finding.location;
-  const lines =
-    loc.endLine && loc.endLine !== loc.startLine
-      ? `${loc.startLine}-${loc.endLine}`
-      : `${loc.startLine}`;
-  return `${COLORS.dim}${loc.path}:${lines}${COLORS.reset}`;
+  return chalk.dim(formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine));
 }
+
+const SEVERITY_COLORS: Record<Severity, typeof chalk.red> = {
+  critical: chalk.red.bold,
+  high: chalk.red,
+  medium: chalk.yellow,
+  low: chalk.cyan,
+  info: chalk.gray,
+};
 
 function formatFinding(finding: Finding, index: number): string {
   const lines: string[] = [];
-  const badge = SEVERITY_BADGES[finding.severity];
+  const badge = formatSeverityBadge(finding.severity);
   const color = SEVERITY_COLORS[finding.severity];
 
   // Title line with badge
-  lines.push(`${COLORS.dim}${index + 1}.${COLORS.reset} ${badge} ${color}${finding.title}${COLORS.reset}`);
+  lines.push(`${chalk.dim(`${index + 1}.`)} ${badge} ${color(finding.title)}`);
 
   // Location
-  const location = formatLocation(finding);
+  const location = formatFindingLocation(finding);
   if (location) {
     lines.push(`   ${location}`);
   }
@@ -63,7 +36,7 @@ function formatFinding(finding: Finding, index: number): string {
 
   // Suggested fix
   if (finding.suggestedFix) {
-    lines.push(`   ${COLORS.dim}Fix:${COLORS.reset} ${finding.suggestedFix.description}`);
+    lines.push(`   ${chalk.dim('Fix:')} ${finding.suggestedFix.description}`);
   }
 
   return lines.join('\n');
@@ -84,30 +57,7 @@ function formatSummary(reports: SkillReport[]): string {
     }
   }
 
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-
-  if (total === 0) {
-    return `${COLORS.cyan}${COLORS.bold}No findings${COLORS.reset}`;
-  }
-
-  const parts: string[] = [];
-  if (counts.critical > 0) {
-    parts.push(`${COLORS.red}${COLORS.bold}${counts.critical} critical${COLORS.reset}`);
-  }
-  if (counts.high > 0) {
-    parts.push(`${COLORS.red}${counts.high} high${COLORS.reset}`);
-  }
-  if (counts.medium > 0) {
-    parts.push(`${COLORS.yellow}${counts.medium} medium${COLORS.reset}`);
-  }
-  if (counts.low > 0) {
-    parts.push(`${COLORS.cyan}${counts.low} low${COLORS.reset}`);
-  }
-  if (counts.info > 0) {
-    parts.push(`${COLORS.gray}${counts.info} info${COLORS.reset}`);
-  }
-
-  return `${COLORS.bold}${total} finding${total === 1 ? '' : 's'}${COLORS.reset}: ${parts.join(', ')}`;
+  return formatFindingCounts(counts);
 }
 
 /**
@@ -116,13 +66,16 @@ function formatSummary(reports: SkillReport[]): string {
 export function renderTerminalReport(reports: SkillReport[]): string {
   const lines: string[] = [];
 
+  lines.push(chalk.bold('RESULTS'));
+  lines.push('');
+
   for (const report of reports) {
-    lines.push(`${COLORS.bold}${COLORS.white}=== ${report.skill} ===${COLORS.reset}`);
-    lines.push(`${COLORS.dim}${report.summary}${COLORS.reset}`);
+    lines.push(chalk.bold.white(`=== ${report.skill} ===`));
+    lines.push(chalk.dim(report.summary));
     lines.push('');
 
     if (report.findings.length === 0) {
-      lines.push(`${COLORS.cyan}No issues found.${COLORS.reset}`);
+      lines.push(chalk.cyan('No issues found.'));
     } else {
       report.findings.forEach((finding, i) => {
         lines.push(formatFinding(finding, i));
@@ -134,7 +87,7 @@ export function renderTerminalReport(reports: SkillReport[]): string {
   }
 
   // Overall summary
-  lines.push(`${COLORS.dim}${'─'.repeat(50)}${COLORS.reset}`);
+  lines.push(chalk.dim('─'.repeat(50)));
   lines.push(formatSummary(reports));
 
   return lines.join('\n');

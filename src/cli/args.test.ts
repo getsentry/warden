@@ -103,6 +103,61 @@ describe('parseCliArgs', () => {
     const result = parseCliArgs([]);
     expect(result.options.parallel).toBeUndefined();
   });
+
+  it('parses --quiet flag', () => {
+    const result = parseCliArgs(['--quiet']);
+    expect(result.options.quiet).toBe(true);
+  });
+
+  it('parses single -v flag', () => {
+    const result = parseCliArgs(['-v']);
+    expect(result.options.verbose).toBe(1);
+  });
+
+  it('parses multiple -v flags', () => {
+    const result = parseCliArgs(['-v', '-v']);
+    expect(result.options.verbose).toBe(2);
+  });
+
+  it('parses -vv flag', () => {
+    const result = parseCliArgs(['-vv']);
+    expect(result.options.verbose).toBe(2);
+  });
+
+  it('parses --verbose flag', () => {
+    const result = parseCliArgs(['--verbose']);
+    expect(result.options.verbose).toBe(1);
+  });
+
+  it('parses --color flag', () => {
+    const result = parseCliArgs(['--color']);
+    expect(result.options.color).toBe(true);
+  });
+
+  it('parses --no-color flag', () => {
+    const result = parseCliArgs(['--no-color']);
+    expect(result.options.color).toBe(false);
+  });
+
+  it('--no-color overrides --color when both specified', () => {
+    const result = parseCliArgs(['--color', '--no-color']);
+    expect(result.options.color).toBe(false);
+  });
+
+  it('defaults quiet to false', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.quiet).toBe(false);
+  });
+
+  it('defaults verbose to 0', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.verbose).toBe(0);
+  });
+
+  it('color is undefined by default (auto-detect)', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.color).toBeUndefined();
+  });
 });
 
 describe('CLIOptionsSchema', () => {
