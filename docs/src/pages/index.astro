@@ -165,10 +165,28 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
   }
 
   .tagline {
-    font-size: 2rem;
-    font-weight: 400;
+    font-family: var(--font-mono);
+    font-size: 2.5rem;
+    font-weight: 700;
     margin: 0;
-    line-height: 1.2;
+    line-height: 1.1;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: linear-gradient(135deg, #fff 0%, #fff 40%, #22d3ee 60%, #fff 80%, #fff 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% {
+      background-position: 100% 50%;
+    }
+    50% {
+      background-position: 0% 50%;
+    }
   }
 
   .tagline-sub {
@@ -439,7 +457,8 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
 
   @media (max-width: 768px) {
     .tagline {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
+      letter-spacing: 0.02em;
     }
 
     .next-steps-grid {
