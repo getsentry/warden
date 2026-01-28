@@ -1,0 +1,14 @@
+name: Warden
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: getsentry/warden@main
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

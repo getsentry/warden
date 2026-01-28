@@ -9,9 +9,11 @@ export function generateTriggerToml(trigger: Trigger): string {
   lines.push(`name = "${trigger.name}"`);
   lines.push(`event = "${trigger.event}"`);
 
-  // Format actions array
-  const actionsStr = trigger.actions.map((a) => `"${a}"`).join(', ');
-  lines.push(`actions = [${actionsStr}]`);
+  // Format actions array (optional for schedule events)
+  if (trigger.actions && trigger.actions.length > 0) {
+    const actionsStr = trigger.actions.map((a) => `"${a}"`).join(', ');
+    lines.push(`actions = [${actionsStr}]`);
+  }
 
   lines.push(`skill = "${trigger.skill}"`);
 
@@ -63,11 +65,14 @@ export function appendTrigger(configPath: string, trigger: Trigger): void {
   const existingContent = readFileSync(configPath, 'utf-8');
 
   // Ensure proper spacing before the new trigger
-  const separator = existingContent.endsWith('\n\n')
-    ? ''
-    : existingContent.endsWith('\n')
-      ? '\n'
-      : '\n\n';
+  let separator: string;
+  if (existingContent.endsWith('\n\n')) {
+    separator = '';
+  } else if (existingContent.endsWith('\n')) {
+    separator = '\n';
+  } else {
+    separator = '\n\n';
+  }
 
   const triggerToml = generateTriggerToml(trigger);
   const newContent = existingContent + separator + triggerToml + '\n';

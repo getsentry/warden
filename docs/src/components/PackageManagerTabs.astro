@@ -6,6 +6,14 @@ interface Props {
 }
 
 const { npm, pnpm, bun } = Astro.props;
+
+// Format multi-line commands with $ prompt on each line
+function formatCommand(cmd: string): string {
+  return cmd
+    .split('\n')
+    .map(line => `<span class="cli-dim">$</span> ${line}`)
+    .join('\n');
+}
 ---
 
 <div class="pm-tabs">
@@ -32,9 +40,9 @@ const { npm, pnpm, bun } = Astro.props;
       </button>
     </div>
     <div class="terminal-body">
-      <pre class="tab-content cli-output" data-pm="npm"><span class="cli-dim">$</span> {npm}</pre>
-      <pre class="tab-content cli-output hidden" data-pm="pnpm"><span class="cli-dim">$</span> {pnpm}</pre>
-      <pre class="tab-content cli-output hidden" data-pm="bun"><span class="cli-dim">$</span> {bun}</pre>
+      <pre class="tab-content cli-output" data-pm="npm" set:html={formatCommand(npm)} />
+      <pre class="tab-content cli-output hidden" data-pm="pnpm" set:html={formatCommand(pnpm)} />
+      <pre class="tab-content cli-output hidden" data-pm="bun" set:html={formatCommand(bun)} />
     </div>
   </div>
 </div>

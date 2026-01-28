@@ -130,7 +130,12 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
               const activeContent = container.querySelector('.tab-content:not(.hidden)');
               if (!activeContent) return;
 
-              const textToCopy = (activeContent.textContent || '').replace(/^\s*[$>]\s*/, '').trim();
+              // Strip $ prompt from each line
+              const textToCopy = (activeContent.textContent || '')
+                .split('\n')
+                .map(line => line.replace(/^\s*[$>]\s*/, ''))
+                .join('\n')
+                .trim();
 
               try {
                 await navigator.clipboard.writeText(textToCopy);

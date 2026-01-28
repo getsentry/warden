@@ -16,8 +16,8 @@ export class SkillRunnerError extends Error {
   }
 }
 
-/** Default concurrency for hunk-level parallel processing */
-const DEFAULT_HUNK_CONCURRENCY = 5;
+/** Default concurrency for file-level parallel processing */
+const DEFAULT_FILE_CONCURRENCY = 5;
 
 /** Result from analyzing a single hunk */
 interface HunkAnalysisResult {
@@ -54,7 +54,7 @@ function emptyUsage(): UsageStats {
 /**
  * Aggregate multiple usage stats into one.
  */
-function aggregateUsage(usages: UsageStats[]): UsageStats {
+export function aggregateUsage(usages: UsageStats[]): UsageStats {
   return usages.reduce(
     (acc, u) => ({
       inputTokens: acc.inputTokens + u.inputTokens,
@@ -84,9 +84,9 @@ export interface SkillRunnerOptions {
   maxTurns?: number;
   /** Lines of context to include around each hunk */
   contextLines?: number;
-  /** Process hunks in parallel (default: true) */
+  /** Process files in parallel (default: true) */
   parallel?: boolean;
-  /** Max concurrent hunk analyses when parallel=true (default: 5) */
+  /** Max concurrent file analyses when parallel=true (default: 5) */
   concurrency?: number;
   /** Model to use for analysis (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
   model?: string;
@@ -275,7 +275,7 @@ async function analyzeHunk(
 /**
  * Deduplicate findings by id and location.
  */
-function deduplicateFindings(findings: Finding[]): Finding[] {
+export function deduplicateFindings(findings: Finding[]): Finding[] {
   const seen = new Set<string>();
   return findings.filter((f) => {
     const key = `${f.id}:${f.location?.path}:${f.location?.startLine}`;
@@ -286,14 +286,14 @@ function deduplicateFindings(findings: Finding[]): Finding[] {
 }
 
 /**
- * Group hunks by filename.
+ * A file prepared for analysis with its hunks.
  */
-interface FileHunks {
+export interface PreparedFile {
   filename: string;
   hunks: HunkWithContext[];
 }
 
-function groupHunksByFile(hunks: HunkWithContext[]): FileHunks[] {
+function groupHunksByFile(hunks: HunkWithContext[]): PreparedFile[] {
   const fileMap = new Map<string, HunkWithContext[]>();
 
   for (const hunk of hunks) {
@@ -305,10 +305,7 @@ function groupHunksByFile(hunks: HunkWithContext[]): FileHunks[] {
     }
   }
 
-  return Array.from(fileMap.entries()).map(([filename, hunks]) => ({
-    filename,
-    hunks,
-  }));
+  return Array.from(fileMap, ([filename, fileHunks]) => ({ filename, hunks: fileHunks }));
 }
 
 /**
@@ -321,29 +318,44 @@ function getHunkLineRange(hunk: HunkWithContext): string {
 }
 
 /**
- * Run a skill on a PR, analyzing each hunk separately.
+ * Attach elapsed time to findings if skill start time is available.
  */
-export async function runSkill(
-  skill: SkillDefinition,
+function attachElapsedTime(findings: Finding[], skillStartTime: number | undefined): void {
+  if (skillStartTime === undefined) return;
+  const elapsedMs = Date.now() - skillStartTime;
+  for (const finding of findings) {
+    finding.elapsedMs = elapsedMs;
+  }
+}
+
+/**
+ * Options for preparing files for analysis.
+ */
+export interface PrepareFilesOptions {
+  /** Lines of context to include around each hunk */
+  contextLines?: number;
+}
+
+/**
+ * Prepare files for analysis by parsing patches into hunks with context.
+ * Returns files that have changes to analyze.
+ */
+export function prepareFiles(
   context: EventContext,
-  options: SkillRunnerOptions = {}
-): Promise<SkillReport> {
-  const { contextLines = 20, parallel = true, callbacks, abortController } = options;
+  options: PrepareFilesOptions = {}
+): PreparedFile[] {
+  const { contextLines = 20 } = options;
 
   if (!context.pullRequest) {
-    throw new SkillRunnerError('Pull request context required for skill execution');
+    return [];
   }
 
   const pr = context.pullRequest;
-  const allFindings: Finding[] = [];
-
-  // Collect all hunks from all files
   const allHunks: HunkWithContext[] = [];
 
   for (const file of pr.files) {
     if (!file.patch) continue;
 
-    // Map file status to diff parser's expected types
     const statusMap: Record<string, 'added' | 'removed' | 'modified' | 'renamed'> = {
       added: 'added',
       removed: 'removed',
@@ -360,7 +372,81 @@ export async function runSkill(
     allHunks.push(...hunksWithContext);
   }
 
-  if (allHunks.length === 0) {
+  return groupHunksByFile(allHunks);
+}
+
+/**
+ * Callbacks for per-file analysis progress.
+ */
+export interface FileAnalysisCallbacks {
+  skillStartTime?: number;
+  onHunkStart?: (hunkNum: number, totalHunks: number, lineRange: string) => void;
+  onHunkComplete?: (hunkNum: number, findings: Finding[]) => void;
+}
+
+/**
+ * Result from analyzing a single file.
+ */
+export interface FileAnalysisResult {
+  filename: string;
+  findings: Finding[];
+  usage: UsageStats;
+}
+
+/**
+ * Analyze a single prepared file's hunks.
+ */
+export async function analyzeFile(
+  skill: SkillDefinition,
+  file: PreparedFile,
+  repoPath: string,
+  options: SkillRunnerOptions = {},
+  callbacks?: FileAnalysisCallbacks
+): Promise<FileAnalysisResult> {
+  const { abortController } = options;
+  const fileFindings: Finding[] = [];
+  const fileUsage: UsageStats[] = [];
+
+  for (const [hunkIndex, hunk] of file.hunks.entries()) {
+    if (abortController?.signal.aborted) break;
+
+    const lineRange = getHunkLineRange(hunk);
+    callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
+
+    const result = await analyzeHunk(skill, hunk, repoPath, options);
+
+    attachElapsedTime(result.findings, callbacks?.skillStartTime);
+    callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings);
+
+    fileFindings.push(...result.findings);
+    fileUsage.push(result.usage);
+  }
+
+  return {
+    filename: file.filename,
+    findings: fileFindings,
+    usage: aggregateUsage(fileUsage),
+  };
+}
+
+/**
+ * Run a skill on a PR, analyzing each hunk separately.
+ */
+export async function runSkill(
+  skill: SkillDefinition,
+  context: EventContext,
+  options: SkillRunnerOptions = {}
+): Promise<SkillReport> {
+  const { parallel = true, callbacks, abortController } = options;
+
+  if (!context.pullRequest) {
+    throw new SkillRunnerError('Pull request context required for skill execution');
+  }
+
+  // Prepare files using shared logic
+  const fileHunks = prepareFiles(context, { contextLines: options.contextLines });
+
+  if (fileHunks.length === 0) {
     return {
       skill: skill.name,
       summary: 'No code changes to analyze',
@@ -369,88 +455,79 @@ export async function runSkill(
     };
   }
 
-  // Group hunks by file for progress reporting
-  const fileHunks = groupHunksByFile(allHunks);
   const totalFiles = fileHunks.length;
+  const allFindings: Finding[] = [];
 
   // Track all usage stats for aggregation
   const allUsage: UsageStats[] = [];
 
-  // Analyze hunks file by file
-  for (const [fileIndex, fileHunkEntry] of fileHunks.entries()) {
-    // Check for abort before starting new file
-    if (abortController?.signal.aborted) break;
-
+  /**
+   * Process all hunks for a single file sequentially.
+   */
+  async function processFile(
+    fileHunkEntry: PreparedFile,
+    fileIndex: number
+  ): Promise<{ findings: Finding[]; usage: UsageStats[] }> {
     const { filename, hunks } = fileHunkEntry;
+    const fileFindings: Finding[] = [];
+    const fileUsage: UsageStats[] = [];
 
     // Report file start
     callbacks?.onFileStart?.(filename, fileIndex, totalFiles);
 
-    if (parallel) {
-      // Process hunks in parallel with concurrency limit
-      const concurrency = options.concurrency ?? DEFAULT_HUNK_CONCURRENCY;
+    // Process hunks sequentially within each file
+    for (const [hunkIndex, hunk] of hunks.entries()) {
+      // Check for abort before starting new hunk
+      if (abortController?.signal.aborted) break;
 
-      // Process in batches
-      for (let i = 0; i < hunks.length; i += concurrency) {
-        // Check for abort before starting new batch
-        if (abortController?.signal.aborted) break;
+      const lineRange = getHunkLineRange(hunk);
 
-        const batch = hunks.slice(i, i + concurrency);
-        const batchPromises = batch.map(async (hunk, batchIndex) => {
-          const hunkIndex = i + batchIndex;
-          const lineRange = getHunkLineRange(hunk);
+      callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
 
-          callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
+      const result = await analyzeHunk(skill, hunk, context.repoPath, options);
 
-          const result = await analyzeHunk(skill, hunk, context.repoPath, options);
-
-          // Attach elapsed time to findings if skill start time is available
-          if (callbacks?.skillStartTime) {
-            const elapsedMs = Date.now() - callbacks.skillStartTime;
-            for (const finding of result.findings) {
-              finding.elapsedMs = elapsedMs;
-            }
-          }
-
-          callbacks?.onHunkComplete?.(filename, hunkIndex + 1, result.findings);
-
-          return result;
-        });
-
-        const batchResults = await Promise.all(batchPromises);
-        for (const result of batchResults) {
-          allFindings.push(...result.findings);
-          allUsage.push(result.usage);
-        }
-      }
-    } else {
-      // Process hunks sequentially
-      for (const [hunkIndex, hunk] of hunks.entries()) {
-        // Check for abort before starting new hunk
-        if (abortController?.signal.aborted) break;
-
-        const lineRange = getHunkLineRange(hunk);
-
-        callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
-
-        const result = await analyzeHunk(skill, hunk, context.repoPath, options);
-
-        // Attach elapsed time to findings if skill start time is available
-        if (callbacks?.skillStartTime) {
-          const elapsedMs = Date.now() - callbacks.skillStartTime;
-          for (const finding of result.findings) {
-            finding.elapsedMs = elapsedMs;
-          }
-        }
-
-        callbacks?.onHunkComplete?.(filename, hunkIndex + 1, result.findings);
-        allFindings.push(...result.findings);
-        allUsage.push(result.usage);
-      }
+      attachElapsedTime(result.findings, callbacks?.skillStartTime);
+      callbacks?.onHunkComplete?.(filename, hunkIndex + 1, result.findings);
+      fileFindings.push(...result.findings);
+      fileUsage.push(result.usage);
     }
 
     // Report file complete
     callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
+
+    return { findings: fileFindings, usage: fileUsage };
+  }
+
+  // Process files - parallel or sequential based on options
+  if (parallel) {
+    // Process files in parallel with concurrency limit
+    const fileConcurrency = options.concurrency ?? DEFAULT_FILE_CONCURRENCY;
+
+    for (let i = 0; i < fileHunks.length; i += fileConcurrency) {
+      // Check for abort before starting new batch
+      if (abortController?.signal.aborted) break;
+
+      const batch = fileHunks.slice(i, i + fileConcurrency);
+      const batchPromises = batch.map((fileHunkEntry, batchIndex) =>
+        processFile(fileHunkEntry, i + batchIndex)
+      );
+
+      const batchResults = await Promise.all(batchPromises);
+      for (const result of batchResults) {
+        allFindings.push(...result.findings);
+        allUsage.push(...result.usage);
+      }
+    }
+  } else {
+    // Process files sequentially
+    for (const [fileIndex, fileHunkEntry] of fileHunks.entries()) {
+      // Check for abort before starting new file
+      if (abortController?.signal.aborted) break;
+
+      const result = await processFile(fileHunkEntry, fileIndex);
+      allFindings.push(...result.findings);
+      allUsage.push(...result.usage);
+    }
   }
 
   // Deduplicate findings
@@ -473,7 +550,7 @@ export async function runSkill(
 /**
  * Generate a summary of findings.
  */
-function generateSummary(skillName: string, findings: Finding[]): string {
+export function generateSummary(skillName: string, findings: Finding[]): string {
   if (findings.length === 0) {
     return `${skillName}: No issues found`;
   }

@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { loadWardenConfig, resolveTrigger } from '../config/loader.js';
 import type { SkillDefinition } from '../config/schema.js';
-import { runSkill } from '../sdk/runner.js';
+import type { SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
@@ -114,13 +114,13 @@ async function runSkills(
   }
 
   // Build skill tasks
+  const runnerOptions: SkillRunnerOptions = { apiKey, abortController };
   const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
     name: skillName,
     failOn: options.failOn,
-    run: async (callbacks) => {
-      const skill = await resolveSkillAsync(skillName, repoPath, skillsConfig);
-      return runSkill(skill, context, { apiKey, callbacks, abortController });
-    },
+    resolveSkill: () => resolveSkillAsync(skillName, repoPath, skillsConfig),
+    context,
+    runnerOptions,
   }));
 
   // Run skills with listr2
@@ -406,10 +406,9 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     name: trigger.name,
     displayName: `${trigger.name} (${trigger.skill})`,
     failOn: trigger.output.failOn ?? options.failOn,
-    run: async (callbacks) => {
-      const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
-      return runSkill(skill, context, { apiKey, model: trigger.model, callbacks, abortController });
-    },
+    resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, config.skills),
+    context,
+    runnerOptions: { apiKey, model: trigger.model, abortController },
   }));
 
   // Run triggers with listr2

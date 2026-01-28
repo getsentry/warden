@@ -21,6 +21,7 @@ function toFileChange(file: GitFileChange): FileChange {
     additions: file.additions,
     deletions: file.deletions,
     patch: file.patch,
+    chunks: file.chunks,
   };
 }
 
