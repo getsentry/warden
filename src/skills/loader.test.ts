@@ -101,6 +101,18 @@ describe('code-simplifier skill', () => {
   });
 });
 
+describe('find-bugs skill', () => {
+  it('has correct structure', async () => {
+    const skill = await getBuiltinSkill('find-bugs');
+    expect(skill).toBeDefined();
+    expect(skill!.name).toBe('find-bugs');
+    expect(skill!.description).toContain('incorrect behavior');
+    expect(skill!.prompt).toContain('correctness');
+    expect(skill!.tools?.allowed).toContain('Read');
+    expect(skill!.tools?.allowed).toContain('Grep');
+  });
+});
+
 describe('skills caching', () => {
   const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
 
