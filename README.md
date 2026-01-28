@@ -13,6 +13,8 @@ AI-powered code review for GitHub pull requests. Catch security issues and simpl
 
 **Run anywhere.** Use as a CLI for local development or as a GitHub Action for CI.
 
+**[Read the full documentation →](https://warden.sentry.dev/)**
+
 ## Quick Start
 
 ### CLI
