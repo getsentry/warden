@@ -4,7 +4,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { loadWardenConfig } from '../config/loader.js';
 import type { SkillDefinition } from '../config/schema.js';
 import { runSkill } from '../sdk/runner.js';
-import { resolveSkillAsync } from '../skills/loader.js';
+import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
 import { parseCliArgs, showHelp, classifyTargets, type CLIOptions } from './args.js';
@@ -62,10 +62,11 @@ function logError(message: string): void {
 }
 
 /**
- * Run a single skill and output results.
+ * Run skills on a context and output results.
+ * If skillName is provided, runs only that skill.
+ * Otherwise, runs all built-in skills.
  */
-async function runSingleSkill(
-  skillName: string,
+async function runSkills(
   context: Awaited<ReturnType<typeof buildLocalEventContext>>,
   options: CLIOptions
 ): Promise<number> {
@@ -78,54 +79,80 @@ async function runSingleSkill(
     return 1;
   }
 
-  logStep(`Running ${skillName}...`);
-
-  try {
-    // Try to load config for custom skills, but don't require it
-    let customSkillsDir: string | undefined;
-    let skillsConfig: SkillDefinition[] | undefined;
-
-    try {
-      const repoPath = getRepoRoot(cwd);
-      customSkillsDir = join(repoPath, '.warden', 'skills');
-      const configPath = options.config
-        ? resolve(cwd, options.config)
-        : resolve(repoPath, 'warden.toml');
-      if (existsSync(configPath)) {
-        const configDir = configPath.replace(/\/warden\.toml$/, '');
-        const config = loadWardenConfig(configDir);
-        skillsConfig = config.skills;
-      }
-    } catch {
-      // Not in a git repo or no config - that's fine
-    }
-
-    const skill = await resolveSkillAsync(skillName, customSkillsDir, skillsConfig);
-    const report = await runSkill(skill, context, { apiKey });
-
-    logSuccess(`Found ${report.findings.length} finding(s)`);
-
-    // Output results
-    log('');
-    if (options.json) {
-      console.log(renderJsonReport([report]));
-    } else {
-      console.log(renderTerminalReport([report]));
-    }
-
-    // Check failure condition
-    if (options.failOn && shouldFail(report, options.failOn)) {
-      const count = countFindingsAtOrAbove(report, options.failOn);
-      log('');
-      logError(`Failing due to: ${count} ${options.failOn}+ severity issue(s)`);
+  // Determine which skills to run
+  let skillNames: string[];
+  if (options.skill) {
+    skillNames = [options.skill];
+  } else {
+    skillNames = await getBuiltinSkillNames();
+    if (skillNames.length === 0) {
+      logError('No built-in skills found');
       return 1;
     }
+    logSuccess(`Found ${skillNames.length} skill(s): ${skillNames.join(', ')}`);
+    log('');
+  }
 
-    return 0;
-  } catch (error) {
-    logError(`Skill ${skillName} failed: ${error}`);
+  // Try to load config for custom skills
+  let customSkillsDir: string | undefined;
+  let skillsConfig: SkillDefinition[] | undefined;
+
+  try {
+    const repoPath = getRepoRoot(cwd);
+    customSkillsDir = join(repoPath, '.warden', 'skills');
+    const configPath = options.config
+      ? resolve(cwd, options.config)
+      : resolve(repoPath, 'warden.toml');
+    if (existsSync(configPath)) {
+      const configDir = configPath.replace(/\/warden\.toml$/, '');
+      const config = loadWardenConfig(configDir);
+      skillsConfig = config.skills;
+    }
+  } catch {
+    // Not in a git repo or no config - that's fine
+  }
+
+  // Run skills
+  const reports: SkillReport[] = [];
+  let hasFailure = false;
+  const failureReasons: string[] = [];
+
+  for (const skillName of skillNames) {
+    logStep(`Running ${skillName}...`);
+
+    try {
+      const skill = await resolveSkillAsync(skillName, customSkillsDir, skillsConfig);
+      const report = await runSkill(skill, context, { apiKey });
+      reports.push(report);
+      logSuccess(`Found ${report.findings.length} finding(s)`);
+
+      // Check failure condition
+      if (options.failOn && shouldFail(report, options.failOn)) {
+        hasFailure = true;
+        const count = countFindingsAtOrAbove(report, options.failOn);
+        failureReasons.push(`${skillName}: ${count} ${options.failOn}+ severity issue(s)`);
+      }
+    } catch (error) {
+      logError(`Skill ${skillName} failed: ${error}`);
+    }
+  }
+
+  // Output results
+  log('');
+  if (options.json) {
+    console.log(renderJsonReport(reports));
+  } else {
+    console.log(renderTerminalReport(reports));
+  }
+
+  // Determine exit code
+  if (options.failOn && hasFailure) {
+    log('');
+    logError(`Failing due to: ${failureReasons.join(', ')}`);
     return 1;
   }
+
+  return 0;
 }
 
 /**
@@ -163,14 +190,7 @@ async function runFileMode(filePatterns: string[], options: CLIOptions): Promise
   logSuccess(`Found ${pullRequest.files.length} file(s)`);
   log('');
 
-  // skill is guaranteed by parseCliArgs validation when targets are provided
-  const skillName = options.skill;
-  if (!skillName) {
-    logError('--skill is required when specifying targets');
-    return 1;
-  }
-
-  return runSingleSkill(skillName, context, options);
+  return runSkills(context, options);
 }
 
 /**
@@ -244,14 +264,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions): Promise<numbe
   logSuccess(`Found ${pullRequest.files.length} changed file(s)`);
   log('');
 
-  // skill is guaranteed by parseCliArgs validation when targets are provided
-  const skillName = options.skill;
-  if (!skillName) {
-    logError('--skill is required when specifying targets');
-    return 1;
-  }
-
-  return runSingleSkill(skillName, context, options);
+  return runSkills(context, options);
 }
 
 /**

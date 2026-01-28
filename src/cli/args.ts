@@ -32,7 +32,7 @@ Targets:
   (none)               Analyze uncommitted changes using warden.toml triggers
 
 Options:
-  --skill <name>       Skill to run (required when targets specified)
+  --skill <name>       Run only this skill (default: run all built-in skills)
   --config <path>      Path to warden.toml (default: ./warden.toml)
   --json               Output results as JSON
   --fail-on <severity> Exit with code 1 if findings >= severity
@@ -41,13 +41,12 @@ Options:
 
 Examples:
   warden                                  # Run triggers from warden.toml
+  warden src/auth.ts                      # Run all skills on file
   warden src/auth.ts --skill security-review
-                                          # Analyze single file
-  warden "src/**/*.ts" --skill security-review
-                                          # Analyze files matching glob
-  warden HEAD~3 --skill security-review   # Analyze changes since 3 commits ago
-  warden main..HEAD --skill security-review
-                                          # Analyze changes between branches
+                                          # Run specific skill on file
+  warden "src/**/*.ts"                    # Run all skills on glob pattern
+  warden HEAD~3                           # Run all skills on git changes
+  warden HEAD~3 --skill security-review   # Run specific skill on git changes
   warden --json                           # Output as JSON
   warden --fail-on high                   # Fail if high+ severity findings
 `;
@@ -153,12 +152,6 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     const issues = result.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`);
     console.error('Invalid options:');
     console.error(issues.join('\n'));
-    process.exit(1);
-  }
-
-  // Validate that targets require --skill
-  if (result.data.targets && result.data.targets.length > 0 && !result.data.skill) {
-    console.error('Error: --skill is required when specifying targets');
     process.exit(1);
   }
 

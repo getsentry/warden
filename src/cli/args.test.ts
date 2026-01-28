@@ -88,10 +88,10 @@ describe('parseCliArgs', () => {
     expect(result.options.skill).toBe('security-review');
   });
 
-  it('rejects targets without --skill', () => {
-    parseCliArgs(['src/auth.ts']);
-    expect(process.exit).toHaveBeenCalledWith(1);
-    expect(console.error).toHaveBeenCalledWith('Error: --skill is required when specifying targets');
+  it('allows targets without --skill (runs all skills)', () => {
+    const result = parseCliArgs(['src/auth.ts']);
+    expect(result.options.targets).toEqual(['src/auth.ts']);
+    expect(result.options.skill).toBeUndefined();
   });
 });
 
