@@ -80,8 +80,19 @@ export const FileChangeSchema = z.object({
   additions: z.number().int().nonnegative(),
   deletions: z.number().int().nonnegative(),
   patch: z.string().optional(),
+  chunks: z.number().int().nonnegative().optional(),
 });
 export type FileChange = z.infer<typeof FileChangeSchema>;
+
+/**
+ * Count the number of chunks/hunks in a patch string.
+ * Each chunk starts with @@ -X,Y +A,B @@
+ */
+export function countPatchChunks(patch: string | undefined): number {
+  if (!patch) return 0;
+  const matches = patch.match(/^@@\s/gm);
+  return matches?.length ?? 0;
+}
 
 // Pull request context
 export const PullRequestContextSchema = z.object({

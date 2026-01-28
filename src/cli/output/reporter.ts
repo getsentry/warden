@@ -110,8 +110,14 @@ export class Reporter {
       return;
     }
 
+    const totalChunks = files.reduce((sum, f) => sum + (f.chunks ?? 0), 0);
+
     if (this.mode.isTTY) {
-      this.log(chalk.bold('FILES') + chalk.dim(`  ${files.length} files changed`));
+      this.log(
+        chalk.bold('FILES') +
+          chalk.cyan(`  ${files.length} files`) +
+          chalk.dim(` · ${totalChunks} chunks`)
+      );
 
       // Show up to 10 files
       const displayFiles = files.slice(0, 10);
@@ -124,7 +130,8 @@ export class Reporter {
         } else {
           statusSymbol = chalk.yellow('~');
         }
-        this.log(`  ${statusSymbol} ${file.filename}`);
+        const chunkInfo = file.chunks ? chalk.dim(` (${file.chunks} chunk${file.chunks !== 1 ? 's' : ''})`) : '';
+        this.log(`  ${statusSymbol} ${file.filename}${chunkInfo}`);
       }
 
       if (files.length > 10) {
@@ -133,7 +140,7 @@ export class Reporter {
 
       this.log('');
     } else {
-      this.logCI(`Found ${files.length} changed files`);
+      this.logCI(`Found ${files.length} changed files with ${totalChunks} chunks`);
     }
   }
 

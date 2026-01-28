@@ -81,30 +81,30 @@ skill = "security-review"`}
 
 Analyzing changes from <span class="cli-cyan">HEAD</span>...
 
-<span class="cli-bold">FILES</span>  <span class="cli-cyan">3 files changed</span>
-  <span class="cli-yellow">~</span> src/api/auth.ts
-  <span class="cli-yellow">~</span> src/api/users.ts
-  <span class="cli-green">+</span> src/api/sessions.ts
+<span class="cli-bold">FILES</span>  <span class="cli-cyan">3 files</span> <span class="cli-dim">· 5 chunks</span>
+  <span class="cli-yellow">~</span> src/api/auth.ts <span class="cli-dim">(2 chunks)</span>
+  <span class="cli-yellow">~</span> src/api/users.ts <span class="cli-dim">(2 chunks)</span>
+  <span class="cli-green">+</span> src/api/sessions.ts <span class="cli-dim">(1 chunk)</span>
 
-┌─ <span class="cli-bold">code-simplifier</span> ───────────────────────────────────────────────── <span class="cli-dim">8.2s</span> ─┐
-│ <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low                                         │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│ <span class="cli-yellow">●</span> <span class="cli-bold">Nested ternary reduces readability</span>                                    │
-│   <span class="cli-dim">src/api/auth.ts:42</span>                                                    │
-│   <span class="cli-dim">42 │</span> const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user';          │
-│                                                                          │
-│   Nested ternary operators are harder to read. Consider using a          │
-│   switch statement or if/else chain for clarity.                         │
-│                                                                          │
-│ <span class="cli-cyan">●</span> <span class="cli-bold">Redundant null check</span>                                                  │
-│   <span class="cli-dim">src/api/users.ts:18</span>                                                   │
-│   <span class="cli-dim">18 │</span> if (user !== null && user !== undefined) {'{'}                     │
-│                                                                          │
-│   Use optional chaining or nullish coalescing instead of explicit        │
-│   null/undefined checks.                                                 │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
+┌─ <span class="cli-bold">code-simplifier</span> ────────────────────────────────────────────── <span class="cli-dim">8.2s</span> ─┐
+│ <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low                                      │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│ <span class="cli-yellow">●</span> <span class="cli-bold">Nested ternary reduces readability</span>                                 │
+│   <span class="cli-dim">src/api/auth.ts:42</span>                                                 │
+│   <span class="cli-dim">42 │</span> const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user';       │
+│                                                                       │
+│   Nested ternary operators are harder to read. Consider using a       │
+│   switch statement or if/else chain for clarity.                      │
+│                                                                       │
+│ <span class="cli-cyan">●</span> <span class="cli-bold">Redundant null check</span>                                               │
+│   <span class="cli-dim">src/api/users.ts:18</span>                                                │
+│   <span class="cli-dim">18 │</span> if (user !== null && user !== undefined) {'{'}                  │
+│                                                                       │
+│   Use optional chaining or nullish coalescing instead of explicit     │
+│   null/undefined checks.                                              │
+│                                                                       │
+└───────────────────────────────────────────────────────────────────────┘
 
 <span class="cli-bold">SUMMARY</span>
 <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low
@@ -158,7 +158,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
 
   .tagline {
     font-size: 2rem;
-    font-weight: 700;
+    font-weight: 400;
     margin: 0;
     line-height: 1.2;
   }

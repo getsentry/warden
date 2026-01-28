@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { countPatchChunks } from '../types/index.js';
 
 export interface GitFileChange {
   filename: string;
@@ -6,6 +7,7 @@ export interface GitFileChange {
   additions: number;
   deletions: number;
   patch?: string;
+  chunks?: number;
 }
 
 /**
@@ -197,6 +199,7 @@ export function getChangedFilesWithPatches(
 
   for (const file of files) {
     file.patch = getFilePatch(base, head, file.filename, cwd);
+    file.chunks = countPatchChunks(file.patch);
   }
 
   return files;

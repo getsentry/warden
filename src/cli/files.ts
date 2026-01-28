@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import fg from 'fast-glob';
+import { countPatchChunks } from '../types/index.js';
 import type { FileChange } from '../types/index.js';
 
 /**
@@ -53,13 +54,15 @@ export function createSyntheticFileChange(
   const lines = content.split('\n');
   const lineCount = lines.length;
   const relativePath = relative(basePath, absolutePath);
+  const patch = createPatchFromContent(content);
 
   return {
     filename: relativePath,
     status: 'added',
     additions: lineCount,
     deletions: 0,
-    patch: createPatchFromContent(content),
+    patch,
+    chunks: countPatchChunks(patch),
   };
 }
 
