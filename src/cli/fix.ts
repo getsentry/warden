@@ -3,7 +3,6 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { createInterface } from 'node:readline';
 import chalk from 'chalk';
 import figures from 'figures';
 import type { Finding, SkillReport } from '../types/index.js';
@@ -175,45 +174,64 @@ function formatDiffForDisplay(diff: string): string[] {
 }
 
 /**
- * Prompt the user for a yes/no/quit response.
+ * Read a single keypress from stdin in raw mode.
  */
-async function promptYNQ(message: string): Promise<'y' | 'n' | 'q'> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-
+async function readSingleKey(): Promise<string> {
   return new Promise((resolve) => {
-    rl.question(message, (answer) => {
-      rl.close();
-      const normalized = answer.toLowerCase().trim();
-      if (normalized === 'y' || normalized === 'yes') {
-        resolve('y');
-      } else if (normalized === 'q' || normalized === 'quit') {
-        resolve('q');
-      } else {
-        resolve('n');
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
+
+    stdin.setRawMode(true);
+    stdin.resume();
+
+    stdin.once('data', (data) => {
+      stdin.setRawMode(wasRaw);
+      stdin.pause();
+
+      const key = data.toString();
+
+      // Handle Ctrl+C
+      if (key === '\x03') {
+        process.stderr.write('\n');
+        process.exit(130);
       }
+
+      resolve(key.toLowerCase());
     });
   });
 }
 
 /**
+ * Prompt the user for a yes/no/quit response.
+ * Accepts single keypress without requiring Enter.
+ */
+async function promptYNQ(message: string): Promise<'y' | 'n' | 'q'> {
+  process.stderr.write(message);
+
+  const key = await readSingleKey();
+  process.stderr.write(key + '\n');
+
+  switch (key) {
+    case 'y':
+      return 'y';
+    case 'q':
+      return 'q';
+    default:
+      return 'n';
+  }
+}
+
+/**
  * Prompt the user for a yes/no response.
+ * Accepts single keypress without requiring Enter.
  */
 async function promptYN(message: string): Promise<boolean> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
+  process.stderr.write(message);
 
-  return new Promise((resolve) => {
-    rl.question(message, (answer) => {
-      rl.close();
-      const normalized = answer.toLowerCase().trim();
-      resolve(normalized === 'y' || normalized === 'yes');
-    });
-  });
+  const key = await readSingleKey();
+  process.stderr.write(key + '\n');
+
+  return key === 'y';
 }
 
 /**
