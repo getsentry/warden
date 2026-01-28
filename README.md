@@ -1,17 +1,23 @@
 # warden
 
-Your code is under new management. AI agents watching over every pull request.
+Your code is under new management. AI agents that review your code—locally or on every PR.
 
-## Why warden?
+## Two Ways to Run
 
-**Skills, not prompts.** Define what to look for once. Warden runs the right analysis at the right time:
+**Local CLI** — Catch issues before you push. Run analysis on uncommitted changes, specific files, or git refs. Fix problems immediately with `--fix`.
+
+**GitHub Action** — Automated review on every pull request. Findings appear as inline comments with suggested fixes.
+
+## Why Warden?
+
+**Catch issues before they land.** Run Warden locally to fix problems before pushing, or let it review every PR automatically.
+
+**Skills, not prompts.** Define analysis once. Warden runs the right checks at the right time:
 
 - **security-review**: Finds injection flaws, auth issues, data exposure
 - **code-simplifier**: Identifies opportunities to reduce complexity
 
 **GitHub-native.** Posts findings as PR review comments with inline annotations. Integrates with your existing workflow.
-
-**Run anywhere.** Use as a CLI for local development or as a GitHub Action for CI.
 
 **[Read the full documentation →](https://warden.sentry.dev/)**
 
@@ -32,7 +38,7 @@ npx warden src/auth.ts --skill security-review
 # Run on git changes
 npx warden HEAD~3
 
-# Auto-fix suggestions
+# Found something? Fix it immediately
 npx warden --fix
 ```
 
@@ -116,6 +122,21 @@ Options:
   -v, --verbose        Show real-time findings
   -vv                  Show debug info (token counts, latencies)
 ```
+
+## When to Use CLI vs Action
+
+| Use Case | CLI | Action |
+|----------|-----|--------|
+| Catch issues before pushing | Yes | |
+| Interactive fix application | Yes | |
+| Fast feedback loop during development | Yes | |
+| Automated review on every PR | | Yes |
+| Team visibility via GitHub comments | | Yes |
+| CI integration with exit codes | Yes | Yes |
+
+**CLI for catching issues early.** Run `warden` before you push to fix problems before they hit CI.
+
+**Action for automated coverage.** Every PR gets reviewed automatically, with findings visible to the whole team.
 
 ## Contributing
 

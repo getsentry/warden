@@ -6,10 +6,10 @@ import { Code } from 'astro:components';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<Base title="Home" description="AI agents watching over every pull request. Run security analysis and custom skills automatically.">
+<Base title="Home" description="AI agents that review your code. Locally or on every PR.">
   <div class="hero">
     <p class="tagline">Your Code Is Under New Management</p>
-    <p class="tagline-sub">AI agents watching over every pull request</p>
+    <p class="tagline-sub">AI agents that review your code. Locally or on every PR.</p>
 
     <div class="cta-buttons">
       <a href={`${base}/setup`} class="btn btn-primary">Get Started</a>
@@ -17,50 +17,47 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   </div>
 
   <section class="section">
-    <h2>What is Warden?</h2>
-    <p>Warden runs AI agents on your pull requests. Configure triggers and skills to automatically review code for security vulnerabilities, code quality issues, and more.</p>
+    <h2>Why Warden?</h2>
+    <p><strong>Catch issues before they land.</strong> Run Warden locally to fix problems before pushing, or let it review every PR automatically.</p>
+    <p><strong>Skills, not prompts.</strong> Define analysis once. Warden runs the right checks at the right time.</p>
+    <p><strong>GitHub-native.</strong> Findings appear as PR comments with inline annotations and suggested fixes.</p>
   </section>
 
   <section class="section">
-    <h2>Quick Start</h2>
-    <p>Add Warden to your repository in two steps:</p>
+    <h2>Two Ways to Run</h2>
 
-    <h3>1. Create the workflow</h3>
-    <Terminal title=".github/workflows/warden.yml" showCopy={true}>
-      <Code
-        code={`name: Warden
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+    <div class="two-ways">
+      <div class="way">
+        <h3>Local CLI</h3>
+        <p>Catch issues before you push. Fix them immediately.</p>
+        <Terminal title="Terminal" showCopy={true}>
+          <Code
+            code={`# Run on uncommitted changes
+npx warden --skill security-review
 
-jobs:
-  warden:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: getsentry/warden-action@v1
-        with:
-          anthropic-api-key: \${{ secrets.ANTHROPIC_API_KEY }}
-          github-token: \${{ secrets.GITHUB_TOKEN }}`}
-        lang="yaml"
-        theme="vitesse-black"
-      />
-    </Terminal>
+# Found something? Fix it
+npx warden --fix`}
+            lang="bash"
+            theme="vitesse-black"
+          />
+        </Terminal>
+      </div>
 
-    <h3>2. Configure triggers</h3>
-    <Terminal title="warden.toml" showCopy={true}>
-      <Code
-        code={`version = 1
-
-[[triggers]]
-name = "Security Review"
-event = "pull_request"
-actions = ["opened", "synchronize"]
-skill = "security-review"`}
-        lang="toml"
-        theme="vitesse-black"
-      />
-    </Terminal>
+      <div class="way">
+        <h3>GitHub Action</h3>
+        <p>Automated review on every pull request.</p>
+        <Terminal title=".github/workflows/warden.yml" showCopy={true}>
+          <Code
+            code={`- uses: getsentry/warden-action@v1
+  with:
+    anthropic-api-key: \${{ secrets.ANTHROPIC_API_KEY }}
+    github-token: \${{ secrets.GITHUB_TOKEN }}`}
+            lang="yaml"
+            theme="vitesse-black"
+          />
+        </Terminal>
+      </div>
+    </div>
 
     <p>See the <a href={`${base}/setup`}>setup guide</a> for detailed configuration options.</p>
   </section>
@@ -119,7 +116,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
         <span class="arch-num">1</span>
         <div>
           <strong>Trigger</strong>
-          <p>PR opened or updated</p>
+          <p>Run CLI or open a PR</p>
         </div>
       </div>
       <span class="arch-arrow">→</span>
@@ -135,7 +132,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
         <span class="arch-num">3</span>
         <div>
           <strong>Analyze</strong>
-          <p>Claude runs matched skills</p>
+          <p>AI agents run matched skills</p>
         </div>
       </div>
       <span class="arch-arrow">→</span>
@@ -143,7 +140,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
         <span class="arch-num">4</span>
         <div>
           <strong>Report</strong>
-          <p>Post findings to GitHub</p>
+          <p>Terminal output or PR comments</p>
         </div>
       </div>
     </div>
@@ -205,6 +202,36 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
   .section h3 {
     margin-top: 1.5rem;
     margin-bottom: 0.5rem;
+  }
+
+  .two-ways {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .way {
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .way h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+  }
+
+  .way > p {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+  }
+
+  @media (max-width: 768px) {
+    .two-ways {
+      grid-template-columns: 1fr;
+    }
   }
 
   .showcase {

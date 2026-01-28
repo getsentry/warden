@@ -74,6 +74,87 @@ skill = "security-review"`}
     />
   </Terminal>
 
+  <Terminal title="CLI" showCopy={true}>
+    <Code
+      code={`# Run security review on uncommitted changes
+npx warden --skill security-review
+
+# Run on specific files
+npx warden src/auth.ts --skill security-review`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>code-simplifier</h3>
+
+  <p>Identifies opportunities to reduce code complexity. This skill analyzes diffs for patterns that could be simplified, refactored, or made more readable.</p>
+
+  <h4>What It Checks</h4>
+
+  <ul>
+    <li><strong>Nested Logic</strong> — Deeply nested conditionals, complex ternaries, callback pyramids</li>
+    <li><strong>Redundant Code</strong> — Duplicate logic, unnecessary null checks, dead code</li>
+    <li><strong>Long Functions</strong> — Functions that do too much, hard to test or maintain</li>
+    <li><strong>Complex Expressions</strong> — Hard-to-read boolean logic, magic numbers, unclear naming</li>
+    <li><strong>Modern Patterns</strong> — Opportunities to use optional chaining, nullish coalescing, destructuring</li>
+  </ul>
+
+  <h4>Severity Levels</h4>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Level</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>high</code></td>
+        <td>Significant complexity that hurts maintainability</td>
+      </tr>
+      <tr>
+        <td><code>medium</code></td>
+        <td>Moderate complexity worth addressing</td>
+      </tr>
+      <tr>
+        <td><code>low</code></td>
+        <td>Minor improvements for readability</td>
+      </tr>
+      <tr>
+        <td><code>info</code></td>
+        <td>Style suggestions</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>Usage</h4>
+
+  <Terminal title="warden.toml" showCopy={true}>
+    <Code
+      code={`[[triggers]]
+name = "Code Simplifier"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "code-simplifier"`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <Terminal title="CLI" showCopy={true}>
+    <Code
+      code={`# Run code simplifier on uncommitted changes
+npx warden --skill code-simplifier
+
+# Run and auto-fix suggestions
+npx warden --skill code-simplifier --fix`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
   <h2>Custom Skills</h2>
 
   <p>Define your own skills in <code>.warden/skills/</code> as TOML files.</p>

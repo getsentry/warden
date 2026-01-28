@@ -6,19 +6,48 @@ import { Code } from 'astro:components';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<Base title="Setup" description="Set up Warden in your GitHub repository">
+<Base title="Setup" description="Set up Warden locally or in your GitHub repository">
   <h1>Setup</h1>
 
-  <p>Get Warden running on your repository in a few steps.</p>
+  <p>Set up Warden once. It watches every change from there.</p>
 
-  <h2>Prerequisites</h2>
+  <h2>Local CLI (Quick Start)</h2>
+
+  <p>Get started in seconds. No configuration required.</p>
+
+  <Terminal title="Terminal" showCopy={true}>
+    <Code
+      code={`# Set your API key
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Run security review on uncommitted changes
+npx warden --skill security-review
+
+# Run on specific files
+npx warden src/auth.ts --skill security-review
+
+# Run on git changes
+npx warden HEAD~3
+
+# Found something? Fix it immediately
+npx warden --fix`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>For more CLI options, see the <a href="https://github.com/dcramer/warden#cli-reference">CLI reference</a>.</p>
+
+  <h2>GitHub Action Setup</h2>
+
+  <h3>Prerequisites</h3>
 
   <ul>
     <li>A GitHub repository</li>
     <li>An Anthropic API key (<a href="https://console.anthropic.com/">get one here</a>)</li>
   </ul>
 
-  <h2>1. Add Your API Key</h2>
+  <h3>1. Add Your API Key</h3>
 
   <p>Add your Anthropic API key as a repository secret:</p>
 
@@ -30,7 +59,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <li>Value: Your API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></li>
   </ol>
 
-  <h2>2. Create the Workflow</h2>
+  <h3>2. Create the Workflow</h3>
 
   <p>Create <code>.github/workflows/warden.yml</code>:</p>
 
@@ -55,7 +84,7 @@ jobs:
     />
   </Terminal>
 
-  <h3>Action Inputs</h3>
+  <h4>Action Inputs</h4>
 
   <table>
     <thead>
@@ -89,7 +118,7 @@ jobs:
     </tbody>
   </table>
 
-  <h2>3. Create the Configuration</h2>
+  <h3>3. Create the Configuration</h3>
 
   <p>Create <code>warden.toml</code> in your repository root:</p>
 
@@ -186,7 +215,7 @@ paths = ["src/api/**/*.ts"]`}
 
   <p>Define custom skills in <code>.warden/skills/</code>. See the <a href={`${base}/skills`}>skills documentation</a> for details.</p>
 
-  <h2>Verify Setup</h2>
+  <h3>Verify Setup</h3>
 
   <p>Open a pull request to test your configuration. You should see:</p>
 
@@ -195,6 +224,27 @@ paths = ["src/api/**/*.ts"]`}
     <li>Review comments appearing on the PR if issues are found</li>
     <li>A summary comment with all findings</li>
   </ol>
+
+  <h2>Local Development Workflow</h2>
+
+  <p>Run Warden locally before pushing to catch issues early. This is faster and cheaper than waiting for CI.</p>
+
+  <Terminal title="Terminal" showCopy={true}>
+    <Code
+      code={`# Before committing: check your changes
+warden --skill security-review
+
+# Before pushing: check everything since main
+warden main..HEAD --skill security-review
+
+# Found issues? Apply fixes automatically
+warden --fix`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>Use <code>--json</code> and <code>--fail-on</code> to integrate with your own CI scripts.</p>
 </Base>
 
 <style>
