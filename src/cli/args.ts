@@ -25,8 +25,14 @@ export const CLIOptionsSchema = z.object({
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init';
+  command: 'run' | 'help' | 'init' | 'version';
   options: CLIOptions;
+}
+
+const VERSION = '0.1.0';
+
+export function showVersion(): void {
+  console.log(`warden ${VERSION}`);
 }
 
 const HELP_TEXT = `
@@ -57,6 +63,7 @@ Options:
   -vv                  Show debug info (token counts, latencies)
   --color / --no-color Override color detection
   --help, -h           Show this help message
+  --version, -V        Show version number
 
 Init Options:
   -f, --force          Overwrite existing files
@@ -158,12 +165,20 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       force: { type: 'boolean', short: 'f', default: false },
       parallel: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
+      version: { type: 'boolean', short: 'V', default: false },
       quiet: { type: 'boolean', default: false },
       color: { type: 'boolean' },
       'no-color': { type: 'boolean' },
     },
     allowPositionals: true,
   });
+
+  if (values.version) {
+    return {
+      command: 'version',
+      options: CLIOptionsSchema.parse({}),
+    };
+  }
 
   if (values.help) {
     return {
@@ -173,13 +188,23 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
   }
 
   // Filter out known commands from positionals
-  const targets = positionals.filter((p) => p !== 'run' && p !== 'help' && p !== 'init');
+  const targets = positionals.filter(
+    (p) => p !== 'run' && p !== 'help' && p !== 'init' && p !== 'version'
+  );
 
   // Handle explicit help command
   if (positionals.includes('help')) {
     return {
       command: 'help',
       options: CLIOptionsSchema.parse({ help: true }),
+    };
+  }
+
+  // Handle explicit version command
+  if (positionals.includes('version')) {
+    return {
+      command: 'version',
+      options: CLIOptionsSchema.parse({}),
     };
   }
 

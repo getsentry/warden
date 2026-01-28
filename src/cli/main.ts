@@ -8,7 +8,7 @@ import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
 import { DEFAULT_CONCURRENCY } from '../utils/index.js';
-import { parseCliArgs, showHelp, classifyTargets, type CLIOptions } from './args.js';
+import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
 import { renderTerminalReport, renderJsonReport } from './terminal.js';
@@ -511,6 +511,11 @@ export async function main(): Promise<void> {
 
   if (command === 'help') {
     showHelp();
+    process.exit(0);
+  }
+
+  if (command === 'version') {
+    showVersion();
     process.exit(0);
   }
 
