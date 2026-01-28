@@ -2,9 +2,12 @@ import { readFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Octokit } from '@octokit/rest';
 import { loadWardenConfig, resolveTrigger, type ResolvedTrigger } from '../config/loader.js';
+import type { ScheduleConfig } from '../config/schema.js';
 import { buildEventContext } from '../event/context.js';
+import { buildScheduleEventContext } from '../event/schedule-context.js';
 import { runSkill } from '../sdk/runner.js';
 import { renderSkillReport } from '../output/renderer.js';
+import { createOrUpdateIssue, createFixPR } from '../output/github-issues.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import type { EventContext, SkillReport } from '../types/index.js';
@@ -132,6 +135,174 @@ async function postReviewToGitHub(
   }
 }
 
+/**
+ * Get the default branch for a repository from the GitHub API.
+ */
+async function getDefaultBranchFromAPI(
+  octokit: Octokit,
+  owner: string,
+  repo: string
+): Promise<string> {
+  const { data } = await octokit.repos.get({ owner, repo });
+  return data.default_branch;
+}
+
+/**
+ * Handle scheduled analysis events.
+ */
+async function runScheduledAnalysis(
+  octokit: Octokit,
+  inputs: ActionInputs,
+  repoPath: string
+): Promise<void> {
+  logGroup('Loading configuration');
+  console.log(`Config path: ${inputs.configPath}`);
+  logGroupEnd();
+
+  const configFullPath = join(repoPath, inputs.configPath);
+  const config = loadWardenConfig(dirname(configFullPath));
+
+  // Find schedule triggers
+  const scheduleTriggers = config.triggers.filter((t) => t.event === 'schedule');
+  if (scheduleTriggers.length === 0) {
+    console.log('No schedule triggers configured');
+    setOutput('findings-count', 0);
+    setOutput('critical-count', 0);
+    setOutput('high-count', 0);
+    setOutput('summary', 'No schedule triggers configured');
+    return;
+  }
+
+  // Get repo info from environment
+  const githubRepository = process.env['GITHUB_REPOSITORY'];
+  if (!githubRepository) {
+    setFailed('GITHUB_REPOSITORY environment variable not set');
+  }
+  const [owner, repo] = githubRepository.split('/');
+  if (!owner || !repo) {
+    setFailed('Invalid GITHUB_REPOSITORY format');
+  }
+
+  const headSha = process.env['GITHUB_SHA'] ?? '';
+  if (!headSha) {
+    setFailed('GITHUB_SHA environment variable not set');
+  }
+
+  const defaultBranch = await getDefaultBranchFromAPI(octokit, owner, repo);
+
+  logGroup('Processing schedule triggers');
+  for (const trigger of scheduleTriggers) {
+    console.log(`- ${trigger.name}: ${trigger.skill}`);
+  }
+  logGroupEnd();
+
+  const allReports: SkillReport[] = [];
+  let totalFindings = 0;
+  const failureReasons: string[] = [];
+  let shouldFailAction = false;
+
+  // Process each schedule trigger
+  for (const trigger of scheduleTriggers) {
+    const resolved = resolveTrigger(trigger, config);
+    logGroup(`Running trigger: ${trigger.name} (skill: ${resolved.skill})`);
+
+    try {
+      // Build context from paths filter
+      const patterns = resolved.filters?.paths ?? ['**/*'];
+      const ignorePatterns = resolved.filters?.ignorePaths;
+
+      const context = await buildScheduleEventContext({
+        patterns,
+        ignorePatterns,
+        repoPath,
+        owner,
+        name: repo,
+        defaultBranch,
+        headSha,
+      });
+
+      // Skip if no matching files
+      if (!context.pullRequest?.files.length) {
+        console.log(`No files match trigger ${trigger.name}`);
+        logGroupEnd();
+        continue;
+      }
+
+      console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
+
+      // Run skill
+      const skill = await resolveSkillAsync(resolved.skill, repoPath, config.skills);
+      const report = await runSkill(skill, context, {
+        apiKey: inputs.anthropicApiKey,
+        model: resolved.model,
+      });
+      console.log(`Found ${report.findings.length} findings`);
+
+      allReports.push(report);
+      totalFindings += report.findings.length;
+
+      // Create/update issue with findings
+      const scheduleConfig: Partial<ScheduleConfig> = trigger.schedule ?? {};
+      const issueTitle = scheduleConfig.issueTitle ?? `Warden: ${trigger.name}`;
+
+      const issueResult = await createOrUpdateIssue(octokit, owner, repo, [report], {
+        title: issueTitle,
+        labels: resolved.output?.labels,
+        commitSha: headSha,
+      });
+
+      if (issueResult) {
+        console.log(`${issueResult.created ? 'Created' : 'Updated'} issue #${issueResult.issueNumber}`);
+        console.log(`Issue URL: ${issueResult.issueUrl}`);
+      }
+
+      // Create fix PR if enabled and there are fixable findings
+      if (scheduleConfig.createFixPR) {
+        const fixResult = await createFixPR(octokit, owner, repo, report.findings, {
+          branchPrefix: scheduleConfig.fixBranchPrefix ?? 'warden-fix',
+          baseBranch: defaultBranch,
+          baseSha: headSha,
+          repoPath,
+          triggerName: trigger.name,
+        });
+
+        if (fixResult) {
+          console.log(`Created fix PR #${fixResult.prNumber} with ${fixResult.fixCount} fixes`);
+          console.log(`PR URL: ${fixResult.prUrl}`);
+        }
+      }
+
+      // Check failure condition
+      const failOn = resolved.output?.failOn ?? inputs.failOn;
+      if (failOn && shouldFail(report, failOn)) {
+        shouldFailAction = true;
+        const count = countFindingsAtOrAbove(report, failOn);
+        failureReasons.push(`${trigger.name}: Found ${count} ${failOn}+ severity issues`);
+      }
+
+      logGroupEnd();
+    } catch (error) {
+      console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
+      logGroupEnd();
+    }
+  }
+
+  // Set outputs
+  const criticalCount = countSeverity(allReports, 'critical');
+  const highCount = countSeverity(allReports, 'high');
+
+  setOutput('findings-count', totalFindings);
+  setOutput('critical-count', criticalCount);
+  setOutput('high-count', highCount);
+  setOutput('summary', allReports.map((r) => r.summary).join('\n') || 'Scheduled analysis complete');
+
+  if (shouldFailAction) {
+    setFailed(failureReasons.join('; '));
+  }
+
+  console.log(`\nScheduled analysis complete: ${totalFindings} total findings`);
+}
+
 async function run(): Promise<void> {
   const inputs = getInputs();
 
@@ -150,6 +321,11 @@ async function run(): Promise<void> {
   process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
 
   const octokit = new Octokit({ auth: inputs.githubToken });
+
+  // Route schedule events to dedicated handler
+  if (eventName === 'schedule' || eventName === 'workflow_dispatch') {
+    return runScheduledAnalysis(octokit, inputs, repoPath);
+  }
 
   let eventPayload: unknown;
   try {

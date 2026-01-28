@@ -72,6 +72,7 @@ export const GitHubEventTypeSchema = z.enum([
   'issue_comment',
   'pull_request_review',
   'pull_request_review_comment',
+  'schedule',
 ]);
 export type GitHubEventType = z.infer<typeof GitHubEventTypeSchema>;
 
