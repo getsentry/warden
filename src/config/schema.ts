@@ -47,17 +47,55 @@ export const OutputConfigSchema = z.object({
 });
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 
+// Schedule-specific configuration
+export const ScheduleConfigSchema = z.object({
+  /** Title for the tracking issue (default: "Warden: {triggerName}") */
+  issueTitle: z.string().optional(),
+  /** Create PR with fixes when suggestedFix is available */
+  createFixPR: z.boolean().default(false),
+  /** Branch prefix for fix PRs (default: "warden-fix") */
+  fixBranchPrefix: z.string().default('warden-fix'),
+});
+export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
+
 // Trigger definition
 export const TriggerSchema = z.object({
   name: z.string().min(1),
-  event: z.enum(['pull_request', 'issues', 'issue_comment']),
-  actions: z.array(z.string()).min(1),
+  event: z.enum(['pull_request', 'issues', 'issue_comment', 'schedule']),
+  /** Actions to trigger on. Required for all events except 'schedule'. */
+  actions: z.array(z.string()).min(1).optional(),
   skill: z.string().min(1),
   filters: PathFilterSchema.optional(),
   output: OutputConfigSchema.optional(),
   /** Model to use for this trigger (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
   model: z.string().optional(),
-});
+  /** Schedule-specific configuration. Only used when event is 'schedule'. */
+  schedule: ScheduleConfigSchema.optional(),
+}).refine(
+  (data) => {
+    // actions is required unless event is 'schedule'
+    if (data.event !== 'schedule') {
+      return data.actions !== undefined && data.actions.length > 0;
+    }
+    return true;
+  },
+  {
+    message: "actions is required for non-schedule events",
+    path: ["actions"],
+  }
+).refine(
+  (data) => {
+    // paths filter is required for schedule events
+    if (data.event === 'schedule') {
+      return data.filters?.paths !== undefined && data.filters.paths.length > 0;
+    }
+    return true;
+  },
+  {
+    message: "filters.paths is required for schedule events",
+    path: ["filters", "paths"],
+  }
+);
 export type Trigger = z.infer<typeof TriggerSchema>;
 
 // Runner configuration

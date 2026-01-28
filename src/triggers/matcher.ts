@@ -37,7 +37,14 @@ export function matchTrigger(trigger: Trigger, context: EventContext): boolean {
     return false;
   }
 
-  if (!trigger.actions.includes(context.action)) {
+  // Schedule events don't have actions - they match based on whether
+  // any files match the paths filter (context was already built with matching files)
+  if (trigger.event === 'schedule') {
+    return (context.pullRequest?.files.length ?? 0) > 0;
+  }
+
+  // For non-schedule events, actions must match
+  if (!trigger.actions?.includes(context.action)) {
     return false;
   }
 
