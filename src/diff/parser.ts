@@ -36,19 +36,26 @@ export interface ParsedDiff {
  */
 function parseHunkHeader(line: string): Omit<DiffHunk, 'content' | 'lines'> | null {
   const match = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/);
-  if (!match) return null;
-
-  const oldStart = match[1];
-  const newStart = match[3];
-  if (!oldStart || !newStart) return null;
+  if (!match || !match[1] || !match[3]) return null;
 
   return {
-    oldStart: parseInt(oldStart, 10),
+    oldStart: parseInt(match[1], 10),
     oldCount: parseInt(match[2] ?? '1', 10),
-    newStart: parseInt(newStart, 10),
+    newStart: parseInt(match[3], 10),
     newCount: parseInt(match[4] ?? '1', 10),
     header: match[5]?.trim() || undefined,
   };
+}
+
+/** Intermediate hunk structure for parsing */
+interface HunkBuilder {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  header?: string;
+  contentParts: string[];
+  lines: string[];
 }
 
 /**
@@ -57,7 +64,7 @@ function parseHunkHeader(line: string): Omit<DiffHunk, 'content' | 'lines'> | nu
 export function parsePatch(patch: string): DiffHunk[] {
   const lines = patch.split('\n');
   const hunks: DiffHunk[] = [];
-  let currentHunk: DiffHunk | null = null;
+  let currentHunk: HunkBuilder | null = null;
 
   for (const line of lines) {
     const header = parseHunkHeader(line);
@@ -65,13 +72,16 @@ export function parsePatch(patch: string): DiffHunk[] {
     if (header) {
       // Save previous hunk if exists
       if (currentHunk) {
-        hunks.push(currentHunk);
+        hunks.push({
+          ...currentHunk,
+          content: currentHunk.contentParts.join('\n'),
+        });
       }
 
-      // Start new hunk
+      // Start new hunk with array-based content builder
       currentHunk = {
         ...header,
-        content: line,
+        contentParts: [line],
         lines: [],
       };
     } else if (currentHunk) {
@@ -81,7 +91,7 @@ export function parsePatch(patch: string): DiffHunk[] {
           !line.startsWith('--- ') &&
           !line.startsWith('+++ ') &&
           !line.startsWith('\\ No newline')) {
-        currentHunk.content += '\n' + line;
+        currentHunk.contentParts.push(line);
         currentHunk.lines.push(line);
       }
     }
@@ -89,7 +99,10 @@ export function parsePatch(patch: string): DiffHunk[] {
 
   // Don't forget the last hunk
   if (currentHunk) {
-    hunks.push(currentHunk);
+    hunks.push({
+      ...currentHunk,
+      content: currentHunk.contentParts.join('\n'),
+    });
   }
 
   return hunks;

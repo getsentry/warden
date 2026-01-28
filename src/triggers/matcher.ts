@@ -2,11 +2,23 @@ import type { Trigger } from '../config/schema.js';
 import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, Severity, SkillReport } from '../types/index.js';
 
+/** Cache for compiled glob patterns */
+const globCache = new Map<string, RegExp>();
+
+/** Clear the glob cache (useful for testing) */
+export function clearGlobCache(): void {
+  globCache.clear();
+}
+
 /**
- * Match a glob pattern against a file path.
- * Supports ** for recursive matching and * for single directory matching.
+ * Convert a glob pattern to a regex (cached).
  */
-export function matchGlob(pattern: string, path: string): boolean {
+function globToRegex(pattern: string): RegExp {
+  const cached = globCache.get(pattern);
+  if (cached) {
+    return cached;
+  }
+
   // Use placeholders to avoid replacement conflicts
   let regexPattern = pattern
     // First, replace glob patterns with placeholders
@@ -26,7 +38,16 @@ export function matchGlob(pattern: string, path: string): boolean {
     .replace(/\0QUESTION\0/g, '[^/]');            // ? matches single char except /
 
   const regex = new RegExp(`^${regexPattern}$`);
-  return regex.test(path);
+  globCache.set(pattern, regex);
+  return regex;
+}
+
+/**
+ * Match a glob pattern against a file path.
+ * Supports ** for recursive matching and * for single directory matching.
+ */
+export function matchGlob(pattern: string, path: string): boolean {
+  return globToRegex(pattern).test(path);
 }
 
 /**

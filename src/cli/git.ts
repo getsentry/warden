@@ -211,7 +211,34 @@ export function getFilePatch(
 }
 
 /**
- * Get patches for all changed files.
+ * Parse a combined diff output into individual file patches.
+ */
+function parseCombinedDiff(diffOutput: string): Map<string, string> {
+  const patches = new Map<string, string>();
+  if (!diffOutput) return patches;
+
+  // Split by "diff --git" but keep the delimiter
+  const parts = diffOutput.split(/(?=^diff --git )/m);
+
+  for (const part of parts) {
+    if (!part.trim()) continue;
+
+    // Extract filename from "diff --git a/path b/path" line
+    const match = part.match(/^diff --git a\/(.+?) b\/(.+?)\n/);
+    if (match) {
+      // Use the "b" path (destination) as the filename
+      const filename = match[2];
+      if (filename) {
+        patches.set(filename, part);
+      }
+    }
+  }
+
+  return patches;
+}
+
+/**
+ * Get patches for all changed files in a single git command.
  */
 export function getChangedFilesWithPatches(
   base: string,
@@ -220,9 +247,26 @@ export function getChangedFilesWithPatches(
 ): GitFileChange[] {
   const files = getChangedFiles(base, head, cwd);
 
-  for (const file of files) {
-    file.patch = getFilePatch(base, head, file.filename, cwd);
-    file.chunks = countPatchChunks(file.patch);
+  if (files.length === 0) {
+    return files;
+  }
+
+  // Get all patches in a single git diff command
+  try {
+    const diffArgs = head ? `${base}...${head}` : base;
+    const combinedDiff = git(`diff ${diffArgs}`, cwd);
+    const patches = parseCombinedDiff(combinedDiff);
+
+    for (const file of files) {
+      file.patch = patches.get(file.filename);
+      file.chunks = countPatchChunks(file.patch);
+    }
+  } catch {
+    // Fall back to per-file patches if combined diff fails
+    for (const file of files) {
+      file.patch = getFilePatch(base, head, file.filename, cwd);
+      file.chunks = countPatchChunks(file.patch);
+    }
   }
 
   return files;

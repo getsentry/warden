@@ -3,6 +3,37 @@ import { join } from 'node:path';
 import type { DiffHunk, ParsedDiff } from './parser.js';
 import { getExpandedLineRange } from './parser.js';
 
+/** Cache for file contents to avoid repeated reads */
+const fileCache = new Map<string, string[] | null>();
+
+/** Clear the file cache (useful for testing or long-running processes) */
+export function clearFileCache(): void {
+  fileCache.clear();
+}
+
+/** Get cached file lines or read and cache them */
+function getCachedFileLines(filePath: string): string[] | null {
+  if (fileCache.has(filePath)) {
+    return fileCache.get(filePath) ?? null;
+  }
+
+  if (!existsSync(filePath)) {
+    fileCache.set(filePath, null);
+    return null;
+  }
+
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    fileCache.set(filePath, lines);
+    return lines;
+  } catch {
+    // Binary file or read error
+    fileCache.set(filePath, null);
+    return null;
+  }
+}
+
 export interface HunkWithContext {
   /** File path */
   filename: string;
@@ -59,7 +90,7 @@ function detectLanguage(filename: string): string {
 }
 
 /**
- * Read specific lines from a file.
+ * Read specific lines from a file using the cache.
  * Returns empty array if file doesn't exist or is binary.
  */
 function readFileLines(
@@ -67,19 +98,12 @@ function readFileLines(
   startLine: number,
   endLine: number
 ): string[] {
-  if (!existsSync(filePath)) {
+  const lines = getCachedFileLines(filePath);
+  if (!lines) {
     return [];
   }
-
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
-    // Lines are 1-indexed, arrays are 0-indexed
-    return lines.slice(startLine - 1, endLine);
-  } catch {
-    // Binary file or read error
-    return [];
-  }
+  // Lines are 1-indexed, arrays are 0-indexed
+  return lines.slice(startLine - 1, endLine);
 }
 
 /**
