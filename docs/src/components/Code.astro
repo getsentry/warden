@@ -1,0 +1,141 @@
+---
+interface Props {
+  code: string;
+  lang?: string;
+  title?: string;
+}
+
+const { code, lang = 'bash', title } = Astro.props;
+---
+
+<div class="code-block">
+  <div class="code-header">
+    {title && <div class="code-title">{title}</div>}
+    <button class="copy-button" aria-label="Copy to clipboard">
+      <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      <svg class="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </button>
+  </div>
+  <pre><code class={`language-${lang}`} set:text={code} /></pre>
+</div>
+
+<script>
+  function setupCodeCopyButtons() {
+    document.querySelectorAll('.code-block').forEach((block) => {
+      const button = block.querySelector('.copy-button');
+      const code = block.querySelector('code');
+
+      if (!button || !code) return;
+
+      button.addEventListener('click', async () => {
+        const textToCopy = code.textContent || '';
+
+        try {
+          await navigator.clipboard.writeText(textToCopy.trim());
+
+          // Show success state
+          button.classList.add('copied');
+          setTimeout(() => {
+            button.classList.remove('copied');
+          }, 2000);
+        } catch (err) {
+          console.error('Failed to copy:', err);
+        }
+      });
+    });
+  }
+
+  // Run on initial load
+  setupCodeCopyButtons();
+
+  // Re-run after page navigation
+  document.addEventListener('astro:page-load', setupCodeCopyButtons);
+</script>
+
+<style>
+  .code-block {
+    margin: 1rem 0;
+    position: relative;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-bottom: none;
+  }
+
+  .code-title {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex: 1;
+  }
+
+  .code-header:has(.code-title) + pre {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .code-header:not(:has(.code-title)) {
+    background: transparent;
+    border: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1;
+    padding: 0.5rem;
+  }
+
+  .copy-button {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 4px 8px;
+    margin-right: 0.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+  }
+
+  .copy-button:hover {
+    background: rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--text);
+  }
+
+  .copy-button .check-icon {
+    display: none;
+  }
+
+  .copy-button.copied {
+    border-color: #4ade80;
+    color: #4ade80;
+  }
+
+  .copy-button.copied .copy-icon {
+    display: none;
+  }
+
+  .copy-button.copied .check-icon {
+    display: block;
+  }
+
+  .code-block pre {
+    margin: 0;
+  }
+</style>

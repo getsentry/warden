@@ -1,0 +1,188 @@
+---
+interface Props {
+  title?: string;
+  showCopy?: boolean;
+}
+
+const { title, showCopy = false } = Astro.props;
+---
+
+<div class="terminal">
+  <div class="terminal-header">
+    <div class="terminal-dots">
+      <span class="dot red"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+    </div>
+    {title && <span class="terminal-title">{title}</span>}
+    {showCopy && (
+      <button class="copy-button" aria-label="Copy to clipboard">
+        <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </button>
+    )}
+  </div>
+  <div class="terminal-body">
+    <slot />
+  </div>
+</div>
+
+<script>
+  function setupCopyButtons() {
+    document.querySelectorAll('.terminal').forEach((terminal) => {
+      const button = terminal.querySelector('.copy-button');
+      const body = terminal.querySelector('.terminal-body');
+
+      if (!button || !body) return;
+
+      button.addEventListener('click', async () => {
+        // Extract text content from the terminal body
+        const content = body.textContent || '';
+
+        // Split into lines and process each line
+        const lines = content.split('\n');
+        const cleanedLines = lines.map(line => {
+          // Remove leading $ or > prompts (with optional spaces before/after)
+          return line.replace(/^\s*[$>]\s*/, '');
+        });
+
+        // Join back together and trim
+        const textToCopy = cleanedLines.join('\n').trim();
+
+        // Copy to clipboard
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+
+          // Show success state
+          button.classList.add('copied');
+          setTimeout(() => {
+            button.classList.remove('copied');
+          }, 2000);
+        } catch (err) {
+          console.error('Failed to copy:', err);
+        }
+      });
+    });
+  }
+
+  // Run on initial load
+  setupCopyButtons();
+
+  // Re-run after page navigation (for SPA-like behavior)
+  document.addEventListener('astro:page-load', setupCopyButtons);
+</script>
+
+<style>
+  .terminal {
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 1.5rem 0;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.05),
+      0 20px 50px -10px rgba(0, 0, 0, 0.7);
+    position: relative;
+  }
+
+  .terminal-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #0a0a0a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 8px;
+  }
+
+  .terminal-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .dot.red {
+    background: #ff5f57;
+  }
+
+  .dot.yellow {
+    background: #febc2e;
+  }
+
+  .dot.green {
+    background: #28c840;
+  }
+
+  .terminal-title {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #888;
+    margin-left: 4px;
+  }
+
+  .copy-button {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+  }
+
+  .copy-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
+  .copy-button .check-icon {
+    display: none;
+  }
+
+  .copy-button.copied {
+    border-color: #4ade80;
+    color: #4ade80;
+  }
+
+  .copy-button.copied .copy-icon {
+    display: none;
+  }
+
+  .copy-button.copied .check-icon {
+    display: block;
+  }
+
+  .terminal-body {
+    padding: 1rem 1.25rem;
+  }
+
+  .terminal-body :global(pre),
+  .terminal-body :global(pre.astro-code) {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  .terminal-body :global(code) {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+</style>
