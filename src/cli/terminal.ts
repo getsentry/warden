@@ -1,13 +1,7 @@
+import { readFileSync } from 'node:fs';
 import chalk from 'chalk';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
-import { formatSeverityBadge, formatLocation, formatFindingCounts } from './output/index.js';
-
-function formatFindingLocation(finding: Finding): string {
-  if (!finding.location) {
-    return '';
-  }
-  return chalk.dim(formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine));
-}
+import { formatSeverityBadge, formatFindingCounts } from './output/index.js';
 
 const SEVERITY_COLORS: Record<Severity, typeof chalk.red> = {
   critical: chalk.red.bold,
@@ -17,26 +11,63 @@ const SEVERITY_COLORS: Record<Severity, typeof chalk.red> = {
   info: chalk.gray,
 };
 
-function formatFinding(finding: Finding, index: number): string {
+/**
+ * Read a specific line from a file.
+ * Returns undefined if the file can't be read or line doesn't exist.
+ */
+function readFileLine(filePath: string, lineNumber: number): string | undefined {
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    if (lineNumber > 0 && lineNumber <= lines.length) {
+      return lines[lineNumber - 1];
+    }
+  } catch {
+    // File not readable, return undefined
+  }
+  return undefined;
+}
+
+function formatFinding(finding: Finding): string {
   const lines: string[] = [];
   const badge = formatSeverityBadge(finding.severity);
   const color = SEVERITY_COLORS[finding.severity];
 
-  // Title line with badge
-  lines.push(`${chalk.dim(`${index + 1}.`)} ${badge} ${color(finding.title)}`);
-
-  // Location
-  const location = formatFindingLocation(finding);
-  if (location) {
-    lines.push(`   ${location}`);
+  // Line 1: [filename] [title] with severity badge
+  if (finding.location) {
+    lines.push(`${badge} ${chalk.white(finding.location.path)} ${color(finding.title)}`);
+  } else {
+    lines.push(`${badge} ${color(finding.title)}`);
   }
 
-  // Description
-  lines.push(`   ${finding.description}`);
+  // Line 2: indented line number and actual code content
+  if (finding.location?.startLine) {
+    const codeLine = readFileLine(finding.location.path, finding.location.startLine);
+    if (codeLine !== undefined) {
+      const lineNum = chalk.dim(`${finding.location.startLine} │`);
+      lines.push(`  ${lineNum} ${codeLine.trimStart()}`);
+    }
+  }
 
-  // Suggested fix
-  if (finding.suggestedFix) {
-    lines.push(`   ${chalk.dim('Fix:')} ${finding.suggestedFix.description}`);
+  // Blank line, then description
+  lines.push('');
+  lines.push(`  ${finding.description}`);
+
+  // Suggested fix diff if available
+  if (finding.suggestedFix?.diff) {
+    lines.push('');
+    // Format the diff with colors
+    const diffLines = finding.suggestedFix.diff.split('\n').map((line) => {
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        return chalk.green(`  ${line}`);
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        return chalk.red(`  ${line}`);
+      } else if (line.startsWith('@@')) {
+        return chalk.cyan(`  ${line}`);
+      }
+      return `  ${line}`;
+    });
+    lines.push(...diffLines);
   }
 
   return lines.join('\n');
@@ -77,10 +108,10 @@ export function renderTerminalReport(reports: SkillReport[]): string {
     if (report.findings.length === 0) {
       lines.push(chalk.cyan('No issues found.'));
     } else {
-      report.findings.forEach((finding, i) => {
-        lines.push(formatFinding(finding, i));
+      for (const finding of report.findings) {
+        lines.push(formatFinding(finding));
         lines.push('');
-      });
+      }
     }
 
     lines.push('');
