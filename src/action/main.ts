@@ -1,8 +1,7 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Octokit } from '@octokit/rest';
-import { loadWardenConfig, resolveSkill } from '../config/loader.js';
-import type { Trigger } from '../config/schema.js';
+import { loadWardenConfig, resolveSkill, resolveTrigger, type ResolvedTrigger } from '../config/loader.js';
 import { buildEventContext } from '../event/context.js';
 import { runSkill } from '../sdk/runner.js';
 import { renderSkillReport } from '../output/renderer.js';
@@ -177,7 +176,9 @@ async function run(): Promise<void> {
   const configFullPath = join(repoPath, inputs.configPath);
   const config = loadWardenConfig(dirname(configFullPath));
 
-  const matchedTriggers = config.triggers.filter((t) => matchTrigger(t, context));
+  // Resolve triggers with defaults and match
+  const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
+  const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
 
   if (matchedTriggers.length === 0) {
     console.log('No triggers matched for this event');
@@ -206,22 +207,16 @@ async function run(): Promise<void> {
     error?: unknown;
   }
 
-  const runSingleTrigger = async (trigger: Trigger): Promise<TriggerResult> => {
+  const runSingleTrigger = async (trigger: ResolvedTrigger): Promise<TriggerResult> => {
     logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
     try {
       const skill = resolveSkill(trigger.skill, config, repoPath);
       const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey, model: trigger.model });
       console.log(`Found ${report.findings.length} findings`);
 
-      // Use trigger's output config, falling back to global inputs
-      const outputConfig = {
-        maxFindings: trigger.output?.maxFindings ?? inputs.maxFindings ?? undefined,
-        extraLabels: trigger.output?.labels ?? [],
-      };
-
       const renderResult = renderSkillReport(report, {
-        maxFindings: outputConfig.maxFindings,
-        extraLabels: outputConfig.extraLabels,
+        maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
+        extraLabels: trigger.output.labels ?? [],
       });
 
       logGroupEnd();
@@ -229,7 +224,7 @@ async function run(): Promise<void> {
         triggerName: trigger.name,
         report,
         renderResult,
-        failOn: trigger.output?.failOn ?? inputs.failOn,
+        failOn: trigger.output.failOn ?? inputs.failOn,
       };
     } catch (error) {
       console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);

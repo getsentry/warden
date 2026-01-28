@@ -65,9 +65,19 @@ export const RunnerConfigSchema = z.object({
 });
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;
 
+// Default configuration that triggers inherit from
+export const DefaultsSchema = z.object({
+  filters: PathFilterSchema.optional(),
+  output: OutputConfigSchema.optional(),
+  /** Default model for all triggers (e.g., 'claude-sonnet-4-20250514') */
+  model: z.string().optional(),
+});
+export type Defaults = z.infer<typeof DefaultsSchema>;
+
 // Main warden.yaml configuration
 export const WardenConfigSchema = z.object({
   version: z.literal(1),
+  defaults: DefaultsSchema.optional(),
   triggers: z.array(TriggerSchema).min(1),
   skills: z.array(SkillDefinitionSchema).optional(),
   runner: RunnerConfigSchema.optional(),

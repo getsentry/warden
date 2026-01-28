@@ -1,0 +1,113 @@
+import { describe, it, expect } from 'vitest';
+import { resolveTrigger } from './loader.js';
+import type { Trigger, WardenConfig } from './schema.js';
+
+describe('resolveTrigger', () => {
+  const baseTrigger: Trigger = {
+    name: 'test-trigger',
+    event: 'pull_request',
+    actions: ['opened'],
+    skill: 'test-skill',
+  };
+
+  const baseConfig: WardenConfig = {
+    version: 1,
+    triggers: [baseTrigger],
+  };
+
+  it('returns trigger with empty filters and output when no defaults', () => {
+    const resolved = resolveTrigger(baseTrigger, baseConfig);
+
+    expect(resolved.filters).toEqual({
+      paths: undefined,
+      ignorePaths: undefined,
+    });
+    expect(resolved.output).toEqual({
+      failOn: undefined,
+      maxFindings: undefined,
+      labels: undefined,
+    });
+    expect(resolved.model).toBeUndefined();
+  });
+
+  it('applies defaults when trigger has no config', () => {
+    const config: WardenConfig = {
+      ...baseConfig,
+      defaults: {
+        filters: { paths: ['src/**'], ignorePaths: ['*.test.ts'] },
+        output: { failOn: 'high', maxFindings: 10, labels: ['security'] },
+        model: 'claude-sonnet-4-20250514',
+      },
+    };
+
+    const resolved = resolveTrigger(baseTrigger, config);
+
+    expect(resolved.filters.paths).toEqual(['src/**']);
+    expect(resolved.filters.ignorePaths).toEqual(['*.test.ts']);
+    expect(resolved.output.failOn).toBe('high');
+    expect(resolved.output.maxFindings).toBe(10);
+    expect(resolved.output.labels).toEqual(['security']);
+    expect(resolved.model).toBe('claude-sonnet-4-20250514');
+  });
+
+  it('trigger config overrides defaults', () => {
+    const trigger: Trigger = {
+      ...baseTrigger,
+      filters: { paths: ['lib/**'] },
+      output: { failOn: 'critical' },
+      model: 'claude-opus-4-20250514',
+    };
+
+    const config: WardenConfig = {
+      ...baseConfig,
+      triggers: [trigger],
+      defaults: {
+        filters: { paths: ['src/**'], ignorePaths: ['*.test.ts'] },
+        output: { failOn: 'high', maxFindings: 10 },
+        model: 'claude-sonnet-4-20250514',
+      },
+    };
+
+    const resolved = resolveTrigger(trigger, config);
+
+    // Trigger overrides
+    expect(resolved.filters.paths).toEqual(['lib/**']);
+    expect(resolved.output.failOn).toBe('critical');
+    expect(resolved.model).toBe('claude-opus-4-20250514');
+
+    // Defaults still applied where trigger doesn't specify
+    expect(resolved.filters.ignorePaths).toEqual(['*.test.ts']);
+    expect(resolved.output.maxFindings).toBe(10);
+  });
+
+  it('partial defaults are applied correctly', () => {
+    const config: WardenConfig = {
+      ...baseConfig,
+      defaults: {
+        filters: { ignorePaths: ['*.md'] },
+      },
+    };
+
+    const resolved = resolveTrigger(baseTrigger, config);
+
+    expect(resolved.filters.paths).toBeUndefined();
+    expect(resolved.filters.ignorePaths).toEqual(['*.md']);
+    expect(resolved.output.failOn).toBeUndefined();
+    expect(resolved.model).toBeUndefined();
+  });
+
+  it('preserves other trigger properties', () => {
+    const trigger: Trigger = {
+      ...baseTrigger,
+      name: 'my-trigger',
+      skill: 'security-review',
+    };
+
+    const resolved = resolveTrigger(trigger, baseConfig);
+
+    expect(resolved.name).toBe('my-trigger');
+    expect(resolved.event).toBe('pull_request');
+    expect(resolved.actions).toEqual(['opened']);
+    expect(resolved.skill).toBe('security-review');
+  });
+});

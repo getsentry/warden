@@ -1,7 +1,15 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
-import { WardenConfigSchema, type WardenConfig, type SkillDefinition, SkillDefinitionSchema } from './schema.js';
+import {
+  WardenConfigSchema,
+  type WardenConfig,
+  type SkillDefinition,
+  SkillDefinitionSchema,
+  type Trigger,
+  type PathFilter,
+  type OutputConfig,
+} from './schema.js';
 
 export class ConfigLoadError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -88,4 +96,34 @@ export function resolveSkill(skillName: string, config: WardenConfig, repoPath: 
   }
 
   throw new ConfigLoadError(`Skill not found: ${skillName}`);
+}
+
+/**
+ * Resolved trigger configuration with defaults applied.
+ */
+export interface ResolvedTrigger extends Trigger {
+  filters: PathFilter;
+  output: OutputConfig;
+}
+
+/**
+ * Resolve a trigger's configuration by merging with defaults.
+ * Trigger-specific values override defaults.
+ */
+export function resolveTrigger(trigger: Trigger, config: WardenConfig): ResolvedTrigger {
+  const defaults = config.defaults;
+
+  return {
+    ...trigger,
+    filters: {
+      paths: trigger.filters?.paths ?? defaults?.filters?.paths,
+      ignorePaths: trigger.filters?.ignorePaths ?? defaults?.filters?.ignorePaths,
+    },
+    output: {
+      failOn: trigger.output?.failOn ?? defaults?.output?.failOn,
+      maxFindings: trigger.output?.maxFindings ?? defaults?.output?.maxFindings,
+      labels: trigger.output?.labels ?? defaults?.output?.labels,
+    },
+    model: trigger.model ?? defaults?.model,
+  };
 }

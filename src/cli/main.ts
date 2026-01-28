@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
-import { loadWardenConfig } from '../config/loader.js';
+import { loadWardenConfig, resolveTrigger } from '../config/loader.js';
 import type { SkillDefinition } from '../config/schema.js';
 import { runSkill } from '../sdk/runner.js';
 import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
@@ -344,8 +344,9 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
   const config = loadWardenConfig(dirname(configPath));
   logSuccess(`Loaded ${config.triggers.length} trigger(s)`);
 
-  // Match triggers
-  const matchedTriggers = config.triggers.filter((t) => matchTrigger(t, context));
+  // Resolve triggers with defaults and match
+  const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
+  const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
 
   // Filter by skill if specified
   const triggersToRun = options.skill
@@ -394,7 +395,7 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
       const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
       const report = await runSkill(skill, context, { apiKey, model: trigger.model });
       logSuccess(`${trigger.name}: Found ${report.findings.length} finding(s)`);
-      return { triggerName: trigger.name, report, failOn: trigger.output?.failOn ?? options.failOn };
+      return { triggerName: trigger.name, report, failOn: trigger.output.failOn ?? options.failOn };
     } catch (error) {
       logError(`Trigger ${trigger.name} failed: ${error}`);
       return { triggerName: trigger.name, error };
