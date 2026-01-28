@@ -1,0 +1,11 @@
+{
+  "skill": "security-review",
+  "description": "Hardcoded API keys and passwords",
+  "expected": [
+    {
+      "severity": "critical",
+      "pattern": "(secret|credential|api.?key|password)",
+      "file": "config.ts"
+    }
+  ]
+}

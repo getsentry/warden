@@ -1,0 +1,11 @@
+{
+  "skill": "security-review",
+  "description": "SQL injection via string concatenation",
+  "expected": [
+    {
+      "severity": "critical",
+      "pattern": "sql.?injection",
+      "file": "database.ts"
+    }
+  ]
+}

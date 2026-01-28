@@ -16,6 +16,7 @@
     "lint:fix": "eslint src --fix",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:examples": "vitest run src/examples/examples.integration.test.ts",
     "typecheck": "tsc --noEmit",
     "prepare": "simple-git-hooks"
   },

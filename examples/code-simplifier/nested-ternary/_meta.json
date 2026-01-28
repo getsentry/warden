@@ -1,0 +1,11 @@
+{
+  "skill": "code-simplifier",
+  "description": "Nested ternary operators that should be simplified",
+  "expected": [
+    {
+      "severity": "medium",
+      "pattern": "(ternary|nested|simplif|readab)",
+      "file": "component.tsx"
+    }
+  ]
+}
