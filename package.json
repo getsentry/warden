@@ -14,8 +14,8 @@
     "dev": "tsc --watch",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "vitest",
-    "test:run": "vitest run",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:examples": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
     "prepare": "simple-git-hooks"
