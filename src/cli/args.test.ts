@@ -158,6 +158,16 @@ describe('parseCliArgs', () => {
     const result = parseCliArgs([]);
     expect(result.options.color).toBeUndefined();
   });
+
+  it('parses --fix flag', () => {
+    const result = parseCliArgs(['--fix']);
+    expect(result.options.fix).toBe(true);
+  });
+
+  it('defaults fix to false', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.fix).toBe(false);
+  });
 });
 
 describe('CLIOptionsSchema', () => {

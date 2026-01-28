@@ -67,9 +67,9 @@ export class BoxRenderer {
 
       this.lines.push(
         chalk.dim(BOX.topLeft) +
-          chalk.dim(BOX.horizontal + ' ') +
+          chalk.dim(BOX.horizontal) + ' ' +
           chalk.bold(this.title) +
-          chalk.dim(' ' + fill) +
+          ' ' + chalk.dim(fill) +
           (this.badge ? chalk.dim(` ${this.badge} `) : '') +
           chalk.dim(BOX.horizontal + BOX.topRight)
       );

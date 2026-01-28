@@ -16,9 +16,16 @@ import {
   Reporter,
   detectOutputMode,
   parseVerbosity,
+  Verbosity,
   runSkillTasks,
   type SkillTaskOptions,
 } from './output/index.js';
+import {
+  collectFixableFindings,
+  applyAllFixes,
+  runInteractiveFixFlow,
+  renderFixSummary,
+} from './fix.js';
 
 /**
  * Load environment variables from .env files in the given directory.
@@ -146,6 +153,24 @@ async function runSkills(
   const totalDuration = Date.now() - startTime;
   reporter.blank();
   reporter.renderSummary(reports, totalDuration);
+
+  // Handle fixes
+  const fixableFindings = collectFixableFindings(reports);
+  if (fixableFindings.length > 0) {
+    if (options.fix) {
+      // --fix mode: apply all fixes automatically
+      const fixSummary = applyAllFixes(fixableFindings);
+      renderFixSummary(fixSummary, reporter);
+    } else if (
+      !options.json &&
+      reporter.verbosity !== Verbosity.Quiet &&
+      reporter.mode.isTTY
+    ) {
+      // Interactive mode: prompt user
+      const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
+      renderFixSummary(fixSummary, reporter);
+    }
+  }
 
   // Determine exit code
   if (hasFailure) {
@@ -418,6 +443,24 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const totalDuration = Date.now() - startTime;
   reporter.blank();
   reporter.renderSummary(reports, totalDuration);
+
+  // Handle fixes
+  const fixableFindings = collectFixableFindings(reports);
+  if (fixableFindings.length > 0) {
+    if (options.fix) {
+      // --fix mode: apply all fixes automatically
+      const fixSummary = applyAllFixes(fixableFindings);
+      renderFixSummary(fixSummary, reporter);
+    } else if (
+      !options.json &&
+      reporter.verbosity !== Verbosity.Quiet &&
+      reporter.mode.isTTY
+    ) {
+      // Interactive mode: prompt user
+      const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
+      renderFixSummary(fixSummary, reporter);
+    }
+  }
 
   // Determine exit code
   if (hasFailure) {
