@@ -1,0 +1,276 @@
+---
+import Base from '../layouts/Base.astro';
+import Terminal from '../components/Terminal.astro';
+import { Code } from 'astro:components';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<Base title="Home" description="AI-powered code review for GitHub. Run security analysis and custom skills on pull requests.">
+  <div class="hero">
+    <p class="tagline">AI-Powered Code Review for GitHub</p>
+    <p class="tagline-sub">Run security analysis and custom skills on every pull request</p>
+
+    <div class="cta-buttons">
+      <a href={`${base}/setup`} class="btn btn-primary">Get Started</a>
+    </div>
+  </div>
+
+  <section class="section">
+    <h2>What is Warden?</h2>
+    <p>Warden is a GitHub Action that uses Claude to analyze your pull requests. Configure triggers and skills to automatically review code for security vulnerabilities, code quality issues, and more.</p>
+  </section>
+
+  <section class="section">
+    <h2>Quick Start</h2>
+    <p>Add Warden to your repository in two steps:</p>
+
+    <h3>1. Create the workflow</h3>
+    <Terminal title=".github/workflows/warden.yml" showCopy={true}>
+      <Code
+        code={`name: Warden
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: getsentry/warden-action@v1
+        with:
+          anthropic-api-key: \${{ secrets.ANTHROPIC_API_KEY }}
+          github-token: \${{ secrets.GITHUB_TOKEN }}`}
+        lang="yaml"
+        theme="vitesse-black"
+      />
+    </Terminal>
+
+    <h3>2. Configure triggers</h3>
+    <Terminal title="warden.toml" showCopy={true}>
+      <Code
+        code={`version = 1
+
+[[triggers]]
+name = "Security Review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "security-review"`}
+        lang="toml"
+        theme="vitesse-black"
+      />
+    </Terminal>
+
+    <p>See the <a href={`${base}/setup`}>setup guide</a> for detailed configuration options.</p>
+  </section>
+
+  <section class="section features">
+    <h2>Features</h2>
+
+    <div class="feature">
+      <h3>Security Analysis</h3>
+      <p>Built-in <code>security-review</code> skill scans for injection vulnerabilities, authentication issues, exposed secrets, and more.</p>
+    </div>
+
+    <div class="feature">
+      <h3>Inline Comments</h3>
+      <p>Findings appear as inline PR comments on the exact lines with issues, with suggested fixes when available.</p>
+    </div>
+
+    <div class="feature">
+      <h3>Custom Skills</h3>
+      <p>Define your own skills with custom prompts and tool restrictions in <code>.warden/skills/</code>.</p>
+    </div>
+
+    <div class="feature">
+      <h3>Configurable Triggers</h3>
+      <p>Control which skills run based on event type, PR action, and file path patterns.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>How It Works</h2>
+    <div class="architecture">
+      <div class="arch-step">
+        <span class="arch-num">1</span>
+        <div>
+          <strong>Trigger</strong>
+          <p>PR opened or updated</p>
+        </div>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-step">
+        <span class="arch-num">2</span>
+        <div>
+          <strong>Config</strong>
+          <p>Match triggers in warden.toml</p>
+        </div>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-step">
+        <span class="arch-num">3</span>
+        <div>
+          <strong>Analyze</strong>
+          <p>Claude runs matched skills</p>
+        </div>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-step">
+        <span class="arch-num">4</span>
+        <div>
+          <strong>Report</strong>
+          <p>Post findings to GitHub</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero {
+    text-align: center;
+    padding: 3rem 0 2rem;
+  }
+
+  .tagline {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .tagline-sub {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    margin: 1rem 0 2rem;
+  }
+
+  .cta-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .btn-primary {
+    background: #fff;
+    color: #000;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.9;
+    color: #000;
+  }
+
+  .section {
+    margin-top: 3rem;
+  }
+
+  .section h2 {
+    margin-bottom: 1rem;
+  }
+
+  .section h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .features {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .feature {
+    padding: 1.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .feature h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+  }
+
+  .feature p {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .architecture {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+  }
+
+  .arch-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .arch-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: #fff;
+    color: #000;
+    border-radius: 50%;
+    font-size: 0.875rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .arch-step strong {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .arch-step p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  .arch-arrow {
+    color: var(--text-tertiary);
+    font-size: 1.25rem;
+  }
+
+  @media (max-width: 768px) {
+    .tagline {
+      font-size: 1.5rem;
+    }
+
+    .architecture {
+      flex-direction: column;
+    }
+
+    .arch-arrow {
+      transform: rotate(90deg);
+    }
+
+    .arch-step {
+      width: 100%;
+    }
+  }
+</style>

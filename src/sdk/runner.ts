@@ -15,6 +15,84 @@ export interface SkillRunnerOptions {
   maxTurns?: number;
 }
 
+/**
+ * Builds the system prompt for the warden agent.
+ * Establishes the agent role, injects skill-specific instructions,
+ * and mandates the fixed SkillReport output format.
+ */
+export function buildSystemPrompt(skill: SkillDefinition): string {
+  return `You are a code analysis agent for Warden. You analyze pull requests and report findings in a structured format.
+
+## Your Analysis Task
+
+${skill.prompt}
+
+## Output Format
+
+You MUST return your analysis as a JSON object with this exact structure:
+
+\`\`\`json
+{
+  "skill": "${skill.name}",
+  "summary": "Brief summary of findings (1-2 sentences)",
+  "findings": [
+    {
+      "id": "unique-identifier",
+      "severity": "critical|high|medium|low|info",
+      "title": "Short descriptive title",
+      "description": "Detailed explanation of the issue",
+      "location": {
+        "path": "path/to/file.ts",
+        "startLine": 10,
+        "endLine": 15
+      },
+      "suggestedFix": {
+        "description": "How to fix this issue",
+        "diff": "unified diff format"
+      },
+      "labels": ["optional-label"]
+    }
+  ],
+  "metadata": {}
+}
+\`\`\`
+
+Requirements:
+- Return ONLY valid JSON (no markdown fences, no explanation before/after)
+- Include "skill" and "summary" fields always
+- "findings" array can be empty if no issues found
+- "location" is required for file-specific findings
+- "suggestedFix" and "labels" are optional
+- Use severity levels appropriately:
+  - critical: Actively exploitable, severe impact
+  - high: Exploitable with moderate effort
+  - medium: Potential issue, needs review
+  - low: Minor concern
+  - info: Observation, not a problem`;
+}
+
+/**
+ * Builds the user prompt with PR context.
+ * Output instructions are in the system prompt.
+ * Requires pullRequest to be present in context.
+ */
+export function buildUserPrompt(context: EventContext & { pullRequest: NonNullable<EventContext['pullRequest']> }): string {
+  const pr = context.pullRequest;
+
+  return `Analyze this pull request:
+
+## PR #${pr.number}: ${pr.title}
+
+**Author:** ${pr.author}
+**Branch:** ${pr.baseBranch} ← ${pr.headBranch}
+
+### Description
+${pr.body || '(No description provided)'}
+
+### Files Changed (${pr.files.length})
+${pr.files.map(f => `- \`${f.filename}\` (+${f.additions}/-${f.deletions})`).join('\n')}`;
+}
+
 export async function runSkill(
   skill: SkillDefinition,
   context: EventContext,
@@ -27,14 +105,15 @@ export async function runSkill(
   }
 
   const contextWithPR = context as EventContext & { pullRequest: NonNullable<EventContext['pullRequest']> };
-  const prompt = buildPrompt(skill, contextWithPR);
+  const systemPrompt = buildSystemPrompt(skill);
+  const userPrompt = buildUserPrompt(contextWithPR);
 
   const stream = query({
-    prompt,
+    prompt: userPrompt,
     options: {
       maxTurns,
       cwd: context.repoPath,
-      customSystemPrompt: skill.prompt,
+      customSystemPrompt: systemPrompt,
       allowedTools: skill.tools?.allowed,
       disallowedTools: skill.tools?.denied,
       permissionMode: 'bypassPermissions',
@@ -54,46 +133,6 @@ export async function runSkill(
   }
 
   return parseSkillOutput(skill.name, resultMessage);
-}
-
-function buildPrompt(skill: SkillDefinition, context: EventContext & { pullRequest: NonNullable<EventContext['pullRequest']> }): string {
-  const pr = context.pullRequest;
-
-  return `Analyze this pull request and return your findings as JSON matching the SkillReport schema.
-
-## Pull Request Details
-- **Number**: #${pr.number}
-- **Title**: ${pr.title}
-- **Author**: ${pr.author}
-- **Base Branch**: ${pr.baseBranch}
-- **Head Branch**: ${pr.headBranch}
-
-## Description
-${pr.body || '(No description provided)'}
-
-## Files Changed (${pr.files.length} files)
-${pr.files.map(f => `- ${f.filename} (+${f.additions}/-${f.deletions})`).join('\n')}
-
-## Instructions
-${skill.description}
-
-Return your analysis as a JSON object with this structure:
-{
-  "skill": "${skill.name}",
-  "summary": "Brief summary of your findings",
-  "findings": [
-    {
-      "id": "unique-id",
-      "severity": "critical|high|medium|low|info",
-      "title": "Short title",
-      "description": "Detailed description",
-      "location": { "path": "file.ts", "startLine": 10, "endLine": 15 },
-      "suggestedFix": { "description": "How to fix", "diff": "unified diff" },
-      "labels": ["optional", "labels"]
-    }
-  ],
-  "metadata": {}
-}`;
 }
 
 function parseSkillOutput(skillName: string, result: SDKResultMessage): SkillReport {

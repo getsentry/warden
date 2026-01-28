@@ -18,7 +18,7 @@ const SEVERITY_ORDER: Record<Severity, number> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, extraLabels = [] } = options;
 
   const findings = maxFindings ? report.findings.slice(0, maxFindings) : report.findings;
   const sortedFindings = [...findings].sort(
@@ -27,7 +27,7 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
 
   const review = renderReview(sortedFindings, report, includeSuggestions);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile);
-  const labels = collectLabels(sortedFindings);
+  const labels = collectLabels(sortedFindings, extraLabels);
 
   return { review, summaryComment, labels };
 }
@@ -183,8 +183,9 @@ function groupFindingsByFile(findings: Finding[]): Record<string, Finding[]> {
   return groups;
 }
 
-function collectLabels(findings: Finding[]): GitHubLabel[] {
-  const allLabels = findings.flatMap((f) => f.labels ?? []);
+function collectLabels(findings: Finding[], extraLabels: string[] = []): GitHubLabel[] {
+  const findingLabels = findings.flatMap((f) => f.labels ?? []);
+  const allLabels = [...findingLabels, ...extraLabels];
   const uniqueLabels = [...new Set(allLabels)];
   return uniqueLabels.map((name) => ({ name, action: 'add' as const }));
 }

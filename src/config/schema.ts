@@ -37,13 +37,22 @@ export const PathFilterSchema = z.object({
 });
 export type PathFilter = z.infer<typeof PathFilterSchema>;
 
+// Output configuration per trigger
+export const OutputConfigSchema = z.object({
+  failOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
+  maxFindings: z.number().int().positive().optional(),
+  labels: z.array(z.string()).optional(),
+});
+export type OutputConfig = z.infer<typeof OutputConfigSchema>;
+
 // Trigger definition
 export const TriggerSchema = z.object({
   name: z.string().min(1),
   event: z.enum(['pull_request', 'issues', 'issue_comment']),
   actions: z.array(z.string()).min(1),
-  skills: z.array(z.string()).min(1),
+  skill: z.string().min(1),
   filters: PathFilterSchema.optional(),
+  output: OutputConfigSchema.optional(),
 });
 export type Trigger = z.infer<typeof TriggerSchema>;
 

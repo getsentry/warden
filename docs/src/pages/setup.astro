@@ -1,0 +1,252 @@
+---
+import Base from '../layouts/Base.astro';
+import Terminal from '../components/Terminal.astro';
+import { Code } from 'astro:components';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<Base title="Setup" description="Set up Warden in your GitHub repository">
+  <h1>Setup</h1>
+
+  <p>Get Warden running on your repository in a few steps.</p>
+
+  <h2>Prerequisites</h2>
+
+  <ul>
+    <li>A GitHub repository</li>
+    <li>An Anthropic API key (<a href="https://console.anthropic.com/">get one here</a>)</li>
+  </ul>
+
+  <h2>1. Add Your API Key</h2>
+
+  <p>Add your Anthropic API key as a repository secret:</p>
+
+  <ol>
+    <li>Go to your repository on GitHub</li>
+    <li>Navigate to <strong>Settings → Secrets and variables → Actions</strong></li>
+    <li>Click <strong>New repository secret</strong></li>
+    <li>Name: <code>ANTHROPIC_API_KEY</code></li>
+    <li>Value: Your API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></li>
+  </ol>
+
+  <h2>2. Create the Workflow</h2>
+
+  <p>Create <code>.github/workflows/warden.yml</code>:</p>
+
+  <Terminal title=".github/workflows/warden.yml" showCopy={true}>
+    <Code
+      code={`name: Warden
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: getsentry/warden-action@v1
+        with:
+          anthropic-api-key: \${{ secrets.ANTHROPIC_API_KEY }}
+          github-token: \${{ secrets.GITHUB_TOKEN }}`}
+      lang="yaml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>Action Inputs</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Input</th>
+        <th>Required</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>anthropic-api-key</code></td>
+        <td>Yes</td>
+        <td>Your Anthropic API key</td>
+      </tr>
+      <tr>
+        <td><code>github-token</code></td>
+        <td>Yes</td>
+        <td>GitHub token for posting comments (use <code>secrets.GITHUB_TOKEN</code>)</td>
+      </tr>
+      <tr>
+        <td><code>config-path</code></td>
+        <td>No</td>
+        <td>Path to config file (default: <code>warden.toml</code>)</td>
+      </tr>
+      <tr>
+        <td><code>fail-on</code></td>
+        <td>No</td>
+        <td>Minimum severity to fail the action: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Create the Configuration</h2>
+
+  <p>Create <code>warden.toml</code> in your repository root:</p>
+
+  <Terminal title="warden.toml" showCopy={true}>
+    <Code
+      code={`version = 1
+
+[[triggers]]
+name = "Security Review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "security-review"`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Configuration Reference</h2>
+
+  <h3>Triggers</h3>
+
+  <p>Each trigger maps GitHub events to skills that should run.</p>
+
+  <Terminal title="warden.toml" showCopy={true}>
+    <Code
+      code={`[[triggers]]
+name = "Security Review"           # Display name
+event = "pull_request"             # GitHub event type
+actions = ["opened", "synchronize"] # Which actions trigger this
+skill = "security-review"          # Skill to run
+
+# Optional: filter by file paths
+[triggers.filters]
+paths = ["src/**/*.ts"]            # Only run on matching files
+ignorePaths = ["**/*.test.ts"]     # Exclude test files
+
+# Optional: output configuration
+[triggers.output]
+failOn = "high"                    # Fail CI if high+ severity found
+maxFindings = 10                   # Limit to 10 findings in output
+labels = ["security"]              # Always add this label when trigger runs`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h4>Supported Events</h4>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Event</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>pull_request</code></td>
+        <td><code>opened</code>, <code>synchronize</code>, <code>reopened</code>, <code>closed</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Multiple Triggers</h3>
+
+  <p>You can define multiple triggers for different scenarios:</p>
+
+  <Terminal title="warden.toml" showCopy={true}>
+    <Code
+      code={`version = 1
+
+# Run security review on all PRs
+[[triggers]]
+name = "Security Review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "security-review"
+
+# Run a custom skill only on specific paths
+[[triggers]]
+name = "API Review"
+event = "pull_request"
+actions = ["opened"]
+skill = "api-review"
+
+[triggers.filters]
+paths = ["src/api/**/*.ts"]`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Custom Skills</h2>
+
+  <p>Define custom skills in <code>.warden/skills/</code>. See the <a href={`${base}/skills`}>skills documentation</a> for details.</p>
+
+  <h2>Verify Setup</h2>
+
+  <p>Open a pull request to test your configuration. You should see:</p>
+
+  <ol>
+    <li>The Warden action running in the PR checks</li>
+    <li>Review comments appearing on the PR if issues are found</li>
+    <li>A summary comment with all findings</li>
+  </ol>
+</Base>
+
+<style>
+  h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  h2 {
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  h4 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+  }
+
+  th {
+    background: rgba(255, 255, 255, 0.03);
+    font-weight: 600;
+  }
+
+  td code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+
+  ol, ul {
+    padding-left: 1.5rem;
+  }
+
+  li {
+    margin-bottom: 0.5rem;
+  }
+</style>

@@ -13,7 +13,7 @@ interface ActionInputs {
   anthropicApiKey: string;
   githubToken: string;
   configPath: string;
-  failOnFindings: boolean;
+  failOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
   maxFindings: number;
 }
 
@@ -27,11 +27,17 @@ function getInputs(): ActionInputs {
     return value;
   };
 
+  const failOnInput = getInput('fail-on');
+  const validFailOn = ['critical', 'high', 'medium', 'low', 'info'] as const;
+  const failOn = validFailOn.includes(failOnInput as typeof validFailOn[number])
+    ? (failOnInput as typeof validFailOn[number])
+    : undefined;
+
   return {
     anthropicApiKey: getInput('anthropic-api-key', true),
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
     configPath: getInput('config-path') || 'warden.toml',
-    failOnFindings: getInput('fail-on-findings') !== 'false',
+    failOn,
     maxFindings: parseInt(getInput('max-findings') || '50', 10),
   };
 }
@@ -173,6 +179,24 @@ function countSeverity(reports: SkillReport[], severity: Severity): number {
   );
 }
 
+const SEVERITY_ORDER: Record<Severity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
+
+function shouldFail(report: SkillReport, failOn: Severity): boolean {
+  const threshold = SEVERITY_ORDER[failOn];
+  return report.findings.some((f) => SEVERITY_ORDER[f.severity] <= threshold);
+}
+
+function countFindingsAtOrAbove(report: SkillReport, failOn: Severity): number {
+  const threshold = SEVERITY_ORDER[failOn];
+  return report.findings.filter((f) => SEVERITY_ORDER[f.severity] <= threshold).length;
+}
+
 async function run(): Promise<void> {
   const inputs = getInputs();
 
@@ -231,22 +255,48 @@ async function run(): Promise<void> {
 
   logGroup('Matched triggers');
   for (const trigger of matchedTriggers) {
-    console.log(`- ${trigger.name}: ${trigger.skills.join(', ')}`);
+    console.log(`- ${trigger.name}: ${trigger.skill}`);
   }
   logGroupEnd();
 
-  const skillsToRun = [...new Set(matchedTriggers.flatMap((t) => t.skills))];
   const reports: SkillReport[] = [];
+  let shouldFailAction = false;
+  const failureReasons: string[] = [];
 
-  for (const skillName of skillsToRun) {
-    logGroup(`Running skill: ${skillName}`);
+  for (const trigger of matchedTriggers) {
+    logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
     try {
-      const skill = resolveSkill(skillName, config, repoPath);
+      const skill = resolveSkill(trigger.skill, config, repoPath);
       const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey });
       reports.push(report);
       console.log(`Found ${report.findings.length} findings`);
+
+      // Use trigger's output config, falling back to global inputs
+      const outputConfig = {
+        maxFindings: trigger.output?.maxFindings ?? inputs.maxFindings ?? undefined,
+        extraLabels: trigger.output?.labels ?? [],
+      };
+
+      const renderResult = renderSkillReport(report, {
+        maxFindings: outputConfig.maxFindings,
+        extraLabels: outputConfig.extraLabels,
+      });
+
+      try {
+        await postReviewToGitHub(octokit, context, renderResult);
+      } catch (error) {
+        console.error(`::warning::Failed to post review: ${error}`);
+      }
+
+      // Check if we should fail based on this trigger's config
+      const failOn = trigger.output?.failOn ?? inputs.failOn;
+      if (failOn && shouldFail(report, failOn)) {
+        shouldFailAction = true;
+        const count = countFindingsAtOrAbove(report, failOn);
+        failureReasons.push(`${trigger.name}: Found ${count} ${failOn}+ severity issues`);
+      }
     } catch (error) {
-      console.error(`::warning::Skill ${skillName} failed: ${error}`);
+      console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
     }
     logGroupEnd();
   }
@@ -260,22 +310,8 @@ async function run(): Promise<void> {
   setOutput('high-count', highCount);
   setOutput('summary', reports.map((r) => r.summary).join('\n'));
 
-  for (const report of reports) {
-    const renderResult = renderSkillReport(report, {
-      maxFindings: inputs.maxFindings || undefined,
-    });
-
-    try {
-      await postReviewToGitHub(octokit, context, renderResult);
-    } catch (error) {
-      console.error(`::warning::Failed to post review: ${error}`);
-    }
-  }
-
-  if (inputs.failOnFindings && (criticalCount > 0 || highCount > 0)) {
-    setFailed(
-      `Found ${criticalCount} critical and ${highCount} high severity findings`
-    );
+  if (shouldFailAction) {
+    setFailed(failureReasons.join('; '));
   }
 
   console.log(`\nAnalysis complete: ${totalFindings} total findings`);
