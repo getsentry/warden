@@ -47,35 +47,47 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
 
     <div class="step">
+      <h3>Add a Skill</h3>
+      <p>Install a skill from the community. Vercel's React best practices is a great start.</p>
+      <Terminal title="Terminal" showCopy={true}>
+        <Code
+          code="npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-best-practices"
+          lang="bash"
+          theme="vitesse-black"
+        />
+      </Terminal>
+    </div>
+
+    <div class="step">
       <h3>Run Locally</h3>
       <p>Catch issues before you push. Fix them immediately.</p>
       <Terminal title="Terminal" showCopy={false}>
-        <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill code-simplifier
+        <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill vercel-react-best-practices
 
 Analyzing changes from <span class="cli-cyan">HEAD</span>...
 
 <span class="cli-bold">FILES</span>  <span class="cli-cyan">3 files</span> <span class="cli-dim">· 5 chunks</span>
-  <span class="cli-yellow">~</span> src/api/auth.ts <span class="cli-dim">(2 chunks)</span>
-  <span class="cli-yellow">~</span> src/api/users.ts <span class="cli-dim">(2 chunks)</span>
-  <span class="cli-green">+</span> src/api/sessions.ts <span class="cli-dim">(1 chunk)</span>
+  <span class="cli-yellow">~</span> src/components/UserList.tsx <span class="cli-dim">(2 chunks)</span>
+  <span class="cli-yellow">~</span> src/components/Dashboard.tsx <span class="cli-dim">(2 chunks)</span>
+  <span class="cli-green">+</span> src/components/Modal.tsx <span class="cli-dim">(1 chunk)</span>
 
-┌─ <span class="cli-bold">code-simplifier</span> ──────────────────────────────────────── <span class="cli-dim">8.2s</span> ─┐
+┌─ <span class="cli-bold">vercel-react-best-practices</span> ─────────────────────────── <span class="cli-dim">8.2s</span> ─┐
 │ <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│ <span class="cli-yellow">●</span> <span class="cli-bold">Nested ternary reduces readability</span>                            │
-│   <span class="cli-dim">src/api/auth.ts:42</span>                                            │
-│   <span class="cli-dim">42 │</span> const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user'; │
+│ <span class="cli-yellow">●</span> <span class="cli-bold">Missing React.memo for list items</span>                             │
+│   <span class="cli-dim">src/components/UserList.tsx:15</span>                                │
+│   <span class="cli-dim">15 │</span> const UserCard = {'({'} user {'}'}) => &lt;div&gt;{'{'}user.name{'}'}&lt;/div&gt;; │
 │                                                                 │
-│   Nested ternary operators are harder to read. Consider using   │
-│   a switch statement or if/else chain for clarity.              │
+│   List item components should be memoized to prevent            │
+│   unnecessary re-renders when parent state changes.             │
 │                                                                 │
-│ <span class="cli-cyan">●</span> <span class="cli-bold">Redundant null check</span>                                          │
-│   <span class="cli-dim">src/api/users.ts:18</span>                                           │
-│   <span class="cli-dim">18 │</span> if (user !== null && user !== undefined) {'{'}               │
+│ <span class="cli-cyan">●</span> <span class="cli-bold">useEffect missing dependency</span>                                   │
+│   <span class="cli-dim">src/components/Dashboard.tsx:23</span>                               │
+│   <span class="cli-dim">23 │</span> useEffect({'('}) => {'{'} fetchData() {'}'}, []{')'}                      │
 │                                                                 │
-│   Use optional chaining or nullish coalescing instead of        │
-│   explicit null/undefined checks.                               │
+│   The dependency array is missing 'fetchData'. This could       │
+│   lead to stale closures or unexpected behavior.                │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 
@@ -104,16 +116,16 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
         <div class="pr-mock-body">
           <div class="pr-mock-finding">
             <span class="pr-mock-severity severity-medium"></span>
-            <span class="pr-mock-title">Nested ternary reduces readability</span>
+            <span class="pr-mock-title">Missing React.memo for list items</span>
           </div>
           <div class="pr-mock-code">
-            <div class="pr-mock-code-header">src/api/auth.ts</div>
-            <pre class="pr-mock-code-content"><span class="line-num">42</span><span class="line-old">- const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user';</span>
-<span class="line-num">42</span><span class="line-new">+ const role = isAdmin</span>
-<span class="line-num">43</span><span class="line-new">+   ? 'admin'</span>
-<span class="line-num">44</span><span class="line-new">+   : isMod ? 'mod' : 'user';</span></pre>
+            <div class="pr-mock-code-header">src/components/UserList.tsx</div>
+            <pre class="pr-mock-code-content"><span class="line-num">15</span><span class="line-old">- const UserCard = ({ user }) => &lt;div&gt;{user.name}&lt;/div&gt;;</span>
+<span class="line-num">15</span><span class="line-new">+ const UserCard = React.memo(({ user }) =></span>
+<span class="line-num">16</span><span class="line-new">+   &lt;div&gt;{user.name}&lt;/div&gt;</span>
+<span class="line-num">17</span><span class="line-new">+ );</span></pre>
           </div>
-          <p class="pr-mock-desc">Nested ternary operators are harder to read. Consider using a switch statement or if/else chain for clarity.</p>
+          <p class="pr-mock-desc">List item components should be memoized to prevent unnecessary re-renders when parent state changes.</p>
         </div>
         <div class="pr-mock-footer">
           <a href="#" class="pr-mock-link">View all 2 findings</a>
