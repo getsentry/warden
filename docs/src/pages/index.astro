@@ -18,10 +18,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <section class="quick-start">
     <div class="step">
-      <div class="step-header">
-        <span class="step-num">1</span>
-        <h3>Install</h3>
-      </div>
+      <h3>Install</h3>
       <p>Install the CLI globally.</p>
       <Terminal title="Terminal" showCopy={true}>
         <Code
@@ -33,10 +30,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
 
     <div class="step">
-      <div class="step-header">
-        <span class="step-num">2</span>
-        <h3>Initialize</h3>
-      </div>
+      <h3>Initialize</h3>
       <p>Scaffold your project with config and GitHub workflow.</p>
       <Terminal title="Terminal" showCopy={false}>
         <pre class="cli-output"><span class="cli-dim">$</span> warden init
@@ -47,21 +41,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 <span class="cli-bold">Next steps:</span>
   1. Set <span class="cli-cyan">ANTHROPIC_API_KEY</span> in .env.local
   2. Add <span class="cli-cyan">ANTHROPIC_API_KEY</span> to repository secrets
-     <span class="cli-dim">github.com/your-org/your-repo/settings/secrets/actions</span>
+     <span class="cli-dim">https://github.com/your-org/your-repo/settings/secrets/actions</span>
   3. Commit and open a PR to test</pre>
       </Terminal>
     </div>
 
     <div class="step">
-      <div class="step-header">
-        <span class="step-num">3</span>
-        <h3>Run Locally</h3>
-      </div>
+      <h3>Run Locally</h3>
       <p>Catch issues before you push. Fix them immediately.</p>
       <Terminal title="Terminal" showCopy={false}>
         <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill code-simplifier
 
-<span class="cli-dim">__    __              _
+<span class="cli-dim"> __    __              _
 / / /\ \ \__ _ _ __ __| | ___ _ __
 \ \/  \/ / _` | '__/ _` |/ _ \ '_ \
  \  /\  / (_| | | | (_| |  __/ | | |
@@ -76,25 +67,25 @@ Analyzing changes from <span class="cli-cyan">HEAD</span>...
   <span class="cli-yellow">~</span> src/api/users.ts <span class="cli-dim">(2 chunks)</span>
   <span class="cli-green">+</span> src/api/sessions.ts <span class="cli-dim">(1 chunk)</span>
 
-┌─ <span class="cli-bold">code-simplifier</span> ────────────────────────────────────────────── <span class="cli-dim">8.2s</span> ─┐
-│ <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low                                      │
-├───────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│ <span class="cli-yellow">●</span> <span class="cli-bold">Nested ternary reduces readability</span>                                 │
-│   <span class="cli-dim">src/api/auth.ts:42</span>                                                 │
-│   <span class="cli-dim">42 │</span> const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user';       │
-│                                                                       │
-│   Nested ternary operators are harder to read. Consider using a       │
-│   switch statement or if/else chain for clarity.                      │
-│                                                                       │
-│ <span class="cli-cyan">●</span> <span class="cli-bold">Redundant null check</span>                                               │
-│   <span class="cli-dim">src/api/users.ts:18</span>                                                │
-│   <span class="cli-dim">18 │</span> if (user !== null && user !== undefined) {'{'}                  │
-│                                                                       │
-│   Use optional chaining or nullish coalescing instead of explicit     │
-│   null/undefined checks.                                              │
-│                                                                       │
-└───────────────────────────────────────────────────────────────────────┘
+┌─ <span class="cli-bold">code-simplifier</span> ──────────────────────────────────────── <span class="cli-dim">8.2s</span> ─┐
+│ <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ <span class="cli-yellow">●</span> <span class="cli-bold">Nested ternary reduces readability</span>                            │
+│   <span class="cli-dim">src/api/auth.ts:42</span>                                            │
+│   <span class="cli-dim">42 │</span> const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user'; │
+│                                                                 │
+│   Nested ternary operators are harder to read. Consider using   │
+│   a switch statement or if/else chain for clarity.              │
+│                                                                 │
+│ <span class="cli-cyan">●</span> <span class="cli-bold">Redundant null check</span>                                          │
+│   <span class="cli-dim">src/api/users.ts:18</span>                                           │
+│   <span class="cli-dim">18 │</span> if (user !== null && user !== undefined) {'{'}               │
+│                                                                 │
+│   Use optional chaining or nullish coalescing instead of        │
+│   explicit null/undefined checks.                               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 
 <span class="cli-bold">SUMMARY</span>
 <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low
@@ -103,10 +94,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     </div>
 
     <div class="step">
-      <div class="step-header">
-        <span class="step-num">4</span>
-        <h3>See Results on PRs</h3>
-      </div>
+      <h3>Keep an Eye on GitHub</h3>
       <p>Open a PR and Warden reviews it automatically. Findings appear as inline comments.</p>
       <div class="pr-mock">
         <div class="pr-mock-header">
@@ -172,21 +160,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     line-height: 1.1;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    background: linear-gradient(135deg, #fff 0%, #fff 40%, #22d3ee 60%, #fff 80%, #fff 100%);
-    background-size: 200% 100%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer 3s ease-in-out infinite;
-  }
-
-  @keyframes shimmer {
-    0%, 100% {
-      background-position: 100% 50%;
-    }
-    50% {
-      background-position: 0% 50%;
-    }
+    color: #fff;
   }
 
   .tagline-sub {
@@ -233,36 +207,18 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     margin-bottom: 0;
   }
 
-  .step-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .step-num {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.75rem;
-    height: 1.75rem;
-    background: #fff;
-    color: #000;
-    border-radius: 50%;
-    font-size: 0.875rem;
-    font-weight: 700;
-    flex-shrink: 0;
-  }
-
-  .step-header h3 {
-    margin: 0;
+  .step h3 {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-mono);
     font-size: 1.125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .step > p {
     color: var(--text-secondary);
     margin-bottom: 1rem;
-    margin-left: 2.5rem;
   }
 
   /* PR Mock */
