@@ -153,3 +153,22 @@ export function padRight(str: string, width: number): string {
   }
   return str + ' '.repeat(width - str.length);
 }
+
+/**
+ * Count findings by severity.
+ */
+export function countBySeverity(findings: Finding[]): Record<Severity, number> {
+  const counts: Record<Severity, number> = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+    info: 0,
+  };
+
+  for (const finding of findings) {
+    counts[finding.severity]++;
+  }
+
+  return counts;
+}

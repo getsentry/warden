@@ -26,9 +26,7 @@ describe('examples', () => {
     // Create a readable name from the path (e.g., "security-review/sql-injection")
     const name = exampleDir.split('/').slice(-2).join('/');
 
-    it(
-      `${name}: ${meta.description}`,
-      async () => {
+    it(`${name}: ${meta.description}`, { timeout: 60000 }, async () => {
         const files = getExampleFiles(exampleDir);
         const context = await buildFileEventContext({
           patterns: files,
@@ -63,8 +61,6 @@ describe('examples', () => {
               `Got ${report.findings.length} findings: ${report.findings.map((f) => `[${f.severity}] ${f.title}`).join(', ') || 'none'}`
           ).toBe(true);
         }
-      },
-      { timeout: 60000 }
-    ); // LLM calls can be slow
+    }); // LLM calls can be slow
   }
 });

@@ -7,12 +7,18 @@ import { runSkill } from '../sdk/runner.js';
 import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
-import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
+import { DEFAULT_CONCURRENCY } from '../utils/index.js';
 import { parseCliArgs, showHelp, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
 import { renderTerminalReport, renderJsonReport } from './terminal.js';
-import { Reporter, detectOutputMode, parseVerbosity } from './output/index.js';
+import {
+  Reporter,
+  detectOutputMode,
+  parseVerbosity,
+  runSkillTasks,
+  type SkillTaskOptions,
+} from './output/index.js';
 
 /**
  * Load environment variables from .env files in the given directory.
@@ -93,48 +99,37 @@ async function runSkills(
     // Not in a git repo or no config - that's fine
   }
 
-  // Show skills section header
-  reporter.startSkills(skillNames);
+  // Build skill tasks
+  const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
+    name: skillName,
+    failOn: options.failOn,
+    run: async (callbacks) => {
+      const skill = await resolveSkillAsync(skillName, customSkillsDir, skillsConfig);
+      return runSkill(skill, context, { apiKey, callbacks });
+    },
+  }));
 
-  // Run skills in parallel
+  // Run skills with listr2
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
+  const results = await runSkillTasks(tasks, {
+    mode: reporter.mode,
+    verbosity: reporter.verbosity,
+    concurrency,
+  });
+
+  // Collect reports and check for failures
   const reports: SkillReport[] = [];
   let hasFailure = false;
   const failureReasons: string[] = [];
 
-  // Create callbacks for progress reporting
-  const callbacks = reporter.createCallbacks();
-
-  interface SkillResult {
-    skillName: string;
-    report?: SkillReport;
-    error?: unknown;
-  }
-
-  const runSingleSkill = async (skillName: string): Promise<SkillResult> => {
-    reporter.startSkill(skillName);
-    try {
-      const skill = await resolveSkillAsync(skillName, customSkillsDir, skillsConfig);
-      const report = await runSkill(skill, context, { apiKey, callbacks });
-      reporter.skillComplete(report);
-      return { skillName, report };
-    } catch (error) {
-      reporter.error(`Skill ${skillName} failed: ${error}`);
-      return { skillName, error };
-    }
-  };
-
-  const results = await processInBatches(skillNames, runSingleSkill, concurrency);
-
-  // Collect reports and check for failures
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
       // Check failure condition
-      if (options.failOn && shouldFail(result.report, options.failOn)) {
+      if (result.failOn && shouldFail(result.report, result.failOn)) {
         hasFailure = true;
-        const count = countFindingsAtOrAbove(result.report, options.failOn);
-        failureReasons.push(`${result.skillName}: ${count} ${options.failOn}+ severity issue(s)`);
+        const count = countFindingsAtOrAbove(result.report, result.failOn);
+        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity issue(s)`);
       }
     }
   }
@@ -153,7 +148,7 @@ async function runSkills(
   reporter.renderSummary(reports, totalDuration);
 
   // Determine exit code
-  if (options.failOn && hasFailure) {
+  if (hasFailure) {
     reporter.blank();
     reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
     return 1;
@@ -368,43 +363,31 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // Show skills section header
-  const skillNames = triggersToRun.map((t) => `${t.name} (${t.skill})`);
-  reporter.startSkills(skillNames);
-
-  // Run triggers in parallel
-  const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
+  // Build trigger tasks
   const customSkillsDir = join(repoPath, '.warden', 'skills');
+  const tasks: SkillTaskOptions[] = triggersToRun.map((trigger) => ({
+    name: trigger.name,
+    displayName: `${trigger.name} (${trigger.skill})`,
+    failOn: trigger.output.failOn ?? options.failOn,
+    run: async (callbacks) => {
+      const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
+      return runSkill(skill, context, { apiKey, model: trigger.model, callbacks });
+    },
+  }));
+
+  // Run triggers with listr2
+  const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
+  const results = await runSkillTasks(tasks, {
+    mode: reporter.mode,
+    verbosity: reporter.verbosity,
+    concurrency,
+  });
+
+  // Collect reports and check for failures
   const reports: SkillReport[] = [];
   let hasFailure = false;
   const failureReasons: string[] = [];
 
-  // Create callbacks for progress reporting
-  const callbacks = reporter.createCallbacks();
-
-  interface TriggerResult {
-    triggerName: string;
-    report?: SkillReport;
-    failOn?: typeof options.failOn;
-    error?: unknown;
-  }
-
-  const runSingleTrigger = async (trigger: (typeof triggersToRun)[number]): Promise<TriggerResult> => {
-    reporter.startSkill(`${trigger.name} (${trigger.skill})`);
-    try {
-      const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
-      const report = await runSkill(skill, context, { apiKey, model: trigger.model, callbacks });
-      reporter.skillComplete(report);
-      return { triggerName: trigger.name, report, failOn: trigger.output.failOn ?? options.failOn };
-    } catch (error) {
-      reporter.error(`Trigger ${trigger.name} failed: ${error}`);
-      return { triggerName: trigger.name, error };
-    }
-  };
-
-  const results = await processInBatches(triggersToRun, runSingleTrigger, concurrency);
-
-  // Collect reports and check for failures
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
@@ -412,7 +395,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       if (result.failOn && shouldFail(result.report, result.failOn)) {
         hasFailure = true;
         const count = countFindingsAtOrAbove(result.report, result.failOn);
-        failureReasons.push(`${result.triggerName}: ${count} ${result.failOn}+ severity issue(s)`);
+        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity issue(s)`);
       }
     }
   }
@@ -431,7 +414,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   reporter.renderSummary(reports, totalDuration);
 
   // Determine exit code
-  if (options.failOn && hasFailure) {
+  if (hasFailure) {
     reporter.blank();
     reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
     return 1;

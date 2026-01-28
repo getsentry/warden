@@ -4,6 +4,18 @@ import { z } from 'zod';
 export const SeveritySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
 export type Severity = z.infer<typeof SeveritySchema>;
 
+/**
+ * Severity order for comparison (lower = more severe).
+ * Single source of truth for severity ordering across the codebase.
+ */
+export const SEVERITY_ORDER: Record<Severity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
+
 // Location within a file
 export const LocationSchema = z.object({
   path: z.string(),
@@ -36,7 +48,7 @@ export const SkillReportSchema = z.object({
   skill: z.string(),
   summary: z.string(),
   findings: z.array(FindingSchema),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 

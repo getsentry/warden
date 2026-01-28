@@ -5,9 +5,9 @@ import {
   shouldFail,
   countFindingsAtOrAbove,
   countSeverity,
-  SEVERITY_ORDER,
 } from './matcher.js';
 import type { Trigger } from '../config/schema.js';
+import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, SkillReport } from '../types/index.js';
 
 describe('matchGlob', () => {

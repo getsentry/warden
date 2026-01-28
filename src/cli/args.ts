@@ -1,8 +1,7 @@
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
+import { SeveritySchema } from '../types/index.js';
 import type { Severity } from '../types/index.js';
-
-const SeveritySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
 
 export const CLIOptionsSchema = z.object({
   targets: z.array(z.string()).optional(),

@@ -9,7 +9,7 @@
     "warden": "dist/cli/index.js"
   },
   "scripts": {
-    "cli": "node dist/cli/index.js",
+    "cli": "tsx src/cli/index.ts",
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "eslint src",
@@ -39,25 +39,27 @@
   "author": "Functional Software, Inc.",
   "license": "FSL-1.1-ALv2",
   "dependencies": {
-    "@anthropic-ai/claude-code": "^1.0.0",
-    "@octokit/rest": "^21.0.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.22",
+    "@octokit/rest": "^22.0.1",
     "chalk": "^5.6.2",
-    "dotenv": "^16.6.1",
+    "dotenv": "^17.2.3",
     "fast-glob": "^3.3.3",
     "figures": "^6.1.0",
-    "ora": "^8.2.0",
+    "listr2": "^10.1.0",
+    "ora": "^9.1.0",
     "smol-toml": "^1.6.0",
-    "zod": "^3.24.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@types/node": "^22.0.0",
-    "eslint": "^9.0.0",
-    "lint-staged": "^15.0.0",
-    "simple-git-hooks": "^2.11.0",
-    "typescript": "^5.7.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^2.0.0"
+    "@types/node": "^25.0.10",
+    "eslint": "^9.39.2",
+    "lint-staged": "^16.2.7",
+    "simple-git-hooks": "^2.13.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.0.0"

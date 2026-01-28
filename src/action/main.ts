@@ -1,11 +1,12 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Octokit } from '@octokit/rest';
-import { loadWardenConfig, resolveSkill, resolveTrigger, type ResolvedTrigger } from '../config/loader.js';
+import { loadWardenConfig, resolveTrigger, type ResolvedTrigger } from '../config/loader.js';
 import { buildEventContext } from '../event/context.js';
 import { runSkill } from '../sdk/runner.js';
 import { renderSkillReport } from '../output/renderer.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
+import { resolveSkillAsync } from '../skills/loader.js';
 import type { EventContext, SkillReport } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
@@ -210,7 +211,8 @@ async function run(): Promise<void> {
   const runSingleTrigger = async (trigger: ResolvedTrigger): Promise<TriggerResult> => {
     logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
     try {
-      const skill = resolveSkill(trigger.skill, config, repoPath);
+      const customSkillsDir = join(repoPath, '.warden', 'skills');
+      const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
       const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey, model: trigger.model });
       console.log(`Found ${report.findings.length} findings`);
 

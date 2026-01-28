@@ -1,4 +1,5 @@
 import type { Trigger } from '../config/schema.js';
+import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, Severity, SkillReport } from '../types/index.js';
 
 /**
@@ -64,17 +65,6 @@ export function matchTrigger(trigger: Trigger, context: EventContext): boolean {
 
   return true;
 }
-
-/**
- * Severity order for comparison (lower = more severe).
- */
-export const SEVERITY_ORDER: Record<Severity, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  info: 4,
-};
 
 /**
  * Check if a report has any findings at or above the given severity threshold.

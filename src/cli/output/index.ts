@@ -1,6 +1,5 @@
 export { Verbosity, parseVerbosity } from './verbosity.js';
 export { type OutputMode, detectOutputMode, timestamp } from './tty.js';
-export { Spinner } from './spinner.js';
 export { Reporter, type SkillRunnerCallbacks } from './reporter.js';
 export {
   formatDuration,
@@ -14,4 +13,11 @@ export {
   formatFindingCompact,
   truncate,
   padRight,
+  countBySeverity,
 } from './formatters.js';
+export {
+  runSkillTasks,
+  type SkillTaskResult,
+  type SkillTaskOptions,
+  type RunTasksOptions,
+} from './tasks.js';

@@ -17,7 +17,8 @@ export interface OutputMode {
  * @param colorOverride - Optional override for color support (--color / --no-color)
  */
 export function detectOutputMode(colorOverride?: boolean): OutputMode {
-  const isTTY = process.stdout.isTTY ?? false;
+  // Check both stderr and stdout for TTY - some environments have TTY on one but not the other
+  const isTTY = (process.stderr.isTTY || process.stdout.isTTY) ?? false;
 
   // Determine color support
   let supportsColor: boolean;
@@ -36,7 +37,7 @@ export function detectOutputMode(colorOverride?: boolean): OutputMode {
     chalk.level = 0;
   }
 
-  const columns = process.stdout.columns ?? 80;
+  const columns = process.stderr.columns ?? process.stdout.columns ?? 80;
 
   return {
     isTTY,

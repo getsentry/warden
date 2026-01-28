@@ -1,5 +1,6 @@
-import { query, type SDKResultMessage } from '@anthropic-ai/claude-code';
+import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
+import { FindingSchema } from '../types/index.js';
 import type { EventContext, SkillReport, Finding } from '../types/index.js';
 import {
   parseFileDiff,
@@ -7,7 +8,6 @@ import {
   formatHunkForAnalysis,
   type HunkWithContext,
 } from '../diff/index.js';
-import { processInBatches } from '../utils/index.js';
 
 export class SkillRunnerError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -107,10 +107,16 @@ function parseHunkOutput(result: SDKResultMessage, filename: string): Finding[] 
     return [];
   }
 
-  const text = result.result;
+  const text = result.result.trim();
 
-  // Try to extract JSON from the response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  // Try to extract JSON from the response - prefer matching from start
+  // to avoid capturing invalid JSON when there's explanatory text with braces
+  let jsonMatch = text.match(/^\{[\s\S]*\}$/);
+  if (!jsonMatch) {
+    // Fall back to finding JSON anywhere in the response
+    jsonMatch = text.match(/\{[\s\S]*\}/);
+  }
+
   if (!jsonMatch) {
     console.error('No JSON found in hunk output');
     return [];
@@ -134,21 +140,22 @@ function parseHunkOutput(result: SDKResultMessage, filename: string): Finding[] 
     return [];
   }
 
-  // Validate and filter findings, ensuring they have the correct file path
+  // Validate findings using FindingSchema and ensure correct file path
   return findings
-    .filter((f): f is Finding => {
-      if (typeof f !== 'object' || f === null) return false;
-      const obj = f as Record<string, unknown>;
-      return (
-        typeof obj['id'] === 'string' &&
-        typeof obj['severity'] === 'string' &&
-        typeof obj['title'] === 'string' &&
-        typeof obj['description'] === 'string'
-      );
+    .map((f) => {
+      // Ensure location has correct file path before validation
+      if (typeof f === 'object' && f !== null && 'location' in f) {
+        const obj = f as Record<string, unknown>;
+        if (obj['location'] && typeof obj['location'] === 'object') {
+          obj['location'] = { ...(obj['location'] as object), path: filename };
+        }
+      }
+      return f;
     })
+    .filter((f): f is Finding => FindingSchema.safeParse(f).success)
     .map((f) => ({
       ...f,
-      // Ensure location has correct file path
+      // Ensure location has correct file path (in case location was missing before)
       location: f.location ? { ...f.location, path: filename } : undefined,
     }));
 }
@@ -172,7 +179,7 @@ async function analyzeHunk(
     options: {
       maxTurns,
       cwd: repoPath,
-      customSystemPrompt: systemPrompt,
+      systemPrompt,
       // Only allow read-only tools - context is already provided in the prompt
       allowedTools: ['Read', 'Grep'],
       // Explicitly block modification/side-effect tools as defense-in-depth

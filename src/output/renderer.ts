@@ -1,3 +1,4 @@
+import { SEVERITY_ORDER } from '../types/index.js';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment, GitHubLabel } from './types.js';
 
@@ -7,14 +8,6 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
   medium: ':orange_circle:',
   low: ':large_blue_circle:',
   info: ':information_source:',
-};
-
-const SEVERITY_ORDER: Record<Severity, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  info: 4,
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
