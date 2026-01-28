@@ -18,19 +18,25 @@ export const CLIOptionsSchema = z.object({
   color: z.boolean().optional(),
   /** Automatically apply all suggested fixes */
   fix: z.boolean().default(false),
+  /** Overwrite existing files (for init command) */
+  force: z.boolean().default(false),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
 
 export interface ParsedArgs {
-  command: 'run' | 'help';
+  command: 'run' | 'help' | 'init';
   options: CLIOptions;
 }
 
 const HELP_TEXT = `
-Usage: warden [targets...] [options]
+Usage: warden [command] [targets...] [options]
 
 Analyze code for security issues and code quality.
+
+Commands:
+  init                 Initialize warden.toml and GitHub workflow
+  (default)            Run analysis on targets or using warden.toml triggers
 
 Targets:
   <files>              Analyze specific files (e.g., src/auth.ts)
@@ -52,7 +58,13 @@ Options:
   --color / --no-color Override color detection
   --help, -h           Show this help message
 
+Init Options:
+  --force              Overwrite existing files
+  --skill <name>       Default skill to configure (default: security-review)
+
 Examples:
+  warden init                             # Initialize warden configuration
+  warden init --skill code-simplifier     # Initialize with specific skill
   warden                                  # Run triggers from warden.toml
   warden src/auth.ts                      # Run all skills on file
   warden src/auth.ts --skill security-review
@@ -143,6 +155,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       json: { type: 'boolean', default: false },
       'fail-on': { type: 'string' },
       fix: { type: 'boolean', default: false },
+      force: { type: 'boolean', default: false },
       parallel: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
       quiet: { type: 'boolean', default: false },
@@ -159,14 +172,35 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     };
   }
 
-  // Filter out 'run' and 'help' commands from positionals (for backward compat)
-  const targets = positionals.filter((p) => p !== 'run' && p !== 'help');
+  // Filter out known commands from positionals
+  const targets = positionals.filter((p) => p !== 'run' && p !== 'help' && p !== 'init');
 
   // Handle explicit help command
   if (positionals.includes('help')) {
     return {
       command: 'help',
       options: CLIOptionsSchema.parse({ help: true }),
+    };
+  }
+
+  // Handle init command
+  if (positionals.includes('init')) {
+    // Handle --color / --no-color
+    let colorOption: boolean | undefined;
+    if (values['no-color']) {
+      colorOption = false;
+    } else if (values.color) {
+      colorOption = true;
+    }
+
+    return {
+      command: 'init',
+      options: CLIOptionsSchema.parse({
+        force: values.force,
+        skill: values.skill,
+        quiet: values.quiet,
+        color: colorOption,
+      }),
     };
   }
 
@@ -185,6 +219,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     json: values.json,
     failOn: values['fail-on'] as Severity | undefined,
     fix: values.fix,
+    force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,
     help: values.help,
     quiet: values.quiet,

@@ -23,42 +23,37 @@ Your code is under new management. AI agents that review your code—locally or 
 
 ## Quick Start
 
-### CLI
-
 ```bash
+# Initialize warden in your repository
+npx warden init
+
 # Set your API key
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # Run on uncommitted changes
 npx warden
 
+# Found something? Fix it immediately
+npx warden --fix
+```
+
+This creates:
+- `warden.toml` — Configuration with the security-review skill
+- `.github/workflows/warden.yml` — GitHub Action for automated PR reviews
+
+Add `ANTHROPIC_API_KEY` to your repository secrets, commit the files, and open a PR to see it in action.
+
+### More CLI Examples
+
+```bash
 # Run on specific files
 npx warden src/auth.ts --skill security-review
 
 # Run on git changes
 npx warden HEAD~3
 
-# Found something? Fix it immediately
-npx warden --fix
-```
-
-### GitHub Action
-
-```yaml
-# .github/workflows/warden.yml
-name: Warden
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dcramer/warden@main
-        with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+# Initialize with a different default skill
+npx warden init --skill code-simplifier
 ```
 
 ## Configuration
@@ -103,7 +98,11 @@ allowed = ["Read", "Grep", "Glob"]
 ## CLI Reference
 
 ```
-Usage: warden [targets...] [options]
+Usage: warden [command] [targets...] [options]
+
+Commands:
+  init                 Initialize warden.toml and GitHub workflow
+  (default)            Run analysis on targets or using warden.toml triggers
 
 Targets:
   <files>              Analyze specific files (e.g., src/auth.ts)
@@ -121,6 +120,10 @@ Options:
   --quiet              Errors and final summary only
   -v, --verbose        Show real-time findings
   -vv                  Show debug info (token counts, latencies)
+
+Init Options:
+  --force              Overwrite existing files
+  --skill <name>       Default skill to configure (default: security-review)
 ```
 
 ## When to Use CLI vs Action

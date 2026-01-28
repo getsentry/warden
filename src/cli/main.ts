@@ -26,6 +26,7 @@ import {
   runInteractiveFixFlow,
   renderFixSummary,
 } from './fix.js';
+import { runInit } from './commands/init.js';
 
 /**
  * Load environment variables from .env files in the given directory.
@@ -521,6 +522,13 @@ export async function main(): Promise<void> {
     reporter.header();
   }
 
-  const exitCode = await runCommand(options, reporter);
+  let exitCode: number;
+
+  if (command === 'init') {
+    exitCode = await runInit(options, reporter);
+  } else {
+    exitCode = await runCommand(options, reporter);
+  }
+
   process.exit(exitCode);
 }
