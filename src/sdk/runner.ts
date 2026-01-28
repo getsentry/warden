@@ -176,9 +176,10 @@ async function analyzeHunk(
       maxTurns,
       cwd: repoPath,
       customSystemPrompt: systemPrompt,
-      // Minimal tools for hunk analysis - context is already provided
+      // Only allow read-only tools - context is already provided in the prompt
       allowedTools: ['Read', 'Grep'],
-      disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch'],
+      // Explicitly block modification/side-effect tools as defense-in-depth
+      disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
       permissionMode: 'bypassPermissions',
       model,
     },
