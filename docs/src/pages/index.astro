@@ -120,9 +120,9 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
           </div>
           <div class="pr-mock-code">
             <div class="pr-mock-code-header">src/components/UserList.tsx</div>
-            <pre class="pr-mock-code-content"><span class="line-num">15</span><span class="line-old">- const UserCard = ({ user }) => &lt;div&gt;{user.name}&lt;/div&gt;;</span>
-<span class="line-num">15</span><span class="line-new">+ const UserCard = React.memo(({ user }) =></span>
-<span class="line-num">16</span><span class="line-new">+   &lt;div&gt;{user.name}&lt;/div&gt;</span>
+            <pre class="pr-mock-code-content"><span class="line-num">15</span><span class="line-old">- const UserCard = (&#123; user &#125;) =&gt; &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;;</span>
+<span class="line-num">15</span><span class="line-new">+ const UserCard = React.memo((&#123; user &#125;) =&gt;</span>
+<span class="line-num">16</span><span class="line-new">+   &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;</span>
 <span class="line-num">17</span><span class="line-new">+ );</span></pre>
           </div>
           <p class="pr-mock-desc">List item components should be memoized to prevent unnecessary re-renders when parent state changes.</p>
