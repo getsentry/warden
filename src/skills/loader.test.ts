@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  clearSkillsCache,
   getBuiltinSkill,
   getBuiltinSkillNames,
   loadSkillFromFile,
+  loadSkillsFromDirectory,
   resolveSkillAsync,
   SkillLoaderError,
 } from './loader.js';
@@ -93,5 +95,32 @@ describe('code-simplifier skill', () => {
     expect(skill!.tools?.allowed).toContain('Read');
     expect(skill!.tools?.allowed).toContain('Grep');
     expect(skill!.tools?.allowed).toContain('Glob');
+  });
+});
+
+describe('skills caching', () => {
+  const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+
+  beforeEach(() => {
+    clearSkillsCache();
+  });
+
+  it('caches directory loads', async () => {
+    const skills1 = await loadSkillsFromDirectory(builtinSkillsDir);
+    expect(skills1.size).toBeGreaterThan(0);
+
+    // Second load should return cached result (same reference)
+    const skills2 = await loadSkillsFromDirectory(builtinSkillsDir);
+    expect(skills2).toBe(skills1);
+  });
+
+  it('clearSkillsCache clears the cache', async () => {
+    const skills1 = await loadSkillsFromDirectory(builtinSkillsDir);
+
+    clearSkillsCache();
+
+    const skills2 = await loadSkillsFromDirectory(builtinSkillsDir);
+    // After clearing, should be a new Map instance
+    expect(skills2).not.toBe(skills1);
   });
 });

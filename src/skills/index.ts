@@ -1,4 +1,5 @@
 export {
+  clearSkillsCache,
   getBuiltinSkill,
   getBuiltinSkillNames,
   loadSkillFromFile,

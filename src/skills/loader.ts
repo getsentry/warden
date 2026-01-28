@@ -11,6 +11,16 @@ export class SkillLoaderError extends Error {
   }
 }
 
+/** Cache for loaded skills directories to avoid repeated disk reads */
+const skillsCache = new Map<string, Map<string, SkillDefinition>>();
+
+/**
+ * Clear the skills cache. Useful for testing or when skills may have changed.
+ */
+export function clearSkillsCache(): void {
+  skillsCache.clear();
+}
+
 /**
  * Parse YAML frontmatter from a markdown file.
  * Returns the frontmatter object and the body content.
@@ -158,14 +168,22 @@ export async function loadSkillFromFile(filePath: string): Promise<SkillDefiniti
 /**
  * Load all skills from a directory.
  * Supports both agentskills.io format (skill-name/SKILL.md) and flat .toml files.
+ * Results are cached to avoid repeated disk reads.
  */
 export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<string, SkillDefinition>> {
+  // Check cache first
+  const cached = skillsCache.get(dirPath);
+  if (cached) {
+    return cached;
+  }
+
   const skills = new Map<string, SkillDefinition>();
 
   let entries: string[];
   try {
     entries = await readdir(dirPath);
   } catch {
+    skillsCache.set(dirPath, skills);
     return skills;
   }
 
@@ -195,6 +213,7 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
     }
   }
 
+  skillsCache.set(dirPath, skills);
   return skills;
 }
 
