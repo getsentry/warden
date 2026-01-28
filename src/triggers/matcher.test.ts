@@ -10,6 +10,20 @@ import type { Trigger } from '../config/schema.js';
 import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, SkillReport } from '../types/index.js';
 
+/** Test helper to create a SkillReport with given severities */
+function makeReport(severities: string[]): SkillReport {
+  return {
+    skill: 'test',
+    summary: 'Test report',
+    findings: severities.map((s, i) => ({
+      id: `finding-${i}`,
+      severity: s as 'critical' | 'high' | 'medium' | 'low' | 'info',
+      title: `Finding ${i}`,
+      description: 'Test finding',
+    })),
+  };
+}
+
 describe('matchGlob', () => {
   it('matches exact paths', () => {
     expect(matchGlob('src/index.ts', 'src/index.ts')).toBe(true);
@@ -106,17 +120,6 @@ describe('matchTrigger', () => {
 });
 
 describe('shouldFail', () => {
-  const makeReport = (severities: string[]): SkillReport => ({
-    skill: 'test',
-    summary: 'Test report',
-    findings: severities.map((s, i) => ({
-      id: `finding-${i}`,
-      severity: s as 'critical' | 'high' | 'medium' | 'low' | 'info',
-      title: `Finding ${i}`,
-      description: 'Test finding',
-    })),
-  });
-
   it('returns true when findings meet threshold', () => {
     expect(shouldFail(makeReport(['high']), 'high')).toBe(true);
     expect(shouldFail(makeReport(['critical']), 'high')).toBe(true);
@@ -131,17 +134,6 @@ describe('shouldFail', () => {
 });
 
 describe('countFindingsAtOrAbove', () => {
-  const makeReport = (severities: string[]): SkillReport => ({
-    skill: 'test',
-    summary: 'Test report',
-    findings: severities.map((s, i) => ({
-      id: `finding-${i}`,
-      severity: s as 'critical' | 'high' | 'medium' | 'low' | 'info',
-      title: `Finding ${i}`,
-      description: 'Test finding',
-    })),
-  });
-
   it('counts findings at or above threshold', () => {
     const report = makeReport(['critical', 'high', 'medium', 'low', 'info']);
     expect(countFindingsAtOrAbove(report, 'critical')).toBe(1);

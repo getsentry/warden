@@ -22,12 +22,16 @@ src/
 ├── types/             # Zod schemas and types
 ├── config/            # Config loading (warden.toml)
 ├── triggers/          # Event trigger matching
+├── event/             # GitHub event parsing
 ├── diff/              # Diff parsing and context
 ├── output/            # Report rendering
 ├── skills/            # Skill discovery and loading
 ├── sdk/               # Claude Code SDK runner
 ├── cli/               # CLI entry and commands
-└── action/            # GitHub Action entry
+│   └── output/        # CLI output formatting
+├── action/            # GitHub Action entry
+├── utils/             # Shared utilities
+└── examples/          # Example configurations
 ```
 
 ## Key Conventions

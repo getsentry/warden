@@ -74,7 +74,7 @@ export const DefaultsSchema = z.object({
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;
 
-// Main warden.yaml configuration
+// Main warden.toml configuration
 export const WardenConfigSchema = z.object({
   version: z.literal(1),
   defaults: DefaultsSchema.optional(),
