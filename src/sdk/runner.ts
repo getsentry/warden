@@ -7,6 +7,7 @@ import {
   formatHunkForAnalysis,
   type HunkWithContext,
 } from '../diff/index.js';
+import { processInBatches } from '../utils/index.js';
 
 export class SkillRunnerError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -14,6 +15,9 @@ export class SkillRunnerError extends Error {
     this.name = 'SkillRunnerError';
   }
 }
+
+/** Default concurrency for hunk-level parallel processing */
+const DEFAULT_HUNK_CONCURRENCY = 5;
 
 export interface SkillRunnerOptions {
   apiKey?: string;
@@ -26,25 +30,6 @@ export interface SkillRunnerOptions {
   concurrency?: number;
   /** Model to use for analysis (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
   model?: string;
-}
-
-/**
- * Process items with limited concurrency using chunked batches.
- */
-async function processInBatches<T, R>(
-  items: T[],
-  fn: (item: T) => Promise<R>,
-  batchSize: number
-): Promise<R[]> {
-  const results: R[] = [];
-
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    const batchResults = await Promise.all(batch.map(fn));
-    results.push(...batchResults);
-  }
-
-  return results;
 }
 
 /**
@@ -264,7 +249,7 @@ export async function runSkill(
   // Analyze hunks
   if (parallel) {
     // Process hunks in parallel with concurrency limit
-    const { concurrency = 5 } = options;
+    const concurrency = options.concurrency ?? DEFAULT_HUNK_CONCURRENCY;
     const results = await processInBatches(
       allHunks,
       (hunk) => analyzeHunk(skill, hunk, context.repoPath, options),

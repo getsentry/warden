@@ -93,6 +93,16 @@ describe('parseCliArgs', () => {
     expect(result.options.targets).toEqual(['src/auth.ts']);
     expect(result.options.skill).toBeUndefined();
   });
+
+  it('parses --parallel option', () => {
+    const result = parseCliArgs(['--parallel', '8']);
+    expect(result.options.parallel).toBe(8);
+  });
+
+  it('does not set parallel when not provided', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.parallel).toBeUndefined();
+  });
 });
 
 describe('CLIOptionsSchema', () => {
@@ -112,6 +122,24 @@ describe('CLIOptionsSchema', () => {
   it('defaults json to false', () => {
     const result = CLIOptionsSchema.parse({});
     expect(result.json).toBe(false);
+  });
+
+  it('validates positive integer for parallel', () => {
+    const result = CLIOptionsSchema.safeParse({ parallel: 4 });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects non-positive parallel values', () => {
+    const result = CLIOptionsSchema.safeParse({ parallel: 0 });
+    expect(result.success).toBe(false);
+
+    const result2 = CLIOptionsSchema.safeParse({ parallel: -1 });
+    expect(result2.success).toBe(false);
+  });
+
+  it('rejects non-integer parallel values', () => {
+    const result = CLIOptionsSchema.safeParse({ parallel: 1.5 });
+    expect(result.success).toBe(false);
   });
 });
 

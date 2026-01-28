@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { loadWardenConfig } from '../config/loader.js';
 import type { SkillDefinition } from '../config/schema.js';
@@ -7,6 +7,7 @@ import { runSkill } from '../sdk/runner.js';
 import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
+import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 import { parseCliArgs, showHelp, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
@@ -104,36 +105,51 @@ async function runSkills(
       ? resolve(cwd, options.config)
       : resolve(repoPath, 'warden.toml');
     if (existsSync(configPath)) {
-      const configDir = configPath.replace(/\/warden\.toml$/, '');
-      const config = loadWardenConfig(configDir);
+      const config = loadWardenConfig(dirname(configPath));
       skillsConfig = config.skills;
     }
   } catch {
     // Not in a git repo or no config - that's fine
   }
 
-  // Run skills
-  const reports: SkillReport[] = [];
-  let hasFailure = false;
+  // Run skills in parallel
+  const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
   const failureReasons: string[] = [];
 
-  for (const skillName of skillNames) {
-    logStep(`Running ${skillName}...`);
+  interface SkillResult {
+    skillName: string;
+    report?: SkillReport;
+    error?: unknown;
+  }
 
+  const runSingleSkill = async (skillName: string): Promise<SkillResult> => {
+    logStep(`Running ${skillName}...`);
     try {
       const skill = await resolveSkillAsync(skillName, customSkillsDir, skillsConfig);
       const report = await runSkill(skill, context, { apiKey });
-      reports.push(report);
-      logSuccess(`Found ${report.findings.length} finding(s)`);
-
-      // Check failure condition
-      if (options.failOn && shouldFail(report, options.failOn)) {
-        hasFailure = true;
-        const count = countFindingsAtOrAbove(report, options.failOn);
-        failureReasons.push(`${skillName}: ${count} ${options.failOn}+ severity issue(s)`);
-      }
+      logSuccess(`${skillName}: Found ${report.findings.length} finding(s)`);
+      return { skillName, report };
     } catch (error) {
       logError(`Skill ${skillName} failed: ${error}`);
+      return { skillName, error };
+    }
+  };
+
+  const results = await processInBatches(skillNames, runSingleSkill, concurrency);
+
+  // Collect reports and check for failures
+  const reports: SkillReport[] = [];
+  let hasFailure = false;
+
+  for (const result of results) {
+    if (result.report) {
+      reports.push(result.report);
+      // Check failure condition
+      if (options.failOn && shouldFail(result.report, options.failOn)) {
+        hasFailure = true;
+        const count = countFindingsAtOrAbove(result.report, options.failOn);
+        failureReasons.push(`${result.skillName}: ${count} ${options.failOn}+ severity issue(s)`);
+      }
     }
   }
 
@@ -325,8 +341,7 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
 
   // Load config
   logStep('Loading configuration...');
-  const configDir = configPath.replace(/\/warden\.toml$/, '');
-  const config = loadWardenConfig(configDir);
+  const config = loadWardenConfig(dirname(configPath));
   logSuccess(`Loaded ${config.triggers.length} trigger(s)`);
 
   // Match triggers
@@ -361,30 +376,46 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
     return 1;
   }
 
-  // Run skills
-  const reports: SkillReport[] = [];
-  let hasFailure = false;
+  // Run triggers in parallel
+  const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
+  const customSkillsDir = join(repoPath, '.warden', 'skills');
   const failureReasons: string[] = [];
 
-  for (const trigger of triggersToRun) {
-    logStep(`Running ${trigger.name} (${trigger.skill})...`);
+  interface TriggerResult {
+    triggerName: string;
+    report?: SkillReport;
+    failOn?: typeof options.failOn;
+    error?: unknown;
+  }
 
+  const runSingleTrigger = async (trigger: typeof triggersToRun[number]): Promise<TriggerResult> => {
+    logStep(`Running ${trigger.name} (${trigger.skill})...`);
     try {
-      const customSkillsDir = join(repoPath, '.warden', 'skills');
       const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
       const report = await runSkill(skill, context, { apiKey, model: trigger.model });
-      reports.push(report);
-      logSuccess(`Found ${report.findings.length} finding(s)`);
-
-      // Check failure condition
-      const failOn = trigger.output?.failOn ?? options.failOn;
-      if (failOn && shouldFail(report, failOn)) {
-        hasFailure = true;
-        const count = countFindingsAtOrAbove(report, failOn);
-        failureReasons.push(`${trigger.name}: ${count} ${failOn}+ severity issue(s)`);
-      }
+      logSuccess(`${trigger.name}: Found ${report.findings.length} finding(s)`);
+      return { triggerName: trigger.name, report, failOn: trigger.output?.failOn ?? options.failOn };
     } catch (error) {
       logError(`Trigger ${trigger.name} failed: ${error}`);
+      return { triggerName: trigger.name, error };
+    }
+  };
+
+  const results = await processInBatches(triggersToRun, runSingleTrigger, concurrency);
+
+  // Collect reports and check for failures
+  const reports: SkillReport[] = [];
+  let hasFailure = false;
+
+  for (const result of results) {
+    if (result.report) {
+      reports.push(result.report);
+      // Check failure condition
+      if (result.failOn && shouldFail(result.report, result.failOn)) {
+        hasFailure = true;
+        const count = countFindingsAtOrAbove(result.report, result.failOn);
+        failureReasons.push(`${result.triggerName}: ${count} ${result.failOn}+ severity issue(s)`);
+      }
     }
   }
 

@@ -58,10 +58,18 @@ export const TriggerSchema = z.object({
 });
 export type Trigger = z.infer<typeof TriggerSchema>;
 
+// Runner configuration
+export const RunnerConfigSchema = z.object({
+  /** Max concurrent trigger executions (default: 4) */
+  concurrency: z.number().int().positive().optional(),
+});
+export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;
+
 // Main warden.yaml configuration
 export const WardenConfigSchema = z.object({
   version: z.literal(1),
   triggers: z.array(TriggerSchema).min(1),
   skills: z.array(SkillDefinitionSchema).optional(),
+  runner: RunnerConfigSchema.optional(),
 });
 export type WardenConfig = z.infer<typeof WardenConfigSchema>;

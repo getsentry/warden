@@ -11,6 +11,8 @@ export const CLIOptionsSchema = z.object({
   json: z.boolean().default(false),
   failOn: SeveritySchema.optional(),
   help: z.boolean().default(false),
+  /** Max concurrent trigger/skill executions (default: 4) */
+  parallel: z.number().int().positive().optional(),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -37,6 +39,7 @@ Options:
   --json               Output results as JSON
   --fail-on <severity> Exit with code 1 if findings >= severity
                        (critical, high, medium, low, info)
+  --parallel <n>       Max concurrent trigger/skill executions (default: 4)
   --help, -h           Show this help message
 
 Examples:
@@ -115,6 +118,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       config: { type: 'string' },
       json: { type: 'boolean', default: false },
       'fail-on': { type: 'string' },
+      parallel: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
     },
     allowPositionals: true,
@@ -144,6 +148,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     config: values.config,
     json: values.json,
     failOn: values['fail-on'] as Severity | undefined,
+    parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,
     help: values.help,
   };
 

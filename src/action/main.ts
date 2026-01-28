@@ -1,13 +1,15 @@
 import { readFileSync, appendFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Octokit } from '@octokit/rest';
 import { loadWardenConfig, resolveSkill } from '../config/loader.js';
+import type { Trigger } from '../config/schema.js';
 import { buildEventContext } from '../event/context.js';
 import { runSkill } from '../sdk/runner.js';
 import { renderSkillReport } from '../output/renderer.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
 import type { EventContext, SkillReport } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
+import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
 interface ActionInputs {
   anthropicApiKey: string;
@@ -15,6 +17,8 @@ interface ActionInputs {
   configPath: string;
   failOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
   maxFindings: number;
+  /** Max concurrent trigger executions */
+  parallel: number;
 }
 
 function getInputs(): ActionInputs {
@@ -39,6 +43,7 @@ function getInputs(): ActionInputs {
     configPath: getInput('config-path') || 'warden.toml',
     failOn,
     maxFindings: parseInt(getInput('max-findings') || '50', 10),
+    parallel: parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10),
   };
 }
 
@@ -170,7 +175,7 @@ async function run(): Promise<void> {
   logGroupEnd();
 
   const configFullPath = join(repoPath, inputs.configPath);
-  const config = loadWardenConfig(configFullPath.replace(/\/warden\.toml$/, ''));
+  const config = loadWardenConfig(dirname(configFullPath));
 
   const matchedTriggers = config.triggers.filter((t) => matchTrigger(t, context));
 
@@ -189,16 +194,23 @@ async function run(): Promise<void> {
   }
   logGroupEnd();
 
-  const reports: SkillReport[] = [];
-  let shouldFailAction = false;
+  // Run triggers in parallel
+  const concurrency = config.runner?.concurrency ?? inputs.parallel;
   const failureReasons: string[] = [];
 
-  for (const trigger of matchedTriggers) {
+  interface TriggerResult {
+    triggerName: string;
+    report?: SkillReport;
+    renderResult?: RenderResult;
+    failOn?: typeof inputs.failOn;
+    error?: unknown;
+  }
+
+  const runSingleTrigger = async (trigger: Trigger): Promise<TriggerResult> => {
     logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
     try {
       const skill = resolveSkill(trigger.skill, config, repoPath);
       const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey, model: trigger.model });
-      reports.push(report);
       console.log(`Found ${report.findings.length} findings`);
 
       // Use trigger's output config, falling back to global inputs
@@ -212,23 +224,46 @@ async function run(): Promise<void> {
         extraLabels: outputConfig.extraLabels,
       });
 
-      try {
-        await postReviewToGitHub(octokit, context, renderResult);
-      } catch (error) {
-        console.error(`::warning::Failed to post review: ${error}`);
+      logGroupEnd();
+      return {
+        triggerName: trigger.name,
+        report,
+        renderResult,
+        failOn: trigger.output?.failOn ?? inputs.failOn,
+      };
+    } catch (error) {
+      console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
+      logGroupEnd();
+      return { triggerName: trigger.name, error };
+    }
+  };
+
+  const results = await processInBatches(matchedTriggers, runSingleTrigger, concurrency);
+
+  // Post reviews to GitHub (sequentially to avoid rate limits)
+  const reports: SkillReport[] = [];
+  let shouldFailAction = false;
+
+  for (const result of results) {
+    if (result.report) {
+      reports.push(result.report);
+
+      // Post review to GitHub
+      if (result.renderResult) {
+        try {
+          await postReviewToGitHub(octokit, context, result.renderResult);
+        } catch (error) {
+          console.error(`::warning::Failed to post review for ${result.triggerName}: ${error}`);
+        }
       }
 
       // Check if we should fail based on this trigger's config
-      const failOn = trigger.output?.failOn ?? inputs.failOn;
-      if (failOn && shouldFail(report, failOn)) {
+      if (result.failOn && shouldFail(result.report, result.failOn)) {
         shouldFailAction = true;
-        const count = countFindingsAtOrAbove(report, failOn);
-        failureReasons.push(`${trigger.name}: Found ${count} ${failOn}+ severity issues`);
+        const count = countFindingsAtOrAbove(result.report, result.failOn);
+        failureReasons.push(`${result.triggerName}: Found ${count} ${result.failOn}+ severity issues`);
       }
-    } catch (error) {
-      console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
     }
-    logGroupEnd();
   }
 
   const totalFindings = reports.reduce((sum, r) => sum + r.findings.length, 0);
