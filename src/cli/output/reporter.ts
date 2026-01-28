@@ -1,12 +1,14 @@
 import chalk from 'chalk';
 import figures from 'figures';
-import type { SkillReport, Finding, FileChange } from '../../types/index.js';
+import type { SkillReport, Finding, FileChange, UsageStats } from '../../types/index.js';
 import { Verbosity } from './verbosity.js';
 import { type OutputMode, timestamp } from './tty.js';
 import {
   formatDuration,
   formatFindingCounts,
   formatFindingCountsPlain,
+  formatUsage,
+  formatUsagePlain,
   countBySeverity,
 } from './formatters.js';
 import { BoxRenderer } from './box.js';
@@ -145,6 +147,22 @@ export class Reporter {
   }
 
   /**
+   * Aggregate usage stats from multiple reports.
+   */
+  private aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
+    const usages = reports.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
+    if (usages.length === 0) return undefined;
+
+    return usages.reduce((acc, u) => ({
+      inputTokens: acc.inputTokens + u.inputTokens,
+      outputTokens: acc.outputTokens + u.outputTokens,
+      cacheReadInputTokens: (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
+      cacheCreationInputTokens: (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
+      costUSD: acc.costUSD + u.costUSD,
+    }));
+  }
+
+  /**
    * Render the summary section.
    */
   renderSummary(reports: SkillReport[], totalDuration: number): void {
@@ -153,6 +171,7 @@ export class Reporter {
       allFindings.push(...report.findings);
     }
     const counts = countBySeverity(allFindings);
+    const totalUsage = this.aggregateUsage(reports);
 
     if (this.verbosity === Verbosity.Quiet) {
       // Quiet mode: just output the summary line
@@ -164,9 +183,17 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(chalk.bold('SUMMARY'));
       this.log(formatFindingCounts(counts));
-      this.log(chalk.dim(`Analysis completed in ${formatDuration(totalDuration)}`));
+      const durationLine = `Analysis completed in ${formatDuration(totalDuration)}`;
+      if (totalUsage) {
+        this.log(chalk.dim(`${durationLine} · ${formatUsage(totalUsage)}`));
+      } else {
+        this.log(chalk.dim(durationLine));
+      }
     } else {
       this.logCI(`Summary: ${formatFindingCountsPlain(counts)}`);
+      if (totalUsage) {
+        this.logCI(`Usage: ${formatUsagePlain(totalUsage)}`);
+      }
       this.logCI(`Total time: ${formatDuration(totalDuration)}`);
     }
   }

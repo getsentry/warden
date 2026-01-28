@@ -44,6 +44,16 @@ export const FindingSchema = z.object({
 });
 export type Finding = z.infer<typeof FindingSchema>;
 
+// Usage statistics from SDK
+export const UsageStatsSchema = z.object({
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheReadInputTokens: z.number().int().nonnegative().optional(),
+  cacheCreationInputTokens: z.number().int().nonnegative().optional(),
+  costUSD: z.number().nonnegative(),
+});
+export type UsageStats = z.infer<typeof UsageStatsSchema>;
+
 // Skill report output
 export const SkillReportSchema = z.object({
   skill: z.string(),
@@ -51,6 +61,7 @@ export const SkillReportSchema = z.object({
   findings: z.array(FindingSchema),
   metadata: z.record(z.string(), z.unknown()).optional(),
   durationMs: z.number().nonnegative().optional(),
+  usage: UsageStatsSchema.optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 

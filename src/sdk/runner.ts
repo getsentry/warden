@@ -1,7 +1,7 @@
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import { FindingSchema } from '../types/index.js';
-import type { EventContext, SkillReport, Finding } from '../types/index.js';
+import type { EventContext, SkillReport, Finding, UsageStats } from '../types/index.js';
 import {
   parseFileDiff,
   expandDiffContext,
@@ -18,6 +18,54 @@ export class SkillRunnerError extends Error {
 
 /** Default concurrency for hunk-level parallel processing */
 const DEFAULT_HUNK_CONCURRENCY = 5;
+
+/** Result from analyzing a single hunk */
+interface HunkAnalysisResult {
+  findings: Finding[];
+  usage: UsageStats;
+}
+
+/**
+ * Extract usage stats from an SDK result message.
+ */
+function extractUsage(result: SDKResultMessage): UsageStats {
+  return {
+    inputTokens: result.usage['input_tokens'],
+    outputTokens: result.usage['output_tokens'],
+    cacheReadInputTokens: result.usage['cache_read_input_tokens'] ?? 0,
+    cacheCreationInputTokens: result.usage['cache_creation_input_tokens'] ?? 0,
+    costUSD: result.total_cost_usd,
+  };
+}
+
+/**
+ * Create empty usage stats.
+ */
+function emptyUsage(): UsageStats {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    costUSD: 0,
+  };
+}
+
+/**
+ * Aggregate multiple usage stats into one.
+ */
+function aggregateUsage(usages: UsageStats[]): UsageStats {
+  return usages.reduce(
+    (acc, u) => ({
+      inputTokens: acc.inputTokens + u.inputTokens,
+      outputTokens: acc.outputTokens + u.outputTokens,
+      cacheReadInputTokens: (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
+      cacheCreationInputTokens: (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
+      costUSD: acc.costUSD + u.costUSD,
+    }),
+    emptyUsage()
+  );
+}
 
 /**
  * Callbacks for progress reporting during skill execution.
@@ -182,7 +230,7 @@ async function analyzeHunk(
   hunkCtx: HunkWithContext,
   repoPath: string,
   options: SkillRunnerOptions
-): Promise<Finding[]> {
+): Promise<HunkAnalysisResult> {
   const { maxTurns = 5, model } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
@@ -212,10 +260,13 @@ async function analyzeHunk(
   }
 
   if (!resultMessage) {
-    return [];
+    return { findings: [], usage: emptyUsage() };
   }
 
-  return parseHunkOutput(resultMessage, hunkCtx.filename);
+  return {
+    findings: parseHunkOutput(resultMessage, hunkCtx.filename),
+    usage: extractUsage(resultMessage),
+  };
 }
 
 /**
@@ -311,12 +362,16 @@ export async function runSkill(
       skill: skill.name,
       summary: 'No code changes to analyze',
       findings: [],
+      usage: emptyUsage(),
     };
   }
 
   // Group hunks by file for progress reporting
   const fileHunks = groupHunksByFile(allHunks);
   const totalFiles = fileHunks.length;
+
+  // Track all usage stats for aggregation
+  const allUsage: UsageStats[] = [];
 
   // Analyze hunks file by file
   for (const [fileIndex, fileHunkEntry] of fileHunks.entries()) {
@@ -338,24 +393,25 @@ export async function runSkill(
 
           callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
 
-          const findings = await analyzeHunk(skill, hunk, context.repoPath, options);
+          const result = await analyzeHunk(skill, hunk, context.repoPath, options);
 
           // Attach elapsed time to findings if skill start time is available
           if (callbacks?.skillStartTime) {
             const elapsedMs = Date.now() - callbacks.skillStartTime;
-            for (const finding of findings) {
+            for (const finding of result.findings) {
               finding.elapsedMs = elapsedMs;
             }
           }
 
-          callbacks?.onHunkComplete?.(filename, hunkIndex + 1, findings);
+          callbacks?.onHunkComplete?.(filename, hunkIndex + 1, result.findings);
 
-          return findings;
+          return result;
         });
 
         const batchResults = await Promise.all(batchPromises);
-        for (const findings of batchResults) {
-          allFindings.push(...findings);
+        for (const result of batchResults) {
+          allFindings.push(...result.findings);
+          allUsage.push(result.usage);
         }
       }
     } else {
@@ -365,18 +421,19 @@ export async function runSkill(
 
         callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
 
-        const findings = await analyzeHunk(skill, hunk, context.repoPath, options);
+        const result = await analyzeHunk(skill, hunk, context.repoPath, options);
 
         // Attach elapsed time to findings if skill start time is available
         if (callbacks?.skillStartTime) {
           const elapsedMs = Date.now() - callbacks.skillStartTime;
-          for (const finding of findings) {
+          for (const finding of result.findings) {
             finding.elapsedMs = elapsedMs;
           }
         }
 
-        callbacks?.onHunkComplete?.(filename, hunkIndex + 1, findings);
-        allFindings.push(...findings);
+        callbacks?.onHunkComplete?.(filename, hunkIndex + 1, result.findings);
+        allFindings.push(...result.findings);
+        allUsage.push(result.usage);
       }
     }
 
@@ -390,10 +447,14 @@ export async function runSkill(
   // Generate summary
   const summary = generateSummary(skill.name, uniqueFindings);
 
+  // Aggregate usage across all hunks
+  const totalUsage = aggregateUsage(allUsage);
+
   return {
     skill: skill.name,
     summary,
     findings: uniqueFindings,
+    usage: totalUsage,
   };
 }
 

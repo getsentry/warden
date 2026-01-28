@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import figures from 'figures';
-import type { Severity, Finding, FileChange } from '../../types/index.js';
+import type { Severity, Finding, FileChange, UsageStats } from '../../types/index.js';
 
 /**
  * Format a duration in milliseconds to a human-readable string.
@@ -183,4 +183,51 @@ export function countBySeverity(findings: Finding[]): Record<Severity, number> {
   }
 
   return counts;
+}
+
+/**
+ * Format a USD cost for display.
+ */
+export function formatCost(costUSD: number): string {
+  if (costUSD < 0.01) {
+    return `$${costUSD.toFixed(4)}`;
+  }
+  return `$${costUSD.toFixed(2)}`;
+}
+
+/**
+ * Format token counts for display.
+ */
+export function formatTokens(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}k`;
+  }
+  return String(tokens);
+}
+
+/**
+ * Format usage stats for terminal display.
+ */
+export function formatUsage(usage: UsageStats): string {
+  // Total input includes fresh tokens + cache reads
+  const totalInput = usage.inputTokens + (usage.cacheReadInputTokens ?? 0);
+  const inputStr = formatTokens(totalInput);
+  const outputStr = formatTokens(usage.outputTokens);
+  const costStr = formatCost(usage.costUSD);
+  return `${inputStr} in / ${outputStr} out · ${costStr}`;
+}
+
+/**
+ * Format usage stats for plain text display.
+ */
+export function formatUsagePlain(usage: UsageStats): string {
+  // Total input includes fresh tokens + cache reads
+  const totalInput = usage.inputTokens + (usage.cacheReadInputTokens ?? 0);
+  const inputStr = formatTokens(totalInput);
+  const outputStr = formatTokens(usage.outputTokens);
+  const costStr = formatCost(usage.costUSD);
+  return `${inputStr} input, ${outputStr} output, ${costStr}`;
 }

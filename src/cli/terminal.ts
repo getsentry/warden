@@ -216,9 +216,27 @@ export function renderTerminalReport(reports: SkillReport[], mode?: OutputMode):
 }
 
 /**
+ * Aggregate usage stats from reports.
+ */
+function aggregateUsage(reports: SkillReport[]) {
+  const usages = reports.map((r) => r.usage).filter((u) => u !== undefined);
+  if (usages.length === 0) return undefined;
+
+  return usages.reduce((acc, u) => ({
+    inputTokens: acc.inputTokens + u.inputTokens,
+    outputTokens: acc.outputTokens + u.outputTokens,
+    cacheReadInputTokens: (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
+    cacheCreationInputTokens: (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
+    costUSD: acc.costUSD + u.costUSD,
+  }));
+}
+
+/**
  * Render skill reports as JSON.
  */
 export function renderJsonReport(reports: SkillReport[]): string {
+  const totalUsage = aggregateUsage(reports);
+
   const output = {
     reports: reports.map((r) => ({
       skill: r.skill,
@@ -226,6 +244,7 @@ export function renderJsonReport(reports: SkillReport[]): string {
       findings: r.findings,
       metadata: r.metadata,
       durationMs: r.durationMs,
+      usage: r.usage,
     })),
     summary: {
       totalFindings: reports.reduce((sum, r) => sum + r.findings.length, 0),
@@ -251,6 +270,7 @@ export function renderJsonReport(reports: SkillReport[]): string {
           0
         ),
       },
+      usage: totalUsage,
     },
   };
 

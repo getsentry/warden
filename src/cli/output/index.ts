@@ -16,6 +16,10 @@ export {
   truncate,
   padRight,
   countBySeverity,
+  formatCost,
+  formatTokens,
+  formatUsage,
+  formatUsagePlain,
 } from './formatters.js';
 export {
   runSkillTasks,
