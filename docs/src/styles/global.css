@@ -500,3 +500,43 @@ hr {
     max-width: 220px;
   }
 }
+
+/* CLI output colors */
+.cli-output {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #e5e5e5;
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.cli-green {
+  color: #4ade80;
+}
+
+.cli-yellow {
+  color: #facc15;
+}
+
+.cli-cyan {
+  color: #22d3ee;
+}
+
+.cli-red {
+  color: #f87171;
+}
+
+.cli-magenta {
+  color: #c084fc;
+}
+
+.cli-bold {
+  font-weight: 600;
+  color: #fff;
+}
+
+.cli-dim {
+  color: #737373;
+}

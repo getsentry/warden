@@ -65,28 +65,51 @@ skill = "security-review"`}
     <p>See the <a href={`${base}/setup`}>setup guide</a> for detailed configuration options.</p>
   </section>
 
-  <section class="section features">
-    <h2>Features</h2>
+  <section class="section showcase">
+    <h2>See It in Action</h2>
 
-    <div class="feature">
-      <h3>Security Analysis</h3>
-      <p>Built-in <code>security-review</code> skill scans for injection vulnerabilities, authentication issues, exposed secrets, and more.</p>
-    </div>
+    <Terminal title="Terminal" showCopy={false}>
+      <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill code-simplifier
 
-    <div class="feature">
-      <h3>Inline Comments</h3>
-      <p>Findings appear as inline PR comments on the exact lines with issues, with suggested fixes when available.</p>
-    </div>
+<span class="cli-dim">__    __              _
+/ / /\ \ \__ _ _ __ __| | ___ _ __
+\ \/  \/ / _` | '__/ _` |/ _ \ '_ \
+ \  /\  / (_| | | | (_| |  __/ | | |
+  \/  \/ \__,_|_|  \__,_|\___|_| |_|</span>
 
-    <div class="feature">
-      <h3>Custom Skills</h3>
-      <p>Define your own skills with custom prompts and tool restrictions in <code>.warden/skills/</code>.</p>
-    </div>
+<span class="cli-bold">v0.1.0</span>
 
-    <div class="feature">
-      <h3>Configurable Triggers</h3>
-      <p>Control which skills run based on event type, PR action, and file path patterns.</p>
-    </div>
+Analyzing changes from <span class="cli-cyan">HEAD</span>...
+
+<span class="cli-bold">FILES</span>  <span class="cli-cyan">3 files changed</span>
+  <span class="cli-yellow">~</span> src/api/auth.ts
+  <span class="cli-yellow">~</span> src/api/users.ts
+  <span class="cli-green">+</span> src/api/sessions.ts
+
+┌─ <span class="cli-bold">code-simplifier</span> ───────────────────────────────────────────────── <span class="cli-dim">8.2s</span> ─┐
+│ <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low                                         │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│ <span class="cli-yellow">●</span> <span class="cli-bold">Nested ternary reduces readability</span>                                    │
+│   <span class="cli-dim">src/api/auth.ts:42</span>                                                    │
+│   <span class="cli-dim">42 │</span> const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user';          │
+│                                                                          │
+│   Nested ternary operators are harder to read. Consider using a          │
+│   switch statement or if/else chain for clarity.                         │
+│                                                                          │
+│ <span class="cli-cyan">●</span> <span class="cli-bold">Redundant null check</span>                                                  │
+│   <span class="cli-dim">src/api/users.ts:18</span>                                                   │
+│   <span class="cli-dim">18 │</span> if (user !== null && user !== undefined) {'{'}                     │
+│                                                                          │
+│   Use optional chaining or nullish coalescing instead of explicit        │
+│   null/undefined checks.                                                 │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+<span class="cli-bold">SUMMARY</span>
+<span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low
+Analysis completed in <span class="cli-dim">8.2s</span></pre>
+    </Terminal>
   </section>
 
   <section class="section">
@@ -184,26 +207,12 @@ skill = "security-review"`}
     margin-bottom: 0.5rem;
   }
 
-  .features {
-    display: grid;
-    gap: 1.5rem;
+  .showcase {
+    margin-top: 3rem;
   }
 
-  .feature {
-    padding: 1.25rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-
-  .feature h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1.1rem;
-  }
-
-  .feature p {
-    margin: 0;
-    color: var(--text-secondary);
+  .showcase h2 {
+    margin-bottom: 1.5rem;
   }
 
   .architecture {
