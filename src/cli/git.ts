@@ -95,6 +95,29 @@ export function getRepoName(cwd: string = process.cwd()): { owner: string; name:
 }
 
 /**
+ * Get the GitHub repository URL if the remote is on GitHub.
+ * Returns null if the remote is not GitHub or not configured.
+ */
+export function getGitHubRepoUrl(cwd: string = process.cwd()): string | null {
+  try {
+    const remoteUrl = git('config --get remote.origin.url', cwd);
+    // Handle SSH: git@github.com:owner/repo.git
+    const sshMatch = remoteUrl.match(/git@github\.com:([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
+    if (sshMatch && sshMatch[1] && sshMatch[2]) {
+      return `https://github.com/${sshMatch[1]}/${sshMatch[2]}`;
+    }
+    // Handle HTTPS: https://github.com/owner/repo.git
+    const httpsMatch = remoteUrl.match(/https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
+    if (httpsMatch && httpsMatch[1] && httpsMatch[2]) {
+      return `https://github.com/${httpsMatch[1]}/${httpsMatch[2]}`;
+    }
+  } catch {
+    // No remote configured
+  }
+  return null;
+}
+
+/**
  * Map git status letter to FileChange status.
  */
 function mapStatus(status: string): GitFileChange['status'] {

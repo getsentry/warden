@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { getRepoRoot } from '../git.js';
+import chalk from 'chalk';
+import { getRepoRoot, getGitHubRepoUrl } from '../git.js';
 import { getBuiltinSkillNames } from '../../skills/loader.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
@@ -95,11 +96,11 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   // Create warden.toml
   const wardenTomlPath = join(repoRoot, 'warden.toml');
   if (existing.hasWardenToml && !options.force) {
-    reporter.warning(`warden.toml already exists. Use --force to overwrite.`);
+    reporter.skipped(relative(cwd, wardenTomlPath), 'already exists');
   } else {
     const content = generateWardenToml(skill);
     writeFileSync(wardenTomlPath, content, 'utf-8');
-    reporter.success(`Created ${relative(cwd, wardenTomlPath)}`);
+    reporter.created(relative(cwd, wardenTomlPath));
     filesCreated++;
   }
 
@@ -112,11 +113,11 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   // Create workflow file
   const workflowPath = join(workflowDir, 'warden.yml');
   if (existing.hasWorkflow && !options.force) {
-    reporter.warning(`GitHub workflow already exists. Use --force to overwrite.`);
+    reporter.skipped(relative(cwd, workflowPath), 'already exists');
   } else {
     const content = generateWorkflowYaml();
     writeFileSync(workflowPath, content, 'utf-8');
-    reporter.success(`Created ${relative(cwd, workflowPath)}`);
+    reporter.created(relative(cwd, workflowPath));
     filesCreated++;
   }
 
@@ -128,13 +129,17 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
 
   // Print next steps
   reporter.blank();
-  reporter.step('Next steps:');
-  reporter.tip('1. Add ANTHROPIC_API_KEY to your repository secrets');
-  reporter.tip('   Go to: Settings > Secrets and variables > Actions > New repository secret');
-  reporter.tip('2. Customize warden.toml to match your project needs');
-  reporter.tip('3. Commit the new files and open a pull request to test');
-  reporter.blank();
-  reporter.tip('Documentation: https://warden.sentry.dev');
+  reporter.bold('Next steps:');
+  reporter.text(`  1. Set ${chalk.cyan('ANTHROPIC_API_KEY')} in .env.local`);
+  reporter.text(`  2. Add ${chalk.cyan('ANTHROPIC_API_KEY')} to repository secrets`);
+
+  // Show GitHub secrets URL if available
+  const githubUrl = getGitHubRepoUrl(repoRoot);
+  if (githubUrl) {
+    reporter.text(`     ${chalk.dim(githubUrl + '/settings/secrets/actions')}`);
+  }
+
+  reporter.text('  3. Commit and open a PR to test');
 
   return 0;
 }

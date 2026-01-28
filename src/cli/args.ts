@@ -59,7 +59,7 @@ Options:
   --help, -h           Show this help message
 
 Init Options:
-  --force              Overwrite existing files
+  -f, --force          Overwrite existing files
   --skill <name>       Default skill to configure (default: security-review)
 
 Examples:
@@ -155,7 +155,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       json: { type: 'boolean', default: false },
       'fail-on': { type: 'string' },
       fix: { type: 'boolean', default: false },
-      force: { type: 'boolean', default: false },
+      force: { type: 'boolean', short: 'f', default: false },
       parallel: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
       quiet: { type: 'boolean', default: false },

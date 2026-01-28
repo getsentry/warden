@@ -202,6 +202,37 @@ export class Reporter {
   }
 
   /**
+   * Log a file creation message (green "Created" prefix, no icon).
+   */
+  created(filename: string): void {
+    if (this.verbosity === Verbosity.Quiet) {
+      return;
+    }
+
+    if (this.mode.isTTY) {
+      this.log(`${chalk.green('Created')} ${filename}`);
+    } else {
+      this.logCI(`Created ${filename}`);
+    }
+  }
+
+  /**
+   * Log a skipped file message (yellow "Skipped" prefix with reason).
+   */
+  skipped(filename: string, reason?: string): void {
+    if (this.verbosity === Verbosity.Quiet) {
+      return;
+    }
+
+    const suffix = reason ? chalk.dim(` (${reason})`) : '';
+    if (this.mode.isTTY) {
+      this.log(`${chalk.yellow('Skipped')} ${filename}${suffix}`);
+    } else {
+      this.logCI(`Skipped ${filename}${reason ? ` (${reason})` : ''}`);
+    }
+  }
+
+  /**
    * Log a warning message.
    */
   warning(message: string): void {
@@ -210,7 +241,7 @@ export class Reporter {
     }
 
     if (this.mode.isTTY) {
-      this.log(`${chalk.yellow(figures.warning)} ${message}`);
+      this.log(`${chalk.yellow(figures.warning)}  ${message}`);
     } else {
       this.logCI(`WARN: ${message}`);
     }
@@ -255,6 +286,36 @@ export class Reporter {
       this.log(chalk.dim(`Tip: ${message}`));
     }
     // No tips in CI mode
+  }
+
+  /**
+   * Log plain text (no prefix).
+   */
+  text(message: string): void {
+    if (this.verbosity === Verbosity.Quiet) {
+      return;
+    }
+
+    if (this.mode.isTTY) {
+      this.log(message);
+    } else {
+      this.logCI(message);
+    }
+  }
+
+  /**
+   * Log bold text.
+   */
+  bold(message: string): void {
+    if (this.verbosity === Verbosity.Quiet) {
+      return;
+    }
+
+    if (this.mode.isTTY) {
+      this.log(chalk.bold(message));
+    } else {
+      this.logCI(message);
+    }
   }
 
   /**

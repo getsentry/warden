@@ -16,57 +16,50 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
   </div>
 
-  <section class="section">
-    <h2>Why Warden?</h2>
-    <p><strong>Catch issues before they land.</strong> Run Warden locally to fix problems before pushing, or let it review every PR automatically.</p>
-    <p><strong>Skills, not prompts.</strong> Define analysis once. Warden runs the right checks at the right time.</p>
-    <p><strong>GitHub-native.</strong> Findings appear as PR comments with inline annotations and suggested fixes.</p>
-  </section>
-
-  <section class="section">
-    <h2>Two Ways to Run</h2>
-
-    <div class="two-ways">
-      <div class="way">
-        <h3>Local CLI</h3>
-        <p>Catch issues before you push. Fix them immediately.</p>
-        <Terminal title="Terminal" showCopy={true}>
-          <Code
-            code={`# Run on uncommitted changes
-npx warden --skill security-review
-
-# Found something? Fix it
-npx warden --fix`}
-            lang="bash"
-            theme="vitesse-black"
-          />
-        </Terminal>
+  <section class="quick-start">
+    <div class="step">
+      <div class="step-header">
+        <span class="step-num">1</span>
+        <h3>Install</h3>
       </div>
-
-      <div class="way">
-        <h3>GitHub Action</h3>
-        <p>Automated review on every pull request.</p>
-        <Terminal title=".github/workflows/warden.yml" showCopy={true}>
-          <Code
-            code={`- uses: getsentry/warden-action@v1
-  with:
-    anthropic-api-key: \${{ secrets.ANTHROPIC_API_KEY }}
-    github-token: \${{ secrets.GITHUB_TOKEN }}`}
-            lang="yaml"
-            theme="vitesse-black"
-          />
-        </Terminal>
-      </div>
+      <p>Install the CLI globally.</p>
+      <Terminal title="Terminal" showCopy={true}>
+        <Code
+          code="npm install -g @sentry/warden"
+          lang="bash"
+          theme="vitesse-black"
+        />
+      </Terminal>
     </div>
 
-    <p>See the <a href={`${base}/setup`}>setup guide</a> for detailed configuration options.</p>
-  </section>
+    <div class="step">
+      <div class="step-header">
+        <span class="step-num">2</span>
+        <h3>Initialize</h3>
+      </div>
+      <p>Scaffold your project with config and GitHub workflow.</p>
+      <Terminal title="Terminal" showCopy={false}>
+        <pre class="cli-output"><span class="cli-dim">$</span> warden init
 
-  <section class="section showcase">
-    <h2>See It in Action</h2>
+<span class="cli-green">Created</span> warden.toml
+<span class="cli-green">Created</span> .github/workflows/warden.yml
 
-    <Terminal title="Terminal" showCopy={false}>
-      <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill code-simplifier
+<span class="cli-bold">Next steps:</span>
+  1. Set <span class="cli-cyan">ANTHROPIC_API_KEY</span> in .env.local
+  2. Add <span class="cli-cyan">ANTHROPIC_API_KEY</span> to repository secrets
+     <span class="cli-dim">github.com/your-org/your-repo/settings/secrets/actions</span>
+  3. Commit and open a PR to test</pre>
+      </Terminal>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <span class="step-num">3</span>
+        <h3>Run Locally</h3>
+      </div>
+      <p>Catch issues before you push. Fix them immediately.</p>
+      <Terminal title="Terminal" showCopy={false}>
+        <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill code-simplifier
 
 <span class="cli-dim">__    __              _
 / / /\ \ \__ _ _ __ __| | ___ _ __
@@ -106,45 +99,63 @@ Analyzing changes from <span class="cli-cyan">HEAD</span>...
 <span class="cli-bold">SUMMARY</span>
 <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low
 Analysis completed in <span class="cli-dim">8.2s</span></pre>
-    </Terminal>
-  </section>
+      </Terminal>
+    </div>
 
-  <section class="section">
-    <h2>How It Works</h2>
-    <div class="architecture">
-      <div class="arch-step">
-        <span class="arch-num">1</span>
-        <div>
-          <strong>Trigger</strong>
-          <p>Run CLI or open a PR</p>
-        </div>
+    <div class="step">
+      <div class="step-header">
+        <span class="step-num">4</span>
+        <h3>See Results on PRs</h3>
       </div>
-      <span class="arch-arrow">→</span>
-      <div class="arch-step">
-        <span class="arch-num">2</span>
-        <div>
-          <strong>Config</strong>
-          <p>Match triggers in warden.toml</p>
+      <p>Open a PR and Warden reviews it automatically. Findings appear as inline comments.</p>
+      <div class="pr-mock">
+        <div class="pr-mock-header">
+          <div class="pr-mock-avatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+            </svg>
+          </div>
+          <div class="pr-mock-meta">
+            <span class="pr-mock-name">warden</span>
+            <span class="pr-mock-badge">bot</span>
+            <span class="pr-mock-time">commented now</span>
+          </div>
         </div>
-      </div>
-      <span class="arch-arrow">→</span>
-      <div class="arch-step">
-        <span class="arch-num">3</span>
-        <div>
-          <strong>Analyze</strong>
-          <p>AI agents run matched skills</p>
+        <div class="pr-mock-body">
+          <div class="pr-mock-finding">
+            <span class="pr-mock-severity severity-medium"></span>
+            <span class="pr-mock-title">Nested ternary reduces readability</span>
+          </div>
+          <div class="pr-mock-code">
+            <div class="pr-mock-code-header">src/api/auth.ts</div>
+            <pre class="pr-mock-code-content"><span class="line-num">42</span><span class="line-old">- const role = isAdmin ? 'admin' : isMod ? 'mod' : 'user';</span>
+<span class="line-num">42</span><span class="line-new">+ const role = isAdmin</span>
+<span class="line-num">43</span><span class="line-new">+   ? 'admin'</span>
+<span class="line-num">44</span><span class="line-new">+   : isMod ? 'mod' : 'user';</span></pre>
+          </div>
+          <p class="pr-mock-desc">Nested ternary operators are harder to read. Consider using a switch statement or if/else chain for clarity.</p>
         </div>
-      </div>
-      <span class="arch-arrow">→</span>
-      <div class="arch-step">
-        <span class="arch-num">4</span>
-        <div>
-          <strong>Report</strong>
-          <p>Terminal output or PR comments</p>
+        <div class="pr-mock-footer">
+          <a href="#" class="pr-mock-link">View all 2 findings</a>
         </div>
       </div>
     </div>
   </section>
+
+  <section class="section next-steps">
+    <h2>Next Steps</h2>
+    <div class="next-steps-grid">
+      <a href={`${base}/skills`} class="next-step-card">
+        <strong>Add your own skills</strong>
+        <p>Create custom reviewers in <code>.warden/skills/</code></p>
+      </a>
+      <a href={`${base}/setup`} class="next-step-card">
+        <strong>Configure triggers</strong>
+        <p>Control when skills run with <code>warden.toml</code></p>
+      </a>
+    </div>
+  </section>
+
 </Base>
 
 <style>
@@ -191,83 +202,32 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     color: #000;
   }
 
-  .section {
+  /* Quick Start Steps */
+  .quick-start {
     margin-top: 3rem;
   }
 
-  .section h2 {
-    margin-bottom: 1rem;
+  .step {
+    margin-bottom: 2.5rem;
   }
 
-  .section h3 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
+  .step:last-child {
+    margin-bottom: 0;
   }
 
-  .two-ways {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    margin: 1.5rem 0;
-  }
-
-  .way {
-    padding: 1.5rem;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-
-  .way h3 {
-    margin-top: 0;
-    margin-bottom: 0.5rem;
-  }
-
-  .way > p {
-    color: var(--text-secondary);
-    margin-bottom: 1rem;
-  }
-
-  @media (max-width: 768px) {
-    .two-ways {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .showcase {
-    margin-top: 3rem;
-  }
-
-  .showcase h2 {
-    margin-bottom: 1.5rem;
-  }
-
-  .architecture {
+  .step-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-top: 1.5rem;
-  }
-
-  .arch-step {
-    display: flex;
-    align-items: flex-start;
     gap: 0.75rem;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    flex: 1;
-    min-width: 140px;
+    margin-bottom: 0.5rem;
   }
 
-  .arch-num {
+  .step-num {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.75rem;
+    height: 1.75rem;
     background: #fff;
     color: #000;
     border-radius: 50%;
@@ -276,20 +236,205 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     flex-shrink: 0;
   }
 
-  .arch-step strong {
-    display: block;
-    margin-bottom: 0.25rem;
+  .step-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
   }
 
-  .arch-step p {
+  .step > p {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    margin-left: 2.5rem;
+  }
+
+  /* PR Mock */
+  .pr-mock {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 0.875rem;
+    margin-top: 1rem;
+  }
+
+  .pr-mock-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+  }
+
+  .pr-mock-avatar {
+    width: 32px;
+    height: 32px;
+    background: #21262d;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8b949e;
+  }
+
+  .pr-mock-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .pr-mock-name {
+    font-weight: 600;
+    color: #c9d1d9;
+  }
+
+  .pr-mock-badge {
+    background: #238636;
+    color: #fff;
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .pr-mock-time {
+    color: #8b949e;
+    font-size: 0.75rem;
+  }
+
+  .pr-mock-body {
+    padding: 1rem;
+  }
+
+  .pr-mock-finding {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .pr-mock-severity {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .pr-mock-severity.severity-medium {
+    background: #d29922;
+  }
+
+  .pr-mock-title {
+    font-weight: 600;
+    color: #c9d1d9;
+  }
+
+  .pr-mock-code {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+
+  .pr-mock-code-header {
+    background: #0d1117;
+    padding: 0.5rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: #8b949e;
+    border-bottom: 1px solid #30363d;
+  }
+
+  .pr-mock-code-content {
+    margin: 0;
+    padding: 0.5rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    background: transparent;
+    border: none;
+    overflow-x: auto;
+  }
+
+  .pr-mock-code-content .line-num {
+    display: inline-block;
+    width: 2.5rem;
+    padding: 0 0.5rem;
+    color: #484f58;
+    text-align: right;
+    user-select: none;
+  }
+
+  .pr-mock-code-content .line-old {
+    display: inline;
+    background: rgba(248, 81, 73, 0.15);
+    color: #f85149;
+  }
+
+  .pr-mock-code-content .line-new {
+    display: inline;
+    background: rgba(63, 185, 80, 0.15);
+    color: #3fb950;
+  }
+
+  .pr-mock-desc {
+    color: #8b949e;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .pr-mock-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #30363d;
+  }
+
+  .pr-mock-link {
+    font-size: 0.8125rem;
+    color: #58a6ff;
+  }
+
+  .pr-mock-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Next Steps */
+  .next-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .next-step-card {
+    display: block;
+    padding: 1.25rem 1.5rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    color: inherit;
+  }
+
+  .next-step-card:hover {
+    border-color: var(--border-strong);
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+  }
+
+  .next-step-card strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+  }
+
+  .next-step-card p {
     margin: 0;
     font-size: 0.875rem;
     color: var(--text-secondary);
   }
 
-  .arch-arrow {
-    color: var(--text-tertiary);
-    font-size: 1.25rem;
+  .next-step-card code {
+    font-size: 0.8125rem;
   }
 
   @media (max-width: 768px) {
@@ -297,16 +442,12 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
       font-size: 1.5rem;
     }
 
-    .architecture {
-      flex-direction: column;
+    .next-steps-grid {
+      grid-template-columns: 1fr;
     }
 
-    .arch-arrow {
-      transform: rotate(90deg);
-    }
-
-    .arch-step {
-      width: 100%;
+    .step > p {
+      margin-left: 0;
     }
   }
 </style>
