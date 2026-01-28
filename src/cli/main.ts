@@ -197,14 +197,20 @@ async function runFileMode(filePatterns: string[], options: CLIOptions, reporter
 
 /**
  * Parse git ref target into base and head refs.
- * Supports formats: "base..head", "base" (head=working tree)
+ * Supports formats: "base..head", "base" (defaults head to HEAD)
+ * Special case: "HEAD" alone means the HEAD commit (HEAD^..HEAD)
  */
-function parseGitRef(ref: string): { base: string; head?: string } {
+function parseGitRef(ref: string): { base: string; head: string } {
   if (ref.includes('..')) {
     const [base, head] = ref.split('..');
-    return { base: base || 'HEAD', head: head || undefined };
+    return { base: base || 'HEAD', head: head || 'HEAD' };
   }
-  return { base: ref };
+  // Single ref: diff from that ref to HEAD
+  // Special case: if ref is HEAD, diff from HEAD^ to see the current commit
+  if (ref.toUpperCase() === 'HEAD') {
+    return { base: 'HEAD^', head: 'HEAD' };
+  }
+  return { base: ref, head: 'HEAD' };
 }
 
 /**
