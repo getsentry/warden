@@ -66,21 +66,21 @@ function matchTrigger(trigger: Trigger, context: EventContext): boolean {
     return false;
   }
 
-  if (trigger.filters?.paths && context.pullRequest) {
-    const patterns = trigger.filters.paths;
-    const files = context.pullRequest.files.map((f) => f.filename);
-    const matches = files.some((file) =>
-      patterns.some((pattern) => matchGlob(pattern, file))
+  const filenames = context.pullRequest?.files.map((f) => f.filename);
+  const pathPatterns = trigger.filters?.paths;
+  const ignorePatterns = trigger.filters?.ignorePaths;
+
+  if (pathPatterns && filenames) {
+    const hasMatch = filenames.some((file) =>
+      pathPatterns.some((pattern) => matchGlob(pattern, file))
     );
-    if (!matches) {
+    if (!hasMatch) {
       return false;
     }
   }
 
-  if (trigger.filters?.ignorePaths && context.pullRequest) {
-    const ignorePatterns = trigger.filters.ignorePaths;
-    const files = context.pullRequest.files.map((f) => f.filename);
-    const allIgnored = files.every((file) =>
+  if (ignorePatterns && filenames) {
+    const allIgnored = filenames.every((file) =>
       ignorePatterns.some((pattern) => matchGlob(pattern, file))
     );
     if (allIgnored) {
