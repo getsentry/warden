@@ -26,6 +26,9 @@
   "lint-staged": {
     "*.ts": [
       "eslint --fix"
+    ],
+    "docs/**/*.astro": [
+      "pnpm -C docs build"
     ]
   },
   "keywords": [
