@@ -28,13 +28,13 @@ function loadEnvFiles(dir: string): void {
   // Load .env first (base config)
   const envPath = join(dir, '.env');
   if (existsSync(envPath)) {
-    dotenvConfig({ path: envPath, debug: false });
+    dotenvConfig({ path: envPath, quiet: true });
   }
 
   // Load .env.local second (local overrides, typically gitignored)
   const envLocalPath = join(dir, '.env.local');
   if (existsSync(envLocalPath)) {
-    dotenvConfig({ path: envLocalPath, override: true, debug: false });
+    dotenvConfig({ path: envLocalPath, override: true, quiet: true });
   }
 }
 

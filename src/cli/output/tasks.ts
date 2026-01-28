@@ -4,13 +4,7 @@ import type { SkillReport, Severity } from '../../types/index.js';
 import type { SkillRunnerCallbacks } from './reporter.js';
 import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
-import {
-  formatDuration,
-  formatFindingCounts,
-  formatProgress,
-  truncate,
-  countBySeverity,
-} from './formatters.js';
+import { formatProgress, truncate } from './formatters.js';
 
 /**
  * Result from running a skill task.
@@ -97,11 +91,6 @@ function createSkillTask(options: SkillTaskOptions): ListrTask<SkillTaskContext>
         // Attach duration to report
         report.durationMs = duration;
 
-        // Update title with results
-        const counts = countBySeverity(report.findings);
-        const countStr = formatFindingCounts(counts);
-        task.title = `${displayName} ${countStr} (${formatDuration(duration)})`;
-
         ctx.results.push({ name, report, failOn });
       } catch (error) {
         ctx.results.push({ name, error });
@@ -135,6 +124,10 @@ export async function runSkillTasks(
     concurrent: concurrency > 1 ? concurrency : false,
     exitOnError: false,
     renderer,
+    rendererOptions: {
+      // Clear the output when tasks complete - results shown in boxes
+      clearOutput: true,
+    },
   });
 
   const ctx: SkillTaskContext = { results: [] };
