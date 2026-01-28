@@ -1,8 +1,9 @@
-export { securityReviewSkill } from './security-review.js';
 export {
   getBuiltinSkill,
   getBuiltinSkillNames,
   loadSkillFromFile,
+  loadSkillFromMarkdown,
+  loadSkillFromToml,
   loadSkillsFromDirectory,
   resolveSkillAsync,
   SkillLoaderError,

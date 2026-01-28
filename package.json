@@ -5,7 +5,11 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "warden": "dist/cli/index.js"
+  },
   "scripts": {
+    "cli": "node dist/cli/index.js",
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "eslint src",
@@ -36,6 +40,8 @@
   "dependencies": {
     "@anthropic-ai/claude-code": "^1.0.0",
     "@octokit/rest": "^21.0.0",
+    "dotenv": "^16.6.1",
+    "fast-glob": "^3.3.3",
     "smol-toml": "^1.6.0",
     "zod": "^3.24.0"
   },

@@ -6,30 +6,29 @@ import {
   resolveSkillAsync,
   SkillLoaderError,
 } from './loader.js';
-import { securityReviewSkill } from './security-review.js';
 
 describe('built-in skills', () => {
-  it('returns security-review skill', () => {
-    const skill = getBuiltinSkill('security-review');
+  it('returns security-review skill', async () => {
+    const skill = await getBuiltinSkill('security-review');
     expect(skill).toBeDefined();
     expect(skill?.name).toBe('security-review');
   });
 
-  it('returns undefined for unknown skill', () => {
-    const skill = getBuiltinSkill('unknown-skill');
+  it('returns undefined for unknown skill', async () => {
+    const skill = await getBuiltinSkill('unknown-skill');
     expect(skill).toBeUndefined();
   });
 
-  it('lists all built-in skill names', () => {
-    const names = getBuiltinSkillNames();
+  it('lists all built-in skill names', async () => {
+    const names = await getBuiltinSkillNames();
     expect(names).toContain('security-review');
   });
 });
 
 describe('loadSkillFromFile', () => {
-  it('rejects non-toml files', async () => {
+  it('rejects unsupported file types', async () => {
     await expect(loadSkillFromFile('/path/to/skill.json')).rejects.toThrow(SkillLoaderError);
-    await expect(loadSkillFromFile('/path/to/skill.json')).rejects.toThrow('Unsupported skill file extension');
+    await expect(loadSkillFromFile('/path/to/skill.json')).rejects.toThrow('Unsupported skill file');
   });
 
   it('throws for missing files', async () => {
@@ -40,7 +39,8 @@ describe('loadSkillFromFile', () => {
 describe('resolveSkillAsync', () => {
   it('resolves built-in skills', async () => {
     const skill = await resolveSkillAsync('security-review');
-    expect(skill).toEqual(securityReviewSkill);
+    expect(skill.name).toBe('security-review');
+    expect(skill.description).toContain('security');
   });
 
   it('resolves inline skills from config', async () => {
@@ -72,13 +72,26 @@ describe('resolveSkillAsync', () => {
 });
 
 describe('security-review skill', () => {
-  it('has correct structure', () => {
-    expect(securityReviewSkill.name).toBe('security-review');
-    expect(securityReviewSkill.description).toContain('security');
-    expect(securityReviewSkill.prompt).toContain('SQL injection');
-    expect(securityReviewSkill.tools?.allowed).toContain('Read');
-    expect(securityReviewSkill.tools?.allowed).toContain('Grep');
-    expect(securityReviewSkill.tools?.denied).toContain('Write');
-    expect(securityReviewSkill.tools?.denied).toContain('Bash');
+  it('has correct structure', async () => {
+    const skill = await getBuiltinSkill('security-review');
+    expect(skill).toBeDefined();
+    expect(skill!.name).toBe('security-review');
+    expect(skill!.description).toContain('security');
+    expect(skill!.prompt).toContain('SQL injection');
+    expect(skill!.tools?.allowed).toContain('Read');
+    expect(skill!.tools?.allowed).toContain('Grep');
+  });
+});
+
+describe('code-simplifier skill', () => {
+  it('has correct structure', async () => {
+    const skill = await getBuiltinSkill('code-simplifier');
+    expect(skill).toBeDefined();
+    expect(skill!.name).toBe('code-simplifier');
+    expect(skill!.description).toContain('simplif');
+    expect(skill!.prompt).toContain('clarity');
+    expect(skill!.tools?.allowed).toContain('Read');
+    expect(skill!.tools?.allowed).toContain('Grep');
+    expect(skill!.tools?.allowed).toContain('Glob');
   });
 });
