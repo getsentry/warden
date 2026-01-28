@@ -7,7 +7,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'AI-powered code review for GitHub' } = Astro.props;
+const { title, description = 'Code review agents for GitHub' } = Astro.props;
 const currentPath = Astro.url.pathname;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
