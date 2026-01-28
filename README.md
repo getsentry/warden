@@ -1,6 +1,6 @@
 # warden
 
-AI-powered code review for GitHub pull requests. Catch security issues and simplify code before they ship.
+Your code is under new management. AI agents watching over every pull request.
 
 ## Why warden?
 
