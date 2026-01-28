@@ -1,3 +1,6 @@
+/.dex
+!/.dex/dex.toml
+
 # Dependencies
 node_modules/
 
