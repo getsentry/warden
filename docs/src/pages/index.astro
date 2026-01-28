@@ -77,14 +77,14 @@ Analyzing changes from <span class="cli-cyan">HEAD</span>...
 │                                                                 │
 │ <span class="cli-yellow">●</span> <span class="cli-bold">Missing React.memo for list items</span>                             │
 │   <span class="cli-dim">src/components/UserList.tsx:15</span>                                │
-│   <span class="cli-dim">15 │</span> const UserCard = {'({'} user {'}'}) => &lt;div&gt;{'{'}user.name{'}'}&lt;/div&gt;; │
+│   <span class="cli-dim">15 │</span> const UserCard = (&#123; user &#125;) =&gt; &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;; │
 │                                                                 │
 │   List item components should be memoized to prevent            │
 │   unnecessary re-renders when parent state changes.             │
 │                                                                 │
 │ <span class="cli-cyan">●</span> <span class="cli-bold">useEffect missing dependency</span>                                   │
 │   <span class="cli-dim">src/components/Dashboard.tsx:23</span>                               │
-│   <span class="cli-dim">23 │</span> useEffect({'('}) => {'{'} fetchData() {'}'}, []{')'}                      │
+│   <span class="cli-dim">23 │</span> useEffect(() =&gt; &#123; fetchData() &#125;, [])                      │
 │                                                                 │
 │   The dependency array is missing 'fetchData'. This could       │
 │   lead to stale closures or unexpected behavior.                │
