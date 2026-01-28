@@ -29,6 +29,12 @@ import {
 import { runInit } from './commands/init.js';
 
 /**
+ * Global abort controller for graceful shutdown on SIGINT.
+ * Used to cancel in-progress SDK queries.
+ */
+export const abortController = new AbortController();
+
+/**
  * Load environment variables from .env files in the given directory.
  * Loads .env first, then .env.local for local overrides.
  */
@@ -112,7 +118,7 @@ async function runSkills(
     failOn: options.failOn,
     run: async (callbacks) => {
       const skill = await resolveSkillAsync(skillName, repoPath, skillsConfig);
-      return runSkill(skill, context, { apiKey, callbacks });
+      return runSkill(skill, context, { apiKey, callbacks, abortController });
     },
   }));
 
@@ -401,7 +407,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     failOn: trigger.output.failOn ?? options.failOn,
     run: async (callbacks) => {
       const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
-      return runSkill(skill, context, { apiKey, model: trigger.model, callbacks });
+      return runSkill(skill, context, { apiKey, model: trigger.model, callbacks, abortController });
     },
   }));
 

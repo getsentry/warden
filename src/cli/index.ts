@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-import { main } from './main.js';
+import { main, abortController } from './main.js';
 
 process.on('SIGINT', () => {
+  // Abort any running SDK queries
+  abortController.abort();
   process.stderr.write('\n');
   process.exit(130);
 });

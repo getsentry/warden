@@ -92,6 +92,8 @@ export interface SkillRunnerOptions {
   model?: string;
   /** Progress callbacks */
   callbacks?: SkillRunnerCallbacks;
+  /** Abort controller for cancellation on SIGINT */
+  abortController?: AbortController;
 }
 
 /**
@@ -231,7 +233,7 @@ async function analyzeHunk(
   repoPath: string,
   options: SkillRunnerOptions
 ): Promise<HunkAnalysisResult> {
-  const { maxTurns = 5, model } = options;
+  const { maxTurns = 5, model, abortController } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(hunkCtx);
@@ -248,6 +250,7 @@ async function analyzeHunk(
       disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
       permissionMode: 'bypassPermissions',
       model,
+      abortController,
     },
   });
 
@@ -325,7 +328,7 @@ export async function runSkill(
   context: EventContext,
   options: SkillRunnerOptions = {}
 ): Promise<SkillReport> {
-  const { contextLines = 20, parallel = true, callbacks } = options;
+  const { contextLines = 20, parallel = true, callbacks, abortController } = options;
 
   if (!context.pullRequest) {
     throw new SkillRunnerError('Pull request context required for skill execution');
@@ -375,6 +378,9 @@ export async function runSkill(
 
   // Analyze hunks file by file
   for (const [fileIndex, fileHunkEntry] of fileHunks.entries()) {
+    // Check for abort before starting new file
+    if (abortController?.signal.aborted) break;
+
     const { filename, hunks } = fileHunkEntry;
 
     // Report file start
@@ -386,6 +392,9 @@ export async function runSkill(
 
       // Process in batches
       for (let i = 0; i < hunks.length; i += concurrency) {
+        // Check for abort before starting new batch
+        if (abortController?.signal.aborted) break;
+
         const batch = hunks.slice(i, i + concurrency);
         const batchPromises = batch.map(async (hunk, batchIndex) => {
           const hunkIndex = i + batchIndex;
@@ -417,6 +426,9 @@ export async function runSkill(
     } else {
       // Process hunks sequentially
       for (const [hunkIndex, hunk] of hunks.entries()) {
+        // Check for abort before starting new hunk
+        if (abortController?.signal.aborted) break;
+
         const lineRange = getHunkLineRange(hunk);
 
         callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
