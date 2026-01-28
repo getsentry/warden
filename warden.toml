@@ -1,0 +1,7 @@
+version = 1
+
+[[triggers]]
+name = "security-review"
+event = "pull_request"
+actions = ["opened", "synchronize", "reopened"]
+skill = "security-review"

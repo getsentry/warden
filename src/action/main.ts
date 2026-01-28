@@ -5,8 +5,8 @@ import { loadWardenConfig, resolveSkill } from '../config/loader.js';
 import { buildEventContext } from '../event/context.js';
 import { runSkill } from '../sdk/runner.js';
 import { renderSkillReport } from '../output/renderer.js';
-import type { Trigger } from '../config/schema.js';
-import type { EventContext, SkillReport, Severity } from '../types/index.js';
+import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
+import type { EventContext, SkillReport } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
 
 interface ActionInputs {
@@ -61,50 +61,6 @@ function logGroup(name: string): void {
 
 function logGroupEnd(): void {
   console.log('::endgroup::');
-}
-
-function matchTrigger(trigger: Trigger, context: EventContext): boolean {
-  if (trigger.event !== context.eventType) {
-    return false;
-  }
-
-  if (!trigger.actions.includes(context.action)) {
-    return false;
-  }
-
-  const filenames = context.pullRequest?.files.map((f) => f.filename);
-  const pathPatterns = trigger.filters?.paths;
-  const ignorePatterns = trigger.filters?.ignorePaths;
-
-  if (pathPatterns && filenames) {
-    const hasMatch = filenames.some((file) =>
-      pathPatterns.some((pattern) => matchGlob(pattern, file))
-    );
-    if (!hasMatch) {
-      return false;
-    }
-  }
-
-  if (ignorePatterns && filenames) {
-    const allIgnored = filenames.every((file) =>
-      ignorePatterns.some((pattern) => matchGlob(pattern, file))
-    );
-    if (allIgnored) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function matchGlob(pattern: string, path: string): boolean {
-  const regexPattern = pattern
-    .replace(/\*\*/g, '{{GLOBSTAR}}')
-    .replace(/\*/g, '[^/]*')
-    .replace(/\?/g, '[^/]')
-    .replace(/{{GLOBSTAR}}/g, '.*');
-  const regex = new RegExp(`^${regexPattern}$`);
-  return regex.test(path);
 }
 
 async function postReviewToGitHub(
@@ -169,32 +125,6 @@ async function postReviewToGitHub(
       }
     }
   }
-}
-
-function countSeverity(reports: SkillReport[], severity: Severity): number {
-  return reports.reduce(
-    (count, report) =>
-      count + report.findings.filter((f) => f.severity === severity).length,
-    0
-  );
-}
-
-const SEVERITY_ORDER: Record<Severity, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  info: 4,
-};
-
-function shouldFail(report: SkillReport, failOn: Severity): boolean {
-  const threshold = SEVERITY_ORDER[failOn];
-  return report.findings.some((f) => SEVERITY_ORDER[f.severity] <= threshold);
-}
-
-function countFindingsAtOrAbove(report: SkillReport, failOn: Severity): number {
-  const threshold = SEVERITY_ORDER[failOn];
-  return report.findings.filter((f) => SEVERITY_ORDER[f.severity] <= threshold).length;
 }
 
 async function run(): Promise<void> {
