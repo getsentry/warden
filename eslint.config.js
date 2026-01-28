@@ -28,6 +28,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["dist/**", "node_modules/**", "*.js", "examples/**", "vitest.config.ts"],
+    ignores: ["dist/**", "node_modules/**", "*.js", "examples/**", "vitest*.config.ts"],
   }
 );
