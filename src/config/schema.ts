@@ -53,6 +53,8 @@ export const TriggerSchema = z.object({
   skill: z.string().min(1),
   filters: PathFilterSchema.optional(),
   output: OutputConfigSchema.optional(),
+  /** Model to use for this trigger (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
+  model: z.string().optional(),
 });
 export type Trigger = z.infer<typeof TriggerSchema>;
 

@@ -372,7 +372,7 @@ async function runConfigMode(options: CLIOptions): Promise<number> {
     try {
       const customSkillsDir = join(repoPath, '.warden', 'skills');
       const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
-      const report = await runSkill(skill, context, { apiKey });
+      const report = await runSkill(skill, context, { apiKey, model: trigger.model });
       reports.push(report);
       logSuccess(`Found ${report.findings.length} finding(s)`);
 

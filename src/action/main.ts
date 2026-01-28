@@ -197,7 +197,7 @@ async function run(): Promise<void> {
     logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
     try {
       const skill = resolveSkill(trigger.skill, config, repoPath);
-      const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey });
+      const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey, model: trigger.model });
       reports.push(report);
       console.log(`Found ${report.findings.length} findings`);
 

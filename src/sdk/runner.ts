@@ -24,6 +24,8 @@ export interface SkillRunnerOptions {
   parallel?: boolean;
   /** Max concurrent hunk analyses when parallel=true (default: 5) */
   concurrency?: number;
+  /** Model to use for analysis (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
+  model?: string;
 }
 
 /**
@@ -163,7 +165,7 @@ async function analyzeHunk(
   repoPath: string,
   options: SkillRunnerOptions
 ): Promise<Finding[]> {
-  const { maxTurns = 5 } = options;
+  const { maxTurns = 5, model } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(hunkCtx);
@@ -178,6 +180,7 @@ async function analyzeHunk(
       allowedTools: ['Read', 'Grep'],
       disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch'],
       permissionMode: 'bypassPermissions',
+      model,
     },
   });
 
