@@ -50,7 +50,7 @@ export interface SkillRunnerOptions {
  * Builds the system prompt for hunk-based analysis.
  */
 function buildHunkSystemPrompt(skill: SkillDefinition): string {
-  return `You are a code analysis agent for Warden. You analyze code changes and report findings in a structured JSON format.
+  let prompt = `You are a code analysis agent for Warden. You analyze code changes and report findings in a structured JSON format.
 
 ## Your Analysis Task
 
@@ -86,6 +86,18 @@ Requirements:
 - "location" is required - use the file path and line numbers from the context provided
 - "suggestedFix" is optional
 - Be concise - focus only on the changes shown`;
+
+  // Add skill resources context when rootDir is available
+  if (skill.rootDir) {
+    prompt += `
+
+## Skill Resources
+
+This skill is located at: ${skill.rootDir}
+You can read files from scripts/, references/, or assets/ subdirectories using the Read tool with the full path.`;
+  }
+
+  return prompt;
 }
 
 /**

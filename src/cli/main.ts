@@ -90,12 +90,11 @@ async function runSkills(
   }
 
   // Try to load config for custom skills
-  let customSkillsDir: string | undefined;
+  let repoPath: string | undefined;
   let skillsConfig: SkillDefinition[] | undefined;
 
   try {
-    const repoPath = getRepoRoot(cwd);
-    customSkillsDir = join(repoPath, '.warden', 'skills');
+    repoPath = getRepoRoot(cwd);
     const configPath = options.config
       ? resolve(cwd, options.config)
       : resolve(repoPath, 'warden.toml');
@@ -112,7 +111,7 @@ async function runSkills(
     name: skillName,
     failOn: options.failOn,
     run: async (callbacks) => {
-      const skill = await resolveSkillAsync(skillName, customSkillsDir, skillsConfig);
+      const skill = await resolveSkillAsync(skillName, repoPath, skillsConfig);
       return runSkill(skill, context, { apiKey, callbacks });
     },
   }));
@@ -396,13 +395,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // Build trigger tasks
-  const customSkillsDir = join(repoPath, '.warden', 'skills');
   const tasks: SkillTaskOptions[] = triggersToRun.map((trigger) => ({
     name: trigger.name,
     displayName: `${trigger.name} (${trigger.skill})`,
     failOn: trigger.output.failOn ?? options.failOn,
     run: async (callbacks) => {
-      const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
+      const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
       return runSkill(skill, context, { apiKey, model: trigger.model, callbacks });
     },
   }));

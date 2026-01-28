@@ -211,8 +211,7 @@ async function run(): Promise<void> {
   const runSingleTrigger = async (trigger: ResolvedTrigger): Promise<TriggerResult> => {
     logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
     try {
-      const customSkillsDir = join(repoPath, '.warden', 'skills');
-      const skill = await resolveSkillAsync(trigger.skill, customSkillsDir, config.skills);
+      const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
       const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey, model: trigger.model });
       console.log(`Found ${report.findings.length} findings`);
 

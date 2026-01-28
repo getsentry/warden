@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { join, extname } from 'node:path';
+import { basename, dirname, join, extname } from 'node:path';
 import { existsSync } from 'node:fs';
 import { parse as parseToml } from 'smol-toml';
 import { SkillDefinitionSchema, ToolNameSchema, type SkillDefinition, type ToolName } from '../config/schema.js';
@@ -13,6 +13,20 @@ export class SkillLoaderError extends Error {
 
 /** Cache for loaded skills directories to avoid repeated disk reads */
 const skillsCache = new Map<string, Map<string, SkillDefinition>>();
+
+/** Conventional skill directories, checked in order */
+export const SKILL_DIRECTORIES = [
+  '.warden/skills',
+  '.claude/skills',
+  '.agents/skills',
+] as const;
+
+/**
+ * Check if a string looks like a path (contains path separators or starts with .)
+ */
+function isSkillPath(nameOrPath: string): boolean {
+  return nameOrPath.includes('/') || nameOrPath.includes('\\') || nameOrPath.startsWith('.');
+}
 
 /**
  * Clear the skills cache. Useful for testing or when skills may have changed.
@@ -118,6 +132,7 @@ export async function loadSkillFromMarkdown(filePath: string): Promise<SkillDefi
     description: frontmatter['description'],
     prompt: body.trim(),
     tools: allowedTools ? { allowed: allowedTools } : undefined,
+    rootDir: dirname(filePath),
   };
 }
 
@@ -146,7 +161,10 @@ export async function loadSkillFromToml(filePath: string): Promise<SkillDefiniti
     );
   }
 
-  return validated.data;
+  return {
+    ...validated.data,
+    rootDir: dirname(filePath),
+  };
 }
 
 /**
@@ -154,9 +172,9 @@ export async function loadSkillFromToml(filePath: string): Promise<SkillDefiniti
  */
 export async function loadSkillFromFile(filePath: string): Promise<SkillDefinition> {
   const ext = extname(filePath).toLowerCase();
-  const basename = filePath.split('/').pop();
+  const filename = basename(filePath);
 
-  if (basename === 'SKILL.md') {
+  if (filename === 'SKILL.md') {
     return loadSkillFromMarkdown(filePath);
   } else if (ext === '.toml') {
     return loadSkillFromToml(filePath);
@@ -255,29 +273,71 @@ export async function getBuiltinSkillNames(): Promise<string[]> {
 }
 
 /**
- * Resolve a skill by name, checking inline skills, custom directory, then built-ins.
+ * Resolve a skill by name or path.
+ *
+ * Resolution order:
+ * 1. Inline skills from config
+ * 2. Direct path (if nameOrPath contains / or \ or starts with .)
+ *    - Directory: load SKILL.md from it
+ *    - File: load the file directly
+ * 3. Conventional directories (if repoRoot provided)
+ *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.toml
+ *    - .claude/skills/{name}/SKILL.md or .claude/skills/{name}.toml
+ *    - .agents/skills/{name}/SKILL.md or .agents/skills/{name}.toml
+ * 4. Built-in skills
  */
 export async function resolveSkillAsync(
-  name: string,
-  customSkillsDir?: string,
+  nameOrPath: string,
+  repoRoot?: string,
   inlineSkills?: SkillDefinition[]
 ): Promise<SkillDefinition> {
-  // Check inline skills from config first
+  // 1. Check inline skills from config first
   if (inlineSkills) {
-    const inline = inlineSkills.find(s => s.name === name);
+    const inline = inlineSkills.find(s => s.name === nameOrPath);
     if (inline) return inline;
   }
 
-  // Check custom skills directory
-  if (customSkillsDir) {
-    const customSkills = await loadSkillsFromDirectory(customSkillsDir);
-    const custom = customSkills.get(name);
-    if (custom) return custom;
+  // 2. Direct path resolution
+  if (isSkillPath(nameOrPath)) {
+    // Resolve relative to repoRoot if provided, otherwise use as-is
+    const resolvedPath = repoRoot ? join(repoRoot, nameOrPath) : nameOrPath;
+
+    // Check if it's a directory with SKILL.md
+    const skillMdPath = join(resolvedPath, 'SKILL.md');
+    if (existsSync(skillMdPath)) {
+      return loadSkillFromMarkdown(skillMdPath);
+    }
+
+    // Check if it's a file directly
+    if (existsSync(resolvedPath)) {
+      return loadSkillFromFile(resolvedPath);
+    }
+
+    throw new SkillLoaderError(`Skill not found at path: ${nameOrPath}`);
   }
 
-  // Check built-in skills
-  const builtin = await getBuiltinSkill(name);
+  // 3. Check conventional skill directories
+  if (repoRoot) {
+    for (const dir of SKILL_DIRECTORIES) {
+      const dirPath = join(repoRoot, dir);
+
+      // Check for skill-name/SKILL.md
+      const skillMdPath = join(dirPath, nameOrPath, 'SKILL.md');
+      if (existsSync(skillMdPath)) {
+        return loadSkillFromMarkdown(skillMdPath);
+      }
+
+      // Check for skill-name.toml
+      const tomlPath = join(dirPath, `${nameOrPath}.toml`);
+      if (existsSync(tomlPath)) {
+        return loadSkillFromToml(tomlPath);
+      }
+    }
+  }
+
+  // 4. Check built-in skills
+  const builtin = await getBuiltinSkill(nameOrPath);
   if (builtin) return builtin;
 
-  throw new SkillLoaderError(`Skill not found: ${name}`);
+  throw new SkillLoaderError(`Skill not found: ${nameOrPath}`);
 }
