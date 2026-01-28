@@ -40,6 +40,7 @@ export const FindingSchema = z.object({
   location: LocationSchema.optional(),
   suggestedFix: SuggestedFixSchema.optional(),
   labels: z.array(z.string()).optional(),
+  elapsedMs: z.number().nonnegative().optional(),
 });
 export type Finding = z.infer<typeof FindingSchema>;
 
@@ -49,6 +50,7 @@ export const SkillReportSchema = z.object({
   summary: z.string(),
   findings: z.array(FindingSchema),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  durationMs: z.number().nonnegative().optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 

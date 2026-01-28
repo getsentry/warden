@@ -13,9 +13,26 @@ import {
 const VERSION = '0.1.0';
 
 /**
+ * ASCII art logo for TTY header.
+ */
+const LOGO = `
+ __       __                            __
+|  \\  _  |  \\                          |  \\
+| $$ / \\ | $$  ______    ______    ____| $$  ______   _______
+| $$/  $\\| $$ |      \\  /      \\  /      $$ /      \\ |       \\
+| $$  $$$\\ $$  \\$$$$$$\\|  $$$$$$\\|  $$$$$$$|  $$$$$$\\| $$$$$$$\\
+| $$ $$\\$$\\$$ /      $$| $$   \\$$| $$  | $$| $$    $$| $$  | $$
+| $$$$  \\$$$$|  $$$$$$$| $$      | $$__| $$| $$$$$$$$| $$  | $$
+| $$$    \\$$$ \\$$    $$| $$       \\$$    $$ \\$$     \\| $$  | $$
+ \\$$      \\$$  \\$$$$$$$ \\$$        \\$$$$$$$  \\$$$$$$$ \\$$   \\$$
+`.trimStart();
+
+/**
  * Callbacks for skill runner progress reporting.
  */
 export interface SkillRunnerCallbacks {
+  /** Start time of the skill execution (for elapsed time calculations) */
+  skillStartTime?: number;
   onFileStart?: (file: string, index: number, total: number) => void;
   onHunkStart?: (file: string, hunkNum: number, total: number, lineRange: string) => void;
   onHunkComplete?: (file: string, hunkNum: number, findings: Finding[]) => void;
@@ -53,7 +70,7 @@ export class Reporter {
   }
 
   /**
-   * Print the header with version.
+   * Print the header with logo and version.
    */
   header(): void {
     if (this.verbosity === Verbosity.Quiet) {
@@ -62,7 +79,10 @@ export class Reporter {
 
     if (this.mode.isTTY) {
       this.log('');
-      this.log(chalk.bold(`warden v${VERSION}`));
+      for (const line of LOGO.split('\n')) {
+        this.log(chalk.cyan(line));
+      }
+      this.log(chalk.dim(`v${VERSION}`));
       this.log('');
     } else {
       this.logCI(`Warden v${VERSION}`);

@@ -13,34 +13,46 @@ export function formatDuration(ms: number): string {
 }
 
 /**
+ * Format an elapsed time for display (e.g., "+0.8s").
+ */
+export function formatElapsed(ms: number): string {
+  if (ms < 1000) {
+    return `+${Math.round(ms)}ms`;
+  }
+  return `+${(ms / 1000).toFixed(1)}s`;
+}
+
+/**
  * Severity configuration for display.
  */
 const SEVERITY_CONFIG: Record<Severity, { color: typeof chalk.red; symbol: string }> = {
-  critical: { color: chalk.bgRed.white.bold, symbol: figures.cross },
-  high: { color: chalk.red.bold, symbol: figures.cross },
-  medium: { color: chalk.yellow, symbol: figures.warning },
-  low: { color: chalk.cyan, symbol: figures.info },
-  info: { color: chalk.gray, symbol: figures.info },
+  critical: { color: chalk.red, symbol: figures.bullet },
+  high: { color: chalk.redBright, symbol: figures.bullet },
+  medium: { color: chalk.yellow, symbol: figures.bullet },
+  low: { color: chalk.green, symbol: figures.bullet },
+  info: { color: chalk.blue, symbol: figures.bullet },
 };
 
 /**
- * Format a severity badge for terminal output.
+ * Format a severity dot for terminal output.
+ */
+export function formatSeverityDot(severity: Severity): string {
+  const config = SEVERITY_CONFIG[severity];
+  return config.color(config.symbol);
+}
+
+/**
+ * Format a severity badge for terminal output (colored dot).
  */
 export function formatSeverityBadge(severity: Severity): string {
-  const config = SEVERITY_CONFIG[severity];
-  const label = severity.toUpperCase();
-
-  if (severity === 'critical') {
-    return config.color(` ${label} `);
-  }
-  return config.color(`[${label}]`);
+  return formatSeverityDot(severity);
 }
 
 /**
  * Format a severity for plain text (CI mode).
  */
 export function formatSeverityPlain(severity: Severity): string {
-  return `[${severity.toUpperCase()}]`;
+  return `[${severity}]`;
 }
 
 /**
@@ -69,7 +81,7 @@ export function formatFindingCompact(finding: Finding): string {
 }
 
 /**
- * Format finding counts for display.
+ * Format finding counts for display (with colored dots).
  */
 export function formatFindingCounts(counts: Record<Severity, number>): string {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -79,13 +91,13 @@ export function formatFindingCounts(counts: Record<Severity, number>): string {
   }
 
   const parts: string[] = [];
-  if (counts.critical > 0) parts.push(chalk.bgRed.white.bold(` ${counts.critical} critical `));
-  if (counts.high > 0) parts.push(chalk.red.bold(`${counts.high} high`));
-  if (counts.medium > 0) parts.push(chalk.yellow(`${counts.medium} medium`));
-  if (counts.low > 0) parts.push(chalk.cyan(`${counts.low} low`));
-  if (counts.info > 0) parts.push(chalk.gray(`${counts.info} info`));
+  if (counts.critical > 0) parts.push(`${formatSeverityDot('critical')} ${counts.critical} critical`);
+  if (counts.high > 0) parts.push(`${formatSeverityDot('high')} ${counts.high} high`);
+  if (counts.medium > 0) parts.push(`${formatSeverityDot('medium')} ${counts.medium} medium`);
+  if (counts.low > 0) parts.push(`${formatSeverityDot('low')} ${counts.low} low`);
+  if (counts.info > 0) parts.push(`${formatSeverityDot('info')} ${counts.info} info`);
 
-  return `${total} finding${total === 1 ? '' : 's'}: ${parts.join(', ')}`;
+  return `${total} finding${total === 1 ? '' : 's'}: ${parts.join('  ')}`;
 }
 
 /**

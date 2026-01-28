@@ -23,6 +23,8 @@ const DEFAULT_HUNK_CONCURRENCY = 5;
  * Callbacks for progress reporting during skill execution.
  */
 export interface SkillRunnerCallbacks {
+  /** Start time of the skill execution (for elapsed time calculations) */
+  skillStartTime?: number;
   onFileStart?: (file: string, index: number, total: number) => void;
   onHunkStart?: (file: string, hunkNum: number, totalHunks: number, lineRange: string) => void;
   onHunkComplete?: (file: string, hunkNum: number, findings: Finding[]) => void;
@@ -326,6 +328,14 @@ export async function runSkill(
 
           const findings = await analyzeHunk(skill, hunk, context.repoPath, options);
 
+          // Attach elapsed time to findings if skill start time is available
+          if (callbacks?.skillStartTime) {
+            const elapsedMs = Date.now() - callbacks.skillStartTime;
+            for (const finding of findings) {
+              finding.elapsedMs = elapsedMs;
+            }
+          }
+
           callbacks?.onHunkComplete?.(filename, hunkIndex + 1, findings);
 
           return findings;
@@ -344,6 +354,14 @@ export async function runSkill(
         callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
 
         const findings = await analyzeHunk(skill, hunk, context.repoPath, options);
+
+        // Attach elapsed time to findings if skill start time is available
+        if (callbacks?.skillStartTime) {
+          const elapsedMs = Date.now() - callbacks.skillStartTime;
+          for (const finding of findings) {
+            finding.elapsedMs = elapsedMs;
+          }
+        }
 
         callbacks?.onHunkComplete?.(filename, hunkIndex + 1, findings);
         allFindings.push(...findings);

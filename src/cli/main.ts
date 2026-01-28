@@ -28,13 +28,13 @@ function loadEnvFiles(dir: string): void {
   // Load .env first (base config)
   const envPath = join(dir, '.env');
   if (existsSync(envPath)) {
-    dotenvConfig({ path: envPath });
+    dotenvConfig({ path: envPath, debug: false });
   }
 
   // Load .env.local second (local overrides, typically gitignored)
   const envLocalPath = join(dir, '.env.local');
   if (existsSync(envLocalPath)) {
-    dotenvConfig({ path: envLocalPath, override: true });
+    dotenvConfig({ path: envLocalPath, override: true, debug: false });
   }
 }
 
@@ -139,7 +139,7 @@ async function runSkills(
   if (options.json) {
     console.log(renderJsonReport(reports));
   } else {
-    console.log(renderTerminalReport(reports));
+    console.log(renderTerminalReport(reports, reporter.mode));
   }
 
   // Show summary
@@ -411,7 +411,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   if (options.json) {
     console.log(renderJsonReport(reports));
   } else {
-    console.log(renderTerminalReport(reports));
+    console.log(renderTerminalReport(reports, reporter.mode));
   }
 
   // Show summary

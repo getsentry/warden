@@ -64,6 +64,7 @@ function createSkillTask(options: SkillTaskOptions): ListrTask<SkillTaskContext>
 
       // Create callbacks that update the task output
       const callbacks: SkillRunnerCallbacks = {
+        skillStartTime: startTime,
         onFileStart: (file, index, total) => {
           currentFile = file;
           fileIndex = index;
@@ -92,6 +93,9 @@ function createSkillTask(options: SkillTaskOptions): ListrTask<SkillTaskContext>
       try {
         const report = await run(callbacks);
         const duration = Date.now() - startTime;
+
+        // Attach duration to report
+        report.durationMs = duration;
 
         // Update title with results
         const counts = countBySeverity(report.findings);
