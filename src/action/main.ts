@@ -45,8 +45,8 @@ interface ActionInputs {
   anthropicApiKey: string;
   githubToken: string;
   configPath: string;
-  failOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
-  commentOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  failOn?: 'off' | 'critical' | 'high' | 'medium' | 'low' | 'info';
+  commentOn?: 'off' | 'critical' | 'high' | 'medium' | 'low' | 'info';
   maxFindings: number;
   /** Max concurrent trigger executions */
   parallel: number;
@@ -77,7 +77,7 @@ function getInputs(): ActionInputs {
     );
   }
 
-  const validSeverities = ['critical', 'high', 'medium', 'low', 'info'] as const;
+  const validSeverities = ['off', 'critical', 'high', 'medium', 'low', 'info'] as const;
 
   const failOnInput = getInput('fail-on');
   const failOn = validSeverities.includes(failOnInput as typeof validSeverities[number])

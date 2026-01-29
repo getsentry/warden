@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import chalk from 'chalk';
-import type { SkillReport, Finding, Severity } from '../types/index.js';
+import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
 import { filterFindingsBySeverity } from '../types/index.js';
 import {
   formatSeverityBadge,
@@ -235,8 +235,9 @@ function aggregateUsage(reports: SkillReport[]) {
 /**
  * Filter reports to only include findings at or above the given severity threshold.
  * Returns new report objects with filtered findings; does not mutate the originals.
+ * If commentOn is 'off', returns reports with empty findings.
  */
-export function filterReportsBySeverity(reports: SkillReport[], commentOn?: Severity): SkillReport[] {
+export function filterReportsBySeverity(reports: SkillReport[], commentOn?: SeverityThreshold): SkillReport[] {
   if (!commentOn) return reports;
   return reports.map((report) => ({
     ...report,
