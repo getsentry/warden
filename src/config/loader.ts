@@ -57,9 +57,21 @@ export interface ResolvedTrigger extends Trigger {
 /**
  * Resolve a trigger's configuration by merging with defaults.
  * Trigger-specific values override defaults.
+ *
+ * Model precedence (highest to lowest):
+ * 1. trigger.model (warden.toml trigger-level)
+ * 2. defaults.model (warden.toml [defaults])
+ * 3. cliModel (--model flag)
+ * 4. WARDEN_MODEL env var
+ * 5. SDK default (not set here)
  */
-export function resolveTrigger(trigger: Trigger, config: WardenConfig): ResolvedTrigger {
+export function resolveTrigger(
+  trigger: Trigger,
+  config: WardenConfig,
+  cliModel?: string
+): ResolvedTrigger {
   const defaults = config.defaults;
+  const envModel = process.env['WARDEN_MODEL'];
 
   return {
     ...trigger,
@@ -73,6 +85,6 @@ export function resolveTrigger(trigger: Trigger, config: WardenConfig): Resolved
       maxFindings: trigger.output?.maxFindings ?? defaults?.output?.maxFindings,
       labels: trigger.output?.labels ?? defaults?.output?.labels,
     },
-    model: trigger.model ?? defaults?.model,
+    model: trigger.model ?? defaults?.model ?? cliModel ?? envModel,
   };
 }

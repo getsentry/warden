@@ -113,4 +113,54 @@ describe('resolveTrigger', () => {
     expect(resolved.actions).toEqual(['opened']);
     expect(resolved.skill).toBe('security-review');
   });
+
+  describe('model precedence', () => {
+    it('trigger.model takes precedence over cliModel', () => {
+      const trigger: Trigger = {
+        ...baseTrigger,
+        model: 'claude-opus-4-20250514',
+      };
+
+      const resolved = resolveTrigger(trigger, baseConfig, 'claude-haiku-3-5-20241022');
+
+      expect(resolved.model).toBe('claude-opus-4-20250514');
+    });
+
+    it('defaults.model takes precedence over cliModel', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          model: 'claude-sonnet-4-20250514',
+        },
+      };
+
+      const resolved = resolveTrigger(baseTrigger, config, 'claude-haiku-3-5-20241022');
+
+      expect(resolved.model).toBe('claude-sonnet-4-20250514');
+    });
+
+    it('cliModel is used when no config model is set', () => {
+      const resolved = resolveTrigger(baseTrigger, baseConfig, 'claude-haiku-3-5-20241022');
+
+      expect(resolved.model).toBe('claude-haiku-3-5-20241022');
+    });
+
+    it('trigger.model takes precedence over defaults.model', () => {
+      const trigger: Trigger = {
+        ...baseTrigger,
+        model: 'claude-opus-4-20250514',
+      };
+      const config: WardenConfig = {
+        ...baseConfig,
+        triggers: [trigger],
+        defaults: {
+          model: 'claude-sonnet-4-20250514',
+        },
+      };
+
+      const resolved = resolveTrigger(trigger, config, 'claude-haiku-3-5-20241022');
+
+      expect(resolved.model).toBe('claude-opus-4-20250514');
+    });
+  });
 });
