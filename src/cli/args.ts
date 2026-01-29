@@ -14,6 +14,8 @@ export const CLIOptionsSchema = z.object({
   help: z.boolean().default(false),
   /** Max concurrent trigger/skill executions (default: 4) */
   parallel: z.number().int().positive().optional(),
+  /** Model to use for analysis (overrides config and WARDEN_MODEL env var) */
+  model: z.string().optional(),
   // Verbosity options
   quiet: z.boolean().default(false),
   verbose: z.number().default(0),
@@ -68,6 +70,7 @@ Targets:
 Options:
   --skill <name>       Run only this skill (default: run all built-in skills)
   --config <path>      Path to warden.toml (default: ./warden.toml)
+  -m, --model <model>  Model to use (overrides config and WARDEN_MODEL env var)
   --json               Output results as JSON
   --fail-on <severity> Exit with code 1 if findings >= severity
                        (critical, high, medium, low, info)
@@ -203,6 +206,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     options: {
       skill: { type: 'string' },
       config: { type: 'string' },
+      model: { type: 'string', short: 'm' },
       json: { type: 'boolean', default: false },
       'fail-on': { type: 'string' },
       'comment-on': { type: 'string' },
@@ -312,6 +316,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     targets: targets.length > 0 ? targets : undefined,
     skill: values.skill,
     config: values.config,
+    model: values.model,
     json: values.json,
     failOn: values['fail-on'] as Severity | undefined,
     commentOn: values['comment-on'] as Severity | undefined,

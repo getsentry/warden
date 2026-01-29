@@ -116,7 +116,9 @@ async function runSkills(
   }
 
   // Build skill tasks
-  const runnerOptions: SkillRunnerOptions = { apiKey, abortController };
+  // Model precedence: CLI flag > WARDEN_MODEL env var > SDK default
+  const model = options.model ?? process.env['WARDEN_MODEL'];
+  const runnerOptions: SkillRunnerOptions = { apiKey, model, abortController };
   const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
     name: skillName,
     failOn: options.failOn,
@@ -374,7 +376,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   reporter.success(`Loaded ${config.triggers.length} ${pluralize(config.triggers.length, 'trigger')}`);
 
   // Resolve triggers with defaults and match
-  const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
+  const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
 
   // Filter by skill if specified
