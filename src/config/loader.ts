@@ -72,6 +72,7 @@ export function resolveTrigger(trigger: Trigger, config: WardenConfig): Resolved
       commentOn: trigger.output?.commentOn ?? defaults?.output?.commentOn,
       maxFindings: trigger.output?.maxFindings ?? defaults?.output?.maxFindings,
       labels: trigger.output?.labels ?? defaults?.output?.labels,
+      commentOnSuccess: trigger.output?.commentOnSuccess ?? defaults?.output?.commentOnSuccess,
     },
     model: trigger.model ?? defaults?.model,
   };

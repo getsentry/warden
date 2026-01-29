@@ -1,7 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { Severity, Finding, SkillReport, UsageStats } from '../types/index.js';
-import { formatStatsCompact, formatDuration, formatCost, countBySeverity } from '../cli/output/formatters.js';
+import { formatStatsCompact, formatDuration, formatCost, formatTokens, countBySeverity } from '../cli/output/formatters.js';
 
 /**
  * GitHub Check annotation for inline code comments.
@@ -359,9 +359,7 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
     }
     if (data.totalUsage) {
       const totalInput = data.totalUsage.inputTokens + (data.totalUsage.cacheReadInputTokens ?? 0);
-      const inputK = (totalInput / 1000).toFixed(1);
-      const outputK = (data.totalUsage.outputTokens / 1000).toFixed(1);
-      statsParts.push(`${inputK}k in / ${outputK}k out`);
+      statsParts.push(`${formatTokens(totalInput)} in / ${formatTokens(data.totalUsage.outputTokens)} out`);
       statsParts.push(`**${formatCost(data.totalUsage.costUSD)}**`);
     }
     lines.push(statsParts.join(' · '), '');
