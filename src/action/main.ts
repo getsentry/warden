@@ -576,12 +576,13 @@ async function run(): Promise<void> {
     if (result.report) {
       reports.push(result.report);
 
-      // Post review to GitHub only if there are findings (after commentOn filtering) OR commentOnSuccess is true
+      // Post review to GitHub (skip if commentOn is 'off')
+      // Only post if there are findings (after commentOn filtering) OR commentOnSuccess is true
       const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
       const hasFindings = filteredFindings.length > 0;
       const commentOnSuccess = result.commentOnSuccess ?? false;
 
-      if (result.renderResult && (hasFindings || commentOnSuccess)) {
+      if (result.renderResult && result.commentOn !== 'off' && (hasFindings || commentOnSuccess)) {
         try {
           await postReviewToGitHub(octokit, context, result.renderResult);
         } catch (error) {

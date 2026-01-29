@@ -1,3 +1,5 @@
+import type { SeverityThreshold } from '../types/index.js';
+
 export interface GitHubComment {
   body: string;
   path?: string;
@@ -17,8 +19,6 @@ export interface RenderResult {
   review?: GitHubReview;
   summaryComment: string;
 }
-
-import type { SeverityThreshold } from '../types/index.js';
 
 export interface RenderOptions {
   includeSuggestions?: boolean;
