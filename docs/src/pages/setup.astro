@@ -9,59 +9,79 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 <Base title="Setup" description="Set up Warden locally or in your GitHub repository">
   <h1>Setup</h1>
 
-  <p>Set up Warden once. It watches every change from there.</p>
+  <p>Configure Warden once for your entire organization.</p>
 
-  <h2>Local CLI (Quick Start)</h2>
-
-  <p>Get started in seconds. No configuration required.</p>
+  <h2>Quick Start (Local CLI)</h2>
 
   <Terminal title="Terminal" showCopy={true}>
     <Code
       code={`# Set your API key
 export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
 
-# Run security review on uncommitted changes
+# Review uncommitted changes
 npx warden --skill security-review
 
-# Run on specific files
+# Review specific files
 npx warden src/auth.ts --skill security-review
 
-# Run on git changes
+# Review recent commits
 npx warden HEAD~3
 
-# Found something? Fix it immediately
+# Auto-fix findings
 npx warden --fix`}
       lang="bash"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <p>For more CLI options, see the <a href="https://github.com/dcramer/warden#cli-reference">CLI reference</a>.</p>
+  <p>See the <a href={`${base}/cli`}>CLI reference</a> for all options.</p>
 
-  <h2>GitHub Action Setup</h2>
+  <h2>GitHub Action</h2>
 
-  <h3>Prerequisites</h3>
+  <h3>1. Set Organization Secrets</h3>
 
-  <ul>
-    <li>A GitHub repository</li>
-    <li>An Anthropic API key (<a href="https://console.anthropic.com/">get one here</a>)</li>
-  </ul>
+  <p>
+    Set secrets at the organization level so all repositories share them.
+    Go to your GitHub organization's <strong>Settings → Secrets and variables → Actions</strong>.
+  </p>
 
-  <h3>1. Add Your API Key</h3>
+  <h4>Required Secrets</h4>
 
-  <p>Add your Anthropic API key as a repository secret:</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Secret</th>
+        <th>Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WARDEN_ANTHROPIC_API_KEY</code></td>
+        <td>Your API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></td>
+      </tr>
+    </tbody>
+  </table>
 
-  <ol>
-    <li>Go to your repository on GitHub</li>
-    <li>Navigate to <strong>Settings → Secrets and variables → Actions</strong></li>
-    <li>Click <strong>New repository secret</strong></li>
-    <li>Name: <code>WARDEN_ANTHROPIC_API_KEY</code></li>
-    <li>Value: Your API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></li>
-  </ol>
+  <h4>Optional Secrets</h4>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Secret</th>
+        <th>Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WARDEN_MODEL</code></td>
+        <td>Model to use (e.g., <code>claude-sonnet-4-20250514</code>)</td>
+      </tr>
+    </tbody>
+  </table>
 
   <h3>2. Create the Workflow</h3>
 
-  <p>Create <code>.github/workflows/warden.yml</code>:</p>
+  <p>Add <code>.github/workflows/warden.yml</code> to each repository:</p>
 
   <Terminal title=".github/workflows/warden.yml" showCopy={true}>
     <Code
@@ -70,6 +90,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+env:
+  WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+  WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
+
 jobs:
   warden:
     runs-on: ubuntu-latest
@@ -77,7 +101,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: getsentry/warden-action@v1
         with:
-          anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
           github-token: \${{ secrets.GITHUB_TOKEN }}`}
       lang="yaml"
       theme="vitesse-black"
@@ -96,14 +119,14 @@ jobs:
     </thead>
     <tbody>
       <tr>
-        <td><code>anthropic-api-key</code></td>
-        <td>Yes</td>
-        <td>Your Anthropic API key</td>
+        <td><code>github-token</code></td>
+        <td>No</td>
+        <td>GitHub token for posting comments (defaults to <code>GITHUB_TOKEN</code>)</td>
       </tr>
       <tr>
-        <td><code>github-token</code></td>
-        <td>Yes</td>
-        <td>GitHub token for posting comments (use <code>secrets.GITHUB_TOKEN</code>)</td>
+        <td><code>anthropic-api-key</code></td>
+        <td>No</td>
+        <td>Anthropic API key (falls back to <code>WARDEN_ANTHROPIC_API_KEY</code> env var)</td>
       </tr>
       <tr>
         <td><code>config-path</code></td>
@@ -113,104 +136,17 @@ jobs:
       <tr>
         <td><code>fail-on</code></td>
         <td>No</td>
-        <td>Minimum severity to fail the action: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></td>
+        <td>Minimum severity to fail: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></td>
       </tr>
       <tr>
         <td><code>comment-on</code></td>
         <td>No</td>
-        <td>Minimum severity to show in comments: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>. Independent of <code>fail-on</code>.</td>
+        <td>Minimum severity to comment: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></td>
       </tr>
     </tbody>
   </table>
 
-  <h2>Using a GitHub App (Optional)</h2>
-
-  <p>
-    By default, Warden uses <code>GITHUB_TOKEN</code> which works well for most setups.
-    However, you can create a dedicated GitHub App for a better experience:
-  </p>
-
-  <ul>
-    <li>Comments appear from a custom "Warden" bot instead of generic "github-actions"</li>
-    <li>Fine-grained permissions (only what's needed)</li>
-    <li>App can be shared across repos in an organization</li>
-  </ul>
-
-  <h3>1. Create the App</h3>
-
-  <p>Run the setup command to create a GitHub App:</p>
-
-  <Terminal title="Terminal" showCopy={true}>
-    <Code
-      code={`# For a personal account
-npx warden setup-app
-
-# For an organization
-npx warden setup-app --org your-org`}
-      lang="bash"
-      theme="vitesse-black"
-    />
-  </Terminal>
-
-  <p>This creates an app with the following permissions:</p>
-
-  <ul>
-    <li><strong>Contents:</strong> Read — to access repository files</li>
-    <li><strong>Pull requests:</strong> Write — to post review comments</li>
-    <li><strong>Issues:</strong> Write — to add labels and comments</li>
-    <li><strong>Checks:</strong> Write — to report status</li>
-    <li><strong>Metadata:</strong> Read — required for all apps</li>
-  </ul>
-
-  <h3>2. Install the App</h3>
-
-  <p>
-    After creating the app, the command outputs an installation URL. Click it to install the app
-    on your repositories. You can choose to install on all repositories or select specific ones.
-  </p>
-
-  <h3>3. Add Secrets</h3>
-
-  <p>Add these secrets to your repository (Settings → Secrets and variables → Actions):</p>
-
-  <ul>
-    <li><code>WARDEN_APP_ID</code> — The App ID shown after creation</li>
-    <li><code>WARDEN_PRIVATE_KEY</code> — The private key (PEM file contents)</li>
-  </ul>
-
-  <h3>4. Update Your Workflow</h3>
-
-  <p>Modify your workflow to generate a token from the GitHub App:</p>
-
-  <Terminal title=".github/workflows/warden.yml" showCopy={true}>
-    <Code
-      code={`name: Warden
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-
-jobs:
-  warden:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/create-github-app-token@v1
-        id: app-token
-        with:
-          app-id: \${{ secrets.WARDEN_APP_ID }}
-          private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
-
-      - uses: getsentry/warden-action@v1
-        with:
-          anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
-          github-token: \${{ steps.app-token.outputs.token }}`}
-      lang="yaml"
-      theme="vitesse-black"
-    />
-  </Terminal>
-
-  <h3>3. Create the Configuration</h3>
+  <h3>3. Add Configuration</h3>
 
   <p>Create <code>warden.toml</code> in your repository root:</p>
 
@@ -228,31 +164,131 @@ skill = "security-review"`}
     />
   </Terminal>
 
+  <h2>GitHub App (Recommended)</h2>
+
+  <p>
+    Use a GitHub App instead of <code>GITHUB_TOKEN</code> for branded comments and cross-repo sharing.
+  </p>
+
+  <h3>Benefits</h3>
+
+  <ul>
+    <li>Comments appear from "Warden" instead of "github-actions"</li>
+    <li>Share a single app across your organization</li>
+    <li>Fine-grained permissions</li>
+  </ul>
+
+  <h3>1. Create the App</h3>
+
+  <Terminal title="Terminal" showCopy={true}>
+    <Code
+      code={`# For an organization (recommended)
+npx warden setup-app --org your-org
+
+# For a personal account
+npx warden setup-app`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>The app gets these permissions:</p>
+
+  <ul>
+    <li><strong>Contents:</strong> Read</li>
+    <li><strong>Pull requests:</strong> Write</li>
+    <li><strong>Issues:</strong> Write</li>
+    <li><strong>Checks:</strong> Write</li>
+    <li><strong>Metadata:</strong> Read</li>
+  </ul>
+
+  <h3>2. Install the App</h3>
+
+  <p>
+    After creation, the command outputs an installation URL. Install the app on your repositories.
+  </p>
+
+  <h3>3. Add Organization Secrets</h3>
+
+  <p>Add these to your organization secrets alongside the API key:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Secret</th>
+        <th>Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WARDEN_APP_ID</code></td>
+        <td>App ID from the setup command</td>
+      </tr>
+      <tr>
+        <td><code>WARDEN_PRIVATE_KEY</code></td>
+        <td>Private key (full PEM contents)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4. Update Your Workflow</h3>
+
+  <Terminal title=".github/workflows/warden.yml" showCopy={true}>
+    <Code
+      code={`name: Warden
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+  WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: \${{ secrets.WARDEN_APP_ID }}
+          private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
+
+      - uses: getsentry/warden-action@v1
+        with:
+          github-token: \${{ steps.app-token.outputs.token }}`}
+      lang="yaml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
   <h2>Configuration Reference</h2>
 
   <h3>Triggers</h3>
 
-  <p>Each trigger maps GitHub events to skills that should run.</p>
+  <p>Each trigger maps a GitHub event to a skill.</p>
 
   <Terminal title="warden.toml" showCopy={true}>
     <Code
       code={`[[triggers]]
 name = "Security Review"           # Display name
-event = "pull_request"             # GitHub event type
-actions = ["opened", "synchronize"] # Which actions trigger this
+event = "pull_request"             # GitHub event
+actions = ["opened", "synchronize"] # Event actions
 skill = "security-review"          # Skill to run
 
-# Optional: filter by file paths
+# Filter by file paths
 [triggers.filters]
-paths = ["src/**/*.ts"]            # Only run on matching files
-ignorePaths = ["**/*.test.ts"]     # Exclude test files
+paths = ["src/**/*.ts"]            # Only matching files
+ignorePaths = ["**/*.test.ts"]     # Exclude patterns
 
-# Optional: output configuration
+# Output settings
 [triggers.output]
-failOn = "high"                    # Fail CI if high+ severity found
-commentOn = "high"                 # Only show high+ severity in comments
-maxFindings = 10                   # Limit to 10 findings in output
-labels = ["security"]              # Always add this label when trigger runs`}
+failOn = "high"                    # Fail CI on high+ severity
+commentOn = "high"                 # Comment on high+ severity
+maxFindings = 10                   # Limit findings shown
+labels = ["security"]              # Add labels when triggered`}
       lang="toml"
       theme="vitesse-black"
     />
@@ -277,20 +313,18 @@ labels = ["security"]              # Always add this label when trigger runs`}
 
   <h3>Multiple Triggers</h3>
 
-  <p>You can define multiple triggers for different scenarios:</p>
-
   <Terminal title="warden.toml" showCopy={true}>
     <Code
       code={`version = 1
 
-# Run security review on all PRs
+# Security review on all PRs
 [[triggers]]
 name = "Security Review"
 event = "pull_request"
 actions = ["opened", "synchronize"]
 skill = "security-review"
 
-# Run a custom skill only on specific paths
+# API review on specific paths
 [[triggers]]
 name = "API Review"
 event = "pull_request"
@@ -304,40 +338,34 @@ paths = ["src/api/**/*.ts"]`}
     />
   </Terminal>
 
-  <h2>Custom Skills</h2>
+  <h2>Verify Setup</h2>
 
-  <p>Define custom skills in <code>.warden/skills/</code>.</p>
-
-  <h3>Verify Setup</h3>
-
-  <p>Open a pull request to test your configuration. You should see:</p>
+  <p>Open a pull request. You should see:</p>
 
   <ol>
-    <li>The Warden action running in the PR checks</li>
-    <li>Review comments appearing on the PR if issues are found</li>
-    <li>A summary comment with all findings</li>
+    <li>Warden running in PR checks</li>
+    <li>Review comments on findings</li>
+    <li>A summary comment</li>
   </ol>
 
-  <h2>Local Development Workflow</h2>
+  <h2>Local Development</h2>
 
-  <p>Run Warden locally before pushing to catch issues early. This is faster and cheaper than waiting for CI.</p>
+  <p>Run Warden locally before pushing to catch issues early.</p>
 
   <Terminal title="Terminal" showCopy={true}>
     <Code
-      code={`# Before committing: check your changes
+      code={`# Check uncommitted changes
 warden --skill security-review
 
-# Before pushing: check everything since main
+# Check commits since main
 warden main..HEAD --skill security-review
 
-# Found issues? Apply fixes automatically
+# Auto-fix findings
 warden --fix`}
       lang="bash"
       theme="vitesse-black"
     />
   </Terminal>
-
-  <p>Use <code>--json</code> and <code>--fail-on</code> to integrate with your own CI scripts.</p>
 </Base>
 
 <style>

@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+env:
+  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+  WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+
 jobs:
   review:
     runs-on: ubuntu-latest
@@ -31,5 +35,4 @@ jobs:
 
       - uses: ./
         with:
-          anthropic-api-key: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
           github-token: ${{ steps.app-token.outputs.token }}
