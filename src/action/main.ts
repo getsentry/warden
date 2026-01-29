@@ -8,6 +8,15 @@ import { buildScheduleEventContext } from '../event/schedule-context.js';
 import { runSkill } from '../sdk/runner.js';
 import { renderSkillReport } from '../output/renderer.js';
 import { createOrUpdateIssue, createFixPR } from '../output/github-issues.js';
+import {
+  createCoreCheck,
+  updateCoreCheck,
+  createSkillCheck,
+  updateSkillCheck,
+  failSkillCheck,
+  determineConclusion,
+  aggregateSeverityCounts,
+} from '../output/github-checks.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import type { EventContext, SkillReport } from '../types/index.js';
@@ -320,6 +329,8 @@ async function run(): Promise<void> {
     setFailed('This action must be run in a GitHub Actions environment');
   }
 
+  // Set both env vars so code using either will work
+  process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
   process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
 
   const octokit = new Octokit({ auth: inputs.githubToken });
@@ -374,6 +385,22 @@ async function run(): Promise<void> {
   }
   logGroupEnd();
 
+  // Create core warden check (only for PRs)
+  let coreCheckId: number | undefined;
+  if (context.pullRequest) {
+    try {
+      const coreCheck = await createCoreCheck(octokit, {
+        owner: context.repository.owner,
+        repo: context.repository.name,
+        headSha: context.pullRequest.headSha,
+      });
+      coreCheckId = coreCheck.checkRunId;
+      console.log(`Created core check: ${coreCheck.url}`);
+    } catch (error) {
+      console.error(`::warning::Failed to create core check: ${error}`);
+    }
+  }
+
   // Run triggers in parallel
   const concurrency = config.runner?.concurrency ?? inputs.parallel;
   const failureReasons: string[] = [];
@@ -388,10 +415,42 @@ async function run(): Promise<void> {
 
   const runSingleTrigger = async (trigger: ResolvedTrigger): Promise<TriggerResult> => {
     logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
+
+    // Create skill check (only for PRs)
+    let skillCheckId: number | undefined;
+    if (context.pullRequest) {
+      try {
+        const skillCheck = await createSkillCheck(octokit, trigger.skill, {
+          owner: context.repository.owner,
+          repo: context.repository.name,
+          headSha: context.pullRequest.headSha,
+        });
+        skillCheckId = skillCheck.checkRunId;
+      } catch (error) {
+        console.error(`::warning::Failed to create skill check for ${trigger.skill}: ${error}`);
+      }
+    }
+
+    const failOn = trigger.output.failOn ?? inputs.failOn;
+
     try {
       const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
       const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey, model: trigger.model });
       console.log(`Found ${report.findings.length} findings`);
+
+      // Update skill check with results
+      if (skillCheckId && context.pullRequest) {
+        try {
+          await updateSkillCheck(octokit, skillCheckId, report, {
+            owner: context.repository.owner,
+            repo: context.repository.name,
+            headSha: context.pullRequest.headSha,
+            failOn,
+          });
+        } catch (error) {
+          console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
+        }
+      }
 
       const renderResult = renderSkillReport(report, {
         maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
@@ -403,9 +462,22 @@ async function run(): Promise<void> {
         triggerName: trigger.name,
         report,
         renderResult,
-        failOn: trigger.output.failOn ?? inputs.failOn,
+        failOn,
       };
     } catch (error) {
+      // Mark skill check as failed
+      if (skillCheckId && context.pullRequest) {
+        try {
+          await failSkillCheck(octokit, skillCheckId, error, {
+            owner: context.repository.owner,
+            repo: context.repository.name,
+            headSha: context.pullRequest.headSha,
+          });
+        } catch (checkError) {
+          console.error(`::warning::Failed to mark skill check as failed: ${checkError}`);
+        }
+      }
+
       console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
       logGroupEnd();
       return { triggerName: trigger.name, error };
@@ -448,6 +520,40 @@ async function run(): Promise<void> {
   setOutput('critical-count', criticalCount);
   setOutput('high-count', highCount);
   setOutput('summary', reports.map((r) => r.summary).join('\n'));
+
+  // Update core check with overall summary
+  if (coreCheckId && context.pullRequest) {
+    try {
+      const summaryData = {
+        totalSkills: matchedTriggers.length,
+        totalFindings,
+        findingsBySeverity: aggregateSeverityCounts(reports),
+        skillResults: results.map((r) => ({
+          name: r.triggerName,
+          findingCount: r.report?.findings.length ?? 0,
+          conclusion: r.report
+            ? determineConclusion(r.report.findings, r.failOn)
+            : ('failure' as const),
+        })),
+      };
+
+      let coreConclusion: 'success' | 'failure' | 'neutral';
+      if (shouldFailAction) {
+        coreConclusion = 'failure';
+      } else if (totalFindings > 0) {
+        coreConclusion = 'neutral';
+      } else {
+        coreConclusion = 'success';
+      }
+
+      await updateCoreCheck(octokit, coreCheckId, summaryData, coreConclusion, {
+        owner: context.repository.owner,
+        repo: context.repository.name,
+      });
+    } catch (error) {
+      console.error(`::warning::Failed to update core check: ${error}`);
+    }
+  }
 
   if (shouldFailAction) {
     setFailed(failureReasons.join('; '));

@@ -47,6 +47,30 @@ describe('renderSkillReport', () => {
     expect(review.comments[0]!.body).toContain('SQL Injection');
   });
 
+  it('includes skill attribution footnote in comments', () => {
+    const report: SkillReport = {
+      ...baseReport,
+      skill: 'code-review',
+      findings: [
+        {
+          id: 'f1',
+          severity: 'medium',
+          title: 'Issue',
+          description: 'Details',
+          location: {
+            path: 'src/file.ts',
+            startLine: 10,
+          },
+        },
+      ],
+    };
+
+    const result = renderSkillReport(report);
+
+    expect(result.review).toBeDefined();
+    expect(result.review!.comments[0]!.body).toContain('<sub>warden: code-review</sub>');
+  });
+
   it('sets start_line for multi-line findings', () => {
     const report: SkillReport = {
       ...baseReport,

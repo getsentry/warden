@@ -47,6 +47,9 @@ function renderReview(
       body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
     }
 
+    // Add attribution footnote
+    body += `\n\n---\n<sub>warden: ${report.skill}</sub>`;
+
     const isMultiLine = location.endLine && location.startLine !== location.endLine;
 
     return {
