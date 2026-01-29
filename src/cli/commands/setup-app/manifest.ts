@@ -10,6 +10,10 @@ export interface ManifestOptions {
 export interface GitHubAppManifest {
   name: string;
   url: string;
+  hook_attributes: {
+    url: string;
+    active: boolean;
+  };
   redirect_url: string;
   public: boolean;
   default_permissions: Record<string, string>;
@@ -25,6 +29,11 @@ export function buildManifest(options: ManifestOptions): GitHubAppManifest {
   return {
     name,
     url: 'https://github.com/getsentry/warden',
+    hook_attributes: {
+      // URL is required by GitHub even when webhooks are disabled
+      url: 'https://example.com/webhook',
+      active: false,
+    },
     redirect_url: `http://localhost:${options.port}/callback`,
     public: false,
     default_permissions: {
