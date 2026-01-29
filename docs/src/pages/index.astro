@@ -39,8 +39,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 <span class="cli-bold">Next steps:</span>
   1. Add a skill: <span class="cli-cyan">warden add &lt;skill-name&gt;</span>
-  2. Set <span class="cli-cyan">ANTHROPIC_API_KEY</span> in .env.local
-  3. Add <span class="cli-cyan">ANTHROPIC_API_KEY</span> to repository secrets
+  2. Set <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> in .env.local
+  3. Add <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> to repository secrets
      <span class="cli-dim">https://github.com/your-org/your-repo/settings/secrets/actions</span>
   4. Commit and open a PR to test</pre>
       </Terminal>
@@ -63,9 +63,9 @@ warden add vercel-react-best-practices`}
       <h3>Run Locally</h3>
       <p>Catch issues before you push. Fix them immediately.</p>
       <Terminal showCopy={false}>
-        <pre class="cli-output"><span class="cli-dim">$</span> warden HEAD --skill vercel-react-best-practices
+        <pre class="cli-output"><span class="cli-dim">$</span> warden
 
-Analyzing changes from <span class="cli-cyan">HEAD</span>...
+Analyzing uncommitted changes...
 
 <span class="cli-bold">FILES</span>  <span class="cli-cyan">3 files</span> <span class="cli-dim">· 5 chunks</span>
   <span class="cli-yellow">~</span> src/components/UserList.tsx <span class="cli-dim">(2 chunks)</span>
