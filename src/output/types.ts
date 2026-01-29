@@ -13,22 +13,15 @@ export interface GitHubReview {
   comments: GitHubComment[];
 }
 
-export interface GitHubLabel {
-  name: string;
-  action: 'add' | 'remove';
-}
-
 export interface RenderResult {
   review?: GitHubReview;
   summaryComment: string;
-  labels: GitHubLabel[];
 }
 
 export interface RenderOptions {
   includeSuggestions?: boolean;
   maxFindings?: number;
   groupByFile?: boolean;
-  extraLabels?: string[];
   /** Only include findings at or above this severity level in rendered output */
   commentOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
 }

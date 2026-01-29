@@ -26,7 +26,6 @@ describe('resolveTrigger', () => {
       failOn: undefined,
       commentOn: undefined,
       maxFindings: undefined,
-      labels: undefined,
     });
     expect(resolved.model).toBeUndefined();
   });
@@ -36,7 +35,7 @@ describe('resolveTrigger', () => {
       ...baseConfig,
       defaults: {
         filters: { paths: ['src/**'], ignorePaths: ['*.test.ts'] },
-        output: { failOn: 'high', commentOn: 'critical', maxFindings: 10, labels: ['security'] },
+        output: { failOn: 'high', commentOn: 'critical', maxFindings: 10 },
         model: 'claude-sonnet-4-20250514',
       },
     };
@@ -48,7 +47,6 @@ describe('resolveTrigger', () => {
     expect(resolved.output.failOn).toBe('high');
     expect(resolved.output.commentOn).toBe('critical');
     expect(resolved.output.maxFindings).toBe(10);
-    expect(resolved.output.labels).toEqual(['security']);
     expect(resolved.model).toBe('claude-sonnet-4-20250514');
   });
 

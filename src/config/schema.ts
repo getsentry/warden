@@ -44,7 +44,6 @@ export const OutputConfigSchema = z.object({
   failOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
   commentOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
   maxFindings: z.number().int().positive().optional(),
-  labels: z.array(z.string()).optional(),
   /** Post a PR comment even when there are no findings (default: false) */
   commentOnSuccess: z.boolean().optional(),
 });

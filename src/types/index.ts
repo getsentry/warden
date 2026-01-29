@@ -49,7 +49,6 @@ export const FindingSchema = z.object({
   description: z.string(),
   location: LocationSchema.optional(),
   suggestedFix: SuggestedFixSchema.optional(),
-  labels: z.array(z.string()).optional(),
   elapsedMs: z.number().nonnegative().optional(),
 });
 export type Finding = z.infer<typeof FindingSchema>;

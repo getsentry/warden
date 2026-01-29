@@ -47,10 +47,6 @@ export function generateTriggerToml(trigger: Trigger): string {
     if (trigger.output.maxFindings) {
       lines.push(`maxFindings = ${trigger.output.maxFindings}`);
     }
-    if (trigger.output.labels && trigger.output.labels.length > 0) {
-      const labelsStr = trigger.output.labels.map((l) => `"${l}"`).join(', ');
-      lines.push(`labels = [${labelsStr}]`);
-    }
   }
 
   if (trigger.model) {

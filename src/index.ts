@@ -114,5 +114,4 @@ export type {
   RenderOptions,
   GitHubReview,
   GitHubComment,
-  GitHubLabel,
 } from './output/types.js';

@@ -15,7 +15,6 @@ describe('renderSkillReport', () => {
     expect(result.review).toBeUndefined();
     expect(result.summaryComment).toContain('security-review');
     expect(result.summaryComment).toContain('No findings to report');
-    expect(result.labels).toEqual([]);
   });
 
   it('renders findings with inline comments', () => {
@@ -180,34 +179,6 @@ describe('renderSkillReport', () => {
     expect(review.comments[0]!.body).toContain(
       'const query = "SELECT * FROM users WHERE id = ?";'
     );
-  });
-
-  it('collects labels from findings', () => {
-    const report: SkillReport = {
-      ...baseReport,
-      findings: [
-        {
-          id: 'f1',
-          severity: 'high',
-          title: 'Security Issue',
-          description: 'Details',
-          labels: ['security', 'needs-review'],
-        },
-        {
-          id: 'f2',
-          severity: 'low',
-          title: 'Minor Issue',
-          description: 'Details',
-          labels: ['security', 'minor'],
-        },
-      ],
-    };
-
-    const result = renderSkillReport(report);
-
-    expect(result.labels).toHaveLength(3);
-    expect(result.labels.map((l) => l.name).sort()).toEqual(['minor', 'needs-review', 'security']);
-    expect(result.labels.every((l) => l.action === 'add')).toBe(true);
   });
 
   it('groups findings by file in summary', () => {

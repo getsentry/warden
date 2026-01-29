@@ -214,28 +214,6 @@ async function postReviewToGitHub(
       body: result.summaryComment,
     });
   }
-
-  for (const label of result.labels) {
-    if (label.action === 'add') {
-      await octokit.issues.addLabels({
-        owner,
-        repo,
-        issue_number: pullNumber,
-        labels: [label.name],
-      });
-    } else {
-      try {
-        await octokit.issues.removeLabel({
-          owner,
-          repo,
-          issue_number: pullNumber,
-          name: label.name,
-        });
-      } catch {
-        // Label may not exist, ignore
-      }
-    }
-  }
 }
 
 /**
@@ -352,7 +330,6 @@ async function runScheduledAnalysis(
 
       const issueResult = await createOrUpdateIssue(octokit, owner, repo, [report], {
         title: issueTitle,
-        labels: resolved.output?.labels,
         commitSha: headSha,
       });
 
@@ -557,7 +534,6 @@ async function run(): Promise<void> {
 
       const renderResult = renderSkillReport(report, {
         maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
-        extraLabels: trigger.output.labels ?? [],
         commentOn,
       });
 
