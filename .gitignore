@@ -1,5 +1,5 @@
-/.dex
-!/.dex/dex.toml
+/.dex/*
+!/.dex/config.toml
 
 # Dependencies
 node_modules/
