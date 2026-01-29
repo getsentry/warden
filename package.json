@@ -21,7 +21,7 @@
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged"
+    "pre-commit": "pnpm build && pnpm lint-staged"
   },
   "lint-staged": {
     "*.ts": [
