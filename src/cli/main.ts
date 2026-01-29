@@ -29,6 +29,7 @@ import {
 } from './fix.js';
 import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
+import { runSetupApp } from './commands/setup-app.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -518,7 +519,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
 }
 
 export async function main(): Promise<void> {
-  const { command, options } = parseCliArgs();
+  const { command, options, setupAppOptions } = parseCliArgs();
 
   if (command === 'help') {
     showHelp();
@@ -544,6 +545,12 @@ export async function main(): Promise<void> {
     exitCode = await runInit(options, reporter);
   } else if (command === 'add') {
     exitCode = await runAdd(options, reporter);
+  } else if (command === 'setup-app') {
+    if (!setupAppOptions) {
+      reporter.error('Missing setup-app options');
+      process.exit(1);
+    }
+    exitCode = await runSetupApp(setupAppOptions, reporter);
   } else {
     exitCode = await runCommand(options, reporter);
   }

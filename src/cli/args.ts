@@ -28,9 +28,18 @@ export const CLIOptionsSchema = z.object({
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
 
+export interface SetupAppOptions {
+  org?: string;
+  port: number;
+  timeout: number;
+  name?: string;
+  open: boolean;
+}
+
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app';
   options: CLIOptions;
+  setupAppOptions?: SetupAppOptions;
 }
 
 const VERSION = '0.1.0';
@@ -47,6 +56,7 @@ Analyze code for security issues and code quality.
 Commands:
   init                 Initialize warden.toml and GitHub workflow
   add [skill]          Add a skill trigger to warden.toml
+  setup-app            Create a GitHub App for Warden via manifest flow
   (default)            Run analysis on targets or using warden.toml triggers
 
 Targets:
@@ -78,6 +88,13 @@ Init Options:
 Add Options:
   --list               List available skills
 
+Setup-app Options:
+  --org <name>         Create under organization (default: personal)
+  --port <number>      Local server port (default: 3000)
+  --timeout <sec>      Callback timeout in seconds (default: 300)
+  --name <string>      Custom app name (default: Warden)
+  --no-open            Print URL instead of opening browser
+
 Examples:
   warden init                             # Initialize warden configuration
   warden add                              # Interactive skill selection
@@ -92,6 +109,8 @@ Examples:
   warden HEAD~3 --skill security-review   # Run specific skill on git changes
   warden --json                           # Output as JSON
   warden --fail-on high                   # Fail if high+ severity findings
+  warden setup-app                        # Create GitHub App interactively
+  warden setup-app --org myorg            # Create app under organization
 `;
 
 export function showHelp(): void {
@@ -150,6 +169,20 @@ export function classifyTargets(targets: string[]): { gitRefs: string[]; filePat
   return { gitRefs, filePatterns };
 }
 
+/**
+ * Resolve color option from --color / --no-color flags.
+ * Returns undefined for auto-detect, true for forced color, false for no color.
+ */
+function resolveColorOption(values: { color?: boolean; 'no-color'?: boolean }): boolean | undefined {
+  if (values['no-color']) {
+    return false;
+  }
+  if (values.color) {
+    return true;
+  }
+  return undefined;
+}
+
 export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs {
   // Count -v flags before parsing (parseArgs doesn't handle multiple -v well)
   let verboseCount = 0;
@@ -182,6 +215,13 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       quiet: { type: 'boolean', default: false },
       color: { type: 'boolean' },
       'no-color': { type: 'boolean' },
+      // setup-app options
+      org: { type: 'string' },
+      port: { type: 'string' },
+      timeout: { type: 'string' },
+      name: { type: 'string' },
+      open: { type: 'boolean', default: true },
+      'no-open': { type: 'boolean' },
     },
     allowPositionals: true,
   });
@@ -202,7 +242,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
   // Filter out known commands from positionals
   const targets = positionals.filter(
-    (p) => p !== 'run' && p !== 'help' && p !== 'init' && p !== 'add' && p !== 'version'
+    (p) => p !== 'run' && p !== 'help' && p !== 'init' && p !== 'add' && p !== 'version' && p !== 'setup-app'
   );
 
   // Handle explicit help command
@@ -223,34 +263,18 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
   // Handle init command
   if (positionals.includes('init')) {
-    // Handle --color / --no-color
-    let colorOption: boolean | undefined;
-    if (values['no-color']) {
-      colorOption = false;
-    } else if (values.color) {
-      colorOption = true;
-    }
-
     return {
       command: 'init',
       options: CLIOptionsSchema.parse({
         force: values.force,
         quiet: values.quiet,
-        color: colorOption,
+        color: resolveColorOption(values),
       }),
     };
   }
 
   // Handle add command
   if (positionals.includes('add')) {
-    // Handle --color / --no-color
-    let colorOption: boolean | undefined;
-    if (values['no-color']) {
-      colorOption = false;
-    } else if (values.color) {
-      colorOption = true;
-    }
-
     // First positional after 'add' is the skill name
     const addIndex = positionals.indexOf('add');
     const skillArg = positionals[addIndex + 1];
@@ -261,17 +285,27 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         skill: skillArg,
         list: values.list,
         quiet: values.quiet,
-        color: colorOption,
+        color: resolveColorOption(values),
       }),
     };
   }
 
-  // Handle --color / --no-color
-  let colorOption: boolean | undefined;
-  if (values['no-color']) {
-    colorOption = false;
-  } else if (values.color) {
-    colorOption = true;
+  // Handle setup-app command
+  if (positionals.includes('setup-app')) {
+    return {
+      command: 'setup-app',
+      options: CLIOptionsSchema.parse({
+        quiet: values.quiet,
+        color: resolveColorOption(values),
+      }),
+      setupAppOptions: {
+        org: values.org as string | undefined,
+        port: values.port ? parseInt(values.port as string, 10) : 3000,
+        timeout: values.timeout ? parseInt(values.timeout as string, 10) : 300,
+        name: values.name as string | undefined,
+        open: !values['no-open'],
+      },
+    };
   }
 
   const rawOptions = {
@@ -287,7 +321,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     help: values.help,
     quiet: values.quiet,
     verbose: verboseCount,
-    color: colorOption,
+    color: resolveColorOption(values),
   };
 
   const result = CLIOptionsSchema.safeParse(rawOptions);

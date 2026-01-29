@@ -196,6 +196,45 @@ describe('parseCliArgs', () => {
     const result = parseCliArgs([]);
     expect(result.options.list).toBe(false);
   });
+
+  it('parses setup-app command', () => {
+    const result = parseCliArgs(['setup-app']);
+    expect(result.command).toBe('setup-app');
+    expect(result.setupAppOptions).toBeDefined();
+    expect(result.setupAppOptions?.port).toBe(3000);
+    expect(result.setupAppOptions?.timeout).toBe(300);
+    expect(result.setupAppOptions?.open).toBe(true);
+  });
+
+  it('parses setup-app --org option', () => {
+    const result = parseCliArgs(['setup-app', '--org', 'myorg']);
+    expect(result.command).toBe('setup-app');
+    expect(result.setupAppOptions?.org).toBe('myorg');
+  });
+
+  it('parses setup-app --port option', () => {
+    const result = parseCliArgs(['setup-app', '--port', '8080']);
+    expect(result.command).toBe('setup-app');
+    expect(result.setupAppOptions?.port).toBe(8080);
+  });
+
+  it('parses setup-app --timeout option', () => {
+    const result = parseCliArgs(['setup-app', '--timeout', '60']);
+    expect(result.command).toBe('setup-app');
+    expect(result.setupAppOptions?.timeout).toBe(60);
+  });
+
+  it('parses setup-app --name option', () => {
+    const result = parseCliArgs(['setup-app', '--name', 'My Custom App']);
+    expect(result.command).toBe('setup-app');
+    expect(result.setupAppOptions?.name).toBe('My Custom App');
+  });
+
+  it('parses setup-app --no-open flag', () => {
+    const result = parseCliArgs(['setup-app', '--no-open']);
+    expect(result.command).toBe('setup-app');
+    expect(result.setupAppOptions?.open).toBe(false);
+  });
 });
 
 describe('CLIOptionsSchema', () => {
