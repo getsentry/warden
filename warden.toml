@@ -7,7 +7,7 @@ failOn = "high"
 commentOn = "medium"
 
 [[triggers]]
-name = "security-review"
+name = "find-bugs"
 event = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
-skill = "security-review"
+skill = "find-bugs"
