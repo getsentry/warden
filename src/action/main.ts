@@ -532,10 +532,15 @@ async function run(): Promise<void> {
         }
       }
 
-      const renderResult = renderSkillReport(report, {
-        maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
-        commentOn,
-      });
+      // Only render if we're going to post comments
+      const renderResult =
+        commentOn !== 'off'
+          ? renderSkillReport(report, {
+              maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
+              extraLabels: trigger.output.labels ?? [],
+              commentOn,
+            })
+          : undefined;
 
       logGroupEnd();
       return {
@@ -576,13 +581,13 @@ async function run(): Promise<void> {
     if (result.report) {
       reports.push(result.report);
 
-      // Post review to GitHub (skip if commentOn is 'off')
+      // Post review to GitHub (renderResult is undefined when commentOn is 'off')
       // Only post if there are findings (after commentOn filtering) OR commentOnSuccess is true
       const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
       const hasFindings = filteredFindings.length > 0;
       const commentOnSuccess = result.commentOnSuccess ?? false;
 
-      if (result.renderResult && result.commentOn !== 'off' && (hasFindings || commentOnSuccess)) {
+      if (result.renderResult && (hasFindings || commentOnSuccess)) {
         try {
           await postReviewToGitHub(octokit, context, result.renderResult);
         } catch (error) {
