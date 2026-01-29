@@ -98,9 +98,10 @@ async function runSkills(
     reporter.blank();
   }
 
-  // Try to load config for custom skills
+  // Try to load config for custom skills and defaults
   let repoPath: string | undefined;
   let skillsConfig: SkillDefinition[] | undefined;
+  let defaultsModel: string | undefined;
 
   try {
     repoPath = getRepoRoot(cwd);
@@ -110,14 +111,15 @@ async function runSkills(
     if (existsSync(configPath)) {
       const config = loadWardenConfig(dirname(configPath));
       skillsConfig = config.skills;
+      defaultsModel = config.defaults?.model;
     }
   } catch {
     // Not in a git repo or no config - that's fine
   }
 
   // Build skill tasks
-  // Model precedence: CLI flag > WARDEN_MODEL env var > SDK default
-  const model = options.model ?? process.env['WARDEN_MODEL'];
+  // Model precedence: defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
+  const model = defaultsModel ?? options.model ?? process.env['WARDEN_MODEL'];
   const runnerOptions: SkillRunnerOptions = { apiKey, model, abortController };
   const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
     name: skillName,

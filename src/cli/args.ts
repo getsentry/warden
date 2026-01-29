@@ -14,7 +14,7 @@ export const CLIOptionsSchema = z.object({
   help: z.boolean().default(false),
   /** Max concurrent trigger/skill executions (default: 4) */
   parallel: z.number().int().positive().optional(),
-  /** Model to use for analysis (overrides config and WARDEN_MODEL env var) */
+  /** Model to use for analysis (fallback when not set in config) */
   model: z.string().optional(),
   // Verbosity options
   quiet: z.boolean().default(false),
@@ -70,7 +70,7 @@ Targets:
 Options:
   --skill <name>       Run only this skill (default: run all built-in skills)
   --config <path>      Path to warden.toml (default: ./warden.toml)
-  -m, --model <model>  Model to use (overrides config and WARDEN_MODEL env var)
+  -m, --model <model>  Model to use (fallback when not set in config)
   --json               Output results as JSON
   --fail-on <severity> Exit with code 1 if findings >= severity
                        (critical, high, medium, low, info)

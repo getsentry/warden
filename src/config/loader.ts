@@ -59,9 +59,9 @@ export interface ResolvedTrigger extends Trigger {
  * Trigger-specific values override defaults.
  *
  * Model precedence (highest to lowest):
- * 1. cliModel (--model flag)
- * 2. trigger.model (warden.toml trigger-level)
- * 3. defaults.model (warden.toml [defaults])
+ * 1. trigger.model (warden.toml trigger-level)
+ * 2. defaults.model (warden.toml [defaults])
+ * 3. cliModel (--model flag)
  * 4. WARDEN_MODEL env var
  * 5. SDK default (not set here)
  */
@@ -85,6 +85,6 @@ export function resolveTrigger(
       maxFindings: trigger.output?.maxFindings ?? defaults?.output?.maxFindings,
       labels: trigger.output?.labels ?? defaults?.output?.labels,
     },
-    model: cliModel ?? trigger.model ?? defaults?.model ?? envModel,
+    model: trigger.model ?? defaults?.model ?? cliModel ?? envModel,
   };
 }
