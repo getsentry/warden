@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm build:action
+
+      - name: Get version info
+        id: version
+        run: |
+          echo "tag=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+          echo "major=${GITHUB_REF_NAME%%.*}" >> $GITHUB_OUTPUT
+
+      - name: Commit dist/action to tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f dist/action/
+          git commit -m "Build action for ${{ steps.version.outputs.tag }}"
+          git tag -f ${{ steps.version.outputs.tag }}
+          git push -f origin ${{ steps.version.outputs.tag }}
+
+      - name: Update major version tag
+        run: |
+          git tag -f ${{ steps.version.outputs.major }}
+          git push -f origin ${{ steps.version.outputs.major }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
