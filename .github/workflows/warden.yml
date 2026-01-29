@@ -11,4 +11,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: getsentry/warden@main
         with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic-api-key: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}

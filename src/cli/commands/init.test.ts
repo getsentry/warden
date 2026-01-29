@@ -69,7 +69,7 @@ describe('init command', () => {
       const content = readFileSync(join(tempDir, '.github', 'workflows', 'warden.yml'), 'utf-8');
       expect(content).toContain('name: Warden');
       expect(content).toContain('pull_request');
-      expect(content).toContain('ANTHROPIC_API_KEY');
+      expect(content).toContain('WARDEN_ANTHROPIC_API_KEY');
       expect(content).toContain('getsentry/warden@main');
     });
   });

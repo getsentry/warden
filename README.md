@@ -28,7 +28,7 @@ Your code is under new management. AI agents that review your code—locally or 
 npx warden init
 
 # Set your API key
-export ANTHROPIC_API_KEY=sk-ant-...
+export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
 
 # Run on uncommitted changes
 npx warden
@@ -47,7 +47,7 @@ Then add a skill:
 npx warden add security-review
 ```
 
-Add `ANTHROPIC_API_KEY` to your repository secrets, commit the files, and open a PR to see it in action.
+Add `WARDEN_ANTHROPIC_API_KEY` to your repository secrets, commit the files, and open a PR to see it in action.
 
 ### More CLI Examples
 
@@ -172,7 +172,7 @@ pnpm test         # Run unit tests
 
 ```bash
 # Create .env.local (gitignored)
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env.local
+echo 'WARDEN_ANTHROPIC_API_KEY=sk-ant-...' > .env.local
 
 # Run against uncommitted changes
 pnpm cli run

@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: getsentry/warden@main
         with:
-          anthropic-api-key: \${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
 `;
 }
 
@@ -112,8 +112,8 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   reporter.blank();
   reporter.bold('Next steps:');
   reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
-  reporter.text(`  2. Set ${chalk.cyan('ANTHROPIC_API_KEY')} in .env.local`);
-  reporter.text(`  3. Add ${chalk.cyan('ANTHROPIC_API_KEY')} to repository secrets`);
+  reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
+  reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to repository secrets`);
 
   // Show GitHub secrets URL if available
   const githubUrl = getGitHubRepoUrl(repoRoot);

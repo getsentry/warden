@@ -185,7 +185,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: anthropics/warden-action@v1
         with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic-api-key: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
@@ -211,7 +211,7 @@ import { ClaudeCode } from '@anthropic-ai/claude-code';
 
 async function runSkill(skill: SkillConfig, context: EventContext): Promise<SkillReport> {
   const claude = new ClaudeCode({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    apiKey: process.env.WARDEN_ANTHROPIC_API_KEY,
   });
 
   const session = await claude.createSession({

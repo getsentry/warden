@@ -7,7 +7,7 @@ import type { SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
-import { DEFAULT_CONCURRENCY } from '../utils/index.js';
+import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
@@ -77,9 +77,9 @@ async function runSkills(
   const startTime = Date.now();
 
   // Check for API key
-  const apiKey = process.env['ANTHROPIC_API_KEY'];
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) {
-    reporter.error('ANTHROPIC_API_KEY environment variable is required');
+    reporter.error('WARDEN_ANTHROPIC_API_KEY environment variable is required');
     return 1;
   }
 
@@ -396,9 +396,9 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   reporter.blank();
 
   // Check for API key
-  const apiKey = process.env['ANTHROPIC_API_KEY'];
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) {
-    reporter.error('ANTHROPIC_API_KEY environment variable is required');
+    reporter.error('WARDEN_ANTHROPIC_API_KEY environment variable is required');
     return 1;
   }
 

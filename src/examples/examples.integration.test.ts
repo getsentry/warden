@@ -5,11 +5,11 @@ import { buildFileEventContext } from '../cli/context.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 
 describe('examples', () => {
-  const apiKey = process.env['ANTHROPIC_API_KEY'];
+  const apiKey = process.env['WARDEN_ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'];
 
   beforeAll(() => {
     if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY required for integration tests');
+      throw new Error('ANTHROPIC_API_KEY (or WARDEN_ANTHROPIC_API_KEY) required for integration tests');
     }
   });
 

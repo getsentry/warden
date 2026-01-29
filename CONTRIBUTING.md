@@ -29,7 +29,7 @@ The CLI runs skills against local git changes. Set up your API key and run it:
 
 ```bash
 # Create .env.local (gitignored)
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env.local
+echo 'WARDEN_ANTHROPIC_API_KEY=sk-ant-...' > .env.local
 
 # Run against uncommitted changes
 pnpm cli run
