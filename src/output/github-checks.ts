@@ -1,6 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
-import type { Severity, Finding, SkillReport } from '../types/index.js';
+import type { Severity, Finding, SkillReport, UsageStats } from '../types/index.js';
+import { formatStatsCompact, formatDuration, formatCost, countBySeverity } from '../cli/output/formatters.js';
 
 /**
  * GitHub Check annotation for inline code comments.
@@ -44,10 +45,14 @@ export interface CoreCheckSummaryData {
   totalSkills: number;
   totalFindings: number;
   findingsBySeverity: Record<Severity, number>;
+  totalDurationMs?: number;
+  totalUsage?: UsageStats;
   skillResults: {
     name: string;
     findingCount: number;
     conclusion: CheckConclusion;
+    durationMs?: number;
+    usage?: UsageStats;
   }[];
 }
 
@@ -306,10 +311,16 @@ function buildSkillSummary(
 
   if (report.findings.length === 0) {
     lines.push('No findings.');
-    return lines.join('\n');
+  } else {
+    lines.push(...renderSeverityTable(findingCounts));
   }
 
-  lines.push(...renderSeverityTable(findingCounts));
+  // Add stats footer if available
+  const statsLine = formatStatsCompact(report.durationMs, report.usage);
+  if (statsLine) {
+    lines.push('', '---', `<sub>${statsLine}</sub>`);
+  }
+
   return lines.join('\n');
 }
 
@@ -339,36 +350,59 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
     '',
   ];
 
+  // Add aggregate stats line if available
+  const hasStats = data.totalDurationMs !== undefined || data.totalUsage;
+  if (hasStats) {
+    const statsParts: string[] = [];
+    if (data.totalDurationMs !== undefined) {
+      statsParts.push(`⏱ **${formatDuration(data.totalDurationMs)}**`);
+    }
+    if (data.totalUsage) {
+      const totalInput = data.totalUsage.inputTokens + (data.totalUsage.cacheReadInputTokens ?? 0);
+      const inputK = (totalInput / 1000).toFixed(1);
+      const outputK = (data.totalUsage.outputTokens / 1000).toFixed(1);
+      statsParts.push(`${inputK}k in / ${outputK}k out`);
+      statsParts.push(`**${formatCost(data.totalUsage.costUSD)}**`);
+    }
+    lines.push(statsParts.join(' · '), '');
+  }
+
   if (data.totalFindings > 0) {
     lines.push(...renderSeverityTable(data.findingsBySeverity), '');
   }
 
-  lines.push(
-    '### Skills',
-    '',
-    '| Skill | Findings | Result |',
-    '|-------|----------|--------|'
-  );
+  // Check if any skill has timing/cost data
+  const hasSkillStats = data.skillResults.some((s) => s.durationMs !== undefined || s.usage);
 
-  for (const skill of data.skillResults) {
-    const icon = conclusionIcon(skill.conclusion);
-    lines.push(`| ${skill.name} | ${skill.findingCount} | ${icon} ${skill.conclusion} |`);
+  if (hasSkillStats) {
+    lines.push(
+      '### Skills',
+      '',
+      '| Skill | Findings | Duration | Cost | Result |',
+      '|-------|----------|----------|------|--------|'
+    );
+
+    for (const skill of data.skillResults) {
+      const icon = conclusionIcon(skill.conclusion);
+      const duration = skill.durationMs !== undefined ? formatDuration(skill.durationMs) : '-';
+      const cost = skill.usage ? formatCost(skill.usage.costUSD) : '-';
+      lines.push(`| ${skill.name} | ${skill.findingCount} | ${duration} | ${cost} | ${icon} ${skill.conclusion} |`);
+    }
+  } else {
+    lines.push(
+      '### Skills',
+      '',
+      '| Skill | Findings | Result |',
+      '|-------|----------|--------|'
+    );
+
+    for (const skill of data.skillResults) {
+      const icon = conclusionIcon(skill.conclusion);
+      lines.push(`| ${skill.name} | ${skill.findingCount} | ${icon} ${skill.conclusion} |`);
+    }
   }
 
   return lines.join('\n');
-}
-
-/**
- * Count findings by severity.
- */
-function countBySeverity(findings: Finding[]): Record<Severity, number> {
-  return findings.reduce(
-    (acc, f) => {
-      acc[f.severity]++;
-      return acc;
-    },
-    { critical: 0, high: 0, medium: 0, low: 0, info: 0 } as Record<Severity, number>
-  );
 }
 
 /**

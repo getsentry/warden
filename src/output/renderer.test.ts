@@ -492,4 +492,94 @@ describe('renderSkillReport', () => {
       expect(result.review!.comments[0]!.body).toContain('Critical Issue');
     });
   });
+
+  describe('stats footer', () => {
+    it('includes stats footer in summary comment when stats are available', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'medium',
+            title: 'Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+        durationMs: 15800,
+        usage: {
+          inputTokens: 3000,
+          outputTokens: 680,
+          costUSD: 0.0048,
+        },
+      };
+
+      const result = renderSkillReport(report);
+
+      expect(result.summaryComment).toContain('⏱ 15.8s');
+      expect(result.summaryComment).toContain('3.0k in / 680 out');
+      expect(result.summaryComment).toContain('$0.0048');
+      expect(result.summaryComment).toContain('<sub>');
+    });
+
+    it('includes stats footer in review body when stats are available', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'medium',
+            title: 'Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+        durationMs: 12300,
+        usage: {
+          inputTokens: 2500,
+          outputTokens: 450,
+          costUSD: 0.0032,
+        },
+      };
+
+      const result = renderSkillReport(report);
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.body).toContain('⏱ 12.3s');
+      expect(result.review!.body).toContain('2.5k in / 450 out');
+      expect(result.review!.body).toContain('$0.0032');
+    });
+
+    it('includes stats footer in empty findings report', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [],
+        durationMs: 8200,
+        usage: {
+          inputTokens: 1800,
+          outputTokens: 320,
+          costUSD: 0.0021,
+        },
+      };
+
+      const result = renderSkillReport(report);
+
+      expect(result.summaryComment).toContain('No findings to report');
+      expect(result.summaryComment).toContain('⏱ 8.2s');
+      expect(result.summaryComment).toContain('1.8k in / 320 out');
+      expect(result.summaryComment).toContain('$0.0021');
+    });
+
+    it('omits stats footer when no stats available', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [],
+      };
+
+      const result = renderSkillReport(report);
+
+      expect(result.summaryComment).not.toContain('⏱');
+      expect(result.summaryComment).not.toContain('<sub>');
+    });
+  });
 });

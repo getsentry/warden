@@ -20,9 +20,25 @@ import {
 } from '../output/github-checks.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
 import { resolveSkillAsync } from '../skills/loader.js';
-import type { EventContext, SkillReport } from '../types/index.js';
+import type { EventContext, SkillReport, UsageStats } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
+
+/**
+ * Aggregate usage stats from multiple reports.
+ */
+function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
+  const reportsWithUsage = reports.filter((r) => r.usage);
+  if (reportsWithUsage.length === 0) return undefined;
+
+  return {
+    inputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.inputTokens ?? 0), 0),
+    outputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.outputTokens ?? 0), 0),
+    cacheReadInputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.cacheReadInputTokens ?? 0), 0),
+    cacheCreationInputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.cacheCreationInputTokens ?? 0), 0),
+    costUSD: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.costUSD ?? 0), 0),
+  };
+}
 
 interface ActionInputs {
   anthropicApiKey: string;
@@ -487,6 +503,7 @@ async function run(): Promise<void> {
     report?: SkillReport;
     renderResult?: RenderResult;
     failOn?: typeof inputs.failOn;
+    commentOnSuccess?: boolean;
     error?: unknown;
   }
 
@@ -548,6 +565,7 @@ async function run(): Promise<void> {
         report,
         renderResult,
         failOn,
+        commentOnSuccess: trigger.output.commentOnSuccess,
       };
     } catch (error) {
       // Mark skill check as failed
@@ -579,8 +597,11 @@ async function run(): Promise<void> {
     if (result.report) {
       reports.push(result.report);
 
-      // Post review to GitHub
-      if (result.renderResult) {
+      // Post review to GitHub only if there are findings OR commentOnSuccess is true
+      const hasFindings = result.report.findings.length > 0;
+      const commentOnSuccess = result.commentOnSuccess ?? false;
+
+      if (result.renderResult && (hasFindings || commentOnSuccess)) {
         try {
           await postReviewToGitHub(octokit, context, result.renderResult);
         } catch (error) {
@@ -613,12 +634,16 @@ async function run(): Promise<void> {
         totalSkills: matchedTriggers.length,
         totalFindings,
         findingsBySeverity: aggregateSeverityCounts(reports),
+        totalDurationMs: reports.reduce((sum, r) => sum + (r.durationMs ?? 0), 0),
+        totalUsage: aggregateUsage(reports),
         skillResults: results.map((r) => ({
           name: r.triggerName,
           findingCount: r.report?.findings.length ?? 0,
           conclusion: r.report
             ? determineConclusion(r.report.findings, r.failOn)
             : ('failure' as const),
+          durationMs: r.report?.durationMs,
+          usage: r.report?.usage,
         })),
       };
 

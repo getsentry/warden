@@ -6,8 +6,9 @@ import {
   formatProgress,
   truncate,
   padRight,
+  formatStatsCompact,
 } from './formatters.js';
-import type { Severity } from '../../types/index.js';
+import type { Severity, UsageStats } from '../../types/index.js';
 
 describe('formatDuration', () => {
   it('formats milliseconds under 1s', () => {
@@ -120,5 +121,56 @@ describe('padRight', () => {
 
   it('returns string unchanged if longer than width', () => {
     expect(padRight('hello', 3)).toBe('hello');
+  });
+});
+
+describe('formatStatsCompact', () => {
+  it('formats duration only', () => {
+    expect(formatStatsCompact(15800)).toBe('⏱ 15.8s');
+  });
+
+  it('formats usage only', () => {
+    const usage: UsageStats = {
+      inputTokens: 3000,
+      outputTokens: 680,
+      costUSD: 0.0048,
+    };
+    expect(formatStatsCompact(undefined, usage)).toBe('3.0k in / 680 out · $0.0048');
+  });
+
+  it('formats both duration and usage', () => {
+    const usage: UsageStats = {
+      inputTokens: 3000,
+      outputTokens: 680,
+      costUSD: 0.0048,
+    };
+    expect(formatStatsCompact(15800, usage)).toBe('⏱ 15.8s · 3.0k in / 680 out · $0.0048');
+  });
+
+  it('includes cache read tokens in input total', () => {
+    const usage: UsageStats = {
+      inputTokens: 1000,
+      cacheReadInputTokens: 2000,
+      outputTokens: 500,
+      costUSD: 0.003,
+    };
+    expect(formatStatsCompact(undefined, usage)).toBe('3.0k in / 500 out · $0.0030');
+  });
+
+  it('returns empty string when no stats provided', () => {
+    expect(formatStatsCompact()).toBe('');
+  });
+
+  it('formats milliseconds for short durations', () => {
+    expect(formatStatsCompact(500)).toBe('⏱ 500ms');
+  });
+
+  it('formats large token counts', () => {
+    const usage: UsageStats = {
+      inputTokens: 120000,
+      outputTokens: 3800,
+      costUSD: 0.0892,
+    };
+    expect(formatStatsCompact(45600, usage)).toBe('⏱ 45.6s · 120.0k in / 3.8k out · $0.09');
   });
 });

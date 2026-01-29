@@ -243,3 +243,26 @@ export function formatUsagePlain(usage: UsageStats): string {
   const costStr = formatCost(usage.costUSD);
   return `${inputStr} input, ${outputStr} output, ${costStr}`;
 }
+
+/**
+ * Format stats (duration, tokens, cost) into a compact single-line format.
+ * Used for markdown footers in PR comments and check annotations.
+ *
+ * @example formatStatsCompact(15800, { inputTokens: 3000, outputTokens: 680, costUSD: 0.0048 })
+ * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.0048"
+ */
+export function formatStatsCompact(durationMs?: number, usage?: UsageStats): string {
+  const parts: string[] = [];
+
+  if (durationMs !== undefined) {
+    parts.push(`⏱ ${formatDuration(durationMs)}`);
+  }
+
+  if (usage) {
+    const totalInput = usage.inputTokens + (usage.cacheReadInputTokens ?? 0);
+    parts.push(`${formatTokens(totalInput)} in / ${formatTokens(usage.outputTokens)} out`);
+    parts.push(formatCost(usage.costUSD));
+  }
+
+  return parts.join(' · ');
+}
