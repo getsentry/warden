@@ -1,6 +1,5 @@
 ---
-import '@fontsource/geist-mono/400.css';
-import '@fontsource/geist-mono/600.css';
+import { Font } from "astro:assets";
 
 interface Props {
   title: string;
@@ -21,6 +20,7 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
     <meta name="description" content={description} />
     <title>{pageTitle}</title>
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
+    <Font cssVariable="--font-geist-mono" preload />
   </head>
   <body>
     <nav class="nav">
