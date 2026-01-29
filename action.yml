@@ -8,8 +8,8 @@ branding:
 
 inputs:
   anthropic-api-key:
-    description: 'Anthropic API key for Claude Code SDK'
-    required: true
+    description: 'Anthropic API key for Claude Code SDK. Can also be provided via WARDEN_ANTHROPIC_API_KEY environment variable.'
+    required: false
   github-token:
     description: 'GitHub token for API access (defaults to GITHUB_TOKEN)'
     required: false

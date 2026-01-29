@@ -20,13 +20,21 @@ function getInputs() {
         }
         return value;
     };
+    // Check for API key: input first, then env vars as fallback
+    const anthropicApiKey = getInput('anthropic-api-key') ||
+        process.env['WARDEN_ANTHROPIC_API_KEY'] ||
+        process.env['ANTHROPIC_API_KEY'] ||
+        '';
+    if (!anthropicApiKey) {
+        throw new Error('Anthropic API key not found. Provide it via the anthropic-api-key input or set WARDEN_ANTHROPIC_API_KEY environment variable.');
+    }
     const failOnInput = getInput('fail-on');
     const validFailOn = ['critical', 'high', 'medium', 'low', 'info'];
     const failOn = validFailOn.includes(failOnInput)
         ? failOnInput
         : undefined;
     return {
-        anthropicApiKey: getInput('anthropic-api-key', true),
+        anthropicApiKey,
         githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
         configPath: getInput('config-path') || 'warden.toml',
         failOn,
