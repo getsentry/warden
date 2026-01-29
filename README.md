@@ -1,6 +1,6 @@
 # warden
 
-Your code is under new management. AI agents that review your code—locally or on every PR.
+Your code is under new management. Agents that review your code - locally or on every PR - using the Skills you already know and love.
 
 ## Two Ways to Run
 
