@@ -50,6 +50,15 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
   // Build manifest
   const manifest = buildManifest({ name, port });
 
+  // Show what permissions will be requested
+  reporter.text('This will create a GitHub App with the following permissions:');
+  reporter.text(`  ${chalk.dim('•')} contents: read        ${chalk.dim('- Read repository files')}`);
+  reporter.text(`  ${chalk.dim('•')} pull_requests: write  ${chalk.dim('- Post review comments')}`);
+  reporter.text(`  ${chalk.dim('•')} issues: write         ${chalk.dim('- Create/update issues')}`);
+  reporter.text(`  ${chalk.dim('•')} checks: write         ${chalk.dim('- Create check runs')}`);
+  reporter.text(`  ${chalk.dim('•')} metadata: read        ${chalk.dim('- Read repository metadata')}`);
+  reporter.blank();
+
   // Build GitHub URL
   const githubUrl = buildGitHubUrl(manifest, state, org);
 
@@ -81,7 +90,7 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
       } catch {
         reporter.warning('Could not open browser automatically.');
         reporter.blank();
-        reporter.text('Please open this URL manually:');
+        reporter.text('Open this URL in your browser:');
         reporter.text(chalk.cyan(githubUrl));
       }
     } else {
@@ -91,13 +100,15 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
     }
 
     reporter.blank();
-    reporter.text('Waiting for callback... (Ctrl+C to cancel)');
+    reporter.text(`On the GitHub page, click ${chalk.cyan('"Create GitHub App"')} to continue.`);
     reporter.blank();
+    reporter.text(chalk.dim('Waiting for GitHub callback... (Ctrl+C to cancel)'));
 
     // Wait for callback
     const { code } = await serverHandle.waitForCallback;
 
     // Exchange code for credentials
+    reporter.blank();
     reporter.step('Exchanging code for credentials...');
     const credentials = await exchangeCodeForCredentials(code);
 
@@ -110,29 +121,35 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
     reporter.text(`  App URL:   ${chalk.cyan(credentials.htmlUrl)}`);
     reporter.blank();
 
-    // Show secrets to add
-    reporter.bold('Add these secrets to your repository:');
-    reporter.blank();
-    reporter.text(`  ${chalk.cyan('WARDEN_APP_ID')}          ${credentials.id}`);
-    reporter.text(`  ${chalk.cyan('WARDEN_PRIVATE_KEY')}     (shown below)`);
-    reporter.blank();
-
-    // Show private key
-    reporter.bold('Private Key:');
-    reporter.blank();
-    reporter.text(chalk.dim(credentials.pem));
-    reporter.blank();
-
-    // Next steps
+    // Next steps - in correct order!
     const githubRepoUrl = getGitHubRepoUrl(process.cwd());
     reporter.bold('Next steps:');
+    reporter.blank();
+
+    // Step 1: Install the app (must happen first!)
+    reporter.text(`  ${chalk.cyan('1.')} Install the app on your repository:`);
+    reporter.text(`     ${chalk.cyan(credentials.htmlUrl + '/installations/new')}`);
+    reporter.blank();
+
+    // Step 2: Add secrets
+    reporter.text(`  ${chalk.cyan('2.')} Add these secrets to your repository:`);
     if (githubRepoUrl) {
-      reporter.text(`  1. Add secrets at: ${chalk.cyan(githubRepoUrl + '/settings/secrets/actions')}`);
-    } else {
-      reporter.text(`  1. Add secrets to your repository settings`);
+      reporter.text(`     ${chalk.cyan(githubRepoUrl + '/settings/secrets/actions')}`);
     }
-    reporter.text(`  2. Update your workflow to use the GitHub App token`);
-    reporter.text(`  3. Install the app on your repository: ${chalk.cyan(credentials.htmlUrl + '/installations/new')}`);
+    reporter.blank();
+    reporter.text(`     ${chalk.white('WARDEN_APP_ID')}          ${credentials.id}`);
+    reporter.text(`     ${chalk.white('WARDEN_PRIVATE_KEY')}     ${chalk.dim('(copy the key below)')}`);
+    reporter.blank();
+
+    // Private key with clear instructions
+    reporter.text(`  ${chalk.cyan('Private Key')} ${chalk.dim('(copy entire block including BEGIN/END lines):')}`);
+    reporter.blank();
+    // Indent the private key for readability
+    const pemLines = credentials.pem.trim().split('\n');
+    for (const line of pemLines) {
+      reporter.text(`     ${chalk.dim(line)}`);
+    }
+    reporter.blank();
 
     return 0;
   } catch (error) {
