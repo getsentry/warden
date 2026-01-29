@@ -29,6 +29,7 @@ interface ActionInputs {
   githubToken: string;
   configPath: string;
   failOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  commentOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
   maxFindings: number;
   /** Max concurrent trigger executions */
   parallel: number;
@@ -59,10 +60,16 @@ function getInputs(): ActionInputs {
     );
   }
 
+  const validSeverities = ['critical', 'high', 'medium', 'low', 'info'] as const;
+
   const failOnInput = getInput('fail-on');
-  const validFailOn = ['critical', 'high', 'medium', 'low', 'info'] as const;
-  const failOn = validFailOn.includes(failOnInput as typeof validFailOn[number])
-    ? (failOnInput as typeof validFailOn[number])
+  const failOn = validSeverities.includes(failOnInput as typeof validSeverities[number])
+    ? (failOnInput as typeof validSeverities[number])
+    : undefined;
+
+  const commentOnInput = getInput('comment-on');
+  const commentOn = validSeverities.includes(commentOnInput as typeof validSeverities[number])
+    ? (commentOnInput as typeof validSeverities[number])
     : undefined;
 
   return {
@@ -70,6 +77,7 @@ function getInputs(): ActionInputs {
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
     configPath: getInput('config-path') || 'warden.toml',
     failOn,
+    commentOn,
     maxFindings: parseInt(getInput('max-findings') || '50', 10),
     parallel: parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10),
   };
@@ -501,7 +509,7 @@ async function run(): Promise<void> {
     }
 
     const failOn = trigger.output.failOn ?? inputs.failOn;
-    const commentOn = trigger.output.commentOn;
+    const commentOn = trigger.output.commentOn ?? inputs.commentOn;
 
     try {
       const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
