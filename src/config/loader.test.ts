@@ -162,5 +162,37 @@ describe('resolveTrigger', () => {
 
       expect(resolved.model).toBe('claude-opus-4-20250514');
     });
+
+    it('empty string cliModel is treated as undefined', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          model: 'claude-sonnet-4-20250514',
+        },
+      };
+
+      const resolved = resolveTrigger(baseTrigger, config, '');
+
+      expect(resolved.model).toBe('claude-sonnet-4-20250514');
+    });
+
+    it('empty string model values fall through to next in precedence', () => {
+      // Simulates GitHub Actions substituting unconfigured secrets with ''
+      const trigger: Trigger = {
+        ...baseTrigger,
+        model: '',
+      };
+      const config: WardenConfig = {
+        ...baseConfig,
+        triggers: [trigger],
+        defaults: {
+          model: '',
+        },
+      };
+
+      const resolved = resolveTrigger(trigger, config, 'claude-haiku-3-5-20241022');
+
+      expect(resolved.model).toBe('claude-haiku-3-5-20241022');
+    });
   });
 });

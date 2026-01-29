@@ -7,6 +7,9 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    env:
+      WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,5 +34,4 @@ jobs:
 
       - uses: ./
         with:
-          anthropic-api-key: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
           github-token: ${{ steps.app-token.outputs.token }}
