@@ -47,6 +47,83 @@ describe('renderSkillReport', () => {
     expect(review.comments[0]!.body).toContain('SQL Injection');
   });
 
+  it('sets start_line for multi-line findings', () => {
+    const report: SkillReport = {
+      ...baseReport,
+      findings: [
+        {
+          id: 'multi-line-1',
+          severity: 'medium',
+          title: 'Multi-line issue',
+          description: 'Spans multiple lines',
+          location: {
+            path: 'src/code.ts',
+            startLine: 10,
+            endLine: 15,
+          },
+        },
+      ],
+    };
+
+    const result = renderSkillReport(report);
+
+    const comment = result.review!.comments[0]!;
+    expect(comment.line).toBe(15);
+    expect(comment.start_line).toBe(10);
+    expect(comment.start_side).toBe('RIGHT');
+  });
+
+  it('does not set start_line for single-line findings', () => {
+    const report: SkillReport = {
+      ...baseReport,
+      findings: [
+        {
+          id: 'single-line-1',
+          severity: 'medium',
+          title: 'Single-line issue',
+          description: 'On one line',
+          location: {
+            path: 'src/code.ts',
+            startLine: 25,
+          },
+        },
+      ],
+    };
+
+    const result = renderSkillReport(report);
+
+    const comment = result.review!.comments[0]!;
+    expect(comment.line).toBe(25);
+    expect(comment.start_line).toBeUndefined();
+    expect(comment.start_side).toBeUndefined();
+  });
+
+  it('does not set start_line when startLine equals endLine', () => {
+    const report: SkillReport = {
+      ...baseReport,
+      findings: [
+        {
+          id: 'same-line-1',
+          severity: 'medium',
+          title: 'Same line issue',
+          description: 'Start and end are same',
+          location: {
+            path: 'src/code.ts',
+            startLine: 30,
+            endLine: 30,
+          },
+        },
+      ],
+    };
+
+    const result = renderSkillReport(report);
+
+    const comment = result.review!.comments[0]!;
+    expect(comment.line).toBe(30);
+    expect(comment.start_line).toBeUndefined();
+    expect(comment.start_side).toBeUndefined();
+  });
+
   it('renders suggested fixes as GitHub suggestions', () => {
     const report: SkillReport = {
       ...baseReport,

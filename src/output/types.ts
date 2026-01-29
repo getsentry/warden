@@ -3,6 +3,8 @@ export interface GitHubComment {
   path?: string;
   line?: number;
   side?: 'LEFT' | 'RIGHT';
+  start_line?: number;
+  start_side?: 'LEFT' | 'RIGHT';
 }
 
 export interface GitHubReview {

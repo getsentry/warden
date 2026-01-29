@@ -47,11 +47,15 @@ function renderReview(
       body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
     }
 
+    const isMultiLine = location.endLine && location.startLine !== location.endLine;
+
     return {
       body,
       path: location.path,
       line: location.endLine ?? location.startLine,
       side: 'RIGHT' as const,
+      start_line: isMultiLine ? location.startLine : undefined,
+      start_side: isMultiLine ? ('RIGHT' as const) : undefined,
     };
   });
 

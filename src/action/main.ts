@@ -92,6 +92,8 @@ async function postReviewToGitHub(
         line: c.line,
         side: c.side ?? ('RIGHT' as const),
         body: c.body,
+        start_line: c.start_line,
+        start_side: c.start_line ? c.start_side ?? ('RIGHT' as const) : undefined,
       }));
 
     await octokit.pulls.createReview({
