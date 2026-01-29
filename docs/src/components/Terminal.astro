@@ -2,12 +2,13 @@
 interface Props {
   title?: string;
   showCopy?: boolean;
+  copyText?: string;
 }
 
-const { title, showCopy = false } = Astro.props;
+const { title, showCopy = false, copyText } = Astro.props;
 ---
 
-<div class="terminal">
+<div class="terminal" data-copy-text={copyText}>
   <div class="terminal-header">
     <div class="terminal-dots">
       <span class="dot red"></span>
@@ -41,31 +42,40 @@ const { title, showCopy = false } = Astro.props;
       if (!button || !body) return;
 
       button.addEventListener('click', async () => {
-        // Get only visible text content (respects display: none)
-        function getVisibleText(element: Element): string {
-          if (getComputedStyle(element).display === 'none') return '';
-          let text = '';
-          for (const node of element.childNodes) {
-            if (node.nodeType === Node.TEXT_NODE) {
-              text += node.textContent;
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-              text += getVisibleText(node as Element);
+        // Check for custom copy text
+        const customCopyText = terminal.getAttribute('data-copy-text');
+
+        let textToCopy: string;
+
+        if (customCopyText) {
+          textToCopy = customCopyText;
+        } else {
+          // Get only visible text content (respects display: none)
+          function getVisibleText(element: Element): string {
+            if (getComputedStyle(element).display === 'none') return '';
+            let text = '';
+            for (const node of element.childNodes) {
+              if (node.nodeType === Node.TEXT_NODE) {
+                text += node.textContent;
+              } else if (node.nodeType === Node.ELEMENT_NODE) {
+                text += getVisibleText(node as Element);
+              }
             }
+            return text;
           }
-          return text;
+
+          const content = getVisibleText(body);
+
+          // Split into lines and process each line
+          const lines = content.split('\n');
+          const cleanedLines = lines.map(line => {
+            // Remove leading $ or > prompts (with optional spaces before/after)
+            return line.replace(/^\s*[$>]\s*/, '');
+          });
+
+          // Join back together and trim
+          textToCopy = cleanedLines.join('\n').trim();
         }
-
-        const content = getVisibleText(body);
-
-        // Split into lines and process each line
-        const lines = content.split('\n');
-        const cleanedLines = lines.map(line => {
-          // Remove leading $ or > prompts (with optional spaces before/after)
-          return line.replace(/^\s*[$>]\s*/, '');
-        });
-
-        // Join back together and trim
-        const textToCopy = cleanedLines.join('\n').trim();
 
         // Copy to clipboard
         try {
