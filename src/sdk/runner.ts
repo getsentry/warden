@@ -192,7 +192,8 @@ function parseHunkOutput(result: SDKResultMessage, filename: string): Finding[] 
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch {
-    console.error('Failed to parse hunk JSON output');
+    const preview = jsonMatch[0].slice(0, 200);
+    console.error(`Failed to parse hunk JSON output. Content preview: ${preview}${jsonMatch[0].length > 200 ? '...' : ''}`);
     return [];
   }
 
@@ -240,39 +241,47 @@ async function analyzeHunk(
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(hunkCtx);
 
-  const stream = query({
-    prompt: userPrompt,
-    options: {
-      maxTurns,
-      cwd: repoPath,
-      systemPrompt,
-      // Only allow read-only tools - context is already provided in the prompt
-      allowedTools: ['Read', 'Grep'],
-      // Explicitly block modification/side-effect tools as defense-in-depth
-      disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
-      permissionMode: 'bypassPermissions',
-      model,
-      abortController,
-      pathToClaudeCodeExecutable,
-    },
-  });
+  try {
+    const stream = query({
+      prompt: userPrompt,
+      options: {
+        maxTurns,
+        cwd: repoPath,
+        systemPrompt,
+        // Only allow read-only tools - context is already provided in the prompt
+        allowedTools: ['Read', 'Grep'],
+        // Explicitly block modification/side-effect tools as defense-in-depth
+        disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
+        permissionMode: 'bypassPermissions',
+        model,
+        abortController,
+        pathToClaudeCodeExecutable,
+      },
+    });
 
-  let resultMessage: SDKResultMessage | undefined;
+    let resultMessage: SDKResultMessage | undefined;
 
-  for await (const message of stream) {
-    if (message.type === 'result') {
-      resultMessage = message;
+    for await (const message of stream) {
+      if (message.type === 'result') {
+        resultMessage = message;
+      }
     }
-  }
 
-  if (!resultMessage) {
+    if (!resultMessage) {
+      return { findings: [], usage: emptyUsage() };
+    }
+
+    return {
+      findings: parseHunkOutput(resultMessage, hunkCtx.filename),
+      usage: extractUsage(resultMessage),
+    };
+  } catch (error) {
+    // Handle SDK errors (subprocess crashes, API errors, etc.) gracefully
+    // so one failing hunk doesn't kill the entire run
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Hunk analysis failed for ${hunkCtx.filename}: ${errorMessage}`);
     return { findings: [], usage: emptyUsage() };
   }
-
-  return {
-    findings: parseHunkOutput(resultMessage, hunkCtx.filename),
-    usage: extractUsage(resultMessage),
-  };
 }
 
 /**
