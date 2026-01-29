@@ -55,6 +55,15 @@ export interface ResolvedTrigger extends Trigger {
 }
 
 /**
+ * Convert empty strings to undefined.
+ * GitHub Actions substitutes unconfigured secrets with empty strings,
+ * so we need to treat '' as "not set" for optional config values.
+ */
+function emptyToUndefined(value: string | undefined): string | undefined {
+  return value === '' ? undefined : value;
+}
+
+/**
  * Resolve a trigger's configuration by merging with defaults.
  * Trigger-specific values override defaults.
  *
@@ -71,7 +80,7 @@ export function resolveTrigger(
   cliModel?: string
 ): ResolvedTrigger {
   const defaults = config.defaults;
-  const envModel = process.env['WARDEN_MODEL'];
+  const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
 
   return {
     ...trigger,
@@ -85,6 +94,10 @@ export function resolveTrigger(
       maxFindings: trigger.output?.maxFindings ?? defaults?.output?.maxFindings,
       labels: trigger.output?.labels ?? defaults?.output?.labels,
     },
-    model: trigger.model ?? defaults?.model ?? cliModel ?? envModel,
+    model:
+      emptyToUndefined(trigger.model) ??
+      emptyToUndefined(defaults?.model) ??
+      emptyToUndefined(cliModel) ??
+      envModel,
   };
 }
