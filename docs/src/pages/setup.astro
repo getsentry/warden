@@ -123,6 +123,93 @@ jobs:
     </tbody>
   </table>
 
+  <h2>Using a GitHub App (Optional)</h2>
+
+  <p>
+    By default, Warden uses <code>GITHUB_TOKEN</code> which works well for most setups.
+    However, you can create a dedicated GitHub App for a better experience:
+  </p>
+
+  <ul>
+    <li>Comments appear from a custom "Warden" bot instead of generic "github-actions"</li>
+    <li>Fine-grained permissions (only what's needed)</li>
+    <li>App can be shared across repos in an organization</li>
+  </ul>
+
+  <h3>1. Create the App</h3>
+
+  <p>Run the setup command to create a GitHub App:</p>
+
+  <Terminal title="Terminal" showCopy={true}>
+    <Code
+      code={`# For a personal account
+npx warden setup-app
+
+# For an organization
+npx warden setup-app --org your-org`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>This creates an app with the following permissions:</p>
+
+  <ul>
+    <li><strong>Contents:</strong> Read — to access repository files</li>
+    <li><strong>Pull requests:</strong> Write — to post review comments</li>
+    <li><strong>Issues:</strong> Write — to add labels and comments</li>
+    <li><strong>Checks:</strong> Write — to report status</li>
+    <li><strong>Metadata:</strong> Read — required for all apps</li>
+  </ul>
+
+  <h3>2. Install the App</h3>
+
+  <p>
+    After creating the app, the command outputs an installation URL. Click it to install the app
+    on your repositories. You can choose to install on all repositories or select specific ones.
+  </p>
+
+  <h3>3. Add Secrets</h3>
+
+  <p>Add these secrets to your repository (Settings → Secrets and variables → Actions):</p>
+
+  <ul>
+    <li><code>WARDEN_APP_ID</code> — The App ID shown after creation</li>
+    <li><code>WARDEN_PRIVATE_KEY</code> — The private key (PEM file contents)</li>
+  </ul>
+
+  <h3>4. Update Your Workflow</h3>
+
+  <p>Modify your workflow to generate a token from the GitHub App:</p>
+
+  <Terminal title=".github/workflows/warden.yml" showCopy={true}>
+    <Code
+      code={`name: Warden
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: \${{ secrets.WARDEN_APP_ID }}
+          private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
+
+      - uses: getsentry/warden-action@v1
+        with:
+          anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+          github-token: \${{ steps.app-token.outputs.token }}`}
+      lang="yaml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
   <h3>3. Create the Configuration</h3>
 
   <p>Create <code>warden.toml</code> in your repository root:</p>
