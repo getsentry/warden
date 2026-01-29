@@ -4,9 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-env:
-  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
-  WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+    env:
+      WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
 
 jobs:
   review:
