@@ -11,3 +11,9 @@ name = "security-review"
 event = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
 skill = "security-review"
+
+[[triggers]]
+name = "find-bugs"
+event = "pull_request"
+actions = ["opened", "synchronize", "reopened"]
+skill = "find-bugs"
