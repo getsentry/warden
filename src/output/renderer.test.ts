@@ -355,4 +355,141 @@ describe('renderSkillReport', () => {
     expect(result.summaryComment).toContain('General Issue');
     expect(result.summaryComment).toContain('General');
   });
+
+  describe('commentOn filtering', () => {
+    it('filters findings by commentOn threshold', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Critical details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'High details',
+            location: { path: 'src/a.ts', startLine: 20 },
+          },
+          {
+            id: 'f3',
+            severity: 'medium',
+            title: 'Medium Issue',
+            description: 'Medium details',
+            location: { path: 'src/a.ts', startLine: 30 },
+          },
+          {
+            id: 'f4',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Low details',
+            location: { path: 'src/a.ts', startLine: 40 },
+          },
+        ],
+      };
+
+      // commentOn='high' should only include critical and high
+      const result = renderSkillReport(report, { commentOn: 'high' });
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.comments).toHaveLength(2);
+      expect(result.review!.comments.map((c) => c.body)).toEqual([
+        expect.stringContaining('Critical Issue'),
+        expect.stringContaining('High Issue'),
+      ]);
+    });
+
+    it('shows all findings when commentOn is not specified', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'info',
+            title: 'Info Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 20 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report);
+
+      expect(result.review!.comments).toHaveLength(2);
+    });
+
+    it('returns empty review when all findings are filtered out', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'info',
+            title: 'Info Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 20 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { commentOn: 'high' });
+
+      expect(result.review).toBeUndefined();
+      expect(result.summaryComment).toContain('No findings to report');
+    });
+
+    it('applies commentOn filter before maxFindings limit', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'low',
+            title: 'Low Issue 1',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 20 },
+          },
+          {
+            id: 'f3',
+            severity: 'low',
+            title: 'Low Issue 2',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 30 },
+          },
+        ],
+      };
+
+      // With commentOn='high' and maxFindings=2, should only show critical (1 finding)
+      // because low findings are filtered out first
+      const result = renderSkillReport(report, { commentOn: 'high', maxFindings: 2 });
+
+      expect(result.review!.comments).toHaveLength(1);
+      expect(result.review!.comments[0]!.body).toContain('Critical Issue');
+    });
+  });
 });

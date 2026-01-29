@@ -149,6 +149,68 @@ describe('findingsToAnnotations', () => {
 
     expect(annotations).toHaveLength(50);
   });
+
+  it('filters by commentOn threshold', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'critical',
+        title: 'Critical',
+        description: 'Critical issue',
+        location: { path: 'a.ts', startLine: 1 },
+      },
+      {
+        id: 'f2',
+        severity: 'high',
+        title: 'High',
+        description: 'High issue',
+        location: { path: 'b.ts', startLine: 2 },
+      },
+      {
+        id: 'f3',
+        severity: 'medium',
+        title: 'Medium',
+        description: 'Medium issue',
+        location: { path: 'c.ts', startLine: 3 },
+      },
+      {
+        id: 'f4',
+        severity: 'low',
+        title: 'Low',
+        description: 'Low issue',
+        location: { path: 'd.ts', startLine: 4 },
+      },
+    ];
+
+    // commentOn='high' should only include critical and high
+    const annotations = findingsToAnnotations(findings, 'high');
+
+    expect(annotations).toHaveLength(2);
+    expect(annotations.map((a) => a.title)).toEqual(['Critical', 'High']);
+  });
+
+  it('returns all findings when commentOn is undefined', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'critical',
+        title: 'Critical',
+        description: 'Critical issue',
+        location: { path: 'a.ts', startLine: 1 },
+      },
+      {
+        id: 'f2',
+        severity: 'info',
+        title: 'Info',
+        description: 'Info issue',
+        location: { path: 'b.ts', startLine: 2 },
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings, undefined);
+
+    expect(annotations).toHaveLength(2);
+  });
 });
 
 describe('determineConclusion', () => {

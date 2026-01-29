@@ -432,6 +432,7 @@ async function run(): Promise<void> {
     }
 
     const failOn = trigger.output.failOn ?? inputs.failOn;
+    const commentOn = trigger.output.commentOn;
 
     try {
       const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
@@ -446,6 +447,7 @@ async function run(): Promise<void> {
             repo: context.repository.name,
             headSha: context.pullRequest.headSha,
             failOn,
+            commentOn,
           });
         } catch (error) {
           console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
@@ -455,6 +457,7 @@ async function run(): Promise<void> {
       const renderResult = renderSkillReport(report, {
         maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
         extraLabels: trigger.output.labels ?? [],
+        commentOn,
       });
 
       logGroupEnd();

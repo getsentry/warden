@@ -1,4 +1,4 @@
-import { SEVERITY_ORDER } from '../types/index.js';
+import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment, GitHubLabel } from './types.js';
 
@@ -11,9 +11,11 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, extraLabels = [] } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, extraLabels = [], commentOn } = options;
 
-  const findings = maxFindings ? report.findings.slice(0, maxFindings) : report.findings;
+  // Filter by commentOn threshold first, then apply maxFindings limit
+  const filteredFindings = filterFindingsBySeverity(report.findings, commentOn);
+  const findings = maxFindings ? filteredFindings.slice(0, maxFindings) : filteredFindings;
   const sortedFindings = [...findings].sort(
     (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
   );

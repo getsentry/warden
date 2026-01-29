@@ -76,7 +76,8 @@ skill = "security-review"
 paths = ["src/**/*.ts"]
 
 [triggers.output]
-failOn = "high"
+failOn = "high"      # Fail CI if high+ severity found
+commentOn = "high"   # Only show high+ severity in comments
 ```
 
 ### Custom Skills

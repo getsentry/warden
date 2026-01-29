@@ -115,6 +115,11 @@ jobs:
         <td>No</td>
         <td>Minimum severity to fail the action: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></td>
       </tr>
+      <tr>
+        <td><code>comment-on</code></td>
+        <td>No</td>
+        <td>Minimum severity to show in comments: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>. Independent of <code>fail-on</code>.</td>
+      </tr>
     </tbody>
   </table>
 
@@ -158,6 +163,7 @@ ignorePaths = ["**/*.test.ts"]     # Exclude test files
 # Optional: output configuration
 [triggers.output]
 failOn = "high"                    # Fail CI if high+ severity found
+commentOn = "high"                 # Only show high+ severity in comments
 maxFindings = 10                   # Limit to 10 findings in output
 labels = ["security"]              # Always add this label when trigger runs`}
       lang="toml"

@@ -41,6 +41,9 @@ export function generateTriggerToml(trigger: Trigger): string {
     if (trigger.output.failOn) {
       lines.push(`failOn = "${trigger.output.failOn}"`);
     }
+    if (trigger.output.commentOn) {
+      lines.push(`commentOn = "${trigger.output.commentOn}"`);
+    }
     if (trigger.output.maxFindings) {
       lines.push(`maxFindings = ${trigger.output.maxFindings}`);
     }

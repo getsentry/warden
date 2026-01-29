@@ -11,7 +11,7 @@ import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
-import { renderTerminalReport, renderJsonReport } from './terminal.js';
+import { renderTerminalReport, renderJsonReport, filterReportsBySeverity } from './terminal.js';
 import {
   Reporter,
   detectOutputMode,
@@ -149,21 +149,24 @@ async function runSkills(
     }
   }
 
+  // Filter reports for output based on commentOn threshold
+  const filteredReports = filterReportsBySeverity(reports, options.commentOn);
+
   // Output results
   reporter.blank();
   if (options.json) {
-    console.log(renderJsonReport(reports));
+    console.log(renderJsonReport(filteredReports));
   } else {
-    console.log(renderTerminalReport(reports, reporter.mode));
+    console.log(renderTerminalReport(filteredReports, reporter.mode));
   }
 
-  // Show summary
+  // Show summary (uses filtered reports for display)
   const totalDuration = Date.now() - startTime;
   reporter.blank();
-  reporter.renderSummary(reports, totalDuration);
+  reporter.renderSummary(filteredReports, totalDuration);
 
-  // Handle fixes
-  const fixableFindings = collectFixableFindings(reports);
+  // Handle fixes (uses filtered reports - only show fixes for visible findings)
+  const fixableFindings = collectFixableFindings(filteredReports);
   if (fixableFindings.length > 0) {
     if (options.fix) {
       // --fix mode: apply all fixes automatically
@@ -180,7 +183,7 @@ async function runSkills(
     }
   }
 
-  // Determine exit code
+  // Determine exit code (based on original reports, not filtered)
   if (hasFailure) {
     reporter.blank();
     reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
@@ -437,21 +440,24 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     }
   }
 
+  // Filter reports for output based on commentOn threshold
+  const filteredReports = filterReportsBySeverity(reports, options.commentOn);
+
   // Output results
   reporter.blank();
   if (options.json) {
-    console.log(renderJsonReport(reports));
+    console.log(renderJsonReport(filteredReports));
   } else {
-    console.log(renderTerminalReport(reports, reporter.mode));
+    console.log(renderTerminalReport(filteredReports, reporter.mode));
   }
 
-  // Show summary
+  // Show summary (uses filtered reports for display)
   const totalDuration = Date.now() - startTime;
   reporter.blank();
-  reporter.renderSummary(reports, totalDuration);
+  reporter.renderSummary(filteredReports, totalDuration);
 
-  // Handle fixes
-  const fixableFindings = collectFixableFindings(reports);
+  // Handle fixes (uses filtered reports - only show fixes for visible findings)
+  const fixableFindings = collectFixableFindings(filteredReports);
   if (fixableFindings.length > 0) {
     if (options.fix) {
       // --fix mode: apply all fixes automatically
@@ -468,7 +474,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     }
   }
 
-  // Determine exit code
+  // Determine exit code (based on original reports, not filtered)
   if (hasFailure) {
     reporter.blank();
     reporter.error(`Failing due to: ${failureReasons.join(', ')}`);

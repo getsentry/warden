@@ -42,6 +42,7 @@ export type PathFilter = z.infer<typeof PathFilterSchema>;
 // Output configuration per trigger
 export const OutputConfigSchema = z.object({
   failOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
+  commentOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
   maxFindings: z.number().int().positive().optional(),
   labels: z.array(z.string()).optional(),
 });

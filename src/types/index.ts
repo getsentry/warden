@@ -16,6 +16,16 @@ export const SEVERITY_ORDER: Record<Severity, number> = {
   info: 4,
 };
 
+/**
+ * Filter findings to only include those at or above the given severity threshold.
+ * If no threshold is provided, returns all findings unchanged.
+ */
+export function filterFindingsBySeverity(findings: Finding[], threshold?: Severity): Finding[] {
+  if (!threshold) return findings;
+  const thresholdOrder = SEVERITY_ORDER[threshold];
+  return findings.filter((f) => SEVERITY_ORDER[f.severity] <= thresholdOrder);
+}
+
 // Location within a file
 export const LocationSchema = z.object({
   path: z.string(),

@@ -24,6 +24,7 @@ describe('resolveTrigger', () => {
     });
     expect(resolved.output).toEqual({
       failOn: undefined,
+      commentOn: undefined,
       maxFindings: undefined,
       labels: undefined,
     });
@@ -35,7 +36,7 @@ describe('resolveTrigger', () => {
       ...baseConfig,
       defaults: {
         filters: { paths: ['src/**'], ignorePaths: ['*.test.ts'] },
-        output: { failOn: 'high', maxFindings: 10, labels: ['security'] },
+        output: { failOn: 'high', commentOn: 'critical', maxFindings: 10, labels: ['security'] },
         model: 'claude-sonnet-4-20250514',
       },
     };
@@ -45,6 +46,7 @@ describe('resolveTrigger', () => {
     expect(resolved.filters.paths).toEqual(['src/**']);
     expect(resolved.filters.ignorePaths).toEqual(['*.test.ts']);
     expect(resolved.output.failOn).toBe('high');
+    expect(resolved.output.commentOn).toBe('critical');
     expect(resolved.output.maxFindings).toBe(10);
     expect(resolved.output.labels).toEqual(['security']);
     expect(resolved.model).toBe('claude-sonnet-4-20250514');
@@ -54,7 +56,7 @@ describe('resolveTrigger', () => {
     const trigger: Trigger = {
       ...baseTrigger,
       filters: { paths: ['lib/**'] },
-      output: { failOn: 'critical' },
+      output: { failOn: 'critical', commentOn: 'high' },
       model: 'claude-opus-4-20250514',
     };
 
@@ -63,7 +65,7 @@ describe('resolveTrigger', () => {
       triggers: [trigger],
       defaults: {
         filters: { paths: ['src/**'], ignorePaths: ['*.test.ts'] },
-        output: { failOn: 'high', maxFindings: 10 },
+        output: { failOn: 'high', commentOn: 'critical', maxFindings: 10 },
         model: 'claude-sonnet-4-20250514',
       },
     };
@@ -73,6 +75,7 @@ describe('resolveTrigger', () => {
     // Trigger overrides
     expect(resolved.filters.paths).toEqual(['lib/**']);
     expect(resolved.output.failOn).toBe('critical');
+    expect(resolved.output.commentOn).toBe('high');
     expect(resolved.model).toBe('claude-opus-4-20250514');
 
     // Defaults still applied where trigger doesn't specify

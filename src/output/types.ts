@@ -29,4 +29,6 @@ export interface RenderOptions {
   maxFindings?: number;
   groupByFile?: boolean;
   extraLabels?: string[];
+  /** Only include findings at or above this severity level in rendered output */
+  commentOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
 }

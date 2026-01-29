@@ -9,6 +9,8 @@ export const CLIOptionsSchema = z.object({
   config: z.string().optional(),
   json: z.boolean().default(false),
   failOn: SeveritySchema.optional(),
+  /** Only show findings at or above this severity in output */
+  commentOn: SeveritySchema.optional(),
   help: z.boolean().default(false),
   /** Max concurrent trigger/skill executions (default: 4) */
   parallel: z.number().int().positive().optional(),
@@ -58,6 +60,8 @@ Options:
   --config <path>      Path to warden.toml (default: ./warden.toml)
   --json               Output results as JSON
   --fail-on <severity> Exit with code 1 if findings >= severity
+                       (critical, high, medium, low, info)
+  --comment-on <sev>   Only show findings >= severity in output
                        (critical, high, medium, low, info)
   --fix                Automatically apply all suggested fixes
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
@@ -168,6 +172,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       config: { type: 'string' },
       json: { type: 'boolean', default: false },
       'fail-on': { type: 'string' },
+      'comment-on': { type: 'string' },
       fix: { type: 'boolean', default: false },
       force: { type: 'boolean', short: 'f', default: false },
       list: { type: 'boolean', short: 'l', default: false },
@@ -275,6 +280,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     config: values.config,
     json: values.json,
     failOn: values['fail-on'] as Severity | undefined,
+    commentOn: values['comment-on'] as Severity | undefined,
     fix: values.fix,
     force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,

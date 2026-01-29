@@ -1,5 +1,5 @@
 import type { Octokit } from '@octokit/rest';
-import { SEVERITY_ORDER } from '../types/index.js';
+import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { Severity, Finding, SkillReport } from '../types/index.js';
 
 /**
@@ -33,6 +33,8 @@ export interface CheckOptions {
  */
 export interface UpdateSkillCheckOptions extends CheckOptions {
   failOn?: Severity;
+  /** Only include findings at or above this severity level in annotations */
+  commentOn?: Severity;
 }
 
 /**
@@ -85,10 +87,14 @@ export function severityToAnnotationLevel(
  * Convert findings to GitHub Check annotations.
  * Only findings with locations can be converted to annotations.
  * Returns at most MAX_ANNOTATIONS_PER_REQUEST annotations.
+ * If commentOn is specified, only include findings at or above that severity.
  */
-export function findingsToAnnotations(findings: Finding[]): CheckAnnotation[] {
+export function findingsToAnnotations(findings: Finding[], commentOn?: Severity): CheckAnnotation[] {
+  // Filter by commentOn threshold if specified
+  const filtered = filterFindingsBySeverity(findings, commentOn);
+
   // Filter to findings with location using type predicate
-  const withLocation = findings.filter(
+  const withLocation = filtered.filter(
     (f): f is Finding & { location: NonNullable<Finding['location']> } => Boolean(f.location)
   );
 
@@ -171,8 +177,10 @@ export async function updateSkillCheck(
   report: SkillReport,
   options: UpdateSkillCheckOptions
 ): Promise<void> {
+  // Conclusion is based on all findings (failOn behavior)
   const conclusion = determineConclusion(report.findings, options.failOn);
-  const annotations = findingsToAnnotations(report.findings);
+  // Annotations are filtered by commentOn threshold
+  const annotations = findingsToAnnotations(report.findings, options.commentOn);
 
   const findingCounts = countBySeverity(report.findings);
   const summary = buildSkillSummary(report, findingCounts);
