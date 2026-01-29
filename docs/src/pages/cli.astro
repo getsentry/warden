@@ -1,0 +1,325 @@
+---
+import Base from '../layouts/Base.astro';
+import Terminal from '../components/Terminal.astro';
+import { Code } from 'astro:components';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<Base title="CLI Reference" description="Warden CLI commands and options">
+  <h1>CLI Reference</h1>
+
+  <p>Warden provides a command-line interface for running code analysis locally and managing your configuration.</p>
+
+  <h2>Quick Start</h2>
+
+  <Terminal showCopy={true} copyText="export WARDEN_ANTHROPIC_API_KEY=sk-ant-... && warden">
+    <Code
+      code={`# Set your API key
+export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
+
+# Run analysis on uncommitted changes
+warden
+
+# Run on specific files
+warden src/auth.ts src/api/*.ts
+
+# Run on a git range
+warden main..HEAD`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Commands</h2>
+
+  <div class="command-card">
+    <h3>warden</h3>
+    <div class="synopsis">warden [target] [options]</div>
+    <p>Run code analysis on the specified target. If no target is given, analyzes uncommitted changes.</p>
+    <ul>
+      <li><code>target</code> — Files, directories, or git refs to analyze (optional)</li>
+    </ul>
+    <Terminal showCopy={true} copyText="warden">
+      <Code
+        code={`# Analyze uncommitted changes (default)
+warden
+
+# Analyze specific files
+warden src/auth.ts
+
+# Analyze a directory
+warden src/api/
+
+# Analyze changes in a git range
+warden HEAD~3..HEAD`}
+        lang="bash"
+        theme="vitesse-black"
+      />
+    </Terminal>
+  </div>
+
+  <div class="command-card">
+    <h3>warden init</h3>
+    <div class="synopsis">warden init</div>
+    <p>Initialize Warden in your project. Creates a configuration file and GitHub workflow.</p>
+    <Terminal showCopy={true} copyText="warden init">
+      <pre class="cli-output"><span class="cli-dim">$</span> warden init
+
+<span class="cli-green">Created</span> warden.toml
+<span class="cli-green">Created</span> .github/workflows/warden.yml
+
+<span class="cli-bold">Next steps:</span>
+  1. Add a skill: <span class="cli-cyan">warden add &lt;skill-name&gt;</span>
+  2. Set <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> in .env.local
+  3. Add <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> to repository secrets
+  4. Commit and open a PR to test</pre>
+    </Terminal>
+  </div>
+
+  <div class="command-card">
+    <h3>warden add</h3>
+    <div class="synopsis">warden add &lt;skill-name&gt;</div>
+    <p>Add a skill trigger to your configuration. The skill must already be installed.</p>
+    <ul>
+      <li><code>skill-name</code> — Name of the skill to add (required)</li>
+    </ul>
+    <Terminal showCopy={true} copyText="warden add security-review">
+      <pre class="cli-output"><span class="cli-dim">$</span> warden add security-review
+
+<span class="cli-green">Added</span> trigger for <span class="cli-cyan">security-review</span> to warden.toml</pre>
+    </Terminal>
+  </div>
+
+  <div class="command-card">
+    <h3>warden setup-app</h3>
+    <div class="synopsis">warden setup-app [--org &lt;name&gt;]</div>
+    <p>Create a GitHub App for Warden. This gives you a custom bot identity instead of the generic "github-actions" user.</p>
+    <ul>
+      <li><code>--org &lt;name&gt;</code> — Create the app for an organization instead of your personal account</li>
+    </ul>
+    <Terminal showCopy={true} copyText="warden setup-app">
+      <Code
+        code={`# For a personal account
+warden setup-app
+
+# For an organization
+warden setup-app --org your-org`}
+        lang="bash"
+        theme="vitesse-black"
+      />
+    </Terminal>
+  </div>
+
+  <h2>Global Options</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Option</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>--skill &lt;name&gt;</code></td>
+        <td>Run a specific skill instead of using triggers from config</td>
+      </tr>
+      <tr>
+        <td><code>--fix</code></td>
+        <td>Automatically apply suggested fixes</td>
+      </tr>
+      <tr>
+        <td><code>--json</code></td>
+        <td>Output results as JSON</td>
+      </tr>
+      <tr>
+        <td><code>--fail-on &lt;level&gt;</code></td>
+        <td>Exit with error code if findings meet severity: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></td>
+      </tr>
+      <tr>
+        <td><code>--config &lt;path&gt;</code></td>
+        <td>Path to config file (default: <code>warden.toml</code>)</td>
+      </tr>
+      <tr>
+        <td><code>--verbose</code></td>
+        <td>Show detailed output</td>
+      </tr>
+      <tr>
+        <td><code>--help</code></td>
+        <td>Show help message</td>
+      </tr>
+      <tr>
+        <td><code>--version</code></td>
+        <td>Show version number</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Target Types</h2>
+
+  <p>Warden accepts different types of targets for analysis:</p>
+
+  <h3>Files and Directories</h3>
+
+  <p>Specify paths directly to analyze specific files or directories.</p>
+
+  <Terminal showCopy={false}>
+    <Code
+      code={`# Single file
+warden src/auth.ts
+
+# Multiple files
+warden src/auth.ts src/api/users.ts
+
+# Glob patterns
+warden "src/**/*.ts"
+
+# Directory (analyzes all files)
+warden src/api/`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>Git References</h3>
+
+  <p>Use git refs to analyze changes between commits.</p>
+
+  <Terminal showCopy={false}>
+    <Code
+      code={`# Changes in last 3 commits
+warden HEAD~3
+
+# Changes between branches
+warden main..HEAD
+
+# Changes since a specific commit
+warden abc1234..HEAD
+
+# Uncommitted changes (default)
+warden`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Environment Variables</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WARDEN_ANTHROPIC_API_KEY</code></td>
+        <td>Your Anthropic API key (required)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>You can set this in a <code>.env.local</code> file in your project root for local development.</p>
+
+  <h2>Examples</h2>
+
+  <h3>Pre-commit Check</h3>
+
+  <p>Run before committing to catch issues early.</p>
+
+  <Terminal showCopy={true} copyText="warden --skill security-review">
+    <Code
+      code={`# Check uncommitted changes
+warden --skill security-review
+
+# Fix issues automatically
+warden --skill security-review --fix`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>CI Integration</h3>
+
+  <p>Use in CI scripts with JSON output and exit codes.</p>
+
+  <Terminal showCopy={false}>
+    <Code
+      code={`# Fail CI on high severity issues
+warden --json --fail-on high > results.json
+
+# Review the output
+cat results.json | jq '.findings[] | select(.severity == "high")'`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>Review PR Changes</h3>
+
+  <p>Analyze all changes in a feature branch.</p>
+
+  <Terminal showCopy={true} copyText="warden main..HEAD">
+    <Code
+      code={`# Compare against main branch
+warden main..HEAD
+
+# Verbose output for debugging
+warden main..HEAD --verbose`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+</Base>
+
+<style>
+  h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  h2 {
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+  }
+
+  th {
+    background: rgba(255, 255, 255, 0.03);
+    font-weight: 600;
+  }
+
+  td code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+
+  ul {
+    padding-left: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  li {
+    margin-bottom: 0.25rem;
+  }
+</style>
