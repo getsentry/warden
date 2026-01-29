@@ -4,13 +4,12 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-    env:
-      WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
-      WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
-
 jobs:
   review:
     runs-on: ubuntu-latest
+    env:
+      WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
     steps:
       - uses: actions/checkout@v4
 
