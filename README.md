@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/warden-icon.svg" alt="Warden" width="128" height="128">
+</p>
+
 # warden
 
 Your code is under new management. Agents that review your code - locally or on every PR - using the Skills you already know and love.

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background: Sentry Purple -->
+  <rect width="512" height="512" rx="64" fill="#362D59"/>
+
+  <!-- Shield shape -->
+  <path
+    d="M256 56c-120 0-176 40-176 40v200c0 80 80 140 176 176 96-36 176-96 176-176V96s-56-40-176-40z"
+    fill="none"
+    stroke="#F8F7FC"
+    stroke-width="24"
+    stroke-linejoin="round"
+  />
+
+  <!-- Inner shield fill (subtle) -->
+  <path
+    d="M256 80c-104 0-152 32-152 32v184c0 64 64 116 152 152 88-36 152-88 152-152V112s-48-32-152-32z"
+    fill="#443861"
+  />
+
+  <!-- Eye - outer circle -->
+  <ellipse cx="256" cy="240" rx="80" ry="56" fill="#F8F7FC"/>
+
+  <!-- Eye - iris -->
+  <circle cx="256" cy="240" r="40" fill="#362D59"/>
+
+  <!-- Eye - pupil -->
+  <circle cx="256" cy="240" r="20" fill="#F8F7FC"/>
+
+  <!-- Eye - highlight -->
+  <circle cx="268" cy="228" r="8" fill="#362D59"/>
+
+  <!-- Eyebrow / vigilance line -->
+  <path
+    d="M176 180c24-16 52-24 80-24s56 8 80 24"
+    fill="none"
+    stroke="#F8F7FC"
+    stroke-width="12"
+    stroke-linecap="round"
+  />
+</svg>
