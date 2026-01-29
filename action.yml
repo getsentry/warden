@@ -18,25 +18,47 @@ inputs:
     description: 'Path to warden.toml config file (relative to repo root)'
     required: false
     default: 'warden.toml'
-  fail-on-findings:
-    description: 'Fail the action if findings with high/critical severity are found'
+  fail-on:
+    description: 'Minimum severity level to fail the action (critical, high, medium, low, info)'
     required: false
-    default: 'true'
   max-findings:
     description: 'Maximum number of findings to report (0 for unlimited)'
     required: false
     default: '50'
+  parallel:
+    description: 'Maximum number of concurrent trigger executions'
+    required: false
+    default: '5'
 
 outputs:
   findings-count:
     description: 'Total number of findings'
+    value: ${{ steps.warden.outputs.findings-count }}
   critical-count:
     description: 'Number of critical severity findings'
+    value: ${{ steps.warden.outputs.critical-count }}
   high-count:
     description: 'Number of high severity findings'
+    value: ${{ steps.warden.outputs.high-count }}
   summary:
     description: 'Summary of the analysis'
+    value: ${{ steps.warden.outputs.summary }}
 
 runs:
-  using: 'node24'
-  main: 'dist/action/index.js'
+  using: 'composite'
+  steps:
+    - name: Install Claude Code CLI
+      shell: bash
+      run: npm install -g @anthropic-ai/claude-code
+
+    - name: Run Warden
+      id: warden
+      shell: bash
+      env:
+        INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_CONFIG_PATH: ${{ inputs.config-path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MAX_FINDINGS: ${{ inputs.max-findings }}
+        INPUT_PARALLEL: ${{ inputs.parallel }}
+      run: node ${{ github.action_path }}/dist/action/index.js

@@ -35,8 +35,10 @@ interface ActionInputs {
 
 function getInputs(): ActionInputs {
   const getInput = (name: string, required = false): string => {
-    const envName = `INPUT_${name.toUpperCase()}`;
-    const value = process.env[envName] ?? '';
+    // Check both hyphenated (native GitHub Actions) and underscored (composite action) formats
+    const hyphenEnv = `INPUT_${name.toUpperCase()}`;
+    const underscoreEnv = `INPUT_${name.toUpperCase().replace(/-/g, '_')}`;
+    const value = process.env[hyphenEnv] ?? process.env[underscoreEnv] ?? '';
     if (required && !value) {
       throw new Error(`Input required and not supplied: ${name}`);
     }
@@ -77,7 +79,6 @@ function setOutput(name: string, value: string | number): void {
   if (outputFile) {
     appendFileSync(outputFile, `${name}=${value}\n`);
   }
-  console.log(`::set-output name=${name}::${value}`);
 }
 
 function setFailed(message: string): never {
