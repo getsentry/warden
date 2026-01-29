@@ -20,6 +20,7 @@ import {
 } from '../output/github-checks.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
 import { resolveSkillAsync } from '../skills/loader.js';
+import { filterFindingsBySeverity } from '../types/index.js';
 import type { EventContext, SkillReport, UsageStats } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
@@ -503,6 +504,7 @@ async function run(): Promise<void> {
     report?: SkillReport;
     renderResult?: RenderResult;
     failOn?: typeof inputs.failOn;
+    commentOn?: typeof inputs.commentOn;
     commentOnSuccess?: boolean;
     error?: unknown;
   }
@@ -565,6 +567,7 @@ async function run(): Promise<void> {
         report,
         renderResult,
         failOn,
+        commentOn,
         commentOnSuccess: trigger.output.commentOnSuccess,
       };
     } catch (error) {
@@ -597,8 +600,9 @@ async function run(): Promise<void> {
     if (result.report) {
       reports.push(result.report);
 
-      // Post review to GitHub only if there are findings OR commentOnSuccess is true
-      const hasFindings = result.report.findings.length > 0;
+      // Post review to GitHub only if there are findings (after commentOn filtering) OR commentOnSuccess is true
+      const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
+      const hasFindings = filteredFindings.length > 0;
       const commentOnSuccess = result.commentOnSuccess ?? false;
 
       if (result.renderResult && (hasFindings || commentOnSuccess)) {
@@ -634,7 +638,9 @@ async function run(): Promise<void> {
         totalSkills: matchedTriggers.length,
         totalFindings,
         findingsBySeverity: aggregateSeverityCounts(reports),
-        totalDurationMs: reports.reduce((sum, r) => sum + (r.durationMs ?? 0), 0),
+        totalDurationMs: reports.some((r) => r.durationMs !== undefined)
+          ? reports.reduce((sum, r) => sum + (r.durationMs ?? 0), 0)
+          : undefined,
         totalUsage: aggregateUsage(reports),
         skillResults: results.map((r) => ({
           name: r.triggerName,
