@@ -21,19 +21,6 @@ function generateState(): string {
 }
 
 /**
- * Build the GitHub URL for creating an app from manifest.
- */
-function buildGitHubUrl(manifest: object, state: string, org?: string): string {
-  const manifestJson = JSON.stringify(manifest);
-  const encodedManifest = encodeURIComponent(manifestJson);
-
-  if (org) {
-    return `https://github.com/organizations/${org}/settings/apps/new?manifest=${encodedManifest}&state=${state}`;
-  }
-  return `https://github.com/settings/apps/new?manifest=${encodedManifest}&state=${state}`;
-}
-
-/**
  * Run the setup-app command.
  */
 export async function runSetupApp(options: SetupAppOptions, reporter: Reporter): Promise<number> {
@@ -59,16 +46,15 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
   reporter.text(`  ${chalk.dim('•')} metadata: read        ${chalk.dim('- Read repository metadata')}`);
   reporter.blank();
 
-  // Build GitHub URL
-  const githubUrl = buildGitHubUrl(manifest, state, org);
-
-  // Start local callback server
+  // Start local server (serves the form and handles callback)
   reporter.step(`Starting local server on http://localhost:${port}...`);
 
   const serverHandle = startCallbackServer({
     port,
     expectedState: state,
     timeoutMs,
+    manifest,
+    org,
   });
 
   // Handle server errors (e.g., port already in use)
@@ -82,21 +68,21 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
   });
 
   try {
-    // Open browser or show URL
+    // Open browser to our local server (which will POST to GitHub)
     if (open) {
-      reporter.step('Opening browser to GitHub...');
+      reporter.step('Opening browser...');
       try {
-        await openBrowser(githubUrl);
+        await openBrowser(serverHandle.startUrl);
       } catch {
         reporter.warning('Could not open browser automatically.');
         reporter.blank();
         reporter.text('Open this URL in your browser:');
-        reporter.text(chalk.cyan(githubUrl));
+        reporter.text(chalk.cyan(serverHandle.startUrl));
       }
     } else {
       reporter.blank();
       reporter.text('Open this URL in your browser:');
-      reporter.text(chalk.cyan(githubUrl));
+      reporter.text(chalk.cyan(serverHandle.startUrl));
     }
 
     reporter.blank();

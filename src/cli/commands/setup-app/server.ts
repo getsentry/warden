@@ -1,9 +1,11 @@
 /**
- * Local HTTP server for receiving GitHub App manifest flow callback.
+ * Local HTTP server for GitHub App manifest flow.
+ * Serves a form that POSTs the manifest to GitHub, then receives the callback.
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import { URL } from 'node:url';
+import type { GitHubAppManifest } from './manifest.js';
 
 export interface CallbackResult {
   code: string;
@@ -14,16 +16,58 @@ export interface ServerOptions {
   port: number;
   expectedState: string;
   timeoutMs: number;
+  manifest: GitHubAppManifest;
+  org?: string;
 }
 
 /**
- * Create and start a local HTTP server to receive the GitHub callback.
- * Returns a promise that resolves with the callback code and state.
+ * Build the HTML page that auto-submits the manifest form to GitHub.
+ */
+function buildStartPage(manifest: GitHubAppManifest, state: string, org?: string): string {
+  const githubUrl = org
+    ? `https://github.com/organizations/${org}/settings/apps/new?state=${state}`
+    : `https://github.com/settings/apps/new?state=${state}`;
+
+  const manifestJson = JSON.stringify(manifest);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <title>Creating GitHub App...</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 50px; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <h1>Redirecting to GitHub...</h1>
+  <div class="spinner"></div>
+  <p>If you are not redirected automatically, click the button below.</p>
+  <form id="manifest-form" action="${githubUrl}" method="post">
+    <input type="hidden" name="manifest" value='${manifestJson.replace(/'/g, '&#39;')}'>
+    <button type="submit" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Continue to GitHub</button>
+  </form>
+  <script>
+    // Auto-submit the form after a brief delay
+    setTimeout(function() {
+      document.getElementById('manifest-form').submit();
+    }, 500);
+  </script>
+</body>
+</html>`;
+}
+
+/**
+ * Create and start a local HTTP server for the manifest flow.
+ * - GET / or /start: Serves the form that POSTs to GitHub
+ * - GET /callback: Receives the callback from GitHub with the code
  */
 export function startCallbackServer(options: ServerOptions): {
   server: Server;
   waitForCallback: Promise<CallbackResult>;
   close: () => void;
+  startUrl: string;
 } {
   let resolveCallback: (result: CallbackResult) => void;
   let rejectCallback: (error: Error) => void;
@@ -34,15 +78,17 @@ export function startCallbackServer(options: ServerOptions): {
   });
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-    // Only handle GET requests to /callback
-    if (req.method !== 'GET' || !req.url?.startsWith('/callback')) {
-      res.writeHead(404);
-      res.end('Not found');
+    const url = new URL(req.url || '/', `http://localhost:${options.port}`);
+
+    // Serve the start page that auto-submits to GitHub
+    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/start')) {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(buildStartPage(options.manifest, options.expectedState, options.org));
       return;
     }
 
-    try {
-      const url = new URL(req.url, `http://localhost:${options.port}`);
+    // Handle callback from GitHub
+    if (req.method === 'GET' && url.pathname === '/callback') {
       const code = url.searchParams.get('code');
       const state = url.searchParams.get('state');
 
@@ -99,20 +145,12 @@ export function startCallbackServer(options: ServerOptions): {
       `);
 
       resolveCallback({ code, state });
-    } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'text/html' });
-      res.end(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>Error</title></head>
-        <body>
-          <h1>Internal Error</h1>
-          <p>Something went wrong. Please try again.</p>
-        </body>
-        </html>
-      `);
-      rejectCallback(error instanceof Error ? error : new Error(String(error)));
+      return;
     }
+
+    // 404 for anything else
+    res.writeHead(404);
+    res.end('Not found');
   });
 
   // Bind only to localhost for security
@@ -129,5 +167,7 @@ export function startCallbackServer(options: ServerOptions): {
     server.close();
   };
 
-  return { server, waitForCallback, close };
+  const startUrl = `http://localhost:${options.port}/start`;
+
+  return { server, waitForCallback, close, startUrl };
 }
