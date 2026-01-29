@@ -35,7 +35,7 @@ interface ActionInputs {
 
 function getInputs(): ActionInputs {
   const getInput = (name: string, required = false): string => {
-    const envName = `INPUT_${name.toUpperCase().replace(/-/g, '_')}`;
+    const envName = `INPUT_${name.toUpperCase()}`;
     const value = process.env[envName] ?? '';
     if (required && !value) {
       throw new Error(`Input required and not supplied: ${name}`);
