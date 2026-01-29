@@ -45,6 +45,8 @@ export const OutputConfigSchema = z.object({
   commentOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
   maxFindings: z.number().int().positive().optional(),
   labels: z.array(z.string()).optional(),
+  /** Post a PR comment even when there are no findings (default: false) */
+  commentOnSuccess: z.boolean().optional(),
 });
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 

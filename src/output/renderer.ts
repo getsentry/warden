@@ -1,6 +1,7 @@
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment, GitHubLabel } from './types.js';
+import { formatStatsCompact, countBySeverity } from '../cli/output/formatters.js';
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
   critical: ':rotating_light:',
@@ -69,9 +70,16 @@ function renderReview(
   );
   const event: GitHubReview['event'] = hasBlockingSeverity ? 'REQUEST_CHANGES' : 'COMMENT';
 
+  // Build review body with optional stats footer
+  let body = `## ${report.skill}\n\n${report.summary}`;
+  const statsLine = formatStatsCompact(report.durationMs, report.usage);
+  if (statsLine) {
+    body += `\n\n---\n<sub>${statsLine}</sub>`;
+  }
+
   return {
     event,
-    body: `## ${report.skill}\n\n${report.summary}`,
+    body,
     comments,
   };
 }
@@ -103,6 +111,11 @@ function renderSummaryComment(
 
   if (findings.length === 0) {
     lines.push('No findings to report.');
+    // Add stats footer even when there are no findings
+    const statsLine = formatStatsCompact(report.durationMs, report.usage);
+    if (statsLine) {
+      lines.push('', '---', `<sub>${statsLine}</sub>`);
+    }
     return lines.join('\n');
   }
 
@@ -148,6 +161,12 @@ ${Object.entries(counts)
     }
   }
 
+  // Add stats footer
+  const statsLine = formatStatsCompact(report.durationMs, report.usage);
+  if (statsLine) {
+    lines.push('', '---', `<sub>${statsLine}</sub>`);
+  }
+
   return lines.join('\n');
 }
 
@@ -161,16 +180,6 @@ function formatLineRange(loc: { startLine: number; endLine?: number }): string {
 function renderFindingItem(finding: Finding): string {
   const location = finding.location ? ` (${formatLineRange(finding.location)})` : '';
   return `- ${SEVERITY_EMOJI[finding.severity]} **${finding.title}**${location}: ${finding.description}`;
-}
-
-function countBySeverity(findings: Finding[]): Record<Severity, number> {
-  return findings.reduce(
-    (acc, f) => {
-      acc[f.severity]++;
-      return acc;
-    },
-    { critical: 0, high: 0, medium: 0, low: 0, info: 0 } as Record<Severity, number>
-  );
 }
 
 function groupFindingsByFile(findings: Finding[]): Record<string, Finding[]> {
