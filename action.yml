@@ -21,6 +21,11 @@ inputs:
   fail-on:
     description: 'Minimum severity level to fail the action (critical, high, medium, low, info)'
     required: false
+    default: 'high'
+  comment-on:
+    description: 'Minimum severity level to show annotations in code review (critical, high, medium, low, info)'
+    required: false
+    default: 'medium'
   max-findings:
     description: 'Maximum number of findings to report (0 for unlimited)'
     required: false
@@ -75,6 +80,7 @@ runs:
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
         INPUT_CONFIG_PATH: ${{ inputs.config-path }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_COMMENT_ON: ${{ inputs.comment-on }}
         INPUT_MAX_FINDINGS: ${{ inputs.max-findings }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
         CLAUDE_CODE_PATH: ${{ env.HOME }}/.local/bin/claude

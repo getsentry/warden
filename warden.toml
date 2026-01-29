@@ -1,5 +1,11 @@
 version = 1
 
+[defaults.output]
+# Fail check on high+ severity findings (critical, high)
+failOn = "high"
+# Show annotations for medium+ severity findings
+commentOn = "medium"
+
 [[triggers]]
 name = "security-review"
 event = "pull_request"
