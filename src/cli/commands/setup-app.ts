@@ -14,25 +14,16 @@ import { openBrowser } from './setup-app/browser.js';
 import { exchangeCodeForCredentials } from './setup-app/credentials.js';
 
 /**
- * Generate a secure random state token for CSRF protection.
- */
-function generateState(): string {
-  return randomBytes(16).toString('hex');
-}
-
-/**
  * Run the setup-app command.
  */
 export async function runSetupApp(options: SetupAppOptions, reporter: Reporter): Promise<number> {
   const { port, timeout, org, name, open } = options;
-  const timeoutMs = timeout * 1000;
 
-  // Header
   reporter.bold('SETUP GITHUB APP');
   reporter.blank();
 
-  // Generate state for CSRF protection
-  const state = generateState();
+  // Generate state token for CSRF protection
+  const state = randomBytes(16).toString('hex');
 
   // Build manifest
   const manifest = buildManifest({ name, port });
@@ -52,7 +43,7 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
   const serverHandle = startCallbackServer({
     port,
     expectedState: state,
-    timeoutMs,
+    timeoutMs: timeout * 1000,
     manifest,
     org,
   });

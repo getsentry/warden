@@ -29,7 +29,7 @@ export function openBrowser(url: string): Promise<void> {
 
     exec(command, (error) => {
       if (error) {
-        reject(new Error(`Failed to open browser: ${error.message}`));
+        reject(error);
       } else {
         resolve();
       }

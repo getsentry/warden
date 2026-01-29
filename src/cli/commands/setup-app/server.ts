@@ -9,7 +9,6 @@ import type { GitHubAppManifest } from './manifest.js';
 
 export interface CallbackResult {
   code: string;
-  state: string;
 }
 
 export interface ServerOptions {
@@ -144,7 +143,7 @@ export function startCallbackServer(options: ServerOptions): {
         </html>
       `);
 
-      resolveCallback({ code, state });
+      resolveCallback({ code });
       return;
     }
 

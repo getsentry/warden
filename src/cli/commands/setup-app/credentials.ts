@@ -4,24 +4,9 @@
 
 export interface AppCredentials {
   id: number;
-  slug: string;
   name: string;
-  clientId: string;
-  clientSecret: string;
   pem: string;
-  webhookSecret: string | null;
   htmlUrl: string;
-}
-
-export interface ConversionResponse {
-  id: number;
-  slug: string;
-  name: string;
-  client_id: string;
-  client_secret: string;
-  pem: string;
-  webhook_secret: string | null;
-  html_url: string;
 }
 
 /**
@@ -44,16 +29,17 @@ export async function exchangeCodeForCredentials(code: string): Promise<AppCrede
     throw new Error(`Failed to exchange code for credentials: ${response.status} ${response.statusText}\n${errorText}`);
   }
 
-  const data = (await response.json()) as ConversionResponse;
+  const data = (await response.json()) as {
+    id: number;
+    name: string;
+    pem: string;
+    html_url: string;
+  };
 
   return {
     id: data.id,
-    slug: data.slug,
     name: data.name,
-    clientId: data.client_id,
-    clientSecret: data.client_secret,
     pem: data.pem,
-    webhookSecret: data.webhook_secret,
     htmlUrl: data.html_url,
   };
 }
