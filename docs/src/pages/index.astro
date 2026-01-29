@@ -100,7 +100,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
 
     <div class="step">
       <h3>Keep an Eye on GitHub</h3>
-      <p>Open a PR and Warden reviews it automatically. Findings appear as inline comments.</p>
+      <p>Open a PR and Warden reviews it automatically. Findings appear as suggested changes you can apply with one click.</p>
       <div class="pr-mock">
         <div class="pr-mock-header">
           <div class="pr-mock-avatar">
@@ -119,14 +119,37 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
             <span class="pr-mock-severity severity-medium"></span>
             <span class="pr-mock-title">Missing React.memo for list items</span>
           </div>
-          <div class="pr-mock-code">
-            <div class="pr-mock-code-header">src/components/UserList.tsx</div>
-            <pre class="pr-mock-code-content"><span class="line-num">15</span><span class="line-old">- const UserCard = (&#123; user &#125;) =&gt; &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;;</span>
-<span class="line-num">15</span><span class="line-new">+ const UserCard = React.memo((&#123; user &#125;) =&gt;</span>
-<span class="line-num">16</span><span class="line-new">+   &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;</span>
-<span class="line-num">17</span><span class="line-new">+ );</span></pre>
-          </div>
           <p class="pr-mock-desc">List item components should be memoized to prevent unnecessary re-renders when parent state changes.</p>
+          <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Wrap UserCard with React.memo</p>
+          <div class="pr-mock-suggestion">
+            <div class="pr-mock-suggestion-header">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8.75 1.75V5H12a.75.75 0 010 1.5H8.75v3.25a.75.75 0 01-1.5 0V6.5H4a.75.75 0 010-1.5h3.25V1.75a.75.75 0 011.5 0zM4 13a.75.75 0 000 1.5h8a.75.75 0 000-1.5H4z"/>
+              </svg>
+              <span>Suggested change</span>
+            </div>
+            <div class="pr-mock-suggestion-diff">
+              <div class="pr-mock-diff-line diff-old">
+                <span class="diff-marker">−</span>
+                <span class="diff-content">const UserCard = (&#123; user &#125;) =&gt; &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;;</span>
+              </div>
+              <div class="pr-mock-diff-line diff-new">
+                <span class="diff-marker">+</span>
+                <span class="diff-content">const UserCard = React.memo((&#123; user &#125;) =&gt; (</span>
+              </div>
+              <div class="pr-mock-diff-line diff-new">
+                <span class="diff-marker">+</span>
+                <span class="diff-content">  &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;</span>
+              </div>
+              <div class="pr-mock-diff-line diff-new">
+                <span class="diff-marker">+</span>
+                <span class="diff-content">));</span>
+              </div>
+            </div>
+            <div class="pr-mock-suggestion-actions">
+              <button class="pr-mock-commit-btn">Commit suggestion</button>
+            </div>
+          </div>
         </div>
         <div class="pr-mock-footer">
           <a href="#" class="pr-mock-link">View all 2 findings</a>
@@ -284,7 +307,6 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
 
   .pr-mock-body {
     padding: 1rem;
-    background: #000;
   }
 
   .pr-mock-finding {
@@ -309,60 +331,94 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     color: #9198a1;
   }
 
-  .pr-mock-code {
+  .pr-mock-desc {
+    color: #9198a1;
+    margin: 0 0 0.75rem;
+    line-height: 1.5;
+  }
+
+  .pr-mock-suggestion-label {
+    color: #9198a1;
+    margin: 0 0 0.75rem;
+  }
+
+  .pr-mock-suggestion {
     background: #0d1117;
     border: 1px solid #21262d;
     border-radius: 6px;
     overflow: hidden;
-    margin-bottom: 0.75rem;
   }
 
-  .pr-mock-code-header {
-    background: #0d1117;
+  .pr-mock-suggestion-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.5rem 0.75rem;
-    font-family: var(--font-mono);
+    background: #161b22;
+    border-bottom: 1px solid #21262d;
     font-size: 0.75rem;
     font-weight: 600;
     color: #8b949e;
-    border-bottom: 1px solid #21262d;
   }
 
-  .pr-mock-code-content {
-    margin: 0;
-    padding: 0.5rem 0;
+  .pr-mock-suggestion-diff {
     font-family: var(--font-mono);
     font-size: 0.75rem;
     line-height: 1.6;
-    background: transparent;
-    border: none;
-    overflow-x: auto;
   }
 
-  .pr-mock-code-content .line-num {
-    display: inline-block;
-    width: 2.5rem;
-    padding: 0 0.5rem;
-    color: #484f58;
-    text-align: right;
+  .pr-mock-diff-line {
+    display: flex;
+    padding: 0 0.75rem;
+  }
+
+  .pr-mock-diff-line.diff-old {
+    background: rgba(248, 81, 73, 0.15);
+  }
+
+  .pr-mock-diff-line.diff-new {
+    background: rgba(63, 185, 80, 0.15);
+  }
+
+  .diff-marker {
+    width: 1.5rem;
+    flex-shrink: 0;
+    text-align: center;
     user-select: none;
   }
 
-  .pr-mock-code-content .line-old {
-    display: inline;
-    background: rgba(248, 81, 73, 0.15);
-    color: #f85149;
+  .diff-content {
+    flex: 1;
+    white-space: pre;
   }
 
-  .pr-mock-code-content .line-new {
-    display: inline;
-    background: rgba(63, 185, 80, 0.15);
-    color: #3fb950;
+  .diff-old .diff-marker { color: #f85149; }
+  .diff-old .diff-content { color: #ffa198; }
+
+  .diff-new .diff-marker { color: #3fb950; }
+  .diff-new .diff-content { color: #7ee787; }
+
+  .pr-mock-suggestion-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid #21262d;
+    background: #161b22;
   }
 
-  .pr-mock-desc {
-    color: #8b949e;
-    margin: 0;
-    line-height: 1.5;
+  .pr-mock-commit-btn {
+    background: #238636;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pr-mock-commit-btn:hover {
+    background: #2ea043;
   }
 
   .pr-mock-footer {
