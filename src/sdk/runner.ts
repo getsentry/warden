@@ -94,6 +94,8 @@ export interface SkillRunnerOptions {
   callbacks?: SkillRunnerCallbacks;
   /** Abort controller for cancellation on SIGINT */
   abortController?: AbortController;
+  /** Path to Claude Code CLI executable. Required in CI environments. */
+  pathToClaudeCodeExecutable?: string;
 }
 
 /**
@@ -233,7 +235,7 @@ async function analyzeHunk(
   repoPath: string,
   options: SkillRunnerOptions
 ): Promise<HunkAnalysisResult> {
-  const { maxTurns = 5, model, abortController } = options;
+  const { maxTurns = 5, model, abortController, pathToClaudeCodeExecutable } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(hunkCtx);
@@ -251,6 +253,7 @@ async function analyzeHunk(
       permissionMode: 'bypassPermissions',
       model,
       abortController,
+      pathToClaudeCodeExecutable,
     },
   });
 

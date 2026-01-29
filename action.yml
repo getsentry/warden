@@ -49,7 +49,23 @@ runs:
   steps:
     - name: Install Claude Code CLI
       shell: bash
-      run: npm install -g @anthropic-ai/claude-code
+      run: |
+        CLAUDE_CODE_VERSION="2.1.23"
+        echo "Installing Claude Code v${CLAUDE_CODE_VERSION}..."
+        for attempt in 1 2 3; do
+          echo "Installation attempt $attempt..."
+          if curl -fsSL https://claude.ai/install.sh | bash -s -- "$CLAUDE_CODE_VERSION"; then
+            break
+          fi
+          if [ $attempt -eq 3 ]; then
+            echo "Failed to install Claude Code after 3 attempts"
+            exit 1
+          fi
+          echo "Installation failed, retrying..."
+          sleep 5
+        done
+        echo "Claude Code installed successfully"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     - name: Run Warden
       id: warden
@@ -61,4 +77,5 @@ runs:
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_MAX_FINDINGS: ${{ inputs.max-findings }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
+        CLAUDE_CODE_PATH: ${{ env.HOME }}/.local/bin/claude
       run: node ${{ github.action_path }}/dist/action/index.js

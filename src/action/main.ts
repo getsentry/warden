@@ -1,5 +1,6 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { execSync } from 'node:child_process';
 import { Octokit } from '@octokit/rest';
 import { loadWardenConfig, resolveTrigger, type ResolvedTrigger } from '../config/loader.js';
 import type { ScheduleConfig } from '../config/schema.js';
@@ -84,6 +85,58 @@ function setOutput(name: string, value: string | number): void {
 function setFailed(message: string): never {
   console.error(`::error::${message}`);
   process.exit(1);
+}
+
+/**
+ * Find the Claude Code CLI executable path.
+ * Required in CI environments where the SDK can't auto-detect the CLI location.
+ */
+function findClaudeCodeExecutable(): string {
+  // Check environment variable first (set by action.yml)
+  const envPath = process.env['CLAUDE_CODE_PATH'];
+  if (envPath) {
+    try {
+      execSync(`test -x "${envPath}"`, { encoding: 'utf-8' });
+      return envPath;
+    } catch {
+      // Path from env doesn't exist, continue to fallbacks
+    }
+  }
+
+  // Standard install location from claude.ai/install.sh
+  const homeLocalBin = `${process.env['HOME']}/.local/bin/claude`;
+  try {
+    execSync(`test -x "${homeLocalBin}"`, { encoding: 'utf-8' });
+    return homeLocalBin;
+  } catch {
+    // Not found in standard location
+  }
+
+  // Try which command
+  try {
+    const path = execSync('which claude', { encoding: 'utf-8' }).trim();
+    if (path) {
+      return path;
+    }
+  } catch {
+    // which command failed
+  }
+
+  // Other common installation paths as fallback
+  const commonPaths = ['/usr/local/bin/claude', '/usr/bin/claude'];
+
+  for (const p of commonPaths) {
+    try {
+      execSync(`test -x "${p}"`, { encoding: 'utf-8' });
+      return p;
+    } catch {
+      // Path doesn't exist or isn't executable
+    }
+  }
+
+  setFailed(
+    'Claude Code CLI not found. Ensure Claude Code is installed via https://claude.ai/install.sh'
+  );
 }
 
 function logGroup(name: string): void {
@@ -257,9 +310,11 @@ async function runScheduledAnalysis(
 
       // Run skill
       const skill = await resolveSkillAsync(resolved.skill, repoPath, config.skills);
+      const claudePath = findClaudeCodeExecutable();
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
+        pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);
 
@@ -450,7 +505,12 @@ async function run(): Promise<void> {
 
     try {
       const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
-      const report = await runSkill(skill, context, { apiKey: inputs.anthropicApiKey, model: trigger.model });
+      const claudePath = findClaudeCodeExecutable();
+      const report = await runSkill(skill, context, {
+        apiKey: inputs.anthropicApiKey,
+        model: trigger.model,
+        pathToClaudeCodeExecutable: claudePath,
+      });
       console.log(`Found ${report.findings.length} findings`);
 
       // Update skill check with results
