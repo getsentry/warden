@@ -14,7 +14,7 @@ import {
 } from '../../sdk/runner.js';
 import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
-import { truncate } from './formatters.js';
+import { truncate, countBySeverity, formatSeverityDot } from './formatters.js';
 
 /**
  * Result from running a skill task.
@@ -60,6 +60,25 @@ export interface RunTasksOptions {
 /** Spinner frames for animation */
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+/**
+ * Format compact severity annotation for file display.
+ */
+function formatFileAnnotation(findings: Finding[]): string {
+  if (findings.length === 0) return '';
+
+  const counts = countBySeverity(findings);
+  const parts: string[] = [];
+
+  // Show only severities with findings, in order of severity
+  if (counts.critical > 0) parts.push(`${formatSeverityDot('critical')} ${counts.critical}`);
+  if (counts.high > 0) parts.push(`${formatSeverityDot('high')} ${counts.high}`);
+  if (counts.medium > 0) parts.push(`${formatSeverityDot('medium')} ${counts.medium}`);
+  if (counts.low > 0) parts.push(`${formatSeverityDot('low')} ${counts.low}`);
+  if (counts.info > 0) parts.push(`${formatSeverityDot('info')} ${counts.info}`);
+
+  return parts.length > 0 ? '  ' + parts.join('  ') : '';
+}
+
 /** File processing state */
 interface FileState {
   file: PreparedFile;
@@ -85,7 +104,8 @@ function renderFileStates(states: FileState[], spinnerFrame: number): string {
     const filename = truncate(state.file.filename, 50);
 
     if (state.status === 'done') {
-      lines.push(`✓ ${filename}`);
+      const annotation = formatFileAnnotation(state.findings);
+      lines.push(`✓ ${filename}${annotation}`);
     } else {
       // Running - show animated spinner
       const hunkInfo = `[${state.currentHunk}/${state.totalHunks}]`;
