@@ -141,6 +141,16 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     reporter.error(message);
+    reporter.blank();
+
+    // Provide recovery guidance if the app might have been created
+    reporter.text(chalk.dim('If the GitHub App was created before this error:'));
+    reporter.text(chalk.dim('  1. Go to https://github.com/settings/apps'));
+    reporter.text(chalk.dim('  2. Find your app and click "Edit"'));
+    reporter.text(chalk.dim('  3. Note the App ID from the URL or "About" section'));
+    reporter.text(chalk.dim('  4. Scroll to "Private keys" and click "Generate a private key"'));
+    reporter.text(chalk.dim('  5. Follow the "Next steps" from this command\'s success output'));
+
     return 1;
   } finally {
     serverHandle.close();
