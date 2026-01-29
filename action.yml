@@ -39,4 +39,4 @@ outputs:
 
 runs:
   using: 'node24'
-  main: 'dist/action/main.js'
+  main: 'dist/action/index.js'

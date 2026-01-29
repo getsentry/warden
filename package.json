@@ -11,6 +11,7 @@
   "scripts": {
     "cli": "tsx src/cli/index.ts",
     "build": "tsc",
+    "build:action": "ncc build src/action/main.ts -o dist/action --source-map --license licenses.txt",
     "dev": "tsc --watch",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
@@ -21,7 +22,7 @@
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm build && pnpm lint-staged"
+    "pre-commit": "pnpm build && pnpm build:action && pnpm lint-staged"
   },
   "lint-staged": {
     "*.ts": [
@@ -57,6 +58,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.10",
+    "@vercel/ncc": "^0.38.4",
     "eslint": "^9.39.2",
     "lint-staged": "^16.2.7",
     "simple-git-hooks": "^2.13.1",

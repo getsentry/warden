@@ -48,6 +48,9 @@ importers:
       '@types/node':
         specifier: ^25.0.10
         version: 25.0.10
+      '@vercel/ncc':
+        specifier: ^0.38.4
+        version: 0.38.4
       eslint:
         specifier: ^9.39.2
         version: 9.39.2
@@ -674,6 +677,10 @@ packages:
   '@typescript-eslint/visitor-keys@8.54.0':
     resolution: {integrity: sha512-VFlhGSl4opC0bprJiItPQ1RfUhGDIBokcPwaFH4yiBCaNPeld/9VeXbiPO1cLyorQi1G1vL+ecBk1x8o1axORA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@vercel/ncc@0.38.4':
+    resolution: {integrity: sha512-8LwjnlP39s08C08J5NstzriPvW1SP8Zfpp1BvC2sI35kPeZnHfxVkCwu4/+Wodgnd60UtT1n8K8zw+Mp7J9JmQ==}
+    hasBin: true
 
   '@vitest/expect@4.0.18':
     resolution: {integrity: sha512-8sCWUyckXXYvx4opfzVY03EOiYVxyNrHS5QxX3DAIi5dpJAAkyJezHCP77VMX4HKA2LDT/Jpfo8i2r5BE3GnQQ==}
@@ -1935,6 +1942,8 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.54.0
       eslint-visitor-keys: 4.2.1
+
+  '@vercel/ncc@0.38.4': {}
 
   '@vitest/expect@4.0.18':
     dependencies:
