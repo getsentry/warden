@@ -54,21 +54,21 @@ describe('writeJsonlReport', () => {
     expect(lines.length).toBe(3);
 
     // First line: security-review report
-    const record1 = JSON.parse(lines[0]) as JsonlRecord;
+    const record1 = JSON.parse(lines[0]!) as JsonlRecord;
     expect(record1.skill).toBe('security-review');
     expect(record1.findings.length).toBe(1);
-    expect(record1.findings[0].id).toBe('sec-001');
+    expect(record1.findings[0]!.id).toBe('sec-001');
     expect(record1.durationMs).toBe(1234);
     expect(record1.run.durationMs).toBe(2000);
     expect(record1.run.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     // Second line: code-review report
-    const record2 = JSON.parse(lines[1]) as JsonlRecord;
+    const record2 = JSON.parse(lines[1]!) as JsonlRecord;
     expect(record2.skill).toBe('code-review');
     expect(record2.findings.length).toBe(0);
 
     // Third line: summary
-    const summary = JSON.parse(lines[2]);
+    const summary = JSON.parse(lines[2]!);
     expect(summary.type).toBe('summary');
     expect(summary.totalFindings).toBe(1);
     expect(summary.bySeverity.high).toBe(1);
@@ -85,7 +85,7 @@ describe('writeJsonlReport', () => {
     // Just the summary line
     expect(lines.length).toBe(1);
 
-    const summary = JSON.parse(lines[0]);
+    const summary = JSON.parse(lines[0]!);
     expect(summary.type).toBe('summary');
     expect(summary.totalFindings).toBe(0);
   });
@@ -123,7 +123,7 @@ describe('writeJsonlReport', () => {
 
     const content = readFileSync(outputPath, 'utf-8');
     const lines = content.trim().split('\n');
-    const summary = JSON.parse(lines[2]);
+    const summary = JSON.parse(lines[2]!);
 
     expect(summary.usage.inputTokens).toBe(300);
     expect(summary.usage.outputTokens).toBe(150);
@@ -153,7 +153,7 @@ describe('writeJsonlReport', () => {
 
     const content = readFileSync(outputPath, 'utf-8');
     const lines = content.trim().split('\n');
-    const summary = JSON.parse(lines[1]);
+    const summary = JSON.parse(lines[1]!);
 
     expect(summary.totalFindings).toBe(6);
     expect(summary.bySeverity.critical).toBe(1);
