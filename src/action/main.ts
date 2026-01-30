@@ -1,4 +1,5 @@
 import { readFileSync, appendFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { Octokit } from '@octokit/rest';
@@ -108,7 +109,15 @@ function getInputs(): ActionInputs {
 function setOutput(name: string, value: string | number): void {
   const outputFile = process.env['GITHUB_OUTPUT'];
   if (outputFile) {
-    appendFileSync(outputFile, `${name}=${value}\n`);
+    const stringValue = String(value);
+    // Use heredoc format with random delimiter for multiline values
+    // Random delimiter prevents injection if value contains the delimiter
+    if (stringValue.includes('\n')) {
+      const delimiter = `ghadelim_${randomUUID()}`;
+      appendFileSync(outputFile, `${name}<<${delimiter}\n${stringValue}\n${delimiter}\n`);
+    } else {
+      appendFileSync(outputFile, `${name}=${stringValue}\n`);
+    }
   }
 }
 
