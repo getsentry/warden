@@ -317,12 +317,19 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
     return 1;
   }
 
+  // Load config to get defaultBranch if available
+  const configPath = options.config
+    ? resolve(cwd, options.config)
+    : resolve(repoPath, 'warden.toml');
+  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
+
   // Build context from local git
   reporter.startContext(`Analyzing changes from ${gitRef}...`);
   const context = buildLocalEventContext({
     base,
     head,
     cwd: repoPath,
+    defaultBranch: config?.defaults?.defaultBranch,
   });
 
   const pullRequest = context.pullRequest;
@@ -376,10 +383,14 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
+  // Load config
+  const config = loadWardenConfig(dirname(configPath));
+
   // Build context from local git
   reporter.startContext('Analyzing uncommitted changes...');
   const context = buildLocalEventContext({
     cwd: repoPath,
+    defaultBranch: config.defaults?.defaultBranch,
   });
 
   const pullRequest = context.pullRequest;
@@ -403,9 +414,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   reporter.contextFiles(pullRequest.files);
 
-  // Load config
   reporter.step('Loading configuration...');
-  const config = loadWardenConfig(dirname(configPath));
   reporter.success(`Loaded ${config.triggers.length} ${pluralize(config.triggers.length, 'trigger')}`);
 
   // Resolve triggers with defaults and match
@@ -557,11 +566,18 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
   // Load environment variables from .env files
   loadEnvFiles(repoPath);
 
+  // Load config to get defaultBranch if available
+  const configPath = options.config
+    ? resolve(cwd, options.config)
+    : resolve(repoPath, 'warden.toml');
+  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
+
   // Build context from local git - compare against HEAD for true uncommitted changes
   reporter.startContext('Analyzing uncommitted changes...');
   const context = buildLocalEventContext({
     base: 'HEAD',
     cwd: repoPath,
+    defaultBranch: config?.defaults?.defaultBranch,
   });
 
   const pullRequest = context.pullRequest;

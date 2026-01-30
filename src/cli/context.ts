@@ -30,6 +30,8 @@ export interface LocalContextOptions {
   base?: string;
   head?: string;
   cwd?: string;
+  /** Override auto-detected default branch (from config) */
+  defaultBranch?: string;
 }
 
 /**
@@ -40,7 +42,7 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
   const cwd = options.cwd ?? process.cwd();
   const repoPath = getRepoRoot(cwd);
   const { owner, name } = getRepoName(cwd);
-  const defaultBranch = getDefaultBranch(cwd);
+  const defaultBranch = options.defaultBranch ?? getDefaultBranch(cwd);
 
   const base = options.base ?? defaultBranch;
   const head = options.head; // undefined means working tree

@@ -118,6 +118,8 @@ export const DefaultsSchema = z.object({
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
   maxTurns: z.number().int().positive().optional(),
+  /** Default branch for the repository (e.g., 'main', 'master', 'develop'). Auto-detected if not specified. */
+  defaultBranch: z.string().optional(),
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;
 

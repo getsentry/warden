@@ -42,27 +42,20 @@ export function getHeadSha(cwd: string = process.cwd()): string {
 }
 
 /**
- * Detect the default branch (main or master).
+ * Detect the default branch by checking common branch names locally.
+ * Does not perform any remote operations to avoid SSH prompts.
  */
 export function getDefaultBranch(cwd: string = process.cwd()): string {
-  // Try to get the default branch from remote
-  try {
-    const remoteHead = git('symbolic-ref refs/remotes/origin/HEAD', cwd);
-    return remoteHead.replace('refs/remotes/origin/', '');
-  } catch {
-    // Fall back to checking if main or master exists
+  // Check common default branches locally (no remote operations)
+  for (const branch of ['main', 'master', 'develop']) {
     try {
-      git('rev-parse --verify main', cwd);
-      return 'main';
+      git(`rev-parse --verify ${branch}`, cwd);
+      return branch;
     } catch {
-      try {
-        git('rev-parse --verify master', cwd);
-        return 'master';
-      } catch {
-        return 'main'; // Default fallback
-      }
+      // Try next branch
     }
   }
+  return 'main'; // Default fallback
 }
 
 /**
