@@ -79,8 +79,9 @@ export function findStaleComments(
       continue;
     }
 
-    // Only consider comments on files that were analyzed
+    // Comments on files NOT in scope are orphaned (file renamed, reverted, etc.)
     if (!isInAnalyzedScope(comment, scope)) {
+      staleComments.push(comment);
       continue;
     }
 

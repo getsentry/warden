@@ -146,11 +146,11 @@ describe('findStaleComments', () => {
     expect(stale).toHaveLength(0);
   });
 
-  it('skips comments on files not in analyzed scope', () => {
+  it('marks comments on files not in analyzed scope as orphaned', () => {
     const comments: ExistingComment[] = [
       {
         id: 1,
-        path: 'src/other.ts', // Not in scope
+        path: 'src/other.ts', // Not in scope - orphaned (file renamed, reverted, etc.)
         line: 42,
         title: 'Some Issue',
         description: 'Description',
@@ -162,7 +162,8 @@ describe('findStaleComments', () => {
     const findings: Finding[] = [];
 
     const stale = findStaleComments(comments, findings, scope);
-    expect(stale).toHaveLength(0);
+    expect(stale).toHaveLength(1);
+    expect(stale[0]!.id).toBe(1);
   });
 
   it('matches findings within 5 lines of comment', () => {
