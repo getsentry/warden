@@ -618,6 +618,7 @@ async function run(): Promise<void> {
           ? reports.reduce((sum, r) => sum + (r.durationMs ?? 0), 0)
           : undefined,
         totalUsage: aggregateUsage(reports),
+        findings: reports.flatMap((r) => r.findings),
         skillResults: results.map((r) => ({
           name: r.triggerName,
           findingCount: r.report?.findings.length ?? 0,

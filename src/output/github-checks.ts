@@ -47,6 +47,8 @@ export interface CoreCheckSummaryData {
   findingsBySeverity: Record<Severity, number>;
   totalDurationMs?: number;
   totalUsage?: UsageStats;
+  /** All findings from all skills */
+  findings: Finding[];
   skillResults: {
     name: string;
     findingCount: number;
@@ -339,65 +341,125 @@ function conclusionIcon(conclusion: CheckConclusion): string {
   }
 }
 
+const SEVERITY_EMOJI: Record<Severity, string> = {
+  critical: '🔴',
+  high: '🟠',
+  medium: '🟡',
+  low: '🔵',
+  info: 'ℹ️',
+};
+
+/**
+ * Format a file location as a markdown code span.
+ */
+function formatLocation(location: { path: string; startLine: number; endLine?: number }): string {
+  const { path, startLine, endLine } = location;
+  const lineRange = endLine && endLine !== startLine ? `${startLine}-${endLine}` : `${startLine}`;
+  return `\`${path}:${lineRange}\``;
+}
+
+/** Maximum findings to show in the summary */
+const MAX_SUMMARY_FINDINGS = 5;
+
 /**
  * Build the summary markdown for the core warden check.
  */
 function buildCoreSummary(data: CoreCheckSummaryData): string {
-  const skillPlural = data.totalSkills === 1 ? '' : 's';
-  const findingPlural = data.totalFindings === 1 ? '' : 's';
-  const lines: string[] = [
-    `Analyzed ${data.totalSkills} skill${skillPlural}, found ${data.totalFindings} total finding${findingPlural}.`,
-    '',
-  ];
+  const lines: string[] = [];
 
-  // Add aggregate stats line if available
-  const hasStats = data.totalDurationMs !== undefined || data.totalUsage;
-  if (hasStats) {
-    const statsParts: string[] = [];
-    if (data.totalDurationMs !== undefined) {
-      statsParts.push(`⏱ **${formatDuration(data.totalDurationMs)}**`);
+  // Lead with actionable headline
+  if (data.totalFindings === 0) {
+    lines.push('## ✅ No issues found', '');
+  } else {
+    const criticalHigh = (data.findingsBySeverity.critical ?? 0) + (data.findingsBySeverity.high ?? 0);
+    if (criticalHigh > 0) {
+      const issueWord = criticalHigh === 1 ? 'issue requires' : 'issues require';
+      lines.push(`## 🔴 ${criticalHigh} ${issueWord} attention`, '');
+    } else {
+      const issueWord = data.totalFindings === 1 ? 'issue' : 'issues';
+      lines.push(`## 🟡 ${data.totalFindings} ${issueWord} found`, '');
     }
-    if (data.totalUsage) {
-      const totalInput = data.totalUsage.inputTokens + (data.totalUsage.cacheReadInputTokens ?? 0);
-      statsParts.push(`${formatTokens(totalInput)} in / ${formatTokens(data.totalUsage.outputTokens)} out`);
-      statsParts.push(`**${formatCost(data.totalUsage.costUSD)}**`);
-    }
-    lines.push(statsParts.join(' · '), '');
   }
 
-  if (data.totalFindings > 0) {
-    lines.push(...renderSeverityTable(data.findingsBySeverity), '');
+  // Sort findings by severity and take top N
+  const sortedFindings = [...data.findings].sort(
+    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
+  );
+  const topFindings = sortedFindings.slice(0, MAX_SUMMARY_FINDINGS);
+
+  // Show top findings grouped by severity
+  if (topFindings.length > 0) {
+    const findingsBySeverity = new Map<Severity, Finding[]>();
+    for (const finding of topFindings) {
+      const existing = findingsBySeverity.get(finding.severity) ?? [];
+      existing.push(finding);
+      findingsBySeverity.set(finding.severity, existing);
+    }
+
+    const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+    for (const severity of severityOrder) {
+      const findings = findingsBySeverity.get(severity);
+      if (!findings?.length) continue;
+
+      lines.push(`### ${SEVERITY_EMOJI[severity]} ${severity.charAt(0).toUpperCase() + severity.slice(1)}`, '');
+      for (const finding of findings) {
+        const location = finding.location ? ` — ${formatLocation(finding.location)}` : '';
+        lines.push(`- **${finding.title}**${location}`);
+        lines.push(`  ${finding.description}`, '');
+      }
+    }
+
+    // Note if there are more findings not shown
+    if (data.totalFindings > topFindings.length) {
+      const remaining = data.totalFindings - topFindings.length;
+      lines.push(`*...and ${remaining} more finding${remaining === 1 ? '' : 's'}*`, '');
+    }
   }
 
-  // Check if any skill has timing/cost data
+  // Skills table in collapsible section
   const hasSkillStats = data.skillResults.some((s) => s.durationMs !== undefined || s.usage);
+  const skillPlural = data.totalSkills === 1 ? '' : 's';
+
+  lines.push('<details>');
+  lines.push(`<summary>📊 ${data.totalSkills} skill${skillPlural} analyzed</summary>`, '');
 
   if (hasSkillStats) {
     lines.push(
-      '### Skills',
-      '',
       '| Skill | Findings | Duration | Cost | Result |',
       '|-------|----------|----------|------|--------|'
     );
-
     for (const skill of data.skillResults) {
       const icon = conclusionIcon(skill.conclusion);
       const duration = skill.durationMs !== undefined ? formatDuration(skill.durationMs) : '-';
       const cost = skill.usage ? formatCost(skill.usage.costUSD) : '-';
-      lines.push(`| ${skill.name} | ${skill.findingCount} | ${duration} | ${cost} | ${icon} ${skill.conclusion} |`);
+      lines.push(`| ${skill.name} | ${skill.findingCount} | ${duration} | ${cost} | ${icon} |`);
     }
   } else {
     lines.push(
-      '### Skills',
-      '',
       '| Skill | Findings | Result |',
       '|-------|----------|--------|'
     );
-
     for (const skill of data.skillResults) {
       const icon = conclusionIcon(skill.conclusion);
-      lines.push(`| ${skill.name} | ${skill.findingCount} | ${icon} ${skill.conclusion} |`);
+      lines.push(`| ${skill.name} | ${skill.findingCount} | ${icon} |`);
     }
+  }
+
+  lines.push('', '</details>', '');
+
+  // Stats footer with labeled inline format
+  const hasStats = data.totalDurationMs !== undefined || data.totalUsage;
+  if (hasStats) {
+    const statsParts: string[] = [];
+    if (data.totalDurationMs !== undefined) {
+      statsParts.push(`**Duration:** ${formatDuration(data.totalDurationMs)}`);
+    }
+    if (data.totalUsage) {
+      const totalInput = data.totalUsage.inputTokens + (data.totalUsage.cacheReadInputTokens ?? 0);
+      statsParts.push(`**Tokens:** ${formatTokens(totalInput)} in / ${formatTokens(data.totalUsage.outputTokens)} out`);
+      statsParts.push(`**Cost:** ${formatCost(data.totalUsage.costUSD)}`);
+    }
+    lines.push('---', statsParts.join(' · '));
   }
 
   return lines.join('\n');
