@@ -4,7 +4,6 @@ export {
   getBuiltinSkillNames,
   loadSkillFromFile,
   loadSkillFromMarkdown,
-  loadSkillFromToml,
   loadSkillsFromDirectory,
   resolveSkillAsync,
   SkillLoaderError,

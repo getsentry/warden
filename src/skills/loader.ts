@@ -2,8 +2,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import { basename, dirname, join, extname, isAbsolute } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { parse as parseToml } from 'smol-toml';
-import { SkillDefinitionSchema, ToolNameSchema, type SkillDefinition, type ToolName } from '../config/schema.js';
+import type { SkillDefinition, ToolName } from '../config/schema.js';
+import { ToolNameSchema } from '../config/schema.js';
 
 export class SkillLoaderError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -32,9 +32,8 @@ const skillsCache = new Map<string, Map<string, LoadedSkill>>();
  * 2. .agents/skills - General agent skills (shared across tools)
  * 3. .claude/skills - Claude Code skills (for compatibility)
  *
- * Within each directory, skills can be defined as:
- * - skill-name/SKILL.md (agentskills.io format with frontmatter)
- * - skill-name.toml (TOML configuration format)
+ * Skills follow the agentskills.io specification:
+ * - skill-name/SKILL.md (directory with SKILL.md inside - preferred)
  * - skill-name.md (flat markdown with SKILL.md frontmatter format)
  *
  * When a skill name exists in multiple directories, the first one found wins.
@@ -183,58 +182,27 @@ export async function loadSkillFromMarkdown(filePath: string): Promise<SkillDefi
 }
 
 /**
- * Load a skill from a TOML file.
- */
-export async function loadSkillFromToml(filePath: string): Promise<SkillDefinition> {
-  let content: string;
-  try {
-    content = await readFile(filePath, 'utf-8');
-  } catch (error) {
-    throw new SkillLoaderError(`Failed to read skill file: ${filePath}`, { cause: error });
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = parseToml(content);
-  } catch (error) {
-    throw new SkillLoaderError(`Failed to parse skill TOML: ${filePath}`, { cause: error });
-  }
-
-  const validated = SkillDefinitionSchema.safeParse(parsed);
-  if (!validated.success) {
-    throw new SkillLoaderError(
-      `Invalid skill definition in ${filePath}: ${validated.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')}`
-    );
-  }
-
-  return {
-    ...validated.data,
-    rootDir: dirname(filePath),
-  };
-}
-
-/**
- * Load a skill from a file (supports both SKILL.md and .toml).
+ * Load a skill from a file (agentskills.io format .md files).
  */
 export async function loadSkillFromFile(filePath: string): Promise<SkillDefinition> {
   const ext = extname(filePath).toLowerCase();
   const filename = basename(filePath);
 
-  if (filename === 'SKILL.md') {
+  // Support SKILL.md (in directory) or any .md file with valid frontmatter
+  if (filename === 'SKILL.md' || ext === '.md') {
     return loadSkillFromMarkdown(filePath);
-  } else if (ext === '.toml') {
-    return loadSkillFromToml(filePath);
   } else {
-    throw new SkillLoaderError(`Unsupported skill file: ${filePath}. Use SKILL.md, .md, or .toml files.`);
+    throw new SkillLoaderError(`Unsupported skill file: ${filePath}. Skills must be .md files following the agentskills.io format.`);
   }
 }
 
 /**
  * Load all skills from a directory.
- * Supports:
- * - agentskills.io format: skill-name/SKILL.md (directory with SKILL.md inside)
- * - Flat .toml files: skill-name.toml
- * - Flat .md files: skill-name.md (with SKILL.md format frontmatter)
+ *
+ * Supports the agentskills.io specification:
+ * - skill-name/SKILL.md (directory with SKILL.md inside - preferred)
+ * - skill-name.md (flat markdown with SKILL.md frontmatter format)
+ *
  * Results are cached to avoid repeated disk reads.
  *
  * @returns Map of skill name to LoadedSkill (includes entry path for tracking)
@@ -256,14 +224,13 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
     return skills;
   }
 
-  // Process entries in format priority order:
-  // 1. Directories with SKILL.md (agentskills.io format) - preferred
-  // 2. Flat .toml files - explicit configuration
-  // 3. Flat .md files - must have valid SKILL.md frontmatter
+  // Process entries following agentskills.io format priority:
+  // 1. Directories with SKILL.md (preferred)
+  // 2. Flat .md files with valid SKILL.md frontmatter
   for (const entry of entries) {
     const entryPath = join(dirPath, entry);
 
-    // Check for agentskills.io format: skill-name/SKILL.md (highest priority)
+    // Check for agentskills.io format: skill-name/SKILL.md (preferred)
     const skillMdPath = join(entryPath, 'SKILL.md');
     if (existsSync(skillMdPath)) {
       try {
@@ -271,17 +238,6 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
         skills.set(skill.name, { skill, entry });
       } catch (error) {
         console.warn(`Warning: Failed to load skill from ${skillMdPath}:`, error);
-      }
-      continue;
-    }
-
-    // Check for .toml files
-    if (entry.endsWith('.toml')) {
-      try {
-        const skill = await loadSkillFromToml(entryPath);
-        skills.set(skill.name, { skill, entry });
-      } catch (error) {
-        console.warn(`Warning: Failed to load skill from ${entry}:`, error);
       }
       continue;
     }
@@ -388,11 +344,11 @@ export async function discoverAllSkills(repoRoot?: string): Promise<Map<string, 
  * 1. Inline skills from config
  * 2. Direct path (if nameOrPath contains / or \ or starts with .)
  *    - Directory: load SKILL.md from it
- *    - File: load the file directly
+ *    - File: load the .md file directly
  * 3. Conventional directories (if repoRoot provided)
- *    - .warden/skills/{name}/SKILL.md, .warden/skills/{name}.toml, or .warden/skills/{name}.md
- *    - .agents/skills/{name}/SKILL.md, .agents/skills/{name}.toml, or .agents/skills/{name}.md
- *    - .claude/skills/{name}/SKILL.md, .claude/skills/{name}.toml, or .claude/skills/{name}.md
+ *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
+ *    - .agents/skills/{name}/SKILL.md or .agents/skills/{name}.md
+ *    - .claude/skills/{name}/SKILL.md or .claude/skills/{name}.md
  * 4. Built-in skills
  */
 export async function resolveSkillAsync(
@@ -429,16 +385,10 @@ export async function resolveSkillAsync(
     for (const dir of SKILL_DIRECTORIES) {
       const dirPath = join(repoRoot, dir);
 
-      // Check for skill-name/SKILL.md
+      // Check for skill-name/SKILL.md (preferred agentskills.io format)
       const skillMdPath = join(dirPath, nameOrPath, 'SKILL.md');
       if (existsSync(skillMdPath)) {
         return loadSkillFromMarkdown(skillMdPath);
-      }
-
-      // Check for skill-name.toml
-      const tomlPath = join(dirPath, `${nameOrPath}.toml`);
-      if (existsSync(tomlPath)) {
-        return loadSkillFromToml(tomlPath);
       }
 
       // Check for skill-name.md (flat markdown file with SKILL.md format)

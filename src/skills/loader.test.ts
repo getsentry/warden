@@ -39,7 +39,7 @@ describe('loadSkillFromFile', () => {
   });
 
   it('throws for missing files', async () => {
-    await expect(loadSkillFromFile('/nonexistent/skill.toml')).rejects.toThrow(SkillLoaderError);
+    await expect(loadSkillFromFile('/nonexistent/skill.md')).rejects.toThrow(SkillLoaderError);
   });
 });
 
