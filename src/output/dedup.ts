@@ -28,6 +28,8 @@ export interface ExistingComment {
   contentHash: string;
   /** GraphQL node ID for the review thread (used to resolve stale comments) */
   threadId?: string;
+  /** Whether the thread has been resolved (resolved comments are used for dedup but not stale detection) */
+  isResolved?: boolean;
 }
 
 /**
@@ -190,11 +192,6 @@ export async function fetchExistingWardenComments(
     const threads = pullRequest.reviewThreads;
 
     for (const thread of threads.nodes) {
-      // Skip resolved threads - they're already handled
-      if (thread.isResolved) {
-        continue;
-      }
-
       // Get the first comment in the thread (the main Warden comment)
       const firstComment = thread.comments.nodes[0];
       if (!firstComment || !isWardenComment(firstComment.body)) {
@@ -213,6 +210,7 @@ export async function fetchExistingWardenComments(
           description: parsed.description,
           contentHash: marker?.contentHash ?? generateContentHash(parsed.title, parsed.description),
           threadId: thread.id,
+          isResolved: thread.isResolved,
         });
       }
     }

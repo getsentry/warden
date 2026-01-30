@@ -146,6 +146,26 @@ describe('findStaleComments', () => {
     expect(stale).toHaveLength(0);
   });
 
+  it('skips already-resolved comments', () => {
+    const comments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        threadId: 'thread-1',
+        isResolved: true, // Already resolved by user
+      },
+    ];
+
+    const findings: Finding[] = [];
+
+    const stale = findStaleComments(comments, findings, scope);
+    expect(stale).toHaveLength(0);
+  });
+
   it('marks comments on files not in analyzed scope as orphaned', () => {
     const comments: ExistingComment[] = [
       {

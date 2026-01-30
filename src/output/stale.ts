@@ -79,6 +79,11 @@ export function findStaleComments(
       continue;
     }
 
+    // Skip already-resolved comments (nothing to do)
+    if (comment.isResolved) {
+      continue;
+    }
+
     // Comments on files NOT in scope are orphaned (file renamed, reverted, etc.)
     if (!isInAnalyzedScope(comment, scope)) {
       staleComments.push(comment);
