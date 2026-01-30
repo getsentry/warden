@@ -7,6 +7,7 @@ import {
   truncate,
   padRight,
   formatStatsCompact,
+  formatSeverityBadge,
 } from './formatters.js';
 import type { Severity, UsageStats } from '../../types/index.js';
 
@@ -77,6 +78,16 @@ describe('formatFindingCountsPlain', () => {
       info: 1,
     };
     expect(formatFindingCountsPlain(counts)).toBe('7 findings (1 critical, 2 high, 3 medium, 1 info)');
+  });
+});
+
+describe('formatSeverityBadge', () => {
+  it('includes severity text for each level', () => {
+    expect(formatSeverityBadge('critical')).toContain('critical');
+    expect(formatSeverityBadge('high')).toContain('high');
+    expect(formatSeverityBadge('medium')).toContain('medium');
+    expect(formatSeverityBadge('low')).toContain('low');
+    expect(formatSeverityBadge('info')).toContain('info');
   });
 });
 
