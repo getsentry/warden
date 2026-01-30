@@ -59,8 +59,11 @@ warden HEAD~3..HEAD`}
 
   <div class="command-card">
     <h3>warden init</h3>
-    <div class="synopsis">warden init</div>
+    <div class="synopsis">warden init [options]</div>
     <p>Initialize Warden in your project. Creates a configuration file and GitHub workflow.</p>
+    <ul>
+      <li><code>-f, --force</code> — Overwrite existing files</li>
+    </ul>
     <Terminal showCopy={true} copyText="warden init">
       <pre class="cli-output"><span class="cli-dim">$</span> warden init
 
@@ -77,10 +80,11 @@ warden HEAD~3..HEAD`}
 
   <div class="command-card">
     <h3>warden add</h3>
-    <div class="synopsis">warden add &lt;skill-name&gt;</div>
-    <p>Add a skill trigger to your configuration. The skill must already be installed.</p>
+    <div class="synopsis">warden add [skill-name] [options]</div>
+    <p>Add a skill trigger to your configuration. Run without arguments for interactive mode.</p>
     <ul>
-      <li><code>skill-name</code> — Name of the skill to add (required)</li>
+      <li><code>skill-name</code> — Name of the skill to add (optional, interactive if omitted)</li>
+      <li><code>--list</code> — List available skills</li>
     </ul>
     <Terminal showCopy={true} copyText="warden add security-review">
       <pre class="cli-output"><span class="cli-dim">$</span> warden add security-review
@@ -91,10 +95,14 @@ warden HEAD~3..HEAD`}
 
   <div class="command-card">
     <h3>warden setup-app</h3>
-    <div class="synopsis">warden setup-app [--org &lt;name&gt;]</div>
+    <div class="synopsis">warden setup-app [options]</div>
     <p>Create a GitHub App for Warden. This gives you a custom bot identity instead of the generic "github-actions" user.</p>
     <ul>
       <li><code>--org &lt;name&gt;</code> — Create the app for an organization instead of your personal account</li>
+      <li><code>--port &lt;number&gt;</code> — Local server port (default: 3000)</li>
+      <li><code>--timeout &lt;sec&gt;</code> — Callback timeout in seconds (default: 300)</li>
+      <li><code>--name &lt;string&gt;</code> — Custom app name (default: Warden)</li>
+      <li><code>--no-open</code> — Print URL instead of opening browser</li>
     </ul>
     <Terminal showCopy={true} copyText="warden setup-app">
       <Code
@@ -142,6 +150,34 @@ warden setup-app --org your-org`}
       <tr>
         <td><code>--verbose</code></td>
         <td>Show detailed output</td>
+      </tr>
+      <tr>
+        <td><code>-m, --model &lt;model&gt;</code></td>
+        <td>Model to use (fallback when not set in config)</td>
+      </tr>
+      <tr>
+        <td><code>-o, --output &lt;path&gt;</code></td>
+        <td>Write full run output to a JSONL file</td>
+      </tr>
+      <tr>
+        <td><code>--comment-on &lt;severity&gt;</code></td>
+        <td>Only show findings at or above this severity in output</td>
+      </tr>
+      <tr>
+        <td><code>--parallel &lt;n&gt;</code></td>
+        <td>Max concurrent trigger/skill executions (default: 4)</td>
+      </tr>
+      <tr>
+        <td><code>--quiet</code></td>
+        <td>Errors and final summary only</td>
+      </tr>
+      <tr>
+        <td><code>-vv</code></td>
+        <td>Show debug info (token counts, latencies)</td>
+      </tr>
+      <tr>
+        <td><code>--color / --no-color</code></td>
+        <td>Override color detection</td>
       </tr>
       <tr>
         <td><code>--help</code></td>

@@ -157,7 +157,7 @@ code {
 pre {
   font-family: var(--font-mono);
   font-size: 0.8125rem;
-  line-height: 1.7;
+  line-height: 2.2;
   background: var(--bg) !important;
   border: 1px solid var(--border);
   border-radius: var(--radius);
