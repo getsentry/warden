@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import type { Finding } from '../types/index.js';
+
+/** Schema for validating LLM deduplication response */
+const DuplicateIndicesSchema = z.array(z.number().int());
 
 /**
  * Parsed marker data from a Warden comment.
@@ -156,7 +160,8 @@ async function findSemanticDuplicates(
 
   const findingsList = findings
     .map((f, i) => {
-      const loc = f.location ? `${f.location.path}:${f.location.startLine}` : 'general';
+      const line = f.location?.endLine ?? f.location?.startLine;
+      const loc = f.location ? `${f.location.path}:${line}` : 'general';
       return `${i + 1}. [${loc}] "${f.title}" - ${f.description}`;
     })
     .join('\n');
@@ -187,7 +192,7 @@ Return ONLY the JSON array, e.g. [1, 3] or [] if none are duplicates.`;
       throw new Error('Unexpected response type');
     }
 
-    const duplicateIndices = JSON.parse(content.text) as number[];
+    const duplicateIndices = DuplicateIndicesSchema.parse(JSON.parse(content.text));
     const duplicateIds = new Set<string>();
 
     for (const num of duplicateIndices) {
