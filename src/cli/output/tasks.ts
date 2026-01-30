@@ -1,5 +1,6 @@
-import { Listr } from 'listr2';
-import type { ListrTask, ListrRendererValue } from 'listr2';
+import chalk from 'chalk';
+import { Listr, PRESET_TIMER } from 'listr2';
+import type { ListrTask, ListrRendererValue, ListrDefaultRendererOptions } from 'listr2';
 import type { SkillReport, SeverityThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import {
@@ -15,6 +16,7 @@ import {
 import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
 import { truncate, countBySeverity, formatSeverityDot } from './formatters.js';
+import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
 
 /**
  * Result from running a skill task.
@@ -105,7 +107,7 @@ function renderFileStates(states: FileState[], spinnerFrame: number): string {
 
     if (state.status === 'done') {
       const annotation = formatFileAnnotation(state.findings);
-      lines.push(`✓ ${filename}${annotation}`);
+      lines.push(`${ICON_CHECK} ${filename}${annotation}`);
     } else {
       // Running - show animated spinner
       const hunkInfo = `[${state.currentHunk}/${state.totalHunks}]`;
@@ -121,7 +123,9 @@ function renderFileStates(states: FileState[], spinnerFrame: number): string {
  */
 function createSkillTask(
   options: SkillTaskOptions,
-  fileConcurrency: number
+  fileConcurrency: number,
+  mode: OutputMode,
+  verbosity: Verbosity
 ): ListrTask<SkillTaskContext> {
   const { name, displayName = name, failOn, resolveSkill, context, runnerOptions = {} } = options;
 
@@ -150,6 +154,10 @@ function createSkillTask(
           },
           failOn,
         });
+        // Manual output for non-TTY mode (since we use 'silent' renderer)
+        if (!mode.isTTY && verbosity !== Verbosity.Quiet) {
+          console.log(`${ICON_SKIPPED} ${displayName} [skipped]`);
+        }
         return;
       }
 
@@ -162,24 +170,28 @@ function createSkillTask(
         findings: [],
       }));
 
-      // Spinner animation state
+      // Spinner animation state (only for TTY mode)
       let spinnerFrame = 0;
       let isRunning = true;
 
-      // Update display
+      // Update display - only in TTY mode to avoid flooding output with intermediate states
       function updateOutput(): void {
-        task.output = renderFileStates(fileStates, spinnerFrame);
+        if (mode.isTTY) {
+          task.output = renderFileStates(fileStates, spinnerFrame);
+        }
       }
 
-      // Start spinner animation
-      const spinnerInterval = setInterval(() => {
-        if (!isRunning) return;
-        spinnerFrame++;
-        // Only update if there are running files
-        if (fileStates.some((s) => s.status === 'running')) {
-          updateOutput();
-        }
-      }, 80);
+      // Start spinner animation (only in TTY mode)
+      const spinnerInterval = mode.isTTY
+        ? setInterval(() => {
+            if (!isRunning) return;
+            spinnerFrame++;
+            // Only update if there are running files
+            if (fileStates.some((s) => s.status === 'running')) {
+              updateOutput();
+            }
+          }, 80)
+        : null;
 
       // Process files with concurrency
       const processFile = async (state: FileState): Promise<void> => {
@@ -221,7 +233,9 @@ function createSkillTask(
       } finally {
         // Stop spinner animation
         isRunning = false;
-        clearInterval(spinnerInterval);
+        if (spinnerInterval) {
+          clearInterval(spinnerInterval);
+        }
       }
 
       // Build report
@@ -240,6 +254,11 @@ function createSkillTask(
       };
 
       ctx.results.push({ name, report, failOn });
+
+      // Manual output for non-TTY mode (since we use 'silent' renderer)
+      if (!mode.isTTY && verbosity !== Verbosity.Quiet) {
+        console.log(`${ICON_CHECK} ${displayName}`);
+      }
     },
   };
 }
@@ -253,24 +272,42 @@ export async function runSkillTasks(
 ): Promise<SkillTaskResult[]> {
   const { mode, verbosity, concurrency } = options;
 
-  // Determine renderer based on output mode
-  let renderer: ListrRendererValue = 'default';
-
-  if (verbosity === Verbosity.Quiet) {
-    renderer = 'silent';
-  } else if (!mode.isTTY) {
-    renderer = 'simple';
+  // Output SKILLS header before running tasks
+  // Must use stderr to match reporter output and avoid Listr2 cursor overwrite
+  if (verbosity !== Verbosity.Quiet && tasks.length > 0) {
+    if (mode.isTTY) {
+      console.error(chalk.bold('SKILLS'));
+    } else {
+      console.error('SKILLS');
+    }
   }
 
   // File-level concurrency (within each skill)
   const fileConcurrency = 5;
 
-  const listrTasks = tasks.map((t) => createSkillTask(t, fileConcurrency));
+  const listrTasks = tasks.map((t) => createSkillTask(t, fileConcurrency, mode, verbosity));
 
-  const listr = new Listr<SkillTaskContext, ListrRendererValue, ListrRendererValue>(listrTasks, {
+  // Custom icons using CHECK MARK (U+2713) instead of HEAVY CHECK MARK (U+2714)
+  const customRendererOptions: ListrDefaultRendererOptions = {
+    icon: {
+      COMPLETED: ICON_CHECK,
+      COMPLETED_WITH_FAILED_SUBTASKS: ICON_CHECK,
+      COMPLETED_WITH_SISTER_TASKS_FAILED: ICON_CHECK,
+    },
+    ...PRESET_TIMER,
+  };
+
+  // Determine renderer based on output mode
+  // - TTY: use 'default' renderer with custom icons
+  // - non-TTY: use 'silent' renderer, output manually with ✓ (U+2713)
+  // - Quiet: use 'silent' renderer, no output
+  const renderer: ListrRendererValue = verbosity === Verbosity.Quiet ? 'silent' : mode.isTTY ? 'default' : 'silent';
+
+  const listr = new Listr<SkillTaskContext, typeof renderer, typeof renderer>(listrTasks, {
     concurrent: concurrency > 1 ? concurrency : false,
     exitOnError: false,
     renderer,
+    rendererOptions: mode.isTTY ? customRendererOptions : {},
   });
 
   const ctx: SkillTaskContext = { results: [] };

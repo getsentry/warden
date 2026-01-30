@@ -12,6 +12,7 @@ import {
   countBySeverity,
 } from './formatters.js';
 import { BoxRenderer } from './box.js';
+import { ICON_CHECK } from './icons.js';
 
 const VERSION = '0.1.0';
 
@@ -222,7 +223,7 @@ export class Reporter {
     }
 
     if (this.mode.isTTY) {
-      this.log(`${chalk.green(figures.tick)} ${message}`);
+      this.log(`${chalk.green(ICON_CHECK)} ${message}`);
     } else {
       this.logCI(message);
     }

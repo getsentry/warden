@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
-import figures from 'figures';
 import select from '@inquirer/select';
 import { getRepoRoot } from '../git.js';
 import { loadWardenConfig, appendTrigger } from '../../config/index.js';
@@ -9,6 +8,7 @@ import type { Trigger } from '../../config/schema.js';
 import { discoverAllSkills, type DiscoveredSkill } from '../../skills/loader.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
+import { ICON_CHECK } from '../output/icons.js';
 
 /** Custom theme for select prompts - white for selected, gray for unselected */
 const selectTheme = {
@@ -51,7 +51,7 @@ function renderSkillList(
     const configuredTag = isConfigured ? chalk.dim(' (already configured)') : '';
 
     if (reporter.mode.isTTY) {
-      const icon = isConfigured ? chalk.dim(figures.tick) : ' ';
+      const icon = isConfigured ? chalk.dim(ICON_CHECK) : ' ';
       reporter.text(`  ${icon} ${chalk.bold(name)} ${dirTag}${configuredTag}`);
       reporter.text(`    ${chalk.dim(discovered.skill.description)}`);
     } else {

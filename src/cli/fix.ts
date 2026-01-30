@@ -8,6 +8,7 @@ import figures from 'figures';
 import type { Finding, SkillReport } from '../types/index.js';
 import { parsePatch, type DiffHunk } from '../diff/index.js';
 import { pluralize, type Reporter } from './output/index.js';
+import { ICON_CHECK } from './output/icons.js';
 import { Verbosity } from './output/verbosity.js';
 
 export interface FixResult {
@@ -322,7 +323,7 @@ export async function runInteractiveFixFlow(
       applyUnifiedDiff(location.path, suggestedFix.diff);
       applied++;
       results.push({ success: true, finding });
-      console.error(chalk.green(`${figures.tick} Applied fix for: ${finding.title}`));
+      console.error(chalk.green(`${ICON_CHECK} Applied fix for: ${finding.title}`));
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       failed++;

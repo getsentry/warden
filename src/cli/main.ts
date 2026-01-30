@@ -2,9 +2,8 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { loadWardenConfig, resolveTrigger } from '../config/loader.js';
-import type { SkillDefinition } from '../config/schema.js';
 import type { SkillRunnerOptions } from '../sdk/runner.js';
-import { resolveSkillAsync, getBuiltinSkillNames } from '../skills/loader.js';
+import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
@@ -69,7 +68,7 @@ function createReporter(options: CLIOptions): Reporter {
 /**
  * Run skills on a context and output results.
  * If skillName is provided, runs only that skill.
- * Otherwise, runs all built-in skills.
+ * Otherwise, runs skills from matched triggers in warden.toml.
  */
 async function runSkills(
   context: Awaited<ReturnType<typeof buildLocalEventContext>>,
@@ -86,39 +85,54 @@ async function runSkills(
     return 1;
   }
 
+  // Try to find repo root for config loading
+  let repoPath: string | undefined;
+  try {
+    repoPath = getRepoRoot(cwd);
+  } catch {
+    // Not in a git repo - that's fine for file mode
+  }
+
+  // Resolve config path
+  let configPath: string | null = null;
+  if (options.config) {
+    configPath = resolve(cwd, options.config);
+  } else if (repoPath) {
+    configPath = resolve(repoPath, 'warden.toml');
+  }
+
+  // Load config if available
+  const config = configPath && existsSync(configPath)
+    ? loadWardenConfig(dirname(configPath))
+    : null;
+
+  const skillsConfig = config?.skills;
+  const defaultsModel = config?.defaults?.model;
+  const defaultsMaxTurns = config?.defaults?.maxTurns;
+
   // Determine which skills to run
   let skillNames: string[];
   if (options.skill) {
+    // Explicit skill specified via CLI
     skillNames = [options.skill];
+  } else if (config) {
+    // Get skills from matched triggers
+    const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
+    const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
+    skillNames = [...new Set(matchedTriggers.map((t) => t.skill))];
   } else {
-    skillNames = await getBuiltinSkillNames();
-    if (skillNames.length === 0) {
-      reporter.error('No built-in skills found');
-      return 1;
-    }
-    reporter.success(`Found ${skillNames.length} ${pluralize(skillNames.length, 'skill')}: ${skillNames.join(', ')}`);
-    reporter.blank();
+    skillNames = [];
   }
 
-  // Try to load config for custom skills and defaults
-  let repoPath: string | undefined;
-  let skillsConfig: SkillDefinition[] | undefined;
-  let defaultsModel: string | undefined;
-  let defaultsMaxTurns: number | undefined;
-
-  try {
-    repoPath = getRepoRoot(cwd);
-    const configPath = options.config
-      ? resolve(cwd, options.config)
-      : resolve(repoPath, 'warden.toml');
-    if (existsSync(configPath)) {
-      const config = loadWardenConfig(dirname(configPath));
-      skillsConfig = config.skills;
-      defaultsModel = config.defaults?.model;
-      defaultsMaxTurns = config.defaults?.maxTurns;
+  // Handle case where no skills to run
+  if (skillNames.length === 0) {
+    if (options.json) {
+      console.log(renderJsonReport([]));
+    } else {
+      reporter.warning('No triggers matched for the changed files');
+      reporter.tip('Specify a skill explicitly: warden <target> --skill <name>');
     }
-  } catch {
-    // Not in a git repo or no config - that's fine
+    return 0;
   }
 
   // Build skill tasks

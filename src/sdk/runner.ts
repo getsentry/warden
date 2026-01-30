@@ -108,34 +108,17 @@ export interface SkillRunnerOptions {
 function buildHunkSystemPrompt(skill: SkillDefinition): string {
   const sections = [
     `<role>
-You are a code analysis agent for Warden. You analyze code changes and report findings in a structured JSON format.
+You are a code analysis agent for Warden. You evaluate code changes against specific skill criteria and report findings ONLY when the code violates or conflicts with those criteria. You do not perform general code review or report issues outside the skill's scope.
 </role>`,
 
     `<tools>
 You have access to these tools to gather context:
-- **Read**: Check files like package.json, action.yml, or entry points to understand the application type
+- **Read**: Check related files to understand context
 - **Grep**: Search for patterns to trace data flow or find related code
 </tools>`,
 
-    `<context_gathering>
-Before and while analyzing, understand the codebase context:
-
-1. **Determine application type** by checking:
-   - \`package.json\` - Look for \`bin\` field (CLI tool), server framework deps (web server), or library exports
-   - \`action.yml\` / \`action.yaml\` - If present, this is a GitHub Action
-   - Entry points and how user input flows into the application
-
-2. **Evaluate trust boundaries** based on application type:
-   - **CLI tools**: User controls local execution. CLI args and file paths are trusted input. Path traversal to user-specified locations is expected/normal.
-   - **Web servers**: Network input is untrusted. Apply strict security patterns (injection, XSS, auth).
-   - **Libraries**: No direct user input. Focus on API safety and documentation.
-   - **GitHub Actions**: CI context. Watch for secrets exposure, command injection in run steps.
-
-3. **Calibrate confidence** using this context. For example, "path traversal" in a CLI tool that writes to a user-specified output path is expected behavior - either skip the finding or report with low confidence. The same pattern in a web server handling user uploads is a real vulnerability - report with high confidence.
-</context_gathering>`,
-
     `<skill_instructions>
-The following defines what to analyze and look for:
+The following defines the ONLY criteria you should evaluate. Do not report findings outside this scope:
 
 ${skill.prompt}
 </skill_instructions>`,
@@ -171,9 +154,10 @@ Full schema:
 Requirements:
 - Return ONLY valid JSON starting with {"findings":
 - "findings" array can be empty if no issues found
-- "location" is required - use the file path and line numbers from the context provided
+- "location.path" is auto-filled from context - just provide startLine (and optionally endLine). Omit location entirely for general findings not about a specific line.
 - "confidence" reflects how certain you are this is a real issue given the codebase context
-- "suggestedFix" is optional
+- "suggestedFix" is optional - only include when you can provide a complete, correct fix. Omit if the fix would be incomplete or if you're uncertain about the correct solution.
+- Keep descriptions SHORT (1-2 sentences max) - avoid lengthy explanations
 - Be concise - focus only on the changes shown
 </output_format>`,
   ];
@@ -191,12 +175,127 @@ You can read files from scripts/, references/, or assets/ subdirectories using t
 /**
  * Builds the user prompt for a single hunk.
  */
-function buildHunkUserPrompt(hunkCtx: HunkWithContext): string {
-  return `Analyze this code change for issues:
+function buildHunkUserPrompt(skill: SkillDefinition, hunkCtx: HunkWithContext): string {
+  return `Analyze this code change according to the "${skill.name}" skill criteria.
 
 ${formatHunkForAnalysis(hunkCtx)}
 
-Focus only on the changes shown. Report any issues found, or return an empty findings array if the code looks good.`;
+IMPORTANT: Only report findings that are explicitly covered by the skill instructions. Do not report general code quality issues, bugs, or improvements unless the skill specifically asks for them. Return an empty findings array if no issues match the skill's criteria.`;
+}
+
+/**
+ * Result from extracting findings JSON from text.
+ */
+export type ExtractFindingsResult =
+  | { success: true; findings: unknown[] }
+  | { success: false; error: string; preview: string };
+
+/**
+ * Extract JSON object from text, handling nested braces correctly.
+ * Starts from the given position and returns the balanced JSON object.
+ */
+export function extractBalancedJson(text: string, startIndex: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = startIndex; i < text.length; i++) {
+    const char = text[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (char === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === '{') depth++;
+    if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(startIndex, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract findings JSON from model output text.
+ * Handles markdown code fences, prose before JSON, and nested objects.
+ */
+export function extractFindingsJson(rawText: string): ExtractFindingsResult {
+  let text = rawText.trim();
+
+  // Strip markdown code fences if present
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch?.[1]) {
+    text = codeBlockMatch[1].trim();
+  }
+
+  // Find the start of the findings JSON object (allow whitespace after opening brace)
+  const findingsMatch = text.match(/\{\s*"findings"/);
+  if (!findingsMatch || findingsMatch.index === undefined) {
+    return {
+      success: false,
+      error: 'no_findings_json',
+      preview: text.slice(0, 200),
+    };
+  }
+  const findingsStart = findingsMatch.index;
+
+  // Extract the balanced JSON object
+  const jsonStr = extractBalancedJson(text, findingsStart);
+  if (!jsonStr) {
+    return {
+      success: false,
+      error: 'unbalanced_json',
+      preview: text.slice(findingsStart, findingsStart + 200),
+    };
+  }
+
+  // Parse the JSON
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    return {
+      success: false,
+      error: 'invalid_json',
+      preview: jsonStr.slice(0, 200),
+    };
+  }
+
+  // Validate structure
+  if (typeof parsed !== 'object' || parsed === null || !('findings' in parsed)) {
+    return {
+      success: false,
+      error: 'missing_findings_key',
+      preview: jsonStr.slice(0, 200),
+    };
+  }
+
+  const findings = (parsed as { findings: unknown }).findings;
+  if (!Array.isArray(findings)) {
+    return {
+      success: false,
+      error: 'findings_not_array',
+      preview: jsonStr.slice(0, 200),
+    };
+  }
+
+  return { success: true, findings };
 }
 
 /**
@@ -204,49 +303,20 @@ Focus only on the changes shown. Report any issues found, or return an empty fin
  */
 function parseHunkOutput(result: SDKResultMessage, filename: string): Finding[] {
   if (result.subtype !== 'success') {
-    // Don't fail the whole run for one hunk
     console.error(`Hunk analysis failed: ${result.subtype}`);
     return [];
   }
 
-  const text = result.result.trim();
+  const extracted = extractFindingsJson(result.result);
 
-  // Look specifically for {"findings": to avoid matching code braces like {variable}
-  // First try exact match (response is only JSON)
-  let jsonMatch = text.match(/^\{"findings":\s*\[[\s\S]*\][\s\S]*\}$/);
-  if (!jsonMatch) {
-    // Fall back to finding findings JSON anywhere in the response
-    jsonMatch = text.match(/\{"findings":\s*\[[\s\S]*?\]\s*\}/);
-  }
-
-  if (!jsonMatch) {
-    // Log a preview of non-JSON output for debugging
-    const preview = text.slice(0, 200);
-    console.error(`No findings JSON in hunk output. Content preview: ${preview}${text.length > 200 ? '...' : ''}`);
-    return [];
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonMatch[0]);
-  } catch {
-    const preview = jsonMatch[0].slice(0, 200);
-    console.error(`Failed to parse findings JSON. Content preview: ${preview}${jsonMatch[0].length > 200 ? '...' : ''}`);
-    return [];
-  }
-
-  // Validate findings array
-  if (typeof parsed !== 'object' || parsed === null || !('findings' in parsed)) {
-    return [];
-  }
-
-  const findings = (parsed as { findings: unknown }).findings;
-  if (!Array.isArray(findings)) {
+  if (!extracted.success) {
+    const suffix = extracted.preview.length >= 200 ? '...' : '';
+    console.error(`${extracted.error}: ${extracted.preview}${suffix}`);
     return [];
   }
 
   // Validate findings using FindingSchema and ensure correct file path
-  return findings
+  return extracted.findings
     .map((f) => {
       // Ensure location has correct file path before validation
       if (typeof f === 'object' && f !== null && 'location' in f) {
@@ -277,7 +347,7 @@ async function analyzeHunk(
   const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
-  const userPrompt = buildHunkUserPrompt(hunkCtx);
+  const userPrompt = buildHunkUserPrompt(skill, hunkCtx);
 
   try {
     const stream = query({
