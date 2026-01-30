@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import {
   clearSkillsCache,
   getBuiltinSkill,
@@ -39,7 +41,7 @@ describe('loadSkillFromFile', () => {
   });
 
   it('throws for missing files', async () => {
-    await expect(loadSkillFromFile('/nonexistent/skill.toml')).rejects.toThrow(SkillLoaderError);
+    await expect(loadSkillFromFile('/nonexistent/skill.md')).rejects.toThrow(SkillLoaderError);
   });
 });
 
@@ -202,8 +204,8 @@ describe('SKILL_DIRECTORIES', () => {
   it('contains expected directories in order', () => {
     expect(SKILL_DIRECTORIES).toEqual([
       '.warden/skills',
-      '.claude/skills',
       '.agents/skills',
+      '.claude/skills',
     ]);
   });
 });
@@ -259,5 +261,58 @@ describe('resolveSkillAsync with absolute and tilde paths', () => {
       const skill = await resolveSkillAsync(`${homeRelativePath}/security-review`, '/different/repo');
       expect(skill.name).toBe('security-review');
     }
+  });
+});
+
+describe('flat markdown skill files', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'warden-test-'));
+  const tempSkillPath = join(tempDir, 'my-custom-skill.md');
+
+  // Create a flat .md skill file with non-SKILL.md filename
+  writeFileSync(
+    tempSkillPath,
+    `---
+name: my-custom-skill
+description: A test skill with custom filename
+---
+
+This is the prompt content.
+`
+  );
+
+  afterAll(() => {
+    try {
+      unlinkSync(tempSkillPath);
+    } catch {
+      // ignore cleanup errors
+    }
+  });
+
+  it('loads flat .md files with any filename (not just SKILL.md)', async () => {
+    const skill = await loadSkillFromFile(tempSkillPath);
+    expect(skill.name).toBe('my-custom-skill');
+    expect(skill.description).toBe('A test skill with custom filename');
+    expect(skill.prompt).toBe('This is the prompt content.');
+  });
+
+  it('loadSkillFromFile accepts .md extension', async () => {
+    // A flat .md file should be loaded using loadSkillFromMarkdown
+    // (same as SKILL.md format with frontmatter)
+    const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+    const skillMdPath = join(builtinSkillsDir, 'security-review', 'SKILL.md');
+    const skill = await loadSkillFromFile(skillMdPath);
+    expect(skill.name).toBe('security-review');
+  });
+
+  it('loadSkillsFromDirectory returns entry paths for tracking', async () => {
+    const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+    clearSkillsCache();
+    const skills = await loadSkillsFromDirectory(builtinSkillsDir);
+
+    // Each loaded skill should have an entry field matching the directory name
+    const securityReview = skills.get('security-review');
+    expect(securityReview).toBeDefined();
+    expect(securityReview!.skill.name).toBe('security-review');
+    expect(securityReview!.entry).toBe('security-review');
   });
 });

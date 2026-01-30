@@ -36,19 +36,23 @@ Don't test every variant of a problem.
 
 ### 4. Always Add Regression Tests for Bugs
 
-When a bug is identified, **ALWAYS** add a test that would have caught it.
+When a **bug** is identified, **ALWAYS** add a test that would have caught it.
 
 - The test should fail before the fix and pass after
 - Name it descriptively to document the bug
 - This prevents the same bug from recurring
 
+**Note:** Regression tests are for unintentional broken behavior (bugs), not intentional changes. Intentional feature removals, deprecations, or breaking changes do NOT need regression tests—these are design decisions, not defects.
+
 ### 5. Cover Every User Entry Point
 
 **ALWAYS** have at least one basic test for each customer/user entry point.
 
-- CLI commands, API endpoints, public functions
+- CLI commands, API endpoints, public/exported functions
 - Test the common/happy path first
 - This proves the entry point works at all
+
+**Note:** "Entry point" means the public interface—exported functions, CLI commands, API routes. Internal/private functions are NOT entry points, even if they handle user-facing flags or options. Test entry points; internal functions get coverage through those tests.
 
 ### 6. Tests Validate Before Manual QA
 
@@ -122,7 +126,7 @@ pnpm test:run          # Run all tests once
 ## Checklist Before Submitting
 
 - [ ] New entry points have at least one happy-path test
-- [ ] Bug fixes include a regression test
+- [ ] Bug fixes (not intentional changes) include a regression test
 - [ ] External services are mocked with sanitized fixtures
 - [ ] Tests validate behavior, not implementation
 - [ ] No shared state between tests
