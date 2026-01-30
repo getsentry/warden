@@ -235,8 +235,16 @@ async function runSkills(
 async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
 
+  // Try to find repo root for env loading, fall back to cwd
+  let envDir = cwd;
+  try {
+    envDir = getRepoRoot(cwd);
+  } catch {
+    // Not in a git repo - use cwd
+  }
+
   // Load environment variables from .env files if they exist
-  loadEnvFiles(cwd);
+  loadEnvFiles(envDir);
 
   // Build context from files
   reporter.step('Building context from files...');
