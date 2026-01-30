@@ -73,7 +73,8 @@ export function parseMarker(body: string): WardenMarker | null {
  */
 export function parseWardenComment(body: string): { title: string; description: string } | null {
   // Match the title pattern: **:emoji: Title** or **Title**
-  const titleMatch = body.match(/\*\*(?::[a-z_]+:\s*)?([^*]+)\*\*/);
+  // Use non-greedy match to handle titles containing asterisks
+  const titleMatch = body.match(/\*\*(?::[a-z_]+:\s*)?(.+?)\*\*/);
   if (!titleMatch || !titleMatch[1]) {
     return null;
   }
