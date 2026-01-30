@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import {
   clearSkillsCache,
   getBuiltinSkill,
@@ -263,6 +265,36 @@ describe('resolveSkillAsync with absolute and tilde paths', () => {
 });
 
 describe('flat markdown skill files', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'warden-test-'));
+  const tempSkillPath = join(tempDir, 'my-custom-skill.md');
+
+  // Create a flat .md skill file with non-SKILL.md filename
+  writeFileSync(
+    tempSkillPath,
+    `---
+name: my-custom-skill
+description: A test skill with custom filename
+---
+
+This is the prompt content.
+`
+  );
+
+  afterAll(() => {
+    try {
+      unlinkSync(tempSkillPath);
+    } catch {
+      // ignore cleanup errors
+    }
+  });
+
+  it('loads flat .md files with any filename (not just SKILL.md)', async () => {
+    const skill = await loadSkillFromFile(tempSkillPath);
+    expect(skill.name).toBe('my-custom-skill');
+    expect(skill.description).toBe('A test skill with custom filename');
+    expect(skill.prompt).toBe('This is the prompt content.');
+  });
+
   it('loadSkillFromFile accepts .md extension', async () => {
     // A flat .md file should be loaded using loadSkillFromMarkdown
     // (same as SKILL.md format with frontmatter)
