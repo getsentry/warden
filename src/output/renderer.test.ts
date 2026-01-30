@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderSkillReport } from './renderer.js';
+import { parseMarker } from './dedup.js';
 import type { SkillReport } from '../types/index.js';
 
 describe('renderSkillReport', () => {
@@ -68,6 +69,37 @@ describe('renderSkillReport', () => {
 
     expect(result.review).toBeDefined();
     expect(result.review!.comments[0]!.body).toContain('<sub>warden: code-review</sub>');
+  });
+
+  it('includes deduplication marker in comments', () => {
+    const report: SkillReport = {
+      ...baseReport,
+      skill: 'security-review',
+      findings: [
+        {
+          id: 'f1',
+          severity: 'high',
+          title: 'SQL Injection',
+          description: 'User input passed to query',
+          location: {
+            path: 'src/db.ts',
+            startLine: 42,
+          },
+        },
+      ],
+    };
+
+    const result = renderSkillReport(report);
+
+    expect(result.review).toBeDefined();
+    const body = result.review!.comments[0]!.body;
+
+    // Verify marker is present and parseable
+    const marker = parseMarker(body);
+    expect(marker).not.toBeNull();
+    expect(marker!.path).toBe('src/db.ts');
+    expect(marker!.line).toBe(42);
+    expect(marker!.contentHash).toMatch(/^[a-f0-9]{8}$/);
   });
 
   it('sets start_line for multi-line findings', () => {

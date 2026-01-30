@@ -21,6 +21,12 @@ import {
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { filterFindingsBySeverity, SeverityThresholdSchema } from '../types/index.js';
+import {
+  fetchExistingWardenComments,
+  deduplicateFindings,
+  findingToExistingComment,
+} from '../output/dedup.js';
+import type { ExistingComment } from '../output/dedup.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
@@ -478,6 +484,8 @@ async function run(): Promise<void> {
     failOn?: typeof inputs.failOn;
     commentOn?: typeof inputs.commentOn;
     commentOnSuccess?: boolean;
+    checkRunUrl?: string;
+    maxFindings?: number;
     error?: unknown;
   }
 
@@ -548,6 +556,8 @@ async function run(): Promise<void> {
         failOn,
         commentOn,
         commentOnSuccess: trigger.output.commentOnSuccess,
+        checkRunUrl: skillCheckUrl,
+        maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
       };
     } catch (error) {
       // Mark skill check as failed
@@ -571,6 +581,24 @@ async function run(): Promise<void> {
 
   const results = await processInBatches(matchedTriggers, runSingleTrigger, concurrency);
 
+  // Fetch existing Warden comments for deduplication (only for PRs)
+  let existingComments: ExistingComment[] = [];
+  if (context.pullRequest) {
+    try {
+      existingComments = await fetchExistingWardenComments(
+        octokit,
+        context.repository.owner,
+        context.repository.name,
+        context.pullRequest.number
+      );
+      if (existingComments.length > 0) {
+        console.log(`Found ${existingComments.length} existing Warden comments for deduplication`);
+      }
+    } catch (error) {
+      console.warn(`::warning::Failed to fetch existing comments for deduplication: ${error}`);
+    }
+  }
+
   // Post reviews to GitHub (sequentially to avoid rate limits)
   const reports: SkillReport[] = [];
   let shouldFailAction = false;
@@ -582,12 +610,52 @@ async function run(): Promise<void> {
       // Post review to GitHub (renderResult is undefined when commentOn is 'off')
       // Only post if there are findings (after commentOn filtering) OR commentOnSuccess is true
       const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
-      const hasFindings = filteredFindings.length > 0;
       const commentOnSuccess = result.commentOnSuccess ?? false;
 
-      if (result.renderResult && (hasFindings || commentOnSuccess)) {
+      if (result.renderResult && (filteredFindings.length > 0 || commentOnSuccess)) {
         try {
-          await postReviewToGitHub(octokit, context, result.renderResult);
+          // Deduplicate findings against existing comments
+          let findingsToPost = filteredFindings;
+          if (existingComments.length > 0 && filteredFindings.length > 0) {
+            findingsToPost = await deduplicateFindings(filteredFindings, existingComments, {
+              apiKey: inputs.anthropicApiKey,
+            });
+            const dedupedCount = filteredFindings.length - findingsToPost.length;
+            if (dedupedCount > 0) {
+              console.log(`Skipping ${dedupedCount} duplicate findings for ${result.triggerName}`);
+            }
+          }
+
+          // Only post if we have non-duplicate findings or commentOnSuccess is true
+          if (findingsToPost.length > 0 || commentOnSuccess) {
+            // Re-render with deduplicated findings if any were removed
+            const renderResultToPost =
+              findingsToPost.length !== filteredFindings.length
+                ? renderSkillReport(
+                    { ...result.report, findings: findingsToPost },
+                    {
+                      maxFindings: result.maxFindings,
+                      commentOn: result.commentOn,
+                      checkRunUrl: result.checkRunUrl,
+                      totalFindings: result.report.findings.length,
+                    }
+                  )
+                : result.renderResult;
+
+            await postReviewToGitHub(octokit, context, renderResultToPost);
+
+            // Add newly posted findings to existing comments for cross-trigger deduplication
+            // Only include findings up to maxFindings since that's what was actually posted
+            const postedFindings = result.maxFindings
+              ? findingsToPost.slice(0, result.maxFindings)
+              : findingsToPost;
+            for (const finding of postedFindings) {
+              const comment = findingToExistingComment(finding);
+              if (comment) {
+                existingComments.push(comment);
+              }
+            }
+          }
         } catch (error) {
           console.error(`::warning::Failed to post review for ${result.triggerName}: ${error}`);
         }

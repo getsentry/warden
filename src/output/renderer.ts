@@ -2,6 +2,7 @@ import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
 import { formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
+import { generateContentHash, generateMarker } from './dedup.js';
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
   critical: ':rotating_light:',
@@ -55,6 +56,11 @@ function renderReview(
 
     // Add attribution footnote
     body += `\n\n---\n<sub>warden: ${report.skill}</sub>`;
+
+    // Add deduplication marker
+    const contentHash = generateContentHash(finding.title, finding.description);
+    const line = location.endLine ?? location.startLine;
+    body += `\n${generateMarker(location.path, line, contentHash)}`;
 
     const isMultiLine = location.endLine && location.startLine !== location.endLine;
 
