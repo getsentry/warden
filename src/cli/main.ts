@@ -524,8 +524,61 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   return 0;
 }
 
+/**
+ * Run in direct skill mode: run a specific skill on uncommitted changes.
+ * Used when --skill is specified without targets.
+ */
+async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Promise<number> {
+  const cwd = process.cwd();
+  let repoPath: string;
+
+  // Find repo root
+  try {
+    repoPath = getRepoRoot(cwd);
+  } catch {
+    reporter.error('Not a git repository');
+    return 1;
+  }
+
+  // Load environment variables from .env files
+  loadEnvFiles(repoPath);
+
+  // Build context from local git - compare against HEAD for true uncommitted changes
+  reporter.startContext('Analyzing uncommitted changes...');
+  const context = buildLocalEventContext({
+    base: 'HEAD',
+    cwd: repoPath,
+  });
+
+  const pullRequest = context.pullRequest;
+  if (!pullRequest) {
+    reporter.error('Failed to build context');
+    return 1;
+  }
+
+  if (pullRequest.files.length === 0) {
+    if (!options.json) {
+      const tip = 'Specify a git ref to analyze committed changes: warden main --skill <name>';
+      reporter.renderEmptyState('No uncommitted changes found', tip);
+      reporter.blank();
+    } else {
+      console.log(renderJsonReport([]));
+    }
+    return 0;
+  }
+
+  reporter.contextFiles(pullRequest.files);
+
+  return runSkills(context, options, reporter);
+}
+
 async function runCommand(options: CLIOptions, reporter: Reporter): Promise<number> {
-  // No targets → config mode
+  // No targets with --skill → run skill directly on uncommitted changes
+  if ((!options.targets || options.targets.length === 0) && options.skill) {
+    return runDirectSkillMode(options, reporter);
+  }
+
+  // No targets → config mode (use triggers)
   if (!options.targets || options.targets.length === 0) {
     return runConfigMode(options, reporter);
   }
