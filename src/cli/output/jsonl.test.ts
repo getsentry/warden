@@ -132,6 +132,17 @@ describe('writeJsonlReport', () => {
     expect(summary.usage.costUSD).toBeCloseTo(0.003);
   });
 
+  it('creates parent directories if they do not exist', () => {
+    const outputPath = join(testDir, 'nested', 'deep', 'output.jsonl');
+
+    writeJsonlReport(outputPath, [], 100);
+
+    expect(existsSync(outputPath)).toBe(true);
+    const content = readFileSync(outputPath, 'utf-8');
+    const summary = JSON.parse(content.trim());
+    expect(summary.type).toBe('summary');
+  });
+
   it('counts findings by severity in summary', () => {
     const outputPath = join(testDir, 'severity.jsonl');
     const reports: SkillReport[] = [

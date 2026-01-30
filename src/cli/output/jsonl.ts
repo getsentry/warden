@@ -1,5 +1,5 @@
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import type { SkillReport, UsageStats } from '../../types/index.js';
 import { countBySeverity } from './formatters.js';
 
@@ -87,6 +87,9 @@ export function writeJsonlReport(
     usage: aggregateUsage(reports),
   };
   lines.push(JSON.stringify(summaryRecord));
+
+  // Ensure parent directory exists
+  mkdirSync(dirname(resolvedPath), { recursive: true });
 
   writeFileSync(resolvedPath, lines.join('\n') + '\n');
 }
