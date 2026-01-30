@@ -1,7 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { Severity, SeverityThreshold, Finding, SkillReport, UsageStats } from '../types/index.js';
-import { formatStatsCompact, formatDuration, formatCost, formatTokens, countBySeverity } from '../cli/output/formatters.js';
+import { formatDuration, formatCost, formatTokens } from '../cli/output/formatters.js';
 
 /**
  * GitHub Check annotation for inline code comments.
@@ -189,8 +189,11 @@ export async function updateSkillCheck(
   // Annotations are filtered by commentOn threshold
   const annotations = findingsToAnnotations(report.findings, options.commentOn);
 
-  const findingCounts = countBySeverity(report.findings);
-  const summary = buildSkillSummary(report, findingCounts);
+  const summary = buildSkillSummary(report);
+
+  const title = report.findings.length === 0
+    ? 'No issues'
+    : `${report.findings.length} issue${report.findings.length === 1 ? '' : 's'}`;
 
   await octokit.checks.update({
     owner: options.owner,
@@ -200,7 +203,7 @@ export async function updateSkillCheck(
     conclusion,
     completed_at: new Date().toISOString(),
     output: {
-      title: `${report.findings.length} finding${report.findings.length === 1 ? '' : 's'}`,
+      title,
       summary,
       annotations,
     },
@@ -267,6 +270,10 @@ export async function updateCoreCheck(
 ): Promise<void> {
   const summary = buildCoreSummary(summaryData);
 
+  const title = summaryData.totalFindings === 0
+    ? 'No issues'
+    : `${summaryData.totalFindings} issue${summaryData.totalFindings === 1 ? '' : 's'}`;
+
   await octokit.checks.update({
     owner: options.owner,
     repo: options.repo,
@@ -275,79 +282,68 @@ export async function updateCoreCheck(
     conclusion,
     completed_at: new Date().toISOString(),
     output: {
-      title: `${summaryData.totalFindings} finding${summaryData.totalFindings === 1 ? '' : 's'} across ${summaryData.totalSkills} skill${summaryData.totalSkills === 1 ? '' : 's'}`,
+      title,
       summary,
     },
   });
 }
 
 /**
- * Render a markdown severity table from counts.
- */
-function renderSeverityTable(counts: Record<Severity, number>): string[] {
-  const severities: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
-  const lines: string[] = [
-    '### Findings by Severity',
-    '',
-    '| Severity | Count |',
-    '|----------|-------|',
-  ];
-
-  for (const severity of severities) {
-    if (counts[severity] > 0) {
-      lines.push(`| ${severity} | ${counts[severity]} |`);
-    }
-  }
-
-  return lines;
-}
-
-/**
  * Build the summary markdown for a skill check.
  */
-function buildSkillSummary(
-  report: SkillReport,
-  findingCounts: Record<Severity, number>
-): string {
+function buildSkillSummary(report: SkillReport): string {
   const lines: string[] = [report.summary, ''];
 
   if (report.findings.length === 0) {
-    lines.push('No findings.');
+    lines.push('No issues found.');
   } else {
-    lines.push(...renderSeverityTable(findingCounts));
+    // Sort findings by severity
+    const sortedFindings = [...report.findings].sort(
+      (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
+    );
+
+    // Group findings by severity
+    const findingsBySeverity = new Map<Severity, Finding[]>();
+    for (const finding of sortedFindings) {
+      const existing = findingsBySeverity.get(finding.severity) ?? [];
+      existing.push(finding);
+      findingsBySeverity.set(finding.severity, existing);
+    }
+
+    const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+    for (const severity of severityOrder) {
+      const findings = findingsBySeverity.get(severity);
+      if (!findings?.length) continue;
+
+      const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+      lines.push(`### ${label}`, '');
+
+      for (const finding of findings) {
+        const location = finding.location ? ` - ${formatLocation(finding.location)}` : '';
+        lines.push('<details>');
+        lines.push(`<summary><strong>${finding.title}</strong>${location}</summary>`, '');
+        lines.push(finding.description, '');
+        lines.push('</details>', '');
+      }
+    }
   }
 
   // Add stats footer if available
-  const statsLine = formatStatsCompact(report.durationMs, report.usage);
-  if (statsLine) {
-    lines.push('', '---', `<sub>${statsLine}</sub>`);
+  if (report.durationMs !== undefined || report.usage) {
+    const statsParts: string[] = [];
+    if (report.durationMs !== undefined) {
+      statsParts.push(`**Duration:** ${formatDuration(report.durationMs)}`);
+    }
+    if (report.usage) {
+      const totalInput = report.usage.inputTokens + (report.usage.cacheReadInputTokens ?? 0);
+      statsParts.push(`**Tokens:** ${formatTokens(totalInput)} in / ${formatTokens(report.usage.outputTokens)} out`);
+      statsParts.push(`**Cost:** ${formatCost(report.usage.costUSD)}`);
+    }
+    lines.push('---', statsParts.join(' · '));
   }
 
   return lines.join('\n');
 }
-
-/**
- * Map check conclusion to display icon.
- */
-function conclusionIcon(conclusion: CheckConclusion): string {
-  switch (conclusion) {
-    case 'success':
-      return ':white_check_mark:';
-    case 'failure':
-      return ':x:';
-    case 'neutral':
-    case 'cancelled':
-      return ':warning:';
-  }
-}
-
-const SEVERITY_EMOJI: Record<Severity, string> = {
-  critical: '🔴',
-  high: '🟠',
-  medium: '🟡',
-  low: '🔵',
-  info: 'ℹ️',
-};
 
 /**
  * Format a file location as a markdown code span.
@@ -359,7 +355,7 @@ function formatLocation(location: { path: string; startLine: number; endLine?: n
 }
 
 /** Maximum findings to show in the summary */
-const MAX_SUMMARY_FINDINGS = 5;
+const MAX_SUMMARY_FINDINGS = 10;
 
 /**
  * Build the summary markdown for the core warden check.
@@ -367,27 +363,13 @@ const MAX_SUMMARY_FINDINGS = 5;
 function buildCoreSummary(data: CoreCheckSummaryData): string {
   const lines: string[] = [];
 
-  // Lead with actionable headline
-  if (data.totalFindings === 0) {
-    lines.push('## ✅ No issues found', '');
-  } else {
-    const criticalHigh = (data.findingsBySeverity.critical ?? 0) + (data.findingsBySeverity.high ?? 0);
-    if (criticalHigh > 0) {
-      const issueWord = criticalHigh === 1 ? 'issue requires' : 'issues require';
-      lines.push(`## 🔴 ${criticalHigh} ${issueWord} attention`, '');
-    } else {
-      const issueWord = data.totalFindings === 1 ? 'issue' : 'issues';
-      lines.push(`## 🟡 ${data.totalFindings} ${issueWord} found`, '');
-    }
-  }
-
   // Sort findings by severity and take top N
   const sortedFindings = [...data.findings].sort(
     (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
   );
   const topFindings = sortedFindings.slice(0, MAX_SUMMARY_FINDINGS);
 
-  // Show top findings grouped by severity
+  // Show findings grouped by severity, each in a collapsible details
   if (topFindings.length > 0) {
     const findingsBySeverity = new Map<Severity, Finding[]>();
     for (const finding of topFindings) {
@@ -401,19 +383,25 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
       const findings = findingsBySeverity.get(severity);
       if (!findings?.length) continue;
 
-      lines.push(`### ${SEVERITY_EMOJI[severity]} ${severity.charAt(0).toUpperCase() + severity.slice(1)}`, '');
+      const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+      lines.push(`### ${label}`, '');
+
       for (const finding of findings) {
-        const location = finding.location ? ` — ${formatLocation(finding.location)}` : '';
-        lines.push(`- **${finding.title}**${location}`);
-        lines.push(`  ${finding.description}`, '');
+        const location = finding.location ? ` - ${formatLocation(finding.location)}` : '';
+        lines.push('<details>');
+        lines.push(`<summary><strong>${finding.title}</strong>${location}</summary>`, '');
+        lines.push(finding.description, '');
+        lines.push('</details>', '');
       }
     }
 
     // Note if there are more findings not shown
     if (data.totalFindings > topFindings.length) {
       const remaining = data.totalFindings - topFindings.length;
-      lines.push(`*...and ${remaining} more finding${remaining === 1 ? '' : 's'}*`, '');
+      lines.push(`*...and ${remaining} more*`, '');
     }
+  } else {
+    lines.push('No issues found.', '');
   }
 
   // Skills table in collapsible section
@@ -421,27 +409,25 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
   const skillPlural = data.totalSkills === 1 ? '' : 's';
 
   lines.push('<details>');
-  lines.push(`<summary>📊 ${data.totalSkills} skill${skillPlural} analyzed</summary>`, '');
+  lines.push(`<summary>${data.totalSkills} skill${skillPlural} analyzed</summary>`, '');
 
   if (hasSkillStats) {
     lines.push(
-      '| Skill | Findings | Duration | Cost | Result |',
-      '|-------|----------|----------|------|--------|'
+      '| Skill | Findings | Duration | Cost |',
+      '|-------|----------|----------|------|'
     );
     for (const skill of data.skillResults) {
-      const icon = conclusionIcon(skill.conclusion);
       const duration = skill.durationMs !== undefined ? formatDuration(skill.durationMs) : '-';
       const cost = skill.usage ? formatCost(skill.usage.costUSD) : '-';
-      lines.push(`| ${skill.name} | ${skill.findingCount} | ${duration} | ${cost} | ${icon} |`);
+      lines.push(`| ${skill.name} | ${skill.findingCount} | ${duration} | ${cost} |`);
     }
   } else {
     lines.push(
-      '| Skill | Findings | Result |',
-      '|-------|----------|--------|'
+      '| Skill | Findings |',
+      '|-------|----------|'
     );
     for (const skill of data.skillResults) {
-      const icon = conclusionIcon(skill.conclusion);
-      lines.push(`| ${skill.name} | ${skill.findingCount} | ${icon} |`);
+      lines.push(`| ${skill.name} | ${skill.findingCount} |`);
     }
   }
 
