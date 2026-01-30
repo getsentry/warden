@@ -1,7 +1,38 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { SkillReport, UsageStats } from '../../types/index.js';
 import { countBySeverity } from './formatters.js';
+
+/**
+ * Get the default run logs directory.
+ * Uses WARDEN_STATE_DIR env var if set, otherwise ~/.local/warden/runs
+ */
+export function getRunLogsDir(): string {
+  const stateDir = process.env['WARDEN_STATE_DIR'];
+  if (stateDir) {
+    return join(stateDir, 'runs');
+  }
+  return join(homedir(), '.local', 'warden', 'runs');
+}
+
+/**
+ * Generate a run log filename from directory name and timestamp.
+ * Format: {dirname}_{timestamp}.jsonl
+ * Timestamp has colons replaced with hyphens for filesystem compatibility.
+ */
+export function generateRunLogFilename(cwd: string, timestamp: Date = new Date()): string {
+  const dirName = basename(cwd) || 'unknown';
+  const ts = timestamp.toISOString().replace(/:/g, '-');
+  return `${dirName}_${ts}.jsonl`;
+}
+
+/**
+ * Get the full path for an automatic run log.
+ */
+export function getRunLogPath(cwd: string, timestamp: Date = new Date()): string {
+  return join(getRunLogsDir(), generateRunLogFilename(cwd, timestamp));
+}
 
 /**
  * Metadata for a JSONL run record.

@@ -20,6 +20,7 @@ import {
   runSkillTasks,
   pluralize,
   writeJsonlReport,
+  getRunLogPath,
   type SkillTaskOptions,
 } from './output/index.js';
 import {
@@ -166,6 +167,11 @@ async function runSkills(
     writeJsonlReport(options.output, reports, totalDuration);
     reporter.success(`Wrote JSONL output to ${options.output}`);
   }
+
+  // Always write automatic run log for debugging
+  const runLogPath = getRunLogPath(cwd);
+  writeJsonlReport(runLogPath, reports, totalDuration);
+  reporter.debug(`Run log: ${runLogPath}`);
 
   // Output results
   reporter.blank();
@@ -465,6 +471,11 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     writeJsonlReport(options.output, reports, totalDuration);
     reporter.success(`Wrote JSONL output to ${options.output}`);
   }
+
+  // Always write automatic run log for debugging
+  const runLogPath = getRunLogPath(repoPath);
+  writeJsonlReport(runLogPath, reports, totalDuration);
+  reporter.debug(`Run log: ${runLogPath}`);
 
   // Output results
   reporter.blank();

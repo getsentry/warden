@@ -29,4 +29,10 @@ export {
   type RunTasksOptions,
 } from './tasks.js';
 export { BoxRenderer, type BoxOptions } from './box.js';
-export { writeJsonlReport, type JsonlRecord, type JsonlRunMetadata } from './jsonl.js';
+export {
+  writeJsonlReport,
+  getRunLogsDir,
+  getRunLogPath,
+  type JsonlRecord,
+  type JsonlRunMetadata,
+} from './jsonl.js';
