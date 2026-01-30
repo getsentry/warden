@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SeverityThresholdSchema } from '../types/index.js';
 
 // Tool names that can be allowed/denied
 export const ToolNameSchema = z.enum([
@@ -41,8 +42,8 @@ export type PathFilter = z.infer<typeof PathFilterSchema>;
 
 // Output configuration per trigger
 export const OutputConfigSchema = z.object({
-  failOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
-  commentOn: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
+  failOn: SeverityThresholdSchema.optional(),
+  commentOn: SeverityThresholdSchema.optional(),
   maxFindings: z.number().int().positive().optional(),
   /** Post a PR comment even when there are no findings (default: false) */
   commentOnSuccess: z.boolean().optional(),

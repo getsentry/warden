@@ -4,6 +4,10 @@ import { z } from 'zod';
 export const SeveritySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
 export type Severity = z.infer<typeof SeveritySchema>;
 
+// Severity threshold for config options (includes 'off' to disable)
+export const SeverityThresholdSchema = z.enum(['off', 'critical', 'high', 'medium', 'low', 'info']);
+export type SeverityThreshold = z.infer<typeof SeverityThresholdSchema>;
+
 /**
  * Severity order for comparison (lower = more severe).
  * Single source of truth for severity ordering across the codebase.
@@ -19,9 +23,11 @@ export const SEVERITY_ORDER: Record<Severity, number> = {
 /**
  * Filter findings to only include those at or above the given severity threshold.
  * If no threshold is provided, returns all findings unchanged.
+ * If threshold is 'off', returns empty array (disabled).
  */
-export function filterFindingsBySeverity(findings: Finding[], threshold?: Severity): Finding[] {
+export function filterFindingsBySeverity(findings: Finding[], threshold?: SeverityThreshold): Finding[] {
   if (!threshold) return findings;
+  if (threshold === 'off') return [];
   const thresholdOrder = SEVERITY_ORDER[threshold];
   return findings.filter((f) => SEVERITY_ORDER[f.severity] <= thresholdOrder);
 }

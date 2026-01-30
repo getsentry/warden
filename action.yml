@@ -19,11 +19,11 @@ inputs:
     required: false
     default: 'warden.toml'
   fail-on:
-    description: 'Minimum severity level to fail the action (critical, high, medium, low, info)'
+    description: 'Minimum severity level to fail the action (off, critical, high, medium, low, info). Use "off" to never fail.'
     required: false
     default: 'high'
   comment-on:
-    description: 'Minimum severity level to show annotations in code review (critical, high, medium, low, info)'
+    description: 'Minimum severity level to show annotations in code review (off, critical, high, medium, low, info). Use "off" to disable comments.'
     required: false
     default: 'medium'
   max-findings:

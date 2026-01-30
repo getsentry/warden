@@ -1,6 +1,6 @@
 import { Listr } from 'listr2';
 import type { ListrTask, ListrRendererValue } from 'listr2';
-import type { SkillReport, Severity, Finding, UsageStats, EventContext } from '../../types/index.js';
+import type { SkillReport, SeverityThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import {
   prepareFiles,
@@ -22,7 +22,7 @@ import { truncate, countBySeverity, formatSeverityDot } from './formatters.js';
 export interface SkillTaskResult {
   name: string;
   report?: SkillReport;
-  failOn?: Severity;
+  failOn?: SeverityThreshold;
   error?: unknown;
 }
 
@@ -39,7 +39,7 @@ export interface SkillTaskContext {
 export interface SkillTaskOptions {
   name: string;
   displayName?: string;
-  failOn?: Severity;
+  failOn?: SeverityThreshold;
   /** Resolve the skill definition (may be async for loading) */
   resolveSkill: () => Promise<SkillDefinition>;
   /** The event context with files to analyze */

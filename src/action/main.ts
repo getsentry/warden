@@ -20,8 +20,8 @@ import {
 } from '../output/github-checks.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
 import { resolveSkillAsync } from '../skills/loader.js';
-import { filterFindingsBySeverity } from '../types/index.js';
-import type { EventContext, SkillReport, UsageStats } from '../types/index.js';
+import { filterFindingsBySeverity, SeverityThresholdSchema } from '../types/index.js';
+import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
@@ -45,8 +45,8 @@ interface ActionInputs {
   anthropicApiKey: string;
   githubToken: string;
   configPath: string;
-  failOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
-  commentOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  failOn?: SeverityThreshold;
+  commentOn?: SeverityThreshold;
   maxFindings: number;
   /** Max concurrent trigger executions */
   parallel: number;
@@ -77,16 +77,14 @@ function getInputs(): ActionInputs {
     );
   }
 
-  const validSeverities = ['critical', 'high', 'medium', 'low', 'info'] as const;
-
   const failOnInput = getInput('fail-on');
-  const failOn = validSeverities.includes(failOnInput as typeof validSeverities[number])
-    ? (failOnInput as typeof validSeverities[number])
+  const failOn = SeverityThresholdSchema.safeParse(failOnInput).success
+    ? (failOnInput as SeverityThreshold)
     : undefined;
 
   const commentOnInput = getInput('comment-on');
-  const commentOn = validSeverities.includes(commentOnInput as typeof validSeverities[number])
-    ? (commentOnInput as typeof validSeverities[number])
+  const commentOn = SeverityThresholdSchema.safeParse(commentOnInput).success
+    ? (commentOnInput as SeverityThreshold)
     : undefined;
 
   return {
@@ -532,10 +530,14 @@ async function run(): Promise<void> {
         }
       }
 
-      const renderResult = renderSkillReport(report, {
-        maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
-        commentOn,
-      });
+      // Only render if we're going to post comments
+      const renderResult =
+        commentOn !== 'off'
+          ? renderSkillReport(report, {
+              maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
+              commentOn,
+            })
+          : undefined;
 
       logGroupEnd();
       return {
@@ -576,7 +578,8 @@ async function run(): Promise<void> {
     if (result.report) {
       reports.push(result.report);
 
-      // Post review to GitHub only if there are findings (after commentOn filtering) OR commentOnSuccess is true
+      // Post review to GitHub (renderResult is undefined when commentOn is 'off')
+      // Only post if there are findings (after commentOn filtering) OR commentOnSuccess is true
       const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
       const hasFindings = filteredFindings.length > 0;
       const commentOnSuccess = result.commentOnSuccess ?? false;

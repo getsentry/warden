@@ -1,16 +1,16 @@
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
-import { SeveritySchema } from '../types/index.js';
-import type { Severity } from '../types/index.js';
+import { SeverityThresholdSchema } from '../types/index.js';
+import type { SeverityThreshold } from '../types/index.js';
 
 export const CLIOptionsSchema = z.object({
   targets: z.array(z.string()).optional(),
   skill: z.string().optional(),
   config: z.string().optional(),
   json: z.boolean().default(false),
-  failOn: SeveritySchema.optional(),
+  failOn: SeverityThresholdSchema.optional(),
   /** Only show findings at or above this severity in output */
-  commentOn: SeveritySchema.optional(),
+  commentOn: SeverityThresholdSchema.optional(),
   help: z.boolean().default(false),
   /** Max concurrent trigger/skill executions (default: 4) */
   parallel: z.number().int().positive().optional(),
@@ -73,9 +73,9 @@ Options:
   -m, --model <model>  Model to use (fallback when not set in config)
   --json               Output results as JSON
   --fail-on <severity> Exit with code 1 if findings >= severity
-                       (critical, high, medium, low, info)
+                       (off, critical, high, medium, low, info)
   --comment-on <sev>   Only show findings >= severity in output
-                       (critical, high, medium, low, info)
+                       (off, critical, high, medium, low, info)
   --fix                Automatically apply all suggested fixes
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
   --quiet              Errors and final summary only
@@ -318,8 +318,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     config: values.config,
     model: values.model,
     json: values.json,
-    failOn: values['fail-on'] as Severity | undefined,
-    commentOn: values['comment-on'] as Severity | undefined,
+    failOn: values['fail-on'] as SeverityThreshold | undefined,
+    commentOn: values['comment-on'] as SeverityThreshold | undefined,
     fix: values.fix,
     force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,

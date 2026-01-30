@@ -1,6 +1,6 @@
 import type { Trigger } from '../config/schema.js';
 import { SEVERITY_ORDER } from '../types/index.js';
-import type { EventContext, Severity, SkillReport } from '../types/index.js';
+import type { EventContext, Severity, SeverityThreshold, SkillReport } from '../types/index.js';
 
 /** Cache for compiled glob patterns */
 const globCache = new Map<string, RegExp>();
@@ -96,16 +96,20 @@ export function matchTrigger(trigger: Trigger, context: EventContext): boolean {
 
 /**
  * Check if a report has any findings at or above the given severity threshold.
+ * Returns false if failOn is 'off' (disabled).
  */
-export function shouldFail(report: SkillReport, failOn: Severity): boolean {
+export function shouldFail(report: SkillReport, failOn: SeverityThreshold): boolean {
+  if (failOn === 'off') return false;
   const threshold = SEVERITY_ORDER[failOn];
   return report.findings.some((f) => SEVERITY_ORDER[f.severity] <= threshold);
 }
 
 /**
  * Count findings at or above the given severity threshold.
+ * Returns 0 if failOn is 'off' (disabled).
  */
-export function countFindingsAtOrAbove(report: SkillReport, failOn: Severity): number {
+export function countFindingsAtOrAbove(report: SkillReport, failOn: SeverityThreshold): number {
+  if (failOn === 'off') return 0;
   const threshold = SEVERITY_ORDER[failOn];
   return report.findings.filter((f) => SEVERITY_ORDER[f.severity] <= threshold).length;
 }

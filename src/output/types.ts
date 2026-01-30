@@ -1,3 +1,5 @@
+import type { SeverityThreshold } from '../types/index.js';
+
 export interface GitHubComment {
   body: string;
   path?: string;
@@ -22,6 +24,7 @@ export interface RenderOptions {
   includeSuggestions?: boolean;
   maxFindings?: number;
   groupByFile?: boolean;
-  /** Only include findings at or above this severity level in rendered output */
-  commentOn?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  extraLabels?: string[];
+  /** Only include findings at or above this severity level in rendered output. Use 'off' to disable comments. */
+  commentOn?: SeverityThreshold;
 }

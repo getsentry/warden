@@ -1,6 +1,6 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
-import type { Severity, Finding, SkillReport, UsageStats } from '../types/index.js';
+import type { Severity, SeverityThreshold, Finding, SkillReport, UsageStats } from '../types/index.js';
 import { formatStatsCompact, formatDuration, formatCost, formatTokens, countBySeverity } from '../cli/output/formatters.js';
 
 /**
@@ -33,9 +33,9 @@ export interface CheckOptions {
  * Options for updating a skill check.
  */
 export interface UpdateSkillCheckOptions extends CheckOptions {
-  failOn?: Severity;
+  failOn?: SeverityThreshold;
   /** Only include findings at or above this severity level in annotations */
-  commentOn?: Severity;
+  commentOn?: SeverityThreshold;
 }
 
 /**
@@ -94,7 +94,7 @@ export function severityToAnnotationLevel(
  * Returns at most MAX_ANNOTATIONS_PER_REQUEST annotations.
  * If commentOn is specified, only include findings at or above that severity.
  */
-export function findingsToAnnotations(findings: Finding[], commentOn?: Severity): CheckAnnotation[] {
+export function findingsToAnnotations(findings: Finding[], commentOn?: SeverityThreshold): CheckAnnotation[] {
   // Filter by commentOn threshold if specified
   const filtered = filterFindingsBySeverity(findings, commentOn);
 
@@ -129,14 +129,14 @@ export function findingsToAnnotations(findings: Finding[], commentOn?: Severity)
  */
 export function determineConclusion(
   findings: Finding[],
-  failOn?: Severity
+  failOn?: SeverityThreshold
 ): CheckConclusion {
   if (findings.length === 0) {
     return 'success';
   }
 
-  if (!failOn) {
-    // No failure threshold, findings exist but don't cause failure
+  if (!failOn || failOn === 'off') {
+    // No failure threshold or disabled, findings exist but don't cause failure
     return 'neutral';
   }
 
