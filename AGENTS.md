@@ -56,10 +56,12 @@ export { SkillReport, runSkill } from "./types/index.js";
 
 ## Testing
 
-When adding new behavior or modifying existing functionality, review `TESTING.md` to determine if tests are needed. Key points:
+**Always reference `/testing-guidelines` when writing tests.** Key principles:
 
-- Test error cases users will actually hit
-- Add regression tests for bugs
+- Mock external services, use sanitized real-world fixtures
+- Prefer integration tests over unit tests
+- Always add regression tests for bugs
+- Cover every user entry point with at least a happy-path test
 - Co-locate tests with source (`foo.ts` → `foo.test.ts`)
 
 ## Task Management

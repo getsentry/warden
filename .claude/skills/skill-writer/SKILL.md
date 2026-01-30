@@ -1,6 +1,7 @@
-# Skill Writer
-
-Generate valid Warden skill definitions from natural language descriptions.
+---
+name: Skill Writer
+description: Generate valid Warden skill definitions from natural language descriptions
+---
 
 ## Usage
 
