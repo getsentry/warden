@@ -86,7 +86,6 @@ All skills must output a SkillReport:
       description: string;
       diff: string;   // Unified diff format
     };
-    labels?: string[]; // Suggested labels
   }];
   metadata?: Record<string, unknown>;
 }

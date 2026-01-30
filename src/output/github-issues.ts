@@ -13,7 +13,6 @@ export interface IssueResult {
 
 export interface CreateIssueOptions {
   title: string;
-  labels?: string[];
   commitSha: string;
 }
 
@@ -28,7 +27,7 @@ export async function createOrUpdateIssue(
   reports: SkillReport[],
   options: CreateIssueOptions
 ): Promise<IssueResult | null> {
-  const { title, labels, commitSha } = options;
+  const { title, commitSha } = options;
   const allFindings = reports.flatMap((r) => r.findings);
   const now = new Date();
 
@@ -54,16 +53,6 @@ export async function createOrUpdateIssue(
       body,
     });
 
-    // Update labels if specified
-    if (labels && labels.length > 0) {
-      await octokit.issues.setLabels({
-        owner,
-        repo,
-        issue_number: existingIssue.number,
-        labels,
-      });
-    }
-
     return {
       issueNumber: existingIssue.number,
       issueUrl: existingIssue.html_url,
@@ -82,7 +71,6 @@ export async function createOrUpdateIssue(
     repo,
     title,
     body,
-    labels,
   });
 
   return {

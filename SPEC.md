@@ -2,7 +2,7 @@
 
 ## Overview
 
-Warden is an event-driven agent that reacts to GitHub events (Pull Requests, Issues, etc.) and executes configured skills using Claude Code SDK to produce structured reports. These reports are then translated into GitHub actions like inline comments, suggested changes, labels, or status checks.
+Warden is an event-driven agent that reacts to GitHub events (Pull Requests, Issues, etc.) and executes configured skills using Claude Code SDK to produce structured reports. These reports are then translated into GitHub actions like inline comments, suggested changes, or status checks.
 
 **Key Decisions:**
 - **Runtime**: GitHub Action (primary), with Cloudflare/Vercel webhook option
@@ -147,7 +147,6 @@ interface Finding {
     description: string;
     diff: string;  // unified diff format
   };
-  labels?: string[];  // suggested labels to add
 }
 ```
 
@@ -160,7 +159,6 @@ Translates SkillReport into GitHub API calls.
 - **PR Review**: Overall review with approve/request-changes/comment
 - **Suggested Change**: GitHub's suggestion block format
 - **Issue Comment**: General comment on issue/PR
-- **Labels**: Add/remove labels
 - **Status Check**: Pass/fail status with details URL
 
 ---

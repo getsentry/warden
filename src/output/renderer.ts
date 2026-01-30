@@ -1,6 +1,6 @@
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
-import type { RenderResult, RenderOptions, GitHubReview, GitHubComment, GitHubLabel } from './types.js';
+import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
 import { formatStatsCompact, countBySeverity } from '../cli/output/formatters.js';
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
@@ -12,7 +12,7 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, extraLabels = [], commentOn } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn } = options;
 
   // Filter by commentOn threshold first, then apply maxFindings limit
   const filteredFindings = filterFindingsBySeverity(report.findings, commentOn);
@@ -23,9 +23,8 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
 
   const review = renderReview(sortedFindings, report, includeSuggestions);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile);
-  const labels = collectLabels(sortedFindings, extraLabels);
 
-  return { review, summaryComment, labels };
+  return { review, summaryComment };
 }
 
 function renderReview(
@@ -192,11 +191,4 @@ function groupFindingsByFile(findings: Finding[]): Record<string, Finding[]> {
     }
   }
   return groups;
-}
-
-function collectLabels(findings: Finding[], extraLabels: string[] = []): GitHubLabel[] {
-  const findingLabels = findings.flatMap((f) => f.labels ?? []);
-  const allLabels = [...findingLabels, ...extraLabels];
-  const uniqueLabels = [...new Set(allLabels)];
-  return uniqueLabels.map((name) => ({ name, action: 'add' as const }));
 }
