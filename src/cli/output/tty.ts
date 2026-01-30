@@ -18,7 +18,13 @@ export interface OutputMode {
  */
 export function detectOutputMode(colorOverride?: boolean): OutputMode {
   // Check both stderr and stdout for TTY - some environments have TTY on one but not the other
-  const isTTY = (process.stderr.isTTY || process.stdout.isTTY) ?? false;
+  const streamIsTTY = (process.stderr.isTTY || process.stdout.isTTY) ?? false;
+
+  // Treat dumb terminals as non-TTY (e.g., TERM=dumb used by some editors/agents)
+  const term = process.env['TERM'] ?? '';
+  const isDumbTerminal = term === 'dumb' || term === '';
+
+  const isTTY = streamIsTTY && !isDumbTerminal;
 
   // Determine color support
   let supportsColor: boolean;
