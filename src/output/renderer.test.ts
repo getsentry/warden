@@ -553,4 +553,145 @@ describe('renderSkillReport', () => {
       expect(result.summaryComment).not.toContain('<sub>');
     });
   });
+
+  describe('check run link', () => {
+    it('shows link to full report when findings are filtered out', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 20 },
+          },
+          {
+            id: 'f3',
+            severity: 'info',
+            title: 'Info Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 30 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, {
+        commentOn: 'high',
+        checkRunUrl: 'https://github.com/owner/repo/runs/123',
+        totalFindings: 3,
+      });
+
+      expect(result.summaryComment).toContain('View 2 additional findings in Checks');
+      expect(result.summaryComment).toContain('https://github.com/owner/repo/runs/123');
+    });
+
+    it('shows singular "finding" when only one is hidden', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 20 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, {
+        commentOn: 'high',
+        checkRunUrl: 'https://github.com/owner/repo/runs/123',
+        totalFindings: 2,
+      });
+
+      expect(result.summaryComment).toContain('View 1 additional finding in Checks');
+    });
+
+    it('shows link when all findings filtered out', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, {
+        commentOn: 'high',
+        checkRunUrl: 'https://github.com/owner/repo/runs/123',
+        totalFindings: 1,
+      });
+
+      expect(result.summaryComment).toContain('No findings to report');
+      expect(result.summaryComment).toContain('View 1 additional finding in Checks');
+    });
+
+    it('does not show link when no checkRunUrl provided', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, {
+        commentOn: 'high',
+        totalFindings: 3,
+      });
+
+      expect(result.summaryComment).not.toContain('View');
+      expect(result.summaryComment).not.toContain('additional finding');
+    });
+
+    it('does not show link when no findings are hidden', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, {
+        commentOn: 'high',
+        checkRunUrl: 'https://github.com/owner/repo/runs/123',
+        totalFindings: 1,
+      });
+
+      expect(result.summaryComment).not.toContain('View');
+      expect(result.summaryComment).not.toContain('additional finding');
+    });
+  });
 });

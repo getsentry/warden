@@ -489,6 +489,7 @@ async function run(): Promise<void> {
 
     // Create skill check (only for PRs)
     let skillCheckId: number | undefined;
+    let skillCheckUrl: string | undefined;
     if (context.pullRequest) {
       try {
         const skillCheck = await createSkillCheck(octokit, trigger.skill, {
@@ -497,6 +498,7 @@ async function run(): Promise<void> {
           headSha: context.pullRequest.headSha,
         });
         skillCheckId = skillCheck.checkRunId;
+        skillCheckUrl = skillCheck.url;
       } catch (error) {
         console.error(`::warning::Failed to create skill check for ${trigger.skill}: ${error}`);
       }
@@ -536,6 +538,8 @@ async function run(): Promise<void> {
           ? renderSkillReport(report, {
               maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
               commentOn,
+              checkRunUrl: skillCheckUrl,
+              totalFindings: report.findings.length,
             })
           : undefined;
 

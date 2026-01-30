@@ -1,7 +1,7 @@
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
-import { formatStatsCompact, countBySeverity } from '../cli/output/formatters.js';
+import { formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
   critical: ':rotating_light:',
@@ -12,7 +12,7 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn, checkRunUrl, totalFindings } = options;
 
   // Filter by commentOn threshold first, then apply maxFindings limit
   const filteredFindings = filterFindingsBySeverity(report.findings, commentOn);
@@ -21,8 +21,12 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
     (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
   );
 
+  // Calculate how many findings were filtered out
+  const total = totalFindings ?? report.findings.length;
+  const hiddenCount = total - sortedFindings.length;
+
   const review = renderReview(sortedFindings, report, includeSuggestions);
-  const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile);
+  const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile, checkRunUrl, hiddenCount);
 
   return { review, summaryComment };
 }
@@ -96,10 +100,16 @@ function renderSuggestion(description: string, diff: string): string {
   return `**Suggested fix:** ${description}\n\n\`\`\`suggestion\n${suggestionLines.join('\n')}\n\`\`\``;
 }
 
+function renderHiddenFindingsLink(hiddenCount: number, checkRunUrl: string): string {
+  return `[View ${hiddenCount} additional ${pluralize(hiddenCount, 'finding')} in Checks](${checkRunUrl})`;
+}
+
 function renderSummaryComment(
   report: SkillReport,
   findings: Finding[],
-  groupByFile: boolean
+  groupByFile: boolean,
+  checkRunUrl?: string,
+  hiddenCount?: number
 ): string {
   const lines: string[] = [];
 
@@ -110,6 +120,11 @@ function renderSummaryComment(
 
   if (findings.length === 0) {
     lines.push('No findings to report.');
+    // Add link to full report if there are hidden findings
+    if (hiddenCount && hiddenCount > 0 && checkRunUrl) {
+      lines.push('');
+      lines.push(renderHiddenFindingsLink(hiddenCount, checkRunUrl));
+    }
     // Add stats footer even when there are no findings
     const statsLine = formatStatsCompact(report.durationMs, report.usage);
     if (statsLine) {
@@ -158,6 +173,12 @@ ${Object.entries(counts)
     for (const finding of findings) {
       lines.push(renderFindingItem(finding));
     }
+  }
+
+  // Add link to full report if there are hidden findings
+  if (hiddenCount && hiddenCount > 0 && checkRunUrl) {
+    lines.push('');
+    lines.push(renderHiddenFindingsLink(hiddenCount, checkRunUrl));
   }
 
   // Add stats footer
