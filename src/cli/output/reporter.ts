@@ -200,6 +200,39 @@ export class Reporter {
   }
 
   /**
+   * Display the configuration section with triggers.
+   */
+  configTriggers(
+    loaded: number,
+    matched: number,
+    triggers: { name: string; skill: string }[]
+  ): void {
+    if (this.verbosity === Verbosity.Quiet) {
+      return;
+    }
+
+    if (this.mode.isTTY) {
+      this.log(
+        chalk.bold('CONFIG') +
+          chalk.cyan(`  ${loaded} triggers`) +
+          chalk.dim(` · ${matched} matched`)
+      );
+
+      // Show matched triggers
+      for (const trigger of triggers) {
+        this.log(`  ${chalk.green(ICON_CHECK)} ${trigger.name} ${chalk.dim(`(${trigger.skill})`)}`);
+      }
+
+      this.log('');
+    } else {
+      this.logCI(`Config: ${loaded} triggers, ${matched} matched`);
+      for (const trigger of triggers) {
+        this.logCI(`  ${trigger.name} (${trigger.skill})`);
+      }
+    }
+  }
+
+  /**
    * Log a step message.
    */
   step(message: string): void {

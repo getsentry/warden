@@ -17,6 +17,7 @@ import {
   parseVerbosity,
   Verbosity,
   runSkillTasks,
+  runSkillTasksWithInk,
   pluralize,
   writeJsonlReport,
   getRunLogPath,
@@ -147,13 +148,16 @@ async function runSkills(
     runnerOptions,
   }));
 
-  // Run skills with listr2
+  // Run skills with Ink UI (TTY) or simple console output (non-TTY)
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
-  const results = await runSkillTasks(tasks, {
+  const taskOptions = {
     mode: reporter.mode,
     verbosity: reporter.verbosity,
     concurrency,
-  });
+  };
+  const results = reporter.mode.isTTY
+    ? await runSkillTasksWithInk(tasks, taskOptions)
+    : await runSkillTasks(tasks, taskOptions);
 
   // Collect reports and check for failures
   const reports: SkillReport[] = [];
@@ -422,9 +426,6 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   reporter.contextFiles(pullRequest.files);
 
-  reporter.step('Loading configuration...');
-  reporter.success(`Loaded ${config.triggers.length} ${pluralize(config.triggers.length, 'trigger')}`);
-
   // Resolve triggers with defaults and match
   const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
@@ -448,8 +449,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 0;
   }
 
-  reporter.success(`${triggersToRun.length} ${pluralize(triggersToRun.length, 'trigger')} matched`);
-  reporter.blank();
+  // Display configuration section
+  reporter.configTriggers(
+    config.triggers.length,
+    triggersToRun.length,
+    triggersToRun.map((t) => ({ name: t.name, skill: t.skill }))
+  );
 
   // Check for API key
   const apiKey = getAnthropicApiKey();
@@ -461,7 +466,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Build trigger tasks
   const tasks: SkillTaskOptions[] = triggersToRun.map((trigger) => ({
     name: trigger.name,
-    displayName: `${trigger.name} (${trigger.skill})`,
+    displayName: trigger.skill,
     failOn: trigger.output.failOn ?? options.failOn,
     resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, config.skills),
     context,
@@ -473,13 +478,16 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     },
   }));
 
-  // Run triggers with listr2
+  // Run triggers with Ink UI (TTY) or simple console output (non-TTY)
   const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
-  const results = await runSkillTasks(tasks, {
+  const taskOptions = {
     mode: reporter.mode,
     verbosity: reporter.verbosity,
     concurrency,
-  });
+  };
+  const results = reporter.mode.isTTY
+    ? await runSkillTasksWithInk(tasks, taskOptions)
+    : await runSkillTasks(tasks, taskOptions);
 
   // Collect reports and check for failures
   const reports: SkillReport[] = [];
