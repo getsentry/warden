@@ -27,6 +27,7 @@ import {
   findingToExistingComment,
 } from '../output/dedup.js';
 import type { ExistingComment } from '../output/dedup.js';
+import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
@@ -584,17 +585,20 @@ async function run(): Promise<void> {
   const results = await processInBatches(matchedTriggers, runSingleTrigger, concurrency);
 
   // Fetch existing Warden comments for deduplication (only for PRs)
+  // Keep original list separate for stale detection (modified list includes newly posted comments)
+  let fetchedComments: ExistingComment[] = [];
   let existingComments: ExistingComment[] = [];
   if (context.pullRequest) {
     try {
-      existingComments = await fetchExistingWardenComments(
+      fetchedComments = await fetchExistingWardenComments(
         octokit,
         context.repository.owner,
         context.repository.name,
         context.pullRequest.number
       );
-      if (existingComments.length > 0) {
-        console.log(`Found ${existingComments.length} existing Warden comments for deduplication`);
+      existingComments = [...fetchedComments];
+      if (fetchedComments.length > 0) {
+        console.log(`Found ${fetchedComments.length} existing Warden comments for deduplication`);
       }
     } catch (error) {
       console.warn(`::warning::Failed to fetch existing comments for deduplication: ${error}`);
@@ -670,6 +674,29 @@ async function run(): Promise<void> {
         failureReasons.push(`${result.triggerName}: Found ${count} ${result.failOn}+ severity issues`);
       }
     }
+  }
+
+  // Resolve stale Warden comments (comments that no longer have matching findings)
+  // Use fetchedComments (not existingComments) to only check comments that have threadIds
+  // Only resolve if ALL triggers succeeded - otherwise findings may be missing due to failures
+  const allTriggersSucceeded = results.every((r) => !r.error);
+  if (context.pullRequest && fetchedComments.length > 0 && allTriggersSucceeded) {
+    try {
+      const allFindings = reports.flatMap((r) => r.findings);
+      const scope = buildAnalyzedScope(context.pullRequest.files);
+      const staleComments = findStaleComments(fetchedComments, allFindings, scope);
+
+      if (staleComments.length > 0) {
+        const resolvedCount = await resolveStaleComments(octokit, staleComments);
+        if (resolvedCount > 0) {
+          console.log(`Resolved ${resolvedCount} stale Warden comments`);
+        }
+      }
+    } catch (error) {
+      console.warn(`::warning::Failed to resolve stale comments: ${error}`);
+    }
+  } else if (!allTriggersSucceeded && fetchedComments.length > 0) {
+    console.log('Skipping stale comment resolution due to trigger failures');
   }
 
   const totalFindings = reports.reduce((sum, r) => sum + r.findings.length, 0);
