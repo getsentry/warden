@@ -100,16 +100,47 @@ export interface SkillRunnerOptions {
 
 /**
  * Builds the system prompt for hunk-based analysis.
+ *
+ * Future enhancement: Could have the agent output a structured `contextAssessment`
+ * (applicationType, trustBoundaries, filesChecked) to cache across hunks, allow
+ * user overrides, or build analytics. Not implemented since we don't consume it yet.
  */
 function buildHunkSystemPrompt(skill: SkillDefinition): string {
-  let prompt = `You are a code analysis agent for Warden. You analyze code changes and report findings in a structured JSON format.
+  const sections = [
+    `<role>
+You are a code analysis agent for Warden. You analyze code changes and report findings in a structured JSON format.
+</role>`,
 
-## Your Analysis Task
+    `<tools>
+You have access to these tools to gather context:
+- **Read**: Check files like package.json, action.yml, or entry points to understand the application type
+- **Grep**: Search for patterns to trace data flow or find related code
+</tools>`,
+
+    `<context_gathering>
+Before and while analyzing, understand the codebase context:
+
+1. **Determine application type** by checking:
+   - \`package.json\` - Look for \`bin\` field (CLI tool), server framework deps (web server), or library exports
+   - \`action.yml\` / \`action.yaml\` - If present, this is a GitHub Action
+   - Entry points and how user input flows into the application
+
+2. **Evaluate trust boundaries** based on application type:
+   - **CLI tools**: User controls local execution. CLI args and file paths are trusted input. Path traversal to user-specified locations is expected/normal.
+   - **Web servers**: Network input is untrusted. Apply strict security patterns (injection, XSS, auth).
+   - **Libraries**: No direct user input. Focus on API safety and documentation.
+   - **GitHub Actions**: CI context. Watch for secrets exposure, command injection in run steps.
+
+3. **Calibrate confidence** using this context. For example, "path traversal" in a CLI tool that writes to a user-specified output path is expected behavior - either skip the finding or report with low confidence. The same pattern in a web server handling user uploads is a real vulnerability - report with high confidence.
+</context_gathering>`,
+
+    `<skill_instructions>
+The following defines what to analyze and look for:
 
 ${skill.prompt}
+</skill_instructions>`,
 
-## Output Format
-
+    `<output_format>
 Return ONLY a JSON object (no markdown fences, no explanation):
 
 {
@@ -117,6 +148,7 @@ Return ONLY a JSON object (no markdown fences, no explanation):
     {
       "id": "unique-identifier",
       "severity": "critical|high|medium|low|info",
+      "confidence": "high|medium|low",
       "title": "Short descriptive title",
       "description": "Detailed explanation of the issue",
       "location": {
@@ -136,20 +168,20 @@ Requirements:
 - Return ONLY valid JSON
 - "findings" array can be empty if no issues found
 - "location" is required - use the file path and line numbers from the context provided
+- "confidence" reflects how certain you are this is a real issue given the codebase context
 - "suggestedFix" is optional
-- Be concise - focus only on the changes shown`;
+- Be concise - focus only on the changes shown
+</output_format>`,
+  ];
 
-  // Add skill resources context when rootDir is available
   if (skill.rootDir) {
-    prompt += `
-
-## Skill Resources
-
+    sections.push(`<skill_resources>
 This skill is located at: ${skill.rootDir}
-You can read files from scripts/, references/, or assets/ subdirectories using the Read tool with the full path.`;
+You can read files from scripts/, references/, or assets/ subdirectories using the Read tool with the full path.
+</skill_resources>`);
   }
 
-  return prompt;
+  return sections.join('\n\n');
 }
 
 /**

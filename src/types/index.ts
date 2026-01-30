@@ -4,6 +4,10 @@ import { z } from 'zod';
 export const SeveritySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
 export type Severity = z.infer<typeof SeveritySchema>;
 
+// Confidence levels for findings
+export const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
+export type Confidence = z.infer<typeof ConfidenceSchema>;
+
 // Severity threshold for config options (includes 'off' to disable)
 export const SeverityThresholdSchema = z.enum(['off', 'critical', 'high', 'medium', 'low', 'info']);
 export type SeverityThreshold = z.infer<typeof SeverityThresholdSchema>;
@@ -51,6 +55,7 @@ export type SuggestedFix = z.infer<typeof SuggestedFixSchema>;
 export const FindingSchema = z.object({
   id: z.string(),
   severity: SeveritySchema,
+  confidence: ConfidenceSchema.optional(),
   title: z.string(),
   description: z.string(),
   location: LocationSchema.optional(),

@@ -48,7 +48,8 @@ function renderReview(
     if (!location) {
       throw new Error('Unexpected: finding without location in filtered list');
     }
-    let body = `**${SEVERITY_EMOJI[finding.severity]} ${finding.title}**\n\n${finding.description}`;
+    const confidenceNote = finding.confidence ? ` (${finding.confidence} confidence)` : '';
+    let body = `**${SEVERITY_EMOJI[finding.severity]} ${finding.title}**${confidenceNote}\n\n${finding.description}`;
 
     if (includeSuggestions && finding.suggestedFix) {
       body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
@@ -205,7 +206,8 @@ function formatLineRange(loc: { startLine: number; endLine?: number }): string {
 
 function renderFindingItem(finding: Finding): string {
   const location = finding.location ? ` (${formatLineRange(finding.location)})` : '';
-  return `- ${SEVERITY_EMOJI[finding.severity]} **${finding.title}**${location}: ${finding.description}`;
+  const confidence = finding.confidence ? ` [${finding.confidence} confidence]` : '';
+  return `- ${SEVERITY_EMOJI[finding.severity]} **${finding.title}**${location}${confidence}: ${finding.description}`;
 }
 
 function groupFindingsByFile(findings: Finding[]): Record<string, Finding[]> {
