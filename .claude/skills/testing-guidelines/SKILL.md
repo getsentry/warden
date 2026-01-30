@@ -1,0 +1,128 @@
+---
+name: testing-guidelines
+description: Guide for writing tests. Use when adding new functionality, fixing bugs, or when tests are needed. Emphasizes integration tests, real-world fixtures, and regression coverage.
+---
+
+# Testing Guidelines
+
+Follow these principles when writing tests for this codebase.
+
+## Core Principles
+
+### 1. Mock External Services, Use Real Fixtures
+
+**ALWAYS** mock third-party network services. **ALWAYS** use fixtures based on real-world data.
+
+- Fixtures must be scrubbed of PII (use dummy data like `foo@example.com`, `user-123`)
+- Capture real API responses, then sanitize them
+- Never make actual network calls in tests
+
+### 2. Prefer Integration Tests Over Unit Tests
+
+Focus on **end-to-end style tests** that validate inputs and outputs, not implementation details.
+
+- Test the public interface, not internal methods
+- Unit tests are valuable for edge cases in pure functions, but integration tests are the priority
+- If refactoring breaks tests but behavior is unchanged, the tests were too coupled to implementation
+
+### 3. Minimize Edge Case Testing
+
+Don't test every variant of a problem.
+
+- Cover the **common path** thoroughly
+- Skip exhaustive input permutations
+- Skip unlikely edge cases that add maintenance burden without value
+- One representative test per category of input is usually sufficient
+
+### 4. Always Add Regression Tests for Bugs
+
+When a bug is identified, **ALWAYS** add a test that would have caught it.
+
+- The test should fail before the fix and pass after
+- Name it descriptively to document the bug
+- This prevents the same bug from recurring
+
+### 5. Cover Every User Entry Point
+
+**ALWAYS** have at least one basic test for each customer/user entry point.
+
+- CLI commands, API endpoints, public functions
+- Test the common/happy path first
+- This proves the entry point works at all
+
+### 6. Tests Validate Before Manual QA
+
+Tests are how we validate **ANY** functionality works before manual testing.
+
+- Write tests first or alongside code, not as an afterthought
+- If you can't test it, reconsider the design
+- Passing tests should give confidence to ship
+
+## Technical Guidelines
+
+### File Organization
+
+- Test files use `*.test.ts` extension
+- Co-locate tests with source: `foo.ts` → `foo.test.ts`
+
+### Test Isolation
+
+Every test must:
+- Run independently without affecting other tests
+- Use temporary directories for file operations
+- Clean up resources in `afterEach` hooks
+
+```typescript
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+describe('my feature', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = join(tmpdir(), `warden-test-${Date.now()}`);
+    mkdirSync(tempDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does something with files', () => {
+    writeFileSync(join(tempDir, 'test.ts'), 'content');
+    // ... test code
+  });
+});
+```
+
+### Pure Function Tests
+
+For pure functions without side effects, no special setup is needed:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { matchGlob } from './matcher.js';
+
+describe('matchGlob', () => {
+  it('matches exact paths', () => {
+    expect(matchGlob('src/index.ts', 'src/index.ts')).toBe(true);
+  });
+});
+```
+
+## Running Tests
+
+```bash
+pnpm test              # Run all tests in watch mode
+pnpm test:run          # Run all tests once
+```
+
+## Checklist Before Submitting
+
+- [ ] New entry points have at least one happy-path test
+- [ ] Bug fixes include a regression test
+- [ ] External services are mocked with sanitized fixtures
+- [ ] Tests validate behavior, not implementation
+- [ ] No shared state between tests
