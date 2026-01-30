@@ -8,6 +8,8 @@ export const CLIOptionsSchema = z.object({
   skill: z.string().optional(),
   config: z.string().optional(),
   json: z.boolean().default(false),
+  /** Write full run output to a JSONL file */
+  output: z.string().optional(),
   failOn: SeverityThresholdSchema.optional(),
   /** Only show findings at or above this severity in output */
   commentOn: SeverityThresholdSchema.optional(),
@@ -72,6 +74,7 @@ Options:
   --config <path>      Path to warden.toml (default: ./warden.toml)
   -m, --model <model>  Model to use (fallback when not set in config)
   --json               Output results as JSON
+  -o, --output <path>  Write full run output to a JSONL file
   --fail-on <severity> Exit with code 1 if findings >= severity
                        (off, critical, high, medium, low, info)
   --comment-on <sev>   Only show findings >= severity in output
@@ -208,6 +211,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       config: { type: 'string' },
       model: { type: 'string', short: 'm' },
       json: { type: 'boolean', default: false },
+      output: { type: 'string', short: 'o' },
       'fail-on': { type: 'string' },
       'comment-on': { type: 'string' },
       fix: { type: 'boolean', default: false },
@@ -318,6 +322,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     config: values.config,
     model: values.model,
     json: values.json,
+    output: values.output,
     failOn: values['fail-on'] as SeverityThreshold | undefined,
     commentOn: values['comment-on'] as SeverityThreshold | undefined,
     fix: values.fix,
