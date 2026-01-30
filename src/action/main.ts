@@ -645,7 +645,11 @@ async function run(): Promise<void> {
             await postReviewToGitHub(octokit, context, renderResultToPost);
 
             // Add newly posted findings to existing comments for cross-trigger deduplication
-            for (const finding of findingsToPost) {
+            // Only include findings up to maxFindings since that's what was actually posted
+            const postedFindings = result.maxFindings
+              ? findingsToPost.slice(0, result.maxFindings)
+              : findingsToPost;
+            for (const finding of postedFindings) {
               const comment = findingToExistingComment(finding);
               if (comment) {
                 existingComments.push(comment);
