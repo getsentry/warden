@@ -676,7 +676,9 @@ async function run(): Promise<void> {
 
   // Resolve stale Warden comments (comments that no longer have matching findings)
   // Use fetchedComments (not existingComments) to only check comments that have threadIds
-  if (context.pullRequest && fetchedComments.length > 0) {
+  // Only resolve if ALL triggers succeeded - otherwise findings may be missing due to failures
+  const allTriggersSucceeded = results.every((r) => !r.error);
+  if (context.pullRequest && fetchedComments.length > 0 && allTriggersSucceeded) {
     try {
       const allFindings = reports.flatMap((r) => r.findings);
       const scope = buildAnalyzedScope(context.pullRequest.files);
@@ -691,6 +693,8 @@ async function run(): Promise<void> {
     } catch (error) {
       console.warn(`::warning::Failed to resolve stale comments: ${error}`);
     }
+  } else if (!allTriggersSucceeded && fetchedComments.length > 0) {
+    console.log('Skipping stale comment resolution due to trigger failures');
   }
 
   const totalFindings = reports.reduce((sum, r) => sum + r.findings.length, 0);
