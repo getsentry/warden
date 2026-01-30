@@ -157,7 +157,7 @@ async function findSemanticDuplicates(
   const findingsList = findings
     .map((f, i) => {
       const loc = f.location ? `${f.location.path}:${f.location.startLine}` : 'general';
-      return `${String.fromCharCode(65 + i)}. [${loc}] "${f.title}" - ${f.description}`;
+      return `${i + 1}. [${loc}] "${f.title}" - ${f.description}`;
     })
     .join('\n');
 
@@ -169,11 +169,11 @@ ${existingList}
 New findings:
 ${findingsList}
 
-Return a JSON array of letters (A, B, etc) for findings that are DUPLICATES of existing comments.
+Return a JSON array of numbers for findings that are DUPLICATES of existing comments.
 Only mark as duplicate if they describe the SAME issue at the SAME location (within a few lines).
 Different issues at the same location are NOT duplicates.
 
-Return ONLY the JSON array, e.g. ["A", "C"] or [] if none are duplicates.`;
+Return ONLY the JSON array, e.g. [1, 3] or [] if none are duplicates.`;
 
   try {
     const response = await client.messages.create({
@@ -187,12 +187,12 @@ Return ONLY the JSON array, e.g. ["A", "C"] or [] if none are duplicates.`;
       throw new Error('Unexpected response type');
     }
 
-    const duplicateLetters = JSON.parse(content.text) as string[];
+    const duplicateIndices = JSON.parse(content.text) as number[];
     const duplicateIds = new Set<string>();
 
-    for (const letter of duplicateLetters) {
-      const index = letter.charCodeAt(0) - 65;
-      const finding = findings[index];
+    for (const num of duplicateIndices) {
+      // Convert 1-based index to 0-based
+      const finding = findings[num - 1];
       if (finding) {
         duplicateIds.add(finding.id);
       }
@@ -251,16 +251,23 @@ export async function deduplicateFindings(
     return findings;
   }
 
-  // Build a set of existing content hashes for fast lookup
-  const existingHashes = new Set(existingComments.map((c) => c.contentHash));
+  // Build a map of existing comments by location+hash for fast lookup
+  // Key format: "path:line:contentHash" to ensure same content at different locations is not deduped
+  const existingKeys = new Set(
+    existingComments.map((c) => `${c.path}:${c.line}:${c.contentHash}`)
+  );
 
-  // First pass: filter out exact hash matches
+  // First pass: filter out exact matches (same content at same location)
   const hashDedupedFindings: Finding[] = [];
   let exactMatchCount = 0;
 
   for (const finding of findings) {
     const hash = generateContentHash(finding.title, finding.description);
-    if (existingHashes.has(hash)) {
+    const line = finding.location?.endLine ?? finding.location?.startLine ?? 0;
+    const path = finding.location?.path ?? '';
+    const key = `${path}:${line}:${hash}`;
+
+    if (existingKeys.has(key)) {
       exactMatchCount++;
     } else {
       hashDedupedFindings.push(finding);

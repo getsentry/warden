@@ -485,6 +485,7 @@ async function run(): Promise<void> {
     commentOn?: typeof inputs.commentOn;
     commentOnSuccess?: boolean;
     checkRunUrl?: string;
+    maxFindings?: number;
     error?: unknown;
   }
 
@@ -556,6 +557,7 @@ async function run(): Promise<void> {
         commentOn,
         commentOnSuccess: trigger.output.commentOnSuccess,
         checkRunUrl: skillCheckUrl,
+        maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
       };
     } catch (error) {
       // Mark skill check as failed
@@ -632,7 +634,7 @@ async function run(): Promise<void> {
                 ? renderSkillReport(
                     { ...result.report, findings: findingsToPost },
                     {
-                      maxFindings: inputs.maxFindings,
+                      maxFindings: result.maxFindings,
                       commentOn: result.commentOn,
                       checkRunUrl: result.checkRunUrl,
                       totalFindings: result.report.findings.length,
