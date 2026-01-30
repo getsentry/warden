@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import {
   clearSkillsCache,
   getBuiltinSkill,
@@ -8,6 +9,7 @@ import {
   loadSkillFromMarkdown,
   loadSkillsFromDirectory,
   resolveSkillAsync,
+  resolveSkillPath,
   SkillLoaderError,
   SKILL_DIRECTORIES,
 } from './loader.js';
@@ -203,5 +205,59 @@ describe('SKILL_DIRECTORIES', () => {
       '.claude/skills',
       '.agents/skills',
     ]);
+  });
+});
+
+describe('resolveSkillPath', () => {
+  it('expands ~ to home directory', () => {
+    const result = resolveSkillPath('~/code/skills/my-skill');
+    expect(result).toBe(join(homedir(), 'code/skills/my-skill'));
+  });
+
+  it('expands lone ~ to home directory', () => {
+    const result = resolveSkillPath('~');
+    expect(result).toBe(homedir());
+  });
+
+  it('preserves absolute paths', () => {
+    const absolutePath = '/Users/test/code/skills/my-skill';
+    const result = resolveSkillPath(absolutePath, '/some/repo');
+    expect(result).toBe(absolutePath);
+  });
+
+  it('joins relative paths with repoRoot', () => {
+    const result = resolveSkillPath('./skills/my-skill', '/repo/root');
+    expect(result).toBe('/repo/root/skills/my-skill');
+  });
+
+  it('returns relative path as-is when no repoRoot', () => {
+    const result = resolveSkillPath('./skills/my-skill');
+    expect(result).toBe('./skills/my-skill');
+  });
+});
+
+describe('resolveSkillAsync with absolute and tilde paths', () => {
+  const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+
+  it('resolves absolute path to skill directory', async () => {
+    const absolutePath = join(builtinSkillsDir, 'security-review');
+    const skill = await resolveSkillAsync(absolutePath, '/different/repo');
+    expect(skill.name).toBe('security-review');
+  });
+
+  it('resolves absolute path to skill file', async () => {
+    const absolutePath = join(builtinSkillsDir, 'security-review', 'SKILL.md');
+    const skill = await resolveSkillAsync(absolutePath, '/different/repo');
+    expect(skill.name).toBe('security-review');
+  });
+
+  it('resolves tilde path to skill directory', async () => {
+    // Create a path using ~ that points to the builtin skills
+    const homeRelativePath = builtinSkillsDir.replace(homedir(), '~');
+    // Only run this test if the skills dir is under home
+    if (homeRelativePath.startsWith('~/')) {
+      const skill = await resolveSkillAsync(`${homeRelativePath}/security-review`, '/different/repo');
+      expect(skill.name).toBe('security-review');
+    }
   });
 });

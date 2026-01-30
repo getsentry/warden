@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { basename, dirname, join, extname } from 'node:path';
+import { basename, dirname, join, extname, isAbsolute } from 'node:path';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { parse as parseToml } from 'smol-toml';
 import { SkillDefinitionSchema, ToolNameSchema, type SkillDefinition, type ToolName } from '../config/schema.js';
 
@@ -26,6 +27,27 @@ export const SKILL_DIRECTORIES = [
  */
 function isSkillPath(nameOrPath: string): boolean {
   return nameOrPath.includes('/') || nameOrPath.includes('\\') || nameOrPath.startsWith('.');
+}
+
+/**
+ * Resolve a skill path, handling absolute paths, tilde expansion, and relative paths.
+ */
+export function resolveSkillPath(nameOrPath: string, repoRoot?: string): string {
+  // Expand ~ to home directory
+  if (nameOrPath.startsWith('~/')) {
+    return join(homedir(), nameOrPath.slice(2));
+  }
+  if (nameOrPath === '~') {
+    return homedir();
+  }
+
+  // Absolute path - use as-is
+  if (isAbsolute(nameOrPath)) {
+    return nameOrPath;
+  }
+
+  // Relative path - join with repoRoot if available
+  return repoRoot ? join(repoRoot, nameOrPath) : nameOrPath;
 }
 
 /**
@@ -341,8 +363,7 @@ export async function resolveSkillAsync(
 
   // 2. Direct path resolution
   if (isSkillPath(nameOrPath)) {
-    // Resolve relative to repoRoot if provided, otherwise use as-is
-    const resolvedPath = repoRoot ? join(repoRoot, nameOrPath) : nameOrPath;
+    const resolvedPath = resolveSkillPath(nameOrPath, repoRoot);
 
     // Check if it's a directory with SKILL.md
     const skillMdPath = join(resolvedPath, 'SKILL.md');
