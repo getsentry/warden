@@ -237,7 +237,8 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
         const skill = await loadSkillFromMarkdown(skillMdPath);
         skills.set(skill.name, skill);
       } catch (error) {
-        console.warn(`Warning: Failed to load skill from ${skillMdPath}:`, error);
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Warning: Skipping invalid skill at ${skillMdPath}: ${message}`);
       }
       continue;
     }
@@ -248,7 +249,8 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
         const skill = await loadSkillFromToml(entryPath);
         skills.set(skill.name, skill);
       } catch (error) {
-        console.warn(`Warning: Failed to load skill from ${entry}:`, error);
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Warning: Skipping invalid skill at ${entryPath}: ${message}`);
       }
     }
   }

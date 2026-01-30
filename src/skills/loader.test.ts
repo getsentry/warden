@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import {
   clearSkillsCache,
   getBuiltinSkill,
@@ -259,5 +260,94 @@ describe('resolveSkillAsync with absolute and tilde paths', () => {
       const skill = await resolveSkillAsync(`${homeRelativePath}/security-review`, '/different/repo');
       expect(skill.name).toBe('security-review');
     }
+  });
+});
+
+describe('graceful handling of invalid skills', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    clearSkillsCache();
+    tempDir = await mkdtemp(join(tmpdir(), 'warden-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('skips skills with missing YAML frontmatter', async () => {
+    // Create a skill directory with invalid SKILL.md (no frontmatter)
+    const skillDir = join(tempDir, 'invalid-skill');
+    await mkdir(skillDir);
+    await writeFile(join(skillDir, 'SKILL.md'), 'Just some content without frontmatter');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const skills = await loadSkillsFromDirectory(tempDir);
+
+    expect(skills.size).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Warning: Skipping invalid skill')
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('missing YAML frontmatter')
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('skips skills with invalid YAML frontmatter', async () => {
+    // Create a skill directory with malformed YAML
+    const skillDir = join(tempDir, 'malformed-skill');
+    await mkdir(skillDir);
+    await writeFile(
+      join(skillDir, 'SKILL.md'),
+      `---
+name: test-skill
+---
+Content here`
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const skills = await loadSkillsFromDirectory(tempDir);
+
+    // Missing description should cause validation to fail
+    expect(skills.size).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Warning: Skipping invalid skill')
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('loads valid skills alongside invalid ones', async () => {
+    // Create a valid skill
+    const validSkillDir = join(tempDir, 'valid-skill');
+    await mkdir(validSkillDir);
+    await writeFile(
+      join(validSkillDir, 'SKILL.md'),
+      `---
+name: valid-skill
+description: A valid skill
+---
+Do something useful`
+    );
+
+    // Create an invalid skill
+    const invalidSkillDir = join(tempDir, 'invalid-skill');
+    await mkdir(invalidSkillDir);
+    await writeFile(join(invalidSkillDir, 'SKILL.md'), 'No frontmatter here');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const skills = await loadSkillsFromDirectory(tempDir);
+
+    // Should load the valid skill and skip the invalid one
+    expect(skills.size).toBe(1);
+    expect(skills.has('valid-skill')).toBe(true);
+    expect(warnSpy).toHaveBeenCalledOnce();
+
+    warnSpy.mockRestore();
   });
 });
