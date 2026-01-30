@@ -177,7 +177,7 @@ Return ONLY the JSON array, e.g. [1, 3] or [] if none are duplicates.`;
 
   try {
     const response = await client.messages.create({
-      model: 'claude-haiku-4-20250514',
+      model: 'claude-haiku-4-5',
       max_tokens: 256,
       messages: [{ role: 'user', content: prompt }],
     });
