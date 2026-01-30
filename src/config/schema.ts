@@ -72,6 +72,8 @@ export const TriggerSchema = z.object({
   output: OutputConfigSchema.optional(),
   /** Model to use for this trigger (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
   model: z.string().optional(),
+  /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
+  maxTurns: z.number().int().positive().optional(),
   /** Schedule-specific configuration. Only used when event is 'schedule'. */
   schedule: ScheduleConfigSchema.optional(),
 }).refine(
@@ -114,6 +116,8 @@ export const DefaultsSchema = z.object({
   output: OutputConfigSchema.optional(),
   /** Default model for all triggers (e.g., 'claude-sonnet-4-20250514') */
   model: z.string().optional(),
+  /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
+  maxTurns: z.number().int().positive().optional(),
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;
 

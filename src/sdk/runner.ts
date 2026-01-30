@@ -236,7 +236,7 @@ async function analyzeHunk(
   repoPath: string,
   options: SkillRunnerOptions
 ): Promise<HunkAnalysisResult> {
-  const { maxTurns = 5, model, abortController, pathToClaudeCodeExecutable } = options;
+  const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(hunkCtx);
