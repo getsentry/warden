@@ -19,6 +19,7 @@ import {
   Verbosity,
   runSkillTasks,
   pluralize,
+  writeJsonlReport,
   type SkillTaskOptions,
 } from './output/index.js';
 import {
@@ -157,6 +158,15 @@ async function runSkills(
   // Filter reports for output based on commentOn threshold
   const filteredReports = filterReportsBySeverity(reports, options.commentOn);
 
+  // Calculate total duration
+  const totalDuration = Date.now() - startTime;
+
+  // Write JSONL output if requested (uses unfiltered reports for complete data)
+  if (options.output) {
+    writeJsonlReport(options.output, reports, totalDuration);
+    reporter.success(`Wrote JSONL output to ${options.output}`);
+  }
+
   // Output results
   reporter.blank();
   if (options.json) {
@@ -166,7 +176,6 @@ async function runSkills(
   }
 
   // Show summary (uses filtered reports for display)
-  const totalDuration = Date.now() - startTime;
   reporter.blank();
   reporter.renderSummary(filteredReports, totalDuration);
 
@@ -448,6 +457,15 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Filter reports for output based on commentOn threshold
   const filteredReports = filterReportsBySeverity(reports, options.commentOn);
 
+  // Calculate total duration
+  const totalDuration = Date.now() - startTime;
+
+  // Write JSONL output if requested (uses unfiltered reports for complete data)
+  if (options.output) {
+    writeJsonlReport(options.output, reports, totalDuration);
+    reporter.success(`Wrote JSONL output to ${options.output}`);
+  }
+
   // Output results
   reporter.blank();
   if (options.json) {
@@ -457,7 +475,6 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // Show summary (uses filtered reports for display)
-  const totalDuration = Date.now() - startTime;
   reporter.blank();
   reporter.renderSummary(filteredReports, totalDuration);
 
