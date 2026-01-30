@@ -54,10 +54,11 @@ export function formatSeverityDot(severity: Severity): string {
 }
 
 /**
- * Format a severity badge for terminal output (colored dot).
+ * Format a severity badge for terminal output (colored dot + severity text).
  */
 export function formatSeverityBadge(severity: Severity): string {
-  return formatSeverityDot(severity);
+  const config = SEVERITY_CONFIG[severity];
+  return `${config.color(config.symbol)} ${config.color(`(${severity})`)}`;
 }
 
 /**
