@@ -48,9 +48,11 @@ When a **bug** is identified, **ALWAYS** add a test that would have caught it.
 
 **ALWAYS** have at least one basic test for each customer/user entry point.
 
-- CLI commands, API endpoints, public functions
+- CLI commands, API endpoints, public/exported functions
 - Test the common/happy path first
 - This proves the entry point works at all
+
+**Note:** "Entry point" means the public interface—exported functions, CLI commands, API routes. Internal/private functions are NOT entry points, even if they handle user-facing flags or options. Test entry points; internal functions get coverage through those tests.
 
 ### 6. Tests Validate Before Manual QA
 
