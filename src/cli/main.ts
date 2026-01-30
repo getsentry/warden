@@ -104,6 +104,7 @@ async function runSkills(
   let repoPath: string | undefined;
   let skillsConfig: SkillDefinition[] | undefined;
   let defaultsModel: string | undefined;
+  let defaultsMaxTurns: number | undefined;
 
   try {
     repoPath = getRepoRoot(cwd);
@@ -114,6 +115,7 @@ async function runSkills(
       const config = loadWardenConfig(dirname(configPath));
       skillsConfig = config.skills;
       defaultsModel = config.defaults?.model;
+      defaultsMaxTurns = config.defaults?.maxTurns;
     }
   } catch {
     // Not in a git repo or no config - that's fine
@@ -122,7 +124,7 @@ async function runSkills(
   // Build skill tasks
   // Model precedence: defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
   const model = defaultsModel ?? options.model ?? process.env['WARDEN_MODEL'];
-  const runnerOptions: SkillRunnerOptions = { apiKey, model, abortController };
+  const runnerOptions: SkillRunnerOptions = { apiKey, model, abortController, maxTurns: defaultsMaxTurns };
   const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
     name: skillName,
     failOn: options.failOn,
@@ -432,7 +434,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     failOn: trigger.output.failOn ?? options.failOn,
     resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, config.skills),
     context,
-    runnerOptions: { apiKey, model: trigger.model, abortController },
+    runnerOptions: {
+      apiKey,
+      model: trigger.model,
+      abortController,
+      maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+    },
   }));
 
   // Run triggers with listr2

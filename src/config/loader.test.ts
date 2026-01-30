@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveTrigger } from './loader.js';
-import type { Trigger, WardenConfig } from './schema.js';
+import { WardenConfigSchema, type Trigger, type WardenConfig } from './schema.js';
 
 describe('resolveTrigger', () => {
   const baseTrigger: Trigger = {
@@ -192,5 +192,66 @@ describe('resolveTrigger', () => {
 
       expect(resolved.model).toBe('claude-haiku-3-5-20241022');
     });
+  });
+});
+
+describe('maxTurns config', () => {
+  it('accepts maxTurns in defaults', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        maxTurns: 25,
+      },
+      triggers: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.maxTurns).toBe(25);
+  });
+
+  it('accepts maxTurns in trigger', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        {
+          name: 'test',
+          event: 'pull_request',
+          actions: ['opened'],
+          skill: 'security-review',
+          maxTurns: 30,
+        },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.triggers[0]?.maxTurns).toBe(30);
+  });
+
+  it('rejects non-positive maxTurns', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        maxTurns: 0,
+      },
+      triggers: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-integer maxTurns', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        maxTurns: 10.5,
+      },
+      triggers: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
   });
 });

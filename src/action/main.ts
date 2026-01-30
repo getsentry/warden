@@ -318,6 +318,7 @@ async function runScheduledAnalysis(
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
+        maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);
@@ -518,6 +519,7 @@ async function run(): Promise<void> {
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
         model: trigger.model,
+        maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);
