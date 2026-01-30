@@ -1,5 +1,6 @@
 export {
   clearSkillsCache,
+  discoverAllSkills,
   getBuiltinSkill,
   getBuiltinSkillNames,
   loadSkillFromFile,
@@ -9,4 +10,4 @@ export {
   SkillLoaderError,
 } from './loader.js';
 
-export type { LoadedSkill } from './loader.js';
+export type { DiscoveredSkill, LoadedSkill } from './loader.js';

@@ -247,9 +247,13 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
       try {
         const skill = await loadSkillFromMarkdown(entryPath);
         skills.set(skill.name, { skill, entry });
-      } catch {
-        // Silently skip .md files that don't have valid SKILL.md format
-        // (e.g., README.md, documentation files)
+      } catch (error) {
+        // Skip files without YAML frontmatter (e.g., README.md, documentation)
+        // But warn about files that have frontmatter but are malformed
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('missing YAML frontmatter')) {
+          console.warn(`Warning: Failed to load skill from ${entry}: ${message}`);
+        }
       }
     }
   }
@@ -326,11 +330,14 @@ export async function discoverAllSkills(repoRoot?: string): Promise<Map<string, 
 
     const skills = await loadSkillsFromDirectory(dirPath);
     for (const [name, loaded] of skills) {
-      result.set(name, {
-        skill: loaded.skill,
-        directory: `./${dir}`,
-        path: join(dirPath, loaded.entry),
-      });
+      // First directory wins - don't overwrite existing skills
+      if (!result.has(name)) {
+        result.set(name, {
+          skill: loaded.skill,
+          directory: `./${dir}`,
+          path: join(dirPath, loaded.entry),
+        });
+      }
     }
   }
 
