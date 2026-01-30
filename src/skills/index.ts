@@ -9,3 +9,5 @@ export {
   resolveSkillAsync,
   SkillLoaderError,
 } from './loader.js';
+
+export type { LoadedSkill } from './loader.js';

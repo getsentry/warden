@@ -202,8 +202,8 @@ describe('SKILL_DIRECTORIES', () => {
   it('contains expected directories in order', () => {
     expect(SKILL_DIRECTORIES).toEqual([
       '.warden/skills',
-      '.claude/skills',
       '.agents/skills',
+      '.claude/skills',
     ]);
   });
 });
@@ -259,5 +259,28 @@ describe('resolveSkillAsync with absolute and tilde paths', () => {
       const skill = await resolveSkillAsync(`${homeRelativePath}/security-review`, '/different/repo');
       expect(skill.name).toBe('security-review');
     }
+  });
+});
+
+describe('flat markdown skill files', () => {
+  it('loadSkillFromFile accepts .md extension', async () => {
+    // A flat .md file should be loaded using loadSkillFromMarkdown
+    // (same as SKILL.md format with frontmatter)
+    const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+    const skillMdPath = join(builtinSkillsDir, 'security-review', 'SKILL.md');
+    const skill = await loadSkillFromFile(skillMdPath);
+    expect(skill.name).toBe('security-review');
+  });
+
+  it('loadSkillsFromDirectory returns entry paths for tracking', async () => {
+    const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+    clearSkillsCache();
+    const skills = await loadSkillsFromDirectory(builtinSkillsDir);
+
+    // Each loaded skill should have an entry field matching the directory name
+    const securityReview = skills.get('security-review');
+    expect(securityReview).toBeDefined();
+    expect(securityReview!.skill.name).toBe('security-review');
+    expect(securityReview!.entry).toBe('security-review');
   });
 });
