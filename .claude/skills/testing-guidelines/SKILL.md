@@ -36,11 +36,13 @@ Don't test every variant of a problem.
 
 ### 4. Always Add Regression Tests for Bugs
 
-When a bug is identified, **ALWAYS** add a test that would have caught it.
+When a **bug** is identified, **ALWAYS** add a test that would have caught it.
 
 - The test should fail before the fix and pass after
 - Name it descriptively to document the bug
 - This prevents the same bug from recurring
+
+**Note:** Regression tests are for unintentional broken behavior (bugs), not intentional changes. Intentional feature removals, deprecations, or breaking changes do NOT need regression tests—these are design decisions, not defects.
 
 ### 5. Cover Every User Entry Point
 
@@ -122,7 +124,7 @@ pnpm test:run          # Run all tests once
 ## Checklist Before Submitting
 
 - [ ] New entry points have at least one happy-path test
-- [ ] Bug fixes include a regression test
+- [ ] Bug fixes (not intentional changes) include a regression test
 - [ ] External services are mocked with sanitized fixtures
 - [ ] Tests validate behavior, not implementation
 - [ ] No shared state between tests
