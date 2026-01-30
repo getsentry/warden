@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { basename, dirname, join, extname, isAbsolute } from 'node:path';
+import { dirname, extname, isAbsolute, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { SkillDefinition, ToolName } from '../config/schema.js';
@@ -186,14 +186,12 @@ export async function loadSkillFromMarkdown(filePath: string): Promise<SkillDefi
  */
 export async function loadSkillFromFile(filePath: string): Promise<SkillDefinition> {
   const ext = extname(filePath).toLowerCase();
-  const filename = basename(filePath);
 
-  // Support SKILL.md (in directory) or any .md file with valid frontmatter
-  if (filename === 'SKILL.md' || ext === '.md') {
+  if (ext === '.md') {
     return loadSkillFromMarkdown(filePath);
-  } else {
-    throw new SkillLoaderError(`Unsupported skill file: ${filePath}. Skills must be .md files following the agentskills.io format.`);
   }
+
+  throw new SkillLoaderError(`Unsupported skill file: ${filePath}. Skills must be .md files following the agentskills.io format.`);
 }
 
 /**
