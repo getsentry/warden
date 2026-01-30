@@ -179,39 +179,36 @@ async function postReviewToGitHub(
     return;
   }
 
+  // Only post PR reviews with inline comments - skip standalone summary comments
+  // as they add noise without providing actionable inline feedback
+  if (!result.review) {
+    return;
+  }
+
   const { owner, name: repo } = context.repository;
   const pullNumber = context.pullRequest.number;
   const commitId = context.pullRequest.headSha;
 
-  if (result.review) {
-    const reviewComments = result.review.comments
-      .filter((c): c is typeof c & { path: string; line: number } => Boolean(c.path && c.line))
-      .map((c) => ({
-        path: c.path,
-        line: c.line,
-        side: c.side ?? ('RIGHT' as const),
-        body: c.body,
-        start_line: c.start_line,
-        start_side: c.start_line ? c.start_side ?? ('RIGHT' as const) : undefined,
-      }));
+  const reviewComments = result.review.comments
+    .filter((c): c is typeof c & { path: string; line: number } => Boolean(c.path && c.line))
+    .map((c) => ({
+      path: c.path,
+      line: c.line,
+      side: c.side ?? ('RIGHT' as const),
+      body: c.body,
+      start_line: c.start_line,
+      start_side: c.start_line ? c.start_side ?? ('RIGHT' as const) : undefined,
+    }));
 
-    await octokit.pulls.createReview({
-      owner,
-      repo,
-      pull_number: pullNumber,
-      commit_id: commitId,
-      event: result.review.event,
-      body: result.review.body,
-      comments: reviewComments,
-    });
-  } else {
-    await octokit.issues.createComment({
-      owner,
-      repo,
-      issue_number: pullNumber,
-      body: result.summaryComment,
-    });
-  }
+  await octokit.pulls.createReview({
+    owner,
+    repo,
+    pull_number: pullNumber,
+    commit_id: commitId,
+    event: result.review.event,
+    body: result.review.body,
+    comments: reviewComments,
+  });
 }
 
 /**
