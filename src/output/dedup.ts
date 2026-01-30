@@ -26,6 +26,8 @@ export interface ExistingComment {
   title: string;
   description: string;
   contentHash: string;
+  /** GraphQL node ID for the review thread (used to resolve stale comments) */
+  threadId?: string;
 }
 
 /**
@@ -98,8 +100,66 @@ export function isWardenComment(body: string): boolean {
   return body.includes('<sub>warden:') || body.includes('<!-- warden:v1:');
 }
 
+/** GraphQL response structure for review threads */
+interface ReviewThreadNode {
+  id: string;
+  isResolved: boolean;
+  comments: {
+    nodes: {
+      databaseId: number;
+      body: string;
+      path: string;
+      line: number | null;
+      originalLine: number | null;
+    }[];
+  };
+}
+
+interface ReviewThreadsResponse {
+  repository?: {
+    pullRequest?: {
+      reviewThreads: {
+        pageInfo: {
+          hasNextPage: boolean;
+          endCursor: string | null;
+        };
+        nodes: ReviewThreadNode[];
+      };
+    } | null;
+  } | null;
+}
+
+const REVIEW_THREADS_QUERY = `
+  query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $prNumber) {
+        reviewThreads(first: 100, after: $cursor) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            id
+            isResolved
+            comments(first: 1) {
+              nodes {
+                databaseId
+                body
+                path
+                line
+                originalLine
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 /**
  * Fetch all existing Warden review comments for a PR.
+ * Uses GraphQL to get thread IDs for stale comment resolution.
  */
 export async function fetchExistingWardenComments(
   octokit: Octokit,
@@ -109,32 +169,56 @@ export async function fetchExistingWardenComments(
 ): Promise<ExistingComment[]> {
   const comments: ExistingComment[] = [];
 
-  // Fetch review comments (inline comments on code)
-  const reviewComments = await octokit.paginate(octokit.pulls.listReviewComments, {
-    owner,
-    repo,
-    pull_number: prNumber,
-    per_page: 100,
-  });
+  // Use GraphQL to get thread IDs along with comment data
+  let cursor: string | null = null;
+  let hasNextPage = true;
 
-  for (const comment of reviewComments) {
-    if (!isWardenComment(comment.body)) {
-      continue;
+  while (hasNextPage) {
+    const response: ReviewThreadsResponse = await octokit.graphql(REVIEW_THREADS_QUERY, {
+      owner,
+      repo,
+      prNumber,
+      cursor,
+    });
+
+    const pullRequest = response.repository?.pullRequest;
+    if (!pullRequest) {
+      // PR doesn't exist or was deleted
+      return comments;
     }
 
-    const marker = parseMarker(comment.body);
-    const parsed = parseWardenComment(comment.body);
+    const threads = pullRequest.reviewThreads;
 
-    if (parsed) {
-      comments.push({
-        id: comment.id,
-        path: marker?.path ?? comment.path,
-        line: marker?.line ?? comment.line ?? comment.original_line ?? 0,
-        title: parsed.title,
-        description: parsed.description,
-        contentHash: marker?.contentHash ?? generateContentHash(parsed.title, parsed.description),
-      });
+    for (const thread of threads.nodes) {
+      // Skip resolved threads - they're already handled
+      if (thread.isResolved) {
+        continue;
+      }
+
+      // Get the first comment in the thread (the main Warden comment)
+      const firstComment = thread.comments.nodes[0];
+      if (!firstComment || !isWardenComment(firstComment.body)) {
+        continue;
+      }
+
+      const marker = parseMarker(firstComment.body);
+      const parsed = parseWardenComment(firstComment.body);
+
+      if (parsed) {
+        comments.push({
+          id: firstComment.databaseId,
+          path: marker?.path ?? firstComment.path,
+          line: marker?.line ?? firstComment.line ?? firstComment.originalLine ?? 0,
+          title: parsed.title,
+          description: parsed.description,
+          contentHash: marker?.contentHash ?? generateContentHash(parsed.title, parsed.description),
+          threadId: thread.id,
+        });
+      }
     }
+
+    hasNextPage = threads.pageInfo.hasNextPage;
+    cursor = threads.pageInfo.endCursor;
   }
 
   return comments;
