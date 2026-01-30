@@ -450,6 +450,7 @@ export async function runSkill(
   options: SkillRunnerOptions = {}
 ): Promise<SkillReport> {
   const { parallel = true, callbacks, abortController } = options;
+  const startTime = Date.now();
 
   if (!context.pullRequest) {
     throw new SkillRunnerError('Pull request context required for skill execution');
@@ -464,6 +465,7 @@ export async function runSkill(
       summary: 'No code changes to analyze',
       findings: [],
       usage: emptyUsage(),
+      durationMs: Date.now() - startTime,
     };
   }
 
@@ -556,6 +558,7 @@ export async function runSkill(
     summary,
     findings: uniqueFindings,
     usage: totalUsage,
+    durationMs: Date.now() - startTime,
   };
 }
 
