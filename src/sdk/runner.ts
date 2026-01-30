@@ -141,8 +141,12 @@ ${skill.prompt}
 </skill_instructions>`,
 
     `<output_format>
-Return ONLY a JSON object (no markdown fences, no explanation):
+IMPORTANT: Your response must be ONLY a valid JSON object. No markdown, no explanation, no code fences.
 
+Example response format:
+{"findings": [{"id": "example-1", "severity": "medium", "confidence": "high", "title": "Issue title", "description": "Description", "location": {"path": "file.ts", "startLine": 10}}]}
+
+Full schema:
 {
   "findings": [
     {
@@ -165,7 +169,7 @@ Return ONLY a JSON object (no markdown fences, no explanation):
 }
 
 Requirements:
-- Return ONLY valid JSON
+- Return ONLY valid JSON starting with {"findings":
 - "findings" array can be empty if no issues found
 - "location" is required - use the file path and line numbers from the context provided
 - "confidence" reflects how certain you are this is a real issue given the codebase context
@@ -207,16 +211,18 @@ function parseHunkOutput(result: SDKResultMessage, filename: string): Finding[] 
 
   const text = result.result.trim();
 
-  // Try to extract JSON from the response - prefer matching from start
-  // to avoid capturing invalid JSON when there's explanatory text with braces
-  let jsonMatch = text.match(/^\{[\s\S]*\}$/);
+  // Look specifically for {"findings": to avoid matching code braces like {variable}
+  // First try exact match (response is only JSON)
+  let jsonMatch = text.match(/^\{"findings":\s*\[[\s\S]*\][\s\S]*\}$/);
   if (!jsonMatch) {
-    // Fall back to finding JSON anywhere in the response
-    jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Fall back to finding findings JSON anywhere in the response
+    jsonMatch = text.match(/\{"findings":\s*\[[\s\S]*?\]\s*\}/);
   }
 
   if (!jsonMatch) {
-    console.error('No JSON found in hunk output');
+    // Log a preview of non-JSON output for debugging
+    const preview = text.slice(0, 200);
+    console.error(`No findings JSON in hunk output. Content preview: ${preview}${text.length > 200 ? '...' : ''}`);
     return [];
   }
 
@@ -225,7 +231,7 @@ function parseHunkOutput(result: SDKResultMessage, filename: string): Finding[] 
     parsed = JSON.parse(jsonMatch[0]);
   } catch {
     const preview = jsonMatch[0].slice(0, 200);
-    console.error(`Failed to parse hunk JSON output. Content preview: ${preview}${jsonMatch[0].length > 200 ? '...' : ''}`);
+    console.error(`Failed to parse findings JSON. Content preview: ${preview}${jsonMatch[0].length > 200 ? '...' : ''}`);
     return [];
   }
 

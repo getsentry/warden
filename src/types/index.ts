@@ -8,6 +8,16 @@ export type Severity = z.infer<typeof SeveritySchema>;
 export const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 export type Confidence = z.infer<typeof ConfidenceSchema>;
 
+/**
+ * Confidence order for comparison (lower = more confident).
+ * Single source of truth for confidence ordering across the codebase.
+ */
+export const CONFIDENCE_ORDER: Record<Confidence, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
 // Severity threshold for config options (includes 'off' to disable)
 export const SeverityThresholdSchema = z.enum(['off', 'critical', 'high', 'medium', 'low', 'info']);
 export type SeverityThreshold = z.infer<typeof SeverityThresholdSchema>;
