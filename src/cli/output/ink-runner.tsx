@@ -17,8 +17,11 @@ import { formatDuration, truncate, countBySeverity, formatSeverityDot } from './
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, SPINNER_FRAMES } from './icons.js';
 
+type StaticItem = { type: 'header' } | { type: 'skill'; skill: SkillState };
+
 interface SkillRunnerProps {
   skills: SkillState[];
+  completedItems: SkillState[];
 }
 
 function Spinner(): React.ReactElement {
@@ -123,32 +126,44 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
   );
 }
 
-function SkillRunner({ skills }: SkillRunnerProps): React.ReactElement {
-  const completed = skills.filter((s) => s.status === 'done' || s.status === 'skipped' || s.status === 'error');
+function SkillRunner({ skills, completedItems }: SkillRunnerProps): React.ReactElement {
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
 
-  return (
-    <Box flexDirection="column">
-      <Text bold>SKILLS</Text>
+  // Build static items: header first, then completed skills
+  const staticItems: StaticItem[] = [
+    { type: 'header' },
+    ...completedItems.map((skill) => ({ type: 'skill' as const, skill })),
+  ];
 
-      {/* Completed skills - rendered with Static to prevent re-renders */}
-      <Static items={completed}>
-        {(skill) => <CompletedSkill key={skill.name} skill={skill} />}
+  return (
+    <>
+      {/* Static content: header + completed skills */}
+      <Static items={staticItems}>
+        {(item) => {
+          if (item.type === 'header') {
+            return (
+              <Text key="header" bold>
+                SKILLS
+              </Text>
+            );
+          }
+          return <CompletedSkill key={item.skill.name} skill={item.skill} />;
+        }}
       </Static>
 
-      {/* Running skills */}
-      {running.map((skill) => (
-        <RunningSkill key={skill.name} skill={skill} />
-      ))}
-
-      {/* Pending skills */}
-      {pending.map((skill) => (
-        <Text key={skill.name} dimColor>
-          {'\u25CB'} {skill.displayName}
-        </Text>
-      ))}
-    </Box>
+      {/* Dynamic content: running + pending */}
+      <Box flexDirection="column">
+        {running.map((skill) => (
+          <RunningSkill key={skill.name} skill={skill} />
+        ))}
+        {pending.map((skill) => (
+          <Text key={skill.name} dimColor>
+            {'\u25CB'} {skill.displayName}
+          </Text>
+        ))}
+      </Box>
+    </>
   );
 }
 
@@ -183,15 +198,17 @@ export async function runSkillTasksWithInk(
 
   // Track skill states
   const skillStates: SkillState[] = [];
+  const completedItems: SkillState[] = [];
+  const completedNames = new Set<string>();
 
   // Create Ink instance
   const { rerender, unmount } = render(
-    <SkillRunner skills={skillStates} />,
+    <SkillRunner skills={skillStates} completedItems={completedItems} />,
     { stdout: process.stderr }
   );
 
   const updateUI = () => {
-    rerender(<SkillRunner skills={[...skillStates]} />);
+    rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} />);
   };
 
   // Callbacks to update state
@@ -204,7 +221,15 @@ export async function runSkillTasksWithInk(
       const idx = skillStates.findIndex((s) => s.name === name);
       const existing = skillStates[idx];
       if (idx >= 0 && existing) {
-        skillStates[idx] = { ...existing, ...updates };
+        const updated = { ...existing, ...updates };
+        skillStates[idx] = updated;
+
+        // If skill just completed, add to completedItems (only once)
+        if (updates.status === 'done' && !completedNames.has(name)) {
+          completedNames.add(name);
+          completedItems.push(updated);
+        }
+
         updateUI();
       }
     },
@@ -223,31 +248,50 @@ export async function runSkillTasksWithInk(
     },
     onSkillSkipped: (name) => {
       const task = tasks.find((t) => t.name === name);
-      skillStates.push({
+      const skipped: SkillState = {
         name,
         displayName: task?.displayName ?? name,
         status: 'skipped',
         files: [],
         findings: [],
-      });
+      };
+      skillStates.push(skipped);
+
+      // Add to completedItems (only once)
+      if (!completedNames.has(name)) {
+        completedNames.add(name);
+        completedItems.push(skipped);
+      }
+
       updateUI();
     },
     onSkillError: (name, error) => {
       const idx = skillStates.findIndex((s) => s.name === name);
       const existing = skillStates[idx];
+      let errorState: SkillState;
+
       if (idx >= 0 && existing) {
-        skillStates[idx] = { ...existing, status: 'error', error };
+        errorState = { ...existing, status: 'error', error };
+        skillStates[idx] = errorState;
       } else {
         const task = tasks.find((t) => t.name === name);
-        skillStates.push({
+        errorState = {
           name,
           displayName: task?.displayName ?? name,
           status: 'error',
           error,
           files: [],
           findings: [],
-        });
+        };
+        skillStates.push(errorState);
       }
+
+      // Add to completedItems (only once)
+      if (!completedNames.has(name)) {
+        completedNames.add(name);
+        completedItems.push(errorState);
+      }
+
       updateUI();
     },
   };
