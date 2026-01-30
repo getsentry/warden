@@ -484,6 +484,7 @@ async function run(): Promise<void> {
     failOn?: typeof inputs.failOn;
     commentOn?: typeof inputs.commentOn;
     commentOnSuccess?: boolean;
+    checkRunUrl?: string;
     error?: unknown;
   }
 
@@ -554,6 +555,7 @@ async function run(): Promise<void> {
         failOn,
         commentOn,
         commentOnSuccess: trigger.output.commentOnSuccess,
+        checkRunUrl: skillCheckUrl,
       };
     } catch (error) {
       // Mark skill check as failed
@@ -632,6 +634,7 @@ async function run(): Promise<void> {
                     {
                       maxFindings: inputs.maxFindings,
                       commentOn: result.commentOn,
+                      checkRunUrl: result.checkRunUrl,
                       totalFindings: result.report.findings.length,
                     }
                   )
