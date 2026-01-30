@@ -109,7 +109,7 @@ export async function runSkillTask(
     const skill = await resolveSkill();
 
     // Prepare files (parse patches into hunks)
-    const preparedFiles = prepareFiles(context, {
+    const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
       contextLines: runnerOptions.contextLines,
     });
 
@@ -123,6 +123,7 @@ export async function runSkillTask(
           summary: 'No code changes to analyze',
           findings: [],
           usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+          skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
         },
         failOn,
       };
@@ -211,6 +212,7 @@ export async function runSkillTask(
       findings: uniqueFindings,
       usage: aggregateUsage(allUsage),
       durationMs: duration,
+      skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
     };
 
     // Notify skill complete

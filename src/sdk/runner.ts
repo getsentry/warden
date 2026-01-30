@@ -1,11 +1,13 @@
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { SkillDefinition } from '../config/schema.js';
+import type { SkillDefinition, ChunkingConfig } from '../config/schema.js';
 import { FindingSchema } from '../types/index.js';
-import type { EventContext, SkillReport, Finding, UsageStats } from '../types/index.js';
+import type { EventContext, SkillReport, Finding, UsageStats, SkippedFile } from '../types/index.js';
 import {
   parseFileDiff,
   expandDiffContext,
   formatHunkForAnalysis,
+  classifyFile,
+  coalesceHunks,
   type HunkWithContext,
 } from '../diff/index.js';
 
@@ -454,27 +456,50 @@ function attachElapsedTime(findings: Finding[], skillStartTime: number | undefin
 export interface PrepareFilesOptions {
   /** Lines of context to include around each hunk */
   contextLines?: number;
+  /** Chunking configuration for file patterns and coalescing */
+  chunking?: ChunkingConfig;
+}
+
+/**
+ * Result from preparing files for analysis.
+ */
+export interface PrepareFilesResult {
+  /** Files prepared for analysis */
+  files: PreparedFile[];
+  /** Files that were skipped due to chunking patterns */
+  skippedFiles: SkippedFile[];
 }
 
 /**
  * Prepare files for analysis by parsing patches into hunks with context.
- * Returns files that have changes to analyze.
+ * Returns files that have changes to analyze and files that were skipped.
  */
 export function prepareFiles(
   context: EventContext,
   options: PrepareFilesOptions = {}
-): PreparedFile[] {
-  const { contextLines = 20 } = options;
+): PrepareFilesResult {
+  const { contextLines = 20, chunking } = options;
 
   if (!context.pullRequest) {
-    return [];
+    return { files: [], skippedFiles: [] };
   }
 
   const pr = context.pullRequest;
   const allHunks: HunkWithContext[] = [];
+  const skippedFiles: SkippedFile[] = [];
 
   for (const file of pr.files) {
     if (!file.patch) continue;
+
+    // Check if this file should be skipped based on chunking patterns
+    const mode = classifyFile(file.filename, chunking?.filePatterns);
+    if (mode === 'skip') {
+      skippedFiles.push({
+        filename: file.filename,
+        reason: 'builtin', // Could be enhanced to track which pattern matched
+      });
+      continue;
+    }
 
     const statusMap: Record<string, 'added' | 'removed' | 'modified' | 'renamed'> = {
       added: 'added',
@@ -488,11 +513,24 @@ export function prepareFiles(
     const status = statusMap[file.status] ?? 'modified';
 
     const diff = parseFileDiff(file.filename, file.patch, status);
-    const hunksWithContext = expandDiffContext(context.repoPath, diff, contextLines);
+
+    // Apply hunk coalescing if enabled (default: enabled)
+    const hunks =
+      chunking?.coalesce?.enabled !== false
+        ? coalesceHunks(diff.hunks, {
+            maxGapLines: chunking?.coalesce?.maxGapLines,
+            maxChunkSize: chunking?.coalesce?.maxChunkSize,
+          })
+        : diff.hunks;
+
+    const hunksWithContext = expandDiffContext(context.repoPath, { ...diff, hunks }, contextLines);
     allHunks.push(...hunksWithContext);
   }
 
-  return groupHunksByFile(allHunks);
+  return {
+    files: groupHunksByFile(allHunks),
+    skippedFiles,
+  };
 }
 
 /**
@@ -564,8 +602,12 @@ export async function runSkill(
     throw new SkillRunnerError('Pull request context required for skill execution');
   }
 
-  // Prepare files using shared logic
-  const fileHunks = prepareFiles(context, { contextLines: options.contextLines });
+  // Prepare files using shared logic (includes chunking)
+  const { files: fileHunks, skippedFiles } = prepareFiles(context, {
+    contextLines: options.contextLines,
+    // Note: chunking config should come from the caller (e.g., from warden.toml defaults)
+    // For now, we use built-in defaults. The caller can pass explicit chunking config.
+  });
 
   if (fileHunks.length === 0) {
     return {
@@ -574,6 +616,7 @@ export async function runSkill(
       findings: [],
       usage: emptyUsage(),
       durationMs: Date.now() - startTime,
+      skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
     };
   }
 
@@ -667,6 +710,7 @@ export async function runSkill(
     findings: uniqueFindings,
     usage: totalUsage,
     durationMs: Date.now() - startTime,
+    skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
   };
 }
 

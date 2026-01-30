@@ -110,6 +110,35 @@ export const RunnerConfigSchema = z.object({
 });
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;
 
+// File pattern for chunking configuration
+export const FilePatternSchema = z.object({
+  /** Glob pattern to match files (e.g., "**\/pnpm-lock.yaml") */
+  pattern: z.string(),
+  /** How to handle matching files: 'per-hunk' (default), 'whole-file', or 'skip' */
+  mode: z.enum(['per-hunk', 'whole-file', 'skip']).default('skip'),
+});
+export type FilePattern = z.infer<typeof FilePatternSchema>;
+
+// Coalescing configuration for merging nearby hunks
+export const CoalesceConfigSchema = z.object({
+  /** Enable hunk coalescing (default: true) */
+  enabled: z.boolean().default(true),
+  /** Max lines gap between hunks to merge (default: 30) */
+  maxGapLines: z.number().int().nonnegative().default(30),
+  /** Target max size per chunk in characters (default: 8000) */
+  maxChunkSize: z.number().int().positive().default(8000),
+});
+export type CoalesceConfig = z.infer<typeof CoalesceConfigSchema>;
+
+// Chunking configuration for controlling how files are processed
+export const ChunkingConfigSchema = z.object({
+  /** Patterns to control file processing mode */
+  filePatterns: z.array(FilePatternSchema).optional(),
+  /** Coalescing options for merging nearby hunks */
+  coalesce: CoalesceConfigSchema.optional(),
+});
+export type ChunkingConfig = z.infer<typeof ChunkingConfigSchema>;
+
 // Default configuration that triggers inherit from
 export const DefaultsSchema = z.object({
   filters: PathFilterSchema.optional(),
@@ -120,6 +149,8 @@ export const DefaultsSchema = z.object({
   maxTurns: z.number().int().positive().optional(),
   /** Default branch for the repository (e.g., 'main', 'master', 'develop'). Auto-detected if not specified. */
   defaultBranch: z.string().optional(),
+  /** Chunking configuration for controlling how files are processed */
+  chunking: ChunkingConfigSchema.optional(),
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;
 

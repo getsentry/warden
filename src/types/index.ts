@@ -84,6 +84,14 @@ export const UsageStatsSchema = z.object({
 });
 export type UsageStats = z.infer<typeof UsageStatsSchema>;
 
+// Skipped file info for chunking
+export const SkippedFileSchema = z.object({
+  filename: z.string(),
+  reason: z.enum(['pattern', 'builtin']),
+  pattern: z.string().optional(),
+});
+export type SkippedFile = z.infer<typeof SkippedFileSchema>;
+
 // Skill report output
 export const SkillReportSchema = z.object({
   skill: z.string(),
@@ -92,6 +100,8 @@ export const SkillReportSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
   durationMs: z.number().nonnegative().optional(),
   usage: UsageStatsSchema.optional(),
+  /** Files that were skipped due to chunking patterns */
+  skippedFiles: z.array(SkippedFileSchema).optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 
