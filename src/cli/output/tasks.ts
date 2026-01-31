@@ -14,6 +14,7 @@ import {
   type SkillRunnerOptions,
   type FileAnalysisCallbacks,
   type PreparedFile,
+  type PRPromptContext,
 } from '../../sdk/runner.js';
 import chalk from 'chalk';
 import figures from 'figures';
@@ -153,6 +154,15 @@ export async function runSkillTask(
       findings: [],
     });
 
+    // Build PR context for inclusion in prompts (if available)
+    const prContext: PRPromptContext | undefined = context.pullRequest
+      ? {
+          changedFiles: context.pullRequest.files.map((f) => f.filename),
+          title: context.pullRequest.title,
+          body: context.pullRequest.body,
+        }
+      : undefined;
+
     // Process files with concurrency
     const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; failedHunks: number }> => {
       const filename = prepared.filename;
@@ -192,7 +202,8 @@ export async function runSkillTask(
         prepared,
         context.repoPath,
         runnerOptions,
-        fileCallbacks
+        fileCallbacks,
+        prContext
       );
 
       // Update file state to done

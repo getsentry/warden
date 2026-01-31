@@ -61,7 +61,7 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
   let body: string;
   if (head) {
     const commitMsg = getCommitMessage(head, cwd);
-    title = commitMsg.subject;
+    title = commitMsg.subject || `Commit ${head}`;
     body = commitMsg.body || `Analyzing changes in ${head}`;
   } else {
     title = `Local changes: ${currentBranch}`;
