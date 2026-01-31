@@ -36,7 +36,8 @@ warden [command] [targets...] [options]
 **Commands:**
 - `(default)` - Run analysis
 - `init` - Initialize warden.toml and GitHub workflow
-- `add <skill>` - Add skill trigger to warden.toml
+- `add [skill]` - Add skill trigger to warden.toml
+- `sync [repo]` - Update cached remote skills to latest
 - `setup-app` - Create GitHub App via manifest flow
 
 **Targets:**
@@ -57,6 +58,7 @@ warden [command] [targets...] [options]
 | `--comment-on <severity>` | Show findings >= severity |
 | `--fix` | Auto-apply suggested fixes |
 | `--parallel <n>` | Concurrent executions (default: 4) |
+| `--offline` | Use cached remote skills only |
 | `-q, --quiet` | Errors and summary only |
 | `-v, --verbose` | Show real-time findings |
 | `-vv` | Debug info (tokens, latency) |
@@ -133,6 +135,45 @@ Report findings with severity, location, and suggested fix.
 ```
 
 **Available tools:** `Read`, `Glob`, `Grep`, `WebFetch`, `WebSearch`, `Bash`, `Write`, `Edit`
+
+## Remote Skills
+
+Skills can be fetched from GitHub repositories:
+
+```bash
+# Add a remote skill
+warden add --repo getsentry/skills --skill security-review
+
+# Add with version pinning (recommended for reproducibility)
+warden add --repo getsentry/skills@abc123 --skill security-review
+
+# List skills in a remote repo
+warden add --repo getsentry/skills --list
+
+# Update all unpinned remote skills
+warden sync
+
+# Update specific repo
+warden sync getsentry/skills
+
+# Run with cached skills only (no network)
+warden --offline
+```
+
+**Remote trigger in warden.toml:**
+
+```toml
+[[triggers]]
+name = "security-review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "security-review"
+remote = "getsentry/skills@abc123"
+```
+
+**Cache location:** `~/.local/warden/skills/` (override with `WARDEN_STATE_DIR`)
+
+**Cache TTL:** 24 hours for unpinned refs (override with `WARDEN_SKILL_CACHE_TTL` in seconds)
 
 **Inline skill in warden.toml:**
 

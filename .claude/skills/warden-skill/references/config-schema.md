@@ -49,6 +49,7 @@ name = "trigger-name"          # Required, unique identifier
 event = "pull_request"         # Required: pull_request | issues | issue_comment | schedule
 actions = ["opened", "synchronize"]  # Required for non-schedule events
 skill = "find-bugs"            # Required, skill name or path
+remote = "owner/repo@sha"      # Optional, fetch skill from GitHub repo
 
 # Optional overrides (inherit from defaults if not set)
 model = "claude-opus-4-20250514"
@@ -120,6 +121,8 @@ Always skipped (cannot be overridden):
 |----------|---------|
 | `WARDEN_ANTHROPIC_API_KEY` | Claude API key (required) |
 | `WARDEN_MODEL` | Default model (lowest priority) |
+| `WARDEN_STATE_DIR` | Override cache location (default: `~/.local/warden`) |
+| `WARDEN_SKILL_CACHE_TTL` | Cache TTL in seconds for unpinned remotes (default: 86400) |
 
 ## Model Precedence (highest to lowest)
 
