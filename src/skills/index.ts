@@ -10,4 +10,4 @@ export {
   SkillLoaderError,
 } from './loader.js';
 
-export type { DiscoveredSkill, LoadedSkill } from './loader.js';
+export type { DiscoveredSkill, LoadedSkill, LoadSkillsOptions } from './loader.js';

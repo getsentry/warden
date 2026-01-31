@@ -315,4 +315,34 @@ This is the prompt content.
     expect(securityReview!.skill.name).toBe('security-review');
     expect(securityReview!.entry).toBe('security-review');
   });
+
+  it('loadSkillsFromDirectory calls onWarning for malformed skills', async () => {
+    const warnings: string[] = [];
+    const onWarning = (message: string) => warnings.push(message);
+
+    // Create a temp directory with a malformed skill
+    const tempDir = join(import.meta.dirname, '.test-malformed-skills');
+    const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    try {
+      mkdirSync(tempDir, { recursive: true });
+      // Create a .md file with frontmatter but missing required name field
+      writeFileSync(
+        join(tempDir, 'bad-skill.md'),
+        `---
+description: Missing name field
+---
+Content here
+`
+      );
+
+      clearSkillsCache();
+      await loadSkillsFromDirectory(tempDir, { onWarning });
+
+      expect(warnings.length).toBe(1);
+      expect(warnings[0]).toContain('bad-skill.md');
+      expect(warnings[0]).toContain("missing 'name'");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });

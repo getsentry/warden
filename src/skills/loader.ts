@@ -195,6 +195,14 @@ export async function loadSkillFromFile(filePath: string): Promise<SkillDefiniti
 }
 
 /**
+ * Options for loading skills from a directory.
+ */
+export interface LoadSkillsOptions {
+  /** Callback for reporting warnings (e.g., failed skill loading) */
+  onWarning?: (message: string) => void;
+}
+
+/**
  * Load all skills from a directory.
  *
  * Supports the agentskills.io specification:
@@ -205,7 +213,10 @@ export async function loadSkillFromFile(filePath: string): Promise<SkillDefiniti
  *
  * @returns Map of skill name to LoadedSkill (includes entry path for tracking)
  */
-export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<string, LoadedSkill>> {
+export async function loadSkillsFromDirectory(
+  dirPath: string,
+  options?: LoadSkillsOptions
+): Promise<Map<string, LoadedSkill>> {
   // Check cache first
   const cached = skillsCache.get(dirPath);
   if (cached) {
@@ -235,7 +246,8 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
         const skill = await loadSkillFromMarkdown(skillMdPath);
         skills.set(skill.name, { skill, entry });
       } catch (error) {
-        console.warn(`Warning: Failed to load skill from ${skillMdPath}:`, error);
+        const message = error instanceof Error ? error.message : String(error);
+        options?.onWarning?.(`Failed to load skill from ${skillMdPath}: ${message}`);
       }
       continue;
     }
@@ -250,7 +262,7 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Map<stri
         // But warn about files that have frontmatter but are malformed
         const message = error instanceof Error ? error.message : String(error);
         if (!message.includes('missing YAML frontmatter')) {
-          console.warn(`Warning: Failed to load skill from ${entry}: ${message}`);
+          options?.onWarning?.(`Failed to load skill from ${entry}: ${message}`);
         }
       }
     }
@@ -312,9 +324,13 @@ export interface DiscoveredSkill {
  * Discover all available skills from conventional directories.
  *
  * @param repoRoot - Repository root path for finding skills
+ * @param options - Options for skill loading (e.g., warning callback)
  * @returns Map of skill name to discovered skill info
  */
-export async function discoverAllSkills(repoRoot?: string): Promise<Map<string, DiscoveredSkill>> {
+export async function discoverAllSkills(
+  repoRoot?: string,
+  options?: LoadSkillsOptions
+): Promise<Map<string, DiscoveredSkill>> {
   const result = new Map<string, DiscoveredSkill>();
 
   if (!repoRoot) {
@@ -326,7 +342,7 @@ export async function discoverAllSkills(repoRoot?: string): Promise<Map<string, 
     const dirPath = join(repoRoot, dir);
     if (!existsSync(dirPath)) continue;
 
-    const skills = await loadSkillsFromDirectory(dirPath);
+    const skills = await loadSkillsFromDirectory(dirPath, options);
     for (const [name, loaded] of skills) {
       // First directory wins - don't overwrite existing skills
       if (!result.has(name)) {

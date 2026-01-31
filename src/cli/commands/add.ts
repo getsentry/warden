@@ -151,7 +151,9 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // 4. Discover all available skills
-  const skills = await discoverAllSkills(repoRoot);
+  const skills = await discoverAllSkills(repoRoot, {
+    onWarning: (message) => reporter.warning(message),
+  });
 
   if (skills.size === 0) {
     reporter.error('No skills found.');
