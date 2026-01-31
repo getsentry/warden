@@ -345,4 +345,44 @@ Content here
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('warns when invalid tool names are filtered from allowed-tools', async () => {
+    const warnings: string[] = [];
+    const onWarning = (message: string) => warnings.push(message);
+
+    // Create a temp directory with a skill containing invalid tool names
+    const tempDir = join(import.meta.dirname, '.test-invalid-tools');
+    const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    try {
+      mkdirSync(tempDir, { recursive: true });
+      // Create a skill with a mix of valid and invalid tool names
+      writeFileSync(
+        join(tempDir, 'test-skill.md'),
+        `---
+name: test-skill
+description: A test skill with invalid tools
+allowed-tools: Read InvalidTool Grep FakeTool
+---
+Test prompt content.
+`
+      );
+
+      clearSkillsCache();
+      const skills = await loadSkillsFromDirectory(tempDir, { onWarning });
+
+      // Skill should still load with only valid tools
+      const skill = skills.get('test-skill');
+      expect(skill).toBeDefined();
+      expect(skill!.skill.tools?.allowed).toEqual(['Read', 'Grep']);
+
+      // Should have warnings for each invalid tool
+      expect(warnings.length).toBe(2);
+      expect(warnings[0]).toContain("Invalid tool name 'InvalidTool'");
+      expect(warnings[0]).toContain('ignored');
+      expect(warnings[0]).toContain('Valid tools:');
+      expect(warnings[1]).toContain("Invalid tool name 'FakeTool'");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });

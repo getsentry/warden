@@ -130,30 +130,57 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
 }
 
 /**
+ * Get valid tool name suggestions for error messages.
+ */
+function getValidToolNames(): string {
+  return ToolNameSchema.options.join(', ');
+}
+
+/**
  * Parse allowed-tools from agentskills.io format to our format.
  * agentskills.io uses space-delimited: "Read Grep Glob"
  * We use array: ["Read", "Grep", "Glob"]
  */
-function parseAllowedTools(allowedTools: unknown): ToolName[] | undefined {
-  if (typeof allowedTools === 'string') {
-    const tools = allowedTools.split(/\s+/).filter(Boolean);
-    // Validate each tool name
-    const validTools: ToolName[] = [];
-    for (const tool of tools) {
-      const result = ToolNameSchema.safeParse(tool);
-      if (result.success) {
-        validTools.push(result.data);
-      }
-    }
-    return validTools.length > 0 ? validTools : undefined;
+function parseAllowedTools(
+  allowedTools: unknown,
+  onWarning?: (message: string) => void
+): ToolName[] | undefined {
+  if (typeof allowedTools !== 'string') {
+    return undefined;
   }
-  return undefined;
+
+  const tools = allowedTools.split(/\s+/).filter(Boolean);
+  const validTools: ToolName[] = [];
+
+  for (const tool of tools) {
+    const result = ToolNameSchema.safeParse(tool);
+    if (result.success) {
+      validTools.push(result.data);
+    } else {
+      onWarning?.(
+        `Invalid tool name '${tool}' in allowed-tools (ignored). Valid tools: ${getValidToolNames()}`
+      );
+    }
+  }
+
+  return validTools.length > 0 ? validTools : undefined;
+}
+
+/**
+ * Options for loading a skill from markdown.
+ */
+export interface LoadSkillFromMarkdownOptions {
+  /** Callback for reporting warnings (e.g., invalid tool names) */
+  onWarning?: (message: string) => void;
 }
 
 /**
  * Load a skill from a SKILL.md file (agentskills.io format).
  */
-export async function loadSkillFromMarkdown(filePath: string): Promise<SkillDefinition> {
+export async function loadSkillFromMarkdown(
+  filePath: string,
+  options?: LoadSkillFromMarkdownOptions
+): Promise<SkillDefinition> {
   let content: string;
   try {
     content = await readFile(filePath, 'utf-8');
@@ -170,7 +197,7 @@ export async function loadSkillFromMarkdown(filePath: string): Promise<SkillDefi
     throw new SkillLoaderError(`Invalid SKILL.md: missing 'description' in frontmatter`);
   }
 
-  const allowedTools = parseAllowedTools(frontmatter['allowed-tools']);
+  const allowedTools = parseAllowedTools(frontmatter['allowed-tools'], options?.onWarning);
 
   return {
     name: frontmatter['name'],
@@ -243,7 +270,7 @@ export async function loadSkillsFromDirectory(
     const skillMdPath = join(entryPath, 'SKILL.md');
     if (existsSync(skillMdPath)) {
       try {
-        const skill = await loadSkillFromMarkdown(skillMdPath);
+        const skill = await loadSkillFromMarkdown(skillMdPath, { onWarning: options?.onWarning });
         skills.set(skill.name, { skill, entry });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -255,7 +282,7 @@ export async function loadSkillsFromDirectory(
     // Check for flat .md files (with SKILL.md format frontmatter)
     if (entry.endsWith('.md')) {
       try {
-        const skill = await loadSkillFromMarkdown(entryPath);
+        const skill = await loadSkillFromMarkdown(entryPath, { onWarning: options?.onWarning });
         skills.set(skill.name, { skill, entry });
       } catch (error) {
         // Skip files without YAML frontmatter (e.g., README.md, documentation)
