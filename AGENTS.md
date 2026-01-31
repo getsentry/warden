@@ -73,3 +73,11 @@ pnpm lint && pnpm build && pnpm test
 ## Task Management
 
 Use `/dex` to break down complex work, track progress across sessions, and coordinate multi-step implementations.
+
+## Skills Policy
+
+Skills define **what to look for**, not how to respond to findings:
+
+- When Warden reports findings, fix the code—don't modify skills to suppress results
+- Skills should only change to improve detection accuracy, not to reduce reported findings
+- Each skill owns its domain expertise; severity definitions are intentionally domain-agnostic

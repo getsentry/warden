@@ -85,14 +85,14 @@ This provides resilience, but clean JSON output is still preferred.
 
 ## Severity Level Definitions
 
-Tie severity to concrete impact:
+Severity reflects **urgency and required action**, not the type of issue. Each skill defines what "significant impact" means in its domain.
 
-| Level | Definition |
-|-------|------------|
-| critical | Actively exploitable, high impact |
-| high | Exploitable with moderate effort |
-| medium | Potential issue, needs review |
-| low | Minor concern |
-| info | Observation, no action needed |
+| Level    | Definition                                               |
+|----------|----------------------------------------------------------|
+| critical | Must fix before merge: significant impact if ignored     |
+| high     | Should fix before merge: notable issue affecting quality |
+| medium   | Worth reviewing: potential issue, may need action        |
+| low      | Minor: address when convenient                           |
+| info     | Informational: no action required                        |
 
 Avoid vague definitions like "important" or "less important."
