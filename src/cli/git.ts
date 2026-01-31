@@ -55,6 +55,17 @@ export function getDefaultBranch(cwd: string = process.cwd()): string {
       // Try next branch
     }
   }
+
+  // Check git config for user-configured default branch
+  try {
+    const configuredDefault = git('config init.defaultBranch', cwd);
+    if (configuredDefault) {
+      return configuredDefault;
+    }
+  } catch {
+    // Config not set
+  }
+
   return 'main'; // Default fallback
 }
 
