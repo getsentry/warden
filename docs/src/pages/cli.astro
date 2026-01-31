@@ -49,7 +49,7 @@ warden init --force    # Overwrite existing files`}
     <p>Add a skill trigger to your configuration. Run without arguments for interactive mode.</p>
     <ul>
       <li><code>skill-name</code>  - Name of the skill to add (optional, interactive if omitted)</li>
-      <li><code>--repo &lt;owner/repo[@sha]&gt;</code>  - Install skill from a GitHub repository</li>
+      <li><code>--remote &lt;owner/repo[@sha]&gt;</code>  - Install skill from a GitHub repository</li>
       <li><code>--list</code>  - List available skills</li>
     </ul>
     <Terminal>
@@ -59,8 +59,8 @@ warden add security-review     # Add local skill
 warden add --list              # List available skills
 
 # Remote skills from GitHub repositories
-warden add --repo getsentry/warden-skills --skill security-review
-warden add --repo getsentry/warden-skills@abc123 --skill api-review  # Pinned to commit`}
+warden add --remote getsentry/warden-skills --skill security-review
+warden add --remote getsentry/warden-skills@abc123 --skill api-review  # Pinned to commit`}
         lang="bash"
         theme="vitesse-black"
       />

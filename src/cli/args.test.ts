@@ -255,24 +255,31 @@ describe('parseCliArgs', () => {
     expect(result.setupAppOptions?.open).toBe(false);
   });
 
-  it('parses add command with --repo flag', () => {
-    const result = parseCliArgs(['add', '--repo', 'getsentry/skills', '--skill', 'security-review']);
+  it('parses add command with --remote flag', () => {
+    const result = parseCliArgs(['add', '--remote', 'getsentry/skills', '--skill', 'security-review']);
     expect(result.command).toBe('add');
-    expect(result.options.repo).toBe('getsentry/skills');
+    expect(result.options.remote).toBe('getsentry/skills');
     expect(result.options.skill).toBe('security-review');
   });
 
-  it('parses add command with pinned --repo', () => {
-    const result = parseCliArgs(['add', '--repo', 'getsentry/skills@abc123', '--skill', 'security-review']);
+  it('parses add command with pinned --remote', () => {
+    const result = parseCliArgs(['add', '--remote', 'getsentry/skills@abc123', '--skill', 'security-review']);
     expect(result.command).toBe('add');
-    expect(result.options.repo).toBe('getsentry/skills@abc123');
+    expect(result.options.remote).toBe('getsentry/skills@abc123');
   });
 
-  it('parses add command with --repo and --list', () => {
-    const result = parseCliArgs(['add', '--repo', 'getsentry/skills', '--list']);
+  it('parses add command with --remote and --list', () => {
+    const result = parseCliArgs(['add', '--remote', 'getsentry/skills', '--list']);
     expect(result.command).toBe('add');
-    expect(result.options.repo).toBe('getsentry/skills');
+    expect(result.options.remote).toBe('getsentry/skills');
     expect(result.options.list).toBe(true);
+  });
+
+  it('parses add command with --remote and positional skill name', () => {
+    const result = parseCliArgs(['add', '--remote', 'getsentry/skills', 'security-review']);
+    expect(result.command).toBe('add');
+    expect(result.options.remote).toBe('getsentry/skills');
+    expect(result.options.skill).toBe('security-review');
   });
 
   it('parses --offline flag', () => {
@@ -290,22 +297,22 @@ describe('parseCliArgs', () => {
     expect(result.command).toBe('sync');
   });
 
-  it('parses sync command with repo argument', () => {
+  it('parses sync command with remote argument', () => {
     const result = parseCliArgs(['sync', 'getsentry/skills']);
     expect(result.command).toBe('sync');
-    expect(result.options.repo).toBe('getsentry/skills');
+    expect(result.options.remote).toBe('getsentry/skills');
   });
 
-  it('parses sync command with --repo flag', () => {
-    const result = parseCliArgs(['sync', '--repo', 'getsentry/skills']);
+  it('parses sync command with --remote flag', () => {
+    const result = parseCliArgs(['sync', '--remote', 'getsentry/skills']);
     expect(result.command).toBe('sync');
-    expect(result.options.repo).toBe('getsentry/skills');
+    expect(result.options.remote).toBe('getsentry/skills');
   });
 
-  it('--repo flag takes precedence over positional in sync', () => {
-    const result = parseCliArgs(['sync', 'other/repo', '--repo', 'getsentry/skills']);
+  it('--remote flag takes precedence over positional in sync', () => {
+    const result = parseCliArgs(['sync', 'other/repo', '--remote', 'getsentry/skills']);
     expect(result.command).toBe('sync');
-    expect(result.options.repo).toBe('getsentry/skills');
+    expect(result.options.remote).toBe('getsentry/skills');
   });
 });
 

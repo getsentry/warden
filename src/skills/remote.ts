@@ -31,23 +31,72 @@ export interface ParsedRemoteRef {
 }
 
 /**
+ * Normalize a GitHub URL to owner/repo format.
+ * Returns null if the input is not a recognized GitHub URL.
+ *
+ * Supports:
+ * - https://github.com/owner/repo
+ * - https://github.com/owner/repo.git
+ * - git@github.com:owner/repo.git
+ */
+function normalizeGitHubUrl(input: string): string | null {
+  // HTTPS URL: https://github.com/owner/repo or https://github.com/owner/repo.git
+  const httpsMatch = input.match(/^https?:\/\/github\.com\/([^/]+)\/([^/@]+?)(?:\.git)?$/);
+  if (httpsMatch) {
+    return `${httpsMatch[1]}/${httpsMatch[2]}`;
+  }
+
+  // SSH URL: git@github.com:owner/repo.git
+  const sshMatch = input.match(/^git@github\.com:([^/]+)\/([^/@]+?)(?:\.git)?$/);
+  if (sshMatch) {
+    return `${sshMatch[1]}/${sshMatch[2]}`;
+  }
+
+  return null;
+}
+
+/**
  * Parse a remote reference string into its components.
- * Supports formats: "owner/repo" or "owner/repo@sha"
+ * Supports formats:
+ * - "owner/repo" or "owner/repo@sha"
+ * - "https://github.com/owner/repo" or "https://github.com/owner/repo@sha"
+ * - "https://github.com/owner/repo.git" or "https://github.com/owner/repo.git@sha"
+ * - "git@github.com:owner/repo.git" or "git@github.com:owner/repo.git@sha"
  */
 export function parseRemoteRef(ref: string): ParsedRemoteRef {
-  const atIndex = ref.indexOf('@');
-  let repoPath: string;
+  let inputRef = ref;
   let sha: string | undefined;
 
-  if (atIndex !== -1) {
-    repoPath = ref.slice(0, atIndex);
-    sha = ref.slice(atIndex + 1);
-    if (!sha) {
-      throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty SHA after @)`);
+  // Extract SHA suffix from the input before URL normalization.
+  // The SHA is always at the end, after a @ that follows the repo name.
+  // For git@github.com URLs, we need to find the @ after the colon.
+  if (ref.startsWith('git@')) {
+    const colonIndex = ref.indexOf(':');
+    if (colonIndex !== -1) {
+      const afterColon = ref.slice(colonIndex + 1);
+      const shaAtIndex = afterColon.lastIndexOf('@');
+      if (shaAtIndex !== -1) {
+        sha = afterColon.slice(shaAtIndex + 1);
+        inputRef = ref.slice(0, colonIndex + 1 + shaAtIndex);
+      }
     }
   } else {
-    repoPath = ref;
+    const lastAtIndex = ref.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const potentialSha = ref.slice(lastAtIndex + 1);
+      // SHA should not contain : or / (those would indicate URL structure)
+      if (!potentialSha.includes(':') && !potentialSha.includes('/')) {
+        if (!potentialSha) {
+          throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty SHA after @)`);
+        }
+        sha = potentialSha;
+        inputRef = ref.slice(0, lastAtIndex);
+      }
+    }
   }
+
+  // Normalize GitHub URLs to owner/repo format
+  const repoPath = normalizeGitHubUrl(inputRef) ?? inputRef;
 
   const slashIndex = repoPath.indexOf('/');
   if (slashIndex === -1) {
@@ -61,13 +110,11 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty owner or repo)`);
   }
 
-  // Ensure repo doesn't contain additional slashes
   if (repo.includes('/')) {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo name cannot contain /)`);
   }
 
   // Security: Prevent git flag injection by rejecting values starting with '-'
-  // This prevents attacks like owner/repo@--upload-pack=/evil/script
   if (owner.startsWith('-')) {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner cannot start with -)`);
   }
@@ -334,8 +381,12 @@ export interface DiscoveredRemoteSkill {
   path: string;
 }
 
+/** Directories to search for skills in remote repositories */
+const REMOTE_SKILL_DIRECTORIES = ['', 'skills'];
+
 /**
  * Discover all skills in a cached remote repository.
+ * Searches both root level and skills/ subdirectory.
  */
 export async function discoverRemoteSkills(ref: string): Promise<DiscoveredRemoteSkill[]> {
   const remotePath = getRemotePath(ref);
@@ -345,28 +396,38 @@ export async function discoverRemoteSkills(ref: string): Promise<DiscoveredRemot
   }
 
   const skills: DiscoveredRemoteSkill[] = [];
+  const seenNames = new Set<string>();
 
-  // Look for skill directories (each with SKILL.md)
-  const entries = readdirSync(remotePath);
+  // Search in root and skills/ subdirectory
+  for (const subdir of REMOTE_SKILL_DIRECTORIES) {
+    const searchPath = subdir ? join(remotePath, subdir) : remotePath;
+    if (!existsSync(searchPath)) continue;
 
-  for (const entry of entries) {
-    if (entry.startsWith('.')) continue;
+    const entries = readdirSync(searchPath);
 
-    const entryPath = join(remotePath, entry);
-    const stat = statSync(entryPath);
+    for (const entry of entries) {
+      if (entry.startsWith('.')) continue;
 
-    if (stat.isDirectory()) {
-      const skillMdPath = join(entryPath, 'SKILL.md');
-      if (existsSync(skillMdPath)) {
-        try {
-          const skill = await loadSkillFromMarkdown(skillMdPath);
-          skills.push({
-            name: skill.name,
-            description: skill.description,
-            path: entryPath,
-          });
-        } catch {
-          // Skip invalid skill directories
+      const entryPath = join(searchPath, entry);
+      const stat = statSync(entryPath);
+
+      if (stat.isDirectory()) {
+        const skillMdPath = join(entryPath, 'SKILL.md');
+        if (existsSync(skillMdPath)) {
+          try {
+            const skill = await loadSkillFromMarkdown(skillMdPath);
+            // First occurrence wins (root takes precedence over skills/)
+            if (!seenNames.has(skill.name)) {
+              seenNames.add(skill.name);
+              skills.push({
+                name: skill.name,
+                description: skill.description,
+                path: entryPath,
+              });
+            }
+          } catch {
+            // Skip invalid skill directories
+          }
         }
       }
     }
@@ -378,33 +439,29 @@ export async function discoverRemoteSkills(ref: string): Promise<DiscoveredRemot
 /**
  * Resolve a skill from a remote repository.
  * Ensures the remote is fetched/cached, then loads the skill.
+ * Matches by skill name (from SKILL.md), not directory name.
  */
 export async function resolveRemoteSkill(
   ref: string,
   skillName: string,
   options: FetchRemoteOptions = {}
 ): Promise<SkillDefinition> {
-  // Ensure remote is fetched
   await fetchRemote(ref, options);
 
-  const remotePath = getRemotePath(ref);
-  const skillPath = join(remotePath, skillName, 'SKILL.md');
+  const availableSkills = await discoverRemoteSkills(ref);
+  const match = availableSkills.find((s) => s.name === skillName);
 
-  if (!existsSync(skillPath)) {
-    // List available skills for helpful error
-    const availableSkills = await discoverRemoteSkills(ref);
-    const skillNames = availableSkills.map((s) => s.name);
-
-    if (skillNames.length === 0) {
-      throw new SkillLoaderError(`No skills found in remote: ${ref}`);
-    }
-
-    throw new SkillLoaderError(
-      `Skill '${skillName}' not found in remote: ${ref}. Available skills: ${skillNames.join(', ')}`
-    );
+  if (match) {
+    return loadSkillFromMarkdown(join(match.path, 'SKILL.md'));
   }
 
-  return loadSkillFromMarkdown(skillPath);
+  if (availableSkills.length === 0) {
+    throw new SkillLoaderError(`No skills found in remote: ${ref}`);
+  }
+
+  throw new SkillLoaderError(
+    `Skill '${skillName}' not found in remote: ${ref}. Available skills: ${availableSkills.map((s) => s.name).join(', ')}`
+  );
 }
 
 /**

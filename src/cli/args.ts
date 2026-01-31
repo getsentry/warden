@@ -32,7 +32,7 @@ export const CLIOptionsSchema = z.object({
   /** Force interpretation of ambiguous targets as git refs */
   git: z.boolean().default(false),
   /** Remote repository reference for skills (e.g., "owner/repo" or "owner/repo@sha") */
-  repo: z.string().optional(),
+  remote: z.string().optional(),
   /** Skip network operations - only use cached remote skills */
   offline: z.boolean().default(false),
 });
@@ -67,7 +67,7 @@ Analyze code for security issues and code quality.
 Commands:
   init                 Initialize warden.toml and GitHub workflow
   add [skill]          Add a skill trigger to warden.toml
-  sync [repo]          Update cached remote skills to latest
+  sync [remote]        Update cached remote skills to latest
   setup-app            Create a GitHub App for Warden via manifest flow
   (default)            Run analysis on targets or using warden.toml triggers
 
@@ -102,7 +102,7 @@ Init Options:
 
 Add Options:
   --list               List available skills
-  --repo <ref>         Remote repository (e.g., owner/repo or owner/repo@sha)
+  --remote <ref>       Remote repository (owner/repo, URL, or with @sha)
 
 Run Options:
   --offline            Use cached remote skills without network access
@@ -119,9 +119,11 @@ Examples:
   warden add                              # Interactive skill selection
   warden add security-review              # Add specific skill trigger
   warden add --list                       # List available skills
-  warden add --repo getsentry/skills --skill security-review
+  warden add --remote getsentry/skills --skill security-review
                                           # Add remote skill trigger
-  warden add --repo getsentry/skills@abc123 --skill security-review
+  warden add --remote https://github.com/getsentry/skills --skill security-review
+                                          # Add remote skill via URL
+  warden add --remote getsentry/skills@abc123 --skill security-review
                                           # Add pinned remote skill
   warden                                  # Run triggers from warden.toml
   warden src/auth.ts                      # Run all skills on file
@@ -260,7 +262,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       fix: { type: 'boolean', default: false },
       force: { type: 'boolean', short: 'f', default: false },
       list: { type: 'boolean', short: 'l', default: false },
-      repo: { type: 'string' },
+      remote: { type: 'string' },
       offline: { type: 'boolean', default: false },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
@@ -295,9 +297,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
   }
 
   // Filter out known commands from positionals
-  const targets = positionals.filter(
-    (p) => p !== 'run' && p !== 'help' && p !== 'init' && p !== 'add' && p !== 'version' && p !== 'setup-app' && p !== 'sync'
-  );
+  const commands = ['run', 'help', 'init', 'add', 'version', 'setup-app', 'sync'];
+  const targets = positionals.filter((p) => !commands.includes(p));
 
   // Handle explicit help command
   if (positionals.includes('help')) {
@@ -329,16 +330,16 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
   // Handle add command
   if (positionals.includes('add')) {
-    // First positional after 'add' is the skill name (only if no --repo)
+    // First positional after 'add' is the skill name
     const addIndex = positionals.indexOf('add');
-    const skillArg = values.repo ? undefined : positionals[addIndex + 1];
+    const skillArg = positionals[addIndex + 1];
 
     return {
       command: 'add',
       options: CLIOptionsSchema.parse({
         skill: values.skill ?? skillArg,
         list: values.list,
-        repo: values.repo,
+        remote: values.remote,
         quiet: values.quiet,
         color: resolveColorOption(values),
       }),
@@ -347,14 +348,14 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
   // Handle sync command
   if (positionals.includes('sync')) {
-    // First positional after 'sync' is the repo to sync, --repo flag takes precedence
+    // First positional after 'sync' is the remote to sync, --remote flag takes precedence
     const syncIndex = positionals.indexOf('sync');
-    const repoArg = values.repo ?? positionals[syncIndex + 1];
+    const remoteArg = values.remote ?? positionals[syncIndex + 1];
 
     return {
       command: 'sync',
       options: CLIOptionsSchema.parse({
-        repo: repoArg,
+        remote: remoteArg,
         quiet: values.quiet,
         color: resolveColorOption(values),
       }),

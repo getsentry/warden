@@ -17,12 +17,12 @@ export async function runSync(options: CLIOptions, reporter: Reporter): Promise<
 
   if (cachedRemotes.length === 0) {
     reporter.warning('No remote skills cached.');
-    reporter.tip('Add remote skills with: warden add --repo owner/repo --skill name');
+    reporter.tip('Add remote skills with: warden add --remote owner/repo --skill name');
     return 0;
   }
 
-  // If a specific repo is provided, only sync that one
-  const targetRepo = options.repo;
+  // If a specific remote is provided, only sync that one
+  const targetRepo = options.remote;
   const remotesToSync = targetRepo
     ? cachedRemotes.filter(({ ref }) => ref === targetRepo || ref.startsWith(`${targetRepo}@`))
     : cachedRemotes;

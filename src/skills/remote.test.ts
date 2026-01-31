@@ -13,6 +13,7 @@ import {
   getCacheTtlSeconds,
   shouldRefresh,
   discoverRemoteSkills,
+  resolveRemoteSkill,
   type RemoteState,
 } from './remote.js';
 import { SkillLoaderError } from './loader.js';
@@ -84,6 +85,70 @@ describe('parseRemoteRef', () => {
   it('throws for SHA starting with dash (flag injection)', () => {
     expect(() => parseRemoteRef('owner/repo@--upload-pack=evil')).toThrow(SkillLoaderError);
     expect(() => parseRemoteRef('owner/repo@--upload-pack=evil')).toThrow('SHA cannot start with -');
+  });
+
+  // GitHub URL support
+  it('parses HTTPS GitHub URL', () => {
+    const result = parseRemoteRef('https://github.com/getsentry/skills');
+    expect(result).toEqual({
+      owner: 'getsentry',
+      repo: 'skills',
+      sha: undefined,
+    });
+  });
+
+  it('parses HTTPS GitHub URL with .git suffix', () => {
+    const result = parseRemoteRef('https://github.com/getsentry/skills.git');
+    expect(result).toEqual({
+      owner: 'getsentry',
+      repo: 'skills',
+      sha: undefined,
+    });
+  });
+
+  it('parses HTTPS GitHub URL with SHA', () => {
+    const result = parseRemoteRef('https://github.com/getsentry/skills@abc123');
+    expect(result).toEqual({
+      owner: 'getsentry',
+      repo: 'skills',
+      sha: 'abc123',
+    });
+  });
+
+  it('parses HTTPS GitHub URL with .git and SHA', () => {
+    const result = parseRemoteRef('https://github.com/getsentry/skills.git@abc123');
+    expect(result).toEqual({
+      owner: 'getsentry',
+      repo: 'skills',
+      sha: 'abc123',
+    });
+  });
+
+  it('parses SSH GitHub URL', () => {
+    const result = parseRemoteRef('git@github.com:getsentry/skills.git');
+    expect(result).toEqual({
+      owner: 'getsentry',
+      repo: 'skills',
+      sha: undefined,
+    });
+  });
+
+  it('parses SSH GitHub URL with SHA', () => {
+    const result = parseRemoteRef('git@github.com:getsentry/skills.git@abc123');
+    expect(result).toEqual({
+      owner: 'getsentry',
+      repo: 'skills',
+      sha: 'abc123',
+    });
+  });
+
+  it('parses HTTP GitHub URL (upgrades to HTTPS)', () => {
+    const result = parseRemoteRef('http://github.com/getsentry/skills');
+    expect(result).toEqual({
+      owner: 'getsentry',
+      repo: 'skills',
+      sha: undefined,
+    });
   });
 });
 
@@ -426,5 +491,151 @@ Prompt.
 
     expect(skills.length).toBe(1);
     expect(skills[0]?.name).toBe('valid-skill');
+  });
+
+  it('discovers skills in skills/ subdirectory', async () => {
+    // Create fake cached remote with skills in skills/ subdirectory (like vercel-labs/agent-skills)
+    const remotePath = getRemotePath('vercel/skills');
+    mkdirSync(join(remotePath, 'skills', 'react-best-practices'), { recursive: true });
+    mkdirSync(join(remotePath, 'skills', 'web-design'), { recursive: true });
+
+    writeFileSync(
+      join(remotePath, 'skills', 'react-best-practices', 'SKILL.md'),
+      `---
+name: react-best-practices
+description: React and Next.js best practices
+---
+React review prompt.
+`
+    );
+
+    writeFileSync(
+      join(remotePath, 'skills', 'web-design', 'SKILL.md'),
+      `---
+name: web-design
+description: Web design guidelines
+---
+Web design prompt.
+`
+    );
+
+    const skills = await discoverRemoteSkills('vercel/skills');
+
+    expect(skills.length).toBe(2);
+    expect(skills.map((s) => s.name).sort()).toEqual(['react-best-practices', 'web-design']);
+  });
+
+  it('root skills take precedence over skills/ subdirectory', async () => {
+    const remotePath = getRemotePath('getsentry/skills');
+
+    // Same skill name in both root and skills/
+    mkdirSync(join(remotePath, 'my-skill'), { recursive: true });
+    mkdirSync(join(remotePath, 'skills', 'my-skill'), { recursive: true });
+
+    writeFileSync(
+      join(remotePath, 'my-skill', 'SKILL.md'),
+      `---
+name: my-skill
+description: Root version
+---
+Root prompt.
+`
+    );
+
+    writeFileSync(
+      join(remotePath, 'skills', 'my-skill', 'SKILL.md'),
+      `---
+name: my-skill
+description: Subdirectory version
+---
+Subdirectory prompt.
+`
+    );
+
+    const skills = await discoverRemoteSkills('getsentry/skills');
+
+    expect(skills.length).toBe(1);
+    expect(skills[0]?.name).toBe('my-skill');
+    expect(skills[0]?.description).toBe('Root version');
+  });
+});
+
+describe('resolveRemoteSkill', () => {
+  const testDir = join(tmpdir(), `warden-remote-resolve-${Date.now()}`);
+  const originalEnv = process.env['WARDEN_STATE_DIR'];
+
+  beforeEach(() => {
+    process.env['WARDEN_STATE_DIR'] = testDir;
+    mkdirSync(testDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env['WARDEN_STATE_DIR'];
+    } else {
+      process.env['WARDEN_STATE_DIR'] = originalEnv;
+    }
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('resolves skill when directory name differs from skill name', async () => {
+    // Simulate vercel-labs/agent-skills structure: directory is "react-best-practices"
+    // but skill name in SKILL.md is "vercel-react-best-practices"
+    const remotePath = getRemotePath('vercel/skills');
+    mkdirSync(join(remotePath, 'skills', 'react-best-practices'), { recursive: true });
+
+    writeFileSync(
+      join(remotePath, 'skills', 'react-best-practices', 'SKILL.md'),
+      `---
+name: vercel-react-best-practices
+description: React best practices from Vercel
+---
+React review prompt.
+`
+    );
+
+    // Create state entry so fetchRemote doesn't try to clone
+    saveState({
+      remotes: {
+        'vercel/skills': {
+          sha: 'abc123',
+          fetchedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    const skill = await resolveRemoteSkill('vercel/skills', 'vercel-react-best-practices', { offline: true });
+
+    expect(skill.name).toBe('vercel-react-best-practices');
+    expect(skill.description).toBe('React best practices from Vercel');
+  });
+
+  it('throws helpful error when skill not found', async () => {
+    const remotePath = getRemotePath('getsentry/skills');
+    mkdirSync(join(remotePath, 'security-review'), { recursive: true });
+
+    writeFileSync(
+      join(remotePath, 'security-review', 'SKILL.md'),
+      `---
+name: security-review
+description: Security review skill
+---
+Prompt.
+`
+    );
+
+    saveState({
+      remotes: {
+        'getsentry/skills': {
+          sha: 'abc123',
+          fetchedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    await expect(resolveRemoteSkill('getsentry/skills', 'nonexistent', { offline: true }))
+      .rejects.toThrow("Skill 'nonexistent' not found");
+    await expect(resolveRemoteSkill('getsentry/skills', 'nonexistent', { offline: true }))
+      .rejects.toThrow('Available skills: security-review');
   });
 });

@@ -221,7 +221,7 @@ async function runAddRemote(
   configPath: string,
   configuredSkills: Set<string>
 ): Promise<number> {
-  const remote = options.repo ?? '';
+  const remote = options.remote ?? '';
   if (!remote) {
     reporter.error('Remote repository is required');
     return 1;
@@ -279,7 +279,7 @@ async function runAddRemote(
     }
   } else {
     reporter.error('Skill name required when not running interactively.');
-    reporter.tip(`Use: warden add --repo ${remote} --skill <name>`);
+    reporter.tip(`Use: warden add --remote ${remote} --skill <name>`);
     return 1;
   }
 
@@ -336,7 +336,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // 2. Check warden.toml exists (deferred for --list without --repo)
+  // 2. Check warden.toml exists (deferred for --list without --remote)
   const configPath = join(repoRoot, 'warden.toml');
   const hasConfig = existsSync(configPath);
 
@@ -353,8 +353,8 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     }
   }
 
-  // 4. Handle remote skills with --repo flag
-  if (options.repo) {
+  // 4. Handle remote skills with --remote flag
+  if (options.remote) {
     // For remote skills, require warden.toml (unless --list)
     if (!hasConfig && !options.list) {
       reporter.error('warden.toml not found.');
@@ -373,7 +373,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
   if (skills.size === 0) {
     reporter.error('No skills found.');
     reporter.tip('Add skills to .warden/skills/, .agents/skills/, or .claude/skills/');
-    reporter.tip('Or use --repo to add remote skills: warden add --repo owner/repo --skill name');
+    reporter.tip('Or use --remote to add remote skills: warden add --remote owner/repo --skill name');
     return 1;
   }
 

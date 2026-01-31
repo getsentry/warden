@@ -142,13 +142,13 @@ Skills can be fetched from GitHub repositories:
 
 ```bash
 # Add a remote skill
-warden add --repo getsentry/skills --skill security-review
+warden add --remote getsentry/skills --skill security-review
 
 # Add with version pinning (recommended for reproducibility)
-warden add --repo getsentry/skills@abc123 --skill security-review
+warden add --remote getsentry/skills@abc123 --skill security-review
 
 # List skills in a remote repo
-warden add --repo getsentry/skills --list
+warden add --remote getsentry/skills --list
 
 # Update all unpinned remote skills
 warden sync
