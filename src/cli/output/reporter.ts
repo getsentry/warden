@@ -13,8 +13,7 @@ import {
 } from './formatters.js';
 import { BoxRenderer } from './box.js';
 import { ICON_CHECK } from './icons.js';
-
-const VERSION = '0.1.0';
+import { getVersion } from '../../utils/index.js';
 
 /**
  * ASCII art logo for TTY header.
@@ -82,10 +81,10 @@ export class Reporter {
       for (const line of LOGO.split('\n')) {
         this.log(chalk.dim(line));
       }
-      this.log(chalk.dim(`v${VERSION}`));
+      this.log(chalk.dim(`v${getVersion()}`));
       this.log('');
     } else {
-      this.logCI(`Warden v${VERSION}`);
+      this.logCI(`Warden v${getVersion()}`);
     }
   }
 

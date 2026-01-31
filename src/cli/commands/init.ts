@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import { getRepoRoot, getGitHubRepoUrl } from '../git.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
+import { getMajorVersion } from '../../utils/index.js';
 
 /**
  * Template for warden.toml configuration file.
@@ -17,6 +18,7 @@ function generateWardenToml(): string {
  * Template for GitHub Actions workflow file.
  */
 function generateWorkflowYaml(): string {
+  const majorVersion = getMajorVersion();
   return `name: Warden
 
 on:
@@ -33,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: getsentry/warden@v1
+      - uses: getsentry/warden@v${majorVersion}
         with:
           anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
 `;

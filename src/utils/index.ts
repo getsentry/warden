@@ -1,4 +1,5 @@
 export { processInBatches } from './async.js';
+export { getVersion, getMajorVersion } from './version.js';
 
 /** Default concurrency for parallel trigger/skill execution */
 export const DEFAULT_CONCURRENCY = 4;

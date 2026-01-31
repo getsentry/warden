@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { SeverityThresholdSchema } from '../types/index.js';
 import type { SeverityThreshold } from '../types/index.js';
+import { getVersion } from '../utils/index.js';
 
 export const CLIOptionsSchema = z.object({
   targets: z.array(z.string()).optional(),
@@ -53,10 +54,8 @@ export interface ParsedArgs {
   setupAppOptions?: SetupAppOptions;
 }
 
-const VERSION = '0.1.0';
-
 export function showVersion(): void {
-  console.log(`warden ${VERSION}`);
+  console.log(`warden ${getVersion()}`);
 }
 
 const HELP_TEXT = `

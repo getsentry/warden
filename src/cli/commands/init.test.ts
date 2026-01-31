@@ -8,6 +8,7 @@ import { Reporter } from '../output/reporter.js';
 import { detectOutputMode } from '../output/tty.js';
 import { Verbosity } from '../output/verbosity.js';
 import type { CLIOptions } from '../args.js';
+import { getMajorVersion } from '../../utils/index.js';
 
 function createMockReporter(): Reporter {
   return new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -75,7 +76,7 @@ describe('init command', () => {
       expect(content).toContain('pull-requests: write');
       expect(content).toContain('checks: write');
       expect(content).toContain('WARDEN_ANTHROPIC_API_KEY');
-      expect(content).toContain('getsentry/warden@v1');
+      expect(content).toContain(`getsentry/warden@v${getMajorVersion()}`);
     });
   });
 

@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import Terminal from '../components/Terminal.astro';
 import { Code } from 'astro:components';
+import { WARDEN_ACTION } from '../utils/version.js';
 ---
 
 <Base title="Config" description="Warden configuration reference">
@@ -368,7 +369,7 @@ jobs:
       #     app-id: \${{ secrets.WARDEN_APP_ID }}
       #     private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
 
-      - uses: getsentry/warden-action@v1
+      - uses: ${WARDEN_ACTION}
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}
           # github-token: \${{ steps.app-token.outputs.token }}`}
