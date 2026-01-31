@@ -70,6 +70,21 @@ describe('parseRemoteRef', () => {
     expect(() => parseRemoteRef('owner/repo/nested')).toThrow(SkillLoaderError);
     expect(() => parseRemoteRef('owner/repo/nested')).toThrow('repo name cannot contain /');
   });
+
+  it('throws for owner starting with dash (flag injection)', () => {
+    expect(() => parseRemoteRef('-malicious/repo')).toThrow(SkillLoaderError);
+    expect(() => parseRemoteRef('-malicious/repo')).toThrow('owner cannot start with -');
+  });
+
+  it('throws for repo starting with dash (flag injection)', () => {
+    expect(() => parseRemoteRef('owner/-malicious')).toThrow(SkillLoaderError);
+    expect(() => parseRemoteRef('owner/-malicious')).toThrow('repo cannot start with -');
+  });
+
+  it('throws for SHA starting with dash (flag injection)', () => {
+    expect(() => parseRemoteRef('owner/repo@--upload-pack=evil')).toThrow(SkillLoaderError);
+    expect(() => parseRemoteRef('owner/repo@--upload-pack=evil')).toThrow('SHA cannot start with -');
+  });
 });
 
 describe('formatRemoteRef', () => {

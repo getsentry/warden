@@ -66,6 +66,18 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo name cannot contain /)`);
   }
 
+  // Security: Prevent git flag injection by rejecting values starting with '-'
+  // This prevents attacks like owner/repo@--upload-pack=/evil/script
+  if (owner.startsWith('-')) {
+    throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner cannot start with -)`);
+  }
+  if (repo.startsWith('-')) {
+    throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo cannot start with -)`);
+  }
+  if (sha?.startsWith('-')) {
+    throw new SkillLoaderError(`Invalid remote ref: ${ref} (SHA cannot start with -)`);
+  }
+
   return { owner, repo, sha };
 }
 
@@ -271,23 +283,24 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
     }
 
     // Clone with minimal depth for unpinned refs
+    // Note: '--' separates flags from positional args to prevent flag injection
     if (isPinned && parsed.sha) {
       // For pinned refs, we need full history to checkout the specific SHA
       // Use a shallow clone then deepen if needed
-      execGit(['clone', '--depth=1', repoUrl, remotePath]);
+      execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
 
       try {
         // Try to checkout the pinned SHA
-        execGit(['fetch', '--depth=1', 'origin', parsed.sha], { cwd: remotePath });
-        execGit(['checkout', parsed.sha], { cwd: remotePath });
+        execGit(['fetch', '--depth=1', 'origin', '--', parsed.sha], { cwd: remotePath });
+        execGit(['checkout', '--', parsed.sha], { cwd: remotePath });
       } catch {
         // If SHA not found, do a full fetch and retry
         execGit(['fetch', '--unshallow'], { cwd: remotePath });
-        execGit(['checkout', parsed.sha], { cwd: remotePath });
+        execGit(['checkout', '--', parsed.sha], { cwd: remotePath });
       }
     } else if (!isPinned) {
       // For unpinned refs, shallow clone of default branch
-      execGit(['clone', '--depth=1', repoUrl, remotePath]);
+      execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
     }
   } else {
     // Update existing cache
