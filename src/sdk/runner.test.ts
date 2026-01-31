@@ -6,6 +6,7 @@ import {
   extractFindingsJson,
   extractBalancedJson,
   extractFindingsWithLLM,
+  truncateForLLMFallback,
   buildSystemPrompt,
 } from './runner.js';
 import type { SkillDefinition } from '../config/schema.js';
@@ -303,9 +304,56 @@ Let me know if you need more details.`;
   });
 });
 
+describe('truncateForLLMFallback', () => {
+  it('returns text unchanged when under limit', () => {
+    const text = 'short text';
+    expect(truncateForLLMFallback(text, 100)).toBe(text);
+  });
+
+  it('returns text unchanged when exactly at limit', () => {
+    const text = 'x'.repeat(100);
+    expect(truncateForLLMFallback(text, 100)).toBe(text);
+  });
+
+  it('preserves findings section when found in text', () => {
+    const prefix = 'Some context before. '.repeat(50);
+    const findings = '{"findings": [{"id": "test-1", "title": "Issue"}]}';
+    const suffix = ' More text after.'.repeat(10);
+    const text = prefix + findings + suffix;
+
+    const result = truncateForLLMFallback(text, 500);
+
+    expect(result).toContain('{"findings"');
+    expect(result).toContain('"id": "test-1"');
+  });
+
+  it('handles findings at very end of long text', () => {
+    const longPrefix = 'context '.repeat(5000);
+    const findings = '{"findings": [{"id": "end-finding"}]}';
+    const text = longPrefix + findings;
+
+    const result = truncateForLLMFallback(text, 1000);
+
+    // Should preserve the findings section
+    expect(result).toContain('{"findings"');
+    expect(result).toContain('end-finding');
+  });
+
+  it('includes truncation marker when findings section is truncated', () => {
+    const longFindings =
+      '{"findings": [' + '{"id": "item"},'.repeat(100) + '{"id": "last"}]}';
+    const text = 'prefix ' + longFindings;
+
+    const result = truncateForLLMFallback(text, 200);
+
+    expect(result).toContain('{"findings"');
+    expect(result).toContain('[... truncated]');
+  });
+});
+
 describe('extractFindingsWithLLM', () => {
   it('returns error when no API key provided', async () => {
-    const result = await extractFindingsWithLLM('some malformed output', undefined);
+    const result = await extractFindingsWithLLM('{"findings": []}', undefined);
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toBe('no_api_key_for_fallback');
@@ -313,9 +361,27 @@ describe('extractFindingsWithLLM', () => {
   });
 
   it('returns error with empty API key', async () => {
-    const result = await extractFindingsWithLLM('some malformed output', '');
+    const result = await extractFindingsWithLLM('{"findings": []}', '');
     expect(result.success).toBe(false);
     if (!result.success) {
+      expect(result.error).toBe('no_api_key_for_fallback');
+    }
+  });
+
+  it('returns error when no findings pattern exists', async () => {
+    const result = await extractFindingsWithLLM('some output without findings', 'fake-key');
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('no_findings_to_extract');
+    }
+  });
+
+  it('allows findings pattern with whitespace after brace', async () => {
+    // Should not return no_findings_to_extract error for { "findings"
+    const result = await extractFindingsWithLLM('{ "findings": []}', undefined);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // Should fail for no API key, not for missing pattern
       expect(result.error).toBe('no_api_key_for_fallback');
     }
   });

@@ -24,6 +24,9 @@ export class SkillRunnerError extends Error {
 /** Default concurrency for file-level parallel processing */
 const DEFAULT_FILE_CONCURRENCY = 5;
 
+/** Pattern to match the start of findings JSON (allows whitespace after brace) */
+const FINDINGS_JSON_START = /\{\s*"findings"/;
+
 /** Result from analyzing a single hunk */
 interface HunkAnalysisResult {
   findings: Finding[];
@@ -258,8 +261,8 @@ export function extractFindingsJson(rawText: string): ExtractFindingsResult {
     text = codeBlockMatch[1].trim();
   }
 
-  // Find the start of the findings JSON object (allow whitespace after opening brace)
-  const findingsMatch = text.match(/\{\s*"findings"/);
+  // Find the start of the findings JSON object
+  const findingsMatch = text.match(FINDINGS_JSON_START);
   if (!findingsMatch || findingsMatch.index === undefined) {
     return {
       success: false,
@@ -319,6 +322,37 @@ const LLM_FALLBACK_MAX_CHARS = 32000;
 const LLM_FALLBACK_TIMEOUT_MS = 30000;
 
 /**
+ * Truncate text for LLM fallback while preserving the findings JSON.
+ *
+ * Caller must ensure findings JSON exists in the text before calling.
+ */
+export function truncateForLLMFallback(rawText: string, maxChars: number): string {
+  if (rawText.length <= maxChars) {
+    return rawText;
+  }
+
+  const findingsIndex = rawText.match(FINDINGS_JSON_START)?.index ?? -1;
+
+  // If findings starts within our budget, simple truncation from start preserves it
+  if (findingsIndex < maxChars - 20) {
+    return rawText.slice(0, maxChars) + '\n[... truncated]';
+  }
+
+  // Findings is beyond our budget - skip to just before it
+  // Keep minimal context (10% of budget or 200 chars, whichever is smaller)
+  const markerOverhead = 40;
+  const usableBudget = maxChars - markerOverhead;
+  const contextBefore = Math.min(200, Math.floor(usableBudget * 0.1), findingsIndex);
+  const startIndex = findingsIndex - contextBefore;
+  const endIndex = startIndex + usableBudget;
+
+  const truncatedContent = rawText.slice(startIndex, endIndex);
+  const suffix = endIndex < rawText.length ? '\n[... truncated]' : '';
+
+  return '[... truncated ...]\n' + truncatedContent + suffix;
+}
+
+/**
  * Extract findings from malformed output using LLM as a fallback.
  * Uses claude-haiku-4-5 for lightweight, fast extraction.
  */
@@ -334,11 +368,17 @@ export async function extractFindingsWithLLM(
     };
   }
 
-  // Truncate input to avoid excessive token usage and timeouts
-  const truncatedText =
-    rawText.length > LLM_FALLBACK_MAX_CHARS
-      ? rawText.slice(0, LLM_FALLBACK_MAX_CHARS) + '\n[... truncated]'
-      : rawText;
+  // If no findings anchor exists, there's nothing to extract
+  if (!FINDINGS_JSON_START.test(rawText)) {
+    return {
+      success: false,
+      error: 'no_findings_to_extract',
+      preview: rawText.slice(0, 200),
+    };
+  }
+
+  // Truncate input while preserving JSON boundaries
+  const truncatedText = truncateForLLMFallback(rawText, LLM_FALLBACK_MAX_CHARS);
 
   try {
     const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS });
