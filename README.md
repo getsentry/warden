@@ -35,7 +35,7 @@ npx warden --fix
 ## Contributing
 
 ```bash
-git clone git@github.com:dcramer/warden.git
+git clone git@github.com:getsentry/warden.git
 cd warden
 pnpm install && pnpm build
 ```
