@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execSync } from 'node:child_process';
-import { getDefaultBranch, getCurrentBranch } from './git.js';
+import { getDefaultBranch, getCurrentBranch, getCommitMessage } from './git.js';
 
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
@@ -81,5 +81,39 @@ describe('getDefaultBranch', () => {
   it('returns hardcoded main when no branches exist and no config is set', () => {
     mockExecSync.mockImplementation(mockBranchDetection([]));
     expect(getDefaultBranch()).toBe('main');
+  });
+});
+
+describe('getCommitMessage', () => {
+  it('returns subject and body from commit', () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git log -1 --format=%s HEAD') {
+        return 'feat: Add new feature\n';
+      }
+      if (cmd === 'git log -1 --format=%b HEAD') {
+        return 'This is the commit body.\n\nWith multiple paragraphs.\n';
+      }
+      throw new Error('Unexpected command');
+    });
+
+    const result = getCommitMessage('HEAD');
+    expect(result.subject).toBe('feat: Add new feature');
+    expect(result.body).toBe('This is the commit body.\n\nWith multiple paragraphs.');
+  });
+
+  it('returns empty body when commit has no body', () => {
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git log -1 --format=%s abc123') {
+        return 'fix: Quick fix\n';
+      }
+      if (cmd === 'git log -1 --format=%b abc123') {
+        return '\n';
+      }
+      throw new Error('Unexpected command');
+    });
+
+    const result = getCommitMessage('abc123');
+    expect(result.subject).toBe('fix: Quick fix');
+    expect(result.body).toBe('');
   });
 });

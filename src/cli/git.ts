@@ -295,3 +295,24 @@ export function refExists(ref: string, cwd: string = process.cwd()): boolean {
     return false;
   }
 }
+
+/**
+ * Commit message with subject and body separated.
+ */
+export interface CommitMessage {
+  /** First line of the commit message */
+  subject: string;
+  /** Remaining lines after the subject (may be empty) */
+  body: string;
+}
+
+/**
+ * Get the commit message for a specific ref.
+ * Returns subject (first line) and body (remaining lines) separately.
+ */
+export function getCommitMessage(ref: string, cwd: string = process.cwd()): CommitMessage {
+  // %s = subject, %b = body
+  const subject = git(`log -1 --format=%s ${ref}`, cwd);
+  const body = git(`log -1 --format=%b ${ref}`, cwd);
+  return { subject, body };
+}

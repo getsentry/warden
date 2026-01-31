@@ -9,6 +9,7 @@ import {
   getDefaultBranch,
   getRepoRoot,
   getRepoName,
+  getCommitMessage,
   type GitFileChange,
 } from './git.js';
 
@@ -37,6 +38,9 @@ export interface LocalContextOptions {
 /**
  * Build an EventContext from local git repository state.
  * Creates a synthetic pull_request event from git diff.
+ *
+ * When analyzing a specific commit (head is set), uses the actual commit
+ * message as title/body to provide intent context to the LLM.
  */
 export function buildLocalEventContext(options: LocalContextOptions = {}): EventContext {
   const cwd = options.cwd ?? process.cwd();
@@ -52,6 +56,18 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
   const changedFiles = getChangedFilesWithPatches(base, head, cwd);
   const files = changedFiles.map(toFileChange);
 
+  // Use actual commit message when analyzing a specific commit
+  let title: string;
+  let body: string;
+  if (head) {
+    const commitMsg = getCommitMessage(head, cwd);
+    title = commitMsg.subject;
+    body = commitMsg.body || `Analyzing changes in ${head}`;
+  } else {
+    title = `Local changes: ${currentBranch}`;
+    body = `Analyzing local changes from ${base} to working tree`;
+  }
+
   return {
     eventType: 'pull_request',
     action: 'opened',
@@ -63,8 +79,8 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
     },
     pullRequest: {
       number: 0, // Local run, no real PR number
-      title: `Local changes: ${currentBranch}`,
-      body: `Analyzing local changes from ${base} to ${head ?? 'working tree'}`,
+      title,
+      body,
       author: 'local',
       baseBranch: base,
       headBranch: currentBranch,
