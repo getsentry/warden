@@ -16,6 +16,7 @@ import {
   type PreparedFile,
 } from '../../sdk/runner.js';
 import chalk from 'chalk';
+import figures from 'figures';
 import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
 import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
@@ -91,6 +92,10 @@ export interface SkillProgressCallbacks {
   onSkillComplete: (name: string, report: SkillReport) => void;
   onSkillSkipped: (name: string) => void;
   onSkillError: (name: string, error: string) => void;
+  /** Called when a prompt exceeds the large prompt threshold */
+  onLargePrompt?: (skillName: string, filename: string, lineRange: string, chars: number, estimatedTokens: number) => void;
+  /** Called with prompt size info in debug mode */
+  onPromptSize?: (skillName: string, filename: string, lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
 }
 
 /**
@@ -170,6 +175,16 @@ export async function runSkillTask(
             current.findings.push(...findings);
           }
         },
+        onLargePrompt: callbacks.onLargePrompt
+          ? (lineRange, chars, estimatedTokens) => {
+              callbacks.onLargePrompt?.(name, filename, lineRange, chars, estimatedTokens);
+            }
+          : undefined,
+        onPromptSize: callbacks.onPromptSize
+          ? (lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
+              callbacks.onPromptSize?.(name, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens);
+            }
+          : undefined,
       };
 
       const result = await analyzeFile(
@@ -290,6 +305,28 @@ export async function runSkillTasks(
         console.error(`\u2717 ${displayName} - Error: ${error}`);
       }
     },
+    // Warn about large prompts (always shown unless quiet)
+    onLargePrompt: (skillName, filename, lineRange, chars, estimatedTokens) => {
+      if (verbosity === Verbosity.Quiet) return;
+      const location = `${filename}:${lineRange}`;
+      const size = `${Math.round(chars / 1000)}k chars (~${Math.round(estimatedTokens / 1000)}k tokens)`;
+      if (mode.isTTY) {
+        console.error(`${chalk.yellow(figures.warning)}  Large prompt for ${location}: ${size}`);
+      } else {
+        console.error(`WARN: Large prompt for ${location}: ${size}`);
+      }
+    },
+    // Debug mode: show prompt sizes
+    onPromptSize: verbosity >= Verbosity.Debug
+      ? (_skillName, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
+          const location = `${filename}:${lineRange}`;
+          if (mode.isTTY) {
+            console.error(chalk.dim(`[debug] Prompt for ${location}: system=${systemChars}, user=${userChars}, total=${totalChars} chars (~${estimatedTokens} tokens)`));
+          } else {
+            console.error(`DEBUG: Prompt for ${location}: system=${systemChars}, user=${userChars}, total=${totalChars} chars (~${estimatedTokens} tokens)`);
+          }
+        }
+      : undefined,
   };
 
   const effectiveCallbacks = callbacks ?? defaultCallbacks;

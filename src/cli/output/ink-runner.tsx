@@ -16,6 +16,7 @@ import {
 import { formatDuration, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, SPINNER_FRAMES } from './icons.js';
+import figures from 'figures';
 
 type StaticItem = { type: 'header' } | { type: 'skill'; skill: SkillState };
 
@@ -296,6 +297,19 @@ export async function runSkillTasksWithInk(
 
       updateUI();
     },
+    // Warn about large prompts - write directly to stderr to avoid Ink interference
+    onLargePrompt: (_skillName, filename, lineRange, chars, estimatedTokens) => {
+      const location = `${filename}:${lineRange}`;
+      const size = `${Math.round(chars / 1000)}k chars (~${Math.round(estimatedTokens / 1000)}k tokens)`;
+      process.stderr.write(`\x1b[33m${figures.warning}\x1b[0m  Large prompt for ${location}: ${size}\n`);
+    },
+    // Debug mode: show prompt sizes
+    onPromptSize: verbosity >= Verbosity.Debug
+      ? (_skillName, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
+          const location = `${filename}:${lineRange}`;
+          process.stderr.write(`\x1b[2m[debug] Prompt for ${location}: system=${systemChars}, user=${userChars}, total=${totalChars} chars (~${estimatedTokens} tokens)\x1b[0m\n`);
+        }
+      : undefined,
   };
 
   const fileConcurrency = 5;

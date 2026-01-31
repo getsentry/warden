@@ -27,6 +27,17 @@ const DEFAULT_FILE_CONCURRENCY = 5;
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 const FINDINGS_JSON_START = /\{\s*"findings"/;
 
+/** Threshold in characters above which to warn about large prompts (~25k tokens) */
+const LARGE_PROMPT_THRESHOLD_CHARS = 100000;
+
+/**
+ * Estimate token count from character count.
+ * Uses chars/4 as a rough approximation for English text.
+ */
+export function estimateTokens(chars: number): number {
+  return Math.ceil(chars / 4);
+}
+
 /** Result from analyzing a single hunk */
 interface HunkAnalysisResult {
   findings: Finding[];
@@ -87,6 +98,10 @@ export interface SkillRunnerCallbacks {
   onHunkStart?: (file: string, hunkNum: number, totalHunks: number, lineRange: string) => void;
   onHunkComplete?: (file: string, hunkNum: number, findings: Finding[]) => void;
   onFileComplete?: (file: string, index: number, total: number) => void;
+  /** Called when a prompt exceeds the large prompt threshold */
+  onLargePrompt?: (file: string, lineRange: string, chars: number, estimatedTokens: number) => void;
+  /** Called with prompt size info in debug mode */
+  onPromptSize?: (file: string, lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
 }
 
 export interface SkillRunnerOptions {
@@ -483,18 +498,42 @@ async function parseHunkOutput(
 }
 
 /**
+ * Callbacks for prompt size reporting during hunk analysis.
+ */
+interface HunkAnalysisCallbacks {
+  lineRange: string;
+  onLargePrompt?: (lineRange: string, chars: number, estimatedTokens: number) => void;
+  onPromptSize?: (lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
+}
+
+/**
  * Analyze a single hunk.
  */
 async function analyzeHunk(
   skill: SkillDefinition,
   hunkCtx: HunkWithContext,
   repoPath: string,
-  options: SkillRunnerOptions
+  options: SkillRunnerOptions,
+  callbacks?: HunkAnalysisCallbacks
 ): Promise<HunkAnalysisResult> {
   const { apiKey, maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(skill, hunkCtx);
+
+  // Report prompt size information
+  const systemChars = systemPrompt.length;
+  const userChars = userPrompt.length;
+  const totalChars = systemChars + userChars;
+  const estimatedTokens = estimateTokens(totalChars);
+
+  // Always call onPromptSize if provided (for debug mode)
+  callbacks?.onPromptSize?.(callbacks.lineRange, systemChars, userChars, totalChars, estimatedTokens);
+
+  // Warn about large prompts
+  if (totalChars > LARGE_PROMPT_THRESHOLD_CHARS) {
+    callbacks?.onLargePrompt?.(callbacks.lineRange, totalChars, estimatedTokens);
+  }
 
   try {
     const stream = query({
@@ -684,6 +723,10 @@ export interface FileAnalysisCallbacks {
   skillStartTime?: number;
   onHunkStart?: (hunkNum: number, totalHunks: number, lineRange: string) => void;
   onHunkComplete?: (hunkNum: number, findings: Finding[]) => void;
+  /** Called when a prompt exceeds the large prompt threshold */
+  onLargePrompt?: (lineRange: string, chars: number, estimatedTokens: number) => void;
+  /** Called with prompt size info in debug mode */
+  onPromptSize?: (lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
 }
 
 /**
@@ -718,7 +761,15 @@ export async function analyzeFile(
     const lineRange = getHunkLineRange(hunk);
     callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
 
-    const result = await analyzeHunk(skill, hunk, repoPath, options);
+    const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
+      ? {
+          lineRange,
+          onLargePrompt: callbacks.onLargePrompt,
+          onPromptSize: callbacks.onPromptSize,
+        }
+      : undefined;
+
+    const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks);
 
     if (result.failed) {
       failedHunks++;
@@ -803,6 +854,16 @@ export async function runSkill(
       onHunkComplete: (hunkNum, findings) => {
         callbacks?.onHunkComplete?.(filename, hunkNum, findings);
       },
+      onLargePrompt: callbacks?.onLargePrompt
+        ? (lineRange, chars, estimatedTokens) => {
+            callbacks.onLargePrompt?.(filename, lineRange, chars, estimatedTokens);
+          }
+        : undefined,
+      onPromptSize: callbacks?.onPromptSize
+        ? (lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
+            callbacks.onPromptSize?.(filename, lineRange, systemChars, userChars, totalChars, estimatedTokens);
+          }
+        : undefined,
     };
 
     const result = await analyzeFile(skill, fileHunkEntry, context.repoPath, options, fileCallbacks);

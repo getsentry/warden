@@ -8,6 +8,7 @@ import {
   extractFindingsWithLLM,
   truncateForLLMFallback,
   buildSystemPrompt,
+  estimateTokens,
 } from './runner.js';
 import type { SkillDefinition } from '../config/schema.js';
 
@@ -473,5 +474,27 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(skill);
     expect(prompt).toContain('scripts/, assets/');
     expect(prompt).not.toContain('references/');
+  });
+});
+
+describe('estimateTokens', () => {
+  it('estimates tokens using chars/4 approximation', () => {
+    expect(estimateTokens(0)).toBe(0);
+    expect(estimateTokens(4)).toBe(1);
+    expect(estimateTokens(8)).toBe(2);
+    expect(estimateTokens(100)).toBe(25);
+    expect(estimateTokens(1000)).toBe(250);
+  });
+
+  it('rounds up for non-divisible counts', () => {
+    expect(estimateTokens(1)).toBe(1);
+    expect(estimateTokens(5)).toBe(2);
+    expect(estimateTokens(7)).toBe(2);
+    expect(estimateTokens(9)).toBe(3);
+  });
+
+  it('handles large character counts', () => {
+    expect(estimateTokens(100000)).toBe(25000);
+    expect(estimateTokens(400000)).toBe(100000);
   });
 });
