@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { SeverityThresholdSchema } from '../types/index.js';
@@ -28,6 +29,8 @@ export const CLIOptionsSchema = z.object({
   force: z.boolean().default(false),
   /** List available skills (for add command) */
   list: z.boolean().default(false),
+  /** Force interpretation of ambiguous targets as git refs */
+  git: z.boolean().default(false),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -81,6 +84,7 @@ Options:
                        (off, critical, high, medium, low, info)
   --fix                Automatically apply all suggested fixes
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
+  --git                Force ambiguous targets to be treated as git refs
   --quiet              Errors and final summary only
   -v, --verbose        Show real-time findings and hunk details
   -vv                  Show debug info (token counts, latencies)
@@ -123,11 +127,23 @@ export function showHelp(): void {
   console.log(HELP_TEXT.trim());
 }
 
+export interface DetectTargetTypeOptions {
+  /** Current working directory for filesystem checks */
+  cwd?: string;
+  /** Force git ref interpretation for ambiguous targets */
+  forceGit?: boolean;
+}
+
 /**
  * Detect if a target looks like a git ref vs a file path.
  * Returns 'git' for git refs, 'file' for file paths.
+ *
+ * For ambiguous targets (no path separators, no extension), checks
+ * if a file/directory exists at that path before defaulting to git ref.
  */
-export function detectTargetType(target: string): 'git' | 'file' {
+export function detectTargetType(target: string, options: DetectTargetTypeOptions = {}): 'git' | 'file' {
+  const { cwd = process.cwd(), forceGit = false } = options;
+
   // Git range syntax (e.g., main..feature, HEAD~3..HEAD)
   if (target.includes('..')) {
     return 'git';
@@ -153,6 +169,18 @@ export function detectTargetType(target: string): 'git' | 'file' {
     return 'file';
   }
 
+  // Ambiguous target (no path separators, no extension)
+  // If --git flag is set, force git ref interpretation
+  if (forceGit) {
+    return 'git';
+  }
+
+  // Check if file/directory exists at this path
+  const fullPath = `${cwd}/${target}`;
+  if (existsSync(fullPath)) {
+    return 'file';
+  }
+
   // Default to git ref (will be validated later)
   return 'git';
 }
@@ -160,12 +188,12 @@ export function detectTargetType(target: string): 'git' | 'file' {
 /**
  * Classify targets into git refs and file patterns.
  */
-export function classifyTargets(targets: string[]): { gitRefs: string[]; filePatterns: string[] } {
+export function classifyTargets(targets: string[], options: DetectTargetTypeOptions = {}): { gitRefs: string[]; filePatterns: string[] } {
   const gitRefs: string[] = [];
   const filePatterns: string[] = [];
 
   for (const target of targets) {
-    if (detectTargetType(target) === 'git') {
+    if (detectTargetType(target, options) === 'git') {
       gitRefs.push(target);
     } else {
       filePatterns.push(target);
@@ -218,6 +246,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       force: { type: 'boolean', short: 'f', default: false },
       list: { type: 'boolean', short: 'l', default: false },
       parallel: { type: 'string' },
+      git: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'V', default: false },
       quiet: { type: 'boolean', default: false },
@@ -328,6 +357,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     fix: values.fix,
     force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,
+    git: values.git,
     help: values.help,
     quiet: values.quiet,
     verbose: verboseCount,

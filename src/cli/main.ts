@@ -630,7 +630,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
   }
 
   // Classify targets
-  const { gitRefs, filePatterns } = classifyTargets(options.targets);
+  const { gitRefs, filePatterns } = classifyTargets(options.targets, { forceGit: options.git });
 
   // Can't mix git refs and file patterns
   if (gitRefs.length > 0 && filePatterns.length > 0) {

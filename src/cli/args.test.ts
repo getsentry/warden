@@ -1,5 +1,14 @@
+import { existsSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { parseCliArgs, CLIOptionsSchema, detectTargetType, classifyTargets } from './args.js';
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual('node:fs');
+  return {
+    ...actual,
+    existsSync: vi.fn(() => false),
+  };
+});
 
 describe('parseCliArgs', () => {
   const originalExit = process.exit;
@@ -197,6 +206,16 @@ describe('parseCliArgs', () => {
     expect(result.options.list).toBe(false);
   });
 
+  it('parses --git flag', () => {
+    const result = parseCliArgs(['feature', '--git']);
+    expect(result.options.git).toBe(true);
+  });
+
+  it('defaults git to false', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.git).toBe(false);
+  });
+
   it('parses setup-app command', () => {
     const result = parseCliArgs(['setup-app']);
     expect(result.command).toBe('setup-app');
@@ -276,6 +295,16 @@ describe('CLIOptionsSchema', () => {
 });
 
 describe('detectTargetType', () => {
+  const mockExistsSync = existsSync as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockExistsSync.mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    mockExistsSync.mockReset();
+  });
+
   it('detects git range syntax', () => {
     expect(detectTargetType('main..feature')).toBe('git');
     expect(detectTargetType('HEAD~3..HEAD')).toBe('git');
@@ -312,13 +341,48 @@ describe('detectTargetType', () => {
     expect(detectTargetType('file?.ts')).toBe('file');
   });
 
-  it('defaults to git for ambiguous targets', () => {
+  it('defaults to git for ambiguous targets when path does not exist', () => {
+    mockExistsSync.mockReturnValue(false);
     expect(detectTargetType('main')).toBe('git');
     expect(detectTargetType('feature')).toBe('git');
+  });
+
+  it('prefers file when ambiguous target exists as file/directory', () => {
+    mockExistsSync.mockReturnValue(true);
+    expect(detectTargetType('feature')).toBe('file');
+    expect(detectTargetType('docs')).toBe('file');
+  });
+
+  it('uses cwd option for filesystem check', () => {
+    mockExistsSync.mockImplementation((path: string) => path === '/custom/path/feature');
+    expect(detectTargetType('feature', { cwd: '/custom/path' })).toBe('file');
+    expect(mockExistsSync).toHaveBeenCalledWith('/custom/path/feature');
+  });
+
+  it('forceGit option overrides filesystem check', () => {
+    mockExistsSync.mockReturnValue(true);
+    expect(detectTargetType('feature', { forceGit: true })).toBe('git');
+  });
+
+  it('forceGit does not affect unambiguous targets', () => {
+    // Git range syntax is still git
+    expect(detectTargetType('main..feature', { forceGit: true })).toBe('git');
+    // File paths are still file
+    expect(detectTargetType('src/auth.ts', { forceGit: true })).toBe('file');
   });
 });
 
 describe('classifyTargets', () => {
+  const mockExistsSync = existsSync as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockExistsSync.mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    mockExistsSync.mockReset();
+  });
+
   it('classifies file targets', () => {
     const { gitRefs, filePatterns } = classifyTargets(['src/auth.ts', 'file.js']);
     expect(gitRefs).toEqual([]);
@@ -335,5 +399,19 @@ describe('classifyTargets', () => {
     const { gitRefs, filePatterns } = classifyTargets(['HEAD~3', 'src/auth.ts']);
     expect(gitRefs).toEqual(['HEAD~3']);
     expect(filePatterns).toEqual(['src/auth.ts']);
+  });
+
+  it('classifies ambiguous target as file when path exists', () => {
+    mockExistsSync.mockReturnValue(true);
+    const { gitRefs, filePatterns } = classifyTargets(['feature']);
+    expect(gitRefs).toEqual([]);
+    expect(filePatterns).toEqual(['feature']);
+  });
+
+  it('forceGit option forces ambiguous targets to git', () => {
+    mockExistsSync.mockReturnValue(true);
+    const { gitRefs, filePatterns } = classifyTargets(['feature'], { forceGit: true });
+    expect(gitRefs).toEqual(['feature']);
+    expect(filePatterns).toEqual([]);
   });
 });
