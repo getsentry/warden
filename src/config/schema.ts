@@ -151,6 +151,8 @@ export const DefaultsSchema = z.object({
   defaultBranch: z.string().optional(),
   /** Chunking configuration for controlling how files are processed */
   chunking: ChunkingConfigSchema.optional(),
+  /** Delay in milliseconds between batch starts when processing files in parallel. Default: 0 */
+  batchDelayMs: z.number().int().nonnegative().optional(),
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;
 

@@ -110,6 +110,7 @@ async function runSkills(
   const skillsConfig = config?.skills;
   const defaultsModel = config?.defaults?.model;
   const defaultsMaxTurns = config?.defaults?.maxTurns;
+  const defaultsBatchDelayMs = config?.defaults?.batchDelayMs;
 
   // Determine which skills to run
   let skillNames: string[];
@@ -139,7 +140,13 @@ async function runSkills(
   // Build skill tasks
   // Model precedence: defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
   const model = defaultsModel ?? options.model ?? process.env['WARDEN_MODEL'];
-  const runnerOptions: SkillRunnerOptions = { apiKey, model, abortController, maxTurns: defaultsMaxTurns };
+  const runnerOptions: SkillRunnerOptions = {
+    apiKey,
+    model,
+    abortController,
+    maxTurns: defaultsMaxTurns,
+    batchDelayMs: defaultsBatchDelayMs,
+  };
   const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
     name: skillName,
     failOn: options.failOn,

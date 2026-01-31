@@ -98,6 +98,8 @@ export interface SkillRunnerOptions {
   parallel?: boolean;
   /** Max concurrent file analyses when parallel=true (default: 5) */
   concurrency?: number;
+  /** Delay in milliseconds between batch starts when parallel=true (default: 0) */
+  batchDelayMs?: number;
   /** Model to use for analysis (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
   model?: string;
   /** Progress callbacks */
@@ -814,10 +816,16 @@ export async function runSkill(
   if (parallel) {
     // Process files in parallel with concurrency limit
     const fileConcurrency = options.concurrency ?? DEFAULT_FILE_CONCURRENCY;
+    const batchDelayMs = options.batchDelayMs ?? 0;
 
     for (let i = 0; i < fileHunks.length; i += fileConcurrency) {
       // Check for abort before starting new batch
       if (abortController?.signal.aborted) break;
+
+      // Apply rate limiting delay between batches (not before the first batch)
+      if (i > 0 && batchDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+      }
 
       const batch = fileHunks.slice(i, i + fileConcurrency);
       const batchPromises = batch.map((fileHunkEntry, batchIndex) =>

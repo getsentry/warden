@@ -329,6 +329,7 @@ async function runScheduledAnalysis(
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
         maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+        batchDelayMs: config.defaults?.batchDelayMs,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);
@@ -530,6 +531,7 @@ async function run(): Promise<void> {
         apiKey: inputs.anthropicApiKey,
         model: trigger.model,
         maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+        batchDelayMs: config.defaults?.batchDelayMs,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);

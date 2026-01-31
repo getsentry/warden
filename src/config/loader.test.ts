@@ -255,3 +255,59 @@ describe('maxTurns config', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('batchDelayMs config', () => {
+  it('accepts batchDelayMs in defaults', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        batchDelayMs: 1000,
+      },
+      triggers: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.batchDelayMs).toBe(1000);
+  });
+
+  it('accepts zero batchDelayMs', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        batchDelayMs: 0,
+      },
+      triggers: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.batchDelayMs).toBe(0);
+  });
+
+  it('rejects negative batchDelayMs', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        batchDelayMs: -100,
+      },
+      triggers: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-integer batchDelayMs', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        batchDelayMs: 100.5,
+      },
+      triggers: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+});
