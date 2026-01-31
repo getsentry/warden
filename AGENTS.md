@@ -64,6 +64,12 @@ export { SkillReport, runSkill } from "./types/index.js";
 - Cover every user entry point with at least a happy-path test
 - Co-locate tests with source (`foo.ts` → `foo.test.ts`)
 
+## Verifying Changes
+
+```bash
+pnpm lint && pnpm build && pnpm test
+```
+
 ## Task Management
 
 Use `/dex` to break down complex work, track progress across sessions, and coordinate multi-step implementations.
