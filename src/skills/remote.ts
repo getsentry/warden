@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { z } from 'zod';
 import { loadSkillFromMarkdown, SkillLoaderError } from './loader.js';
 import type { SkillDefinition } from '../config/schema.js';
@@ -206,11 +206,12 @@ export interface FetchRemoteOptions {
 
 /**
  * Execute a git command and return stdout.
+ * Uses execFileSync to avoid shell injection vulnerabilities.
  * Throws SkillLoaderError on failure.
  */
 function execGit(args: string[], options?: { cwd?: string }): string {
   try {
-    return execSync(`git ${args.join(' ')}`, {
+    return execFileSync('git', args, {
       encoding: 'utf-8',
       cwd: options?.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
