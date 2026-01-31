@@ -117,6 +117,44 @@ describe('matchTrigger', () => {
     const trigger = { ...baseTrigger, filters: { ignorePaths: ['*.md'] } };
     expect(matchTrigger(trigger, context)).toBe(false);
   });
+
+  it('fails when path filters defined but filenames undefined', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: undefined,
+    };
+    const trigger = { ...baseTrigger, filters: { paths: ['src/**/*.ts'] } };
+    expect(matchTrigger(trigger, context)).toBe(false);
+  });
+
+  it('fails when ignorePaths defined but filenames undefined', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: undefined,
+    };
+    const trigger = { ...baseTrigger, filters: { ignorePaths: ['*.md'] } };
+    expect(matchTrigger(trigger, context)).toBe(false);
+  });
+
+  it('fails when path filters defined but files array empty', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        files: [],
+      },
+    };
+    const trigger = { ...baseTrigger, filters: { paths: ['src/**/*.ts'] } };
+    expect(matchTrigger(trigger, context)).toBe(false);
+  });
+
+  it('matches when no filters defined and filenames unavailable', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: undefined,
+    };
+    expect(matchTrigger(baseTrigger, context)).toBe(true);
+  });
 });
 
 describe('shouldFail', () => {

@@ -73,6 +73,12 @@ export function matchTrigger(trigger: Trigger, context: EventContext): boolean {
   const pathPatterns = trigger.filters?.paths;
   const ignorePatterns = trigger.filters?.ignorePaths;
 
+  // Fail trigger match when path filters are defined but filenames unavailable
+  // This prevents filters from being silently bypassed on API failures
+  if ((pathPatterns || ignorePatterns) && (!filenames || filenames.length === 0)) {
+    return false;
+  }
+
   if (pathPatterns && filenames) {
     const hasMatch = filenames.some((file) =>
       pathPatterns.some((pattern) => matchGlob(pattern, file))
