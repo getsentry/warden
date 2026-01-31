@@ -1,5 +1,5 @@
 {
-  "name": "warden",
+  "name": "@sentry/warden",
   "version": "0.1.0",
   "description": "Event-driven agent that reacts to GitHub events and executes skills via Claude Code SDK",
   "type": "module",
