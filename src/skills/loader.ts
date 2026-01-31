@@ -300,43 +300,6 @@ export async function loadSkillsFromDirectory(
 }
 
 /**
- * Get the path to the built-in skills directory.
- */
-function getBuiltinSkillsDir(): string {
-  // Skills are in the repo root's skills/ directory
-  // This file is at src/skills/loader.ts, so we go up to repo root
-  // import.meta.dirname = src/skills, so we need ../.. to get to root
-  return join(import.meta.dirname, '..', '..', 'skills');
-}
-
-/**
- * Get a built-in skill by name.
- */
-export async function getBuiltinSkill(name: string): Promise<SkillDefinition | undefined> {
-  const skillsDir = getBuiltinSkillsDir();
-  const skillMdPath = join(skillsDir, name, 'SKILL.md');
-
-  if (existsSync(skillMdPath)) {
-    try {
-      return await loadSkillFromMarkdown(skillMdPath);
-    } catch {
-      return undefined;
-    }
-  }
-
-  return undefined;
-}
-
-/**
- * Get all built-in skill names.
- */
-export async function getBuiltinSkillNames(): Promise<string[]> {
-  const skillsDir = getBuiltinSkillsDir();
-  const skills = await loadSkillsFromDirectory(skillsDir);
-  return Array.from(skills.keys());
-}
-
-/**
  * A discovered skill with source metadata.
  */
 export interface DiscoveredSkill {
@@ -397,7 +360,6 @@ export async function discoverAllSkills(
  *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
  *    - .agents/skills/{name}/SKILL.md or .agents/skills/{name}.md
  *    - .claude/skills/{name}/SKILL.md or .claude/skills/{name}.md
- * 4. Built-in skills
  */
 export async function resolveSkillAsync(
   nameOrPath: string,
@@ -446,10 +408,6 @@ export async function resolveSkillAsync(
       }
     }
   }
-
-  // 4. Check built-in skills
-  const builtin = await getBuiltinSkill(nameOrPath);
-  if (builtin) return builtin;
 
   throw new SkillLoaderError(`Skill not found: ${nameOrPath}`);
 }

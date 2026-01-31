@@ -1,8 +1,6 @@
 export {
   clearSkillsCache,
   discoverAllSkills,
-  getBuiltinSkill,
-  getBuiltinSkillNames,
   loadSkillFromFile,
   loadSkillFromMarkdown,
   loadSkillsFromDirectory,

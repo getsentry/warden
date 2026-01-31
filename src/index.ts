@@ -83,8 +83,6 @@ export type { SkillRunnerOptions, SkillRunnerCallbacks } from './sdk/runner.js';
 // -----------------------------------------------------------------------------
 export {
   resolveSkillAsync,
-  getBuiltinSkill,
-  getBuiltinSkillNames,
   SkillLoaderError,
 } from './skills/index.js';
 
