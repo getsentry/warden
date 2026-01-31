@@ -23,11 +23,12 @@ import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from 
 import { resolveSkillAsync } from '../skills/loader.js';
 import { filterFindingsBySeverity, SeverityThresholdSchema } from '../types/index.js';
 import {
-  fetchExistingWardenComments,
+  fetchExistingComments,
   deduplicateFindings,
   findingToExistingComment,
+  processDuplicateActions,
 } from '../output/dedup.js';
-import type { ExistingComment } from '../output/dedup.js';
+import type { ExistingComment, DeduplicateResult } from '../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
@@ -647,13 +648,13 @@ async function run(): Promise<void> {
 
   const results = await processInBatches(matchedTriggers, runSingleTrigger, concurrency);
 
-  // Fetch existing Warden comments for deduplication (only for PRs)
+  // Fetch existing comments for deduplication (only for PRs)
   // Keep original list separate for stale detection (modified list includes newly posted comments)
   let fetchedComments: ExistingComment[] = [];
   let existingComments: ExistingComment[] = [];
   if (context.pullRequest) {
     try {
-      fetchedComments = await fetchExistingWardenComments(
+      fetchedComments = await fetchExistingComments(
         octokit,
         context.repository.owner,
         context.repository.name,
@@ -661,7 +662,11 @@ async function run(): Promise<void> {
       );
       existingComments = [...fetchedComments];
       if (fetchedComments.length > 0) {
-        console.log(`Found ${fetchedComments.length} existing Warden comments for deduplication`);
+        const wardenCount = fetchedComments.filter((c) => c.isWarden).length;
+        const externalCount = fetchedComments.length - wardenCount;
+        console.log(
+          `Found ${fetchedComments.length} existing comments for deduplication (${wardenCount} Warden, ${externalCount} external)`
+        );
       }
     } catch (error) {
       console.warn(`::warning::Failed to fetch existing comments for deduplication: ${error}`);
@@ -685,13 +690,40 @@ async function run(): Promise<void> {
         try {
           // Deduplicate findings against existing comments
           let findingsToPost = filteredFindings;
+          let dedupResult: DeduplicateResult | undefined;
+
           if (existingComments.length > 0 && filteredFindings.length > 0) {
-            findingsToPost = await deduplicateFindings(filteredFindings, existingComments, {
+            dedupResult = await deduplicateFindings(filteredFindings, existingComments, {
               apiKey: inputs.anthropicApiKey,
+              currentSkill: result.report.skill,
             });
-            const dedupedCount = filteredFindings.length - findingsToPost.length;
-            if (dedupedCount > 0) {
-              console.log(`Skipping ${dedupedCount} duplicate findings for ${result.triggerName}`);
+            findingsToPost = dedupResult.newFindings;
+
+            if (dedupResult.duplicateActions.length > 0) {
+              console.log(
+                `Found ${dedupResult.duplicateActions.length} duplicate findings for ${result.triggerName}`
+              );
+            }
+          }
+
+          // Process duplicate actions (update Warden comments, add reactions)
+          if (dedupResult && dedupResult.duplicateActions.length > 0) {
+            const actionCounts = await processDuplicateActions(
+              octokit,
+              context.repository.owner,
+              context.repository.name,
+              dedupResult.duplicateActions,
+              result.report.skill
+            );
+
+            if (actionCounts.updated > 0) {
+              console.log(`Updated ${actionCounts.updated} existing Warden comments with skill attribution`);
+            }
+            if (actionCounts.reacted > 0) {
+              console.log(`Added reactions to ${actionCounts.reacted} existing external comments`);
+            }
+            if (actionCounts.failed > 0) {
+              console.warn(`::warning::Failed to process ${actionCounts.failed} duplicate actions`);
             }
           }
 
@@ -719,7 +751,7 @@ async function run(): Promise<void> {
               ? findingsToPost.slice(0, result.maxFindings)
               : findingsToPost;
             for (const finding of postedFindings) {
-              const comment = findingToExistingComment(finding);
+              const comment = findingToExistingComment(finding, result.report.skill);
               if (comment) {
                 existingComments.push(comment);
               }
@@ -752,12 +784,14 @@ async function run(): Promise<void> {
   // Resolve stale Warden comments (comments that no longer have matching findings)
   // Use fetchedComments (not existingComments) to only check comments that have threadIds
   // Only resolve if ALL triggers succeeded - otherwise findings may be missing due to failures
+  // Filter to only Warden comments - we don't resolve external comments
   const allTriggersSucceeded = triggerErrors.length === 0;
-  if (context.pullRequest && fetchedComments.length > 0 && allTriggersSucceeded) {
+  const wardenComments = fetchedComments.filter((c) => c.isWarden);
+  if (context.pullRequest && wardenComments.length > 0 && allTriggersSucceeded) {
     try {
       const allFindings = reports.flatMap((r) => r.findings);
       const scope = buildAnalyzedScope(context.pullRequest.files);
-      const staleComments = findStaleComments(fetchedComments, allFindings, scope);
+      const staleComments = findStaleComments(wardenComments, allFindings, scope);
 
       if (staleComments.length > 0) {
         const resolvedCount = await resolveStaleComments(octokit, staleComments);
@@ -768,7 +802,7 @@ async function run(): Promise<void> {
     } catch (error) {
       console.warn(`::warning::Failed to resolve stale comments: ${error}`);
     }
-  } else if (!allTriggersSucceeded && fetchedComments.length > 0) {
+  } else if (!allTriggersSucceeded && wardenComments.length > 0) {
     console.log('Skipping stale comment resolution due to trigger failures');
   }
 
