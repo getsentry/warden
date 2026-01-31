@@ -51,6 +51,7 @@
     "deny": []
   },
   "enabledPlugins": {
-    "dex@dex": true
+    "dex@dex": true,
+    "sentry-skills@sentry-skills": true
   }
 }
