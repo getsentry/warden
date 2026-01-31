@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/warden-icon.svg" alt="Warden" width="128" height="128">
+  <img src="assets/warden-icon-purple.svg" alt="Warden" width="128" height="128">
 </p>
 
 # warden
