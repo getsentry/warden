@@ -22,21 +22,27 @@ const SEVERITY_COLORS: Record<Severity, typeof chalk.red> = {
   info: chalk.blue,
 };
 
+type FileLineResult =
+  | { status: 'ok'; line: string }
+  | { status: 'file_unavailable' }
+  | { status: 'line_not_found' };
+
 /**
  * Read a specific line from a file.
- * Returns undefined if the file can't be read or line doesn't exist.
+ * Returns a result indicating success, file unavailable, or line not found.
  */
-function readFileLine(filePath: string, lineNumber: number): string | undefined {
+function readFileLine(filePath: string, lineNumber: number): FileLineResult {
   try {
     const content = readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
-    if (lineNumber > 0 && lineNumber <= lines.length) {
-      return lines[lineNumber - 1];
+    const line = lines[lineNumber - 1];
+    if (lineNumber > 0 && lineNumber <= lines.length && line !== undefined) {
+      return { status: 'ok', line };
     }
+    return { status: 'line_not_found' };
   } catch {
-    // File not readable, return undefined
+    return { status: 'file_unavailable' };
   }
-  return undefined;
 }
 
 /**
@@ -62,11 +68,14 @@ function formatFindingTTY(finding: Finding): string[] {
 
   // Code snippet
   if (finding.location?.startLine) {
-    const codeLine = readFileLine(finding.location.path, finding.location.startLine);
-    if (codeLine !== undefined) {
-      const lineNum = chalk.dim(`${finding.location.startLine} │`);
-      lines.push(`  ${lineNum} ${codeLine.trimStart()}`);
+    const result = readFileLine(finding.location.path, finding.location.startLine);
+    const lineNum = chalk.dim(`${finding.location.startLine} │`);
+    if (result.status === 'ok') {
+      lines.push(`  ${lineNum} ${result.line.trimStart()}`);
+    } else if (result.status === 'file_unavailable') {
+      lines.push(`  ${lineNum} ${chalk.dim.italic('(file unavailable)')}`);
     }
+    // For 'line_not_found', we silently skip - the line may not exist in this version
   }
 
   // Blank line, then description
