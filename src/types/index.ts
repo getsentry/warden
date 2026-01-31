@@ -102,6 +102,8 @@ export const SkillReportSchema = z.object({
   usage: UsageStatsSchema.optional(),
   /** Files that were skipped due to chunking patterns */
   skippedFiles: z.array(SkippedFileSchema).optional(),
+  /** Number of hunks that failed to analyze (SDK errors, API errors, etc.) */
+  failedHunks: z.number().int().nonnegative().optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 

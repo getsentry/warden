@@ -26,6 +26,8 @@ const DEFAULT_FILE_CONCURRENCY = 5;
 interface HunkAnalysisResult {
   findings: Finding[];
   usage: UsageStats;
+  /** Whether the hunk analysis failed (SDK error, API error, etc.) */
+  failed: boolean;
 }
 
 /**
@@ -470,17 +472,18 @@ async function analyzeHunk(
     }
 
     if (!resultMessage) {
-      return { findings: [], usage: emptyUsage() };
+      return { findings: [], usage: emptyUsage(), failed: true };
     }
 
     return {
       findings: await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey),
       usage: extractUsage(resultMessage),
+      failed: false,
     };
   } catch {
     // Handle SDK errors (subprocess crashes, API errors, etc.) gracefully
     // so one failing hunk doesn't kill the entire run
-    return { findings: [], usage: emptyUsage() };
+    return { findings: [], usage: emptyUsage(), failed: true };
   }
 }
 
@@ -639,6 +642,8 @@ export interface FileAnalysisResult {
   filename: string;
   findings: Finding[];
   usage: UsageStats;
+  /** Number of hunks that failed to analyze */
+  failedHunks: number;
 }
 
 /**
@@ -654,6 +659,7 @@ export async function analyzeFile(
   const { abortController } = options;
   const fileFindings: Finding[] = [];
   const fileUsage: UsageStats[] = [];
+  let failedHunks = 0;
 
   for (const [hunkIndex, hunk] of file.hunks.entries()) {
     if (abortController?.signal.aborted) break;
@@ -662,6 +668,10 @@ export async function analyzeFile(
     callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
 
     const result = await analyzeHunk(skill, hunk, repoPath, options);
+
+    if (result.failed) {
+      failedHunks++;
+    }
 
     attachElapsedTime(result.findings, callbacks?.skillStartTime);
     callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings);
@@ -674,6 +684,7 @@ export async function analyzeFile(
     filename: file.filename,
     findings: fileFindings,
     usage: aggregateUsage(fileUsage),
+    failedHunks,
   };
 }
 
@@ -718,41 +729,36 @@ export async function runSkill(
   // Track all usage stats for aggregation
   const allUsage: UsageStats[] = [];
 
+  // Track failed hunks across all files
+  let totalFailedHunks = 0;
+
   /**
    * Process all hunks for a single file sequentially.
+   * Wraps analyzeFile with progress callbacks.
    */
   async function processFile(
     fileHunkEntry: PreparedFile,
     fileIndex: number
-  ): Promise<{ findings: Finding[]; usage: UsageStats[] }> {
-    const { filename, hunks } = fileHunkEntry;
-    const fileFindings: Finding[] = [];
-    const fileUsage: UsageStats[] = [];
+  ): Promise<FileAnalysisResult> {
+    const { filename } = fileHunkEntry;
 
-    // Report file start
     callbacks?.onFileStart?.(filename, fileIndex, totalFiles);
 
-    // Process hunks sequentially within each file
-    for (const [hunkIndex, hunk] of hunks.entries()) {
-      // Check for abort before starting new hunk
-      if (abortController?.signal.aborted) break;
+    const fileCallbacks: FileAnalysisCallbacks = {
+      skillStartTime: callbacks?.skillStartTime,
+      onHunkStart: (hunkNum, totalHunks, lineRange) => {
+        callbacks?.onHunkStart?.(filename, hunkNum, totalHunks, lineRange);
+      },
+      onHunkComplete: (hunkNum, findings) => {
+        callbacks?.onHunkComplete?.(filename, hunkNum, findings);
+      },
+    };
 
-      const lineRange = getHunkLineRange(hunk);
+    const result = await analyzeFile(skill, fileHunkEntry, context.repoPath, options, fileCallbacks);
 
-      callbacks?.onHunkStart?.(filename, hunkIndex + 1, hunks.length, lineRange);
-
-      const result = await analyzeHunk(skill, hunk, context.repoPath, options);
-
-      attachElapsedTime(result.findings, callbacks?.skillStartTime);
-      callbacks?.onHunkComplete?.(filename, hunkIndex + 1, result.findings);
-      fileFindings.push(...result.findings);
-      fileUsage.push(result.usage);
-    }
-
-    // Report file complete
     callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
 
-    return { findings: fileFindings, usage: fileUsage };
+    return result;
   }
 
   // Process files - parallel or sequential based on options
@@ -772,7 +778,8 @@ export async function runSkill(
       const batchResults = await Promise.all(batchPromises);
       for (const result of batchResults) {
         allFindings.push(...result.findings);
-        allUsage.push(...result.usage);
+        allUsage.push(result.usage);
+        totalFailedHunks += result.failedHunks;
       }
     }
   } else {
@@ -783,7 +790,8 @@ export async function runSkill(
 
       const result = await processFile(fileHunkEntry, fileIndex);
       allFindings.push(...result.findings);
-      allUsage.push(...result.usage);
+      allUsage.push(result.usage);
+      totalFailedHunks += result.failedHunks;
     }
   }
 
@@ -805,6 +813,9 @@ export async function runSkill(
   };
   if (skippedFiles.length > 0) {
     report.skippedFiles = skippedFiles;
+  }
+  if (totalFailedHunks > 0) {
+    report.failedHunks = totalFailedHunks;
   }
   return report;
 }

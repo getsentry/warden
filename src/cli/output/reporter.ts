@@ -168,8 +168,10 @@ export class Reporter {
    */
   renderSummary(reports: SkillReport[], totalDuration: number): void {
     const allFindings: Finding[] = [];
+    let totalFailedHunks = 0;
     for (const report of reports) {
       allFindings.push(...report.findings);
+      totalFailedHunks += report.failedHunks ?? 0;
     }
     const counts = countBySeverity(allFindings);
     const totalUsage = this.aggregateUsage(reports);
@@ -184,6 +186,9 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(chalk.bold('SUMMARY'));
       this.log(formatFindingCounts(counts));
+      if (totalFailedHunks > 0) {
+        this.log(chalk.yellow(`${figures.warning}  ${totalFailedHunks} chunk${totalFailedHunks === 1 ? '' : 's'} failed to analyze`));
+      }
       const durationLine = `Analysis completed in ${formatDuration(totalDuration)}`;
       if (totalUsage) {
         this.log(chalk.dim(`${durationLine} · ${formatUsage(totalUsage)}`));
@@ -192,6 +197,9 @@ export class Reporter {
       }
     } else {
       this.logCI(`Summary: ${formatFindingCountsPlain(counts)}`);
+      if (totalFailedHunks > 0) {
+        this.logCI(`WARN: ${totalFailedHunks} chunk(s) failed to analyze`);
+      }
       if (totalUsage) {
         this.logCI(`Usage: ${formatUsagePlain(totalUsage)}`);
       }
