@@ -291,12 +291,13 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
 
       try {
         // Try to checkout the pinned SHA
+        // Note: 'checkout' without '--' treats arg as ref; with '--' it's a file path
         execGit(['fetch', '--depth=1', 'origin', '--', parsed.sha], { cwd: remotePath });
-        execGit(['checkout', '--', parsed.sha], { cwd: remotePath });
+        execGit(['checkout', parsed.sha], { cwd: remotePath });
       } catch {
         // If SHA not found, do a full fetch and retry
         execGit(['fetch', '--unshallow'], { cwd: remotePath });
-        execGit(['checkout', '--', parsed.sha], { cwd: remotePath });
+        execGit(['checkout', parsed.sha], { cwd: remotePath });
       }
     } else if (!isPinned) {
       // For unpinned refs, shallow clone of default branch
