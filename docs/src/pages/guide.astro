@@ -1,0 +1,143 @@
+---
+import Base from '../layouts/Base.astro';
+import Terminal from '../components/Terminal.astro';
+import { Code } from 'astro:components';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<Base title="Guide" description="Set up Warden for your GitHub organization">
+  <h1>Guide</h1>
+
+  <p>Warden reviews pull requests automatically. Initialize once, add skills, open a PR.</p>
+
+  <h2>Quick Start</h2>
+
+  <h3>1. Add Organization Secret</h3>
+
+  <p>Go to your GitHub organization's <strong>Settings → Secrets and variables → Actions</strong> and add:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Secret</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WARDEN_ANTHROPIC_API_KEY</code></td>
+        <td>Your API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>2. Initialize Warden</h3>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`npx warden init`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>This generates <code>warden.toml</code> and <code>.github/workflows/warden.yml</code>.</p>
+
+  <h3>3. Create a Skill</h3>
+
+  <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> spec. Create <code>.agents/skills/security-review/SKILL.md</code>:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`---
+name: security-review
+description: Review code for security vulnerabilities
+allowed-tools: Read Grep Glob
+---
+
+Review the code for security issues including:
+- SQL injection
+- XSS vulnerabilities
+- Hardcoded secrets
+- Insecure dependencies`}
+      lang="markdown"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>4. Add the Skill</h3>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`npx warden add security-review`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>Or run <code>warden add</code> without arguments for interactive mode. Use <code>warden add --list</code> to see available skills.</p>
+
+  <h3>5. Open a Pull Request</h3>
+
+  <p>Warden runs in your PR checks and posts review comments. See <a href={`${base}/config`}>Config</a> for all options.</p>
+
+  <h2>GitHub App (Optional)</h2>
+
+  <p>Use a GitHub App for branded comments. Comments appear from "Warden" instead of "github-actions".</p>
+
+  <h3>1. Create the App</h3>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`npx warden setup-app --org your-org`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>2. Add Secrets</h3>
+
+  <p>Add these to your organization secrets:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Secret</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WARDEN_APP_ID</code></td>
+        <td>App ID from the setup command</td>
+      </tr>
+      <tr>
+        <td><code>WARDEN_PRIVATE_KEY</code></td>
+        <td>Private key (full PEM contents)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>3. Update Your Workflow</h3>
+
+  <p>Uncomment the GitHub App section in <code>.github/workflows/warden.yml</code>. See <a href={`${base}/config#workflow`}>Workflow Reference</a> for the full example.</p>
+
+  <h2>Local Development</h2>
+
+  <p>Run Warden locally to catch issues before pushing:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
+
+warden --skill security-review
+warden main..HEAD --skill security-review
+warden --fix`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>See the <a href={`${base}/cli`}>CLI reference</a> for all options.</p>
+</Base>

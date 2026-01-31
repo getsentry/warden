@@ -4,32 +4,8 @@ import Terminal from '../components/Terminal.astro';
 import { Code } from 'astro:components';
 ---
 
-<Base title="CLI Reference" description="Warden CLI commands and options">
-  <h1>CLI Reference</h1>
-
-  <p>Warden provides a command-line interface for running code analysis locally and managing your configuration.</p>
-
-  <h2>Quick Start</h2>
-
-  <Terminal showCopy={true} copyText="export WARDEN_ANTHROPIC_API_KEY=sk-ant-... && warden">
-    <Code
-      code={`# Set your API key
-export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
-
-# Run analysis on uncommitted changes
-warden
-
-# Run on specific files
-warden src/auth.ts src/api/*.ts
-
-# Run on a git range
-warden main..HEAD`}
-      lang="bash"
-      theme="vitesse-black"
-    />
-  </Terminal>
-
-  <h2>Commands</h2>
+<Base title="CLI" description="Warden CLI commands and options">
+  <h1>CLI</h1>
 
   <div class="command-card">
     <h3>warden</h3>
@@ -38,19 +14,12 @@ warden main..HEAD`}
     <ul>
       <li><code>target</code> — Files, directories, or git refs to analyze (optional)</li>
     </ul>
-    <Terminal showCopy={true} copyText="warden">
+    <Terminal>
       <Code
-        code={`# Analyze uncommitted changes (default)
-warden
-
-# Analyze specific files
-warden src/auth.ts
-
-# Analyze a directory
-warden src/api/
-
-# Analyze changes in a git range
-warden HEAD~3..HEAD`}
+        code={`warden                     # Analyze uncommitted changes (default)
+warden src/auth.ts         # Analyze specific file
+warden src/api/            # Analyze a directory
+warden HEAD~3..HEAD        # Analyze changes in a git range`}
         lang="bash"
         theme="vitesse-black"
       />
@@ -64,17 +33,13 @@ warden HEAD~3..HEAD`}
     <ul>
       <li><code>-f, --force</code> — Overwrite existing files</li>
     </ul>
-    <Terminal showCopy={true} copyText="warden init">
-      <pre class="cli-output"><span class="cli-dim">$</span> warden init
-
-<span class="cli-green">Created</span> warden.toml
-<span class="cli-green">Created</span> .github/workflows/warden.yml
-
-<span class="cli-bold">Next steps:</span>
-  1. Add a skill: <span class="cli-cyan">warden add &lt;skill-name&gt;</span>
-  2. Set <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> in .env.local
-  3. Add <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> to repository secrets
-  4. Commit and open a PR to test</pre>
+    <Terminal>
+      <Code
+        code={`warden init            # Interactive setup
+warden init --force    # Overwrite existing files`}
+        lang="bash"
+        theme="vitesse-black"
+      />
     </Terminal>
   </div>
 
@@ -86,10 +51,14 @@ warden HEAD~3..HEAD`}
       <li><code>skill-name</code> — Name of the skill to add (optional, interactive if omitted)</li>
       <li><code>--list</code> — List available skills</li>
     </ul>
-    <Terminal showCopy={true} copyText="warden add security-review">
-      <pre class="cli-output"><span class="cli-dim">$</span> warden add security-review
-
-<span class="cli-green">Added</span> trigger for <span class="cli-cyan">security-review</span> to warden.toml</pre>
+    <Terminal>
+      <Code
+        code={`warden add                     # Interactive mode
+warden add security-review     # Add specific skill
+warden add --list              # List available skills`}
+        lang="bash"
+        theme="vitesse-black"
+      />
     </Terminal>
   </div>
 
@@ -104,13 +73,10 @@ warden HEAD~3..HEAD`}
       <li><code>--name &lt;string&gt;</code> — Custom app name (default: Warden)</li>
       <li><code>--no-open</code> — Print URL instead of opening browser</li>
     </ul>
-    <Terminal showCopy={true} copyText="warden setup-app">
+    <Terminal>
       <Code
-        code={`# For a personal account
-warden setup-app
-
-# For an organization
-warden setup-app --org your-org`}
+        code={`warden setup-app               # For a personal account
+warden setup-app --org my-org  # For an organization`}
         lang="bash"
         theme="vitesse-black"
       />
@@ -118,128 +84,25 @@ warden setup-app --org your-org`}
   </div>
 
   <h2>Global Options</h2>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Option</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>--skill &lt;name&gt;</code></td>
-        <td>Run a specific skill instead of using triggers from config</td>
-      </tr>
-      <tr>
-        <td><code>--fix</code></td>
-        <td>Automatically apply suggested fixes</td>
-      </tr>
-      <tr>
-        <td><code>--json</code></td>
-        <td>Output results as JSON</td>
-      </tr>
-      <tr>
-        <td><code>--fail-on &lt;level&gt;</code></td>
-        <td>Exit with error code if findings meet severity: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></td>
-      </tr>
-      <tr>
-        <td><code>--config &lt;path&gt;</code></td>
-        <td>Path to config file (default: <code>warden.toml</code>)</td>
-      </tr>
-      <tr>
-        <td><code>--verbose</code></td>
-        <td>Show detailed output</td>
-      </tr>
-      <tr>
-        <td><code>-m, --model &lt;model&gt;</code></td>
-        <td>Model to use (fallback when not set in config)</td>
-      </tr>
-      <tr>
-        <td><code>-o, --output &lt;path&gt;</code></td>
-        <td>Write full run output to a JSONL file</td>
-      </tr>
-      <tr>
-        <td><code>--comment-on &lt;severity&gt;</code></td>
-        <td>Only show findings at or above this severity in output</td>
-      </tr>
-      <tr>
-        <td><code>--parallel &lt;n&gt;</code></td>
-        <td>Max concurrent trigger/skill executions (default: 4)</td>
-      </tr>
-      <tr>
-        <td><code>--quiet</code></td>
-        <td>Errors and final summary only</td>
-      </tr>
-      <tr>
-        <td><code>-vv</code></td>
-        <td>Show debug info (token counts, latencies)</td>
-      </tr>
-      <tr>
-        <td><code>--color / --no-color</code></td>
-        <td>Override color detection</td>
-      </tr>
-      <tr>
-        <td><code>--help</code></td>
-        <td>Show help message</td>
-      </tr>
-      <tr>
-        <td><code>--version</code></td>
-        <td>Show version number</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h2>Target Types</h2>
-
-  <p>Warden accepts different types of targets for analysis:</p>
-
-  <h3>Files and Directories</h3>
-
-  <p>Specify paths directly to analyze specific files or directories.</p>
-
-  <Terminal showCopy={false}>
-    <Code
-      code={`# Single file
-warden src/auth.ts
-
-# Multiple files
-warden src/auth.ts src/api/users.ts
-
-# Glob patterns
-warden "src/**/*.ts"
-
-# Directory (analyzes all files)
-warden src/api/`}
-      lang="bash"
-      theme="vitesse-black"
-    />
-  </Terminal>
-
-  <h3>Git References</h3>
-
-  <p>Use git refs to analyze changes between commits.</p>
-
-  <Terminal showCopy={false}>
-    <Code
-      code={`# Changes in last 3 commits
-warden HEAD~3
-
-# Changes between branches
-warden main..HEAD
-
-# Changes since a specific commit
-warden abc1234..HEAD
-
-# Uncommitted changes (default)
-warden`}
-      lang="bash"
-      theme="vitesse-black"
-    />
-  </Terminal>
+  <ul>
+    <li><code>--skill &lt;name&gt;</code> — Run a specific skill instead of using triggers from config</li>
+    <li><code>--fix</code> — Automatically apply suggested fixes</li>
+    <li><code>--json</code> — Output results as JSON</li>
+    <li><code>--fail-on &lt;level&gt;</code> — Exit with error code if findings meet severity: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></li>
+    <li><code>--config &lt;path&gt;</code> — Path to config file (default: <code>warden.toml</code>)</li>
+    <li><code>--verbose</code> — Show detailed output</li>
+    <li><code>-m, --model &lt;model&gt;</code> — Model to use (fallback when not set in config)</li>
+    <li><code>-o, --output &lt;path&gt;</code> — Write full run output to a JSONL file</li>
+    <li><code>--comment-on &lt;severity&gt;</code> — Only show findings at or above this severity in output</li>
+    <li><code>--parallel &lt;n&gt;</code> — Max concurrent trigger/skill executions (default: 4)</li>
+    <li><code>--quiet</code> — Errors and final summary only</li>
+    <li><code>-vv</code> — Show debug info (token counts, latencies)</li>
+    <li><code>--color / --no-color</code> — Override color detection</li>
+    <li><code>--help</code> — Show help message</li>
+    <li><code>--version</code> — Show version number</li>
+  </ul>
 
   <h2>Environment Variables</h2>
-
   <table>
     <thead>
       <tr>
@@ -254,106 +117,4 @@ warden`}
       </tr>
     </tbody>
   </table>
-
-  <p>You can set this in a <code>.env.local</code> file in your project root for local development.</p>
-
-  <h2>Examples</h2>
-
-  <h3>Pre-commit Check</h3>
-
-  <p>Run before committing to catch issues early.</p>
-
-  <Terminal showCopy={true} copyText="warden --skill security-review">
-    <Code
-      code={`# Check uncommitted changes
-warden --skill security-review
-
-# Fix issues automatically
-warden --skill security-review --fix`}
-      lang="bash"
-      theme="vitesse-black"
-    />
-  </Terminal>
-
-  <h3>CI Integration</h3>
-
-  <p>Use in CI scripts with JSON output and exit codes.</p>
-
-  <Terminal showCopy={false}>
-    <Code
-      code={`# Fail CI on high severity issues
-warden --json --fail-on high > results.json
-
-# Review the output
-cat results.json | jq '.findings[] | select(.severity == "high")'`}
-      lang="bash"
-      theme="vitesse-black"
-    />
-  </Terminal>
-
-  <h3>Review PR Changes</h3>
-
-  <p>Analyze all changes in a feature branch.</p>
-
-  <Terminal showCopy={true} copyText="warden main..HEAD">
-    <Code
-      code={`# Compare against main branch
-warden main..HEAD
-
-# Verbose output for debugging
-warden main..HEAD --verbose`}
-      lang="bash"
-      theme="vitesse-black"
-    />
-  </Terminal>
 </Base>
-
-<style>
-  h1 {
-    margin-bottom: 0.5rem;
-  }
-
-  h2 {
-    margin-top: 2.5rem;
-    margin-bottom: 1rem;
-  }
-
-  h3 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.9rem;
-  }
-
-  th, td {
-    text-align: left;
-    padding: 0.75rem;
-    border: 1px solid var(--border);
-  }
-
-  th {
-    background: rgba(255, 255, 255, 0.03);
-    font-weight: 600;
-  }
-
-  td code {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    font-size: 0.85em;
-  }
-
-  ul {
-    padding-left: 1.5rem;
-    margin-bottom: 0.5rem;
-  }
-
-  li {
-    margin-bottom: 0.25rem;
-  }
-</style>

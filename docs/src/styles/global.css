@@ -157,7 +157,7 @@ code {
 pre {
   font-family: var(--font-mono);
   font-size: 0.8125rem;
-  line-height: 2.2;
+  line-height: 1.7;
   background: var(--bg) !important;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -416,6 +416,14 @@ hr {
   margin: 0.75rem 0 0;
 }
 
+.command-card .terminal {
+  margin: 0.75rem 0 0;
+}
+
+.command-card .terminal:last-child {
+  margin-bottom: 0;
+}
+
 .install-method {
   margin-bottom: 2rem;
 }
@@ -501,19 +509,15 @@ hr {
   }
 }
 
-/* CLI output colors */
+/* CLI output colors (used across Terminal and PackageManagerTabs) */
 .cli-output {
   font-family: var(--font-mono);
-  font-weight: 400;
-  font-size: 0.8125rem;
-  line-height: 1.15;
-  letter-spacing: 0;
-  font-feature-settings: normal;
-  font-variant-ligatures: none;
-  -webkit-font-smoothing: antialiased;
+  font-size: 0.875rem;
+  line-height: 1.6;
   color: #e5e5e5;
   margin: 0;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .cli-green {

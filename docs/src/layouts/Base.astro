@@ -36,7 +36,8 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
           <span class="hamburger"></span>
         </button>
         <div class="nav-links">
-          <a href={`${base}/setup`} class:list={[{ active: currentPath.endsWith('/setup') || currentPath.endsWith('/setup/') }]}>Setup</a>
+          <a href={`${base}/guide`} class:list={[{ active: currentPath.endsWith('/guide') || currentPath.endsWith('/guide/') }]}>Guide</a>
+          <a href={`${base}/config`} class:list={[{ active: currentPath.endsWith('/config') || currentPath.endsWith('/config/') }]}>Config</a>
           <a href={`${base}/cli`} class:list={[{ active: currentPath.endsWith('/cli') || currentPath.endsWith('/cli/') }]}>CLI</a>
           <a href="https://github.com/getsentry/warden" class="nav-github" aria-label="GitHub">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

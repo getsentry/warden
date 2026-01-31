@@ -1,0 +1,546 @@
+---
+import Base from '../layouts/Base.astro';
+import Terminal from '../components/Terminal.astro';
+import { Code } from 'astro:components';
+---
+
+<Base title="Config" description="Warden configuration reference">
+  <h1>Config</h1>
+
+  <p>Warden is configured via <code>warden.toml</code> in your repository root.</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`version = 1
+
+[[triggers]]
+name = "Security Review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "security-review"`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Triggers</h2>
+
+  <p>Triggers map GitHub events to skills.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>name</code></td>
+        <td>Display name</td>
+      </tr>
+      <tr>
+        <td><code>event</code></td>
+        <td><code>pull_request</code>, <code>issues</code>, <code>issue_comment</code>, <code>schedule</code></td>
+      </tr>
+      <tr>
+        <td><code>actions</code></td>
+        <td>Event actions (required except for <code>schedule</code>)</td>
+      </tr>
+      <tr>
+        <td><code>skill</code></td>
+        <td>Skill to run</td>
+      </tr>
+      <tr>
+        <td><code>model</code></td>
+        <td>Model override (optional)</td>
+      </tr>
+      <tr>
+        <td><code>maxTurns</code></td>
+        <td>Max agentic turns per hunk (optional)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Pull Request Actions</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Action</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>opened</code></td>
+        <td>PR created</td>
+      </tr>
+      <tr>
+        <td><code>synchronize</code></td>
+        <td>New commits pushed</td>
+      </tr>
+      <tr>
+        <td><code>reopened</code></td>
+        <td>PR reopened</td>
+      </tr>
+      <tr>
+        <td><code>closed</code></td>
+        <td>PR closed or merged</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Filters</h2>
+
+  <p>Control which files are analyzed using glob patterns.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>paths</code></td>
+        <td>Files to include</td>
+      </tr>
+      <tr>
+        <td><code>ignorePaths</code></td>
+        <td>Files to exclude</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[[triggers]]
+name = "API Review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "api-review"
+
+[triggers.filters]
+paths = ["src/api/**/*.ts"]
+ignorePaths = ["**/*.test.ts"]`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Output</h2>
+
+  <p>Control how findings are reported.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>failOn</code></td>
+        <td>Minimum severity to fail: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>, <code>info</code>, <code>off</code></td>
+      </tr>
+      <tr>
+        <td><code>commentOn</code></td>
+        <td>Minimum severity to post as comment</td>
+      </tr>
+      <tr>
+        <td><code>maxFindings</code></td>
+        <td>Maximum findings to report</td>
+      </tr>
+      <tr>
+        <td><code>commentOnSuccess</code></td>
+        <td>Post comment when no findings (default: <code>false</code>)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[triggers.output]
+failOn = "high"
+commentOn = "medium"
+maxFindings = 20`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Defaults</h2>
+
+  <p>Default settings inherited by all triggers. Individual triggers can override any setting.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>model</code></td>
+        <td>Model for all triggers</td>
+      </tr>
+      <tr>
+        <td><code>maxTurns</code></td>
+        <td>Max agentic turns per hunk (default: 50)</td>
+      </tr>
+      <tr>
+        <td><code>defaultBranch</code></td>
+        <td>Repository default branch (auto-detected)</td>
+      </tr>
+      <tr>
+        <td><code>filters</code></td>
+        <td>Default path filters</td>
+      </tr>
+      <tr>
+        <td><code>output</code></td>
+        <td>Default output settings</td>
+      </tr>
+      <tr>
+        <td><code>chunking</code></td>
+        <td>File processing configuration</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[defaults]
+model = "claude-sonnet-4-20250514"
+maxTurns = 30
+
+[defaults.filters]
+ignorePaths = ["**/vendor/**", "**/node_modules/**"]
+
+[defaults.output]
+failOn = "high"
+commentOn = "medium"`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Chunking</h2>
+
+  <p>Control how files are split for analysis. By default, Warden analyzes each hunk separately.</p>
+
+  <h3>File Patterns</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>per-hunk</code></td>
+        <td>Analyze each diff hunk separately (default)</td>
+      </tr>
+      <tr>
+        <td><code>whole-file</code></td>
+        <td>Analyze entire file as one chunk</td>
+      </tr>
+      <tr>
+        <td><code>skip</code></td>
+        <td>Skip the file entirely</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Coalescing</h3>
+
+  <p>Merge nearby hunks for better context.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Default</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>enabled</code></td>
+        <td><code>true</code></td>
+        <td>Enable hunk coalescing</td>
+      </tr>
+      <tr>
+        <td><code>maxGapLines</code></td>
+        <td>30</td>
+        <td>Max lines between hunks to merge</td>
+      </tr>
+      <tr>
+        <td><code>maxChunkSize</code></td>
+        <td>8000</td>
+        <td>Target max chunk size in characters</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[defaults.chunking]
+
+[[defaults.chunking.filePatterns]]
+pattern = "**/pnpm-lock.yaml"
+mode = "skip"
+
+[[defaults.chunking.filePatterns]]
+pattern = "**/migrations/*.sql"
+mode = "whole-file"
+
+[defaults.chunking.coalesce]
+enabled = true
+maxGapLines = 50
+maxChunkSize = 10000`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Schedule Triggers</h2>
+
+  <p>Run on a cron schedule instead of PR events. Requires <code>filters.paths</code> to specify which files to scan.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Default</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>issueTitle</code></td>
+        <td>"Warden: {'{name}'}"</td>
+        <td>Title for the tracking issue</td>
+      </tr>
+      <tr>
+        <td><code>createFixPR</code></td>
+        <td><code>false</code></td>
+        <td>Create PR with fixes when available</td>
+      </tr>
+      <tr>
+        <td><code>fixBranchPrefix</code></td>
+        <td><code>warden-fix</code></td>
+        <td>Branch prefix for fix PRs</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[[triggers]]
+name = "Weekly Security Scan"
+event = "schedule"
+skill = "security-review"
+
+[triggers.filters]
+paths = ["src/**/*.ts"]
+
+[triggers.schedule]
+createFixPR = true`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>Environment Variables</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>WARDEN_ANTHROPIC_API_KEY</code></td>
+        <td>Anthropic API key (required)</td>
+      </tr>
+      <tr>
+        <td><code>WARDEN_MODEL</code></td>
+        <td>Model override</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Skills</h2>
+
+  <p>Skills define what Warden analyzes. They follow the <a href="https://agentskills.io">agentskills.io</a> specification.</p>
+
+  <h3>Skill Directories</h3>
+
+  <p>Warden discovers skills from these directories (first match wins):</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Directory</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>.warden/skills/</code></td>
+        <td>Warden-specific skills (highest priority)</td>
+      </tr>
+      <tr>
+        <td><code>.agents/skills/</code></td>
+        <td>Shared agent skills</td>
+      </tr>
+      <tr>
+        <td><code>.claude/skills/</code></td>
+        <td>Claude Code skills</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>SKILL.md Format</h3>
+
+  <p>Create a directory with a <code>SKILL.md</code> file:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`.agents/skills/
+└── security-review/
+    └── SKILL.md`}
+      lang="text"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>The <code>SKILL.md</code> file uses YAML frontmatter for metadata and markdown for the prompt:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`---
+name: security-review
+description: Review code for security vulnerabilities
+allowed-tools: Read Grep Glob
+---
+
+Review the code for security issues including:
+- SQL injection
+- XSS vulnerabilities
+- Hardcoded secrets
+- Insecure dependencies`}
+      lang="markdown"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>name</code></td>
+        <td>Skill name (referenced by triggers)</td>
+      </tr>
+      <tr>
+        <td><code>description</code></td>
+        <td>Brief description</td>
+      </tr>
+      <tr>
+        <td><code>allowed-tools</code></td>
+        <td>Space-separated tool names (optional)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Available Tools</h3>
+
+  <p><code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Edit</code>, <code>Write</code>, <code>Bash</code>, <code>WebFetch</code>, <code>WebSearch</code></p>
+
+  <h2 id="workflow">Workflow</h2>
+
+  <p>The workflow generated by <code>warden init</code>. Uncomment the GitHub App section for branded comments.</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`name: Warden
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Uncomment for GitHub App (branded comments)
+      # - uses: actions/create-github-app-token@v1
+      #   id: app-token
+      #   with:
+      #     app-id: \${{ secrets.WARDEN_APP_ID }}
+      #     private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
+
+      - uses: getsentry/warden-action@v1
+        with:
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+          # github-token: \${{ steps.app-token.outputs.token }}`}
+      lang="yaml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>Action Inputs</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Input</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>github-token</code></td>
+        <td>GitHub token for posting comments (default: <code>GITHUB_TOKEN</code>)</td>
+      </tr>
+      <tr>
+        <td><code>anthropic-api-key</code></td>
+        <td>Anthropic API key (falls back to <code>WARDEN_ANTHROPIC_API_KEY</code>)</td>
+      </tr>
+      <tr>
+        <td><code>config-path</code></td>
+        <td>Path to config file (default: <code>warden.toml</code>)</td>
+      </tr>
+      <tr>
+        <td><code>fail-on</code></td>
+        <td>Minimum severity to fail the check</td>
+      </tr>
+      <tr>
+        <td><code>comment-on</code></td>
+        <td>Minimum severity to post comments</td>
+      </tr>
+    </tbody>
+  </table>
+</Base>
