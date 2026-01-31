@@ -32,6 +32,7 @@ import {
 import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
 import { runSetupApp } from './commands/setup-app.js';
+import { runSync } from './commands/sync.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -213,22 +214,32 @@ async function runSkills(
   const defaultsMaxTurns = config?.defaults?.maxTurns;
   const defaultsBatchDelayMs = config?.defaults?.batchDelayMs;
 
-  // Determine which skills to run
-  let skillNames: string[];
+  // Determine which triggers/skills to run
+  // We need to preserve trigger objects (not just skill names) to retain the `remote` property
+  interface SkillToRun { skill: string; remote?: string }
+  let skillsToRun: SkillToRun[];
   if (options.skill) {
-    // Explicit skill specified via CLI
-    skillNames = [options.skill];
+    // Explicit skill specified via CLI (no remote support in this mode)
+    skillsToRun = [{ skill: options.skill }];
   } else if (config) {
-    // Get skills from matched triggers
+    // Get skills from matched triggers, preserving remote property
     const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
-    skillNames = [...new Set(matchedTriggers.map((t) => t.skill))];
+    // Dedupe by skill name but keep first occurrence (with its remote property)
+    const seen = new Set<string>();
+    skillsToRun = matchedTriggers
+      .filter((t) => {
+        if (seen.has(t.skill)) return false;
+        seen.add(t.skill);
+        return true;
+      })
+      .map((t) => ({ skill: t.skill, remote: t.remote }));
   } else {
-    skillNames = [];
+    skillsToRun = [];
   }
 
   // Handle case where no skills to run
-  if (skillNames.length === 0) {
+  if (skillsToRun.length === 0) {
     if (options.json) {
       console.log(renderJsonReport([]));
     } else {
@@ -248,10 +259,14 @@ async function runSkills(
     maxTurns: defaultsMaxTurns,
     batchDelayMs: defaultsBatchDelayMs,
   };
-  const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
-    name: skillName,
+  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote }) => ({
+    name: skill,
     failOn: options.failOn,
-    resolveSkill: () => resolveSkillAsync(skillName, repoPath, skillsConfig),
+    resolveSkill: () => resolveSkillAsync(skill, repoPath, {
+      inlineSkills: skillsConfig,
+      remote,
+      offline: options.offline,
+    }),
     context,
     runnerOptions,
   }));
@@ -487,7 +502,11 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     name: trigger.name,
     displayName: trigger.skill,
     failOn: trigger.output.failOn ?? options.failOn,
-    resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, config.skills),
+    resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, {
+      inlineSkills: config.skills,
+      remote: trigger.remote,
+      offline: options.offline,
+    }),
     context,
     runnerOptions: {
       apiKey,
@@ -648,6 +667,8 @@ export async function main(): Promise<void> {
       process.exit(1);
     }
     exitCode = await runSetupApp(setupAppOptions, reporter);
+  } else if (command === 'sync') {
+    exitCode = await runSync(options, reporter);
   } else {
     exitCode = await runCommand(options, reporter);
   }

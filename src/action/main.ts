@@ -367,7 +367,10 @@ async function runScheduledAnalysis(
       console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
 
       // Run skill
-      const skill = await resolveSkillAsync(resolved.skill, repoPath, config.skills);
+      const skill = await resolveSkillAsync(resolved.skill, repoPath, {
+        inlineSkills: config.skills,
+        remote: resolved.remote,
+      });
       const claudePath = findClaudeCodeExecutable();
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
@@ -573,7 +576,10 @@ async function run(): Promise<void> {
     const commentOn = trigger.output.commentOn ?? inputs.commentOn;
 
     try {
-      const skill = await resolveSkillAsync(trigger.skill, repoPath, config.skills);
+      const skill = await resolveSkillAsync(trigger.skill, repoPath, {
+        inlineSkills: config.skills,
+        remote: trigger.remote,
+      });
       const claudePath = findClaudeCodeExecutable();
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,

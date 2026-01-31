@@ -23,6 +23,7 @@ function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     force: false,
     list: false,
     git: false,
+    offline: false,
     ...overrides,
   };
 }

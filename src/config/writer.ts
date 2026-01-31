@@ -17,6 +17,10 @@ export function generateTriggerToml(trigger: Trigger): string {
 
   lines.push(`skill = "${trigger.skill}"`);
 
+  if (trigger.remote) {
+    lines.push(`remote = "${trigger.remote}"`);
+  }
+
   // Optional fields
   if (trigger.filters) {
     if (trigger.filters.paths && trigger.filters.paths.length > 0) {

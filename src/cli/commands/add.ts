@@ -6,6 +6,12 @@ import { getRepoRoot } from '../git.js';
 import { loadWardenConfig, appendTrigger } from '../../config/index.js';
 import type { Trigger } from '../../config/schema.js';
 import { discoverAllSkills, type DiscoveredSkill } from '../../skills/loader.js';
+import {
+  fetchRemote,
+  discoverRemoteSkills,
+  parseRemoteRef,
+  type DiscoveredRemoteSkill,
+} from '../../skills/remote.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
 import { ICON_CHECK } from '../output/icons.js';
@@ -32,7 +38,7 @@ const selectTheme = {
 };
 
 /**
- * Render the list of available skills.
+ * Render the list of available local skills.
  */
 function renderSkillList(
   skills: Map<string, DiscoveredSkill>,
@@ -63,7 +69,38 @@ function renderSkillList(
 }
 
 /**
- * Prompt user to select a skill interactively.
+ * Render the list of available remote skills.
+ */
+function renderRemoteSkillList(
+  skills: DiscoveredRemoteSkill[],
+  configuredSkills: Set<string>,
+  remote: string,
+  reporter: Reporter
+): void {
+  reporter.bold(`Available Skills from ${remote}`);
+  reporter.blank();
+
+  // Sort skills alphabetically by name
+  const sortedSkills = [...skills].sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const skill of sortedSkills) {
+    const isConfigured = configuredSkills.has(skill.name);
+    const configuredTag = isConfigured ? chalk.dim(' (already configured)') : '';
+
+    if (reporter.mode.isTTY) {
+      const icon = isConfigured ? chalk.dim(ICON_CHECK) : ' ';
+      reporter.text(`  ${icon} ${chalk.bold(skill.name)}${configuredTag}`);
+      reporter.text(`    ${chalk.dim(skill.description)}`);
+    } else {
+      const status = isConfigured ? '[configured]' : '';
+      reporter.text(`${skill.name} ${status}`);
+      reporter.text(`  ${skill.description}`);
+    }
+  }
+}
+
+/**
+ * Prompt user to select a local skill interactively.
  */
 async function promptSkillSelection(
   skills: Map<string, DiscoveredSkill>,
@@ -107,7 +144,51 @@ async function promptSkillSelection(
 }
 
 /**
- * Create a default trigger for a skill.
+ * Prompt user to select a remote skill interactively.
+ */
+async function promptRemoteSkillSelection(
+  skills: DiscoveredRemoteSkill[],
+  configuredSkills: Set<string>,
+  reporter: Reporter,
+): Promise<string | null> {
+  // Filter out already configured skills for selection
+  const availableSkills = skills
+    .filter((s) => !configuredSkills.has(s.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (availableSkills.length === 0) {
+    reporter.warning('All available skills are already configured.');
+    return null;
+  }
+
+  const choices = availableSkills.map((skill) => {
+    return {
+      name: skill.name,
+      value: skill.name,
+      description: skill.description,
+    };
+  });
+
+  reporter.bold('ADD REMOTE SKILL');
+  reporter.blank();
+
+  try {
+    const answer = await select({
+      message: '',
+      choices,
+      theme: selectTheme,
+    });
+    // Clear the inquirer "done" line
+    process.stderr.write('\x1b[1A\x1b[2K');
+    return answer;
+  } catch {
+    // User cancelled (Ctrl+C or escape)
+    return null;
+  }
+}
+
+/**
+ * Create a default trigger for a local skill.
  */
 function createDefaultTrigger(skillName: string): Trigger {
   return {
@@ -116,6 +197,128 @@ function createDefaultTrigger(skillName: string): Trigger {
     actions: ['opened', 'synchronize', 'reopened'],
     skill: skillName,
   };
+}
+
+/**
+ * Create a trigger for a remote skill.
+ */
+function createRemoteTrigger(skillName: string, remote: string): Trigger {
+  return {
+    name: skillName,
+    event: 'pull_request',
+    actions: ['opened', 'synchronize', 'reopened'],
+    skill: skillName,
+    remote,
+  };
+}
+
+/**
+ * Run the add command for remote skills.
+ */
+async function runAddRemote(
+  options: CLIOptions,
+  reporter: Reporter,
+  configPath: string,
+  configuredSkills: Set<string>
+): Promise<number> {
+  const remote = options.repo ?? '';
+  if (!remote) {
+    reporter.error('Remote repository is required');
+    return 1;
+  }
+  const cwd = process.cwd();
+
+  // Validate remote ref format
+  try {
+    parseRemoteRef(remote);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    reporter.error(message);
+    return 1;
+  }
+
+  // Fetch remote repository
+  reporter.step(`Fetching skills from ${remote}...`);
+  try {
+    await fetchRemote(remote, {
+      onProgress: (msg) => reporter.debug(msg),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    reporter.error(`Failed to fetch remote: ${message}`);
+    return 1;
+  }
+
+  // Discover skills in the remote
+  const remoteSkills = await discoverRemoteSkills(remote);
+
+  if (remoteSkills.length === 0) {
+    reporter.error(`No skills found in remote: ${remote}`);
+    return 1;
+  }
+
+  reporter.success(`Found ${remoteSkills.length} skill${remoteSkills.length === 1 ? '' : 's'}`);
+
+  // Handle --list: display remote skills and exit
+  if (options.list) {
+    reporter.blank();
+    renderRemoteSkillList(remoteSkills, configuredSkills, remote, reporter);
+    return 0;
+  }
+
+  // Get skill to add (from --skill or interactive prompt)
+  let skillName: string | null;
+
+  if (options.skill) {
+    skillName = options.skill;
+  } else if (reporter.mode.isTTY) {
+    reporter.blank();
+    skillName = await promptRemoteSkillSelection(remoteSkills, configuredSkills, reporter);
+    if (!skillName) {
+      return 0; // User quit or no skills available
+    }
+  } else {
+    reporter.error('Skill name required when not running interactively.');
+    reporter.tip(`Use: warden add --repo ${remote} --skill <name>`);
+    return 1;
+  }
+
+  // Validate skill exists in remote
+  const skill = remoteSkills.find((s) => s.name === skillName);
+  if (!skill) {
+    reporter.error(`Skill '${skillName}' not found in remote: ${remote}`);
+    reporter.blank();
+    reporter.tip('Available skills:');
+    for (const s of remoteSkills) {
+      reporter.text(`  - ${s.name}`);
+    }
+    return 1;
+  }
+
+  // Check for duplicate trigger
+  if (configuredSkills.has(skillName)) {
+    reporter.warning(`Trigger '${skillName}' already exists in warden.toml`);
+    reporter.skipped(relative(cwd, configPath), 'trigger already configured');
+    return 0;
+  }
+
+  // Append trigger to warden.toml
+  const trigger = createRemoteTrigger(skillName, remote);
+  try {
+    appendTrigger(configPath, trigger);
+    reporter.success(`Added trigger '${skillName}' to ${relative(cwd, configPath)}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    reporter.error(`Failed to update warden.toml: ${message}`);
+    return 1;
+  }
+
+  // Show success message
+  reporter.blank();
+  reporter.text(`The trigger will run on pull requests using skill from ${chalk.cyan(remote)}.`);
+  reporter.text(`Edit ${chalk.cyan('warden.toml')} to customize filters and output options.`);
+
+  return 0;
 }
 
 /**
@@ -133,7 +336,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // 2. Check warden.toml exists (deferred for --list)
+  // 2. Check warden.toml exists (deferred for --list without --repo)
   const configPath = join(repoRoot, 'warden.toml');
   const hasConfig = existsSync(configPath);
 
@@ -150,30 +353,44 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     }
   }
 
-  // 4. Discover all available skills
+  // 4. Handle remote skills with --repo flag
+  if (options.repo) {
+    // For remote skills, require warden.toml (unless --list)
+    if (!hasConfig && !options.list) {
+      reporter.error('warden.toml not found.');
+      reporter.tip('Run `warden init` first to create the configuration file.');
+      return 1;
+    }
+
+    return runAddRemote(options, reporter, configPath, configuredSkills);
+  }
+
+  // 5. Discover local skills
   const skills = await discoverAllSkills(repoRoot, {
     onWarning: (message) => reporter.warning(message),
   });
 
   if (skills.size === 0) {
     reporter.error('No skills found.');
+    reporter.tip('Add skills to .warden/skills/, .agents/skills/, or .claude/skills/');
+    reporter.tip('Or use --repo to add remote skills: warden add --repo owner/repo --skill name');
     return 1;
   }
 
-  // 5. Handle --list: display skills and exit (works without warden.toml)
+  // 6. Handle --list: display skills and exit (works without warden.toml)
   if (options.list) {
     renderSkillList(skills, configuredSkills, reporter);
     return 0;
   }
 
-  // 6. For adding skills, require warden.toml
+  // 7. For adding skills, require warden.toml
   if (!hasConfig) {
     reporter.error('warden.toml not found.');
     reporter.tip('Run `warden init` first to create the configuration file.');
     return 1;
   }
 
-  // 7. Get skill to add (from arg or interactive prompt)
+  // 8. Get skill to add (from arg or interactive prompt)
   let skillName: string | null;
 
   if (options.skill) {
@@ -192,7 +409,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // 8. Validate skill exists
+  // 9. Validate skill exists
   if (!skills.has(skillName)) {
     reporter.error(`Skill not found: ${skillName}`);
     reporter.blank();
@@ -203,14 +420,14 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // 9. Check for duplicate trigger
+  // 10. Check for duplicate trigger
   if (configuredSkills.has(skillName)) {
     reporter.warning(`Trigger '${skillName}' already exists in warden.toml`);
     reporter.skipped(relative(cwd, configPath), 'trigger already configured');
     return 0;
   }
 
-  // 10. Append trigger to warden.toml
+  // 11. Append trigger to warden.toml
   const trigger = createDefaultTrigger(skillName);
   try {
     appendTrigger(configPath, trigger);
@@ -221,7 +438,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // 11. Show success message with next steps
+  // 12. Show success message with next steps
   reporter.blank();
   reporter.text(`The trigger will run on pull requests.`);
   reporter.text(`Edit ${chalk.cyan('warden.toml')} to customize filters and output options.`);

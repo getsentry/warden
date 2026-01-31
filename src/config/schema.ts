@@ -68,6 +68,8 @@ export const TriggerSchema = z.object({
   /** Actions to trigger on. Required for all events except 'schedule'. */
   actions: z.array(z.string()).min(1).optional(),
   skill: z.string().min(1),
+  /** Remote repository reference for the skill (e.g., "owner/repo" or "owner/repo@sha") */
+  remote: z.string().optional(),
   filters: PathFilterSchema.optional(),
   output: OutputConfigSchema.optional(),
   /** Model to use for this trigger (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */

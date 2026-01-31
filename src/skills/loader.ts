@@ -348,15 +348,25 @@ export async function discoverAllSkills(
   return result;
 }
 
+export interface ResolveSkillOptions {
+  /** Inline skills from config */
+  inlineSkills?: SkillDefinition[];
+  /** Remote repository reference (e.g., "owner/repo" or "owner/repo@sha") */
+  remote?: string;
+  /** Skip network operations - only use cache for remote skills */
+  offline?: boolean;
+}
+
 /**
  * Resolve a skill by name or path.
  *
  * Resolution order:
- * 1. Inline skills from config
- * 2. Direct path (if nameOrPath contains / or \ or starts with .)
+ * 1. Remote repository (if remote option is set)
+ * 2. Inline skills from config
+ * 3. Direct path (if nameOrPath contains / or \ or starts with .)
  *    - Directory: load SKILL.md from it
  *    - File: load the .md file directly
- * 3. Conventional directories (if repoRoot provided)
+ * 4. Conventional directories (if repoRoot provided)
  *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
  *    - .agents/skills/{name}/SKILL.md or .agents/skills/{name}.md
  *    - .claude/skills/{name}/SKILL.md or .claude/skills/{name}.md
@@ -364,8 +374,21 @@ export async function discoverAllSkills(
 export async function resolveSkillAsync(
   nameOrPath: string,
   repoRoot?: string,
-  inlineSkills?: SkillDefinition[]
+  optionsOrInlineSkills?: SkillDefinition[] | ResolveSkillOptions
 ): Promise<SkillDefinition> {
+  // Handle backward compatibility: third arg can be inline skills array or options object
+  const options: ResolveSkillOptions = Array.isArray(optionsOrInlineSkills)
+    ? { inlineSkills: optionsOrInlineSkills }
+    : (optionsOrInlineSkills ?? {});
+
+  const { inlineSkills, remote, offline } = options;
+
+  // 0. Remote repository resolution takes priority when specified
+  if (remote) {
+    // Dynamic import to avoid circular dependencies
+    const { resolveRemoteSkill } = await import('./remote.js');
+    return resolveRemoteSkill(remote, nameOrPath, { offline });
+  }
   // 1. Check inline skills from config first
   if (inlineSkills) {
     const inline = inlineSkills.find(s => s.name === nameOrPath);
