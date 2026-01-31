@@ -7,7 +7,6 @@ version = 1                    # Required, must be 1
 
 [defaults]                     # Optional, inherited by all triggers
 [[triggers]]                   # Required, array of trigger configs
-[[skills]]                     # Optional, inline skill definitions
 ```
 
 ## Defaults Section
@@ -80,22 +79,6 @@ fixBranchPrefix = "security-fix"       # Branch name prefix
 
 **Actions (for non-schedule):**
 - `opened`, `synchronize`, `reopened`, `closed`
-
-## Skills Section (Inline Skills)
-
-```toml
-[[skills]]
-name = "custom-skill"
-description = "What this skill checks"
-prompt = """
-Analysis instructions here.
-Look for specific issues.
-"""
-
-[skills.tools]
-allowed = ["Read", "Grep", "Glob"]     # Whitelist tools
-denied = ["Write", "Edit", "Bash"]     # Blacklist tools (optional)
-```
 
 ## Severity Values
 

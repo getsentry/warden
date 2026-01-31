@@ -175,30 +175,6 @@ remote = "getsentry/skills@abc123"
 
 **Cache TTL:** 24 hours for unpinned refs (override with `WARDEN_SKILL_CACHE_TTL` in seconds)
 
-**Inline skill in warden.toml:**
-
-```toml
-[[skills]]
-name = "custom-check"
-description = "Check for TODO comments"
-prompt = """
-Find TODO comments that have been in the code for too long.
-Report as low severity findings.
-"""
-
-[skills.tools]
-allowed = ["Read", "Grep", "Glob"]
-```
-
-## Built-in Skills
-
-| Skill | Purpose |
-|-------|---------|
-| `find-bugs` | Logical/functional bugs, null handling, async issues |
-| `security-review` | Injection, auth, CSRF, crypto, race conditions |
-| `code-simplifier` | Readability, consistency, redundancy removal |
-| `performance-review` | N+1 queries, blocking I/O, memory leaks |
-
 ## Common Patterns
 
 **Strict security on critical files:**
