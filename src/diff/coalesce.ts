@@ -25,7 +25,8 @@ export interface CoalesceOptions {
  * Merge two adjacent hunks into one.
  *
  * The merged hunk spans from the start of the first hunk to the end of the second,
- * with content combined using '...' as a visual separator.
+ * with content combined using '...' as a visual separator. When both hunks have
+ * different headers (indicating different function/class scopes), both are preserved.
  */
 function mergeHunks(a: DiffHunk, b: DiffHunk): DiffHunk {
   // Calculate the new range that spans both hunks
@@ -34,12 +35,20 @@ function mergeHunks(a: DiffHunk, b: DiffHunk): DiffHunk {
   const oldStart = Math.min(a.oldStart, b.oldStart);
   const oldEnd = Math.max(a.oldStart + a.oldCount, b.oldStart + b.oldCount);
 
+  // Combine headers when both exist and are different
+  let header: string | undefined;
+  if (a.header && b.header && a.header !== b.header) {
+    header = `${a.header} → ${b.header}`;
+  } else {
+    header = a.header ?? b.header;
+  }
+
   return {
     oldStart,
     oldCount: oldEnd - oldStart,
     newStart,
     newCount: newEnd - newStart,
-    header: a.header, // Keep first hunk's header
+    header,
     content: a.content + '\n...\n' + b.content,
     lines: [...a.lines, ...b.lines],
   };

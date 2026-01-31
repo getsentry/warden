@@ -6,9 +6,9 @@ function makeHunk(
   newStart: number,
   newCount: number,
   content: string,
-  oldStart = newStart,
-  oldCount = newCount
+  options: { oldStart?: number; oldCount?: number; header?: string } = {}
 ): DiffHunk {
+  const { oldStart = newStart, oldCount = newCount, header } = options;
   return {
     oldStart,
     oldCount,
@@ -16,6 +16,7 @@ function makeHunk(
     newCount,
     content,
     lines: content.split('\n'),
+    header,
   };
 }
 
@@ -119,8 +120,8 @@ describe('coalesceHunks', () => {
 
   describe('merged hunk properties', () => {
     it('calculates correct line ranges', () => {
-      const hunk1 = makeHunk(10, 5, 'first', 8, 5);
-      const hunk2 = makeHunk(25, 10, 'second', 23, 10);
+      const hunk1 = makeHunk(10, 5, 'first', { oldStart: 8, oldCount: 5 });
+      const hunk2 = makeHunk(25, 10, 'second', { oldStart: 23, oldCount: 10 });
 
       const result = coalesceHunks([hunk1, hunk2], { maxGapLines: 20 });
 
@@ -131,11 +132,36 @@ describe('coalesceHunks', () => {
       expect(result[0]!.oldCount).toBe(25); // 8 to 33 (23 + 10)
     });
 
-    it('preserves first hunk header', () => {
-      const hunk1 = makeHunk(1, 3, 'first');
-      hunk1.header = 'function foo()';
+    it('combines different headers from both hunks', () => {
+      const hunk1 = makeHunk(1, 3, 'first', { header: 'function foo()' });
+      const hunk2 = makeHunk(10, 3, 'second', { header: 'function bar()' });
+
+      const result = coalesceHunks([hunk1, hunk2], { maxGapLines: 20 });
+
+      expect(result[0]!.header).toBe('function foo() → function bar()');
+    });
+
+    it('preserves single header when only first hunk has one', () => {
+      const hunk1 = makeHunk(1, 3, 'first', { header: 'function foo()' });
       const hunk2 = makeHunk(10, 3, 'second');
-      hunk2.header = 'function bar()';
+
+      const result = coalesceHunks([hunk1, hunk2], { maxGapLines: 20 });
+
+      expect(result[0]!.header).toBe('function foo()');
+    });
+
+    it('preserves single header when only second hunk has one', () => {
+      const hunk1 = makeHunk(1, 3, 'first');
+      const hunk2 = makeHunk(10, 3, 'second', { header: 'function bar()' });
+
+      const result = coalesceHunks([hunk1, hunk2], { maxGapLines: 20 });
+
+      expect(result[0]!.header).toBe('function bar()');
+    });
+
+    it('preserves header when both hunks have identical headers', () => {
+      const hunk1 = makeHunk(1, 3, 'first', { header: 'function foo()' });
+      const hunk2 = makeHunk(10, 3, 'second', { header: 'function foo()' });
 
       const result = coalesceHunks([hunk1, hunk2], { maxGapLines: 20 });
 
