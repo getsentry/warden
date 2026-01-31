@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "test:examples": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "release": "pnpm lint && pnpm build && pnpm test && npm version"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged && pnpm typecheck"
