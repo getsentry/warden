@@ -6,47 +6,166 @@ import { Code } from 'astro:components';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<Base title="Guide" description="Set up Warden for your GitHub organization">
+<Base title="Guide" description="How to use Warden for AI-powered code review">
   <h1>Guide</h1>
 
-  <p>Warden reviews pull requests automatically. Initialize once, add skills, open a PR.</p>
+  <p>Warden is an AI code reviewer that runs <strong>skills</strong> against your code changes. Skills are prompts that define what to look for—security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.</p>
 
-  <h2>Quick Start</h2>
+  <nav class="toc">
+    <details open>
+      <summary>On this page</summary>
+      <ul>
+        <li><a href="#the-core-idea">The Core Idea</a></li>
+        <li><a href="#when-to-use-warden">When to Use Warden</a></li>
+        <li><a href="#local-development">Local Development</a></li>
+        <li><a href="#creating-skills">Creating Skills</a></li>
+        <li><a href="#adding-skills">Adding Skills</a></li>
+        <li><a href="#pull-request-reviews">Pull Request Reviews</a></li>
+        <li><a href="#github-app">GitHub App (Optional)</a></li>
+        <li><a href="#tips">Tips</a></li>
+      </ul>
+    </details>
+  </nav>
 
-  <h3>1. Add Organization Secret</h3>
+  <h2 id="the-core-idea">The Core Idea</h2>
 
-  <p>Go to your GitHub organization's <strong>Settings → Secrets and variables → Actions</strong> and add:</p>
+  <p>Every time you run Warden, it:</p>
+  <ol>
+    <li>Identifies what changed (files, hunks, or entire directories)</li>
+    <li>Matches changes against configured triggers</li>
+    <li>Runs the appropriate skills against matching code</li>
+    <li>Reports findings with severity, location, and optional fixes</li>
+  </ol>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Secret</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>WARDEN_ANTHROPIC_API_KEY</code></td>
-        <td>Your API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></td>
-      </tr>
-    </tbody>
-  </table>
+  <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> specification—they're markdown files with a prompt that tells the AI what to look for. You can use community skills, write your own, or combine both.</p>
 
-  <h3>2. Initialize Warden</h3>
+  <p>Warden works in two contexts:</p>
+  <ul>
+    <li><strong>Locally</strong> — Review changes before you push, get instant feedback</li>
+    <li><strong>In CI</strong> — Automatically review pull requests, post findings as comments</li>
+  </ul>
+
+  <h2 id="when-to-use-warden">When to Use Warden</h2>
+
+  <p><strong>Use Warden when:</strong></p>
+  <ul>
+    <li>You want consistent code review coverage across your team</li>
+    <li>You need specialized reviews that human reviewers might miss (security, API contracts, accessibility)</li>
+    <li>You want to catch issues before human review starts</li>
+    <li>You're enforcing patterns or conventions specific to your codebase</li>
+  </ul>
+
+  <p><strong>Skip Warden when:</strong></p>
+  <ul>
+    <li>Quick typo or formatting fixes</li>
+    <li>Documentation-only changes (unless you have a docs skill)</li>
+    <li>Generated code or vendored dependencies</li>
+  </ul>
+
+  <h2 id="local-development">Local Development</h2>
+
+  <p>Running Warden locally is the fastest way to get value. You get feedback before pushing, while the code is fresh in your mind.</p>
+
+  <h3>Setup</h3>
+
+  <p>Set your API key:</p>
 
   <Terminal showCopy={true}>
     <Code
-      code={`npx warden init`}
+      code={`export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
       lang="bash"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <p>This generates <code>warden.toml</code> and <code>.github/workflows/warden.yml</code>.</p>
+  <h3>Review Uncommitted Changes</h3>
 
-  <h3>3. Create a Skill</h3>
+  <p>Run Warden with no arguments to review your working directory:</p>
 
-  <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> spec. Create <code>.agents/skills/security-review/SKILL.md</code>:</p>
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>Warden analyzes staged and unstaged changes, running any skills that match via your configured triggers.</p>
+
+  <h3>Review Before Pushing</h3>
+
+  <p>Review all commits on your branch that aren't on main:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden main..HEAD`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>This catches everything you're about to push.</p>
+
+  <h3>Run a Specific Skill</h3>
+
+  <p>Skip trigger matching and run one skill directly:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden --skill security-review`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>Auto-Fix Issues</h3>
+
+  <p>Let Warden apply suggested fixes interactively:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden --fix`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>You'll be prompted to accept or reject each fix.</p>
+
+  <h3>Analyze Specific Files</h3>
+
+  <p>Target specific files or directories:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden src/auth.ts
+warden src/api/`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2 id="creating-skills">Creating Skills</h2>
+
+  <p>Skills are markdown files that tell Warden what to look for. They follow the <a href="https://agentskills.io">agentskills.io</a> specification.</p>
+
+  <h3>Directory Structure</h3>
+
+  <p>Create a skill in one of these directories (first match wins):</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`.warden/skills/skill-name/SKILL.md   # Warden-specific (highest priority)
+.agents/skills/skill-name/SKILL.md   # Shared agent skills
+.claude/skills/skill-name/SKILL.md   # Claude Code skills`}
+      lang="text"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>SKILL.md Format</h3>
+
+  <p>A skill has YAML frontmatter for metadata and markdown for the prompt:</p>
 
   <Terminal showCopy={true}>
     <Code
@@ -57,36 +176,188 @@ allowed-tools: Read Grep Glob
 ---
 
 Review the code for security issues including:
-- SQL injection
-- XSS vulnerabilities
-- Hardcoded secrets
-- Insecure dependencies`}
+- SQL injection and parameter binding
+- XSS vulnerabilities in user input handling
+- Hardcoded secrets or credentials
+- Insecure cryptographic practices
+- Path traversal vulnerabilities
+
+Focus on issues in the changed code. For each issue found, report:
+- The specific vulnerability type
+- Why it's a problem
+- How to fix it`}
       lang="markdown"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <h3>4. Add the Skill</h3>
+  <h3>Frontmatter Fields</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>name</code></td>
+        <td>Skill identifier (referenced in triggers and CLI)</td>
+      </tr>
+      <tr>
+        <td><code>description</code></td>
+        <td>Brief description of what the skill does</td>
+      </tr>
+      <tr>
+        <td><code>allowed-tools</code></td>
+        <td>Space-separated list of tools the skill can use</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Available Tools</h3>
+
+  <p><code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Edit</code>, <code>Write</code>, <code>Bash</code>, <code>WebFetch</code>, <code>WebSearch</code></p>
+
+  <p>Most review skills only need <code>Read</code>, <code>Grep</code>, and <code>Glob</code> for exploring context.</p>
+
+  <h3>What Makes a Good Skill</h3>
+
+  <ul>
+    <li><strong>Specific scope</strong> — One skill, one concern. "Security review" not "code quality"</li>
+    <li><strong>Clear criteria</strong> — What counts as an issue? What severity?</li>
+    <li><strong>Actionable output</strong> — Findings should include how to fix</li>
+    <li><strong>Examples</strong> — Show what good and bad code looks like</li>
+  </ul>
+
+  <h2 id="adding-skills">Adding Skills</h2>
+
+  <p>Warden can discover and install community skills.</p>
+
+  <h3>Interactive Mode</h3>
 
   <Terminal showCopy={true}>
     <Code
-      code={`npx warden add security-review`}
+      code={`warden add`}
       lang="bash"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <p>Or run <code>warden add</code> without arguments for interactive mode. Use <code>warden add --list</code> to see available skills.</p>
+  <p>Browse available skills and select which to add.</p>
 
-  <h3>5. Open a Pull Request</h3>
+  <h3>List Available Skills</h3>
 
-  <p>Warden runs in your PR checks and posts review comments. See <a href={`${base}/config`}>Config</a> for all options.</p>
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden add --list`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
 
-  <h2>GitHub App (Optional)</h2>
+  <h3>Add a Specific Skill</h3>
 
-  <p>Use a GitHub App for branded comments. Comments appear from "Warden" instead of "github-actions".</p>
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden add security-review`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
 
-  <h3>1. Create the App</h3>
+  <p>This adds the skill and creates a trigger in <code>warden.toml</code>.</p>
+
+  <h2 id="pull-request-reviews">Pull Request Reviews</h2>
+
+  <p>Warden runs automatically on pull requests via GitHub Actions, posting findings as review comments.</p>
+
+  <h3>Organization Setup</h3>
+
+  <p>Add your Anthropic API key as an organization secret so all repos can use it:</p>
+
+  <ol>
+    <li>Go to <strong>Organization Settings → Secrets and variables → Actions</strong></li>
+    <li>Add <code>WARDEN_ANTHROPIC_API_KEY</code> with your key from <a href="https://console.anthropic.com/">console.anthropic.com</a></li>
+  </ol>
+
+  <h3>Repository Setup</h3>
+
+  <p>Initialize Warden in each repository:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`npx warden init`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>This creates:</p>
+  <ul>
+    <li><code>warden.toml</code> — Configuration with triggers</li>
+    <li><code>.github/workflows/warden.yml</code> — GitHub Actions workflow</li>
+  </ul>
+
+  <h3>What Happens on a PR</h3>
+
+  <ol>
+    <li>PR is opened or updated</li>
+    <li>GitHub Actions runs the Warden workflow</li>
+    <li>Warden analyzes changed files against configured triggers</li>
+    <li>Findings are posted as inline review comments</li>
+    <li>Check passes or fails based on <code>failOn</code> severity</li>
+  </ol>
+
+  <h3>Configuring Triggers</h3>
+
+  <p>Triggers map events to skills. Edit <code>warden.toml</code>:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`version = 1
+
+[[triggers]]
+name = "Security Review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "security-review"
+
+[[triggers]]
+name = "API Review"
+event = "pull_request"
+actions = ["opened", "synchronize"]
+skill = "api-review"
+
+[triggers.filters]
+paths = ["src/api/**/*.ts"]`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>See the <a href={`${base}/config`}>Config reference</a> for all trigger options.</p>
+
+  <h3>Controlling Output</h3>
+
+  <p>Configure when to fail and what to comment on:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[defaults.output]
+failOn = "high"      # Fail the check on high or critical findings
+commentOn = "medium" # Post comments for medium and above`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2 id="github-app">GitHub App (Optional)</h2>
+
+  <p>By default, Warden posts comments as "github-actions". Create a GitHub App for branded comments that appear from "Warden" with a custom avatar.</p>
+
+  <h3>Create the App</h3>
 
   <Terminal showCopy={true}>
     <Code
@@ -96,7 +367,9 @@ Review the code for security issues including:
     />
   </Terminal>
 
-  <h3>2. Add Secrets</h3>
+  <p>This opens a browser to create and install the app.</p>
+
+  <h3>Add Secrets</h3>
 
   <p>Add these to your organization secrets:</p>
 
@@ -110,7 +383,7 @@ Review the code for security issues including:
     <tbody>
       <tr>
         <td><code>WARDEN_APP_ID</code></td>
-        <td>App ID from the setup command</td>
+        <td>App ID from the setup command output</td>
       </tr>
       <tr>
         <td><code>WARDEN_PRIVATE_KEY</code></td>
@@ -119,25 +392,78 @@ Review the code for security issues including:
     </tbody>
   </table>
 
-  <h3>3. Update Your Workflow</h3>
+  <h3>Update Workflow</h3>
 
-  <p>Uncomment the GitHub App section in <code>.github/workflows/warden.yml</code>. See <a href={`${base}/config#workflow`}>Workflow Reference</a> for the full example.</p>
-
-  <h2>Local Development</h2>
-
-  <p>Run Warden locally to catch issues before pushing:</p>
+  <p>Uncomment the GitHub App section in <code>.github/workflows/warden.yml</code>:</p>
 
   <Terminal showCopy={true}>
     <Code
-      code={`export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
+      code={`- uses: actions/create-github-app-token@v1
+  id: app-token
+  with:
+    app-id: \${{ secrets.WARDEN_APP_ID }}
+    private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
 
-warden --skill security-review
-warden main..HEAD --skill security-review
-warden --fix`}
-      lang="bash"
+- uses: getsentry/warden-action@v1
+  with:
+    github-token: \${{ steps.app-token.outputs.token }}`}
+      lang="yaml"
       theme="vitesse-black"
     />
   </Terminal>
 
+  <h2 id="tips">Tips</h2>
+
+  <ul>
+    <li><strong><code>--verbose</code></strong> — See which triggers matched and what Warden is doing</li>
+    <li><strong><code>--fix</code></strong> — Apply suggested fixes interactively</li>
+    <li><strong><code>--skill &lt;name&gt;</code></strong> — Skip trigger matching and run one skill directly</li>
+    <li><strong><code>--fail-on &lt;level&gt;</code></strong> — Override the failure threshold for CI</li>
+    <li><strong><code>-vv</code></strong> — Debug output with token counts and latencies</li>
+  </ul>
+
   <p>See the <a href={`${base}/cli`}>CLI reference</a> for all options.</p>
 </Base>
+
+<style>
+  .toc {
+    margin-bottom: 2rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .toc summary {
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+  }
+
+  .toc ul {
+    margin: 0.5rem 0 0 0;
+    padding-left: 1.25rem;
+    list-style: none;
+  }
+
+  .toc > details > ul {
+    padding-left: 0;
+  }
+
+  .toc li {
+    margin: 0.25rem 0;
+    line-height: 1.4;
+  }
+
+  .toc a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.875rem;
+  }
+
+  .toc a:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+  }
+</style>
