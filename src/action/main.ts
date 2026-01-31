@@ -368,7 +368,6 @@ async function runScheduledAnalysis(
 
       // Run skill
       const skill = await resolveSkillAsync(resolved.skill, repoPath, {
-        inlineSkills: config.skills,
         remote: resolved.remote,
       });
       const claudePath = findClaudeCodeExecutable();
@@ -577,7 +576,6 @@ async function run(): Promise<void> {
 
     try {
       const skill = await resolveSkillAsync(trigger.skill, repoPath, {
-        inlineSkills: config.skills,
         remote: trigger.remote,
       });
       const claudePath = findClaudeCodeExecutable();

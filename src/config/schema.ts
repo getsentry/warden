@@ -163,7 +163,6 @@ export const WardenConfigSchema = z.object({
   version: z.literal(1),
   defaults: DefaultsSchema.optional(),
   triggers: z.array(TriggerSchema).default([]),
-  skills: z.array(SkillDefinitionSchema).optional(),
   runner: RunnerConfigSchema.optional(),
 });
 export type WardenConfig = z.infer<typeof WardenConfigSchema>;

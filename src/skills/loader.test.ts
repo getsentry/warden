@@ -33,29 +33,6 @@ describe('resolveSkillAsync', () => {
     expect(skill.description).toBeDefined();
   });
 
-  it('resolves inline skills from config', async () => {
-    const inlineSkill = {
-      name: 'custom-inline',
-      description: 'A custom skill',
-      prompt: 'Do something custom',
-    };
-
-    const skill = await resolveSkillAsync('custom-inline', undefined, [inlineSkill]);
-    expect(skill).toEqual(inlineSkill);
-  });
-
-  it('prioritizes inline skills over conventional directory skills', async () => {
-    const repoRoot = new URL('../..', import.meta.url).pathname;
-    const overrideSkill = {
-      name: 'testing-guidelines',
-      description: 'Override testing-guidelines',
-      prompt: 'Custom testing-guidelines',
-    };
-
-    const skill = await resolveSkillAsync('testing-guidelines', repoRoot, [overrideSkill]);
-    expect(skill.description).toBe('Override testing-guidelines');
-  });
-
   it('throws for unknown skills', async () => {
     await expect(resolveSkillAsync('nonexistent-skill')).rejects.toThrow(SkillLoaderError);
     await expect(resolveSkillAsync('nonexistent-skill')).rejects.toThrow('Skill not found');
@@ -104,16 +81,6 @@ describe('rootDir tracking', () => {
     expect(skill).toBeDefined();
     expect(skill.rootDir).toContain('skills');
     expect(skill.rootDir).toContain('testing-guidelines');
-  });
-
-  it('inline skills do not have rootDir', async () => {
-    const inlineSkill = {
-      name: 'inline-test',
-      description: 'Test',
-      prompt: 'Test prompt',
-    };
-    const skill = await resolveSkillAsync('inline-test', undefined, [inlineSkill]);
-    expect(skill.rootDir).toBeUndefined();
   });
 });
 

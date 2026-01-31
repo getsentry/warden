@@ -209,7 +209,6 @@ async function runSkills(
     ? loadWardenConfig(dirname(configPath))
     : null;
 
-  const skillsConfig = config?.skills;
   const defaultsModel = config?.defaults?.model;
   const defaultsMaxTurns = config?.defaults?.maxTurns;
   const defaultsBatchDelayMs = config?.defaults?.batchDelayMs;
@@ -263,7 +262,6 @@ async function runSkills(
     name: skill,
     failOn: options.failOn,
     resolveSkill: () => resolveSkillAsync(skill, repoPath, {
-      inlineSkills: skillsConfig,
       remote,
       offline: options.offline,
     }),
@@ -503,7 +501,6 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     displayName: trigger.skill,
     failOn: trigger.output.failOn ?? options.failOn,
     resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, {
-      inlineSkills: config.skills,
       remote: trigger.remote,
       offline: options.offline,
     }),
