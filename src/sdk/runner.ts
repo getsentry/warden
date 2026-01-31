@@ -278,14 +278,62 @@ You can read files from ${dirList} subdirectories using the Read tool with the f
 }
 
 /**
+ * Context about the PR being analyzed, for inclusion in prompts.
+ *
+ * The title and body (like a commit message) help explain the _intent_ of the
+ * changes to the agent, enabling it to better understand what the author was
+ * trying to accomplish and identify issues that conflict with that intent.
+ */
+export interface PRPromptContext {
+  /** All files being changed in the PR */
+  changedFiles: string[];
+  /** PR title - explains what the change does */
+  title?: string;
+  /** PR description/body - explains why and provides additional context */
+  body?: string | null;
+}
+
+/**
  * Builds the user prompt for a single hunk.
  */
-function buildHunkUserPrompt(skill: SkillDefinition, hunkCtx: HunkWithContext): string {
-  return `Analyze this code change according to the "${skill.name}" skill criteria.
+function buildHunkUserPrompt(
+  skill: SkillDefinition,
+  hunkCtx: HunkWithContext,
+  prContext?: PRPromptContext
+): string {
+  const sections: string[] = [];
 
-${formatHunkForAnalysis(hunkCtx)}
+  sections.push(`Analyze this code change according to the "${skill.name}" skill criteria.`);
 
-IMPORTANT: Only report findings that are explicitly covered by the skill instructions. Do not report general code quality issues, bugs, or improvements unless the skill specifically asks for them. Return an empty findings array if no issues match the skill's criteria.`;
+  // Include PR title and description for context on intent
+  if (prContext?.title) {
+    let prSection = `## Pull Request Context\n**Title:** ${prContext.title}`;
+    if (prContext.body) {
+      // Truncate very long PR descriptions to avoid bloating prompts
+      const maxBodyLength = 1000;
+      const body = prContext.body.length > maxBodyLength
+        ? prContext.body.slice(0, maxBodyLength) + '...'
+        : prContext.body;
+      prSection += `\n\n**Description:**\n${body}`;
+    }
+    sections.push(prSection);
+  }
+
+  // Include list of other files being changed in the PR for context
+  const otherFiles = prContext?.changedFiles.filter((f) => f !== hunkCtx.filename) ?? [];
+  if (otherFiles.length > 0) {
+    sections.push(`## Other Files in This PR
+The following files are also being changed in this PR (may provide useful context):
+${otherFiles.map((f) => `- ${f}`).join('\n')}`);
+  }
+
+  sections.push(formatHunkForAnalysis(hunkCtx));
+
+  sections.push(
+    `IMPORTANT: Only report findings that are explicitly covered by the skill instructions. Do not report general code quality issues, bugs, or improvements unless the skill specifically asks for them. Return an empty findings array if no issues match the skill's criteria.`
+  );
+
+  return sections.join('\n\n');
 }
 
 /**
@@ -625,12 +673,13 @@ async function analyzeHunk(
   hunkCtx: HunkWithContext,
   repoPath: string,
   options: SkillRunnerOptions,
-  callbacks?: HunkAnalysisCallbacks
+  callbacks?: HunkAnalysisCallbacks,
+  prContext?: PRPromptContext
 ): Promise<HunkAnalysisResult> {
   const { apiKey, abortController, retry } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
-  const userPrompt = buildHunkUserPrompt(skill, hunkCtx);
+  const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
 
   // Report prompt size information
   const systemChars = systemPrompt.length;
@@ -909,7 +958,8 @@ export async function analyzeFile(
   file: PreparedFile,
   repoPath: string,
   options: SkillRunnerOptions = {},
-  callbacks?: FileAnalysisCallbacks
+  callbacks?: FileAnalysisCallbacks,
+  prContext?: PRPromptContext
 ): Promise<FileAnalysisResult> {
   const { abortController } = options;
   const fileFindings: Finding[] = [];
@@ -931,7 +981,7 @@ export async function analyzeFile(
         }
       : undefined;
 
-    const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks);
+    const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
 
     if (result.failed) {
       failedHunks++;
@@ -996,6 +1046,13 @@ export async function runSkill(
   // Track failed hunks across all files
   let totalFailedHunks = 0;
 
+  // Build PR context for inclusion in prompts (helps LLM understand the full scope of changes)
+  const prContext: PRPromptContext = {
+    changedFiles: context.pullRequest.files.map((f) => f.filename),
+    title: context.pullRequest.title,
+    body: context.pullRequest.body,
+  };
+
   /**
    * Process all hunks for a single file sequentially.
    * Wraps analyzeFile with progress callbacks.
@@ -1033,7 +1090,7 @@ export async function runSkill(
         : undefined,
     };
 
-    const result = await analyzeFile(skill, fileHunkEntry, context.repoPath, options, fileCallbacks);
+    const result = await analyzeFile(skill, fileHunkEntry, context.repoPath, options, fileCallbacks, prContext);
 
     callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
 
