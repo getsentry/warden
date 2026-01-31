@@ -1,5 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { extractFindingsJson, extractBalancedJson, extractFindingsWithLLM } from './runner.js';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import {
+  extractFindingsJson,
+  extractBalancedJson,
+  extractFindingsWithLLM,
+  buildSystemPrompt,
+} from './runner.js';
+import type { SkillDefinition } from '../config/schema.js';
 
 describe('extractBalancedJson', () => {
   it('extracts simple JSON object', () => {
@@ -318,5 +327,85 @@ describe('extractFindingsWithLLM', () => {
     if (!result.success) {
       expect(result.preview).toHaveLength(200);
     }
+  });
+});
+
+describe('buildSystemPrompt', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = join(tmpdir(), `warden-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tempDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const baseSkill: SkillDefinition = {
+    name: 'test-skill',
+    description: 'A test skill',
+    prompt: 'Check for issues',
+  };
+
+  it('does not include resource guidance when rootDir is not set', () => {
+    const prompt = buildSystemPrompt(baseSkill);
+    expect(prompt).not.toContain('<skill_resources>');
+    expect(prompt).not.toContain('scripts/');
+    expect(prompt).not.toContain('references/');
+    expect(prompt).not.toContain('assets/');
+  });
+
+  it('does not include resource guidance when rootDir has no resource directories', () => {
+    const skill: SkillDefinition = { ...baseSkill, rootDir: tempDir };
+    const prompt = buildSystemPrompt(skill);
+    expect(prompt).not.toContain('<skill_resources>');
+  });
+
+  it('includes resource guidance when scripts/ directory exists', () => {
+    mkdirSync(join(tempDir, 'scripts'));
+    const skill: SkillDefinition = { ...baseSkill, rootDir: tempDir };
+    const prompt = buildSystemPrompt(skill);
+    expect(prompt).toContain('<skill_resources>');
+    expect(prompt).toContain(`This skill is located at: ${tempDir}`);
+    expect(prompt).toContain('scripts/');
+    expect(prompt).not.toContain('references/');
+    expect(prompt).not.toContain('assets/');
+  });
+
+  it('includes resource guidance when references/ directory exists', () => {
+    mkdirSync(join(tempDir, 'references'));
+    const skill: SkillDefinition = { ...baseSkill, rootDir: tempDir };
+    const prompt = buildSystemPrompt(skill);
+    expect(prompt).toContain('<skill_resources>');
+    expect(prompt).toContain('references/');
+  });
+
+  it('includes resource guidance when assets/ directory exists', () => {
+    mkdirSync(join(tempDir, 'assets'));
+    const skill: SkillDefinition = { ...baseSkill, rootDir: tempDir };
+    const prompt = buildSystemPrompt(skill);
+    expect(prompt).toContain('<skill_resources>');
+    expect(prompt).toContain('assets/');
+  });
+
+  it('lists all existing resource directories', () => {
+    mkdirSync(join(tempDir, 'scripts'));
+    mkdirSync(join(tempDir, 'references'));
+    mkdirSync(join(tempDir, 'assets'));
+    const skill: SkillDefinition = { ...baseSkill, rootDir: tempDir };
+    const prompt = buildSystemPrompt(skill);
+    expect(prompt).toContain('<skill_resources>');
+    expect(prompt).toContain('scripts/, references/, assets/');
+  });
+
+  it('lists only existing directories when some are missing', () => {
+    mkdirSync(join(tempDir, 'scripts'));
+    mkdirSync(join(tempDir, 'assets'));
+    // references/ does not exist
+    const skill: SkillDefinition = { ...baseSkill, rootDir: tempDir };
+    const prompt = buildSystemPrompt(skill);
+    expect(prompt).toContain('scripts/, assets/');
+    expect(prompt).not.toContain('references/');
   });
 });

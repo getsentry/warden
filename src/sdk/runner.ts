@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import type { SkillDefinition, ChunkingConfig } from '../config/schema.js';
@@ -167,11 +169,18 @@ Requirements:
 </output_format>`,
   ];
 
-  if (skill.rootDir) {
-    sections.push(`<skill_resources>
-This skill is located at: ${skill.rootDir}
-You can read files from scripts/, references/, or assets/ subdirectories using the Read tool with the full path.
+  const { rootDir } = skill;
+  if (rootDir) {
+    const resourceDirs = ['scripts', 'references', 'assets'].filter((dir) =>
+      existsSync(join(rootDir, dir))
+    );
+    if (resourceDirs.length > 0) {
+      const dirList = resourceDirs.map((d) => `${d}/`).join(', ');
+      sections.push(`<skill_resources>
+This skill is located at: ${rootDir}
+You can read files from ${dirList} subdirectories using the Read tool with the full path.
 </skill_resources>`);
+    }
   }
 
   return sections.join('\n\n');
