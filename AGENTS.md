@@ -78,6 +78,12 @@ Use `/dex` to break down complex work, track progress across sessions, and coord
 
 Skills define **what to look for**, not how to respond to findings:
 
-- When Warden reports findings, fix the code—don't modify skills to suppress results
+- When Warden reports findings, fix the code. Don't modify skills to suppress results
 - Skills should only change to improve detection accuracy, not to reduce reported findings
 - Each skill owns its domain expertise; severity definitions are intentionally domain-agnostic
+
+## Voice
+
+Warden watches over your code. Not "AI code reviewer" or similar.
+
+Keep it brief, dry, and slightly ominous. Think security guard who's seen everything. Professional but with personality. No fluff, no hype, no em-dashes.

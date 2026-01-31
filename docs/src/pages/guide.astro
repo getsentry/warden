@@ -6,10 +6,10 @@ import { Code } from 'astro:components';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<Base title="Guide" description="How to use Warden for AI-powered code review">
+<Base title="Guide" description="How to use Warden to watch over your code">
   <h1>Guide</h1>
 
-  <p>Warden is an AI code reviewer that runs <strong>skills</strong> against your code changes. Skills are prompts that define what to look for—security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.</p>
+  <p>Warden watches over your code by running <strong>skills</strong> against your changes. Skills are prompts that define what to look for: security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.</p>
 
   <nav class="toc">
     <details open>
@@ -37,12 +37,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <li>Reports findings with severity, location, and optional fixes</li>
   </ol>
 
-  <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> specification—they're markdown files with a prompt that tells the AI what to look for. You can use community skills, write your own, or combine both.</p>
+  <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> specification -they're markdown files with a prompt that tells the AI what to look for. You can use community skills, write your own, or combine both.</p>
 
   <p>Warden works in two contexts:</p>
   <ul>
-    <li><strong>Locally</strong> — Review changes before you push, get instant feedback</li>
-    <li><strong>In CI</strong> — Automatically review pull requests, post findings as comments</li>
+    <li><strong>Locally</strong>  - Review changes before you push, get instant feedback</li>
+    <li><strong>In CI</strong>  - Automatically review pull requests, post findings as comments</li>
   </ul>
 
   <h2 id="when-to-use-warden">When to Use Warden</h2>
@@ -225,10 +225,10 @@ Focus on issues in the changed code. For each issue found, report:
   <h3>What Makes a Good Skill</h3>
 
   <ul>
-    <li><strong>Specific scope</strong> — One skill, one concern. "Security review" not "code quality"</li>
-    <li><strong>Clear criteria</strong> — What counts as an issue? What severity?</li>
-    <li><strong>Actionable output</strong> — Findings should include how to fix</li>
-    <li><strong>Examples</strong> — Show what good and bad code looks like</li>
+    <li><strong>Specific scope</strong>  - One skill, one concern. "Security review" not "code quality"</li>
+    <li><strong>Clear criteria</strong>  - What counts as an issue? What severity?</li>
+    <li><strong>Actionable output</strong>  - Findings should include how to fix</li>
+    <li><strong>Examples</strong>  - Show what good and bad code looks like</li>
   </ul>
 
   <h2 id="adding-skills">Adding Skills</h2>
@@ -296,8 +296,8 @@ Focus on issues in the changed code. For each issue found, report:
 
   <p>This creates:</p>
   <ul>
-    <li><code>warden.toml</code> — Configuration with triggers</li>
-    <li><code>.github/workflows/warden.yml</code> — GitHub Actions workflow</li>
+    <li><code>warden.toml</code>  - Configuration with triggers</li>
+    <li><code>.github/workflows/warden.yml</code>  - GitHub Actions workflow</li>
   </ul>
 
   <h3>What Happens on a PR</h3>
@@ -415,11 +415,11 @@ commentOn = "medium" # Post comments for medium and above`}
   <h2 id="tips">Tips</h2>
 
   <ul>
-    <li><strong><code>--verbose</code></strong> — See which triggers matched and what Warden is doing</li>
-    <li><strong><code>--fix</code></strong> — Apply suggested fixes interactively</li>
-    <li><strong><code>--skill &lt;name&gt;</code></strong> — Skip trigger matching and run one skill directly</li>
-    <li><strong><code>--fail-on &lt;level&gt;</code></strong> — Override the failure threshold for CI</li>
-    <li><strong><code>-vv</code></strong> — Debug output with token counts and latencies</li>
+    <li><strong><code>--verbose</code></strong>  - See which triggers matched and what Warden is doing</li>
+    <li><strong><code>--fix</code></strong>  - Apply suggested fixes interactively</li>
+    <li><strong><code>--skill &lt;name&gt;</code></strong>  - Skip trigger matching and run one skill directly</li>
+    <li><strong><code>--fail-on &lt;level&gt;</code></strong>  - Override the failure threshold for CI</li>
+    <li><strong><code>-vv</code></strong>  - Debug output with token counts and latencies</li>
   </ul>
 
   <p>See the <a href={`${base}/cli`}>CLI reference</a> for all options.</p>

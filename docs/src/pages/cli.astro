@@ -12,7 +12,7 @@ import { Code } from 'astro:components';
     <div class="synopsis">warden [target] [options]</div>
     <p>Run code analysis on the specified target. If no target is given, analyzes uncommitted changes.</p>
     <ul>
-      <li><code>target</code> — Files, directories, or git refs to analyze (optional)</li>
+      <li><code>target</code> - Files, directories, or git refs to analyze (optional)</li>
     </ul>
     <Terminal>
       <Code
@@ -31,7 +31,7 @@ warden HEAD~3..HEAD        # Analyze changes in a git range`}
     <div class="synopsis">warden init [options]</div>
     <p>Initialize Warden in your project. Creates a configuration file and GitHub workflow.</p>
     <ul>
-      <li><code>-f, --force</code> — Overwrite existing files</li>
+      <li><code>-f, --force</code>  - Overwrite existing files</li>
     </ul>
     <Terminal>
       <Code
@@ -48,8 +48,8 @@ warden init --force    # Overwrite existing files`}
     <div class="synopsis">warden add [skill-name] [options]</div>
     <p>Add a skill trigger to your configuration. Run without arguments for interactive mode.</p>
     <ul>
-      <li><code>skill-name</code> — Name of the skill to add (optional, interactive if omitted)</li>
-      <li><code>--list</code> — List available skills</li>
+      <li><code>skill-name</code>  - Name of the skill to add (optional, interactive if omitted)</li>
+      <li><code>--list</code>  - List available skills</li>
     </ul>
     <Terminal>
       <Code
@@ -67,11 +67,11 @@ warden add --list              # List available skills`}
     <div class="synopsis">warden setup-app [options]</div>
     <p>Create a GitHub App for Warden. This gives you a custom bot identity instead of the generic "github-actions" user.</p>
     <ul>
-      <li><code>--org &lt;name&gt;</code> — Create the app for an organization instead of your personal account</li>
-      <li><code>--port &lt;number&gt;</code> — Local server port (default: 3000)</li>
-      <li><code>--timeout &lt;sec&gt;</code> — Callback timeout in seconds (default: 300)</li>
-      <li><code>--name &lt;string&gt;</code> — Custom app name (default: Warden)</li>
-      <li><code>--no-open</code> — Print URL instead of opening browser</li>
+      <li><code>--org &lt;name&gt;</code>  - Create the app for an organization instead of your personal account</li>
+      <li><code>--port &lt;number&gt;</code>  - Local server port (default: 3000)</li>
+      <li><code>--timeout &lt;sec&gt;</code>  - Callback timeout in seconds (default: 300)</li>
+      <li><code>--name &lt;string&gt;</code>  - Custom app name (default: Warden)</li>
+      <li><code>--no-open</code>  - Print URL instead of opening browser</li>
     </ul>
     <Terminal>
       <Code
@@ -85,21 +85,21 @@ warden setup-app --org my-org  # For an organization`}
 
   <h2>Global Options</h2>
   <ul>
-    <li><code>--skill &lt;name&gt;</code> — Run a specific skill instead of using triggers from config</li>
-    <li><code>--fix</code> — Automatically apply suggested fixes</li>
-    <li><code>--json</code> — Output results as JSON</li>
-    <li><code>--fail-on &lt;level&gt;</code> — Exit with error code if findings meet severity: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></li>
-    <li><code>--config &lt;path&gt;</code> — Path to config file (default: <code>warden.toml</code>)</li>
-    <li><code>--verbose</code> — Show detailed output</li>
-    <li><code>-m, --model &lt;model&gt;</code> — Model to use (fallback when not set in config)</li>
-    <li><code>-o, --output &lt;path&gt;</code> — Write full run output to a JSONL file</li>
-    <li><code>--comment-on &lt;severity&gt;</code> — Only show findings at or above this severity in output</li>
-    <li><code>--parallel &lt;n&gt;</code> — Max concurrent trigger/skill executions (default: 4)</li>
-    <li><code>--quiet</code> — Errors and final summary only</li>
-    <li><code>-vv</code> — Show debug info (token counts, latencies)</li>
-    <li><code>--color / --no-color</code> — Override color detection</li>
-    <li><code>--help</code> — Show help message</li>
-    <li><code>--version</code> — Show version number</li>
+    <li><code>--skill &lt;name&gt;</code>  - Run a specific skill instead of using triggers from config</li>
+    <li><code>--fix</code>  - Automatically apply suggested fixes</li>
+    <li><code>--json</code>  - Output results as JSON</li>
+    <li><code>--fail-on &lt;level&gt;</code>  - Exit with error code if findings meet severity: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></li>
+    <li><code>--config &lt;path&gt;</code>  - Path to config file (default: <code>warden.toml</code>)</li>
+    <li><code>--verbose</code>  - Show detailed output</li>
+    <li><code>-m, --model &lt;model&gt;</code>  - Model to use (fallback when not set in config)</li>
+    <li><code>-o, --output &lt;path&gt;</code>  - Write full run output to a JSONL file</li>
+    <li><code>--comment-on &lt;severity&gt;</code>  - Only show findings at or above this severity in output</li>
+    <li><code>--parallel &lt;n&gt;</code>  - Max concurrent trigger/skill executions (default: 4)</li>
+    <li><code>--quiet</code>  - Errors and final summary only</li>
+    <li><code>-vv</code>  - Show debug info (token counts, latencies)</li>
+    <li><code>--color / --no-color</code>  - Override color detection</li>
+    <li><code>--help</code>  - Show help message</li>
+    <li><code>--version</code>  - Show version number</li>
   </ul>
 
   <h2>Environment Variables</h2>
