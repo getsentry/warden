@@ -67,6 +67,107 @@ function createReporter(options: CLIOptions): Reporter {
 }
 
 /**
+ * Resolve the config file path based on CLI options and repo root.
+ */
+function resolveConfigPath(options: CLIOptions, repoPath: string): string {
+  const cwd = process.cwd();
+  return options.config ? resolve(cwd, options.config) : resolve(repoPath, 'warden.toml');
+}
+
+/**
+ * Result of processing skill task results.
+ */
+interface ProcessedResults {
+  reports: SkillReport[];
+  filteredReports: SkillReport[];
+  hasFailure: boolean;
+  failureReasons: string[];
+}
+
+/**
+ * Process skill task results into reports and check for failures.
+ */
+function processTaskResults(
+  results: Awaited<ReturnType<typeof runSkillTasks>>,
+  commentOn: CLIOptions['commentOn']
+): ProcessedResults {
+  const reports: SkillReport[] = [];
+  let hasFailure = false;
+  const failureReasons: string[] = [];
+
+  for (const result of results) {
+    if (result.report) {
+      reports.push(result.report);
+      if (result.failOn && shouldFail(result.report, result.failOn)) {
+        hasFailure = true;
+        const count = countFindingsAtOrAbove(result.report, result.failOn);
+        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
+      }
+    }
+  }
+
+  const filteredReports = filterReportsBySeverity(reports, commentOn);
+  return { reports, filteredReports, hasFailure, failureReasons };
+}
+
+/**
+ * Output results and handle fixes. Returns exit code.
+ */
+async function outputResultsAndHandleFixes(
+  processed: ProcessedResults,
+  options: CLIOptions,
+  reporter: Reporter,
+  repoPath: string,
+  totalDuration: number
+): Promise<number> {
+  const { reports, filteredReports, hasFailure, failureReasons } = processed;
+
+  // Write JSONL output if requested (uses unfiltered reports for complete data)
+  if (options.output) {
+    writeJsonlReport(options.output, reports, totalDuration);
+    reporter.success(`Wrote JSONL output to ${options.output}`);
+  }
+
+  // Always write automatic run log for debugging
+  const runLogPath = getRunLogPath(repoPath);
+  writeJsonlReport(runLogPath, reports, totalDuration);
+  reporter.debug(`Run log: ${runLogPath}`);
+
+  // Output results
+  reporter.blank();
+  if (options.json) {
+    console.log(renderJsonReport(filteredReports));
+  } else {
+    console.log(renderTerminalReport(filteredReports, reporter.mode));
+  }
+
+  // Show summary (uses filtered reports for display)
+  reporter.blank();
+  reporter.renderSummary(filteredReports, totalDuration);
+
+  // Handle fixes (uses filtered reports - only show fixes for visible findings)
+  const fixableFindings = collectFixableFindings(filteredReports);
+  if (fixableFindings.length > 0) {
+    if (options.fix) {
+      const fixSummary = applyAllFixes(fixableFindings);
+      renderFixSummary(fixSummary, reporter);
+    } else if (!options.json && reporter.verbosity !== Verbosity.Quiet && reporter.mode.isTTY) {
+      const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
+      renderFixSummary(fixSummary, reporter);
+    }
+  }
+
+  // Determine exit code (based on original reports, not filtered)
+  if (hasFailure) {
+    reporter.blank();
+    reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
+    return 1;
+  }
+
+  return 0;
+}
+
+/**
  * Run skills on a context and output results.
  * If skillName is provided, runs only that skill.
  * Otherwise, runs skills from matched triggers in warden.toml.
@@ -166,78 +267,10 @@ async function runSkills(
     ? await runSkillTasksWithInk(tasks, taskOptions)
     : await runSkillTasks(tasks, taskOptions);
 
-  // Collect reports and check for failures
-  const reports: SkillReport[] = [];
-  let hasFailure = false;
-  const failureReasons: string[] = [];
-
-  for (const result of results) {
-    if (result.report) {
-      reports.push(result.report);
-      // Check failure condition
-      if (result.failOn && shouldFail(result.report, result.failOn)) {
-        hasFailure = true;
-        const count = countFindingsAtOrAbove(result.report, result.failOn);
-        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
-      }
-    }
-  }
-
-  // Filter reports for output based on commentOn threshold
-  const filteredReports = filterReportsBySeverity(reports, options.commentOn);
-
-  // Calculate total duration
+  // Process results and output
   const totalDuration = Date.now() - startTime;
-
-  // Write JSONL output if requested (uses unfiltered reports for complete data)
-  if (options.output) {
-    writeJsonlReport(options.output, reports, totalDuration);
-    reporter.success(`Wrote JSONL output to ${options.output}`);
-  }
-
-  // Always write automatic run log for debugging
-  const runLogPath = getRunLogPath(cwd);
-  writeJsonlReport(runLogPath, reports, totalDuration);
-  reporter.debug(`Run log: ${runLogPath}`);
-
-  // Output results
-  reporter.blank();
-  if (options.json) {
-    console.log(renderJsonReport(filteredReports));
-  } else {
-    console.log(renderTerminalReport(filteredReports, reporter.mode));
-  }
-
-  // Show summary (uses filtered reports for display)
-  reporter.blank();
-  reporter.renderSummary(filteredReports, totalDuration);
-
-  // Handle fixes (uses filtered reports - only show fixes for visible findings)
-  const fixableFindings = collectFixableFindings(filteredReports);
-  if (fixableFindings.length > 0) {
-    if (options.fix) {
-      // --fix mode: apply all fixes automatically
-      const fixSummary = applyAllFixes(fixableFindings);
-      renderFixSummary(fixSummary, reporter);
-    } else if (
-      !options.json &&
-      reporter.verbosity !== Verbosity.Quiet &&
-      reporter.mode.isTTY
-    ) {
-      // Interactive mode: prompt user
-      const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
-      renderFixSummary(fixSummary, reporter);
-    }
-  }
-
-  // Determine exit code (based on original reports, not filtered)
-  if (hasFailure) {
-    reporter.blank();
-    reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
-    return 1;
-  }
-
-  return 0;
+  const processed = processTaskResults(results, options.commentOn);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration);
 }
 
 /**
@@ -245,17 +278,6 @@ async function runSkills(
  */
 async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
-
-  // Try to find repo root for env loading, fall back to cwd
-  let envDir = cwd;
-  try {
-    envDir = getRepoRoot(cwd);
-  } catch {
-    // Not in a git repo - use cwd
-  }
-
-  // Load environment variables from .env files if they exist
-  loadEnvFiles(envDir);
 
   // Build context from files
   reporter.step('Building context from files...');
@@ -319,9 +341,6 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
     return 1;
   }
 
-  // Load environment variables from .env files
-  loadEnvFiles(repoPath);
-
   const { base, head } = parseGitRef(gitRef);
 
   // Validate base ref
@@ -337,9 +356,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
   }
 
   // Load config to get defaultBranch if available
-  const configPath = options.config
-    ? resolve(cwd, options.config)
-    : resolve(repoPath, 'warden.toml');
+  const configPath = resolveConfigPath(options, repoPath);
   const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
 
   // Build context from local git
@@ -388,13 +405,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // Load environment variables from .env files
-  loadEnvFiles(repoPath);
-
   // Resolve config path
-  const configPath = options.config
-    ? resolve(cwd, options.config)
-    : resolve(repoPath, 'warden.toml');
+  const configPath = resolveConfigPath(options, repoPath);
 
   if (!existsSync(configPath)) {
     reporter.error(`Configuration file not found: ${configPath}`);
@@ -496,78 +508,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     ? await runSkillTasksWithInk(tasks, taskOptions)
     : await runSkillTasks(tasks, taskOptions);
 
-  // Collect reports and check for failures
-  const reports: SkillReport[] = [];
-  let hasFailure = false;
-  const failureReasons: string[] = [];
-
-  for (const result of results) {
-    if (result.report) {
-      reports.push(result.report);
-      // Check failure condition
-      if (result.failOn && shouldFail(result.report, result.failOn)) {
-        hasFailure = true;
-        const count = countFindingsAtOrAbove(result.report, result.failOn);
-        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
-      }
-    }
-  }
-
-  // Filter reports for output based on commentOn threshold
-  const filteredReports = filterReportsBySeverity(reports, options.commentOn);
-
-  // Calculate total duration
+  // Process results and output
   const totalDuration = Date.now() - startTime;
-
-  // Write JSONL output if requested (uses unfiltered reports for complete data)
-  if (options.output) {
-    writeJsonlReport(options.output, reports, totalDuration);
-    reporter.success(`Wrote JSONL output to ${options.output}`);
-  }
-
-  // Always write automatic run log for debugging
-  const runLogPath = getRunLogPath(repoPath);
-  writeJsonlReport(runLogPath, reports, totalDuration);
-  reporter.debug(`Run log: ${runLogPath}`);
-
-  // Output results
-  reporter.blank();
-  if (options.json) {
-    console.log(renderJsonReport(filteredReports));
-  } else {
-    console.log(renderTerminalReport(filteredReports, reporter.mode));
-  }
-
-  // Show summary (uses filtered reports for display)
-  reporter.blank();
-  reporter.renderSummary(filteredReports, totalDuration);
-
-  // Handle fixes (uses filtered reports - only show fixes for visible findings)
-  const fixableFindings = collectFixableFindings(filteredReports);
-  if (fixableFindings.length > 0) {
-    if (options.fix) {
-      // --fix mode: apply all fixes automatically
-      const fixSummary = applyAllFixes(fixableFindings);
-      renderFixSummary(fixSummary, reporter);
-    } else if (
-      !options.json &&
-      reporter.verbosity !== Verbosity.Quiet &&
-      reporter.mode.isTTY
-    ) {
-      // Interactive mode: prompt user
-      const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
-      renderFixSummary(fixSummary, reporter);
-    }
-  }
-
-  // Determine exit code (based on original reports, not filtered)
-  if (hasFailure) {
-    reporter.blank();
-    reporter.error(`Failing due to: ${failureReasons.join(', ')}`);
-    return 1;
-  }
-
-  return 0;
+  const processed = processTaskResults(results, options.commentOn);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration);
 }
 
 /**
@@ -586,13 +530,8 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
     return 1;
   }
 
-  // Load environment variables from .env files
-  loadEnvFiles(repoPath);
-
   // Load config to get defaultBranch if available
-  const configPath = options.config
-    ? resolve(cwd, options.config)
-    : resolve(repoPath, 'warden.toml');
+  const configPath = resolveConfigPath(options, repoPath);
   const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
 
   // Build context from local git - compare against HEAD for true uncommitted changes
@@ -626,18 +565,20 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 }
 
 async function runCommand(options: CLIOptions, reporter: Reporter): Promise<number> {
+  const targets = options.targets ?? [];
+
   // No targets with --skill → run skill directly on uncommitted changes
-  if ((!options.targets || options.targets.length === 0) && options.skill) {
+  if (targets.length === 0 && options.skill) {
     return runDirectSkillMode(options, reporter);
   }
 
   // No targets → config mode (use triggers)
-  if (!options.targets || options.targets.length === 0) {
+  if (targets.length === 0) {
     return runConfigMode(options, reporter);
   }
 
   // Classify targets
-  const { gitRefs, filePatterns } = classifyTargets(options.targets, { forceGit: options.git });
+  const { gitRefs, filePatterns } = classifyTargets(targets, { forceGit: options.git });
 
   // Can't mix git refs and file patterns
   if (gitRefs.length > 0 && filePatterns.length > 0) {
@@ -675,6 +616,17 @@ export async function main(): Promise<void> {
     showVersion();
     process.exit(0);
   }
+
+  // Load environment variables from .env files at CLI entry point.
+  // Try repo root first, fall back to cwd if not in a git repo.
+  const cwd = process.cwd();
+  let envDir = cwd;
+  try {
+    envDir = getRepoRoot(cwd);
+  } catch {
+    // Not in a git repo - use cwd
+  }
+  loadEnvFiles(envDir);
 
   // Create reporter based on options
   const reporter = createReporter(options);
