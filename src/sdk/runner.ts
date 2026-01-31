@@ -254,7 +254,9 @@ Requirements:
 - "findings" array can be empty if no issues found
 - "location.path" is auto-filled from context - just provide startLine (and optionally endLine). Omit location entirely for general findings not about a specific line.
 - "confidence" reflects how certain you are this is a real issue given the codebase context
-- "suggestedFix" is optional - only include when you can provide a complete, correct fix. Omit if the fix would be incomplete or if you're uncertain about the correct solution.
+- "suggestedFix" is optional - only include when you can provide a complete, correct fix **to the file being analyzed**. Omit suggestedFix if:
+  - The fix would be incomplete or you're uncertain about the correct solution
+  - The fix requires changes to a different file or a new file (describe the fix in the description field instead)
 - Keep descriptions SHORT (1-2 sentences max) - avoid lengthy explanations
 - Be concise - focus only on the changes shown
 </output_format>`,

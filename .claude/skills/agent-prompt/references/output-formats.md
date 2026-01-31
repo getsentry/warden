@@ -51,7 +51,7 @@ Requirements:
 - "findings" array can be empty if no issues found
 - "location.path" is auto-filled - just provide startLine (and optionally endLine). Omit location for general findings.
 - "confidence" reflects certainty given codebase context
-- "suggestedFix" is optional - only include when the fix is complete and correct
+- "suggestedFix" is optional - only include when the fix is complete, correct, and applies to the same file being analyzed. If the fix requires changes to a different file, describe it in the description instead.
 ```
 
 ## Set Length Expectations
