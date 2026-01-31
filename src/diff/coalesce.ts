@@ -86,15 +86,11 @@ export function coalesceHunks(
   const sorted = [...hunks].sort((a, b) => a.newStart - b.newStart);
 
   const result: DiffHunk[] = [];
-  const first = sorted[0];
-  if (!first) {
-    return hunks;
-  }
-  let current = first;
+  // sorted[0] is guaranteed to exist since we checked hunks.length > 1 above
+  let current = sorted[0] as DiffHunk;
 
   for (let i = 1; i < sorted.length; i++) {
-    const next = sorted[i];
-    if (!next) continue;
+    const next = sorted[i] as DiffHunk;
     const gap = calculateGap(current, next);
     const combinedSize = current.content.length + next.content.length;
 

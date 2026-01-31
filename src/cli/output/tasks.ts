@@ -212,8 +212,10 @@ export async function runSkillTask(
       findings: uniqueFindings,
       usage: aggregateUsage(allUsage),
       durationMs: duration,
-      skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
     };
+    if (skippedFiles.length > 0) {
+      report.skippedFiles = skippedFiles;
+    }
 
     // Notify skill complete
     callbacks.onSkillUpdate(name, {

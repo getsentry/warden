@@ -9,56 +9,56 @@ import type { FilePattern } from '../config/schema.js';
 describe('classifyFile', () => {
   describe('built-in skip patterns', () => {
     it.each([
-      ['pnpm-lock.yaml', 'skip'],
-      ['package-lock.json', 'skip'],
-      ['yarn.lock', 'skip'],
-      ['Cargo.lock', 'skip'],
-      ['go.sum', 'skip'],
-      ['poetry.lock', 'skip'],
-      ['composer.lock', 'skip'],
-      ['Gemfile.lock', 'skip'],
-      ['Pipfile.lock', 'skip'],
-      ['bun.lockb', 'skip'],
-    ] as const)('skips lock file: %s', (filename, expected) => {
-      expect(classifyFile(filename)).toBe(expected);
+      'pnpm-lock.yaml',
+      'package-lock.json',
+      'yarn.lock',
+      'Cargo.lock',
+      'go.sum',
+      'poetry.lock',
+      'composer.lock',
+      'Gemfile.lock',
+      'Pipfile.lock',
+      'bun.lockb',
+    ])('skips lock file: %s', (filename) => {
+      expect(classifyFile(filename)).toBe('skip');
     });
 
     it.each([
-      ['src/pnpm-lock.yaml', 'skip'],
-      ['packages/web/package-lock.json', 'skip'],
-      ['nested/deep/yarn.lock', 'skip'],
-    ] as const)('skips nested lock file: %s', (filename, expected) => {
-      expect(classifyFile(filename)).toBe(expected);
+      'src/pnpm-lock.yaml',
+      'packages/web/package-lock.json',
+      'nested/deep/yarn.lock',
+    ])('skips nested lock file: %s', (filename) => {
+      expect(classifyFile(filename)).toBe('skip');
     });
 
     it.each([
-      ['bundle.min.js', 'skip'],
-      ['styles.min.css', 'skip'],
-      ['vendor.bundle.js', 'skip'],
-      ['app.bundle.css', 'skip'],
-    ] as const)('skips minified/bundled file: %s', (filename, expected) => {
-      expect(classifyFile(filename)).toBe(expected);
+      'bundle.min.js',
+      'styles.min.css',
+      'vendor.bundle.js',
+      'app.bundle.css',
+    ])('skips minified/bundled file: %s', (filename) => {
+      expect(classifyFile(filename)).toBe('skip');
     });
 
     it.each([
-      ['dist/index.js', 'skip'],
-      ['build/main.js', 'skip'],
-      ['node_modules/lodash/index.js', 'skip'],
-      ['.next/static/chunks/main.js', 'skip'],
-      ['out/index.html', 'skip'],
-      ['coverage/lcov.info', 'skip'],
-    ] as const)('skips build artifacts: %s', (filename, expected) => {
-      expect(classifyFile(filename)).toBe(expected);
+      'dist/index.js',
+      'build/main.js',
+      'node_modules/lodash/index.js',
+      '.next/static/chunks/main.js',
+      'out/index.html',
+      'coverage/lcov.info',
+    ])('skips build artifacts: %s', (filename) => {
+      expect(classifyFile(filename)).toBe('skip');
     });
 
     it.each([
-      ['types.generated.ts', 'skip'],
-      ['schema.g.ts', 'skip'],
-      ['model.g.dart', 'skip'],
-      ['generated/api.ts', 'skip'],
-      ['__generated__/graphql.ts', 'skip'],
-    ] as const)('skips generated files: %s', (filename, expected) => {
-      expect(classifyFile(filename)).toBe(expected);
+      'types.generated.ts',
+      'schema.g.ts',
+      'model.g.dart',
+      'generated/api.ts',
+      '__generated__/graphql.ts',
+    ])('skips generated files: %s', (filename) => {
+      expect(classifyFile(filename)).toBe('skip');
     });
   });
 

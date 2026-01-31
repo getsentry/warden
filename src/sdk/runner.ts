@@ -515,13 +515,13 @@ export function prepareFiles(
     const diff = parseFileDiff(file.filename, file.patch, status);
 
     // Apply hunk coalescing if enabled (default: enabled)
-    const hunks =
-      chunking?.coalesce?.enabled !== false
-        ? coalesceHunks(diff.hunks, {
-            maxGapLines: chunking?.coalesce?.maxGapLines,
-            maxChunkSize: chunking?.coalesce?.maxChunkSize,
-          })
-        : diff.hunks;
+    const coalesceEnabled = chunking?.coalesce?.enabled !== false;
+    const hunks = coalesceEnabled
+      ? coalesceHunks(diff.hunks, {
+          maxGapLines: chunking?.coalesce?.maxGapLines,
+          maxChunkSize: chunking?.coalesce?.maxChunkSize,
+        })
+      : diff.hunks;
 
     const hunksWithContext = expandDiffContext(context.repoPath, { ...diff, hunks }, contextLines);
     allHunks.push(...hunksWithContext);
@@ -602,7 +602,6 @@ export async function runSkill(
     throw new SkillRunnerError('Pull request context required for skill execution');
   }
 
-  // Prepare files using shared logic (includes chunking)
   const { files: fileHunks, skippedFiles } = prepareFiles(context, {
     contextLines: options.contextLines,
     // Note: chunking config should come from the caller (e.g., from warden.toml defaults)
@@ -610,14 +609,17 @@ export async function runSkill(
   });
 
   if (fileHunks.length === 0) {
-    return {
+    const report: SkillReport = {
       skill: skill.name,
       summary: 'No code changes to analyze',
       findings: [],
       usage: emptyUsage(),
       durationMs: Date.now() - startTime,
-      skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
     };
+    if (skippedFiles.length > 0) {
+      report.skippedFiles = skippedFiles;
+    }
+    return report;
   }
 
   const totalFiles = fileHunks.length;
@@ -704,14 +706,17 @@ export async function runSkill(
   // Aggregate usage across all hunks
   const totalUsage = aggregateUsage(allUsage);
 
-  return {
+  const report: SkillReport = {
     skill: skill.name,
     summary,
     findings: uniqueFindings,
     usage: totalUsage,
     durationMs: Date.now() - startTime,
-    skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
   };
+  if (skippedFiles.length > 0) {
+    report.skippedFiles = skippedFiles;
+  }
+  return report;
 }
 
 /**

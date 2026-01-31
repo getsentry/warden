@@ -141,14 +141,16 @@ function SkillRunner({ skills, completedItems }: SkillRunnerProps): React.ReactE
       {/* Static content: header + completed skills */}
       <Static items={staticItems}>
         {(item) => {
-          if (item.type === 'header') {
-            return (
-              <Text key="header" bold>
-                SKILLS
-              </Text>
-            );
+          switch (item.type) {
+            case 'header':
+              return (
+                <Text key="header" bold>
+                  SKILLS
+                </Text>
+              );
+            case 'skill':
+              return <CompletedSkill key={item.skill.name} skill={item.skill} />;
           }
-          return <CompletedSkill key={item.skill.name} skill={item.skill} />;
         }}
       </Static>
 
@@ -248,19 +250,18 @@ export async function runSkillTasksWithInk(
     },
     onSkillSkipped: (name) => {
       const task = tasks.find((t) => t.name === name);
-      const skipped: SkillState = {
+      const state: SkillState = {
         name,
         displayName: task?.displayName ?? name,
         status: 'skipped',
         files: [],
         findings: [],
       };
-      skillStates.push(skipped);
+      skillStates.push(state);
 
-      // Add to completedItems (only once)
       if (!completedNames.has(name)) {
         completedNames.add(name);
-        completedItems.push(skipped);
+        completedItems.push(state);
       }
 
       updateUI();
@@ -268,14 +269,14 @@ export async function runSkillTasksWithInk(
     onSkillError: (name, error) => {
       const idx = skillStates.findIndex((s) => s.name === name);
       const existing = skillStates[idx];
-      let errorState: SkillState;
+      let state: SkillState;
 
       if (idx >= 0 && existing) {
-        errorState = { ...existing, status: 'error', error };
-        skillStates[idx] = errorState;
+        state = { ...existing, status: 'error', error };
+        skillStates[idx] = state;
       } else {
         const task = tasks.find((t) => t.name === name);
-        errorState = {
+        state = {
           name,
           displayName: task?.displayName ?? name,
           status: 'error',
@@ -283,13 +284,12 @@ export async function runSkillTasksWithInk(
           files: [],
           findings: [],
         };
-        skillStates.push(errorState);
+        skillStates.push(state);
       }
 
-      // Add to completedItems (only once)
       if (!completedNames.has(name)) {
         completedNames.add(name);
-        completedItems.push(errorState);
+        completedItems.push(state);
       }
 
       updateUI();

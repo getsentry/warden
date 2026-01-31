@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  coalesceHunks,
-  wouldCoalesceReduce,
-  DEFAULT_MAX_GAP_LINES,
-  DEFAULT_MAX_CHUNK_SIZE,
-} from './coalesce.js';
+import { coalesceHunks, wouldCoalesceReduce } from './coalesce.js';
 import type { DiffHunk } from './parser.js';
 
 function makeHunk(
@@ -39,21 +34,22 @@ describe('coalesceHunks', () => {
   describe('merging nearby hunks', () => {
     it('merges two adjacent hunks within gap limit', () => {
       const hunk1 = makeHunk(1, 5, 'first');
-      const hunk2 = makeHunk(10, 5, 'second'); // Gap of 4 lines (10 - 6 = 4)
+      const hunk2 = makeHunk(10, 5, 'second');
 
       const result = coalesceHunks([hunk1, hunk2], { maxGapLines: 10 });
+      const [merged] = result;
 
       expect(result).toHaveLength(1);
-      expect(result[0]!.newStart).toBe(1);
-      expect(result[0]!.newCount).toBe(14); // 1-5 + 10-14 = 1-14
-      expect(result[0]!.content).toContain('first');
-      expect(result[0]!.content).toContain('...');
-      expect(result[0]!.content).toContain('second');
+      expect(merged!.newStart).toBe(1);
+      expect(merged!.newCount).toBe(14);
+      expect(merged!.content).toContain('first');
+      expect(merged!.content).toContain('...');
+      expect(merged!.content).toContain('second');
     });
 
     it('does not merge hunks beyond gap limit', () => {
       const hunk1 = makeHunk(1, 5, 'first');
-      const hunk2 = makeHunk(50, 5, 'second'); // Gap of 44 lines
+      const hunk2 = makeHunk(50, 5, 'second');
 
       const result = coalesceHunks([hunk1, hunk2], { maxGapLines: 30 });
 
@@ -62,7 +58,7 @@ describe('coalesceHunks', () => {
 
     it('does not merge when combined size exceeds limit', () => {
       const hunk1 = makeHunk(1, 5, 'a'.repeat(5000));
-      const hunk2 = makeHunk(10, 5, 'b'.repeat(5000)); // Combined: 10000+ chars
+      const hunk2 = makeHunk(10, 5, 'b'.repeat(5000));
 
       const result = coalesceHunks([hunk1, hunk2], { maxChunkSize: 8000 });
 
@@ -156,15 +152,6 @@ describe('coalesceHunks', () => {
     });
   });
 
-  describe('default values', () => {
-    it('uses default maxGapLines', () => {
-      expect(DEFAULT_MAX_GAP_LINES).toBe(30);
-    });
-
-    it('uses default maxChunkSize', () => {
-      expect(DEFAULT_MAX_CHUNK_SIZE).toBe(8000);
-    });
-  });
 });
 
 describe('wouldCoalesceReduce', () => {
