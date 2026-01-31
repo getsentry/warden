@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
@@ -17,6 +17,28 @@ import {
   type RemoteState,
 } from './remote.js';
 import { SkillLoaderError } from './loader.js';
+
+/** Standard SKILL.md content for testing */
+function skillMd(name: string, description: string): string {
+  return `---
+name: ${name}
+description: ${description}
+---
+Prompt for ${name}.
+`;
+}
+
+/**
+ * Create a file tree from a declarative structure.
+ * Keys are relative paths, values are file contents.
+ */
+function createFileTree(basePath: string, files: Record<string, string>): void {
+  for (const [relativePath, content] of Object.entries(files)) {
+    const fullPath = join(basePath, relativePath);
+    mkdirSync(dirname(fullPath), { recursive: true });
+    writeFileSync(fullPath, content);
+  }
+}
 
 describe('parseRemoteRef', () => {
   it('parses owner/repo format', () => {
@@ -383,10 +405,11 @@ describe('shouldRefresh', () => {
 });
 
 describe('discoverRemoteSkills', () => {
-  const testDir = join(tmpdir(), `warden-remote-discover-${Date.now()}`);
+  let testDir: string;
   const originalEnv = process.env['WARDEN_STATE_DIR'];
 
   beforeEach(() => {
+    testDir = join(tmpdir(), `warden-remote-discover-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     process.env['WARDEN_STATE_DIR'] = testDir;
     mkdirSync(testDir, { recursive: true });
   });
@@ -401,162 +424,202 @@ describe('discoverRemoteSkills', () => {
   });
 
   it('throws when remote is not cached', async () => {
-    await expect(discoverRemoteSkills('getsentry/skills')).rejects.toThrow(SkillLoaderError);
     await expect(discoverRemoteSkills('getsentry/skills')).rejects.toThrow('Remote not cached');
   });
 
-  it('discovers skills in cached remote', async () => {
-    // Create fake cached remote with skills
-    const remotePath = getRemotePath('getsentry/skills');
-    mkdirSync(join(remotePath, 'security-review'), { recursive: true });
-    mkdirSync(join(remotePath, 'code-review'), { recursive: true });
+  it('discovers skills at root level', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      'skill-a/SKILL.md': skillMd('skill-a', 'Skill A'),
+      'skill-b/SKILL.md': skillMd('skill-b', 'Skill B'),
+    });
 
-    writeFileSync(
-      join(remotePath, 'security-review', 'SKILL.md'),
-      `---
-name: security-review
-description: Review code for security issues
----
-Security review prompt.
-`
-    );
+    const skills = await discoverRemoteSkills('test/repo');
 
-    writeFileSync(
-      join(remotePath, 'code-review', 'SKILL.md'),
-      `---
-name: code-review
-description: General code review
----
-Code review prompt.
-`
-    );
-
-    const skills = await discoverRemoteSkills('getsentry/skills');
-
-    expect(skills.length).toBe(2);
-    expect(skills.map((s) => s.name).sort()).toEqual(['code-review', 'security-review']);
+    expect(skills.map((s) => s.name).sort()).toEqual(['skill-a', 'skill-b']);
   });
 
-  it('skips directories without SKILL.md', async () => {
-    const remotePath = getRemotePath('getsentry/skills');
-    mkdirSync(join(remotePath, 'valid-skill'), { recursive: true });
-    mkdirSync(join(remotePath, 'empty-dir'), { recursive: true });
-    mkdirSync(join(remotePath, '.git'), { recursive: true }); // Hidden dir
+  it('skips directories without SKILL.md and hidden directories', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      'valid-skill/SKILL.md': skillMd('valid', 'Valid skill'),
+      'empty-dir/README.md': '# Empty',
+      '.git/config': '# Git config',
+    });
 
-    writeFileSync(
-      join(remotePath, 'valid-skill', 'SKILL.md'),
-      `---
-name: valid-skill
-description: A valid skill
----
-Prompt.
-`
-    );
-
-    writeFileSync(join(remotePath, 'empty-dir', 'README.md'), '# Empty');
-    writeFileSync(join(remotePath, '.git', 'config'), '# Git config');
-
-    const skills = await discoverRemoteSkills('getsentry/skills');
+    const skills = await discoverRemoteSkills('test/repo');
 
     expect(skills.length).toBe(1);
-    expect(skills[0]?.name).toBe('valid-skill');
+    expect(skills[0]?.name).toBe('valid');
   });
 
-  it('skips invalid skill directories', async () => {
-    const remotePath = getRemotePath('getsentry/skills');
-    mkdirSync(join(remotePath, 'valid-skill'), { recursive: true });
-    mkdirSync(join(remotePath, 'invalid-skill'), { recursive: true });
+  it('skips invalid SKILL.md files', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      'valid/SKILL.md': skillMd('valid', 'Valid skill'),
+      'invalid/SKILL.md': '---\ndescription: Missing name\n---\nPrompt.',
+    });
 
-    writeFileSync(
-      join(remotePath, 'valid-skill', 'SKILL.md'),
-      `---
-name: valid-skill
-description: A valid skill
----
-Prompt.
-`
-    );
-
-    // Invalid: missing required name field
-    writeFileSync(
-      join(remotePath, 'invalid-skill', 'SKILL.md'),
-      `---
-description: Missing name
----
-Prompt.
-`
-    );
-
-    const skills = await discoverRemoteSkills('getsentry/skills');
+    const skills = await discoverRemoteSkills('test/repo');
 
     expect(skills.length).toBe(1);
-    expect(skills[0]?.name).toBe('valid-skill');
+    expect(skills[0]?.name).toBe('valid');
   });
 
-  it('discovers skills in skills/ subdirectory', async () => {
-    // Create fake cached remote with skills in skills/ subdirectory (like vercel-labs/agent-skills)
-    const remotePath = getRemotePath('vercel/skills');
-    mkdirSync(join(remotePath, 'skills', 'react-best-practices'), { recursive: true });
-    mkdirSync(join(remotePath, 'skills', 'web-design'), { recursive: true });
+  // Test all 5 discovery directories with precedence
+  describe('directory discovery', () => {
+    const directories = [
+      { path: '', label: 'root' },
+      { path: 'skills', label: 'skills/' },
+      { path: '.warden/skills', label: '.warden/skills' },
+      { path: '.agents/skills', label: '.agents/skills' },
+      { path: '.claude/skills', label: '.claude/skills' },
+    ];
 
-    writeFileSync(
-      join(remotePath, 'skills', 'react-best-practices', 'SKILL.md'),
-      `---
-name: react-best-practices
-description: React and Next.js best practices
----
-React review prompt.
-`
-    );
+    it.each(directories)('discovers skills in $label directory', async ({ path }) => {
+      const remotePath = getRemotePath('test/repo');
+      const skillDir = path ? `${path}/my-skill` : 'my-skill';
+      createFileTree(remotePath, {
+        [`${skillDir}/SKILL.md`]: skillMd('my-skill', `From ${path || 'root'}`),
+      });
 
-    writeFileSync(
-      join(remotePath, 'skills', 'web-design', 'SKILL.md'),
-      `---
-name: web-design
-description: Web design guidelines
----
-Web design prompt.
-`
-    );
+      const skills = await discoverRemoteSkills('test/repo');
 
-    const skills = await discoverRemoteSkills('vercel/skills');
+      expect(skills.length).toBe(1);
+      expect(skills[0]?.name).toBe('my-skill');
+      expect(skills[0]?.path).toBe(join(remotePath, skillDir));
+    });
 
-    expect(skills.length).toBe(2);
-    expect(skills.map((s) => s.name).sort()).toEqual(['react-best-practices', 'web-design']);
+    it('respects precedence order: root > skills/ > .warden > .agents > .claude', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        'my-skill/SKILL.md': skillMd('my-skill', 'From root'),
+        'skills/my-skill/SKILL.md': skillMd('my-skill', 'From skills/'),
+        '.warden/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .warden'),
+        '.agents/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .agents'),
+        '.claude/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .claude'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills.length).toBe(1);
+      expect(skills[0]?.description).toBe('From root');
+      expect(skills[0]?.path).toBe(join(remotePath, 'my-skill'));
+    });
+
+    it('.warden takes precedence when root and skills/ are absent', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.warden/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .warden'),
+        '.agents/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .agents'),
+        '.claude/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .claude'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills[0]?.description).toBe('From .warden');
+    });
   });
 
-  it('root skills take precedence over skills/ subdirectory', async () => {
-    const remotePath = getRemotePath('getsentry/skills');
+  // Marketplace format tests
+  describe('marketplace format', () => {
+    function marketplaceJson(plugins: { name: string; source: string }[]): string {
+      return JSON.stringify({ name: 'test', plugins });
+    }
 
-    // Same skill name in both root and skills/
-    mkdirSync(join(remotePath, 'my-skill'), { recursive: true });
-    mkdirSync(join(remotePath, 'skills', 'my-skill'), { recursive: true });
+    it('discovers skills from marketplace.json plugins', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': marketplaceJson([
+          { name: 'my-plugin', source: './plugins/my-plugin' },
+        ]),
+        'plugins/my-plugin/skills/commit/SKILL.md': skillMd('commit', 'Commit skill'),
+        'plugins/my-plugin/skills/review/SKILL.md': skillMd('review', 'Review skill'),
+      });
 
-    writeFileSync(
-      join(remotePath, 'my-skill', 'SKILL.md'),
-      `---
-name: my-skill
-description: Root version
----
-Root prompt.
-`
-    );
+      const skills = await discoverRemoteSkills('test/repo');
 
-    writeFileSync(
-      join(remotePath, 'skills', 'my-skill', 'SKILL.md'),
-      `---
-name: my-skill
-description: Subdirectory version
----
-Subdirectory prompt.
-`
-    );
+      expect(skills.map((s) => s.name).sort()).toEqual(['commit', 'review']);
+      expect(skills.every((s) => s.pluginName === 'my-plugin')).toBe(true);
+    });
 
-    const skills = await discoverRemoteSkills('getsentry/skills');
+    it('ignores traditional directories when marketplace.json exists', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': marketplaceJson([
+          { name: 'plugin', source: './plugins/p' },
+        ]),
+        'plugins/p/skills/marketplace-skill/SKILL.md': skillMd('marketplace-skill', 'From marketplace'),
+        'root-skill/SKILL.md': skillMd('root-skill', 'From root'),
+      });
 
-    expect(skills.length).toBe(1);
-    expect(skills[0]?.name).toBe('my-skill');
-    expect(skills[0]?.description).toBe('Root version');
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills.length).toBe(1);
+      expect(skills[0]?.name).toBe('marketplace-skill');
+    });
+
+    it('handles multiple plugins', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': marketplaceJson([
+          { name: 'plugin-a', source: './plugins/a' },
+          { name: 'plugin-b', source: './plugins/b' },
+        ]),
+        'plugins/a/skills/skill-a/SKILL.md': skillMd('skill-a', 'From A'),
+        'plugins/b/skills/skill-b/SKILL.md': skillMd('skill-b', 'From B'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills.find((s) => s.name === 'skill-a')?.pluginName).toBe('plugin-a');
+      expect(skills.find((s) => s.name === 'skill-b')?.pluginName).toBe('plugin-b');
+    });
+
+    it('first plugin wins for duplicate skill names', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': marketplaceJson([
+          { name: 'plugin-a', source: './plugins/a' },
+          { name: 'plugin-b', source: './plugins/b' },
+        ]),
+        'plugins/a/skills/shared/SKILL.md': skillMd('shared', 'From A'),
+        'plugins/b/skills/shared/SKILL.md': skillMd('shared', 'From B'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills.length).toBe(1);
+      expect(skills[0]?.description).toBe('From A');
+      expect(skills[0]?.pluginName).toBe('plugin-a');
+    });
+
+    it('returns correct path for marketplace skills', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': marketplaceJson([
+          { name: 'plugin', source: './plugins/p' },
+        ]),
+        'plugins/p/skills/my-skill/SKILL.md': skillMd('my-skill', 'Test'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills[0]?.path).toBe(join(remotePath, 'plugins', 'p', 'skills', 'my-skill'));
+    });
+
+    it('falls back to traditional when marketplace.json is invalid', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': 'invalid json {{{',
+        'my-skill/SKILL.md': skillMd('my-skill', 'Traditional'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills[0]?.name).toBe('my-skill');
+      expect(skills[0]?.pluginName).toBeUndefined();
+    });
   });
 });
 

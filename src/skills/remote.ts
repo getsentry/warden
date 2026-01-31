@@ -23,6 +23,24 @@ const RemoteStateSchema = z.object({
 export type RemoteEntry = z.infer<typeof RemoteEntrySchema>;
 export type RemoteState = z.infer<typeof RemoteStateSchema>;
 
+/** Schema for a plugin in marketplace.json */
+const MarketplacePluginSchema = z.object({
+  name: z.string(),
+  source: z.string(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+});
+
+/** Schema for .claude-plugin/marketplace.json */
+const MarketplaceConfigSchema = z.object({
+  $schema: z.string().optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  plugins: z.array(MarketplacePluginSchema),
+});
+
+type MarketplaceConfig = z.infer<typeof MarketplaceConfigSchema>;
+
 /** Parsed remote reference */
 export interface ParsedRemoteRef {
   owner: string;
@@ -379,26 +397,48 @@ export interface DiscoveredRemoteSkill {
   name: string;
   description: string;
   path: string;
+  /** Plugin name for marketplace format skills */
+  pluginName?: string;
+}
+
+/**
+ * Parse marketplace.json from a remote repository if it exists.
+ * Returns null if the file doesn't exist or is invalid.
+ */
+function parseMarketplaceConfig(remotePath: string): MarketplaceConfig | null {
+  const marketplacePath = join(remotePath, '.claude-plugin', 'marketplace.json');
+
+  if (!existsSync(marketplacePath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(marketplacePath, 'utf-8');
+    const data = JSON.parse(content);
+    return MarketplaceConfigSchema.parse(data);
+  } catch {
+    // Invalid or malformed marketplace.json - fall back to traditional discovery
+    return null;
+  }
 }
 
 /** Directories to search for skills in remote repositories */
-const REMOTE_SKILL_DIRECTORIES = ['', 'skills'];
+const REMOTE_SKILL_DIRECTORIES = [
+  '',               // root level
+  'skills',         // skills/ subdirectory
+  '.warden/skills', // Warden-specific
+  '.agents/skills', // General agent skills
+  '.claude/skills', // Claude Code skills
+];
 
 /**
- * Discover all skills in a cached remote repository.
- * Searches both root level and skills/ subdirectory.
+ * Discover skills using traditional directory layout.
+ * Searches root level, skills/, and conventional skill directories.
  */
-export async function discoverRemoteSkills(ref: string): Promise<DiscoveredRemoteSkill[]> {
-  const remotePath = getRemotePath(ref);
-
-  if (!existsSync(remotePath)) {
-    throw new SkillLoaderError(`Remote not cached: ${ref}. Run fetch first.`);
-  }
-
+async function discoverTraditionalSkills(remotePath: string): Promise<DiscoveredRemoteSkill[]> {
   const skills: DiscoveredRemoteSkill[] = [];
   const seenNames = new Set<string>();
 
-  // Search in root and skills/ subdirectory
   for (const subdir of REMOTE_SKILL_DIRECTORIES) {
     const searchPath = subdir ? join(remotePath, subdir) : remotePath;
     if (!existsSync(searchPath)) continue;
@@ -434,6 +474,81 @@ export async function discoverRemoteSkills(ref: string): Promise<DiscoveredRemot
   }
 
   return skills;
+}
+
+/**
+ * Discover skills using marketplace format.
+ * Searches plugins/{plugin}/skills/ for each plugin defined in marketplace.json.
+ */
+async function discoverMarketplaceSkills(
+  remotePath: string,
+  config: MarketplaceConfig
+): Promise<DiscoveredRemoteSkill[]> {
+  const skills: DiscoveredRemoteSkill[] = [];
+  const seenNames = new Set<string>();
+
+  for (const plugin of config.plugins) {
+    // Resolve plugin source path (e.g., "./plugins/sentry-skills" -> "plugins/sentry-skills")
+    const pluginSource = plugin.source.replace(/^\.\//, '');
+    const skillsPath = join(remotePath, pluginSource, 'skills');
+
+    if (!existsSync(skillsPath)) continue;
+
+    const entries = readdirSync(skillsPath);
+
+    for (const entry of entries) {
+      if (entry.startsWith('.')) continue;
+
+      const entryPath = join(skillsPath, entry);
+      const stat = statSync(entryPath);
+
+      if (stat.isDirectory()) {
+        const skillMdPath = join(entryPath, 'SKILL.md');
+        if (existsSync(skillMdPath)) {
+          try {
+            const skill = await loadSkillFromMarkdown(skillMdPath);
+            // First plugin wins for duplicate skill names
+            if (!seenNames.has(skill.name)) {
+              seenNames.add(skill.name);
+              skills.push({
+                name: skill.name,
+                description: skill.description,
+                path: entryPath,
+                pluginName: plugin.name,
+              });
+            }
+          } catch {
+            // Skip invalid skill directories
+          }
+        }
+      }
+    }
+  }
+
+  return skills;
+}
+
+/**
+ * Discover all skills in a cached remote repository.
+ * Detects format and delegates to appropriate discovery function:
+ * - If .claude-plugin/marketplace.json exists, uses marketplace discovery
+ * - Otherwise, uses traditional discovery (root, skills/, .warden/skills, etc.)
+ */
+export async function discoverRemoteSkills(ref: string): Promise<DiscoveredRemoteSkill[]> {
+  const remotePath = getRemotePath(ref);
+
+  if (!existsSync(remotePath)) {
+    throw new SkillLoaderError(`Remote not cached: ${ref}. Run fetch first.`);
+  }
+
+  // Check for marketplace format
+  const marketplaceConfig = parseMarketplaceConfig(remotePath);
+  if (marketplaceConfig) {
+    return discoverMarketplaceSkills(remotePath, marketplaceConfig);
+  }
+
+  // Fall back to traditional discovery
+  return discoverTraditionalSkills(remotePath);
 }
 
 /**
