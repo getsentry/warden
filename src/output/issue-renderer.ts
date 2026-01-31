@@ -1,6 +1,7 @@
 import { SEVERITY_ORDER } from '../types/index.js';
 import type { SkillReport, Finding, Severity } from '../types/index.js';
 import { countBySeverity } from '../cli/output/formatters.js';
+import { escapeHtml } from '../utils/index.js';
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
   critical: ':rotating_light:',
@@ -114,7 +115,7 @@ export function renderIssueBody(
     lines.push('### Skill Summaries');
     lines.push('');
     for (const report of reports) {
-      lines.push(`**${report.skill}:** ${report.summary}`);
+      lines.push(`**${report.skill}:** ${escapeHtml(report.summary)}`);
       lines.push('');
     }
   }
@@ -168,11 +169,11 @@ function renderFindingItem(finding: Finding, ctx: LinkContext): string {
     }
   }
 
-  let line = `- ${SEVERITY_EMOJI[finding.severity]} **${finding.title}**${locationStr}`;
-  line += `\n  ${finding.description}`;
+  let line = `- ${SEVERITY_EMOJI[finding.severity]} **${escapeHtml(finding.title)}**${locationStr}`;
+  line += `\n  ${escapeHtml(finding.description)}`;
 
   if (finding.suggestedFix) {
-    line += `\n  *Suggested fix:* ${finding.suggestedFix.description}`;
+    line += `\n  *Suggested fix:* ${escapeHtml(finding.suggestedFix.description)}`;
   }
 
   return line;

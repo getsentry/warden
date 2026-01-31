@@ -2,6 +2,7 @@ import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { Severity, SeverityThreshold, Finding, SkillReport, UsageStats } from '../types/index.js';
 import { formatDuration, formatCost, formatTokens } from '../cli/output/formatters.js';
+import { escapeHtml } from '../utils/index.js';
 
 /**
  * GitHub Check annotation for inline code comments.
@@ -118,8 +119,8 @@ export function findingsToAnnotations(findings: Finding[], commentOn?: SeverityT
     start_line: finding.location.startLine,
     end_line: finding.location.endLine ?? finding.location.startLine,
     annotation_level: severityToAnnotationLevel(finding.severity),
-    message: finding.description,
-    title: finding.title,
+    message: escapeHtml(finding.description),
+    title: escapeHtml(finding.title),
   }));
 }
 
@@ -292,7 +293,7 @@ export async function updateCoreCheck(
  * Build the summary markdown for a skill check.
  */
 function buildSkillSummary(report: SkillReport): string {
-  const lines: string[] = [report.summary, ''];
+  const lines: string[] = [escapeHtml(report.summary), ''];
 
   if (report.findings.length === 0) {
     lines.push('No issues found.');
@@ -321,8 +322,8 @@ function buildSkillSummary(report: SkillReport): string {
       for (const finding of findings) {
         const location = finding.location ? ` - ${formatLocation(finding.location)}` : '';
         lines.push('<details>');
-        lines.push(`<summary><strong>${finding.title}</strong>${location}</summary>`, '');
-        lines.push(finding.description, '');
+        lines.push(`<summary><strong>${escapeHtml(finding.title)}</strong>${location}</summary>`, '');
+        lines.push(escapeHtml(finding.description), '');
         lines.push('</details>', '');
       }
     }
@@ -389,8 +390,8 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
       for (const finding of findings) {
         const location = finding.location ? ` - ${formatLocation(finding.location)}` : '';
         lines.push('<details>');
-        lines.push(`<summary><strong>${finding.title}</strong>${location}</summary>`, '');
-        lines.push(finding.description, '');
+        lines.push(`<summary><strong>${escapeHtml(finding.title)}</strong>${location}</summary>`, '');
+        lines.push(escapeHtml(finding.description), '');
         lines.push('</details>', '');
       }
     }

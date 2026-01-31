@@ -3,6 +3,7 @@ import type { SkillReport, Finding, Severity } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
 import { formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
 import { generateContentHash, generateMarker } from './dedup.js';
+import { escapeHtml } from '../utils/index.js';
 
 const SEVERITY_EMOJI: Record<Severity, string> = {
   critical: ':rotating_light:',
@@ -49,7 +50,7 @@ function renderReview(
       throw new Error('Unexpected: finding without location in filtered list');
     }
     const confidenceNote = finding.confidence ? ` (${finding.confidence} confidence)` : '';
-    let body = `**${SEVERITY_EMOJI[finding.severity]} ${finding.title}**${confidenceNote}\n\n${finding.description}`;
+    let body = `**${SEVERITY_EMOJI[finding.severity]} ${escapeHtml(finding.title)}**${confidenceNote}\n\n${escapeHtml(finding.description)}`;
 
     if (includeSuggestions && finding.suggestedFix) {
       body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
@@ -81,7 +82,7 @@ function renderReview(
   const event: GitHubReview['event'] = hasBlockingSeverity ? 'REQUEST_CHANGES' : 'COMMENT';
 
   // Build review body with optional stats footer
-  let body = `## ${report.skill}\n\n${report.summary}`;
+  let body = `## ${report.skill}\n\n${escapeHtml(report.summary)}`;
   const statsLine = formatStatsCompact(report.durationMs, report.usage);
   if (statsLine) {
     body += `\n\n---\n<sub>${statsLine}</sub>`;
@@ -101,10 +102,10 @@ function renderSuggestion(description: string, diff: string): string {
     .map((line) => line.slice(1));
 
   if (suggestionLines.length === 0) {
-    return `**Suggested fix:** ${description}`;
+    return `**Suggested fix:** ${escapeHtml(description)}`;
   }
 
-  return `**Suggested fix:** ${description}\n\n\`\`\`suggestion\n${suggestionLines.join('\n')}\n\`\`\``;
+  return `**Suggested fix:** ${escapeHtml(description)}\n\n\`\`\`suggestion\n${suggestionLines.join('\n')}\n\`\`\``;
 }
 
 function renderHiddenFindingsLink(hiddenCount: number, checkRunUrl: string): string {
@@ -122,7 +123,7 @@ function renderSummaryComment(
 
   lines.push(`## ${report.skill}`);
   lines.push('');
-  lines.push(report.summary);
+  lines.push(escapeHtml(report.summary));
   lines.push('');
 
   if (findings.length === 0) {
@@ -207,7 +208,7 @@ function formatLineRange(loc: { startLine: number; endLine?: number }): string {
 function renderFindingItem(finding: Finding): string {
   const location = finding.location ? ` (${formatLineRange(finding.location)})` : '';
   const confidence = finding.confidence ? ` [${finding.confidence} confidence]` : '';
-  return `- ${SEVERITY_EMOJI[finding.severity]} **${finding.title}**${location}${confidence}: ${finding.description}`;
+  return `- ${SEVERITY_EMOJI[finding.severity]} **${escapeHtml(finding.title)}**${location}${confidence}: ${escapeHtml(finding.description)}`;
 }
 
 function groupFindingsByFile(findings: Finding[]): Record<string, Finding[]> {
