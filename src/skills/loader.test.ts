@@ -5,8 +5,6 @@ import { writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
   clearSkillsCache,
-  getBuiltinSkill,
-  getBuiltinSkillNames,
   loadSkillFromFile,
   loadSkillFromMarkdown,
   loadSkillsFromDirectory,
@@ -15,24 +13,6 @@ import {
   SkillLoaderError,
   SKILL_DIRECTORIES,
 } from './loader.js';
-
-describe('built-in skills', () => {
-  it('returns security-review skill', async () => {
-    const skill = await getBuiltinSkill('security-review');
-    expect(skill).toBeDefined();
-    expect(skill?.name).toBe('security-review');
-  });
-
-  it('returns undefined for unknown skill', async () => {
-    const skill = await getBuiltinSkill('unknown-skill');
-    expect(skill).toBeUndefined();
-  });
-
-  it('lists all built-in skill names', async () => {
-    const names = await getBuiltinSkillNames();
-    expect(names).toContain('security-review');
-  });
-});
 
 describe('loadSkillFromFile', () => {
   it('rejects unsupported file types', async () => {
@@ -46,10 +26,11 @@ describe('loadSkillFromFile', () => {
 });
 
 describe('resolveSkillAsync', () => {
-  it('resolves built-in skills', async () => {
-    const skill = await resolveSkillAsync('security-review');
-    expect(skill.name).toBe('security-review');
-    expect(skill.description).toContain('security');
+  it('resolves skills from conventional directories', async () => {
+    const repoRoot = new URL('../..', import.meta.url).pathname;
+    const skill = await resolveSkillAsync('testing-guidelines', repoRoot);
+    expect(skill.name).toBe('testing-guidelines');
+    expect(skill.description).toBeDefined();
   });
 
   it('resolves inline skills from config', async () => {
@@ -63,15 +44,16 @@ describe('resolveSkillAsync', () => {
     expect(skill).toEqual(inlineSkill);
   });
 
-  it('prioritizes inline skills over built-ins', async () => {
+  it('prioritizes inline skills over conventional directory skills', async () => {
+    const repoRoot = new URL('../..', import.meta.url).pathname;
     const overrideSkill = {
-      name: 'security-review',
-      description: 'Override security review',
-      prompt: 'Custom security review',
+      name: 'testing-guidelines',
+      description: 'Override testing-guidelines',
+      prompt: 'Custom testing-guidelines',
     };
 
-    const skill = await resolveSkillAsync('security-review', undefined, [overrideSkill]);
-    expect(skill.description).toBe('Override security review');
+    const skill = await resolveSkillAsync('testing-guidelines', repoRoot, [overrideSkill]);
+    expect(skill.description).toBe('Override testing-guidelines');
   });
 
   it('throws for unknown skills', async () => {
@@ -80,72 +62,48 @@ describe('resolveSkillAsync', () => {
   });
 });
 
-describe('security-review skill', () => {
-  it('has correct structure', async () => {
-    const skill = await getBuiltinSkill('security-review');
-    expect(skill).toBeDefined();
-    expect(skill!.name).toBe('security-review');
-    expect(skill!.description).toContain('security');
-    expect(skill!.prompt).toContain('SQL injection');
-    expect(skill!.tools?.allowed).toContain('Read');
-    expect(skill!.tools?.allowed).toContain('Grep');
-  });
-});
-
-describe('code-simplifier skill', () => {
-  it('has correct structure', async () => {
-    const skill = await getBuiltinSkill('code-simplifier');
-    expect(skill).toBeDefined();
-    expect(skill!.name).toBe('code-simplifier');
-    expect(skill!.description).toContain('simplif');
-    expect(skill!.prompt).toContain('clarity');
-    expect(skill!.tools?.allowed).toContain('Read');
-    expect(skill!.tools?.allowed).toContain('Grep');
-    expect(skill!.tools?.allowed).toContain('Glob');
-  });
-});
-
 describe('skills caching', () => {
-  const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+  const skillsDir = new URL('../../.claude/skills', import.meta.url).pathname;
 
   beforeEach(() => {
     clearSkillsCache();
   });
 
   it('caches directory loads', async () => {
-    const skills1 = await loadSkillsFromDirectory(builtinSkillsDir);
+    const skills1 = await loadSkillsFromDirectory(skillsDir);
     expect(skills1.size).toBeGreaterThan(0);
 
     // Second load should return cached result (same reference)
-    const skills2 = await loadSkillsFromDirectory(builtinSkillsDir);
+    const skills2 = await loadSkillsFromDirectory(skillsDir);
     expect(skills2).toBe(skills1);
   });
 
   it('clearSkillsCache clears the cache', async () => {
-    const skills1 = await loadSkillsFromDirectory(builtinSkillsDir);
+    const skills1 = await loadSkillsFromDirectory(skillsDir);
 
     clearSkillsCache();
 
-    const skills2 = await loadSkillsFromDirectory(builtinSkillsDir);
+    const skills2 = await loadSkillsFromDirectory(skillsDir);
     // After clearing, should be a new Map instance
     expect(skills2).not.toBe(skills1);
   });
 });
 
 describe('rootDir tracking', () => {
-  const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+  const skillsDir = new URL('../../.claude/skills', import.meta.url).pathname;
 
   it('sets rootDir when loading from markdown', async () => {
-    const skillPath = join(builtinSkillsDir, 'security-review', 'SKILL.md');
+    const skillPath = join(skillsDir, 'testing-guidelines', 'SKILL.md');
     const skill = await loadSkillFromMarkdown(skillPath);
-    expect(skill.rootDir).toBe(join(builtinSkillsDir, 'security-review'));
+    expect(skill.rootDir).toBe(join(skillsDir, 'testing-guidelines'));
   });
 
-  it('sets rootDir for built-in skills', async () => {
-    const skill = await getBuiltinSkill('security-review');
+  it('sets rootDir for skills from conventional directories', async () => {
+    const repoRoot = new URL('../..', import.meta.url).pathname;
+    const skill = await resolveSkillAsync('testing-guidelines', repoRoot);
     expect(skill).toBeDefined();
-    expect(skill!.rootDir).toContain('skills');
-    expect(skill!.rootDir).toContain('security-review');
+    expect(skill.rootDir).toContain('skills');
+    expect(skill.rootDir).toContain('testing-guidelines');
   });
 
   it('inline skills do not have rootDir', async () => {
@@ -160,26 +118,25 @@ describe('rootDir tracking', () => {
 });
 
 describe('direct path resolution', () => {
-  const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+  const skillsDir = new URL('../../.claude/skills', import.meta.url).pathname;
 
   it('resolves skill from directory path with SKILL.md', async () => {
-    const skillDir = join(builtinSkillsDir, 'security-review');
+    const skillDir = join(skillsDir, 'testing-guidelines');
     const skill = await resolveSkillAsync(skillDir);
-    expect(skill.name).toBe('security-review');
+    expect(skill.name).toBe('testing-guidelines');
     expect(skill.rootDir).toBe(skillDir);
   });
 
   it('resolves skill from file path', async () => {
-    const skillPath = join(builtinSkillsDir, 'security-review', 'SKILL.md');
+    const skillPath = join(skillsDir, 'testing-guidelines', 'SKILL.md');
     const skill = await resolveSkillAsync(skillPath);
-    expect(skill.name).toBe('security-review');
+    expect(skill.name).toBe('testing-guidelines');
   });
 
   it('resolves relative path with repoRoot', async () => {
-    // Use the repo root (two levels up from skills dir)
     const repoRoot = new URL('../..', import.meta.url).pathname;
-    const skill = await resolveSkillAsync('./skills/security-review', repoRoot);
-    expect(skill.name).toBe('security-review');
+    const skill = await resolveSkillAsync('./.claude/skills/testing-guidelines', repoRoot);
+    expect(skill.name).toBe('testing-guidelines');
   });
 
   it('throws for nonexistent path', async () => {
@@ -227,27 +184,27 @@ describe('resolveSkillPath', () => {
 });
 
 describe('resolveSkillAsync with absolute and tilde paths', () => {
-  const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+  const skillsDir = new URL('../../.claude/skills', import.meta.url).pathname;
 
   it('resolves absolute path to skill directory', async () => {
-    const absolutePath = join(builtinSkillsDir, 'security-review');
+    const absolutePath = join(skillsDir, 'testing-guidelines');
     const skill = await resolveSkillAsync(absolutePath, '/different/repo');
-    expect(skill.name).toBe('security-review');
+    expect(skill.name).toBe('testing-guidelines');
   });
 
   it('resolves absolute path to skill file', async () => {
-    const absolutePath = join(builtinSkillsDir, 'security-review', 'SKILL.md');
+    const absolutePath = join(skillsDir, 'testing-guidelines', 'SKILL.md');
     const skill = await resolveSkillAsync(absolutePath, '/different/repo');
-    expect(skill.name).toBe('security-review');
+    expect(skill.name).toBe('testing-guidelines');
   });
 
   it('resolves tilde path to skill directory', async () => {
-    // Create a path using ~ that points to the builtin skills
-    const homeRelativePath = builtinSkillsDir.replace(homedir(), '~');
+    // Create a path using ~ that points to the skills dir
+    const homeRelativePath = skillsDir.replace(homedir(), '~');
     // Only run this test if the skills dir is under home
     if (homeRelativePath.startsWith('~/')) {
-      const skill = await resolveSkillAsync(`${homeRelativePath}/security-review`, '/different/repo');
-      expect(skill.name).toBe('security-review');
+      const skill = await resolveSkillAsync(`${homeRelativePath}/testing-guidelines`, '/different/repo');
+      expect(skill.name).toBe('testing-guidelines');
     }
   });
 });
@@ -286,22 +243,22 @@ This is the prompt content.
   it('loadSkillFromFile accepts .md extension', async () => {
     // A flat .md file should be loaded using loadSkillFromMarkdown
     // (same as SKILL.md format with frontmatter)
-    const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
-    const skillMdPath = join(builtinSkillsDir, 'security-review', 'SKILL.md');
+    const skillsDir = new URL('../../.claude/skills', import.meta.url).pathname;
+    const skillMdPath = join(skillsDir, 'testing-guidelines', 'SKILL.md');
     const skill = await loadSkillFromFile(skillMdPath);
-    expect(skill.name).toBe('security-review');
+    expect(skill.name).toBe('testing-guidelines');
   });
 
   it('loadSkillsFromDirectory returns entry paths for tracking', async () => {
-    const builtinSkillsDir = new URL('../../skills', import.meta.url).pathname;
+    const skillsDir = new URL('../../.claude/skills', import.meta.url).pathname;
     clearSkillsCache();
-    const skills = await loadSkillsFromDirectory(builtinSkillsDir);
+    const skills = await loadSkillsFromDirectory(skillsDir);
 
     // Each loaded skill should have an entry field matching the directory name
-    const securityReview = skills.get('security-review');
-    expect(securityReview).toBeDefined();
-    expect(securityReview!.skill.name).toBe('security-review');
-    expect(securityReview!.entry).toBe('security-review');
+    const skillWriter = skills.get('testing-guidelines');
+    expect(skillWriter).toBeDefined();
+    expect(skillWriter!.skill.name).toBe('testing-guidelines');
+    expect(skillWriter!.entry).toBe('testing-guidelines');
   });
 
   it('loadSkillsFromDirectory calls onWarning for malformed skills', async () => {

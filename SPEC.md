@@ -101,15 +101,15 @@ tools:
 output_schema: SkillReport  # references shared schema
 ```
 
-**Built-in Skills (examples):**
-- `security-review` - Scan for security vulnerabilities (used for dogfooding Warden itself)
+**Example Skills:**
+- `security-review` - Scan for security vulnerabilities
 - `code-review` - General code quality feedback
 - `dependency-check` - Check for outdated/vulnerable deps
 - `test-coverage` - Analyze if new code has tests
 - `documentation-check` - Ensure public APIs are documented
 
-**Custom Skills:**
-Users can define custom skills in their repo under `.warden/skills/`
+**Skills:**
+Users define skills in conventional directories: `.warden/skills/`, `.agents/skills/`, or `.claude/skills/`
 
 ### 3a. Internal Meta-Skills (for development)
 
@@ -240,7 +240,7 @@ async function runSkill(skill: SkillConfig, context: EventContext): Promise<Skil
 **In Scope:**
 - GitHub Action trigger only (no webhook service yet)
 - `pull_request` events (opened, synchronize)
-- One built-in skill: `security-review` (for dogfooding on Warden's own PRs)
+- Skills from conventional directories (`.warden/skills/`, `.agents/skills/`, `.claude/skills/`)
 - Internal meta-skill: `skill-writer` (to help design correct skills)
 - Three output types: inline comments, suggested changes, summary comment
 - In-repo `warden.yaml` configuration

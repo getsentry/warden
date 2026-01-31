@@ -8,7 +8,7 @@ Your code is under new management. Agents that review your code - locally or on 
 
 ## Why Warden?
 
-**Skills, not prompts.** Define analysis once, run it anywhere. Built-in skills cover security review and code simplification.
+**Skills, not prompts.** Define analysis once, run it anywhere. Bootstrap your environment with skills from conventional directories (`.warden/skills/`, `.agents/skills/`, `.claude/skills/`).
 
 **Two ways to run.** CLI catches issues before you push. GitHub Action reviews every PR automatically.
 
