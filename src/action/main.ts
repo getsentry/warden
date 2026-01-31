@@ -34,6 +34,28 @@ import type { RenderResult } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
 /**
+ * Error Handling Policy
+ * =====================
+ *
+ * Fatal errors (setFailed - exit immediately):
+ * - Missing required inputs (API key, GitHub token, environment variables)
+ * - Environment setup failures (not running in GitHub Actions)
+ * - Claude Code CLI not found
+ * - Event payload parsing failures
+ * - Event context building failures
+ *
+ * Non-fatal errors (log warning + continue):
+ * - Individual trigger execution failures (accumulate and report)
+ * - GitHub check creation/update failures
+ * - Review comment posting failures
+ * - Stale comment resolution failures
+ *
+ * End-of-run failure conditions:
+ * - Findings exceed severity threshold (fail-on)
+ * - ALL triggers failed (no successful analysis)
+ */
+
+/**
  * Aggregate usage stats from multiple reports.
  */
 function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
@@ -186,6 +208,27 @@ function logGroupEnd(): void {
   console.log('::endgroup::');
 }
 
+/**
+ * Log trigger error summary and fail if all triggers failed.
+ * Returns true if the action should fail due to all triggers failing.
+ */
+function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): void {
+  if (triggerErrors.length === 0) {
+    return;
+  }
+
+  logGroup('Trigger Errors Summary');
+  for (const err of triggerErrors) {
+    console.error(`  - ${err}`);
+  }
+  logGroupEnd();
+
+  // Fail if ALL triggers failed (no successful analysis was performed)
+  if (triggerErrors.length === totalTriggers && totalTriggers > 0) {
+    setFailed(`All ${totalTriggers} trigger(s) failed: ${triggerErrors.join('; ')}`);
+  }
+}
+
 async function postReviewToGitHub(
   octokit: Octokit,
   context: EventContext,
@@ -291,6 +334,7 @@ async function runScheduledAnalysis(
   const allReports: SkillReport[] = [];
   let totalFindings = 0;
   const failureReasons: string[] = [];
+  const triggerErrors: string[] = [];
   let shouldFailAction = false;
 
   // Process each schedule trigger
@@ -377,10 +421,14 @@ async function runScheduledAnalysis(
 
       logGroupEnd();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      triggerErrors.push(`${trigger.name}: ${errorMessage}`);
       console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
       logGroupEnd();
     }
   }
+
+  handleTriggerErrors(triggerErrors, scheduleTriggers.length);
 
   // Set outputs
   const criticalCount = countSeverity(allReports, 'critical');
@@ -687,10 +735,20 @@ async function run(): Promise<void> {
     }
   }
 
+  // Collect trigger errors for summary
+  const triggerErrors = results
+    .filter((r) => r.error)
+    .map((r) => {
+      const errorMessage = r.error instanceof Error ? r.error.message : String(r.error);
+      return `${r.triggerName}: ${errorMessage}`;
+    });
+
+  handleTriggerErrors(triggerErrors, matchedTriggers.length);
+
   // Resolve stale Warden comments (comments that no longer have matching findings)
   // Use fetchedComments (not existingComments) to only check comments that have threadIds
   // Only resolve if ALL triggers succeeded - otherwise findings may be missing due to failures
-  const allTriggersSucceeded = results.every((r) => !r.error);
+  const allTriggersSucceeded = triggerErrors.length === 0;
   if (context.pullRequest && fetchedComments.length > 0 && allTriggersSucceeded) {
     try {
       const allFindings = reports.flatMap((r) => r.findings);
