@@ -7,10 +7,10 @@ failOn = "high"
 commentOn = "medium"
 
 [[triggers]]
-name = "find-bugs"
+name = "notseer"
 event = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
-skill = "find-bugs"
+skill = "notseer"
 
 [[triggers]]
 name = "testing-guidelines"
