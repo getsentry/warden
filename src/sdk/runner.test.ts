@@ -11,6 +11,7 @@ import {
   estimateTokens,
   isRetryableError,
   calculateRetryDelay,
+  aggregateUsage,
 } from './runner.js';
 import {
   APIError,
@@ -637,5 +638,88 @@ describe('calculateRetryDelay', () => {
     const config = { ...defaultConfig, maxDelayMs: 5000 };
     expect(calculateRetryDelay(2, config)).toBe(4000);
     expect(calculateRetryDelay(3, config)).toBe(5000);
+  });
+});
+
+describe('aggregateUsage', () => {
+  it('returns empty usage for empty array', () => {
+    const result = aggregateUsage([]);
+    expect(result).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      costUSD: 0,
+    });
+  });
+
+  it('returns the same usage for single item array', () => {
+    const usage = {
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheReadInputTokens: 10,
+      cacheCreationInputTokens: 5,
+      costUSD: 0.01,
+    };
+    const result = aggregateUsage([usage]);
+    expect(result).toEqual(usage);
+  });
+
+  it('aggregates multiple usage stats correctly', () => {
+    const usages = [
+      {
+        inputTokens: 100,
+        outputTokens: 50,
+        cacheReadInputTokens: 10,
+        cacheCreationInputTokens: 5,
+        costUSD: 0.01,
+      },
+      {
+        inputTokens: 200,
+        outputTokens: 100,
+        cacheReadInputTokens: 20,
+        cacheCreationInputTokens: 10,
+        costUSD: 0.02,
+      },
+      {
+        inputTokens: 150,
+        outputTokens: 75,
+        cacheReadInputTokens: 15,
+        cacheCreationInputTokens: 7,
+        costUSD: 0.015,
+      },
+    ];
+    const result = aggregateUsage(usages);
+    expect(result).toEqual({
+      inputTokens: 450,
+      outputTokens: 225,
+      cacheReadInputTokens: 45,
+      cacheCreationInputTokens: 22,
+      costUSD: 0.045,
+    });
+  });
+
+  it('handles undefined optional cache fields', () => {
+    const usages = [
+      {
+        inputTokens: 100,
+        outputTokens: 50,
+        costUSD: 0.01,
+      },
+      {
+        inputTokens: 200,
+        outputTokens: 100,
+        cacheReadInputTokens: 20,
+        costUSD: 0.02,
+      },
+    ];
+    const result = aggregateUsage(usages);
+    expect(result).toEqual({
+      inputTokens: 300,
+      outputTokens: 150,
+      cacheReadInputTokens: 20,
+      cacheCreationInputTokens: 0,
+      costUSD: 0.03,
+    });
   });
 });

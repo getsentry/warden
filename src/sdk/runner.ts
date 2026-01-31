@@ -653,23 +653,41 @@ async function analyzeHunk(
   };
 
   let lastError: unknown;
+  // Track accumulated usage across retry attempts for accurate cost reporting
+  const accumulatedUsage: UsageStats[] = [];
 
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
     // Check for abort before each attempt
     if (abortController?.signal.aborted) {
-      return { findings: [], usage: emptyUsage(), failed: true };
+      return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
     }
 
     try {
       const resultMessage = await executeQuery(systemPrompt, userPrompt, repoPath, options);
 
       if (!resultMessage) {
-        return { findings: [], usage: emptyUsage(), failed: true };
+        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
+      }
+
+      // Extract usage from the result, regardless of success/error status
+      const usage = extractUsage(resultMessage);
+      accumulatedUsage.push(usage);
+
+      // Check if the SDK returned an error result (e.g., max turns, budget exceeded)
+      const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
+
+      if (isError) {
+        // SDK error - we have usage but no valid findings
+        return {
+          findings: [],
+          usage: aggregateUsage(accumulatedUsage),
+          failed: true,
+        };
       }
 
       return {
         findings: await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey),
-        usage: extractUsage(resultMessage),
+        usage: aggregateUsage(accumulatedUsage),
         failed: false,
       };
     } catch (error) {
@@ -697,12 +715,12 @@ async function analyzeHunk(
         await sleep(delayMs, abortController?.signal);
       } catch {
         // Aborted during sleep
-        return { findings: [], usage: emptyUsage(), failed: true };
+        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
       }
     }
   }
 
-  // All attempts failed - return failure
+  // All attempts failed - return failure with any accumulated usage
   // Log the final error for debugging if verbose
   if (options.verbose && lastError) {
     const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
@@ -715,7 +733,7 @@ async function analyzeHunk(
     );
   }
 
-  return { findings: [], usage: emptyUsage(), failed: true };
+  return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
 }
 
 /**
