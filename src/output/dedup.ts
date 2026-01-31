@@ -4,9 +4,6 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { Finding } from '../types/index.js';
 
-/** Schema for validating LLM deduplication response */
-const DuplicateIndicesSchema = z.array(z.number().int());
-
 /**
  * Parsed marker data from a Warden comment.
  */
@@ -17,7 +14,7 @@ export interface WardenMarker {
 }
 
 /**
- * Existing Warden comment from GitHub.
+ * Existing comment from GitHub (either Warden or external).
  */
 export interface ExistingComment {
   id: number;
@@ -30,6 +27,40 @@ export interface ExistingComment {
   threadId?: string;
   /** Whether the thread has been resolved (resolved comments are used for dedup but not stale detection) */
   isResolved?: boolean;
+  /** Whether this is a Warden-generated comment */
+  isWarden?: boolean;
+  /** Skills that have already detected this issue (for Warden comments) */
+  skills?: string[];
+  /** The raw comment body (needed for updating Warden comments) */
+  body?: string;
+  /** GraphQL node ID for the comment (needed for adding reactions) */
+  commentNodeId?: string;
+}
+
+/**
+ * Type of action to take for a duplicate finding.
+ */
+export type DuplicateActionType = 'update_warden' | 'react_external';
+
+/**
+ * Action to take for a duplicate finding.
+ */
+export interface DuplicateAction {
+  type: DuplicateActionType;
+  finding: Finding;
+  existingComment: ExistingComment;
+  /** Whether this was a hash match or semantic match */
+  matchType: 'hash' | 'semantic';
+}
+
+/**
+ * Result of deduplication with actions for duplicates.
+ */
+export interface DeduplicateResult {
+  /** Findings that are not duplicates - should be posted */
+  newFindings: Finding[];
+  /** Actions to take for duplicate findings */
+  duplicateActions: DuplicateAction[];
 }
 
 /**
@@ -59,10 +90,8 @@ export function parseMarker(body: string): WardenMarker | null {
     return null;
   }
 
-  const [, path, lineStr, contentHash] = match;
-  if (!path || !lineStr || !contentHash) {
-    return null;
-  }
+  // Capture groups are guaranteed to exist when the regex matches
+  const [, path, lineStr, contentHash] = match as [string, string, string, string];
 
   return {
     path,
@@ -102,12 +131,46 @@ export function isWardenComment(body: string): boolean {
   return body.includes('<sub>warden:') || body.includes('<!-- warden:v1:');
 }
 
+/**
+ * Parse skill names from a Warden comment's attribution line.
+ * Handles both single skill: "<sub>warden: skill-name</sub>"
+ * And multiple skills: "<sub>warden: skill1, skill2</sub>"
+ */
+export function parseWardenSkills(body: string): string[] {
+  const match = body.match(/<sub>warden:\s*([^<]+)<\/sub>/);
+  if (!match || !match[1]) {
+    return [];
+  }
+  return match[1]
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Update a Warden comment body to add a new skill to the attribution.
+ * Changes "<sub>warden: skill1</sub>" to "<sub>warden: skill1, skill2</sub>"
+ * Returns null if skill is already listed.
+ */
+export function updateWardenCommentBody(body: string, newSkill: string): string | null {
+  const existingSkills = parseWardenSkills(body);
+
+  // Don't update if skill already listed
+  if (existingSkills.includes(newSkill)) {
+    return null;
+  }
+
+  const allSkills = [...existingSkills, newSkill].join(', ');
+  return body.replace(/<sub>warden:\s*[^<]+<\/sub>/, `<sub>warden: ${allSkills}</sub>`);
+}
+
 /** GraphQL response structure for review threads */
 interface ReviewThreadNode {
   id: string;
   isResolved: boolean;
   comments: {
     nodes: {
+      id: string; // GraphQL node ID (for reactions)
       databaseId: number;
       body: string;
       path: string;
@@ -145,6 +208,7 @@ const REVIEW_THREADS_QUERY = `
             isResolved
             comments(first: 1) {
               nodes {
+                id
                 databaseId
                 body
                 path
@@ -160,10 +224,10 @@ const REVIEW_THREADS_QUERY = `
 `;
 
 /**
- * Fetch all existing Warden review comments for a PR.
- * Uses GraphQL to get thread IDs for stale comment resolution.
+ * Fetch all existing review comments for a PR (both Warden and external).
+ * Uses GraphQL to get thread IDs for stale comment resolution and node IDs for reactions.
  */
-export async function fetchExistingWardenComments(
+export async function fetchExistingComments(
   octokit: Octokit,
   owner: string,
   repo: string,
@@ -192,27 +256,35 @@ export async function fetchExistingWardenComments(
     const threads = pullRequest.reviewThreads;
 
     for (const thread of threads.nodes) {
-      // Get the first comment in the thread (the main Warden comment)
+      // Get the first comment in the thread
       const firstComment = thread.comments.nodes[0];
-      if (!firstComment || !isWardenComment(firstComment.body)) {
+      if (!firstComment) {
         continue;
       }
 
-      const marker = parseMarker(firstComment.body);
+      const isWarden = isWardenComment(firstComment.body);
+      const marker = isWarden ? parseMarker(firstComment.body) : null;
       const parsed = parseWardenComment(firstComment.body);
 
-      if (parsed) {
-        comments.push({
-          id: firstComment.databaseId,
-          path: marker?.path ?? firstComment.path,
-          line: marker?.line ?? firstComment.line ?? firstComment.originalLine ?? 0,
-          title: parsed.title,
-          description: parsed.description,
-          contentHash: marker?.contentHash ?? generateContentHash(parsed.title, parsed.description),
-          threadId: thread.id,
-          isResolved: thread.isResolved,
-        });
-      }
+      // For Warden comments, we need parsed title/description
+      // For external comments, we extract what we can or use body as description
+      const title = parsed?.title ?? '';
+      const description = parsed?.description ?? firstComment.body.slice(0, 500);
+
+      comments.push({
+        id: firstComment.databaseId,
+        path: marker?.path ?? firstComment.path,
+        line: marker?.line ?? firstComment.line ?? firstComment.originalLine ?? 0,
+        title,
+        description,
+        contentHash: marker?.contentHash ?? generateContentHash(title, description),
+        threadId: thread.id,
+        isResolved: thread.isResolved,
+        isWarden,
+        skills: isWarden ? parseWardenSkills(firstComment.body) : undefined,
+        body: firstComment.body,
+        commentNodeId: firstComment.id,
+      });
     }
 
     hasNextPage = threads.pageInfo.hasNextPage;
@@ -223,16 +295,37 @@ export async function fetchExistingWardenComments(
 }
 
 /**
+ * @deprecated Use fetchExistingComments instead
+ */
+export async function fetchExistingWardenComments(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<ExistingComment[]> {
+  const allComments = await fetchExistingComments(octokit, owner, repo, prNumber);
+  return allComments.filter((c) => c.isWarden);
+}
+
+/** Schema for validating LLM deduplication response with matched indices */
+const DuplicateMatchesSchema = z.array(
+  z.object({
+    findingIndex: z.number().int(),
+    existingIndex: z.number().int(),
+  })
+);
+
+/**
  * Use LLM to identify which findings are semantic duplicates of existing comments.
- * Returns a Set of finding IDs that should be skipped as duplicates.
+ * Returns a Map of finding ID to matched ExistingComment.
  */
 async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
   apiKey: string
-): Promise<Set<string>> {
+): Promise<Map<string, ExistingComment>> {
   if (findings.length === 0 || existingComments.length === 0) {
-    return new Set();
+    return new Map();
   }
 
   const client = new Anthropic({ apiKey });
@@ -257,16 +350,19 @@ ${existingList}
 New findings:
 ${findingsList}
 
-Return a JSON array of numbers for findings that are DUPLICATES of existing comments.
+Return a JSON array of objects identifying which findings are DUPLICATES of which existing comments.
 Only mark as duplicate if they describe the SAME issue at the SAME location (within a few lines).
 Different issues at the same location are NOT duplicates.
 
-Return ONLY the JSON array, e.g. [1, 3] or [] if none are duplicates.`;
+Return ONLY the JSON array in this format:
+[{"findingIndex": 1, "existingIndex": 2}]
+where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
+Return [] if none are duplicates.`;
 
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5',
-      max_tokens: 256,
+      max_tokens: 512,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -275,21 +371,21 @@ Return ONLY the JSON array, e.g. [1, 3] or [] if none are duplicates.`;
       throw new Error('Unexpected response type');
     }
 
-    const duplicateIndices = DuplicateIndicesSchema.parse(JSON.parse(content.text));
-    const duplicateIds = new Set<string>();
+    const parsed = DuplicateMatchesSchema.parse(JSON.parse(content.text));
+    const matches = new Map<string, ExistingComment>();
 
-    for (const num of duplicateIndices) {
-      // Convert 1-based index to 0-based
-      const finding = findings[num - 1];
-      if (finding) {
-        duplicateIds.add(finding.id);
+    for (const match of parsed) {
+      const finding = findings[match.findingIndex - 1];
+      const existing = existingComments[match.existingIndex - 1];
+      if (finding && existing) {
+        matches.set(finding.id, existing);
       }
     }
 
-    return duplicateIds;
+    return matches;
   } catch (error) {
     console.warn(`LLM deduplication failed, falling back to hash-only: ${error}`);
-    return new Set();
+    return new Map();
   }
 }
 
@@ -301,13 +397,106 @@ export interface DeduplicateOptions {
   apiKey?: string;
   /** Skip LLM deduplication and only use exact hash matching */
   hashOnly?: boolean;
+  /** Current skill name (for updating Warden comment attribution) */
+  currentSkill?: string;
+}
+
+const ADD_REACTION_MUTATION = `
+  mutation($subjectId: ID!, $content: ReactionContent!) {
+    addReaction(input: { subjectId: $subjectId, content: $content }) {
+      reaction {
+        content
+      }
+    }
+  }
+`;
+
+/**
+ * Update an existing Warden PR review comment via REST API.
+ */
+export async function updateWardenComment(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  commentId: number,
+  newBody: string
+): Promise<void> {
+  await octokit.pulls.updateReviewComment({
+    owner,
+    repo,
+    comment_id: commentId,
+    body: newBody,
+  });
+}
+
+/**
+ * Add a reaction to an existing PR review comment.
+ * Uses GraphQL to handle review comments.
+ */
+export async function addReactionToComment(
+  octokit: Octokit,
+  commentNodeId: string,
+  reaction: 'THUMBS_UP' | 'EYES' = 'EYES'
+): Promise<void> {
+  await octokit.graphql(ADD_REACTION_MUTATION, {
+    subjectId: commentNodeId,
+    content: reaction,
+  });
+}
+
+/**
+ * Process duplicate actions - update Warden comments and add reactions.
+ * Returns counts of actions taken for logging.
+ */
+export async function processDuplicateActions(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  actions: DuplicateAction[],
+  currentSkill: string
+): Promise<{ updated: number; reacted: number; skipped: number; failed: number }> {
+  let updated = 0;
+  let reacted = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const action of actions) {
+    try {
+      if (action.type === 'update_warden') {
+        if (!action.existingComment.body) {
+          skipped++;
+          continue;
+        }
+        const newBody = updateWardenCommentBody(action.existingComment.body, currentSkill);
+        // Only update if body actually changed (skill wasn't already listed)
+        if (newBody) {
+          await updateWardenComment(octokit, owner, repo, action.existingComment.id, newBody);
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else if (action.type === 'react_external') {
+        if (!action.existingComment.commentNodeId) {
+          skipped++;
+          continue;
+        }
+        await addReactionToComment(octokit, action.existingComment.commentNodeId);
+        reacted++;
+      }
+    } catch (error) {
+      console.warn(`Failed to process duplicate action for ${action.finding.title}: ${error}`);
+      failed++;
+    }
+  }
+
+  return { updated, reacted, skipped, failed };
 }
 
 /**
  * Convert a Finding to an ExistingComment for cross-trigger deduplication.
  * Returns null if the finding has no location.
  */
-export function findingToExistingComment(finding: Finding): ExistingComment | null {
+export function findingToExistingComment(finding: Finding, skill?: string): ExistingComment | null {
   if (!finding.location) {
     return null;
   }
@@ -319,35 +508,42 @@ export function findingToExistingComment(finding: Finding): ExistingComment | nu
     title: finding.title,
     description: finding.description,
     contentHash: generateContentHash(finding.title, finding.description),
+    isWarden: true,
+    skills: skill ? [skill] : [],
   };
 }
 
 /**
- * Deduplicate findings against existing Warden comments.
- * Returns only non-duplicate findings.
+ * Deduplicate findings against existing comments.
+ * Returns non-duplicate findings and actions to take for duplicates.
  *
  * Deduplication is two-pass:
- * 1. Exact content hash match - instant skip
+ * 1. Exact content hash match - instant match
  * 2. LLM semantic comparison for remaining findings (if API key provided)
+ *
+ * For duplicates:
+ * - If matching a Warden comment: action to update attribution with new skill
+ * - If matching an external comment: action to add reaction
  */
 export async function deduplicateFindings(
   findings: Finding[],
   existingComments: ExistingComment[],
   options: DeduplicateOptions = {}
-): Promise<Finding[]> {
+): Promise<DeduplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
-    return findings;
+    return { newFindings: findings, duplicateActions: [] };
   }
 
   // Build a map of existing comments by location+hash for fast lookup
-  // Key format: "path:line:contentHash" to ensure same content at different locations is not deduped
-  const existingKeys = new Set(
-    existingComments.map((c) => `${c.path}:${c.line}:${c.contentHash}`)
-  );
+  const existingByKey = new Map<string, ExistingComment>();
+  for (const c of existingComments) {
+    const key = `${c.path}:${c.line}:${c.contentHash}`;
+    existingByKey.set(key, c);
+  }
 
-  // First pass: filter out exact matches (same content at same location)
+  // First pass: find exact matches (same content at same location)
   const hashDedupedFindings: Finding[] = [];
-  let exactMatchCount = 0;
+  const duplicateActions: DuplicateAction[] = [];
 
   for (const finding of findings) {
     const hash = generateContentHash(finding.title, finding.description);
@@ -355,28 +551,49 @@ export async function deduplicateFindings(
     const path = finding.location?.path ?? '';
     const key = `${path}:${line}:${hash}`;
 
-    if (existingKeys.has(key)) {
-      exactMatchCount++;
+    const matchingComment = existingByKey.get(key);
+    if (matchingComment) {
+      duplicateActions.push({
+        type: matchingComment.isWarden ? 'update_warden' : 'react_external',
+        finding,
+        existingComment: matchingComment,
+        matchType: 'hash',
+      });
     } else {
       hashDedupedFindings.push(finding);
     }
   }
 
-  if (exactMatchCount > 0) {
-    console.log(`Dedup: ${exactMatchCount} findings matched by content hash`);
+  if (duplicateActions.length > 0) {
+    console.log(`Dedup: ${duplicateActions.length} findings matched by content hash`);
   }
 
   // If hash-only mode, no API key, or no remaining findings, stop here
   if (options.hashOnly || !options.apiKey || hashDedupedFindings.length === 0) {
-    return hashDedupedFindings;
+    return { newFindings: hashDedupedFindings, duplicateActions };
   }
 
   // Second pass: LLM semantic comparison for remaining findings
-  const duplicateIds = await findSemanticDuplicates(hashDedupedFindings, existingComments, options.apiKey);
+  const semanticMatches = await findSemanticDuplicates(hashDedupedFindings, existingComments, options.apiKey);
 
-  if (duplicateIds.size > 0) {
-    console.log(`Dedup: ${duplicateIds.size} findings identified as semantic duplicates by LLM`);
+  if (semanticMatches.size > 0) {
+    console.log(`Dedup: ${semanticMatches.size} findings identified as semantic duplicates by LLM`);
   }
 
-  return hashDedupedFindings.filter((f) => !duplicateIds.has(f.id));
+  const newFindings: Finding[] = [];
+  for (const finding of hashDedupedFindings) {
+    const matchingComment = semanticMatches.get(finding.id);
+    if (matchingComment) {
+      duplicateActions.push({
+        type: matchingComment.isWarden ? 'update_warden' : 'react_external',
+        finding,
+        existingComment: matchingComment,
+        matchType: 'semantic',
+      });
+    } else {
+      newFindings.push(finding);
+    }
+  }
+
+  return { newFindings, duplicateActions };
 }

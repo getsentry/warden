@@ -7,6 +7,8 @@ import {
   isWardenComment,
   deduplicateFindings,
   findingToExistingComment,
+  parseWardenSkills,
+  updateWardenCommentBody,
 } from './dedup.js';
 import type { Finding } from '../types/index.js';
 import type { ExistingComment } from './dedup.js';
@@ -140,8 +142,9 @@ describe('deduplicateFindings', () => {
   it('returns all findings when no existing comments', async () => {
     const findings = [baseFinding];
     const result = await deduplicateFindings(findings, [], { hashOnly: true });
-    expect(result).toHaveLength(1);
-    expect(result[0]).toBe(baseFinding);
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.newFindings[0]).toBe(baseFinding);
+    expect(result.duplicateActions).toHaveLength(0);
   });
 
   it('returns all findings when findings array is empty', async () => {
@@ -157,10 +160,11 @@ describe('deduplicateFindings', () => {
     ];
 
     const result = await deduplicateFindings([], existingComments, { hashOnly: true });
-    expect(result).toHaveLength(0);
+    expect(result.newFindings).toHaveLength(0);
+    expect(result.duplicateActions).toHaveLength(0);
   });
 
-  it('filters out exact hash matches', async () => {
+  it('filters out exact hash matches and creates duplicate action', async () => {
     const existingComments: ExistingComment[] = [
       {
         id: 1,
@@ -169,11 +173,15 @@ describe('deduplicateFindings', () => {
         title: 'SQL Injection',
         description: 'User input passed to query',
         contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: true,
       },
     ];
 
     const result = await deduplicateFindings([baseFinding], existingComments, { hashOnly: true });
-    expect(result).toHaveLength(0);
+    expect(result.newFindings).toHaveLength(0);
+    expect(result.duplicateActions).toHaveLength(1);
+    expect(result.duplicateActions[0]!.type).toBe('update_warden');
+    expect(result.duplicateActions[0]!.matchType).toBe('hash');
   });
 
   it('keeps findings with different content', async () => {
@@ -198,8 +206,9 @@ describe('deduplicateFindings', () => {
     const result = await deduplicateFindings([differentFinding], existingComments, {
       hashOnly: true,
     });
-    expect(result).toHaveLength(1);
-    expect(result[0]!.title).toBe('XSS Vulnerability');
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.newFindings[0]!.title).toBe('XSS Vulnerability');
+    expect(result.duplicateActions).toHaveLength(0);
   });
 
   it('filters multiple duplicates and keeps unique findings', async () => {
@@ -235,6 +244,7 @@ describe('deduplicateFindings', () => {
         title: 'SQL Injection',
         description: 'User input passed to query',
         contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: true,
       },
       {
         id: 2,
@@ -243,14 +253,20 @@ describe('deduplicateFindings', () => {
         title: 'Code Style',
         description: 'Inconsistent indentation',
         contentHash: generateContentHash('Code Style', 'Inconsistent indentation'),
+        isWarden: false,
       },
     ];
 
     const result = await deduplicateFindings([finding1, finding2, finding3], existingComments, {
       hashOnly: true,
     });
-    expect(result).toHaveLength(1);
-    expect(result[0]!.id).toBe('f2');
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.newFindings[0]!.id).toBe('f2');
+    expect(result.duplicateActions).toHaveLength(2);
+    // First should be update_warden (isWarden: true)
+    expect(result.duplicateActions[0]!.type).toBe('update_warden');
+    // Second should be react_external (isWarden: false)
+    expect(result.duplicateActions[1]!.type).toBe('react_external');
   });
 
   it('works without API key (hash-only mode)', async () => {
@@ -258,7 +274,52 @@ describe('deduplicateFindings', () => {
     const existingComments: ExistingComment[] = [];
 
     const result = await deduplicateFindings(findings, existingComments, {});
-    expect(result).toHaveLength(1);
+    expect(result.newFindings).toHaveLength(1);
+  });
+});
+
+describe('parseWardenSkills', () => {
+  it('parses single skill', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: security-review</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['security-review']);
+  });
+
+  it('parses multiple skills', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: security-review, code-quality, performance</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['security-review', 'code-quality', 'performance']);
+  });
+
+  it('handles extra whitespace', () => {
+    const body = `<sub>warden:  skill1 ,  skill2 </sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('returns empty array for non-Warden comment', () => {
+    const body = 'Regular comment without attribution';
+    expect(parseWardenSkills(body)).toEqual([]);
+  });
+});
+
+describe('updateWardenCommentBody', () => {
+  it('adds new skill to attribution', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: skill1</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>warden: skill1, skill2</sub>');
+  });
+
+  it('returns null if skill already listed', () => {
+    const body = `<sub>warden: skill1, skill2</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('preserves rest of comment body', () => {
+    const body = `**:warning: SQL Injection**\n\nUser input passed to query\n\n---\n<sub>warden: security-review</sub>\n<!-- warden:v1:file.ts:10:abc123 -->`;
+    const result = updateWardenCommentBody(body, 'code-quality');
+    expect(result).toContain('**:warning: SQL Injection**');
+    expect(result).toContain('User input passed to query');
+    expect(result).toContain('<sub>warden: security-review, code-quality</sub>');
+    expect(result).toContain('<!-- warden:v1:file.ts:10:abc123 -->');
   });
 });
 
@@ -284,7 +345,27 @@ describe('findingToExistingComment', () => {
       title: 'SQL Injection',
       description: 'User input passed to query',
       contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+      isWarden: true,
+      skills: [],
     });
+  });
+
+  it('includes skill when provided', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: {
+        path: 'src/db.ts',
+        startLine: 42,
+      },
+    };
+
+    const comment = findingToExistingComment(finding, 'security-review');
+    expect(comment).not.toBeNull();
+    expect(comment!.isWarden).toBe(true);
+    expect(comment!.skills).toEqual(['security-review']);
   });
 
   it('uses startLine when endLine is not set', () => {
