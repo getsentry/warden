@@ -81,16 +81,9 @@ function renderReview(
   );
   const event: GitHubReview['event'] = hasBlockingSeverity ? 'REQUEST_CHANGES' : 'COMMENT';
 
-  // Build review body with optional stats footer
-  let body = `## ${report.skill}\n\n${escapeHtml(report.summary)}`;
-  const statsLine = formatStatsCompact(report.durationMs, report.usage);
-  if (statsLine) {
-    body += `\n\n---\n<sub>${statsLine}</sub>`;
-  }
-
   return {
     event,
-    body,
+    body: '',
     comments,
   };
 }

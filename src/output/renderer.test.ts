@@ -525,7 +525,7 @@ describe('renderSkillReport', () => {
       expect(result.summaryComment).toContain('<sub>');
     });
 
-    it('includes stats footer in review body when stats are available', () => {
+    it('review body is empty (stats only in summary comment)', () => {
       const report: SkillReport = {
         ...baseReport,
         findings: [
@@ -548,9 +548,7 @@ describe('renderSkillReport', () => {
       const result = renderSkillReport(report);
 
       expect(result.review).toBeDefined();
-      expect(result.review!.body).toContain('⏱ 12.3s');
-      expect(result.review!.body).toContain('2.5k in / 450 out');
-      expect(result.review!.body).toContain('$0.0032');
+      expect(result.review!.body).toBe('');
     });
 
     it('includes stats footer in empty findings report', () => {
