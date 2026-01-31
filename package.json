@@ -41,8 +41,13 @@
     "code-review",
     "security"
   ],
-  "author": "Functional Software, Inc.",
+  "author": "Sentry",
   "license": "FSL-1.1-ALv2",
+  "repository": "https://github.com/getsentry/warden",
+  "bugs": {
+    "url": "https://github.com/getsentry/warden/issues"
+  },
+  "homepage": "https://warden.sentry.dev",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.22",
     "@anthropic-ai/sdk": "^0.72.1",
