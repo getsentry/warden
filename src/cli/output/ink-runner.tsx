@@ -170,13 +170,15 @@ function SkillRunner({ skills, completedItems }: SkillRunnerProps): React.ReactE
 }
 
 /** No-op callbacks for quiet mode. */
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+const noop = () => {};
 const noopCallbacks: SkillProgressCallbacks = {
-  onSkillStart: () => {},
-  onSkillUpdate: () => {},
-  onFileUpdate: () => {},
-  onSkillComplete: () => {},
-  onSkillSkipped: () => {},
-  onSkillError: () => {},
+  onSkillStart: noop,
+  onSkillUpdate: noop,
+  onFileUpdate: noop,
+  onSkillComplete: noop,
+  onSkillSkipped: noop,
+  onSkillError: noop,
 };
 
 /**
