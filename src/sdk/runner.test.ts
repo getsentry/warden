@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractFindingsJson, extractBalancedJson } from './runner.js';
+import { extractFindingsJson, extractBalancedJson, extractFindingsWithLLM } from './runner.js';
 
 describe('extractBalancedJson', () => {
   it('extracts simple JSON object', () => {
@@ -222,5 +222,101 @@ describe('extractFindingsJson', () => {
     const text = '{"findings": []} Some trailing text here';
     const result = extractFindingsJson(text);
     expect(result).toEqual({ success: true, findings: [] });
+  });
+
+  it('extracts findings from typescript code block', () => {
+    const text = '```typescript\n{"findings": [{"id": "ts-1"}]}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({
+      success: true,
+      findings: [{ id: 'ts-1' }],
+    });
+  });
+
+  it('extracts findings from javascript code block', () => {
+    const text = '```javascript\n{"findings": []}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({ success: true, findings: [] });
+  });
+
+  it('extracts findings from ts code block (short form)', () => {
+    const text = '```ts\n{"findings": [{"id": "issue-1"}]}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({
+      success: true,
+      findings: [{ id: 'issue-1' }],
+    });
+  });
+
+  it('extracts findings from python code block', () => {
+    const text = '```python\n{"findings": [{"id": "py-1"}]}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({
+      success: true,
+      findings: [{ id: 'py-1' }],
+    });
+  });
+
+  it('extracts findings from c++ code block', () => {
+    const text = '```c++\n{"findings": []}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({ success: true, findings: [] });
+  });
+
+  it('extracts findings from c# code block', () => {
+    const text = '```c#\n{"findings": [{"id": "cs-1"}]}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({
+      success: true,
+      findings: [{ id: 'cs-1' }],
+    });
+  });
+
+  it('extracts findings from objective-c code block', () => {
+    const text = '```objective-c\n{"findings": []}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({ success: true, findings: [] });
+  });
+
+  it('extracts findings with prose and typescript code block', () => {
+    const text = `Here's what I found in this TypeScript code:
+
+\`\`\`typescript
+{"findings": [{"id": "type-error", "title": "Missing type annotation"}]}
+\`\`\`
+
+Let me know if you need more details.`;
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({
+      success: true,
+      findings: [{ id: 'type-error', title: 'Missing type annotation' }],
+    });
+  });
+});
+
+describe('extractFindingsWithLLM', () => {
+  it('returns error when no API key provided', async () => {
+    const result = await extractFindingsWithLLM('some malformed output', undefined);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('no_api_key_for_fallback');
+    }
+  });
+
+  it('returns error with empty API key', async () => {
+    const result = await extractFindingsWithLLM('some malformed output', '');
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe('no_api_key_for_fallback');
+    }
+  });
+
+  it('includes preview in error response', async () => {
+    const longText = 'x'.repeat(300);
+    const result = await extractFindingsWithLLM(longText, undefined);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.preview).toHaveLength(200);
+    }
   });
 });

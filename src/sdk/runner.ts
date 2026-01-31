@@ -1,4 +1,5 @@
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import type { SkillDefinition, ChunkingConfig } from '../config/schema.js';
 import { FindingSchema } from '../types/index.js';
 import type { EventContext, SkillReport, Finding, UsageStats, SkippedFile } from '../types/index.js';
@@ -240,8 +241,8 @@ export function extractBalancedJson(text: string, startIndex: number): string | 
 export function extractFindingsJson(rawText: string): ExtractFindingsResult {
   let text = rawText.trim();
 
-  // Strip markdown code fences if present
-  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  // Strip markdown code fences if present (handles any language tag: ```json, ```typescript, ```c++, etc.)
+  const codeBlockMatch = text.match(/```[\w+#-]*\s*([\s\S]*?)```/);
   if (codeBlockMatch?.[1]) {
     text = codeBlockMatch[1].trim();
   }
@@ -300,41 +301,132 @@ export function extractFindingsJson(rawText: string): ExtractFindingsResult {
   return { success: true, findings };
 }
 
+/** Max characters to send to LLM fallback (roughly ~8k tokens) */
+const LLM_FALLBACK_MAX_CHARS = 32000;
+
+/** Timeout for LLM fallback API calls in milliseconds */
+const LLM_FALLBACK_TIMEOUT_MS = 30000;
+
+/**
+ * Extract findings from malformed output using LLM as a fallback.
+ * Uses claude-haiku-4-5 for lightweight, fast extraction.
+ */
+export async function extractFindingsWithLLM(
+  rawText: string,
+  apiKey?: string
+): Promise<ExtractFindingsResult> {
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'no_api_key_for_fallback',
+      preview: rawText.slice(0, 200),
+    };
+  }
+
+  // Truncate input to avoid excessive token usage and timeouts
+  const truncatedText =
+    rawText.length > LLM_FALLBACK_MAX_CHARS
+      ? rawText.slice(0, LLM_FALLBACK_MAX_CHARS) + '\n[... truncated]'
+      : rawText;
+
+  try {
+    const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS });
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user',
+          content: `Extract the findings JSON from this model output.
+Return ONLY valid JSON in format: {"findings": [...]}
+If no findings exist, return: {"findings": []}
+
+Model output:
+${truncatedText}`,
+        },
+      ],
+    });
+
+    const content = response.content[0];
+    if (!content || content.type !== 'text') {
+      return {
+        success: false,
+        error: 'llm_unexpected_response',
+        preview: rawText.slice(0, 200),
+      };
+    }
+
+    // Parse the LLM response as JSON
+    return extractFindingsJson(content.text);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      error: `llm_extraction_failed: ${errorMessage}`,
+      preview: rawText.slice(0, 200),
+    };
+  }
+}
+
+/**
+ * Validate and normalize findings from extracted JSON.
+ */
+function validateFindings(findings: unknown[], filename: string): Finding[] {
+  const validated: Finding[] = [];
+
+  for (const f of findings) {
+    // Normalize location path before validation
+    if (typeof f === 'object' && f !== null && 'location' in f) {
+      const loc = (f as Record<string, unknown>)['location'];
+      if (loc && typeof loc === 'object') {
+        (loc as Record<string, unknown>)['path'] = filename;
+      }
+    }
+
+    const result = FindingSchema.safeParse(f);
+    if (result.success) {
+      validated.push({
+        ...result.data,
+        location: result.data.location ? { ...result.data.location, path: filename } : undefined,
+      });
+    }
+  }
+
+  return validated;
+}
+
 /**
  * Parse findings from a hunk analysis result.
+ * Uses a two-tier extraction strategy:
+ * 1. Regex-based extraction (fast, handles well-formed output)
+ * 2. LLM fallback using haiku (handles malformed output gracefully)
  */
-function parseHunkOutput(result: SDKResultMessage, filename: string): Finding[] {
+async function parseHunkOutput(
+  result: SDKResultMessage,
+  filename: string,
+  apiKey?: string
+): Promise<Finding[]> {
   if (result.subtype !== 'success') {
-    console.error(`Hunk analysis failed: ${result.subtype}`);
+    // Silently return empty - the SDK already handles error reporting
     return [];
   }
 
+  // Tier 1: Try regex-based extraction first (fast)
   const extracted = extractFindingsJson(result.result);
 
-  if (!extracted.success) {
-    const suffix = extracted.preview.length >= 200 ? '...' : '';
-    console.error(`${extracted.error}: ${extracted.preview}${suffix}`);
-    return [];
+  if (extracted.success) {
+    return validateFindings(extracted.findings, filename);
   }
 
-  // Validate findings using FindingSchema and ensure correct file path
-  return extracted.findings
-    .map((f) => {
-      // Ensure location has correct file path before validation
-      if (typeof f === 'object' && f !== null && 'location' in f) {
-        const obj = f as Record<string, unknown>;
-        if (obj['location'] && typeof obj['location'] === 'object') {
-          obj['location'] = { ...(obj['location'] as object), path: filename };
-        }
-      }
-      return f;
-    })
-    .filter((f): f is Finding => FindingSchema.safeParse(f).success)
-    .map((f) => ({
-      ...f,
-      // Ensure location has correct file path (in case location was missing before)
-      location: f.location ? { ...f.location, path: filename } : undefined,
-    }));
+  // Tier 2: Try LLM fallback for malformed output
+  const fallback = await extractFindingsWithLLM(result.result, apiKey);
+
+  if (fallback.success) {
+    return validateFindings(fallback.findings, filename);
+  }
+
+  // Both tiers failed - return empty findings silently
+  return [];
 }
 
 /**
@@ -346,7 +438,7 @@ async function analyzeHunk(
   repoPath: string,
   options: SkillRunnerOptions
 ): Promise<HunkAnalysisResult> {
-  const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
+  const { apiKey, maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(skill, hunkCtx);
@@ -382,14 +474,12 @@ async function analyzeHunk(
     }
 
     return {
-      findings: parseHunkOutput(resultMessage, hunkCtx.filename),
+      findings: await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey),
       usage: extractUsage(resultMessage),
     };
-  } catch (error) {
+  } catch {
     // Handle SDK errors (subprocess crashes, API errors, etc.) gracefully
     // so one failing hunk doesn't kill the entire run
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`Hunk analysis failed for ${hunkCtx.filename}: ${errorMessage}`);
     return { findings: [], usage: emptyUsage() };
   }
 }
