@@ -4,7 +4,14 @@ import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import type { SkillDefinition, ChunkingConfig } from '../config/schema.js';
 import { FindingSchema } from '../types/index.js';
-import type { EventContext, SkillReport, Finding, UsageStats, SkippedFile } from '../types/index.js';
+import type { EventContext, SkillReport, Finding, UsageStats, SkippedFile, RetryConfig } from '../types/index.js';
+import {
+  APIError,
+  RateLimitError,
+  InternalServerError,
+  APIConnectionError,
+  APIConnectionTimeoutError,
+} from '@anthropic-ai/sdk';
 import {
   parseFileDiff,
   expandDiffContext,
@@ -88,6 +95,64 @@ export function aggregateUsage(usages: UsageStats[]): UsageStats {
   );
 }
 
+/** Default retry configuration */
+const DEFAULT_RETRY_CONFIG: Required<RetryConfig> = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  backoffMultiplier: 2,
+  maxDelayMs: 30000,
+};
+
+/**
+ * Check if an error is retryable.
+ * Retries on: rate limits (429), server errors (5xx), connection errors, timeouts.
+ */
+export function isRetryableError(error: unknown): boolean {
+  if (error instanceof RateLimitError) return true;
+  if (error instanceof InternalServerError) return true;
+  if (error instanceof APIConnectionError) return true;
+  if (error instanceof APIConnectionTimeoutError) return true;
+
+  // Check for generic APIError with retryable status codes
+  if (error instanceof APIError) {
+    const status = error.status;
+    if (status === 429) return true;
+    if (status !== undefined && status >= 500 && status < 600) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Calculate delay for a retry attempt using exponential backoff.
+ */
+export function calculateRetryDelay(
+  attempt: number,
+  config: Required<RetryConfig>
+): number {
+  const delay = config.initialDelayMs * Math.pow(config.backoffMultiplier, attempt);
+  return Math.min(delay, config.maxDelayMs);
+}
+
+/**
+ * Sleep for a specified duration, respecting abort signal.
+ */
+async function sleep(ms: number, abortSignal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (abortSignal?.aborted) {
+      reject(new Error('Aborted'));
+      return;
+    }
+
+    const timeout = setTimeout(resolve, ms);
+
+    abortSignal?.addEventListener('abort', () => {
+      clearTimeout(timeout);
+      reject(new Error('Aborted'));
+    }, { once: true });
+  });
+}
+
 /**
  * Callbacks for progress reporting during skill execution.
  */
@@ -102,6 +167,8 @@ export interface SkillRunnerCallbacks {
   onLargePrompt?: (file: string, lineRange: string, chars: number, estimatedTokens: number) => void;
   /** Called with prompt size info in debug mode */
   onPromptSize?: (file: string, lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
+  /** Called when a retry attempt is made (verbose mode) */
+  onRetry?: (file: string, lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
 }
 
 export interface SkillRunnerOptions {
@@ -123,6 +190,10 @@ export interface SkillRunnerOptions {
   abortController?: AbortController;
   /** Path to Claude Code CLI executable. Required in CI environments. */
   pathToClaudeCodeExecutable?: string;
+  /** Retry configuration for transient API failures */
+  retry?: RetryConfig;
+  /** Enable verbose logging for retry attempts */
+  verbose?: boolean;
 }
 
 /**
@@ -504,10 +575,50 @@ interface HunkAnalysisCallbacks {
   lineRange: string;
   onLargePrompt?: (lineRange: string, chars: number, estimatedTokens: number) => void;
   onPromptSize?: (lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
+  onRetry?: (lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
 }
 
 /**
- * Analyze a single hunk.
+ * Execute a single SDK query attempt.
+ */
+async function executeQuery(
+  systemPrompt: string,
+  userPrompt: string,
+  repoPath: string,
+  options: SkillRunnerOptions
+): Promise<SDKResultMessage | undefined> {
+  const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
+
+  const stream = query({
+    prompt: userPrompt,
+    options: {
+      maxTurns,
+      cwd: repoPath,
+      systemPrompt,
+      // Only allow read-only tools - context is already provided in the prompt
+      allowedTools: ['Read', 'Grep'],
+      // Explicitly block modification/side-effect tools as defense-in-depth
+      disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
+      permissionMode: 'bypassPermissions',
+      model,
+      abortController,
+      pathToClaudeCodeExecutable,
+    },
+  });
+
+  let resultMessage: SDKResultMessage | undefined;
+
+  for await (const message of stream) {
+    if (message.type === 'result') {
+      resultMessage = message;
+    }
+  }
+
+  return resultMessage;
+}
+
+/**
+ * Analyze a single hunk with retry logic for transient failures.
  */
 async function analyzeHunk(
   skill: SkillDefinition,
@@ -516,7 +627,7 @@ async function analyzeHunk(
   options: SkillRunnerOptions,
   callbacks?: HunkAnalysisCallbacks
 ): Promise<HunkAnalysisResult> {
-  const { apiKey, maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
+  const { apiKey, abortController, retry } = options;
 
   const systemPrompt = buildHunkSystemPrompt(skill);
   const userPrompt = buildHunkUserPrompt(skill, hunkCtx);
@@ -535,46 +646,76 @@ async function analyzeHunk(
     callbacks?.onLargePrompt?.(callbacks.lineRange, totalChars, estimatedTokens);
   }
 
-  try {
-    const stream = query({
-      prompt: userPrompt,
-      options: {
-        maxTurns,
-        cwd: repoPath,
-        systemPrompt,
-        // Only allow read-only tools - context is already provided in the prompt
-        allowedTools: ['Read', 'Grep'],
-        // Explicitly block modification/side-effect tools as defense-in-depth
-        disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
-        permissionMode: 'bypassPermissions',
-        model,
-        abortController,
-        pathToClaudeCodeExecutable,
-      },
-    });
+  // Merge retry config with defaults
+  const retryConfig: Required<RetryConfig> = {
+    ...DEFAULT_RETRY_CONFIG,
+    ...retry,
+  };
 
-    let resultMessage: SDKResultMessage | undefined;
+  let lastError: unknown;
 
-    for await (const message of stream) {
-      if (message.type === 'result') {
-        resultMessage = message;
-      }
-    }
-
-    if (!resultMessage) {
+  for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    // Check for abort before each attempt
+    if (abortController?.signal.aborted) {
       return { findings: [], usage: emptyUsage(), failed: true };
     }
 
-    return {
-      findings: await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey),
-      usage: extractUsage(resultMessage),
-      failed: false,
-    };
-  } catch {
-    // Handle SDK errors (subprocess crashes, API errors, etc.) gracefully
-    // so one failing hunk doesn't kill the entire run
-    return { findings: [], usage: emptyUsage(), failed: true };
+    try {
+      const resultMessage = await executeQuery(systemPrompt, userPrompt, repoPath, options);
+
+      if (!resultMessage) {
+        return { findings: [], usage: emptyUsage(), failed: true };
+      }
+
+      return {
+        findings: await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey),
+        usage: extractUsage(resultMessage),
+        failed: false,
+      };
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry if not a retryable error or we've exhausted retries
+      if (!isRetryableError(error) || attempt >= retryConfig.maxRetries) {
+        break;
+      }
+
+      // Calculate delay and wait before retry
+      const delayMs = calculateRetryDelay(attempt, retryConfig);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Notify about retry in verbose mode
+      callbacks?.onRetry?.(
+        callbacks.lineRange,
+        attempt + 1,
+        retryConfig.maxRetries,
+        errorMessage,
+        delayMs
+      );
+
+      try {
+        await sleep(delayMs, abortController?.signal);
+      } catch {
+        // Aborted during sleep
+        return { findings: [], usage: emptyUsage(), failed: true };
+      }
+    }
   }
+
+  // All attempts failed - return failure
+  // Log the final error for debugging if verbose
+  if (options.verbose && lastError) {
+    const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+    callbacks?.onRetry?.(
+      callbacks.lineRange,
+      retryConfig.maxRetries + 1,
+      retryConfig.maxRetries,
+      `Final failure: ${errorMessage}`,
+      0
+    );
+  }
+
+  return { findings: [], usage: emptyUsage(), failed: true };
 }
 
 /**
@@ -727,6 +868,8 @@ export interface FileAnalysisCallbacks {
   onLargePrompt?: (lineRange: string, chars: number, estimatedTokens: number) => void;
   /** Called with prompt size info in debug mode */
   onPromptSize?: (lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
+  /** Called when a retry attempt is made (verbose mode) */
+  onRetry?: (lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
 }
 
 /**
@@ -766,6 +909,7 @@ export async function analyzeFile(
           lineRange,
           onLargePrompt: callbacks.onLargePrompt,
           onPromptSize: callbacks.onPromptSize,
+          onRetry: callbacks.onRetry,
         }
       : undefined;
 
@@ -862,6 +1006,11 @@ export async function runSkill(
       onPromptSize: callbacks?.onPromptSize
         ? (lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
             callbacks.onPromptSize?.(filename, lineRange, systemChars, userChars, totalChars, estimatedTokens);
+          }
+        : undefined,
+      onRetry: callbacks?.onRetry
+        ? (lineRange, attempt, maxRetries, error, delayMs) => {
+            callbacks.onRetry?.(filename, lineRange, attempt, maxRetries, error, delayMs);
           }
         : undefined,
     };

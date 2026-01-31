@@ -9,7 +9,18 @@ import {
   truncateForLLMFallback,
   buildSystemPrompt,
   estimateTokens,
+  isRetryableError,
+  calculateRetryDelay,
 } from './runner.js';
+import {
+  APIError,
+  RateLimitError,
+  InternalServerError,
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  BadRequestError,
+  AuthenticationError,
+} from '@anthropic-ai/sdk';
 import type { SkillDefinition } from '../config/schema.js';
 
 describe('extractBalancedJson', () => {
@@ -496,5 +507,135 @@ describe('estimateTokens', () => {
   it('handles large character counts', () => {
     expect(estimateTokens(100000)).toBe(25000);
     expect(estimateTokens(400000)).toBe(100000);
+  });
+});
+
+describe('isRetryableError', () => {
+  it('returns true for RateLimitError', () => {
+    const error = new RateLimitError(429, { message: 'Rate limited' }, 'Rate limited', new Headers());
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for InternalServerError', () => {
+    const error = new InternalServerError(500, { message: 'Server error' }, 'Server error', new Headers());
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for APIConnectionError', () => {
+    const error = new APIConnectionError({ message: 'Connection failed' });
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for APIConnectionTimeoutError', () => {
+    const error = new APIConnectionTimeoutError({ message: 'Timeout' });
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for generic APIError with 429 status', () => {
+    const error = new APIError(429, { message: 'Too many requests' }, 'Too many requests', new Headers());
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for generic APIError with 500 status', () => {
+    const error = new APIError(500, { message: 'Internal error' }, 'Internal error', new Headers());
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for generic APIError with 502 status', () => {
+    const error = new APIError(502, { message: 'Bad gateway' }, 'Bad gateway', new Headers());
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for generic APIError with 503 status', () => {
+    const error = new APIError(503, { message: 'Service unavailable' }, 'Service unavailable', new Headers());
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns true for generic APIError with 504 status', () => {
+    const error = new APIError(504, { message: 'Gateway timeout' }, 'Gateway timeout', new Headers());
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it('returns false for BadRequestError', () => {
+    const error = new BadRequestError(400, { message: 'Bad request' }, 'Bad request', new Headers());
+    expect(isRetryableError(error)).toBe(false);
+  });
+
+  it('returns false for AuthenticationError', () => {
+    const error = new AuthenticationError(401, { message: 'Unauthorized' }, 'Unauthorized', new Headers());
+    expect(isRetryableError(error)).toBe(false);
+  });
+
+  it('returns false for generic APIError with 400 status', () => {
+    const error = new APIError(400, { message: 'Bad request' }, 'Bad request', new Headers());
+    expect(isRetryableError(error)).toBe(false);
+  });
+
+  it('returns false for regular Error', () => {
+    const error = new Error('Some error');
+    expect(isRetryableError(error)).toBe(false);
+  });
+
+  it('returns false for string error', () => {
+    expect(isRetryableError('error string')).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isRetryableError(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isRetryableError(undefined)).toBe(false);
+  });
+});
+
+describe('calculateRetryDelay', () => {
+  const defaultConfig = {
+    maxRetries: 3,
+    initialDelayMs: 1000,
+    backoffMultiplier: 2,
+    maxDelayMs: 30000,
+  };
+
+  it('returns initial delay for first attempt (attempt 0)', () => {
+    expect(calculateRetryDelay(0, defaultConfig)).toBe(1000);
+  });
+
+  it('doubles delay for second attempt (attempt 1)', () => {
+    expect(calculateRetryDelay(1, defaultConfig)).toBe(2000);
+  });
+
+  it('quadruples delay for third attempt (attempt 2)', () => {
+    expect(calculateRetryDelay(2, defaultConfig)).toBe(4000);
+  });
+
+  it('continues exponential growth for more attempts', () => {
+    expect(calculateRetryDelay(3, defaultConfig)).toBe(8000);
+    expect(calculateRetryDelay(4, defaultConfig)).toBe(16000);
+  });
+
+  it('caps delay at maxDelayMs', () => {
+    expect(calculateRetryDelay(5, defaultConfig)).toBe(30000);
+    expect(calculateRetryDelay(10, defaultConfig)).toBe(30000);
+  });
+
+  it('respects custom initialDelayMs', () => {
+    const config = { ...defaultConfig, initialDelayMs: 500 };
+    expect(calculateRetryDelay(0, config)).toBe(500);
+    expect(calculateRetryDelay(1, config)).toBe(1000);
+    expect(calculateRetryDelay(2, config)).toBe(2000);
+  });
+
+  it('respects custom backoffMultiplier', () => {
+    const config = { ...defaultConfig, backoffMultiplier: 3 };
+    expect(calculateRetryDelay(0, config)).toBe(1000);
+    expect(calculateRetryDelay(1, config)).toBe(3000);
+    expect(calculateRetryDelay(2, config)).toBe(9000);
+  });
+
+  it('respects custom maxDelayMs', () => {
+    const config = { ...defaultConfig, maxDelayMs: 5000 };
+    expect(calculateRetryDelay(2, config)).toBe(4000);
+    expect(calculateRetryDelay(3, config)).toBe(5000);
   });
 });

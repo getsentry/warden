@@ -179,3 +179,16 @@ export const EventContextSchema = z.object({
   repoPath: z.string(),
 });
 export type EventContext = z.infer<typeof EventContextSchema>;
+
+// Retry configuration for SDK calls
+export const RetryConfigSchema = z.object({
+  /** Maximum number of retry attempts (default: 3) */
+  maxRetries: z.number().int().nonnegative().default(3),
+  /** Initial delay in milliseconds before first retry (default: 1000) */
+  initialDelayMs: z.number().int().positive().default(1000),
+  /** Multiplier for exponential backoff (default: 2) */
+  backoffMultiplier: z.number().positive().default(2),
+  /** Maximum delay in milliseconds between retries (default: 30000) */
+  maxDelayMs: z.number().int().positive().default(30000),
+});
+export type RetryConfig = z.infer<typeof RetryConfigSchema>;
