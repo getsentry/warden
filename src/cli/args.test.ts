@@ -254,6 +254,47 @@ describe('parseCliArgs', () => {
     expect(result.command).toBe('setup-app');
     expect(result.setupAppOptions?.open).toBe(false);
   });
+
+  it('parses add command with --repo flag', () => {
+    const result = parseCliArgs(['add', '--repo', 'getsentry/skills', '--skill', 'security-review']);
+    expect(result.command).toBe('add');
+    expect(result.options.repo).toBe('getsentry/skills');
+    expect(result.options.skill).toBe('security-review');
+  });
+
+  it('parses add command with pinned --repo', () => {
+    const result = parseCliArgs(['add', '--repo', 'getsentry/skills@abc123', '--skill', 'security-review']);
+    expect(result.command).toBe('add');
+    expect(result.options.repo).toBe('getsentry/skills@abc123');
+  });
+
+  it('parses add command with --repo and --list', () => {
+    const result = parseCliArgs(['add', '--repo', 'getsentry/skills', '--list']);
+    expect(result.command).toBe('add');
+    expect(result.options.repo).toBe('getsentry/skills');
+    expect(result.options.list).toBe(true);
+  });
+
+  it('parses --offline flag', () => {
+    const result = parseCliArgs(['--offline']);
+    expect(result.options.offline).toBe(true);
+  });
+
+  it('defaults offline to false', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.offline).toBe(false);
+  });
+
+  it('parses sync command', () => {
+    const result = parseCliArgs(['sync']);
+    expect(result.command).toBe('sync');
+  });
+
+  it('parses sync command with repo argument', () => {
+    const result = parseCliArgs(['sync', 'getsentry/skills']);
+    expect(result.command).toBe('sync');
+    expect(result.options.repo).toBe('getsentry/skills');
+  });
 });
 
 describe('CLIOptionsSchema', () => {

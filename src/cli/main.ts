@@ -32,6 +32,7 @@ import {
 import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
 import { runSetupApp } from './commands/setup-app.js';
+import { runSync } from './commands/sync.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -251,7 +252,10 @@ async function runSkills(
   const tasks: SkillTaskOptions[] = skillNames.map((skillName) => ({
     name: skillName,
     failOn: options.failOn,
-    resolveSkill: () => resolveSkillAsync(skillName, repoPath, skillsConfig),
+    resolveSkill: () => resolveSkillAsync(skillName, repoPath, {
+      inlineSkills: skillsConfig,
+      offline: options.offline,
+    }),
     context,
     runnerOptions,
   }));
@@ -487,7 +491,11 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     name: trigger.name,
     displayName: trigger.skill,
     failOn: trigger.output.failOn ?? options.failOn,
-    resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, config.skills),
+    resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, {
+      inlineSkills: config.skills,
+      remote: trigger.remote,
+      offline: options.offline,
+    }),
     context,
     runnerOptions: {
       apiKey,
@@ -648,6 +656,8 @@ export async function main(): Promise<void> {
       process.exit(1);
     }
     exitCode = await runSetupApp(setupAppOptions, reporter);
+  } else if (command === 'sync') {
+    exitCode = await runSync(options, reporter);
   } else {
     exitCode = await runCommand(options, reporter);
   }
