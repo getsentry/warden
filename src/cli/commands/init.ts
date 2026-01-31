@@ -23,12 +23,17 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: getsentry/warden@main
+      - uses: getsentry/warden@v1
         with:
           anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
 `;
