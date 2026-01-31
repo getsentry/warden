@@ -193,28 +193,14 @@ Focus on issues in the changed code. For each issue found, report:
 
   <h3>Frontmatter Fields</h3>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>name</code></td>
-        <td>Skill identifier (referenced in triggers and CLI)</td>
-      </tr>
-      <tr>
-        <td><code>description</code></td>
-        <td>Brief description of what the skill does</td>
-      </tr>
-      <tr>
-        <td><code>allowed-tools</code></td>
-        <td>Space-separated list of tools the skill can use</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>name</dt>
+    <dd>Skill identifier (referenced in triggers and CLI)</dd>
+    <dt>description</dt>
+    <dd>Brief description of what the skill does</dd>
+    <dt>allowed-tools</dt>
+    <dd>Space-separated list of tools the skill can use</dd>
+  </dl>
 
   <h3>Available Tools</h3>
 
@@ -373,24 +359,12 @@ commentOn = "medium" # Post comments for medium and above`}
 
   <p>Add these to your organization secrets:</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Secret</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>WARDEN_APP_ID</code></td>
-        <td>App ID from the setup command output</td>
-      </tr>
-      <tr>
-        <td><code>WARDEN_PRIVATE_KEY</code></td>
-        <td>Private key (full PEM contents)</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>WARDEN_APP_ID</dt>
+    <dd>App ID from the setup command output</dd>
+    <dt>WARDEN_PRIVATE_KEY</dt>
+    <dd>Private key (full PEM contents)</dd>
+  </dl>
 
   <h3>Update Workflow</h3>
 

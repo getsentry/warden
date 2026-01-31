@@ -49,13 +49,35 @@ warden init --force    # Overwrite existing files`}
     <p>Add a skill trigger to your configuration. Run without arguments for interactive mode.</p>
     <ul>
       <li><code>skill-name</code>  - Name of the skill to add (optional, interactive if omitted)</li>
+      <li><code>--repo &lt;owner/repo[@sha]&gt;</code>  - Install skill from a GitHub repository</li>
       <li><code>--list</code>  - List available skills</li>
     </ul>
     <Terminal>
       <Code
         code={`warden add                     # Interactive mode
-warden add security-review     # Add specific skill
-warden add --list              # List available skills`}
+warden add security-review     # Add local skill
+warden add --list              # List available skills
+
+# Remote skills from GitHub repositories
+warden add --repo getsentry/warden-skills --skill security-review
+warden add --repo getsentry/warden-skills@abc123 --skill api-review  # Pinned to commit`}
+        lang="bash"
+        theme="vitesse-black"
+      />
+    </Terminal>
+  </div>
+
+  <div class="command-card">
+    <h3>warden sync</h3>
+    <div class="synopsis">warden sync [remote]</div>
+    <p>Update cached remote skills. Refreshes unpinned skills to their latest versions.</p>
+    <ul>
+      <li><code>remote</code>  - Specific remote to sync (e.g., <code>owner/repo</code>). If omitted, syncs all.</li>
+    </ul>
+    <Terminal>
+      <Code
+        code={`warden sync                    # Update all remote skills
+warden sync getsentry/warden-skills  # Update specific remote`}
         lang="bash"
         theme="vitesse-black"
       />
@@ -85,7 +107,7 @@ warden setup-app --org my-org  # For an organization`}
 
   <h2>Global Options</h2>
   <ul>
-    <li><code>--skill &lt;name&gt;</code>  - Run a specific skill instead of using triggers from config</li>
+    <li><code>--skill &lt;name-or-path&gt;</code>  - Run a specific skill by name or path (see <a href="#skill-references">Skill References</a>)</li>
     <li><code>--fix</code>  - Automatically apply suggested fixes</li>
     <li><code>--json</code>  - Output results as JSON</li>
     <li><code>--fail-on &lt;level&gt;</code>  - Exit with error code if findings meet severity: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code></li>
@@ -98,23 +120,46 @@ warden setup-app --org my-org  # For an organization`}
     <li><code>--quiet</code>  - Errors and final summary only</li>
     <li><code>-vv</code>  - Show debug info (token counts, latencies)</li>
     <li><code>--color / --no-color</code>  - Override color detection</li>
+    <li><code>--offline</code>  - Use cached remote skills only, skip network fetches</li>
     <li><code>--help</code>  - Show help message</li>
     <li><code>--version</code>  - Show version number</li>
   </ul>
 
+  <h2 id="skill-references">Skill References</h2>
+
+  <p>The <code>--skill</code> option accepts multiple formats:</p>
+
+  <Terminal>
+    <Code
+      code={`# By name (resolved from .warden/skills/, .agents/skills/, .claude/skills/)
+warden --skill security-review
+
+# Relative path
+warden --skill ./skills/custom-review
+
+# Absolute path
+warden --skill /shared/skills/company-review
+
+# Home directory expansion
+warden --skill ~/my-skills/security`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>Resolution order:</p>
+  <ol>
+    <li>Remote repository (if <code>remote</code> is specified in trigger config)</li>
+    <li>Direct path (if contains <code>/</code>, <code>\</code>, or starts with <code>.</code>)</li>
+    <li>Conventional directories: <code>.warden/skills/</code>, <code>.agents/skills/</code>, <code>.claude/skills/</code></li>
+  </ol>
+
   <h2>Environment Variables</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Variable</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>WARDEN_ANTHROPIC_API_KEY</code></td>
-        <td>Your Anthropic API key (required)</td>
-      </tr>
-    </tbody>
-  </table>
+
+  <dl>
+    <dt>WARDEN_ANTHROPIC_API_KEY</dt>
+    <dd>Your Anthropic API key (required)</dd>
+    <dt>WARDEN_SKILL_CACHE_TTL</dt>
+    <dd>Cache duration for unpinned remote skills. Default: 24h</dd>
+  </dl>
 </Base>

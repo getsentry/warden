@@ -27,92 +27,46 @@ skill = "security-review"`}
 
   <p>Triggers map GitHub events to skills.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>name</code></td>
-        <td>Display name</td>
-      </tr>
-      <tr>
-        <td><code>event</code></td>
-        <td><code>pull_request</code>, <code>issues</code>, <code>issue_comment</code>, <code>schedule</code></td>
-      </tr>
-      <tr>
-        <td><code>actions</code></td>
-        <td>Event actions (required except for <code>schedule</code>)</td>
-      </tr>
-      <tr>
-        <td><code>skill</code></td>
-        <td>Skill to run</td>
-      </tr>
-      <tr>
-        <td><code>model</code></td>
-        <td>Model override (optional)</td>
-      </tr>
-      <tr>
-        <td><code>maxTurns</code></td>
-        <td>Max agentic turns per hunk (optional)</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>name</dt>
+    <dd>Display name</dd>
+    <dt>event</dt>
+    <dd><code>pull_request</code>, <code>issues</code>, <code>issue_comment</code>, <code>schedule</code></dd>
+    <dt>actions</dt>
+    <dd>Event actions (required except for <code>schedule</code>)</dd>
+    <dt>skill</dt>
+    <dd>Skill name or path to run (see <a href="#skill-references">Skill References</a>)</dd>
+    <dt>remote</dt>
+    <dd>GitHub repository for remote skills: <code>owner/repo</code> or <code>owner/repo@sha</code></dd>
+    <dt>model</dt>
+    <dd>Model override (optional)</dd>
+    <dt>maxTurns</dt>
+    <dd>Max agentic turns per hunk (optional)</dd>
+  </dl>
 
   <h3>Pull Request Actions</h3>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Action</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>opened</code></td>
-        <td>PR created</td>
-      </tr>
-      <tr>
-        <td><code>synchronize</code></td>
-        <td>New commits pushed</td>
-      </tr>
-      <tr>
-        <td><code>reopened</code></td>
-        <td>PR reopened</td>
-      </tr>
-      <tr>
-        <td><code>closed</code></td>
-        <td>PR closed or merged</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>opened</dt>
+    <dd>PR created</dd>
+    <dt>synchronize</dt>
+    <dd>New commits pushed</dd>
+    <dt>reopened</dt>
+    <dd>PR reopened</dd>
+    <dt>closed</dt>
+    <dd>PR closed or merged</dd>
+  </dl>
 
   <h2>Filters</h2>
 
   <p>Control which files are analyzed using glob patterns.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>paths</code></td>
-        <td>Files to include</td>
-      </tr>
-      <tr>
-        <td><code>ignorePaths</code></td>
-        <td>Files to exclude</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>paths</dt>
+    <dd>Files to include</dd>
+    <dt>ignorePaths</dt>
+    <dd>Files to exclude</dd>
+  </dl>
 
   <Terminal showCopy={true}>
     <Code
@@ -134,32 +88,16 @@ ignorePaths = ["**/*.test.ts"]`}
 
   <p>Control how findings are reported.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>failOn</code></td>
-        <td>Minimum severity to fail: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>, <code>info</code>, <code>off</code></td>
-      </tr>
-      <tr>
-        <td><code>commentOn</code></td>
-        <td>Minimum severity to post as comment</td>
-      </tr>
-      <tr>
-        <td><code>maxFindings</code></td>
-        <td>Maximum findings to report</td>
-      </tr>
-      <tr>
-        <td><code>commentOnSuccess</code></td>
-        <td>Post comment when no findings (default: <code>false</code>)</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>failOn</dt>
+    <dd>Minimum severity to fail: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>, <code>info</code>, <code>off</code></dd>
+    <dt>commentOn</dt>
+    <dd>Minimum severity to post as comment</dd>
+    <dt>maxFindings</dt>
+    <dd>Maximum findings to report</dd>
+    <dt>commentOnSuccess</dt>
+    <dd>Post comment when no findings. Default: <code>false</code></dd>
+  </dl>
 
   <Terminal showCopy={true}>
     <Code
@@ -176,40 +114,20 @@ maxFindings = 20`}
 
   <p>Default settings inherited by all triggers. Individual triggers can override any setting.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>model</code></td>
-        <td>Model for all triggers</td>
-      </tr>
-      <tr>
-        <td><code>maxTurns</code></td>
-        <td>Max agentic turns per hunk (default: 50)</td>
-      </tr>
-      <tr>
-        <td><code>defaultBranch</code></td>
-        <td>Repository default branch (auto-detected)</td>
-      </tr>
-      <tr>
-        <td><code>filters</code></td>
-        <td>Default path filters</td>
-      </tr>
-      <tr>
-        <td><code>output</code></td>
-        <td>Default output settings</td>
-      </tr>
-      <tr>
-        <td><code>chunking</code></td>
-        <td>File processing configuration</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>model</dt>
+    <dd>Model for all triggers</dd>
+    <dt>maxTurns</dt>
+    <dd>Max agentic turns per hunk. Default: 50</dd>
+    <dt>defaultBranch</dt>
+    <dd>Repository default branch (auto-detected)</dd>
+    <dt>filters</dt>
+    <dd>Default path filters</dd>
+    <dt>output</dt>
+    <dd>Default output settings</dd>
+    <dt>chunking</dt>
+    <dd>File processing configuration</dd>
+  </dl>
 
   <Terminal showCopy={true}>
     <Code
@@ -234,59 +152,27 @@ commentOn = "medium"`}
 
   <h3>File Patterns</h3>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Mode</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>per-hunk</code></td>
-        <td>Analyze each diff hunk separately (default)</td>
-      </tr>
-      <tr>
-        <td><code>whole-file</code></td>
-        <td>Analyze entire file as one chunk</td>
-      </tr>
-      <tr>
-        <td><code>skip</code></td>
-        <td>Skip the file entirely</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>per-hunk</dt>
+    <dd>Analyze each diff hunk separately (default)</dd>
+    <dt>whole-file</dt>
+    <dd>Analyze entire file as one chunk</dd>
+    <dt>skip</dt>
+    <dd>Skip the file entirely</dd>
+  </dl>
 
   <h3>Coalescing</h3>
 
   <p>Merge nearby hunks for better context.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Default</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>enabled</code></td>
-        <td><code>true</code></td>
-        <td>Enable hunk coalescing</td>
-      </tr>
-      <tr>
-        <td><code>maxGapLines</code></td>
-        <td>30</td>
-        <td>Max lines between hunks to merge</td>
-      </tr>
-      <tr>
-        <td><code>maxChunkSize</code></td>
-        <td>8000</td>
-        <td>Target max chunk size in characters</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>enabled</dt>
+    <dd>Enable hunk coalescing. Default: <code>true</code></dd>
+    <dt>maxGapLines</dt>
+    <dd>Max lines between hunks to merge. Default: 30</dd>
+    <dt>maxChunkSize</dt>
+    <dd>Target max chunk size in characters. Default: 8000</dd>
+  </dl>
 
   <Terminal showCopy={true}>
     <Code
@@ -313,32 +199,14 @@ maxChunkSize = 10000`}
 
   <p>Run on a cron schedule instead of PR events. Requires <code>filters.paths</code> to specify which files to scan.</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Default</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>issueTitle</code></td>
-        <td>"Warden: {'{name}'}"</td>
-        <td>Title for the tracking issue</td>
-      </tr>
-      <tr>
-        <td><code>createFixPR</code></td>
-        <td><code>false</code></td>
-        <td>Create PR with fixes when available</td>
-      </tr>
-      <tr>
-        <td><code>fixBranchPrefix</code></td>
-        <td><code>warden-fix</code></td>
-        <td>Branch prefix for fix PRs</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>issueTitle</dt>
+    <dd>Title for the tracking issue. Default: "Warden: {'{name}'}"</dd>
+    <dt>createFixPR</dt>
+    <dd>Create PR with fixes when available. Default: <code>false</code></dd>
+    <dt>fixBranchPrefix</dt>
+    <dd>Branch prefix for fix PRs. Default: <code>warden-fix</code></dd>
+  </dl>
 
   <Terminal showCopy={true}>
     <Code
@@ -359,24 +227,54 @@ createFixPR = true`}
 
   <h2>Environment Variables</h2>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Variable</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>WARDEN_ANTHROPIC_API_KEY</code></td>
-        <td>Anthropic API key (required)</td>
-      </tr>
-      <tr>
-        <td><code>WARDEN_MODEL</code></td>
-        <td>Model override</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>WARDEN_ANTHROPIC_API_KEY</dt>
+    <dd>Anthropic API key (required)</dd>
+    <dt>WARDEN_MODEL</dt>
+    <dd>Model override</dd>
+    <dt>WARDEN_SKILL_CACHE_TTL</dt>
+    <dd>Cache duration for unpinned remote skills. Default: 24h</dd>
+  </dl>
+
+  <h2 id="skill-references">Skill References</h2>
+
+  <p>Skills can be referenced in multiple ways:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`# By name (resolved from .warden/skills/, .agents/skills/, .claude/skills/)
+[[triggers]]
+skill = "security-review"
+
+# By relative path
+[[triggers]]
+skill = "./custom-skills/my-review"
+
+# By absolute path
+[[triggers]]
+skill = "/shared/skills/company-review"
+
+# Remote skill (unpinned - checks for updates every 24h)
+[[triggers]]
+skill = "security-review"
+remote = "getsentry/warden-skills"
+
+# Remote skill (pinned to commit - cached permanently)
+[[triggers]]
+skill = "security-review"
+remote = "getsentry/warden-skills@abc123def"`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h3>Resolution Order</h3>
+
+  <ol>
+    <li>Remote repository (if <code>remote</code> field is specified)</li>
+    <li>Direct path (if skill contains <code>/</code>, <code>\</code>, or starts with <code>.</code>)</li>
+    <li>Conventional directories (first match wins)</li>
+  </ol>
 
   <h2>Skills</h2>
 
@@ -386,28 +284,14 @@ createFixPR = true`}
 
   <p>Warden discovers skills from these directories (first match wins):</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Directory</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>.warden/skills/</code></td>
-        <td>Warden-specific skills (highest priority)</td>
-      </tr>
-      <tr>
-        <td><code>.agents/skills/</code></td>
-        <td>Shared agent skills</td>
-      </tr>
-      <tr>
-        <td><code>.claude/skills/</code></td>
-        <td>Claude Code skills</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>.warden/skills/</dt>
+    <dd>Warden-specific skills (highest priority)</dd>
+    <dt>.agents/skills/</dt>
+    <dd>Shared agent skills</dd>
+    <dt>.claude/skills/</dt>
+    <dd>Claude Code skills</dd>
+  </dl>
 
   <h3>SKILL.md Format</h3>
 
@@ -443,28 +327,14 @@ Review the code for security issues including:
     />
   </Terminal>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>name</code></td>
-        <td>Skill name (referenced by triggers)</td>
-      </tr>
-      <tr>
-        <td><code>description</code></td>
-        <td>Brief description</td>
-      </tr>
-      <tr>
-        <td><code>allowed-tools</code></td>
-        <td>Space-separated tool names (optional)</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>name</dt>
+    <dd>Skill name (referenced by triggers)</dd>
+    <dt>description</dt>
+    <dd>Brief description</dd>
+    <dt>allowed-tools</dt>
+    <dd>Space-separated tool names (optional)</dd>
+  </dl>
 
   <h3>Available Tools</h3>
 
@@ -513,34 +383,16 @@ jobs:
 
   <h3>Action Inputs</h3>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Input</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>github-token</code></td>
-        <td>GitHub token for posting comments (default: <code>GITHUB_TOKEN</code>)</td>
-      </tr>
-      <tr>
-        <td><code>anthropic-api-key</code></td>
-        <td>Anthropic API key (falls back to <code>WARDEN_ANTHROPIC_API_KEY</code>)</td>
-      </tr>
-      <tr>
-        <td><code>config-path</code></td>
-        <td>Path to config file (default: <code>warden.toml</code>)</td>
-      </tr>
-      <tr>
-        <td><code>fail-on</code></td>
-        <td>Minimum severity to fail the check</td>
-      </tr>
-      <tr>
-        <td><code>comment-on</code></td>
-        <td>Minimum severity to post comments</td>
-      </tr>
-    </tbody>
-  </table>
+  <dl>
+    <dt>github-token</dt>
+    <dd>GitHub token for posting comments. Default: <code>GITHUB_TOKEN</code></dd>
+    <dt>anthropic-api-key</dt>
+    <dd>Anthropic API key (falls back to <code>WARDEN_ANTHROPIC_API_KEY</code>)</dd>
+    <dt>config-path</dt>
+    <dd>Path to config file. Default: <code>warden.toml</code></dd>
+    <dt>fail-on</dt>
+    <dd>Minimum severity to fail the check</dd>
+    <dt>comment-on</dt>
+    <dd>Minimum severity to post comments</dd>
+  </dl>
 </Base>

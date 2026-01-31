@@ -247,9 +247,11 @@ dl {
 }
 
 dt {
-  font-weight: 600;
-  color: var(--text);
-  margin-top: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #c084fc;
+  margin-top: 0.75rem;
 }
 
 dt:first-child {
@@ -258,10 +260,9 @@ dt:first-child {
 
 dd {
   color: var(--text-secondary);
-  margin-left: 0;
-  margin-top: 0.25rem;
-  padding-left: 1rem;
-  border-left: 2px solid var(--border);
+  margin: 0.25rem 0 0 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
 }
 
 /* Blockquotes */
