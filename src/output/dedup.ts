@@ -150,10 +150,15 @@ export function parseWardenSkills(body: string): string[] {
 /**
  * Update a Warden comment body to add a new skill to the attribution.
  * Changes "<sub>warden: skill1</sub>" to "<sub>warden: skill1, skill2</sub>"
- * Returns null if skill is already listed.
+ * Returns null if skill is already listed or if no <sub>warden:...</sub> tag exists.
  */
 export function updateWardenCommentBody(body: string, newSkill: string): string | null {
   const existingSkills = parseWardenSkills(body);
+
+  // If no existing <sub>warden:...</sub> tag exists, we can't update it
+  if (existingSkills.length === 0) {
+    return null;
+  }
 
   // Don't update if skill already listed
   if (existingSkills.includes(newSkill)) {
@@ -161,7 +166,8 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
   }
 
   const allSkills = [...existingSkills, newSkill].join(', ');
-  return body.replace(/<sub>warden:\s*[^<]+<\/sub>/, `<sub>warden: ${allSkills}</sub>`);
+  // Use a replacer function to avoid special $ character interpretation in skill names
+  return body.replace(/<sub>warden:\s*[^<]+<\/sub>/, () => `<sub>warden: ${allSkills}</sub>`);
 }
 
 /** GraphQL response structure for review threads */
@@ -471,6 +477,8 @@ export async function processDuplicateActions(
         // Only update if body actually changed (skill wasn't already listed)
         if (newBody) {
           await updateWardenComment(octokit, owner, repo, action.existingComment.id, newBody);
+          // Update in-memory body so subsequent triggers see the updated content
+          action.existingComment.body = newBody;
           updated++;
         } else {
           skipped++;
