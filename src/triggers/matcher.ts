@@ -2,7 +2,10 @@ import type { Trigger } from '../config/schema.js';
 import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, Severity, SeverityThreshold, SkillReport } from '../types/index.js';
 
-/** Cache for compiled glob patterns */
+/** Maximum number of patterns to cache (LRU eviction when exceeded) */
+const GLOB_CACHE_MAX_SIZE = 1000;
+
+/** Cache for compiled glob patterns with LRU eviction */
 const globCache = new Map<string, RegExp>();
 
 /** Clear the glob cache (useful for testing) */
@@ -10,12 +13,20 @@ export function clearGlobCache(): void {
   globCache.clear();
 }
 
+/** Get current cache size (useful for testing) */
+export function getGlobCacheSize(): number {
+  return globCache.size;
+}
+
 /**
- * Convert a glob pattern to a regex (cached).
+ * Convert a glob pattern to a regex (cached with LRU eviction).
  */
 function globToRegex(pattern: string): RegExp {
   const cached = globCache.get(pattern);
   if (cached) {
+    // Move to end for LRU ordering (delete and re-add)
+    globCache.delete(pattern);
+    globCache.set(pattern, cached);
     return cached;
   }
 
@@ -38,6 +49,15 @@ function globToRegex(pattern: string): RegExp {
     .replace(/\0QUESTION\0/g, '[^/]');            // ? matches single char except /
 
   const regex = new RegExp(`^${regexPattern}$`);
+
+  // Evict oldest entry if cache is full
+  if (globCache.size >= GLOB_CACHE_MAX_SIZE) {
+    const oldestKey = globCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      globCache.delete(oldestKey);
+    }
+  }
+
   globCache.set(pattern, regex);
   return regex;
 }

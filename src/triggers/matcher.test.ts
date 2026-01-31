@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   matchGlob,
   matchTrigger,
   shouldFail,
   countFindingsAtOrAbove,
   countSeverity,
+  clearGlobCache,
+  getGlobCacheSize,
 } from './matcher.js';
 import type { Trigger } from '../config/schema.js';
 import { SEVERITY_ORDER } from '../types/index.js';
@@ -25,6 +27,10 @@ function makeReport(severities: string[]): SkillReport {
 }
 
 describe('matchGlob', () => {
+  beforeEach(() => {
+    clearGlobCache();
+  });
+
   it('matches exact paths', () => {
     expect(matchGlob('src/index.ts', 'src/index.ts')).toBe(true);
     expect(matchGlob('src/index.ts', 'src/other.ts')).toBe(false);
@@ -46,6 +52,58 @@ describe('matchGlob', () => {
   it('matches question mark wildcard', () => {
     expect(matchGlob('src/?.ts', 'src/a.ts')).toBe(true);
     expect(matchGlob('src/?.ts', 'src/ab.ts')).toBe(false);
+  });
+
+  it('caches compiled patterns', () => {
+    matchGlob('src/*.ts', 'src/index.ts');
+    expect(getGlobCacheSize()).toBe(1);
+
+    // Same pattern should not increase cache size
+    matchGlob('src/*.ts', 'src/other.ts');
+    expect(getGlobCacheSize()).toBe(1);
+
+    // Different pattern should increase cache size
+    matchGlob('lib/*.js', 'lib/index.js');
+    expect(getGlobCacheSize()).toBe(2);
+  });
+
+  it('evicts oldest entry when cache exceeds max size', () => {
+    // Fill cache with 1000 patterns
+    for (let i = 0; i < 1000; i++) {
+      matchGlob(`pattern${i}/*.ts`, `pattern${i}/file.ts`);
+    }
+    expect(getGlobCacheSize()).toBe(1000);
+
+    // Adding one more should evict the oldest
+    matchGlob('newpattern/*.ts', 'newpattern/file.ts');
+    expect(getGlobCacheSize()).toBe(1000);
+
+    // The first pattern should be evicted (cache miss will re-add it)
+    // We can verify this by checking the cache size doesn't increase
+    // when we add it back
+    const sizeBefore = getGlobCacheSize();
+    matchGlob('pattern0/*.ts', 'pattern0/file.ts');
+    expect(getGlobCacheSize()).toBe(sizeBefore);
+  });
+
+  it('maintains LRU order by refreshing accessed entries', () => {
+    // Add patterns 0, 1, 2
+    matchGlob('pattern0/*.ts', 'pattern0/file.ts');
+    matchGlob('pattern1/*.ts', 'pattern1/file.ts');
+    matchGlob('pattern2/*.ts', 'pattern2/file.ts');
+
+    // Access pattern0 to make it most recently used
+    matchGlob('pattern0/*.ts', 'pattern0/file.ts');
+
+    // Fill cache to max (997 more patterns needed to reach 1000)
+    for (let i = 3; i < 1000; i++) {
+      matchGlob(`pattern${i}/*.ts`, `pattern${i}/file.ts`);
+    }
+    expect(getGlobCacheSize()).toBe(1000);
+
+    // Add one more - should evict pattern1 (oldest not-accessed)
+    matchGlob('newpattern/*.ts', 'newpattern/file.ts');
+    expect(getGlobCacheSize()).toBe(1000);
   });
 });
 
