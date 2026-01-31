@@ -1,0 +1,707 @@
+import { readFileSync, appendFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { dirname, join } from 'node:path';
+import { execSync } from 'node:child_process';
+import { Octokit } from '@octokit/rest';
+import { loadWardenConfig, resolveTrigger } from '../config/loader.js';
+import { buildEventContext } from '../event/context.js';
+import { buildScheduleEventContext } from '../event/schedule-context.js';
+import { runSkill } from '../sdk/runner.js';
+import { renderSkillReport } from '../output/renderer.js';
+import { createOrUpdateIssue, createFixPR } from '../output/github-issues.js';
+import { createCoreCheck, updateCoreCheck, createSkillCheck, updateSkillCheck, failSkillCheck, determineConclusion, aggregateSeverityCounts, } from '../output/github-checks.js';
+import { matchTrigger, shouldFail, countFindingsAtOrAbove, countSeverity } from '../triggers/matcher.js';
+import { resolveSkillAsync } from '../skills/loader.js';
+import { filterFindingsBySeverity, SeverityThresholdSchema } from '../types/index.js';
+import { fetchExistingComments, deduplicateFindings, findingToExistingComment, processDuplicateActions, } from '../output/dedup.js';
+import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
+import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
+/**
+ * Error Handling Policy
+ * =====================
+ *
+ * Fatal errors (setFailed - exit immediately):
+ * - Missing required inputs (API key, GitHub token, environment variables)
+ * - Environment setup failures (not running in GitHub Actions)
+ * - Claude Code CLI not found
+ * - Event payload parsing failures
+ * - Event context building failures
+ *
+ * Non-fatal errors (log warning + continue):
+ * - Individual trigger execution failures (accumulate and report)
+ * - GitHub check creation/update failures
+ * - Review comment posting failures
+ * - Stale comment resolution failures
+ *
+ * End-of-run failure conditions:
+ * - Findings exceed severity threshold (fail-on)
+ * - ALL triggers failed (no successful analysis)
+ */
+/**
+ * Aggregate usage stats from multiple reports.
+ */
+function aggregateUsage(reports) {
+    const reportsWithUsage = reports.filter((r) => r.usage);
+    if (reportsWithUsage.length === 0)
+        return undefined;
+    return {
+        inputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.inputTokens ?? 0), 0),
+        outputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.outputTokens ?? 0), 0),
+        cacheReadInputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.cacheReadInputTokens ?? 0), 0),
+        cacheCreationInputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.cacheCreationInputTokens ?? 0), 0),
+        costUSD: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.costUSD ?? 0), 0),
+    };
+}
+function getInputs() {
+    const getInput = (name, required = false) => {
+        // Check both hyphenated (native GitHub Actions) and underscored (composite action) formats
+        const hyphenEnv = `INPUT_${name.toUpperCase()}`;
+        const underscoreEnv = `INPUT_${name.toUpperCase().replace(/-/g, '_')}`;
+        const value = process.env[hyphenEnv] ?? process.env[underscoreEnv] ?? '';
+        if (required && !value) {
+            throw new Error(`Input required and not supplied: ${name}`);
+        }
+        return value;
+    };
+    // Check for API key: input first, then env vars as fallback
+    const anthropicApiKey = getInput('anthropic-api-key') ||
+        process.env['WARDEN_ANTHROPIC_API_KEY'] ||
+        process.env['ANTHROPIC_API_KEY'] ||
+        '';
+    if (!anthropicApiKey) {
+        throw new Error('Anthropic API key not found. Provide it via the anthropic-api-key input or set WARDEN_ANTHROPIC_API_KEY environment variable.');
+    }
+    const failOnInput = getInput('fail-on');
+    const failOn = SeverityThresholdSchema.safeParse(failOnInput).success
+        ? failOnInput
+        : undefined;
+    const commentOnInput = getInput('comment-on');
+    const commentOn = SeverityThresholdSchema.safeParse(commentOnInput).success
+        ? commentOnInput
+        : undefined;
+    return {
+        anthropicApiKey,
+        githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
+        configPath: getInput('config-path') || 'warden.toml',
+        failOn,
+        commentOn,
+        maxFindings: parseInt(getInput('max-findings') || '50', 10),
+        parallel: parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10),
+    };
+}
+function setOutput(name, value) {
+    const outputFile = process.env['GITHUB_OUTPUT'];
+    if (outputFile) {
+        const stringValue = String(value);
+        // Use heredoc format with random delimiter for multiline values
+        // Random delimiter prevents injection if value contains the delimiter
+        if (stringValue.includes('\n')) {
+            const delimiter = `ghadelim_${randomUUID()}`;
+            appendFileSync(outputFile, `${name}<<${delimiter}\n${stringValue}\n${delimiter}\n`);
+        }
+        else {
+            appendFileSync(outputFile, `${name}=${stringValue}\n`);
+        }
+    }
+}
+function setFailed(message) {
+    console.error(`::error::${message}`);
+    process.exit(1);
+}
+/**
+ * Find the Claude Code CLI executable path.
+ * Required in CI environments where the SDK can't auto-detect the CLI location.
+ */
+function findClaudeCodeExecutable() {
+    // Check environment variable first (set by action.yml)
+    const envPath = process.env['CLAUDE_CODE_PATH'];
+    if (envPath) {
+        try {
+            execSync(`test -x "${envPath}"`, { encoding: 'utf-8' });
+            return envPath;
+        }
+        catch {
+            // Path from env doesn't exist, continue to fallbacks
+        }
+    }
+    // Standard install location from claude.ai/install.sh
+    const homeLocalBin = `${process.env['HOME']}/.local/bin/claude`;
+    try {
+        execSync(`test -x "${homeLocalBin}"`, { encoding: 'utf-8' });
+        return homeLocalBin;
+    }
+    catch {
+        // Not found in standard location
+    }
+    // Try which command
+    try {
+        const path = execSync('which claude', { encoding: 'utf-8' }).trim();
+        if (path) {
+            return path;
+        }
+    }
+    catch {
+        // which command failed
+    }
+    // Other common installation paths as fallback
+    const commonPaths = ['/usr/local/bin/claude', '/usr/bin/claude'];
+    for (const p of commonPaths) {
+        try {
+            execSync(`test -x "${p}"`, { encoding: 'utf-8' });
+            return p;
+        }
+        catch {
+            // Path doesn't exist or isn't executable
+        }
+    }
+    setFailed('Claude Code CLI not found. Ensure Claude Code is installed via https://claude.ai/install.sh');
+}
+function logGroup(name) {
+    console.log(`::group::${name}`);
+}
+function logGroupEnd() {
+    console.log('::endgroup::');
+}
+/**
+ * Log trigger error summary and fail if all triggers failed.
+ * Returns true if the action should fail due to all triggers failing.
+ */
+function handleTriggerErrors(triggerErrors, totalTriggers) {
+    if (triggerErrors.length === 0) {
+        return;
+    }
+    logGroup('Trigger Errors Summary');
+    for (const err of triggerErrors) {
+        console.error(`  - ${err}`);
+    }
+    logGroupEnd();
+    // Fail if ALL triggers failed (no successful analysis was performed)
+    if (triggerErrors.length === totalTriggers && totalTriggers > 0) {
+        setFailed(`All ${totalTriggers} trigger(s) failed: ${triggerErrors.join('; ')}`);
+    }
+}
+async function postReviewToGitHub(octokit, context, result) {
+    if (!context.pullRequest) {
+        return;
+    }
+    // Only post PR reviews with inline comments - skip standalone summary comments
+    // as they add noise without providing actionable inline feedback
+    if (!result.review) {
+        return;
+    }
+    const { owner, name: repo } = context.repository;
+    const pullNumber = context.pullRequest.number;
+    const commitId = context.pullRequest.headSha;
+    const reviewComments = result.review.comments
+        .filter((c) => Boolean(c.path && c.line))
+        .map((c) => ({
+        path: c.path,
+        line: c.line,
+        side: c.side ?? 'RIGHT',
+        body: c.body,
+        start_line: c.start_line,
+        start_side: c.start_line ? c.start_side ?? 'RIGHT' : undefined,
+    }));
+    await octokit.pulls.createReview({
+        owner,
+        repo,
+        pull_number: pullNumber,
+        commit_id: commitId,
+        event: result.review.event,
+        body: result.review.body,
+        comments: reviewComments,
+    });
+}
+/**
+ * Get the default branch for a repository from the GitHub API.
+ */
+async function getDefaultBranchFromAPI(octokit, owner, repo) {
+    const { data } = await octokit.repos.get({ owner, repo });
+    return data.default_branch;
+}
+/**
+ * Handle scheduled analysis events.
+ */
+async function runScheduledAnalysis(octokit, inputs, repoPath) {
+    logGroup('Loading configuration');
+    console.log(`Config path: ${inputs.configPath}`);
+    logGroupEnd();
+    const configFullPath = join(repoPath, inputs.configPath);
+    const config = loadWardenConfig(dirname(configFullPath));
+    // Find schedule triggers
+    const scheduleTriggers = config.triggers.filter((t) => t.event === 'schedule');
+    if (scheduleTriggers.length === 0) {
+        console.log('No schedule triggers configured');
+        setOutput('findings-count', 0);
+        setOutput('critical-count', 0);
+        setOutput('high-count', 0);
+        setOutput('summary', 'No schedule triggers configured');
+        return;
+    }
+    // Get repo info from environment
+    const githubRepository = process.env['GITHUB_REPOSITORY'];
+    if (!githubRepository) {
+        setFailed('GITHUB_REPOSITORY environment variable not set');
+    }
+    const [owner, repo] = githubRepository.split('/');
+    if (!owner || !repo) {
+        setFailed('Invalid GITHUB_REPOSITORY format');
+    }
+    const headSha = process.env['GITHUB_SHA'] ?? '';
+    if (!headSha) {
+        setFailed('GITHUB_SHA environment variable not set');
+    }
+    const defaultBranch = await getDefaultBranchFromAPI(octokit, owner, repo);
+    logGroup('Processing schedule triggers');
+    for (const trigger of scheduleTriggers) {
+        console.log(`- ${trigger.name}: ${trigger.skill}`);
+    }
+    logGroupEnd();
+    const allReports = [];
+    let totalFindings = 0;
+    const failureReasons = [];
+    const triggerErrors = [];
+    let shouldFailAction = false;
+    // Process each schedule trigger
+    for (const trigger of scheduleTriggers) {
+        const resolved = resolveTrigger(trigger, config);
+        logGroup(`Running trigger: ${trigger.name} (skill: ${resolved.skill})`);
+        try {
+            // Build context from paths filter
+            const patterns = resolved.filters?.paths ?? ['**/*'];
+            const ignorePatterns = resolved.filters?.ignorePaths;
+            const context = await buildScheduleEventContext({
+                patterns,
+                ignorePatterns,
+                repoPath,
+                owner,
+                name: repo,
+                defaultBranch,
+                headSha,
+            });
+            // Skip if no matching files
+            if (!context.pullRequest?.files.length) {
+                console.log(`No files match trigger ${trigger.name}`);
+                logGroupEnd();
+                continue;
+            }
+            console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
+            // Run skill
+            const skill = await resolveSkillAsync(resolved.skill, repoPath, {
+                remote: resolved.remote,
+            });
+            const claudePath = findClaudeCodeExecutable();
+            const report = await runSkill(skill, context, {
+                apiKey: inputs.anthropicApiKey,
+                model: resolved.model,
+                maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+                batchDelayMs: config.defaults?.batchDelayMs,
+                pathToClaudeCodeExecutable: claudePath,
+            });
+            console.log(`Found ${report.findings.length} findings`);
+            allReports.push(report);
+            totalFindings += report.findings.length;
+            // Create/update issue with findings
+            const scheduleConfig = trigger.schedule ?? {};
+            const issueTitle = scheduleConfig.issueTitle ?? `Warden: ${trigger.name}`;
+            const issueResult = await createOrUpdateIssue(octokit, owner, repo, [report], {
+                title: issueTitle,
+                commitSha: headSha,
+            });
+            if (issueResult) {
+                console.log(`${issueResult.created ? 'Created' : 'Updated'} issue #${issueResult.issueNumber}`);
+                console.log(`Issue URL: ${issueResult.issueUrl}`);
+            }
+            // Create fix PR if enabled and there are fixable findings
+            if (scheduleConfig.createFixPR) {
+                const fixResult = await createFixPR(octokit, owner, repo, report.findings, {
+                    branchPrefix: scheduleConfig.fixBranchPrefix ?? 'warden-fix',
+                    baseBranch: defaultBranch,
+                    baseSha: headSha,
+                    repoPath,
+                    triggerName: trigger.name,
+                });
+                if (fixResult) {
+                    console.log(`Created fix PR #${fixResult.prNumber} with ${fixResult.fixCount} fixes`);
+                    console.log(`PR URL: ${fixResult.prUrl}`);
+                }
+            }
+            // Check failure condition
+            const failOn = resolved.output?.failOn ?? inputs.failOn;
+            if (failOn && shouldFail(report, failOn)) {
+                shouldFailAction = true;
+                const count = countFindingsAtOrAbove(report, failOn);
+                failureReasons.push(`${trigger.name}: Found ${count} ${failOn}+ severity issues`);
+            }
+            logGroupEnd();
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            triggerErrors.push(`${trigger.name}: ${errorMessage}`);
+            console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
+            logGroupEnd();
+        }
+    }
+    handleTriggerErrors(triggerErrors, scheduleTriggers.length);
+    // Set outputs
+    const criticalCount = countSeverity(allReports, 'critical');
+    const highCount = countSeverity(allReports, 'high');
+    setOutput('findings-count', totalFindings);
+    setOutput('critical-count', criticalCount);
+    setOutput('high-count', highCount);
+    setOutput('summary', allReports.map((r) => r.summary).join('\n') || 'Scheduled analysis complete');
+    if (shouldFailAction) {
+        setFailed(failureReasons.join('; '));
+    }
+    console.log(`\nScheduled analysis complete: ${totalFindings} total findings`);
+}
+async function run() {
+    const inputs = getInputs();
+    if (!inputs.githubToken) {
+        setFailed('GitHub token is required');
+    }
+    const eventName = process.env['GITHUB_EVENT_NAME'];
+    const eventPath = process.env['GITHUB_EVENT_PATH'];
+    const repoPath = process.env['GITHUB_WORKSPACE'];
+    if (!eventName || !eventPath || !repoPath) {
+        setFailed('This action must be run in a GitHub Actions environment');
+    }
+    // Set both env vars so code using either will work
+    process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+    process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+    const octokit = new Octokit({ auth: inputs.githubToken });
+    // Route schedule events to dedicated handler
+    if (eventName === 'schedule' || eventName === 'workflow_dispatch') {
+        return runScheduledAnalysis(octokit, inputs, repoPath);
+    }
+    let eventPayload;
+    try {
+        eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
+    }
+    catch (error) {
+        setFailed(`Failed to read event payload: ${error}`);
+    }
+    logGroup('Building event context');
+    console.log(`Event: ${eventName}`);
+    console.log(`Workspace: ${repoPath}`);
+    logGroupEnd();
+    let context;
+    try {
+        context = await buildEventContext(eventName, eventPayload, repoPath, octokit);
+    }
+    catch (error) {
+        setFailed(`Failed to build event context: ${error}`);
+    }
+    logGroup('Loading configuration');
+    console.log(`Config path: ${inputs.configPath}`);
+    logGroupEnd();
+    const configFullPath = join(repoPath, inputs.configPath);
+    const config = loadWardenConfig(dirname(configFullPath));
+    // Resolve triggers with defaults and match
+    const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
+    const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
+    if (matchedTriggers.length === 0) {
+        console.log('No triggers matched for this event');
+        setOutput('findings-count', 0);
+        setOutput('critical-count', 0);
+        setOutput('high-count', 0);
+        setOutput('summary', 'No triggers matched');
+        return;
+    }
+    logGroup('Matched triggers');
+    for (const trigger of matchedTriggers) {
+        console.log(`- ${trigger.name}: ${trigger.skill}`);
+    }
+    logGroupEnd();
+    // Create core warden check (only for PRs)
+    let coreCheckId;
+    if (context.pullRequest) {
+        try {
+            const coreCheck = await createCoreCheck(octokit, {
+                owner: context.repository.owner,
+                repo: context.repository.name,
+                headSha: context.pullRequest.headSha,
+            });
+            coreCheckId = coreCheck.checkRunId;
+            console.log(`Created core check: ${coreCheck.url}`);
+        }
+        catch (error) {
+            console.error(`::warning::Failed to create core check: ${error}`);
+        }
+    }
+    // Run triggers in parallel
+    const concurrency = config.runner?.concurrency ?? inputs.parallel;
+    const failureReasons = [];
+    const runSingleTrigger = async (trigger) => {
+        logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
+        // Create skill check (only for PRs)
+        let skillCheckId;
+        let skillCheckUrl;
+        if (context.pullRequest) {
+            try {
+                const skillCheck = await createSkillCheck(octokit, trigger.skill, {
+                    owner: context.repository.owner,
+                    repo: context.repository.name,
+                    headSha: context.pullRequest.headSha,
+                });
+                skillCheckId = skillCheck.checkRunId;
+                skillCheckUrl = skillCheck.url;
+            }
+            catch (error) {
+                console.error(`::warning::Failed to create skill check for ${trigger.skill}: ${error}`);
+            }
+        }
+        const failOn = trigger.output.failOn ?? inputs.failOn;
+        const commentOn = trigger.output.commentOn ?? inputs.commentOn;
+        try {
+            const skill = await resolveSkillAsync(trigger.skill, repoPath, {
+                remote: trigger.remote,
+            });
+            const claudePath = findClaudeCodeExecutable();
+            const report = await runSkill(skill, context, {
+                apiKey: inputs.anthropicApiKey,
+                model: trigger.model,
+                maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+                batchDelayMs: config.defaults?.batchDelayMs,
+                pathToClaudeCodeExecutable: claudePath,
+            });
+            console.log(`Found ${report.findings.length} findings`);
+            // Update skill check with results
+            if (skillCheckId && context.pullRequest) {
+                try {
+                    await updateSkillCheck(octokit, skillCheckId, report, {
+                        owner: context.repository.owner,
+                        repo: context.repository.name,
+                        headSha: context.pullRequest.headSha,
+                        failOn,
+                        commentOn,
+                    });
+                }
+                catch (error) {
+                    console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
+                }
+            }
+            // Only render if we're going to post comments
+            const renderResult = commentOn !== 'off'
+                ? renderSkillReport(report, {
+                    maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
+                    commentOn,
+                    checkRunUrl: skillCheckUrl,
+                    totalFindings: report.findings.length,
+                })
+                : undefined;
+            logGroupEnd();
+            return {
+                triggerName: trigger.name,
+                report,
+                renderResult,
+                failOn,
+                commentOn,
+                commentOnSuccess: trigger.output.commentOnSuccess,
+                checkRunUrl: skillCheckUrl,
+                maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
+            };
+        }
+        catch (error) {
+            // Mark skill check as failed
+            if (skillCheckId && context.pullRequest) {
+                try {
+                    await failSkillCheck(octokit, skillCheckId, error, {
+                        owner: context.repository.owner,
+                        repo: context.repository.name,
+                        headSha: context.pullRequest.headSha,
+                    });
+                }
+                catch (checkError) {
+                    console.error(`::warning::Failed to mark skill check as failed: ${checkError}`);
+                }
+            }
+            console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
+            logGroupEnd();
+            return { triggerName: trigger.name, error };
+        }
+    };
+    const results = await processInBatches(matchedTriggers, runSingleTrigger, concurrency);
+    // Fetch existing comments for deduplication (only for PRs)
+    // Keep original list separate for stale detection (modified list includes newly posted comments)
+    let fetchedComments = [];
+    let existingComments = [];
+    if (context.pullRequest) {
+        try {
+            fetchedComments = await fetchExistingComments(octokit, context.repository.owner, context.repository.name, context.pullRequest.number);
+            existingComments = [...fetchedComments];
+            if (fetchedComments.length > 0) {
+                const wardenCount = fetchedComments.filter((c) => c.isWarden).length;
+                const externalCount = fetchedComments.length - wardenCount;
+                console.log(`Found ${fetchedComments.length} existing comments for deduplication (${wardenCount} Warden, ${externalCount} external)`);
+            }
+        }
+        catch (error) {
+            console.warn(`::warning::Failed to fetch existing comments for deduplication: ${error}`);
+        }
+    }
+    // Post reviews to GitHub (sequentially to avoid rate limits)
+    const reports = [];
+    let shouldFailAction = false;
+    for (const result of results) {
+        if (result.report) {
+            reports.push(result.report);
+            // Post review to GitHub (renderResult is undefined when commentOn is 'off')
+            // Only post if there are findings (after commentOn filtering) OR commentOnSuccess is true
+            const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
+            const commentOnSuccess = result.commentOnSuccess ?? false;
+            if (result.renderResult && (filteredFindings.length > 0 || commentOnSuccess)) {
+                try {
+                    // Deduplicate findings against existing comments
+                    let findingsToPost = filteredFindings;
+                    let dedupResult;
+                    if (existingComments.length > 0 && filteredFindings.length > 0) {
+                        dedupResult = await deduplicateFindings(filteredFindings, existingComments, {
+                            apiKey: inputs.anthropicApiKey,
+                            currentSkill: result.report.skill,
+                        });
+                        findingsToPost = dedupResult.newFindings;
+                        if (dedupResult.duplicateActions.length > 0) {
+                            console.log(`Found ${dedupResult.duplicateActions.length} duplicate findings for ${result.triggerName}`);
+                        }
+                    }
+                    // Process duplicate actions (update Warden comments, add reactions)
+                    if (dedupResult && dedupResult.duplicateActions.length > 0) {
+                        const actionCounts = await processDuplicateActions(octokit, context.repository.owner, context.repository.name, dedupResult.duplicateActions, result.report.skill);
+                        if (actionCounts.updated > 0) {
+                            console.log(`Updated ${actionCounts.updated} existing Warden comments with skill attribution`);
+                        }
+                        if (actionCounts.reacted > 0) {
+                            console.log(`Added reactions to ${actionCounts.reacted} existing external comments`);
+                        }
+                        if (actionCounts.failed > 0) {
+                            console.warn(`::warning::Failed to process ${actionCounts.failed} duplicate actions`);
+                        }
+                    }
+                    // Only post if we have non-duplicate findings or commentOnSuccess is true
+                    if (findingsToPost.length > 0 || commentOnSuccess) {
+                        // Re-render with deduplicated findings if any were removed
+                        const renderResultToPost = findingsToPost.length !== filteredFindings.length
+                            ? renderSkillReport({ ...result.report, findings: findingsToPost }, {
+                                maxFindings: result.maxFindings,
+                                commentOn: result.commentOn,
+                                checkRunUrl: result.checkRunUrl,
+                                totalFindings: result.report.findings.length,
+                            })
+                            : result.renderResult;
+                        await postReviewToGitHub(octokit, context, renderResultToPost);
+                        // Add newly posted findings to existing comments for cross-trigger deduplication
+                        // Only include findings up to maxFindings since that's what was actually posted
+                        const postedFindings = result.maxFindings
+                            ? findingsToPost.slice(0, result.maxFindings)
+                            : findingsToPost;
+                        for (const finding of postedFindings) {
+                            const comment = findingToExistingComment(finding, result.report.skill);
+                            if (comment) {
+                                existingComments.push(comment);
+                            }
+                        }
+                    }
+                }
+                catch (error) {
+                    console.error(`::warning::Failed to post review for ${result.triggerName}: ${error}`);
+                }
+            }
+            // Check if we should fail based on this trigger's config
+            if (result.failOn && shouldFail(result.report, result.failOn)) {
+                shouldFailAction = true;
+                const count = countFindingsAtOrAbove(result.report, result.failOn);
+                failureReasons.push(`${result.triggerName}: Found ${count} ${result.failOn}+ severity issues`);
+            }
+        }
+    }
+    // Collect trigger errors for summary
+    const triggerErrors = results
+        .filter((r) => r.error)
+        .map((r) => {
+        const errorMessage = r.error instanceof Error ? r.error.message : String(r.error);
+        return `${r.triggerName}: ${errorMessage}`;
+    });
+    handleTriggerErrors(triggerErrors, matchedTriggers.length);
+    // Resolve stale Warden comments (comments that no longer have matching findings)
+    // Use fetchedComments (not existingComments) to only check comments that have threadIds
+    // Only resolve if ALL triggers succeeded - otherwise findings may be missing due to failures
+    // Filter to only Warden comments - we don't resolve external comments
+    const allTriggersSucceeded = triggerErrors.length === 0;
+    const wardenComments = fetchedComments.filter((c) => c.isWarden);
+    if (context.pullRequest && wardenComments.length > 0 && allTriggersSucceeded) {
+        try {
+            const allFindings = reports.flatMap((r) => r.findings);
+            const scope = buildAnalyzedScope(context.pullRequest.files);
+            const staleComments = findStaleComments(wardenComments, allFindings, scope);
+            if (staleComments.length > 0) {
+                const resolvedCount = await resolveStaleComments(octokit, staleComments);
+                if (resolvedCount > 0) {
+                    console.log(`Resolved ${resolvedCount} stale Warden comments`);
+                }
+            }
+        }
+        catch (error) {
+            console.warn(`::warning::Failed to resolve stale comments: ${error}`);
+        }
+    }
+    else if (!allTriggersSucceeded && wardenComments.length > 0) {
+        console.log('Skipping stale comment resolution due to trigger failures');
+    }
+    const totalFindings = reports.reduce((sum, r) => sum + r.findings.length, 0);
+    const criticalCount = countSeverity(reports, 'critical');
+    const highCount = countSeverity(reports, 'high');
+    setOutput('findings-count', totalFindings);
+    setOutput('critical-count', criticalCount);
+    setOutput('high-count', highCount);
+    setOutput('summary', reports.map((r) => r.summary).join('\n'));
+    // Update core check with overall summary
+    if (coreCheckId && context.pullRequest) {
+        try {
+            const summaryData = {
+                totalSkills: matchedTriggers.length,
+                totalFindings,
+                findingsBySeverity: aggregateSeverityCounts(reports),
+                totalDurationMs: reports.some((r) => r.durationMs !== undefined)
+                    ? reports.reduce((sum, r) => sum + (r.durationMs ?? 0), 0)
+                    : undefined,
+                totalUsage: aggregateUsage(reports),
+                findings: reports.flatMap((r) => r.findings),
+                skillResults: results.map((r) => ({
+                    name: r.triggerName,
+                    findingCount: r.report?.findings.length ?? 0,
+                    conclusion: r.report
+                        ? determineConclusion(r.report.findings, r.failOn)
+                        : 'failure',
+                    durationMs: r.report?.durationMs,
+                    usage: r.report?.usage,
+                })),
+            };
+            let coreConclusion;
+            if (shouldFailAction) {
+                coreConclusion = 'failure';
+            }
+            else if (totalFindings > 0) {
+                coreConclusion = 'neutral';
+            }
+            else {
+                coreConclusion = 'success';
+            }
+            await updateCoreCheck(octokit, coreCheckId, summaryData, coreConclusion, {
+                owner: context.repository.owner,
+                repo: context.repository.name,
+            });
+        }
+        catch (error) {
+            console.error(`::warning::Failed to update core check: ${error}`);
+        }
+    }
+    if (shouldFailAction) {
+        setFailed(failureReasons.join('; '));
+    }
+    console.log(`\nAnalysis complete: ${totalFindings} total findings`);
+}
+run().catch((error) => {
+    setFailed(`Unexpected error: ${error}`);
+});
+//# sourceMappingURL=main.js.map
