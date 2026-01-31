@@ -347,9 +347,9 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
   // Handle sync command
   if (positionals.includes('sync')) {
-    // First positional after 'sync' is the repo to sync
+    // First positional after 'sync' is the repo to sync, --repo flag takes precedence
     const syncIndex = positionals.indexOf('sync');
-    const repoArg = positionals[syncIndex + 1];
+    const repoArg = values.repo ?? positionals[syncIndex + 1];
 
     return {
       command: 'sync',

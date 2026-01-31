@@ -295,6 +295,18 @@ describe('parseCliArgs', () => {
     expect(result.command).toBe('sync');
     expect(result.options.repo).toBe('getsentry/skills');
   });
+
+  it('parses sync command with --repo flag', () => {
+    const result = parseCliArgs(['sync', '--repo', 'getsentry/skills']);
+    expect(result.command).toBe('sync');
+    expect(result.options.repo).toBe('getsentry/skills');
+  });
+
+  it('--repo flag takes precedence over positional in sync', () => {
+    const result = parseCliArgs(['sync', 'other/repo', '--repo', 'getsentry/skills']);
+    expect(result.command).toBe('sync');
+    expect(result.options.repo).toBe('getsentry/skills');
+  });
 });
 
 describe('CLIOptionsSchema', () => {

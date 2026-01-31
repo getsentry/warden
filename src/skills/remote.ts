@@ -236,24 +236,26 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
   const isCached = existsSync(remotePath);
   const needsRefresh = shouldRefresh(ref, state);
 
+  // Check if we have a valid cache (directory exists AND state entry exists)
+  const stateEntry = state.remotes[ref];
+  const hasValidCache = isCached && !!stateEntry;
+
   // Handle offline mode
   if (offline) {
-    if (isCached) {
-      const entry = state.remotes[ref];
-      return entry?.sha ?? 'unknown';
+    if (hasValidCache) {
+      return stateEntry.sha;
     }
     throw new SkillLoaderError(`Remote skill not cached and offline mode enabled: ${ref}`);
   }
 
-  // Pinned + cached = use cache (SHA is immutable)
-  if (isPinned && isCached && !force && parsed.sha) {
+  // Pinned + valid cache = use cache (SHA is immutable)
+  if (isPinned && hasValidCache && !force && parsed.sha) {
     return parsed.sha;
   }
 
-  // Unpinned + cached + fresh = use cache
-  if (!isPinned && isCached && !needsRefresh && !force) {
-    const entry = state.remotes[ref];
-    return entry?.sha ?? 'unknown';
+  // Unpinned + valid cache + fresh = use cache
+  if (!isPinned && hasValidCache && !needsRefresh && !force) {
+    return stateEntry.sha;
   }
 
   const repoUrl = `https://github.com/${parsed.owner}/${parsed.repo}.git`;
