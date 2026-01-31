@@ -20,10 +20,8 @@ Your code is under new management. Agents that review your code - locally or on 
 # Initialize warden in your repository
 npx warden init
 
-# Set your API key
-export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
-
 # Run on uncommitted changes
+# Uses Claude Code subscription if logged in, or set WARDEN_ANTHROPIC_API_KEY
 npx warden
 
 # Fix issues automatically

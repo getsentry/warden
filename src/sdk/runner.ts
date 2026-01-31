@@ -124,6 +124,42 @@ export function isRetryableError(error: unknown): boolean {
 }
 
 /**
+ * Check if an error is an authentication failure.
+ * These require user action (login or API key) and should not be retried.
+ */
+export function isAuthenticationError(error: unknown): boolean {
+  if (error instanceof APIError && error.status === 401) {
+    return true;
+  }
+
+  // Check error message for common auth failure patterns
+  const message = error instanceof Error ? error.message : String(error);
+  const authPatterns = [
+    'authentication',
+    'unauthorized',
+    'invalid.*api.*key',
+    'not.*logged.*in',
+    'login.*required',
+  ];
+  return authPatterns.some((pattern) => new RegExp(pattern, 'i').test(message));
+}
+
+/** User-friendly error message for authentication failures */
+const AUTH_ERROR_MESSAGE = `Authentication required.
+
+  claude login                             # Use Claude Code subscription
+  export WARDEN_ANTHROPIC_API_KEY=sk-...   # Or use API key
+
+https://console.anthropic.com/ for API keys`;
+
+export class WardenAuthenticationError extends Error {
+  constructor() {
+    super(AUTH_ERROR_MESSAGE);
+    this.name = 'WardenAuthenticationError';
+  }
+}
+
+/**
  * Calculate delay for a retry attempt using exponential backoff.
  */
 export function calculateRetryDelay(
@@ -743,6 +779,11 @@ async function analyzeHunk(
       };
     } catch (error) {
       lastError = error;
+
+      // Authentication errors should surface immediately with helpful guidance
+      if (isAuthenticationError(error)) {
+        throw new WardenAuthenticationError();
+      }
 
       // Don't retry if not a retryable error or we've exhausted retries
       if (!isRetryableError(error) || attempt >= retryConfig.maxRetries) {

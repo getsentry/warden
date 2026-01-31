@@ -10,8 +10,10 @@ import {
   buildSystemPrompt,
   estimateTokens,
   isRetryableError,
+  isAuthenticationError,
   calculateRetryDelay,
   aggregateUsage,
+  WardenAuthenticationError,
 } from './runner.js';
 import {
   APIError,
@@ -587,6 +589,85 @@ describe('isRetryableError', () => {
 
   it('returns false for undefined', () => {
     expect(isRetryableError(undefined)).toBe(false);
+  });
+});
+
+describe('isAuthenticationError', () => {
+  it('returns true for AuthenticationError (401)', () => {
+    const error = new AuthenticationError(401, { message: 'Unauthorized' }, 'Unauthorized', new Headers());
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
+  it('returns true for generic APIError with 401 status', () => {
+    const error = new APIError(401, { message: 'Unauthorized' }, 'Unauthorized', new Headers());
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
+  it('returns true for error message containing "authentication"', () => {
+    const error = new Error('Authentication failed');
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
+  it('returns true for error message containing "unauthorized"', () => {
+    const error = new Error('Request unauthorized');
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
+  it('returns true for error message containing "invalid api key"', () => {
+    const error = new Error('Invalid API key provided');
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
+  it('returns true for error message containing "not logged in"', () => {
+    const error = new Error('User is not logged in');
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
+  it('returns true for error message containing "login required"', () => {
+    const error = new Error('Login required to access this resource');
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
+  it('returns false for rate limit errors', () => {
+    const error = new RateLimitError(429, { message: 'Rate limited' }, 'Rate limited', new Headers());
+    expect(isAuthenticationError(error)).toBe(false);
+  });
+
+  it('returns false for server errors', () => {
+    const error = new InternalServerError(500, { message: 'Server error' }, 'Server error', new Headers());
+    expect(isAuthenticationError(error)).toBe(false);
+  });
+
+  it('returns false for bad request errors', () => {
+    const error = new BadRequestError(400, { message: 'Bad request' }, 'Bad request', new Headers());
+    expect(isAuthenticationError(error)).toBe(false);
+  });
+
+  it('returns false for generic errors without auth keywords', () => {
+    const error = new Error('Something went wrong');
+    expect(isAuthenticationError(error)).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isAuthenticationError(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isAuthenticationError(undefined)).toBe(false);
+  });
+});
+
+describe('WardenAuthenticationError', () => {
+  it('has helpful error message', () => {
+    const error = new WardenAuthenticationError();
+    expect(error.message).toContain('claude login');
+    expect(error.message).toContain('WARDEN_ANTHROPIC_API_KEY');
+    expect(error.message).toContain('console.anthropic.com');
+  });
+
+  it('has correct name', () => {
+    const error = new WardenAuthenticationError();
+    expect(error.name).toBe('WardenAuthenticationError');
   });
 });
 

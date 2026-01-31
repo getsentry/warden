@@ -66,17 +66,23 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <p>Running Warden locally is the fastest way to get value. You get feedback before pushing, while the code is fresh in your mind.</p>
 
-  <h3>Setup</h3>
+  <h3>Authentication</h3>
 
-  <p>Set your API key:</p>
+  <p>Warden uses your Claude Code subscription if you're logged in. Otherwise, set an API key:</p>
 
   <Terminal showCopy={true}>
     <Code
-      code={`export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
+      code={`# Option 1: Claude Code subscription (if logged in)
+claude login
+
+# Option 2: API key
+export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
       lang="bash"
       theme="vitesse-black"
     />
   </Terminal>
+
+  <p>Get an API key from <a href="https://console.anthropic.com/">console.anthropic.com</a>. CI/CD environments require an API key.</p>
 
   <h3>Review Uncommitted Changes</h3>
 

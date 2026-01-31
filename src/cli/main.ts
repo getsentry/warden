@@ -181,11 +181,10 @@ async function runSkills(
   const cwd = process.cwd();
   const startTime = Date.now();
 
-  // Check for API key
+  // Get API key (optional - SDK can use Claude Code subscription auth)
   const apiKey = getAnthropicApiKey();
   if (!apiKey) {
-    reporter.error('WARDEN_ANTHROPIC_API_KEY environment variable is required');
-    return 1;
+    reporter.debug('No API key found. Using Claude Code subscription auth.');
   }
 
   // Try to find repo root for config loading
@@ -488,11 +487,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     triggersToRun.map((t) => ({ name: t.name, skill: t.skill }))
   );
 
-  // Check for API key
+  // Get API key (optional - SDK can use Claude Code subscription auth)
   const apiKey = getAnthropicApiKey();
   if (!apiKey) {
-    reporter.error('WARDEN_ANTHROPIC_API_KEY environment variable is required');
-    return 1;
+    reporter.debug('No API key found. Using Claude Code subscription auth.');
   }
 
   // Build trigger tasks

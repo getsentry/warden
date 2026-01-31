@@ -158,7 +158,9 @@ warden --skill ~/my-skills/security`}
 
   <dl>
     <dt>WARDEN_ANTHROPIC_API_KEY</dt>
-    <dd>Your Anthropic API key (required)</dd>
+    <dd>Anthropic API key. Required for CI/CD. For local use, Warden can use your Claude Code subscription instead (run <code>claude login</code>).</dd>
+    <dt>ANTHROPIC_API_KEY</dt>
+    <dd>Fallback if <code>WARDEN_ANTHROPIC_API_KEY</code> is not set</dd>
     <dt>WARDEN_SKILL_CACHE_TTL</dt>
     <dd>Cache duration for unpinned remote skills. Default: 24h</dd>
   </dl>
