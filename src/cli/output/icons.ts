@@ -11,3 +11,9 @@ export const ICON_SKIPPED = '↓'; // U+2193 DOWNWARDS ARROW
 
 /** Braille spinner frames for loading animation */
 export const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
+
+/** Circle for pending states */
+export const ICON_PENDING = '\u25CB'; // ○ WHITE CIRCLE
+
+/** X mark for error states */
+export const ICON_ERROR = '\u2717'; // ✗ BALLOT X

@@ -1,5 +1,25 @@
 /**
  * Ink-based skill runner with real-time progress display.
+ *
+ * ## Ink Rendering Constraints
+ *
+ * This file uses Ink (React for CLIs) which has specific constraints that,
+ * if violated, cause duplicate output lines or corrupted display:
+ *
+ * 1. **Single Static component**: Ink's Static uses `position: 'absolute'`.
+ *    Multiple Static components cause layout conflicts. We print the header
+ *    before Ink starts to avoid needing a second Static.
+ *
+ * 2. **Stable item references**: Static tracks items by reference equality.
+ *    Never wrap items in new objects (e.g., `{ type: 'skill', skill }`) on
+ *    each render. Pass the original objects directly.
+ *
+ * 3. **Batched updates**: Rapid consecutive rerender() calls cause duplicate
+ *    output. The updateUI() function batches updates using setImmediate().
+ *
+ * 4. **No direct writes to stderr**: Writing to process.stderr while Ink is
+ *    running corrupts cursor tracking. The onLargePrompt/onPromptSize callbacks
+ *    are exceptions that may cause minor display glitches in edge cases.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -15,10 +35,8 @@ import {
 } from './tasks.js';
 import { formatDuration, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
 import { Verbosity } from './verbosity.js';
-import { ICON_CHECK, ICON_SKIPPED, SPINNER_FRAMES } from './icons.js';
+import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
-
-type StaticItem = { type: 'header' } | { type: 'skill'; skill: SkillState };
 
 interface SkillRunnerProps {
   skills: SkillState[];
@@ -91,7 +109,7 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
     return (
       <Box flexDirection="column">
         <Box>
-          <Text color="red">{'\u2717'}</Text>
+          <Text color="red">{ICON_ERROR}</Text>
           <Text> {skill.displayName}</Text>
           {duration && <Text dimColor> [{duration}]</Text>}
         </Box>
@@ -127,46 +145,42 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
   );
 }
 
+/**
+ * Renders the skill execution UI.
+ *
+ * IMPORTANT: Ink's Static component tracks items by reference equality.
+ * Items passed to Static must have stable references across renders.
+ * Creating new wrapper objects causes Static to mishandle its internal
+ * state, resulting in duplicate output lines.
+ *
+ * We use a SINGLE Static component to avoid layout conflicts from multiple
+ * absolutely-positioned Static containers.
+ */
 function SkillRunner({ skills, completedItems }: SkillRunnerProps): React.ReactElement {
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
 
-  // Build static items: header first, then completed skills
-  const staticItems: StaticItem[] = [
-    { type: 'header' },
-    ...completedItems.map((skill) => ({ type: 'skill' as const, skill })),
-  ];
-
   return (
-    <>
-      {/* Static content: header + completed skills */}
-      <Static items={staticItems}>
-        {(item) => {
-          switch (item.type) {
-            case 'header':
-              return (
-                <Text key="header" bold>
-                  SKILLS
-                </Text>
-              );
-            case 'skill':
-              return <CompletedSkill key={item.skill.name} skill={item.skill} />;
-          }
-        }}
+    <Box flexDirection="column">
+      {/*
+       * Completed skills - passed directly to Static WITHOUT wrapper objects.
+       * completedItems elements have stable references (same objects from parent),
+       * so Ink can correctly track which items are new vs already rendered.
+       */}
+      <Static items={completedItems}>
+        {(skill) => <CompletedSkill key={skill.name} skill={skill} />}
       </Static>
 
-      {/* Dynamic content: running + pending */}
-      <Box flexDirection="column">
-        {running.map((skill) => (
-          <RunningSkill key={skill.name} skill={skill} />
-        ))}
-        {pending.map((skill) => (
-          <Text key={skill.name} dimColor>
-            {'\u25CB'} {skill.displayName}
-          </Text>
-        ))}
-      </Box>
-    </>
+      {/* Dynamic content - updates in place */}
+      {running.map((skill) => (
+        <RunningSkill key={skill.name} skill={skill} />
+      ))}
+      {pending.map((skill) => (
+        <Text key={skill.name} dimColor>
+          {ICON_PENDING} {skill.displayName}
+        </Text>
+      ))}
+    </Box>
   );
 }
 
@@ -206,14 +220,28 @@ export async function runSkillTasksWithInk(
   const completedItems: SkillState[] = [];
   const completedNames = new Set<string>();
 
+  // Print header before Ink starts - this avoids multiple Static components
+  // which can cause layout conflicts due to absolute positioning
+  process.stderr.write('\x1b[1mSKILLS\x1b[0m\n');
+
   // Create Ink instance
   const { rerender, unmount } = render(
     <SkillRunner skills={skillStates} completedItems={completedItems} />,
     { stdout: process.stderr }
   );
 
+  // Batch UI updates to prevent rapid consecutive rerenders that cause duplicate lines.
+  // Without batching, multiple callbacks firing in quick succession (e.g., 5 files
+  // starting simultaneously) trigger 5 immediate rerenders, which Ink cannot
+  // process correctly, resulting in the same line appearing multiple times.
+  let updatePending = false;
   const updateUI = () => {
-    rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} />);
+    if (updatePending) return;
+    updatePending = true;
+    setImmediate(() => {
+      updatePending = false;
+      rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} />);
+    });
   };
 
   // Callbacks to update state
@@ -297,13 +325,14 @@ export async function runSkillTasksWithInk(
 
       updateUI();
     },
-    // Warn about large prompts - write directly to stderr to avoid Ink interference
+    // CAUTION: Direct stderr writes while Ink is running can cause display glitches.
+    // These callbacks are rare (large prompts, debug mode) so the tradeoff is acceptable.
+    // If these cause issues, consider queueing messages and printing after unmount().
     onLargePrompt: (_skillName, filename, lineRange, chars, estimatedTokens) => {
       const location = `${filename}:${lineRange}`;
       const size = `${Math.round(chars / 1000)}k chars (~${Math.round(estimatedTokens / 1000)}k tokens)`;
       process.stderr.write(`\x1b[33m${figures.warning}\x1b[0m  Large prompt for ${location}: ${size}\n`);
     },
-    // Debug mode: show prompt sizes
     onPromptSize: verbosity >= Verbosity.Debug
       ? (_skillName, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
           const location = `${filename}:${lineRange}`;
