@@ -40,7 +40,8 @@ describe('renderSkillReport', () => {
 
     expect(result.review).toBeDefined();
     const review = result.review!;
-    expect(review.event).toBe('REQUEST_CHANGES');
+    // Without failOn set, event is COMMENT regardless of severity
+    expect(review.event).toBe('COMMENT');
     expect(review.comments).toHaveLength(1);
     expect(review.comments[0]!.path).toBe('src/db.ts');
     expect(review.comments[0]!.line).toBe(45);
@@ -274,7 +275,7 @@ describe('renderSkillReport', () => {
     expect(review.comments[0]!.body).toContain('Critical Issue');
   });
 
-  it('requests changes for critical/high severity', () => {
+  it('uses COMMENT event when failOn is not specified', () => {
     const criticalReport: SkillReport = {
       ...baseReport,
       findings: [
@@ -288,38 +289,191 @@ describe('renderSkillReport', () => {
       ],
     };
 
-    const highReport: SkillReport = {
-      ...baseReport,
-      findings: [
-        {
-          id: 'f1',
-          severity: 'high',
-          title: 'High',
-          description: 'Details',
-          location: { path: 'src/a.ts', startLine: 1 },
-        },
-      ],
-    };
+    // Without failOn, even critical findings use COMMENT
+    const result = renderSkillReport(criticalReport);
+    expect(result.review!.event).toBe('COMMENT');
+  });
 
-    const mediumReport: SkillReport = {
-      ...baseReport,
-      findings: [
-        {
-          id: 'f1',
-          severity: 'medium',
-          title: 'Medium',
-          description: 'Details',
-          location: { path: 'src/a.ts', startLine: 1 },
-        },
-      ],
-    };
+  describe('failOn threshold', () => {
+    it('uses COMMENT when failOn is not set', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
 
-    const criticalResult = renderSkillReport(criticalReport);
-    const highResult = renderSkillReport(highReport);
-    const mediumResult = renderSkillReport(mediumReport);
-    expect(criticalResult.review!.event).toBe('REQUEST_CHANGES');
-    expect(highResult.review!.event).toBe('REQUEST_CHANGES');
-    expect(mediumResult.review!.event).toBe('COMMENT');
+      const result = renderSkillReport(report);
+      expect(result.review!.event).toBe('COMMENT');
+    });
+
+    it('uses COMMENT when failOn is off', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'off' });
+      expect(result.review!.event).toBe('COMMENT');
+    });
+
+    it('uses REQUEST_CHANGES when failOn is critical and finding is critical', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'critical' });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
+    it('uses COMMENT when failOn is critical but finding is only high', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'critical' });
+      expect(result.review!.event).toBe('COMMENT');
+    });
+
+    it('uses REQUEST_CHANGES when failOn is high and finding is high', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'high' });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
+    it('uses REQUEST_CHANGES when failOn is high and finding is critical (more severe)', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'high' });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
+    it('uses COMMENT when failOn is high but finding is only medium', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'medium',
+            title: 'Medium Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'high' });
+      expect(result.review!.event).toBe('COMMENT');
+    });
+
+    it('uses REQUEST_CHANGES when any finding meets failOn threshold', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+          {
+            id: 'f2',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'high' });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
+    it('failOn and commentOn work independently', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+          {
+            id: 'f2',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+      };
+
+      // commentOn=high filters out low finding from comments
+      // failOn=critical causes REQUEST_CHANGES because of critical finding
+      const result = renderSkillReport(report, { failOn: 'critical', commentOn: 'high' });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+      expect(result.review!.comments).toHaveLength(1);
+      expect(result.review!.comments[0]!.body).toContain('Critical Issue');
+    });
   });
 
   it('respects maxFindings option', () => {

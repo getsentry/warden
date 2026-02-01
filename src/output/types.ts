@@ -27,6 +27,8 @@ export interface RenderOptions {
   extraLabels?: string[];
   /** Only include findings at or above this severity level in rendered output. Use 'off' to disable comments. */
   commentOn?: SeverityThreshold;
+  /** Fail threshold - determines REQUEST_CHANGES vs COMMENT for PR reviews */
+  failOn?: SeverityThreshold;
   /** URL to the GitHub Check run containing the full report (used when findings are filtered) */
   checkRunUrl?: string;
   /** Total number of findings before filtering (used to show "X more findings" link) */

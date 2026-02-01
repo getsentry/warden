@@ -1,5 +1,5 @@
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
-import type { SkillReport, Finding, Severity } from '../types/index.js';
+import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
 import { formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
 import { generateContentHash, generateMarker } from './dedup.js';
@@ -14,7 +14,7 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn, checkRunUrl, totalFindings } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn, failOn, checkRunUrl, totalFindings } = options;
 
   // Filter by commentOn threshold first, then apply maxFindings limit
   const filteredFindings = filterFindingsBySeverity(report.findings, commentOn);
@@ -27,7 +27,7 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
   const total = totalFindings ?? report.findings.length;
   const hiddenCount = total - sortedFindings.length;
 
-  const review = renderReview(sortedFindings, report, includeSuggestions);
+  const review = renderReview(sortedFindings, report, includeSuggestions, failOn);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile, checkRunUrl, hiddenCount);
 
   return { review, summaryComment };
@@ -36,7 +36,8 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
 function renderReview(
   findings: Finding[],
   report: SkillReport,
-  includeSuggestions: boolean
+  includeSuggestions: boolean,
+  failOn?: SeverityThreshold
 ): GitHubReview | undefined {
   const findingsWithLocation = findings.filter((f) => f.location);
 
@@ -76,16 +77,38 @@ function renderReview(
     };
   });
 
-  const hasBlockingSeverity = findings.some(
-    (f) => f.severity === 'critical' || f.severity === 'high'
-  );
-  const event: GitHubReview['event'] = hasBlockingSeverity ? 'REQUEST_CHANGES' : 'COMMENT';
+  // Determine review event type based on failOn threshold.
+  // REQUEST_CHANGES only when findings would cause the build to fail.
+  // This keeps commentOn (what gets commented) separate from failOn (what blocks).
+  const event = determineReviewEvent(findings, failOn);
 
   return {
     event,
     body: '',
     comments,
   };
+}
+
+/**
+ * Determine the PR review event type based on failOn threshold.
+ * Returns REQUEST_CHANGES only if failOn is set and findings meet/exceed the threshold.
+ */
+function determineReviewEvent(
+  findings: Finding[],
+  failOn?: SeverityThreshold
+): GitHubReview['event'] {
+  // If failOn is not set or is 'off', always use COMMENT
+  if (!failOn || failOn === 'off') {
+    return 'COMMENT';
+  }
+
+  // Check if any finding meets or exceeds the failOn threshold
+  const failOnOrder = SEVERITY_ORDER[failOn];
+  const hasBlockingFinding = findings.some(
+    (f) => SEVERITY_ORDER[f.severity] <= failOnOrder
+  );
+
+  return hasBlockingFinding ? 'REQUEST_CHANGES' : 'COMMENT';
 }
 
 function renderSuggestion(description: string, diff: string): string {

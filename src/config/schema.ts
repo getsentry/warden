@@ -42,7 +42,9 @@ export type PathFilter = z.infer<typeof PathFilterSchema>;
 
 // Output configuration per trigger
 export const OutputConfigSchema = z.object({
+  /** Fail the build and request PR changes when findings meet this severity */
   failOn: SeverityThresholdSchema.optional(),
+  /** Only post comments for findings at or above this severity */
   commentOn: SeverityThresholdSchema.optional(),
   maxFindings: z.number().int().positive().optional(),
   /** Post a PR comment even when there are no findings (default: false) */
