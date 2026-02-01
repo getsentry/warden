@@ -1,4 +1,4 @@
-import type { SeverityThreshold } from '../types/index.js';
+import type { SeverityThreshold, Finding } from '../types/index.js';
 
 export interface GitHubComment {
   body: string;
@@ -33,4 +33,9 @@ export interface RenderOptions {
   checkRunUrl?: string;
   /** Total number of findings before filtering (used to show "X more findings" link) */
   totalFindings?: number;
+  /**
+   * Original findings for failOn evaluation. Use when report.findings has been
+   * modified (e.g., for deduplication) but failOn should evaluate against all findings.
+   */
+  allFindings?: Finding[];
 }

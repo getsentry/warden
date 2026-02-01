@@ -741,6 +741,8 @@ async function run(): Promise<void> {
                       failOn: result.failOn,
                       checkRunUrl: result.checkRunUrl,
                       totalFindings: result.report.findings.length,
+                      // Pass original findings for failOn evaluation (not affected by dedup)
+                      allFindings: result.report.findings,
                     }
                   )
                 : result.renderResult;

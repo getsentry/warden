@@ -14,7 +14,7 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn, failOn, checkRunUrl, totalFindings } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn, failOn, checkRunUrl, totalFindings, allFindings } = options;
 
   // Filter by commentOn threshold first, then apply maxFindings limit
   const filteredFindings = filterFindingsBySeverity(report.findings, commentOn);
@@ -27,7 +27,9 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
   const total = totalFindings ?? report.findings.length;
   const hiddenCount = total - sortedFindings.length;
 
-  const review = renderReview(sortedFindings, report, includeSuggestions, failOn);
+  // Use allFindings for failOn evaluation if provided (e.g., when report.findings was modified for dedup)
+  const findingsForFailOn = allFindings ?? report.findings;
+  const review = renderReview(sortedFindings, report, includeSuggestions, failOn, findingsForFailOn);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile, checkRunUrl, hiddenCount);
 
   return { review, summaryComment };
@@ -37,13 +39,14 @@ function renderReview(
   findings: Finding[],
   report: SkillReport,
   includeSuggestions: boolean,
-  failOn?: SeverityThreshold
+  failOn?: SeverityThreshold,
+  allFindings?: Finding[]
 ): GitHubReview | undefined {
   const findingsWithLocation = findings.filter((f) => f.location);
 
   // Determine review event type based on failOn threshold against ALL findings.
-  // Use report.findings (not filtered findings) so failOn operates independently of commentOn.
-  const event = determineReviewEvent(report.findings, failOn);
+  // Use allFindings (or report.findings) so failOn operates independently of commentOn and deduplication.
+  const event = determineReviewEvent(allFindings ?? report.findings, failOn);
 
   // If no comments to post, only create a review if REQUEST_CHANGES is needed
   // This ensures failOn can block the PR even when commentOn filters out all findings

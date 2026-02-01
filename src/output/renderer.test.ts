@@ -519,6 +519,43 @@ describe('renderSkillReport', () => {
       expect(result.review).toBeUndefined();
     });
 
+    it('REQUEST_CHANGES uses allFindings when report.findings is modified (deduplication)', () => {
+      // Simulate deduplication scenario: report.findings has been reduced
+      // but allFindings contains the original set including a critical finding
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f2',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+        ],
+      };
+
+      const allFindings = [
+        {
+          id: 'f1',
+          severity: 'critical' as const,
+          title: 'Critical Issue (deduplicated)',
+          description: 'Details',
+          location: { path: 'src/a.ts', startLine: 1 },
+        },
+        ...report.findings,
+      ];
+
+      // Without allFindings, would use report.findings (only low) -> COMMENT
+      // With allFindings (includes critical), should be REQUEST_CHANGES
+      const result = renderSkillReport(report, { failOn: 'high', allFindings });
+      expect(result.review).toBeDefined();
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+      // Comments only include the low finding (what's in report.findings)
+      expect(result.review!.comments).toHaveLength(1);
+      expect(result.review!.comments[0]!.body).toContain('Low Issue');
+    });
+
     it('REQUEST_CHANGES when some findings are filtered by commentOn but others meet both thresholds', () => {
       const report: SkillReport = {
         ...baseReport,
