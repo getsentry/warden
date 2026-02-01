@@ -77,10 +77,10 @@ function renderReview(
     };
   });
 
-  // Determine review event type based on failOn threshold.
+  // Determine review event type based on failOn threshold against ALL findings.
   // REQUEST_CHANGES only when findings would cause the build to fail.
-  // This keeps commentOn (what gets commented) separate from failOn (what blocks).
-  const event = determineReviewEvent(findings, failOn);
+  // Use report.findings (not filtered findings) so failOn operates independently of commentOn.
+  const event = determineReviewEvent(report.findings, failOn);
 
   return {
     event,
