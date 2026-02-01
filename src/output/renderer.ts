@@ -54,7 +54,8 @@ function renderReview(
     if (event === 'REQUEST_CHANGES') {
       return {
         event,
-        body: '',
+        // GitHub API requires non-empty body for REQUEST_CHANGES
+        body: 'Findings exceed the configured threshold. See the GitHub Check for details.',
         comments: [],
       };
     }

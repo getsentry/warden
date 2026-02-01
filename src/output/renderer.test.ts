@@ -496,6 +496,9 @@ describe('renderSkillReport', () => {
       expect(result.review).toBeDefined();
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(0);
+      // GitHub API requires non-empty body for REQUEST_CHANGES
+      expect(result.review!.body).toBeTruthy();
+      expect(result.review!.body).toContain('threshold');
     });
 
     it('no review when commentOn filters all findings and failOn threshold not met', () => {
