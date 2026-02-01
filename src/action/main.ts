@@ -1,8 +1,8 @@
 import { readFileSync, appendFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import { execSync } from 'node:child_process';
 import { Octokit } from '@octokit/rest';
+import { execNonInteractive } from '../utils/exec.js';
 import { loadWardenConfig, resolveTrigger, type ResolvedTrigger } from '../config/loader.js';
 import type { ScheduleConfig } from '../config/schema.js';
 import { buildEventContext } from '../event/context.js';
@@ -158,7 +158,7 @@ function findClaudeCodeExecutable(): string {
   const envPath = process.env['CLAUDE_CODE_PATH'];
   if (envPath) {
     try {
-      execSync(`test -x "${envPath}"`, { encoding: 'utf-8' });
+      execNonInteractive(`test -x "${envPath}"`);
       return envPath;
     } catch {
       // Path from env doesn't exist, continue to fallbacks
@@ -168,7 +168,7 @@ function findClaudeCodeExecutable(): string {
   // Standard install location from claude.ai/install.sh
   const homeLocalBin = `${process.env['HOME']}/.local/bin/claude`;
   try {
-    execSync(`test -x "${homeLocalBin}"`, { encoding: 'utf-8' });
+    execNonInteractive(`test -x "${homeLocalBin}"`);
     return homeLocalBin;
   } catch {
     // Not found in standard location
@@ -176,7 +176,7 @@ function findClaudeCodeExecutable(): string {
 
   // Try which command
   try {
-    const path = execSync('which claude', { encoding: 'utf-8' }).trim();
+    const path = execNonInteractive('which claude');
     if (path) {
       return path;
     }
@@ -189,7 +189,7 @@ function findClaudeCodeExecutable(): string {
 
   for (const p of commonPaths) {
     try {
-      execSync(`test -x "${p}"`, { encoding: 'utf-8' });
+      execNonInteractive(`test -x "${p}"`);
       return p;
     } catch {
       // Path doesn't exist or isn't executable

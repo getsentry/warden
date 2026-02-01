@@ -1,5 +1,5 @@
-import { execSync } from 'node:child_process';
 import { countPatchChunks } from '../types/index.js';
+import { execNonInteractive } from '../utils/exec.js';
 
 export interface GitFileChange {
   filename: string;
@@ -12,18 +12,14 @@ export interface GitFileChange {
 
 /**
  * Execute a git command and return stdout.
+ * Uses non-interactive mode to prevent SSH passphrase prompts.
  */
 function git(args: string, cwd: string = process.cwd()): string {
   try {
-    return execSync(`git ${args}`, {
-      cwd,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+    return execNonInteractive(`git ${args}`, { cwd });
   } catch (error) {
-    const execError = error as { stderr?: Buffer | string; message: string };
-    const stderr = execError.stderr?.toString() ?? '';
-    throw new Error(`Git command failed: git ${args}\n${stderr || execError.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Git command failed: git ${args}\n${message}`);
   }
 }
 

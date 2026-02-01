@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { z } from 'zod';
+import { execGitNonInteractive } from '../utils/exec.js';
 import { loadSkillFromMarkdown, SkillLoaderError } from './loader.js';
 import type { SkillDefinition } from '../config/schema.js';
 
@@ -283,16 +283,12 @@ export interface FetchRemoteOptions {
 
 /**
  * Execute a git command and return stdout.
- * Uses execFileSync to avoid shell injection vulnerabilities.
+ * Uses non-interactive mode to prevent SSH passphrase prompts.
  * Throws SkillLoaderError on failure.
  */
 function execGit(args: string[], options?: { cwd?: string }): string {
   try {
-    return execFileSync('git', args, {
-      encoding: 'utf-8',
-      cwd: options?.cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+    return execGitNonInteractive(args, { cwd: options?.cwd });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new SkillLoaderError(`Git command failed: git ${args.join(' ')}: ${message}`);

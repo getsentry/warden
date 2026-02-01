@@ -1,32 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { execSync } from 'node:child_process';
 import { getDefaultBranch, getCurrentBranch, getCommitMessage } from './git.js';
 
-vi.mock('node:child_process', () => ({
-  execSync: vi.fn(),
+vi.mock('../utils/exec.js', () => ({
+  execNonInteractive: vi.fn(),
 }));
 
-const mockExecSync = vi.mocked(execSync);
+import { execNonInteractive } from '../utils/exec.js';
+
+const mockExecNonInteractive = vi.mocked(execNonInteractive);
 
 beforeEach(() => {
-  mockExecSync.mockReset();
+  mockExecNonInteractive.mockReset();
 });
 
 describe('git error handling', () => {
-  it('includes stderr in error message when git command fails', () => {
-    const error = new Error('Command failed') as Error & { stderr: string };
-    error.stderr = 'fatal: not a git repository';
-    mockExecSync.mockImplementation(() => {
-      throw error;
+  it('includes error message when git command fails', () => {
+    mockExecNonInteractive.mockImplementation(() => {
+      throw new Error('Command failed: git rev-parse --abbrev-ref HEAD\nfatal: not a git repository');
     });
 
     expect(() => getCurrentBranch()).toThrow(
-      'Git command failed: git rev-parse --abbrev-ref HEAD\nfatal: not a git repository'
+      'Git command failed: git rev-parse --abbrev-ref HEAD\nCommand failed: git rev-parse --abbrev-ref HEAD\nfatal: not a git repository'
     );
   });
 
-  it('includes command in error message when stderr is empty', () => {
-    mockExecSync.mockImplementation(() => {
+  it('includes command in error message when error is simple', () => {
+    mockExecNonInteractive.mockImplementation(() => {
       throw new Error('Command failed');
     });
 
@@ -39,6 +38,7 @@ describe('git error handling', () => {
 /**
  * Creates a mock that simulates git branch detection.
  * Returns success for branches in existingBranches, and optionally a config value.
+ * Note: execNonInteractive returns trimmed output, so no trailing newlines.
  */
 function mockBranchDetection(
   existingBranches: string[],
@@ -47,11 +47,11 @@ function mockBranchDetection(
   return (cmd: string) => {
     for (const branch of existingBranches) {
       if (cmd === `git rev-parse --verify ${branch}`) {
-        return 'abc123\n';
+        return 'abc123';
       }
     }
     if (cmd === 'git config init.defaultBranch' && configDefault) {
-      return `${configDefault}\n`;
+      return configDefault;
     }
     throw new Error('Not found');
   };
@@ -59,39 +59,39 @@ function mockBranchDetection(
 
 describe('getDefaultBranch', () => {
   it('returns main when main branch exists locally', () => {
-    mockExecSync.mockImplementation(mockBranchDetection(['main']));
+    mockExecNonInteractive.mockImplementation(mockBranchDetection(['main']));
     expect(getDefaultBranch()).toBe('main');
   });
 
   it('returns master when main does not exist but master does', () => {
-    mockExecSync.mockImplementation(mockBranchDetection(['master']));
+    mockExecNonInteractive.mockImplementation(mockBranchDetection(['master']));
     expect(getDefaultBranch()).toBe('master');
   });
 
   it('returns develop when main and master do not exist but develop does', () => {
-    mockExecSync.mockImplementation(mockBranchDetection(['develop']));
+    mockExecNonInteractive.mockImplementation(mockBranchDetection(['develop']));
     expect(getDefaultBranch()).toBe('develop');
   });
 
   it('returns git config init.defaultBranch when no common branches exist', () => {
-    mockExecSync.mockImplementation(mockBranchDetection([], 'trunk'));
+    mockExecNonInteractive.mockImplementation(mockBranchDetection([], 'trunk'));
     expect(getDefaultBranch()).toBe('trunk');
   });
 
   it('returns hardcoded main when no branches exist and no config is set', () => {
-    mockExecSync.mockImplementation(mockBranchDetection([]));
+    mockExecNonInteractive.mockImplementation(mockBranchDetection([]));
     expect(getDefaultBranch()).toBe('main');
   });
 });
 
 describe('getCommitMessage', () => {
   it('returns subject and body from commit', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
+    mockExecNonInteractive.mockImplementation((cmd: string) => {
       if (cmd === 'git log -1 --format=%s HEAD') {
-        return 'feat: Add new feature\n';
+        return 'feat: Add new feature';
       }
       if (cmd === 'git log -1 --format=%b HEAD') {
-        return 'This is the commit body.\n\nWith multiple paragraphs.\n';
+        return 'This is the commit body.\n\nWith multiple paragraphs.';
       }
       throw new Error('Unexpected command');
     });
@@ -102,12 +102,12 @@ describe('getCommitMessage', () => {
   });
 
   it('returns empty body when commit has no body', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
+    mockExecNonInteractive.mockImplementation((cmd: string) => {
       if (cmd === 'git log -1 --format=%s abc123') {
-        return 'fix: Quick fix\n';
+        return 'fix: Quick fix';
       }
       if (cmd === 'git log -1 --format=%b abc123') {
-        return '\n';
+        return '';
       }
       throw new Error('Unexpected command');
     });
