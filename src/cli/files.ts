@@ -13,11 +13,21 @@ export interface ExpandGlobOptions {
 }
 
 /**
+ * Normalize path separators to forward slashes for cross-platform consistency.
+ * fast-glob always returns forward slashes, but Node.js path functions use
+ * backslashes on Windows.
+ */
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+/**
  * Find the git root directory by walking up from the given path.
  * Returns the git root path, or null if not in a git repository.
  */
 function findGitRoot(startPath: string): string | null {
-  let current = startPath;
+  // Resolve to absolute path to handle relative paths like '.' or 'src'
+  let current = resolve(startPath);
 
   while (current !== dirname(current)) {
     const gitDir = join(current, '.git');
@@ -32,7 +42,12 @@ function findGitRoot(startPath: string): string | null {
 
 /**
  * Prefix gitignore patterns with a directory path.
- * Handles negation patterns and preserves comments/empty lines.
+ * Handles negation patterns, leading slashes, and preserves comments/empty lines.
+ *
+ * Note: Patterns without slashes (like *.log) are intentionally NOT prefixed
+ * with **\/ because the ignore package handles them correctly - they match
+ * at any depth relative to the .gitignore location when the path being tested
+ * is relative to the git root with the subdir prefix included.
  */
 function prefixGitignorePatterns(content: string, prefix: string): string {
   return content
@@ -42,10 +57,17 @@ function prefixGitignorePatterns(content: string, prefix: string): string {
       if (!trimmed || trimmed.startsWith('#')) {
         return line;
       }
-      if (trimmed.startsWith('!')) {
-        return `!${prefix}/${trimmed.slice(1)}`;
-      }
-      return `${prefix}/${trimmed}`;
+
+      // Handle negation patterns
+      const isNegation = trimmed.startsWith('!');
+      const pattern = isNegation ? trimmed.slice(1) : trimmed;
+
+      // Handle patterns with leading slash (anchored to .gitignore location)
+      // Remove leading slash to avoid double slashes: /build -> subdir/build
+      const cleanPattern = pattern.startsWith('/') ? pattern.slice(1) : pattern;
+
+      const prefixedPattern = `${prefix}/${cleanPattern}`;
+      return isNegation ? `!${prefixedPattern}` : prefixedPattern;
     })
     .join('\n');
 }
@@ -65,7 +87,11 @@ async function loadGitignoreRules(gitRoot: string, cwd: string): Promise<Ignore>
   // Always ignore .git directory
   ig.add('.git');
 
+  // Normalize git root for consistent comparisons
+  const normalizedGitRoot = normalizePath(gitRoot);
+
   // Find all .gitignore files in the repository
+  // fast-glob always returns forward slashes
   const gitignoreFiles = await fg('**/.gitignore', {
     cwd: gitRoot,
     absolute: true,
@@ -75,27 +101,31 @@ async function loadGitignoreRules(gitRoot: string, cwd: string): Promise<Ignore>
 
   // Also check from cwd up to git root for any .gitignore files
   // that might be outside the search scope
-  let current = cwd;
+  let current = resolve(cwd);
   while (current !== dirname(current)) {
     const gitignorePath = join(current, '.gitignore');
-    if (existsSync(gitignorePath) && !gitignoreFiles.includes(gitignorePath)) {
-      gitignoreFiles.push(gitignorePath);
+    // Normalize for comparison with fast-glob results
+    const normalizedPath = normalizePath(gitignorePath);
+    if (existsSync(gitignorePath) && !gitignoreFiles.includes(normalizedPath)) {
+      gitignoreFiles.push(normalizedPath);
     }
 
-    if (current === gitRoot) {
+    if (normalizePath(current) === normalizedGitRoot) {
       break;
     }
     current = dirname(current);
   }
 
   // Sort by path depth (root first, then nested)
+  // Use forward slashes for consistent depth counting
   gitignoreFiles.sort((a, b) => a.split('/').length - b.split('/').length);
 
   // Process gitignore files from root down (parent rules apply first)
   for (const gitignorePath of gitignoreFiles) {
     try {
       const content = readFileSync(gitignorePath, 'utf-8');
-      const relativeDir = relative(gitRoot, dirname(gitignorePath));
+      // Use normalized paths for relative calculation
+      const relativeDir = normalizePath(relative(gitRoot, dirname(gitignorePath)));
 
       if (relativeDir) {
         ig.add(prefixGitignorePatterns(content, relativeDir));
@@ -123,7 +153,8 @@ export async function expandFileGlobs(
 ): Promise<string[]> {
   const options =
     typeof cwdOrOptions === 'string' ? { cwd: cwdOrOptions } : cwdOrOptions;
-  const cwd = options.cwd ?? process.cwd();
+  // Resolve to absolute path to handle relative paths like '.' or 'src'
+  const cwd = resolve(options.cwd ?? process.cwd());
   const useGitignore = options.gitignore ?? true;
 
   // Get all matching files first
@@ -150,8 +181,12 @@ export async function expandFileGlobs(
   // Load and apply gitignore rules
   const ig = await loadGitignoreRules(gitRoot, cwd);
 
-  // Filter files using gitignore rules (paths must be relative to git root)
-  const filteredFiles = files.filter((file) => !ig.ignores(relative(gitRoot, file)));
+  // Filter files using gitignore rules
+  // Normalize paths to forward slashes for consistent matching
+  const filteredFiles = files.filter((file) => {
+    const relativePath = normalizePath(relative(gitRoot, file));
+    return !ig.ignores(relativePath);
+  });
 
   return filteredFiles.sort();
 }

@@ -210,6 +210,21 @@ describe('expandFileGlobs', () => {
       expect(files.some(f => f.endsWith('subdir-included.ts'))).toBe(true);
       expect(files.some(f => f.includes('ignored'))).toBe(false);
     });
+
+    it('handles leading slash patterns in nested .gitignore', async () => {
+      initGitRepo();
+      mkdirSync(join(tempDir, 'subdir'), { recursive: true });
+      // Leading slash anchors pattern to the .gitignore location
+      writeFileSync(join(tempDir, 'subdir', '.gitignore'), '/anchored.ts\n');
+      writeFileSync(join(tempDir, 'subdir', 'anchored.ts'), 'ignored');
+      writeFileSync(join(tempDir, 'subdir', 'included.ts'), 'included');
+
+      const files = await expandFileGlobs(['**/*.ts'], tempDir);
+
+      expect(files).toHaveLength(1);
+      expect(files.some(f => f.endsWith('included.ts'))).toBe(true);
+      expect(files.some(f => f.endsWith('anchored.ts'))).toBe(false);
+    });
   });
 });
 
