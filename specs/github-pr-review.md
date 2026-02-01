@@ -9,20 +9,22 @@ Two thresholds control PR behavior:
 | Option | Purpose | Default |
 |--------|---------|---------|
 | `commentOn` | Which findings appear as inline PR comments | all severities |
-| `failOn` | When to block the PR (REQUEST_CHANGES) and fail the check | off |
+| `failOn` | When to fail the GitHub Check (blocks merge via branch protection) | off |
 
 ## Review Event Types
 
 GitHub PR reviews have three event types:
 - `COMMENT` - Posts comments without blocking
-- `REQUEST_CHANGES` - Posts comments and blocks merge
+- `REQUEST_CHANGES` - Posts comments with "changes requested" status
 - `APPROVE` - Approves the PR (not used by Warden)
+
+Note: PR reviews are only posted when there are inline comments to show. When `commentOn` filters out all findings (or is set to `off`), no PR review is posted. The GitHub Check still fails independently based on `failOn`.
 
 ## Expected Behavior
 
 ### Review Event Selection
 
-The review event type is determined solely by `failOn`:
+When a PR review is posted (i.e., when there are comments), the event type is determined by `failOn`:
 
 | failOn | Findings | Review Event |
 |--------|----------|--------------|
@@ -53,10 +55,15 @@ The `commentOn` threshold controls which findings appear as comments, independen
 
 `commentOn` and `failOn` operate independently:
 
-- A finding can be commented (`commentOn`) but not block the PR (`failOn`)
-- A finding can block the PR but be filtered from comments (if `commentOn` is more restrictive)
-- Setting `failOn: off` never blocks, regardless of severity
-- Setting `commentOn: off` posts no comments, but `failOn` can still block
+- A finding can be commented (`commentOn`) but not fail the check (`failOn`)
+- A finding can fail the check but be filtered from comments (if `commentOn` is more restrictive)
+- Setting `failOn: off` never fails the check, regardless of severity
+- Setting `commentOn: off` posts no PR review, but `failOn` still fails the check
+
+When `commentOn` is more restrictive than `failOn`:
+- The GitHub Check fails (blocks merge via branch protection)
+- The PR review uses `REQUEST_CHANGES` if any comments are posted
+- If all findings are filtered from comments, no PR review is posted but the check still fails
 
 ### Inline Comment Format
 
@@ -113,6 +120,18 @@ output.failOn = "off"
 - All findings: COMMENT, commented
 - PR never blocked regardless of severity
 
+### Silent Blocking
+
+```toml
+[triggers.security]
+output.failOn = "critical"
+output.commentOn = "off"
+```
+
+- No PR review or comments posted
+- Check fails on critical findings (blocks merge via branch protection)
+- Findings visible in Check run details
+
 ### Silent Monitoring
 
 ```toml
@@ -121,6 +140,6 @@ output.failOn = "off"
 output.commentOn = "off"
 ```
 
-- No comments posted
-- PR never blocked
+- No PR review or comments posted
+- Check never fails
 - Findings only visible in Check run details
