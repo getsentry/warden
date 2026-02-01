@@ -41,7 +41,20 @@ function renderReview(
 ): GitHubReview | undefined {
   const findingsWithLocation = findings.filter((f) => f.location);
 
+  // Determine review event type based on failOn threshold against ALL findings.
+  // Use report.findings (not filtered findings) so failOn operates independently of commentOn.
+  const event = determineReviewEvent(report.findings, failOn);
+
+  // If no comments to post, only create a review if REQUEST_CHANGES is needed
+  // This ensures failOn can block the PR even when commentOn filters out all findings
   if (findingsWithLocation.length === 0) {
+    if (event === 'REQUEST_CHANGES') {
+      return {
+        event,
+        body: '',
+        comments: [],
+      };
+    }
     return undefined;
   }
 
@@ -76,11 +89,6 @@ function renderReview(
       start_side: isMultiLine ? ('RIGHT' as const) : undefined,
     };
   });
-
-  // Determine review event type based on failOn threshold against ALL findings.
-  // REQUEST_CHANGES only when findings would cause the build to fail.
-  // Use report.findings (not filtered findings) so failOn operates independently of commentOn.
-  const event = determineReviewEvent(report.findings, failOn);
 
   return {
     event,

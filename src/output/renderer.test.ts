@@ -491,12 +491,31 @@ describe('renderSkillReport', () => {
 
       // commentOn=critical filters out high finding from comments (no comments posted)
       // failOn=high should still cause REQUEST_CHANGES because high finding meets threshold
+      // Per spec: "a finding can block the PR but be filtered from comments"
       const result = renderSkillReport(report, { failOn: 'high', commentOn: 'critical' });
-      // Review is undefined because no findings pass commentOn filter to become comments
-      // But the spec says findings can "block the PR but be filtered from comments"
-      // This requires a review with REQUEST_CHANGES even with no inline comments
-      // Current behavior: review is undefined when no comments
-      // This test documents the current behavior after the fix
+      expect(result.review).toBeDefined();
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+      expect(result.review!.comments).toHaveLength(0);
+    });
+
+    it('no review when commentOn filters all findings and failOn threshold not met', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'medium',
+            title: 'Medium Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      // commentOn=critical filters out medium finding (no comments)
+      // failOn=high: medium doesn't meet threshold, so no REQUEST_CHANGES needed
+      // Result: no review posted (nothing useful to show)
+      const result = renderSkillReport(report, { failOn: 'high', commentOn: 'critical' });
       expect(result.review).toBeUndefined();
     });
 
