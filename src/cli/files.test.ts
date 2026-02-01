@@ -121,6 +121,96 @@ describe('expandFileGlobs', () => {
     const files = await expandFileGlobs(['*.nonexistent'], tempDir);
     expect(files).toHaveLength(0);
   });
+
+  describe('gitignore support', () => {
+    function initGitRepo(): void {
+      mkdirSync(join(tempDir, '.git'), { recursive: true });
+    }
+
+    it('excludes files matching .gitignore patterns by default', async () => {
+      initGitRepo();
+      writeFileSync(join(tempDir, '.gitignore'), 'ignored.ts\nbuild/\n');
+      writeFileSync(join(tempDir, 'included.ts'), 'content');
+      writeFileSync(join(tempDir, 'ignored.ts'), 'should be ignored');
+      mkdirSync(join(tempDir, 'build'), { recursive: true });
+      writeFileSync(join(tempDir, 'build', 'output.ts'), 'should be ignored');
+
+      const files = await expandFileGlobs(['**/*.ts'], tempDir);
+
+      expect(files).toHaveLength(1);
+      expect(files.some(f => f.endsWith('included.ts'))).toBe(true);
+      expect(files.some(f => f.endsWith('ignored.ts'))).toBe(false);
+      expect(files.some(f => f.includes('build/'))).toBe(false);
+    });
+
+    it('includes ignored files when gitignore: false', async () => {
+      initGitRepo();
+      writeFileSync(join(tempDir, '.gitignore'), 'ignored.ts\n');
+      writeFileSync(join(tempDir, 'included.ts'), 'content');
+      writeFileSync(join(tempDir, 'ignored.ts'), 'content');
+
+      const files = await expandFileGlobs(['**/*.ts'], { cwd: tempDir, gitignore: false });
+
+      expect(files).toHaveLength(2);
+      expect(files.some(f => f.endsWith('included.ts'))).toBe(true);
+      expect(files.some(f => f.endsWith('ignored.ts'))).toBe(true);
+    });
+
+    it('handles node_modules pattern', async () => {
+      initGitRepo();
+      writeFileSync(join(tempDir, '.gitignore'), 'node_modules/\n');
+      writeFileSync(join(tempDir, 'index.ts'), 'content');
+      mkdirSync(join(tempDir, 'node_modules', 'pkg'), { recursive: true });
+      writeFileSync(join(tempDir, 'node_modules', 'pkg', 'index.ts'), 'module');
+
+      const files = await expandFileGlobs(['**/*.ts'], tempDir);
+
+      expect(files).toHaveLength(1);
+      expect(files.some(f => f.endsWith('index.ts'))).toBe(true);
+      expect(files.some(f => f.includes('node_modules'))).toBe(false);
+    });
+
+    it('handles negation patterns in .gitignore', async () => {
+      initGitRepo();
+      writeFileSync(join(tempDir, '.gitignore'), '*.ts\n!important.ts\n');
+      writeFileSync(join(tempDir, 'ignored.ts'), 'ignored');
+      writeFileSync(join(tempDir, 'important.ts'), 'not ignored');
+
+      const files = await expandFileGlobs(['**/*.ts'], tempDir);
+
+      expect(files).toHaveLength(1);
+      expect(files.some(f => f.endsWith('important.ts'))).toBe(true);
+      expect(files.some(f => f.endsWith('ignored.ts'))).toBe(false);
+    });
+
+    it('skips gitignore rules when not in a git repository', async () => {
+      writeFileSync(join(tempDir, 'file1.ts'), 'content');
+      writeFileSync(join(tempDir, 'file2.ts'), 'content');
+      writeFileSync(join(tempDir, '.gitignore'), 'file2.ts\n');
+
+      const files = await expandFileGlobs(['**/*.ts'], tempDir);
+
+      expect(files).toHaveLength(2);
+    });
+
+    it('handles nested .gitignore files', async () => {
+      initGitRepo();
+      writeFileSync(join(tempDir, '.gitignore'), 'root-ignored.ts\n');
+      mkdirSync(join(tempDir, 'subdir'), { recursive: true });
+      writeFileSync(join(tempDir, 'subdir', '.gitignore'), 'subdir-ignored.ts\n');
+      writeFileSync(join(tempDir, 'root-ignored.ts'), 'ignored');
+      writeFileSync(join(tempDir, 'root-included.ts'), 'included');
+      writeFileSync(join(tempDir, 'subdir', 'subdir-ignored.ts'), 'ignored');
+      writeFileSync(join(tempDir, 'subdir', 'subdir-included.ts'), 'included');
+
+      const files = await expandFileGlobs(['**/*.ts'], tempDir);
+
+      expect(files).toHaveLength(2);
+      expect(files.some(f => f.endsWith('root-included.ts'))).toBe(true);
+      expect(files.some(f => f.endsWith('subdir-included.ts'))).toBe(true);
+      expect(files.some(f => f.includes('ignored'))).toBe(false);
+    });
+  });
 });
 
 describe('expandAndCreateFileChanges', () => {
