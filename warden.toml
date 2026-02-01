@@ -11,9 +11,3 @@ name = "notseer"
 event = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
 skill = "notseer"
-
-[[triggers]]
-name = "testing-guidelines"
-event = "pull_request"
-actions = ["opened", "synchronize", "reopened"]
-skill = "testing-guidelines"
