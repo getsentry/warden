@@ -708,9 +708,11 @@ async function run(): Promise<void> {
         }
       }
 
-      // Only render if we're going to post comments
+      // Render if we're going to post comments OR if we might need to approve
+      // (approval can happen even with no comments when previousReviewState is CHANGES_REQUESTED)
+      const mightNeedApproval = previousReviewState === 'CHANGES_REQUESTED' && failOn && failOn !== 'off';
       const renderResult =
-        commentOn !== 'off'
+        commentOn !== 'off' || mightNeedApproval
           ? renderSkillReport(report, {
               maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
               commentOn,
