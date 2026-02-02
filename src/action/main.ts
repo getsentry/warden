@@ -32,6 +32,7 @@ import type { ExistingComment, DeduplicateResult } from '../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult, ReviewState } from '../output/types.js';
+import { findBotReviewState } from './review-state.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
 /**
@@ -242,12 +243,6 @@ function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): vo
   }
 }
 
-const VALID_REVIEW_STATES: ReadonlySet<string> = new Set(['CHANGES_REQUESTED', 'APPROVED', 'COMMENTED']);
-
-function isValidReviewState(state: string): state is ReviewState {
-  return VALID_REVIEW_STATES.has(state);
-}
-
 /**
  * Get the authenticated bot's login name.
  * For GitHub Apps, this returns the app's slug with [bot] suffix (e.g., "warden[bot]").
@@ -295,20 +290,7 @@ async function getWardenPreviousReviewState(
       per_page: 100,
     });
 
-    // Find the most recent review from this bot
-    // Reviews are returned in chronological order, so search from the end
-    for (let i = reviews.length - 1; i >= 0; i--) {
-      const review = reviews[i];
-      if (!review?.user || !isValidReviewState(review.state)) {
-        continue;
-      }
-
-      if (review.user.login === botLogin) {
-        return review.state;
-      }
-    }
-
-    return null;
+    return findBotReviewState(reviews, botLogin);
   } catch (error) {
     console.warn(`::warning::Failed to fetch previous review state: ${error}`);
     return null;
