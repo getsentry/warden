@@ -876,6 +876,9 @@ async function run(): Promise<void> {
                 review: {
                   ...renderResultToPost.review,
                   event: 'COMMENT',
+                  // Clear the approval body since we're not actually approving
+                  // (another trigger has blocking findings)
+                  body: '',
                 },
               };
             }
