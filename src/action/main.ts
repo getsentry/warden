@@ -267,6 +267,7 @@ async function getAuthenticatedBotLogin(octokit: Octokit): Promise<string | null
 /**
  * Get Warden's previous review state on a PR.
  * Returns the most recent review state if Warden (the authenticated app) previously reviewed.
+ * Returns null if we can't reliably identify our own reviews (e.g., using PAT instead of GitHub App).
  */
 async function getWardenPreviousReviewState(
   octokit: Octokit,
@@ -277,6 +278,15 @@ async function getWardenPreviousReviewState(
   try {
     // Get the authenticated bot's login to identify our own reviews
     const botLogin = await getAuthenticatedBotLogin(octokit);
+
+    // Without a bot login, we can't reliably identify our own reviews.
+    // Skip approval flow to avoid approving based on another bot's review.
+    if (!botLogin) {
+      console.log(
+        'Skipping approval flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
+      );
+      return null;
+    }
 
     const { data: reviews } = await octokit.pulls.listReviews({
       owner,
@@ -293,12 +303,7 @@ async function getWardenPreviousReviewState(
         continue;
       }
 
-      // Match by login if we know the bot's identity, otherwise fall back to type check
-      const isOurReview = botLogin
-        ? review.user.login === botLogin
-        : review.user.type === 'Bot';
-
-      if (isOurReview) {
+      if (review.user.login === botLogin) {
         return review.state;
       }
     }

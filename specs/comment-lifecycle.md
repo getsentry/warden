@@ -132,10 +132,13 @@ A Warden comment is automatically resolved when:
 | CHANGES_REQUESTED | Blocking | REQUEST_CHANGES |
 | CHANGES_REQUESTED | Non-blocking | APPROVE |
 | CHANGES_REQUESTED | None | APPROVE |
-| APPROVED | Any | (no change needed) |
+| APPROVED | Blocking | REQUEST_CHANGES |
+| APPROVED | Non-blocking | COMMENT |
 | COMMENTED | Any | (follow "None" rules) |
 
 "Blocking" means findings at or above the `failOn` severity threshold.
+
+**Important**: Approval only occurs when `failOn` is configured. Without an active threshold, Warden uses COMMENT even if it previously requested changes. This prevents accidental approval when configuration changes between runs.
 
 ### Approval Message
 
@@ -212,6 +215,43 @@ Result:
 - 1 comment remains open
 - PR still shows CHANGES_REQUESTED
 ```
+
+---
+
+## Limitations
+
+### Location Tolerance
+
+Findings match existing comments if within 5 lines. If code moves more than 5 lines during refactoring:
+- Original comment may be incorrectly marked as "stale"
+- New comment posted at the new location
+- Results in temporary duplicate (old resolved, new posted)
+
+### Semantic Matching Requires API Key
+
+Without an Anthropic API key:
+- Only exact content hash matching is used
+- Near-duplicates (same issue, different wording) may be posted
+- External comment matching is less accurate
+
+### GitHub App Required for Approval
+
+The approval flow requires a GitHub App token to reliably identify Warden's own reviews. When using a PAT or `GITHUB_TOKEN`:
+- Approval flow is skipped
+- Previous CHANGES_REQUESTED state is not cleared automatically
+- User must dismiss the review manually
+
+### CLI vs GitHub Action
+
+| Feature | CLI (`warden run`) | GitHub Action |
+|---------|-------------------|---------------|
+| Finds issues | Yes | Yes |
+| Posts PR comments | No | Yes |
+| Resolves stale comments | No | Yes |
+| Approval flow | No | Yes |
+| Tracks review state | No | Yes |
+
+The CLI is for local development and CI checks. Full comment lifecycle features require the GitHub Action.
 
 ---
 

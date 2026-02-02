@@ -49,6 +49,10 @@ When Warden previously posted a `REQUEST_CHANGES` review and the blocking issues
 
 The approval clears Warden's "changes requested" status so the PR can be merged without manual dismissal.
 
+**Requirements for approval**:
+- `failOn` must be configured (approval is meaningless without a threshold)
+- Must use a GitHub App token (PAT/GITHUB_TOKEN cannot reliably identify previous reviews)
+
 See [Comment Lifecycle](comment-lifecycle.md) for details on how Warden tracks its previous review state.
 
 ### Comment Filtering

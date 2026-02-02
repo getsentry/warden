@@ -691,19 +691,20 @@ describe('renderSkillReport', () => {
       expect(result.review).toBeUndefined();
     });
 
-    it('uses APPROVE even when failOn is not set if previousReviewState is CHANGES_REQUESTED', () => {
+    it('does NOT approve when failOn is not set, even if previousReviewState is CHANGES_REQUESTED', () => {
       const report: SkillReport = {
         ...baseReport,
         findings: [],
       };
 
-      // No failOn means no blocking findings by definition
+      // Without failOn, approval is meaningless - we wouldn't have requested changes
+      // This prevents accidental approval when config changes between runs
       const result = renderSkillReport(report, {
         previousReviewState: 'CHANGES_REQUESTED',
       });
 
-      expect(result.review).toBeDefined();
-      expect(result.review!.event).toBe('APPROVE');
+      // No review - no failOn means no meaningful state to transition
+      expect(result.review).toBeUndefined();
     });
 
     it('APPROVE body contains resolution message', () => {

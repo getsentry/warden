@@ -114,7 +114,7 @@ function renderReview(
  * Determine the PR review event type based on failOn threshold and previous review state.
  * Returns:
  * - REQUEST_CHANGES if failOn is set and findings meet/exceed the threshold
- * - APPROVE if we previously requested changes but no longer have blocking findings
+ * - APPROVE if failOn is set, we previously requested changes, and no longer have blocking findings
  * - COMMENT otherwise
  */
 function determineReviewEvent(
@@ -122,18 +122,21 @@ function determineReviewEvent(
   failOn?: SeverityThreshold,
   previousReviewState?: 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED' | null
 ): GitHubReview['event'] {
+  // failOn must be set (and not 'off') for REQUEST_CHANGES or APPROVE
+  const hasActiveThreshold = failOn && failOn !== 'off';
+
   // Check if any finding meets or exceeds the failOn threshold
   const hasBlockingFinding =
-    failOn &&
-    failOn !== 'off' &&
+    hasActiveThreshold &&
     findings.some((f) => SEVERITY_ORDER[f.severity] <= SEVERITY_ORDER[failOn]);
 
   if (hasBlockingFinding) {
     return 'REQUEST_CHANGES';
   }
 
-  // If we previously requested changes but no longer have blocking findings, approve
-  if (previousReviewState === 'CHANGES_REQUESTED') {
+  // Only approve if we have an active threshold configured.
+  // Without failOn, approval is meaningless (we never would have requested changes).
+  if (hasActiveThreshold && previousReviewState === 'CHANGES_REQUESTED') {
     return 'APPROVE';
   }
 
