@@ -2,7 +2,7 @@ import type { ReviewState } from '../output/types.js';
 
 const VALID_REVIEW_STATES: ReadonlySet<string> = new Set(['CHANGES_REQUESTED', 'APPROVED', 'COMMENTED']);
 
-export function isValidReviewState(state: string): state is ReviewState {
+function isValidReviewState(state: string): state is ReviewState {
   return VALID_REVIEW_STATES.has(state);
 }
 
