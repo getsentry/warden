@@ -781,14 +781,13 @@ async function run(): Promise<void> {
       reviewEvent: r.renderResult?.review?.event,
     }))
   );
-  const coordinationByTrigger = new Map(reviewCoordination.map((c) => [c.triggerName, c]));
 
-  for (const result of results) {
+  // Use index-based lookup instead of Map to handle duplicate trigger names correctly.
+  // The coordination array order matches the results array order (both from same .map()).
+  for (const [i, result] of results.entries()) {
+    const coordination = reviewCoordination[i];
     if (result.report) {
       reports.push(result.report);
-
-      // Get the coordinated review decision for this trigger
-      const coordination = coordinationByTrigger.get(result.triggerName);
       const needsApproval = coordination?.reviewEvent === 'APPROVE';
 
       if (coordination?.approvalSuppressed) {
