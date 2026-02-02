@@ -302,14 +302,15 @@ function splitHunk(hunk: DiffHunk, maxChunkSize: number): DiffHunk[] {
       break;
     }
 
-    // Find best split point
-    const splitIdx = findBestSplitPoint(lines, currentStart, lines.length, targetEnd);
+    // Find best split point, ensuring we advance by at least one line
+    let splitIdx = findBestSplitPoint(lines, currentStart, lines.length, targetEnd);
+    if (splitIdx <= currentStart) {
+      splitIdx = currentStart + 1;
+    }
 
     // Extract lines for this chunk
     const chunkLines = lines.slice(currentStart, splitIdx);
-    if (chunkLines.length > 0) {
-      result.push(createSubHunk(hunk, chunkLines, currentStart));
-    }
+    result.push(createSubHunk(hunk, chunkLines, currentStart));
 
     currentStart = splitIdx;
   }

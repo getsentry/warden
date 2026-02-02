@@ -249,6 +249,21 @@ describe('splitLargeHunks', () => {
       }
     });
 
+    it('handles lines longer than maxChunkSize without infinite loop', () => {
+      // Create lines where average length exceeds maxChunkSize
+      // This previously caused an infinite loop when estimatedLines = 0
+      const lines = Array.from({ length: 5 }, (_, i) => ` line ${i}: ${'x'.repeat(200)}`);
+      const content = lines.join('\n');
+      const hunk = makeHunk(1, 5, content);
+
+      // maxChunkSize smaller than average line length
+      const result = splitLargeHunks([hunk], { maxChunkSize: 100 });
+
+      // Should still complete and produce results (one line per chunk in worst case)
+      expect(result.length).toBeGreaterThan(0);
+      expect(result.length).toBeLessThanOrEqual(lines.length);
+    });
+
     it('prefers blank lines as split points', () => {
       // Create content with a clear blank line in the middle
       const part1 = Array.from({ length: 10 }, (_, i) => ` line ${i}: ${'a'.repeat(30)}`).join('\n');
