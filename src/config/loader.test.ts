@@ -311,3 +311,56 @@ describe('batchDelayMs config', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('trigger name uniqueness', () => {
+  it('allows unique trigger names', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        { name: 'trigger-a', event: 'pull_request', actions: ['opened'], skill: 'skill-a' },
+        { name: 'trigger-b', event: 'pull_request', actions: ['opened'], skill: 'skill-b' },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects duplicate trigger names', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        { name: 'my-trigger', event: 'pull_request', actions: ['opened'], skill: 'skill-a' },
+        { name: 'my-trigger', event: 'pull_request', actions: ['opened'], skill: 'skill-b' },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('Duplicate trigger names: my-trigger');
+    }
+  });
+
+  it('reports all duplicate names in error message', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        { name: 'dup-a', event: 'pull_request', actions: ['opened'], skill: 'skill-1' },
+        { name: 'dup-a', event: 'pull_request', actions: ['opened'], skill: 'skill-2' },
+        { name: 'dup-b', event: 'pull_request', actions: ['opened'], skill: 'skill-3' },
+        { name: 'dup-b', event: 'pull_request', actions: ['opened'], skill: 'skill-4' },
+        { name: 'unique', event: 'pull_request', actions: ['opened'], skill: 'skill-5' },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = result.error.issues[0]?.message ?? '';
+      expect(message).toContain('dup-a');
+      expect(message).toContain('dup-b');
+      expect(message).not.toContain('unique');
+    }
+  });
+});

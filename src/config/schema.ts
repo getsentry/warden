@@ -161,10 +161,22 @@ export const DefaultsSchema = z.object({
 export type Defaults = z.infer<typeof DefaultsSchema>;
 
 // Main warden.toml configuration
-export const WardenConfigSchema = z.object({
-  version: z.literal(1),
-  defaults: DefaultsSchema.optional(),
-  triggers: z.array(TriggerSchema).default([]),
-  runner: RunnerConfigSchema.optional(),
-});
+export const WardenConfigSchema = z
+  .object({
+    version: z.literal(1),
+    defaults: DefaultsSchema.optional(),
+    triggers: z.array(TriggerSchema).default([]),
+    runner: RunnerConfigSchema.optional(),
+  })
+  .superRefine((config, ctx) => {
+    const names = config.triggers.map((t) => t.name);
+    const duplicates = names.filter((name, i) => names.indexOf(name) !== i);
+    if (duplicates.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Duplicate trigger names: ${[...new Set(duplicates)].join(', ')}`,
+        path: ['triggers'],
+      });
+    }
+  });
 export type WardenConfig = z.infer<typeof WardenConfigSchema>;
