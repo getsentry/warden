@@ -32,7 +32,7 @@ import type { ExistingComment, DeduplicateResult } from '../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult, ReviewState } from '../output/types.js';
-import { findBotReviewState } from './review-state.js';
+import { findBotReviewState, coordinateReviewEvents } from './review-state.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
 /**
@@ -768,38 +768,36 @@ async function run(): Promise<void> {
   const reports: SkillReport[] = [];
   let shouldFailAction = false;
 
-  // Check if ANY trigger has blocking findings (REQUEST_CHANGES)
-  // This prevents a trigger with no findings from posting APPROVE when another trigger has issues
-  const anyTriggerHasBlockingFindings = results.some(
-    (r) => r.renderResult?.review?.event === 'REQUEST_CHANGES'
+  // Coordinate review events across triggers to ensure consistent PR state:
+  // - If ANY trigger has REQUEST_CHANGES, no trigger posts APPROVE
+  // - Only ONE trigger posts APPROVE (first one wins)
+  const reviewCoordination = coordinateReviewEvents(
+    results.map((r) => ({
+      triggerName: r.triggerName,
+      reviewEvent: r.renderResult?.review?.event,
+    }))
   );
-
-  // Track whether we've already posted an APPROVE to avoid duplicate approval reviews
-  let approvalPosted = false;
+  const coordinationByTrigger = new Map(reviewCoordination.map((c) => [c.triggerName, c]));
 
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
+
+      // Get the coordinated review decision for this trigger
+      const coordination = coordinationByTrigger.get(result.triggerName);
+      const needsApproval = coordination?.reviewEvent === 'APPROVE';
+
+      if (coordination?.approvalSuppressed) {
+        console.log(
+          `Suppressing APPROVE for ${result.triggerName}: ${coordination.suppressionReason}`
+        );
+      }
 
       // Post review to GitHub (renderResult is undefined when commentOn is 'off')
       // Only post if there are findings (after commentOn filtering) OR commentOnSuccess is true
       // OR if we need to post an APPROVE review to clear a previous CHANGES_REQUESTED
       const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
       const commentOnSuccess = result.commentOnSuccess ?? false;
-      const wantsApproval = result.renderResult?.review?.event === 'APPROVE';
-      // Only approve if this trigger wants to AND no other trigger has blocking findings
-      // AND we haven't already posted an approval (avoid duplicate APPROVE reviews)
-      const needsApproval = wantsApproval && !anyTriggerHasBlockingFindings && !approvalPosted;
-
-      if (wantsApproval && anyTriggerHasBlockingFindings) {
-        console.log(
-          `Suppressing APPROVE for ${result.triggerName}: another trigger has blocking findings`
-        );
-      } else if (wantsApproval && approvalPosted) {
-        console.log(
-          `Skipping APPROVE for ${result.triggerName}: approval already posted by earlier trigger`
-        );
-      }
 
       if (result.renderResult && (filteredFindings.length > 0 || commentOnSuccess || needsApproval)) {
         try {
@@ -845,10 +843,11 @@ async function run(): Promise<void> {
           // Only post if we have non-duplicate findings, commentOnSuccess is true, or we need to approve
           if (findingsToPost.length > 0 || commentOnSuccess || needsApproval) {
             // Re-render with deduplicated findings if any were removed
-            // Don't pass previousReviewState if another trigger has blocking findings OR
-            // if we've already posted an approval (to avoid re-rendering as APPROVE)
-            const effectivePreviousReviewState =
-              anyTriggerHasBlockingFindings || approvalPosted ? null : result.previousReviewState;
+            // Don't pass previousReviewState if this trigger's approval was suppressed
+            // (to avoid re-rendering as APPROVE when coordination decided otherwise)
+            const effectivePreviousReviewState = coordination?.approvalSuppressed
+              ? null
+              : result.previousReviewState;
 
             let renderResultToPost =
               findingsToPost.length !== filteredFindings.length
@@ -867,11 +866,9 @@ async function run(): Promise<void> {
                   )
                 : result.renderResult;
 
-            // Downgrade APPROVE to COMMENT if:
-            // - Another trigger has blocking findings, OR
-            // - We've already posted an approval (avoid duplicate APPROVE reviews)
+            // Apply coordinated review event (may downgrade APPROVE to COMMENT)
             if (
-              (anyTriggerHasBlockingFindings || approvalPosted) &&
+              coordination?.approvalSuppressed &&
               renderResultToPost?.review?.event === 'APPROVE'
             ) {
               renderResultToPost = {
@@ -884,11 +881,6 @@ async function run(): Promise<void> {
             }
 
             await postReviewToGitHub(octokit, context, renderResultToPost);
-
-            // Track that we've posted an approval to prevent duplicates
-            if (renderResultToPost?.review?.event === 'APPROVE') {
-              approvalPosted = true;
-            }
 
             // Add newly posted findings to existing comments for cross-trigger deduplication
             // Only include findings up to maxFindings since that's what was actually posted
