@@ -768,6 +768,12 @@ async function run(): Promise<void> {
   const reports: SkillReport[] = [];
   let shouldFailAction = false;
 
+  // Check if ANY trigger has blocking findings (REQUEST_CHANGES)
+  // This prevents a trigger with no findings from posting APPROVE when another trigger has issues
+  const anyTriggerHasBlockingFindings = results.some(
+    (r) => r.renderResult?.review?.event === 'REQUEST_CHANGES'
+  );
+
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
@@ -777,7 +783,15 @@ async function run(): Promise<void> {
       // OR if we need to post an APPROVE review to clear a previous CHANGES_REQUESTED
       const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
       const commentOnSuccess = result.commentOnSuccess ?? false;
-      const needsApproval = result.renderResult?.review?.event === 'APPROVE';
+      const wantsApproval = result.renderResult?.review?.event === 'APPROVE';
+      // Only approve if this trigger wants to AND no other trigger has blocking findings
+      const needsApproval = wantsApproval && !anyTriggerHasBlockingFindings;
+
+      if (wantsApproval && anyTriggerHasBlockingFindings) {
+        console.log(
+          `Suppressing APPROVE for ${result.triggerName}: another trigger has blocking findings`
+        );
+      }
 
       if (result.renderResult && (filteredFindings.length > 0 || commentOnSuccess || needsApproval)) {
         try {
@@ -823,7 +837,12 @@ async function run(): Promise<void> {
           // Only post if we have non-duplicate findings, commentOnSuccess is true, or we need to approve
           if (findingsToPost.length > 0 || commentOnSuccess || needsApproval) {
             // Re-render with deduplicated findings if any were removed
-            const renderResultToPost =
+            // When another trigger has blocking findings, don't pass previousReviewState to avoid APPROVE
+            const effectivePreviousReviewState = anyTriggerHasBlockingFindings
+              ? null
+              : result.previousReviewState;
+
+            let renderResultToPost =
               findingsToPost.length !== filteredFindings.length
                 ? renderSkillReport(
                     { ...result.report, findings: findingsToPost },
@@ -835,10 +854,24 @@ async function run(): Promise<void> {
                       totalFindings: result.report.findings.length,
                       // Pass original findings for failOn evaluation (not affected by dedup)
                       allFindings: result.report.findings,
-                      previousReviewState: result.previousReviewState,
+                      previousReviewState: effectivePreviousReviewState,
                     }
                   )
                 : result.renderResult;
+
+            // If another trigger has blocking findings, downgrade any APPROVE to COMMENT
+            if (
+              anyTriggerHasBlockingFindings &&
+              renderResultToPost?.review?.event === 'APPROVE'
+            ) {
+              renderResultToPost = {
+                ...renderResultToPost,
+                review: {
+                  ...renderResultToPost.review,
+                  event: 'COMMENT',
+                },
+              };
+            }
 
             await postReviewToGitHub(octokit, context, renderResultToPost);
 
