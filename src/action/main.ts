@@ -31,7 +31,7 @@ import {
 import type { ExistingComment, DeduplicateResult } from '../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
-import type { RenderResult } from '../output/types.js';
+import type { RenderResult, ReviewState } from '../output/types.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
 /**
@@ -242,9 +242,7 @@ function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): vo
   }
 }
 
-type ReviewState = 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED';
-
-const VALID_REVIEW_STATES = new Set<string>(['CHANGES_REQUESTED', 'APPROVED', 'COMMENTED']);
+const VALID_REVIEW_STATES: ReadonlySet<string> = new Set(['CHANGES_REQUESTED', 'APPROVED', 'COMMENTED']);
 
 function isValidReviewState(state: string): state is ReviewState {
   return VALID_REVIEW_STATES.has(state);
@@ -288,6 +286,8 @@ async function getWardenPreviousReviewState(
       return null;
     }
 
+    // Note: No pagination. PRs with 100+ reviews are rare; if Warden's review
+    // is beyond page 1, user can manually dismiss. Not worth the complexity.
     const { data: reviews } = await octokit.pulls.listReviews({
       owner,
       repo,
@@ -790,10 +790,12 @@ async function run(): Promise<void> {
 
       // Post review to GitHub (renderResult is undefined when commentOn is 'off')
       // Only post if there are findings (after commentOn filtering) OR commentOnSuccess is true
+      // OR if we need to post an APPROVE review to clear a previous CHANGES_REQUESTED
       const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
       const commentOnSuccess = result.commentOnSuccess ?? false;
+      const needsApproval = result.renderResult?.review?.event === 'APPROVE';
 
-      if (result.renderResult && (filteredFindings.length > 0 || commentOnSuccess)) {
+      if (result.renderResult && (filteredFindings.length > 0 || commentOnSuccess || needsApproval)) {
         try {
           // Deduplicate findings against existing comments
           let findingsToPost = filteredFindings;
@@ -834,8 +836,8 @@ async function run(): Promise<void> {
             }
           }
 
-          // Only post if we have non-duplicate findings or commentOnSuccess is true
-          if (findingsToPost.length > 0 || commentOnSuccess) {
+          // Only post if we have non-duplicate findings, commentOnSuccess is true, or we need to approve
+          if (findingsToPost.length > 0 || commentOnSuccess || needsApproval) {
             // Re-render with deduplicated findings if any were removed
             const renderResultToPost =
               findingsToPost.length !== filteredFindings.length

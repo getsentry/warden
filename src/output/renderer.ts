@@ -1,6 +1,6 @@
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
-import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
+import type { RenderResult, RenderOptions, GitHubReview, GitHubComment, ReviewState } from './types.js';
 import { formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
 import { generateContentHash, generateMarker } from './dedup.js';
 import { escapeHtml } from '../utils/index.js';
@@ -41,7 +41,7 @@ function renderReview(
   includeSuggestions: boolean,
   failOn?: SeverityThreshold,
   allFindings?: Finding[],
-  previousReviewState?: 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED' | null
+  previousReviewState?: ReviewState | null
 ): GitHubReview | undefined {
   const findingsWithLocation = findings.filter((f) => f.location);
 
@@ -120,7 +120,7 @@ function renderReview(
 function determineReviewEvent(
   findings: Finding[],
   failOn?: SeverityThreshold,
-  previousReviewState?: 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED' | null
+  previousReviewState?: ReviewState | null
 ): GitHubReview['event'] {
   // failOn must be set (and not 'off') for REQUEST_CHANGES or APPROVE
   const hasActiveThreshold = failOn && failOn !== 'off';
