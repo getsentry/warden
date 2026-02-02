@@ -147,6 +147,15 @@ export async function resolveStaleComments(
       });
       resolvedCount++;
     } catch (error) {
+      const errorMessage = String(error);
+      if (errorMessage.includes('Resource not accessible')) {
+        // Permission error affects all threads; log once and stop trying
+        console.warn(
+          `Failed to resolve thread: GitHub App may need 'contents:write' permission. ` +
+            `See: https://github.com/orgs/community/discussions/44650`
+        );
+        break;
+      }
       console.warn(`Failed to resolve thread for comment ${comment.id}: ${error}`);
     }
   }

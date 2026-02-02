@@ -16,9 +16,9 @@ Two thresholds control PR behavior:
 GitHub PR reviews have three event types:
 - `COMMENT` - Posts comments without blocking
 - `REQUEST_CHANGES` - Posts comments with "changes requested" status
-- `APPROVE` - Approves the PR (not used by Warden)
+- `APPROVE` - Approves the PR, clearing a previous "changes requested" status
 
-Note: PR reviews are only posted when there are inline comments to show. When `commentOn` filters out all findings (or is set to `off`), no PR review is posted. The GitHub Check still fails independently based on `failOn`.
+Note: PR reviews are only posted when there are inline comments to show, OR when transitioning from REQUEST_CHANGES to APPROVE. When `commentOn` filters out all findings (or is set to `off`), no PR review is posted unless an approval is needed. The GitHub Check still fails independently based on `failOn`.
 
 ## Expected Behavior
 
@@ -36,6 +36,20 @@ When a PR review is posted (i.e., when there are comments), the event type is de
 | `high` | medium or lower | COMMENT |
 | `medium` | critical, high, or medium | REQUEST_CHANGES |
 | `medium` | low or info | COMMENT |
+
+### Approval After Fixes
+
+When Warden previously posted a `REQUEST_CHANGES` review and the blocking issues are now fixed:
+
+| Previous State | Current Blocking Findings | Review Event |
+|----------------|---------------------------|--------------|
+| REQUEST_CHANGES | none | APPROVE |
+| REQUEST_CHANGES | some | REQUEST_CHANGES |
+| COMMENT or none | any | (follow table above) |
+
+The approval clears Warden's "changes requested" status so the PR can be merged without manual dismissal.
+
+See [Comment Lifecycle](comment-lifecycle.md) for details on how Warden tracks its previous review state.
 
 ### Comment Filtering
 

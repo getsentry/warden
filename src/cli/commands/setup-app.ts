@@ -30,7 +30,7 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
 
   // Show what permissions will be requested
   reporter.text('This will create a GitHub App with the following permissions:');
-  reporter.text(`  ${chalk.dim('•')} contents: read        ${chalk.dim('- Read repository files')}`);
+  reporter.text(`  ${chalk.dim('•')} contents: write       ${chalk.dim('- Read files, resolve review threads')}`);
   reporter.text(`  ${chalk.dim('•')} pull_requests: write  ${chalk.dim('- Post review comments')}`);
   reporter.text(`  ${chalk.dim('•')} issues: write         ${chalk.dim('- Create/update issues')}`);
   reporter.text(`  ${chalk.dim('•')} checks: write         ${chalk.dim('- Create check runs')}`);

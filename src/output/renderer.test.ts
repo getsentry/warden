@@ -596,6 +596,133 @@ describe('renderSkillReport', () => {
     });
   });
 
+  describe('previousReviewState and APPROVE', () => {
+    it('uses APPROVE when previousReviewState is CHANGES_REQUESTED and no blocking findings', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [], // No findings - issues are fixed
+      };
+
+      const result = renderSkillReport(report, {
+        failOn: 'high',
+        previousReviewState: 'CHANGES_REQUESTED',
+      });
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.event).toBe('APPROVE');
+      expect(result.review!.body).toContain('All previously reported issues have been resolved');
+    });
+
+    it('uses APPROVE with low findings when failOn is high and previously requested changes', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      // Low finding doesn't meet high threshold, so should APPROVE
+      const result = renderSkillReport(report, {
+        failOn: 'high',
+        previousReviewState: 'CHANGES_REQUESTED',
+      });
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.event).toBe('APPROVE');
+    });
+
+    it('uses REQUEST_CHANGES even with previousReviewState when blocking findings exist', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'High Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      // High finding meets threshold, so should still REQUEST_CHANGES
+      const result = renderSkillReport(report, {
+        failOn: 'high',
+        previousReviewState: 'CHANGES_REQUESTED',
+      });
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
+    it('uses COMMENT when previousReviewState is COMMENTED (not CHANGES_REQUESTED)', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [],
+      };
+
+      const result = renderSkillReport(report, {
+        failOn: 'high',
+        previousReviewState: 'COMMENTED',
+      });
+
+      // No review needed - no findings, no previous CHANGES_REQUESTED to clear
+      expect(result.review).toBeUndefined();
+    });
+
+    it('uses COMMENT when previousReviewState is null', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [],
+      };
+
+      const result = renderSkillReport(report, {
+        failOn: 'high',
+        previousReviewState: null,
+      });
+
+      // No review needed - no findings, no previous state to clear
+      expect(result.review).toBeUndefined();
+    });
+
+    it('uses APPROVE even when failOn is not set if previousReviewState is CHANGES_REQUESTED', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [],
+      };
+
+      // No failOn means no blocking findings by definition
+      const result = renderSkillReport(report, {
+        previousReviewState: 'CHANGES_REQUESTED',
+      });
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.event).toBe('APPROVE');
+    });
+
+    it('APPROVE body contains resolution message', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [],
+      };
+
+      const result = renderSkillReport(report, {
+        failOn: 'high',
+        previousReviewState: 'CHANGES_REQUESTED',
+      });
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.body).toBe('All previously reported issues have been resolved.');
+      expect(result.review!.comments).toHaveLength(0);
+    });
+  });
+
   it('respects maxFindings option', () => {
     const report: SkillReport = {
       ...baseReport,

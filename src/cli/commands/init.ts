@@ -25,8 +25,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# contents: write required for resolving review threads via GraphQL
+# See: https://github.com/orgs/community/discussions/44650
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   checks: write
 

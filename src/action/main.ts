@@ -242,6 +242,74 @@ function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): vo
   }
 }
 
+type ReviewState = 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED';
+
+const VALID_REVIEW_STATES = new Set<string>(['CHANGES_REQUESTED', 'APPROVED', 'COMMENTED']);
+
+function isValidReviewState(state: string): state is ReviewState {
+  return VALID_REVIEW_STATES.has(state);
+}
+
+/**
+ * Get the authenticated bot's login name.
+ * For GitHub Apps, this returns the app's slug with [bot] suffix (e.g., "warden[bot]").
+ */
+async function getAuthenticatedBotLogin(octokit: Octokit): Promise<string | null> {
+  try {
+    const { data: user } = await octokit.users.getAuthenticated();
+    return user.login;
+  } catch {
+    // May fail if using a non-app token (e.g., PAT or GITHUB_TOKEN)
+    return null;
+  }
+}
+
+/**
+ * Get Warden's previous review state on a PR.
+ * Returns the most recent review state if Warden (the authenticated app) previously reviewed.
+ */
+async function getWardenPreviousReviewState(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<ReviewState | null> {
+  try {
+    // Get the authenticated bot's login to identify our own reviews
+    const botLogin = await getAuthenticatedBotLogin(octokit);
+
+    const { data: reviews } = await octokit.pulls.listReviews({
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    });
+
+    // Find the most recent review from this bot
+    // Reviews are returned in chronological order, so search from the end
+    for (let i = reviews.length - 1; i >= 0; i--) {
+      const review = reviews[i];
+      if (!review?.user || !isValidReviewState(review.state)) {
+        continue;
+      }
+
+      // Match by login if we know the bot's identity, otherwise fall back to type check
+      const isOurReview = botLogin
+        ? review.user.login === botLogin
+        : review.user.type === 'Bot';
+
+      if (isOurReview) {
+        return review.state;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(`::warning::Failed to fetch previous review state: ${error}`);
+    return null;
+  }
+}
+
 async function postReviewToGitHub(
   octokit: Octokit,
   context: EventContext,
@@ -552,6 +620,20 @@ async function run(): Promise<void> {
     }
   }
 
+  // Fetch previous review state for APPROVE logic (only for PRs)
+  let previousReviewState: ReviewState | null = null;
+  if (context.pullRequest) {
+    previousReviewState = await getWardenPreviousReviewState(
+      octokit,
+      context.repository.owner,
+      context.repository.name,
+      context.pullRequest.number
+    );
+    if (previousReviewState) {
+      console.log(`Previous Warden review state: ${previousReviewState}`);
+    }
+  }
+
   // Run triggers in parallel
   const concurrency = config.runner?.concurrency ?? inputs.parallel;
   const failureReasons: string[] = [];
@@ -565,6 +647,7 @@ async function run(): Promise<void> {
     commentOnSuccess?: boolean;
     checkRunUrl?: string;
     maxFindings?: number;
+    previousReviewState?: typeof previousReviewState;
     error?: unknown;
   }
 
@@ -629,6 +712,7 @@ async function run(): Promise<void> {
               failOn,
               checkRunUrl: skillCheckUrl,
               totalFindings: report.findings.length,
+              previousReviewState,
             })
           : undefined;
 
@@ -642,6 +726,7 @@ async function run(): Promise<void> {
         commentOnSuccess: trigger.output.commentOnSuccess,
         checkRunUrl: skillCheckUrl,
         maxFindings: trigger.output.maxFindings ?? inputs.maxFindings,
+        previousReviewState,
       };
     } catch (error) {
       // Mark skill check as failed
@@ -759,6 +844,7 @@ async function run(): Promise<void> {
                       totalFindings: result.report.findings.length,
                       // Pass original findings for failOn evaluation (not affected by dedup)
                       allFindings: result.report.findings,
+                      previousReviewState: result.previousReviewState,
                     }
                   )
                 : result.renderResult;

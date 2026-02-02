@@ -36,8 +36,10 @@ export function buildManifest(options: ManifestOptions): GitHubAppManifest {
     },
     redirect_url: `http://localhost:${options.port}/callback`,
     public: false,
+    // contents: write required for resolving review threads via GraphQL
+    // See: https://github.com/orgs/community/discussions/44650
     default_permissions: {
-      contents: 'read',
+      contents: 'write',
       pull_requests: 'write',
       issues: 'write',
       checks: 'write',

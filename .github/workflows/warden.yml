@@ -1,7 +1,9 @@
 name: Warden
 
+# contents: write required for resolving review threads via GraphQL
+# See: https://github.com/orgs/community/discussions/44650
 permissions:
-  contents: read
+  contents: write
 
 on:
   pull_request:
