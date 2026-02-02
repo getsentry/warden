@@ -18,6 +18,7 @@ import {
   formatHunkForAnalysis,
   classifyFile,
   coalesceHunks,
+  splitLargeHunks,
   type HunkWithContext,
 } from '../diff/index.js';
 
@@ -948,14 +949,19 @@ export function prepareFiles(
 
     const diff = parseFileDiff(file.filename, file.patch, status);
 
-    // Apply hunk coalescing if enabled (default: enabled)
+    // Split large hunks first (handles large files becoming single hunks)
+    const splitHunks = splitLargeHunks(diff.hunks, {
+      maxChunkSize: chunking?.coalesce?.maxChunkSize,
+    });
+
+    // Then coalesce nearby small ones if enabled (default: enabled)
     const coalesceEnabled = chunking?.coalesce?.enabled !== false;
     const hunks = coalesceEnabled
-      ? coalesceHunks(diff.hunks, {
+      ? coalesceHunks(splitHunks, {
           maxGapLines: chunking?.coalesce?.maxGapLines,
           maxChunkSize: chunking?.coalesce?.maxChunkSize,
         })
-      : diff.hunks;
+      : splitHunks;
 
     const hunksWithContext = expandDiffContext(context.repoPath, { ...diff, hunks }, contextLines);
     allHunks.push(...hunksWithContext);

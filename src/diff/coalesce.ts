@@ -1,6 +1,10 @@
 /**
- * Hunk coalescing - merges nearby hunks into fewer, larger chunks
- * to reduce the number of LLM API calls while keeping chunk sizes manageable.
+ * Hunk coalescing and splitting - manages hunk sizes for LLM analysis.
+ *
+ * - splitLargeHunks: Breaks large hunks into smaller chunks at logical breakpoints
+ * - coalesceHunks: Merges nearby small hunks into fewer, larger chunks
+ *
+ * Pipeline: parsePatch() → splitLargeHunks() → coalesceHunks() → expandDiffContext()
  */
 
 import type { DiffHunk } from './parser.js';
@@ -130,4 +134,212 @@ export function wouldCoalesceReduce(
   if (hunks.length <= 1) return false;
   const coalesced = coalesceHunks(hunks, options);
   return coalesced.length < hunks.length;
+}
+
+/**
+ * Options for splitting large hunks.
+ */
+export interface SplitOptions {
+  /** Target max size per chunk in characters (default: 8000) */
+  maxChunkSize?: number;
+}
+
+/**
+ * Patterns that indicate logical breakpoints for splitting.
+ * Prioritized in order: blank lines are best, then function/class definitions.
+ */
+const LOGICAL_BREAKPOINT_PATTERNS = [
+  // Blank lines (highest priority - natural paragraph breaks)
+  /^[ ]?$/,
+  // Function/method definitions (various languages)
+  /^[ ]?(export\s+)?(async\s+)?function\s+\w+/,
+  /^[ ]?(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(/,
+  /^[ ]?(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?function/,
+  /^[ ]?(public|private|protected)?\s*(static\s+)?(async\s+)?\w+\s*\([^)]*\)\s*[:{]/,
+  /^[ ]?def\s+\w+/,
+  /^[ ]?fn\s+\w+/,
+  /^[ ]?func\s+\w+/,
+  // Class/struct/interface definitions
+  /^[ ]?(export\s+)?(abstract\s+)?class\s+\w+/,
+  /^[ ]?(export\s+)?interface\s+\w+/,
+  /^[ ]?(export\s+)?type\s+\w+\s*=/,
+  /^[ ]?struct\s+\w+/,
+  /^[ ]?impl\s+/,
+  // Block comments (often precede logical sections)
+  /^[ ]?\/\*\*/,
+  /^[ ]?\/\//,
+  /^[ ]?#\s/,
+];
+
+/**
+ * Check if a line is a good logical breakpoint for splitting.
+ * Returns a priority score (lower is better) or -1 if not a breakpoint.
+ */
+function getBreakpointPriority(line: string): number {
+  const index = LOGICAL_BREAKPOINT_PATTERNS.findIndex((pattern) => pattern.test(line));
+  return index;
+}
+
+/**
+ * Find the best split point in a range of lines.
+ * Prefers logical breakpoints; falls back to midpoint if none found.
+ *
+ * @param lines - Array of lines to search
+ * @param startIdx - Start index in the lines array
+ * @param endIdx - End index (exclusive) in the lines array
+ * @param targetIdx - Ideal split point (used for fallback)
+ * @returns Index of the best split point
+ */
+function findBestSplitPoint(
+  lines: string[],
+  startIdx: number,
+  endIdx: number,
+  targetIdx: number
+): number {
+  // Search window: look within 20% of chunk size from target
+  const windowSize = Math.max(10, Math.floor((endIdx - startIdx) * 0.2));
+  const searchStart = Math.max(startIdx + 1, targetIdx - windowSize);
+  const searchEnd = Math.min(endIdx - 1, targetIdx + windowSize);
+
+  let bestIdx = targetIdx;
+  let bestPriority = Infinity;
+
+  for (let i = searchStart; i <= searchEnd; i++) {
+    const line = lines[i];
+    if (!line) continue;
+
+    const priority = getBreakpointPriority(line);
+    if (priority >= 0 && priority < bestPriority) {
+      bestPriority = priority;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
+}
+
+/**
+ * Create a sub-hunk from a portion of lines.
+ *
+ * @param originalHunk - The original hunk being split
+ * @param lines - The lines for this sub-hunk
+ * @param lineOffset - How many lines into the original hunk this sub-hunk starts
+ */
+function createSubHunk(
+  originalHunk: DiffHunk,
+  lines: string[],
+  lineOffset: number
+): DiffHunk {
+  // Calculate how many "new" lines we've passed to get the new start position
+  // We need to count actual new-file lines, not just array indices
+  let newLinesBeforeOffset = 0;
+  let oldLinesBeforeOffset = 0;
+
+  for (let i = 0; i < lineOffset && i < originalHunk.lines.length; i++) {
+    const line = originalHunk.lines[i];
+    if (line === undefined) continue;
+    if (!line.startsWith('-')) {
+      newLinesBeforeOffset++;
+    }
+    if (!line.startsWith('+')) {
+      oldLinesBeforeOffset++;
+    }
+  }
+
+  // Count lines in this sub-hunk (lines without '-' are in new file, without '+' are in old file)
+  const newCount = lines.filter((line) => !line.startsWith('-')).length;
+  const oldCount = lines.filter((line) => !line.startsWith('+')).length;
+
+  // Build the @@ header for this sub-hunk
+  const newStart = originalHunk.newStart + newLinesBeforeOffset;
+  const oldStart = originalHunk.oldStart + oldLinesBeforeOffset;
+  const header = originalHunk.header;
+  const headerSuffix = header ? ` ${header}` : '';
+  const hunkHeader = `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@${headerSuffix}`;
+
+  return {
+    oldStart,
+    oldCount,
+    newStart,
+    newCount,
+    header,
+    content: [hunkHeader, ...lines].join('\n'),
+    lines,
+  };
+}
+
+/**
+ * Split a single large hunk into smaller chunks.
+ *
+ * @param hunk - The hunk to split
+ * @param maxChunkSize - Maximum size in characters per chunk
+ * @returns Array of smaller hunks (may be single element if no split needed)
+ */
+function splitHunk(hunk: DiffHunk, maxChunkSize: number): DiffHunk[] {
+  // If hunk is small enough, return as-is
+  if (hunk.content.length <= maxChunkSize) {
+    return [hunk];
+  }
+
+  const result: DiffHunk[] = [];
+  const lines = hunk.lines;
+  let currentStart = 0;
+
+  while (currentStart < lines.length) {
+    // Estimate how many lines fit in maxChunkSize
+    // Use average line length as a rough guide
+    const avgLineLength = hunk.content.length / Math.max(1, lines.length);
+    const estimatedLines = Math.floor(maxChunkSize / avgLineLength);
+    const targetEnd = Math.min(currentStart + estimatedLines, lines.length);
+
+    // Calculate remaining content size
+    const remainingLines = lines.slice(currentStart);
+    const remainingSize = remainingLines.join('\n').length;
+
+    // If remaining content fits in maxChunkSize, take it all
+    if (remainingSize <= maxChunkSize) {
+      result.push(createSubHunk(hunk, remainingLines, currentStart));
+      break;
+    }
+
+    // Find best split point
+    const splitIdx = findBestSplitPoint(lines, currentStart, lines.length, targetEnd);
+
+    // Extract lines for this chunk
+    const chunkLines = lines.slice(currentStart, splitIdx);
+    if (chunkLines.length > 0) {
+      result.push(createSubHunk(hunk, chunkLines, currentStart));
+    }
+
+    currentStart = splitIdx;
+  }
+
+  return result;
+}
+
+/**
+ * Split large hunks into smaller chunks for LLM analysis.
+ *
+ * Large files (1000+ lines) that become single hunks in file-based analysis
+ * can generate prompts exceeding practical limits. This function splits
+ * such hunks at logical breakpoints (blank lines, function definitions)
+ * to keep chunk sizes manageable.
+ *
+ * @param hunks - Array of hunks to potentially split
+ * @param options - Split options (maxChunkSize)
+ * @returns Array of hunks (may be larger than input if splits occurred)
+ *
+ * @example
+ * // Pipeline usage:
+ * const diff = parseFileDiff(filename, patch, status);
+ * const splitHunks = splitLargeHunks(diff.hunks, { maxChunkSize: 8000 });
+ * const coalescedHunks = coalesceHunks(splitHunks, { maxGapLines: 30 });
+ */
+export function splitLargeHunks(
+  hunks: DiffHunk[],
+  options: SplitOptions = {}
+): DiffHunk[] {
+  const { maxChunkSize = DEFAULT_MAX_CHUNK_SIZE } = options;
+
+  return hunks.flatMap((hunk) => splitHunk(hunk, maxChunkSize));
 }

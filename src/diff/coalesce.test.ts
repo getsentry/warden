@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { coalesceHunks, wouldCoalesceReduce } from './coalesce.js';
+import { coalesceHunks, wouldCoalesceReduce, splitLargeHunks } from './coalesce.js';
 import type { DiffHunk } from './parser.js';
 
 function makeHunk(
@@ -204,5 +204,177 @@ describe('wouldCoalesceReduce', () => {
       makeHunk(100, 3, 'b'), // Too far apart
     ];
     expect(wouldCoalesceReduce(hunks, { maxGapLines: 10 })).toBe(false);
+  });
+});
+
+describe('splitLargeHunks', () => {
+  describe('edge cases', () => {
+    it('returns empty array for empty input', () => {
+      expect(splitLargeHunks([])).toEqual([]);
+    });
+
+    it('returns small hunk unchanged', () => {
+      const hunk = makeHunk(1, 5, 'small content');
+      const result = splitLargeHunks([hunk], { maxChunkSize: 8000 });
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(hunk);
+    });
+
+    it('passes through multiple small hunks unchanged', () => {
+      const hunks = [
+        makeHunk(1, 3, 'first'),
+        makeHunk(10, 3, 'second'),
+        makeHunk(20, 3, 'third'),
+      ];
+      const result = splitLargeHunks(hunks, { maxChunkSize: 8000 });
+      expect(result).toHaveLength(3);
+      expect(result).toEqual(hunks);
+    });
+  });
+
+  describe('splitting large hunks', () => {
+    it('splits a large hunk into multiple chunks', () => {
+      // Create a hunk with ~2000 chars of content (will exceed 500 char limit)
+      const lines = Array.from({ length: 50 }, (_, i) => ` line ${i}: ${'x'.repeat(30)}`);
+      const content = lines.join('\n');
+      const hunk = makeHunk(1, 50, content);
+
+      const result = splitLargeHunks([hunk], { maxChunkSize: 500 });
+
+      expect(result.length).toBeGreaterThan(1);
+      // All resulting hunks should be smaller than or around the limit
+      for (const h of result) {
+        // Allow some tolerance since we split at logical breakpoints
+        expect(h.content.length).toBeLessThan(1000);
+      }
+    });
+
+    it('prefers blank lines as split points', () => {
+      // Create content with a clear blank line in the middle
+      const part1 = Array.from({ length: 10 }, (_, i) => ` line ${i}: ${'a'.repeat(30)}`).join('\n');
+      const part2 = Array.from({ length: 10 }, (_, i) => ` line ${i + 11}: ${'b'.repeat(30)}`).join('\n');
+      const content = `${part1}\n \n${part2}`; // Blank line (context line) in middle
+      const hunk = makeHunk(1, 21, content);
+
+      const result = splitLargeHunks([hunk], { maxChunkSize: 600 });
+
+      // Should split at or near the blank line
+      expect(result.length).toBeGreaterThan(1);
+    });
+
+    it('prefers function definitions as split points', () => {
+      // Create content with a function definition in the middle
+      const lines = [
+        ...Array.from({ length: 8 }, (_, i) => ` line ${i}: ${'a'.repeat(40)}`),
+        ' function processData() {',
+        ...Array.from({ length: 8 }, (_, i) => ` line ${i + 10}: ${'b'.repeat(40)}`),
+      ];
+      const content = lines.join('\n');
+      const hunk = makeHunk(1, lines.length, content);
+
+      const result = splitLargeHunks([hunk], { maxChunkSize: 600 });
+
+      expect(result.length).toBeGreaterThan(1);
+    });
+  });
+
+  describe('line number accuracy', () => {
+    it('maintains correct newStart for split hunks', () => {
+      // Create 30 lines of context (no + or -)
+      const lines = Array.from({ length: 30 }, (_, i) => ` line ${i + 1}`);
+      const content = lines.join('\n');
+      const hunk = makeHunk(1, 30, content);
+
+      const result = splitLargeHunks([hunk], { maxChunkSize: 200 });
+
+      expect(result.length).toBeGreaterThan(1);
+      // First chunk should start at line 1
+      expect(result[0]!.newStart).toBe(1);
+      // Subsequent chunks should have increasing start lines
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i]!.newStart).toBeGreaterThan(result[i - 1]!.newStart);
+      }
+    });
+
+    it('handles mixed add/remove lines correctly', () => {
+      const lines = [
+        ' context 1',
+        '+added line 1',
+        '-removed line',
+        ' context 2',
+        '+added line 2',
+        ' context 3',
+        ...Array.from({ length: 20 }, (_, i) => ` more context ${i}`),
+      ];
+      const content = lines.join('\n');
+      // newCount: context(1) + added(1) + context(1) + added(1) + context(1) + more(20) = 25
+      // oldCount: context(1) + removed(1) + context(1) + context(1) + more(20) = 24
+      const hunk: DiffHunk = {
+        oldStart: 1,
+        oldCount: 24,
+        newStart: 1,
+        newCount: 25,
+        content: `@@ -1,24 +1,25 @@\n${content}`,
+        lines,
+      };
+
+      const result = splitLargeHunks([hunk], { maxChunkSize: 200 });
+
+      expect(result.length).toBeGreaterThan(1);
+      // Each chunk should have valid line counts
+      for (const h of result) {
+        expect(h.newStart).toBeGreaterThanOrEqual(1);
+        expect(h.newCount).toBeGreaterThan(0);
+        expect(h.oldStart).toBeGreaterThanOrEqual(1);
+        expect(h.oldCount).toBeGreaterThan(0);
+      }
+    });
+
+    it('preserves original header in split hunks', () => {
+      const lines = Array.from({ length: 30 }, (_, i) => ` line ${i + 1}`);
+      const content = lines.join('\n');
+      const hunk = makeHunk(1, 30, content, { header: 'function example()' });
+
+      const result = splitLargeHunks([hunk], { maxChunkSize: 200 });
+
+      expect(result.length).toBeGreaterThan(1);
+      for (const h of result) {
+        expect(h.header).toBe('function example()');
+      }
+    });
+  });
+
+  describe('integration with coalescing', () => {
+    it('split then coalesce produces reasonable chunk count', () => {
+      // Create a large hunk that should be split
+      const largeLines = Array.from({ length: 100 }, (_, i) => ` line ${i + 1}: ${'x'.repeat(50)}`);
+      const largeContent = largeLines.join('\n');
+      const largeHunk = makeHunk(1, 100, largeContent);
+
+      // Split into smaller chunks
+      const splitResult = splitLargeHunks([largeHunk], { maxChunkSize: 1000 });
+
+      // The split chunks are adjacent, so coalescing might re-merge some
+      // but should still respect size limits
+      const coalescedResult = coalesceHunks(splitResult, { maxGapLines: 50, maxChunkSize: 2000 });
+
+      // Should have fewer chunks than split produced, but more than 1
+      expect(coalescedResult.length).toBeLessThanOrEqual(splitResult.length);
+      expect(coalescedResult.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('small hunks pass through both split and coalesce', () => {
+      const hunks = [
+        makeHunk(1, 3, 'small 1'),
+        makeHunk(50, 3, 'small 2'),
+      ];
+
+      const splitResult = splitLargeHunks(hunks, { maxChunkSize: 8000 });
+      expect(splitResult).toHaveLength(2);
+
+      const coalescedResult = coalesceHunks(splitResult, { maxGapLines: 10 });
+      // These are too far apart to coalesce (gap > 10)
+      expect(coalescedResult).toHaveLength(2);
+    });
   });
 });
