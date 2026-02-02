@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { findBotReviewState, coordinateReviewEvents } from './review-state.js';
+import {
+  findBotReviewState,
+  coordinateReviewEvents,
+  applyCoordinationToReview,
+} from './review-state.js';
 
 describe('findBotReviewState', () => {
   const botLogin = 'warden[bot]';
@@ -234,6 +238,152 @@ describe('coordinateReviewEvents', () => {
       expect(result[0]!.suppressionReason).toBe('another trigger has blocking findings');
       // trigger3 also suppressed due to blocking findings
       expect(result[2]!.suppressionReason).toBe('another trigger has blocking findings');
+    });
+  });
+});
+
+describe('applyCoordinationToReview', () => {
+  describe('when approval is suppressed', () => {
+    it('downgrades APPROVE to COMMENT and clears body', () => {
+      const review = {
+        event: 'APPROVE' as const,
+        body: 'All previously reported issues have been resolved.',
+        comments: [],
+      };
+      const coordination = {
+        triggerName: 'test',
+        reviewEvent: 'COMMENT' as const,
+        approvalSuppressed: true,
+        suppressionReason: 'another trigger has blocking findings',
+      };
+
+      const result = applyCoordinationToReview(review, coordination);
+
+      expect(result).toEqual({
+        event: 'COMMENT',
+        body: '',
+        comments: [],
+      });
+    });
+
+    it('clears body even when it contains findings summary', () => {
+      const review = {
+        event: 'APPROVE' as const,
+        body: 'All previously reported issues have been resolved.\n\nSummary: 0 issues found.',
+        comments: [{ body: 'Some comment', path: 'file.ts', line: 10 }],
+      };
+      const coordination = {
+        triggerName: 'test',
+        reviewEvent: 'COMMENT' as const,
+        approvalSuppressed: true,
+        suppressionReason: 'approval already posted by earlier trigger',
+      };
+
+      const result = applyCoordinationToReview(review, coordination);
+
+      expect(result?.event).toBe('COMMENT');
+      expect(result?.body).toBe('');
+      // Comments are preserved
+      expect(result?.comments).toEqual([{ body: 'Some comment', path: 'file.ts', line: 10 }]);
+    });
+  });
+
+  describe('when approval is not suppressed', () => {
+    it('returns APPROVE review unchanged', () => {
+      const review = {
+        event: 'APPROVE' as const,
+        body: 'All previously reported issues have been resolved.',
+        comments: [],
+      };
+      const coordination = {
+        triggerName: 'test',
+        reviewEvent: 'APPROVE' as const,
+        approvalSuppressed: false,
+      };
+
+      const result = applyCoordinationToReview(review, coordination);
+
+      expect(result).toEqual(review);
+    });
+
+    it('returns REQUEST_CHANGES review unchanged', () => {
+      const review = {
+        event: 'REQUEST_CHANGES' as const,
+        body: 'Issues found.',
+        comments: [{ body: 'Fix this', path: 'file.ts', line: 5 }],
+      };
+      const coordination = {
+        triggerName: 'test',
+        reviewEvent: 'REQUEST_CHANGES' as const,
+        approvalSuppressed: false,
+      };
+
+      const result = applyCoordinationToReview(review, coordination);
+
+      expect(result).toEqual(review);
+    });
+
+    it('returns COMMENT review unchanged', () => {
+      const review = {
+        event: 'COMMENT' as const,
+        body: '',
+        comments: [{ body: 'Note', path: 'file.ts', line: 1 }],
+      };
+      const coordination = {
+        triggerName: 'test',
+        reviewEvent: 'COMMENT' as const,
+        approvalSuppressed: false,
+      };
+
+      const result = applyCoordinationToReview(review, coordination);
+
+      expect(result).toEqual(review);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('returns undefined when review is undefined', () => {
+      const coordination = {
+        triggerName: 'test',
+        reviewEvent: 'COMMENT' as const,
+        approvalSuppressed: true,
+        suppressionReason: 'test',
+      };
+
+      const result = applyCoordinationToReview(undefined, coordination);
+
+      expect(result).toBeUndefined();
+    });
+
+    it('returns review unchanged when coordination is undefined', () => {
+      const review = {
+        event: 'APPROVE' as const,
+        body: 'Approved!',
+        comments: [],
+      };
+
+      const result = applyCoordinationToReview(review, undefined);
+
+      expect(result).toEqual(review);
+    });
+
+    it('does not modify non-APPROVE review even when suppressed', () => {
+      const review = {
+        event: 'REQUEST_CHANGES' as const,
+        body: 'Issues found.',
+        comments: [],
+      };
+      const coordination = {
+        triggerName: 'test',
+        reviewEvent: 'COMMENT' as const,
+        approvalSuppressed: true,
+        suppressionReason: 'test',
+      };
+
+      const result = applyCoordinationToReview(review, coordination);
+
+      // Should not modify since it's already REQUEST_CHANGES, not APPROVE
+      expect(result).toEqual(review);
     });
   });
 });

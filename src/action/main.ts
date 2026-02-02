@@ -32,7 +32,11 @@ import type { ExistingComment, DeduplicateResult } from '../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult, ReviewState } from '../output/types.js';
-import { findBotReviewState, coordinateReviewEvents } from './review-state.js';
+import {
+  findBotReviewState,
+  coordinateReviewEvents,
+  applyCoordinationToReview,
+} from './review-state.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
 /**
@@ -866,21 +870,15 @@ async function run(): Promise<void> {
                   )
                 : result.renderResult;
 
-            // Apply coordinated review event (may downgrade APPROVE to COMMENT)
-            if (
-              coordination?.approvalSuppressed &&
-              renderResultToPost?.review?.event === 'APPROVE'
-            ) {
-              renderResultToPost = {
-                ...renderResultToPost,
-                review: {
-                  ...renderResultToPost.review,
-                  event: 'COMMENT',
-                  // Clear the approval body since we're not actually approving
-                  // (another trigger has blocking findings)
-                  body: '',
-                },
-              };
+            // Apply coordinated review event (may downgrade APPROVE to COMMENT and clear body)
+            if (renderResultToPost?.review) {
+              const coordinatedReview = applyCoordinationToReview(
+                renderResultToPost.review,
+                coordination
+              );
+              if (coordinatedReview !== renderResultToPost.review) {
+                renderResultToPost = { ...renderResultToPost, review: coordinatedReview };
+              }
             }
 
             await postReviewToGitHub(octokit, context, renderResultToPost);

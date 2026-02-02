@@ -75,6 +75,35 @@ export function coordinateReviewEvents(triggers: TriggerReviewInput[]): TriggerR
   });
 }
 
+/**
+ * Apply a coordination decision to a GitHub review.
+ *
+ * When approval is suppressed, this:
+ * 1. Downgrades the event from APPROVE to COMMENT
+ * 2. Clears the body to avoid misleading messages like "All previously reported issues have been resolved."
+ *
+ * Returns the original review unchanged if no suppression is needed.
+ */
+export function applyCoordinationToReview(
+  review: GitHubReview | undefined,
+  coordination: TriggerReviewOutput | undefined
+): GitHubReview | undefined {
+  if (!review || !coordination?.approvalSuppressed) {
+    return review;
+  }
+
+  if (review.event !== 'APPROVE') {
+    return review;
+  }
+
+  return {
+    ...review,
+    event: 'COMMENT',
+    // Clear the body since approval messages are misleading when suppressed
+    body: '',
+  };
+}
+
 export interface ReviewInfo {
   state: string;
   user?: { login: string } | null;
