@@ -206,7 +206,7 @@ function findBestSplitPoint(
 
   for (let i = searchStart; i <= searchEnd; i++) {
     const line = lines[i];
-    if (!line) continue;
+    if (line === undefined) continue;
 
     const priority = getBreakpointPriority(line);
     if (priority >= 0 && priority < bestPriority) {

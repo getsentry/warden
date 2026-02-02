@@ -277,6 +277,24 @@ describe('splitLargeHunks', () => {
       expect(result.length).toBeGreaterThan(1);
     });
 
+    it('selects empty string blank lines as split points', () => {
+      // Empty strings ("") should match /^[ ]?$/ pattern as highest priority
+      // Previously skipped due to !line check treating "" as falsy
+      const lines = [
+        ...Array.from({ length: 8 }, (_, i) => ` line ${i}: ${'a'.repeat(40)}`),
+        '', // Empty string blank line
+        ...Array.from({ length: 8 }, (_, i) => ` line ${i + 9}: ${'b'.repeat(40)}`),
+      ];
+      const content = lines.join('\n');
+      const hunk = makeHunk(1, lines.length, content);
+
+      const result = splitLargeHunks([hunk], { maxChunkSize: 500 });
+
+      expect(result.length).toBeGreaterThan(1);
+      // First chunk should end at or before the blank line
+      expect(result[0]!.lines.length).toBeLessThanOrEqual(9);
+    });
+
     it('prefers function definitions as split points', () => {
       // Create content with a function definition in the middle
       const lines = [
