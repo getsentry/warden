@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findBotReviewState } from './review-state.js';
+import { findBotReviewState, coordinateReviewEvents } from './review-state.js';
 
 describe('findBotReviewState', () => {
   const botLogin = 'warden[bot]';
@@ -82,5 +82,158 @@ describe('findBotReviewState', () => {
     ];
     // Should skip PENDING and return CHANGES_REQUESTED
     expect(findBotReviewState(reviews, botLogin)).toBe('CHANGES_REQUESTED');
+  });
+});
+
+describe('coordinateReviewEvents', () => {
+  describe('single trigger', () => {
+    it('allows APPROVE when single trigger has no blocking findings', () => {
+      const result = coordinateReviewEvents([{ triggerName: 'trigger1', reviewEvent: 'APPROVE' }]);
+
+      expect(result).toEqual([
+        { triggerName: 'trigger1', reviewEvent: 'APPROVE', approvalSuppressed: false },
+      ]);
+    });
+
+    it('allows REQUEST_CHANGES for single trigger', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'trigger1', reviewEvent: 'REQUEST_CHANGES' },
+      ]);
+
+      expect(result).toEqual([
+        { triggerName: 'trigger1', reviewEvent: 'REQUEST_CHANGES', approvalSuppressed: false },
+      ]);
+    });
+
+    it('allows COMMENT for single trigger', () => {
+      const result = coordinateReviewEvents([{ triggerName: 'trigger1', reviewEvent: 'COMMENT' }]);
+
+      expect(result).toEqual([
+        { triggerName: 'trigger1', reviewEvent: 'COMMENT', approvalSuppressed: false },
+      ]);
+    });
+  });
+
+  describe('multiple triggers - blocking findings override', () => {
+    it('suppresses APPROVE when another trigger has REQUEST_CHANGES', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'clean-trigger', reviewEvent: 'APPROVE' },
+        { triggerName: 'blocking-trigger', reviewEvent: 'REQUEST_CHANGES' },
+      ]);
+
+      expect(result).toEqual([
+        {
+          triggerName: 'clean-trigger',
+          reviewEvent: 'COMMENT',
+          approvalSuppressed: true,
+          suppressionReason: 'another trigger has blocking findings',
+        },
+        { triggerName: 'blocking-trigger', reviewEvent: 'REQUEST_CHANGES', approvalSuppressed: false },
+      ]);
+    });
+
+    it('suppresses APPROVE even when it comes after REQUEST_CHANGES', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'blocking-trigger', reviewEvent: 'REQUEST_CHANGES' },
+        { triggerName: 'clean-trigger', reviewEvent: 'APPROVE' },
+      ]);
+
+      expect(result).toEqual([
+        { triggerName: 'blocking-trigger', reviewEvent: 'REQUEST_CHANGES', approvalSuppressed: false },
+        {
+          triggerName: 'clean-trigger',
+          reviewEvent: 'COMMENT',
+          approvalSuppressed: true,
+          suppressionReason: 'another trigger has blocking findings',
+        },
+      ]);
+    });
+
+    it('suppresses multiple APPROVEs when one trigger has REQUEST_CHANGES', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'clean-trigger-1', reviewEvent: 'APPROVE' },
+        { triggerName: 'blocking-trigger', reviewEvent: 'REQUEST_CHANGES' },
+        { triggerName: 'clean-trigger-2', reviewEvent: 'APPROVE' },
+      ]);
+
+      expect(result[0]!.approvalSuppressed).toBe(true);
+      expect(result[0]!.reviewEvent).toBe('COMMENT');
+      expect(result[1]!.reviewEvent).toBe('REQUEST_CHANGES');
+      expect(result[2]!.approvalSuppressed).toBe(true);
+      expect(result[2]!.reviewEvent).toBe('COMMENT');
+    });
+  });
+
+  describe('multiple triggers - duplicate approval prevention', () => {
+    it('only allows first trigger to APPROVE when multiple want to', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'trigger1', reviewEvent: 'APPROVE' },
+        { triggerName: 'trigger2', reviewEvent: 'APPROVE' },
+        { triggerName: 'trigger3', reviewEvent: 'APPROVE' },
+      ]);
+
+      expect(result).toEqual([
+        { triggerName: 'trigger1', reviewEvent: 'APPROVE', approvalSuppressed: false },
+        {
+          triggerName: 'trigger2',
+          reviewEvent: 'COMMENT',
+          approvalSuppressed: true,
+          suppressionReason: 'approval already posted by earlier trigger',
+        },
+        {
+          triggerName: 'trigger3',
+          reviewEvent: 'COMMENT',
+          approvalSuppressed: true,
+          suppressionReason: 'approval already posted by earlier trigger',
+        },
+      ]);
+    });
+
+    it('allows APPROVE after COMMENT triggers', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'trigger1', reviewEvent: 'COMMENT' },
+        { triggerName: 'trigger2', reviewEvent: 'APPROVE' },
+        { triggerName: 'trigger3', reviewEvent: 'COMMENT' },
+      ]);
+
+      expect(result).toEqual([
+        { triggerName: 'trigger1', reviewEvent: 'COMMENT', approvalSuppressed: false },
+        { triggerName: 'trigger2', reviewEvent: 'APPROVE', approvalSuppressed: false },
+        { triggerName: 'trigger3', reviewEvent: 'COMMENT', approvalSuppressed: false },
+      ]);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles empty trigger list', () => {
+      const result = coordinateReviewEvents([]);
+      expect(result).toEqual([]);
+    });
+
+    it('handles triggers with undefined reviewEvent', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'trigger1', reviewEvent: undefined },
+        { triggerName: 'trigger2', reviewEvent: 'APPROVE' },
+      ]);
+
+      expect(result).toEqual([
+        { triggerName: 'trigger1', reviewEvent: undefined, approvalSuppressed: false },
+        { triggerName: 'trigger2', reviewEvent: 'APPROVE', approvalSuppressed: false },
+      ]);
+    });
+
+    it('REQUEST_CHANGES takes priority over duplicate approval rule', () => {
+      // When both rules could apply, blocking findings reason takes priority
+      const result = coordinateReviewEvents([
+        { triggerName: 'trigger1', reviewEvent: 'APPROVE' },
+        { triggerName: 'trigger2', reviewEvent: 'REQUEST_CHANGES' },
+        { triggerName: 'trigger3', reviewEvent: 'APPROVE' },
+      ]);
+
+      // trigger1 suppressed due to blocking findings (not duplicate approval)
+      expect(result[0]!.suppressionReason).toBe('another trigger has blocking findings');
+      // trigger3 also suppressed due to blocking findings
+      expect(result[2]!.suppressionReason).toBe('another trigger has blocking findings');
+    });
   });
 });
