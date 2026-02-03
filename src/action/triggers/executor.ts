@@ -18,6 +18,7 @@ import {
   updateSkillCheck,
   failSkillCheck,
 } from '../../output/github-checks.js';
+import { logGroup, logGroupEnd } from '../workflow/base.js';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -56,18 +57,6 @@ export interface TriggerResult {
   maxFindings?: number;
   previousReviewState?: ReviewState | null;
   error?: unknown;
-}
-
-// -----------------------------------------------------------------------------
-// Logging Helpers
-// -----------------------------------------------------------------------------
-
-function logGroup(name: string): void {
-  console.log(`::group::${name}`);
-}
-
-function logGroupEnd(): void {
-  console.log('::endgroup::');
 }
 
 // -----------------------------------------------------------------------------
