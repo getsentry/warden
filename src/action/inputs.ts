@@ -13,7 +13,10 @@ import { DEFAULT_CONCURRENCY } from '../utils/index.js';
 // -----------------------------------------------------------------------------
 
 export interface ActionInputs {
+  /** API key for Anthropic API (empty if using OAuth) */
   anthropicApiKey: string;
+  /** OAuth token for Claude Code (empty if using API key) */
+  oauthToken: string;
   githubToken: string;
   configPath: string;
   failOn?: SeverityThreshold;
@@ -47,18 +50,26 @@ function getInput(name: string, required = false): string {
  * Throws if required inputs are missing.
  */
 export function parseActionInputs(): ActionInputs {
-  // Check for API key: input first, then env vars as fallback
-  const anthropicApiKey =
+  // Check for auth token: supports both API keys and OAuth tokens
+  // Priority: input > WARDEN_ANTHROPIC_API_KEY > ANTHROPIC_API_KEY > CLAUDE_CODE_OAUTH_TOKEN
+  const authToken =
     getInput('anthropic-api-key') ||
     process.env['WARDEN_ANTHROPIC_API_KEY'] ||
     process.env['ANTHROPIC_API_KEY'] ||
+    process.env['CLAUDE_CODE_OAUTH_TOKEN'] ||
     '';
 
-  if (!anthropicApiKey) {
+  if (!authToken) {
     throw new Error(
-      'Anthropic API key not found. Provide it via the anthropic-api-key input or set WARDEN_ANTHROPIC_API_KEY environment variable.'
+      'Authentication not found. Provide an API key via anthropic-api-key input, ' +
+        'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
     );
   }
+
+  // Detect token type: OAuth tokens start with 'sk-ant-oat', API keys are other 'sk-ant-' prefixes
+  const isOAuthToken = authToken.startsWith('sk-ant-oat');
+  const anthropicApiKey = isOAuthToken ? '' : authToken;
+  const oauthToken = isOAuthToken ? authToken : '';
 
   const failOnInput = getInput('fail-on');
   const failOn = SeverityThresholdSchema.safeParse(failOnInput).success
@@ -75,6 +86,7 @@ export function parseActionInputs(): ActionInputs {
 
   return {
     anthropicApiKey,
+    oauthToken,
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
     configPath: getInput('config-path') || 'warden.toml',
     failOn,
@@ -95,10 +107,14 @@ export function validateInputs(inputs: ActionInputs): void {
 }
 
 /**
- * Set up environment variables for the Anthropic API key.
- * This ensures code using either env var name will work.
+ * Set up environment variables for authentication.
+ * Sets appropriate env vars based on token type (API key vs OAuth).
  */
-export function setupApiKeyEnv(apiKey: string): void {
-  process.env['WARDEN_ANTHROPIC_API_KEY'] = apiKey;
-  process.env['ANTHROPIC_API_KEY'] = apiKey;
+export function setupAuthEnv(inputs: ActionInputs): void {
+  if (inputs.oauthToken) {
+    process.env['CLAUDE_CODE_OAUTH_TOKEN'] = inputs.oauthToken;
+  } else {
+    process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+    process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+  }
 }

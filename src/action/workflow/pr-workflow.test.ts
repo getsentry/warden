@@ -134,6 +134,7 @@ function createMockOctokit(options: MockOctokitOptions = {}): Octokit {
 function createDefaultInputs(overrides: Partial<ActionInputs> = {}): ActionInputs {
   return {
     anthropicApiKey: 'test-api-key',
+    oauthToken: '',
     githubToken: 'test-github-token',
     configPath: 'warden.toml',
     maxFindings: 50,

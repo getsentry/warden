@@ -25,7 +25,7 @@
  */
 
 import { Octokit } from '@octokit/rest';
-import { parseActionInputs, validateInputs, setupApiKeyEnv } from './inputs.js';
+import { parseActionInputs, validateInputs, setupAuthEnv } from './inputs.js';
 import { setFailed } from './workflow/base.js';
 import { runPRWorkflow } from './workflow/pr-workflow.js';
 import { runScheduleWorkflow } from './workflow/schedule.js';
@@ -42,8 +42,8 @@ async function run(): Promise<void> {
     setFailed('This action must be run in a GitHub Actions environment');
   }
 
-  // Set up API key environment variables
-  setupApiKeyEnv(inputs.anthropicApiKey);
+  // Set up authentication environment variables
+  setupAuthEnv(inputs);
 
   const octokit = new Octokit({ auth: inputs.githubToken });
 
