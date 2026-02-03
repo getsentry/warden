@@ -32,11 +32,8 @@ import type { ExistingComment, DeduplicateResult } from '../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../output/stale.js';
 import type { EventContext, SkillReport, SeverityThreshold, UsageStats } from '../types/index.js';
 import type { RenderResult, ReviewState } from '../output/types.js';
-import {
-  findBotReviewState,
-  coordinateReviewEvents,
-  applyCoordinationToReview,
-} from './review-state.js';
+import { findBotReviewState, applyCoordinationToReview } from './review-state.js';
+import { buildReviewCoordination, shouldResolveStaleComments } from './orchestration.js';
 import { processInBatches, DEFAULT_CONCURRENCY } from '../utils/index.js';
 
 /**
@@ -773,14 +770,10 @@ async function run(): Promise<void> {
   let shouldFailAction = false;
 
   // Coordinate review events across triggers to ensure consistent PR state:
+  // - If ANY trigger failed, no trigger posts APPROVE
   // - If ANY trigger has REQUEST_CHANGES, no trigger posts APPROVE
   // - Only ONE trigger posts APPROVE (first one wins)
-  const reviewCoordination = coordinateReviewEvents(
-    results.map((r) => ({
-      triggerName: r.triggerName,
-      reviewEvent: r.renderResult?.review?.event,
-    }))
-  );
+  const reviewCoordination = buildReviewCoordination(results);
 
   // Use index-based lookup instead of Map to handle duplicate trigger names correctly.
   // The coordination array order matches the results array order (both from same .map()).
@@ -922,9 +915,9 @@ async function run(): Promise<void> {
   // Use fetchedComments (not existingComments) to only check comments that have threadIds
   // Only resolve if ALL triggers succeeded - otherwise findings may be missing due to failures
   // Filter to only Warden comments - we don't resolve external comments
-  const allTriggersSucceeded = triggerErrors.length === 0;
+  const canResolveStale = shouldResolveStaleComments(results);
   const wardenComments = fetchedComments.filter((c) => c.isWarden);
-  if (context.pullRequest && wardenComments.length > 0 && allTriggersSucceeded) {
+  if (context.pullRequest && wardenComments.length > 0 && canResolveStale) {
     try {
       const allFindings = reports.flatMap((r) => r.findings);
       const scope = buildAnalyzedScope(context.pullRequest.files);
@@ -939,7 +932,7 @@ async function run(): Promise<void> {
     } catch (error) {
       console.warn(`::warning::Failed to resolve stale comments: ${error}`);
     }
-  } else if (!allTriggersSucceeded && wardenComments.length > 0) {
+  } else if (!canResolveStale && wardenComments.length > 0) {
     console.log('Skipping stale comment resolution due to trigger failures');
   }
 

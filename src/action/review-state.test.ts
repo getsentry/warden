@@ -118,6 +118,55 @@ describe('coordinateReviewEvents', () => {
     });
   });
 
+  describe('multiple triggers - failed trigger blocks approval', () => {
+    it('suppresses APPROVE when another trigger failed (undefined reviewEvent)', () => {
+      // Scenario: Trigger A failed (maybe it previously had REQUEST_CHANGES),
+      // Trigger B ran clean and wants to approve. We can't verify A's issues
+      // are fixed, so suppress the approval.
+      const result = coordinateReviewEvents([
+        { triggerName: 'failed-trigger', reviewEvent: undefined },
+        { triggerName: 'clean-trigger', reviewEvent: 'APPROVE' },
+      ]);
+
+      expect(result).toEqual([
+        { triggerName: 'failed-trigger', reviewEvent: undefined, approvalSuppressed: false },
+        {
+          triggerName: 'clean-trigger',
+          reviewEvent: 'COMMENT',
+          approvalSuppressed: true,
+          suppressionReason: 'another trigger failed',
+        },
+      ]);
+    });
+
+    it('suppresses multiple APPROVEs when one trigger failed', () => {
+      const result = coordinateReviewEvents([
+        { triggerName: 'clean-trigger-1', reviewEvent: 'APPROVE' },
+        { triggerName: 'failed-trigger', reviewEvent: undefined },
+        { triggerName: 'clean-trigger-2', reviewEvent: 'APPROVE' },
+      ]);
+
+      expect(result[0]!.approvalSuppressed).toBe(true);
+      expect(result[0]!.suppressionReason).toBe('another trigger failed');
+      expect(result[1]!.approvalSuppressed).toBe(false);
+      expect(result[2]!.approvalSuppressed).toBe(true);
+      expect(result[2]!.suppressionReason).toBe('another trigger failed');
+    });
+
+    it('failed trigger takes priority over REQUEST_CHANGES reason', () => {
+      // When both a failure and blocking findings exist, failure reason takes priority
+      // (since it's checked first)
+      const result = coordinateReviewEvents([
+        { triggerName: 'failed-trigger', reviewEvent: undefined },
+        { triggerName: 'blocking-trigger', reviewEvent: 'REQUEST_CHANGES' },
+        { triggerName: 'clean-trigger', reviewEvent: 'APPROVE' },
+      ]);
+
+      expect(result[2]!.approvalSuppressed).toBe(true);
+      expect(result[2]!.suppressionReason).toBe('another trigger failed');
+    });
+  });
+
   describe('multiple triggers - blocking findings override', () => {
     it('suppresses APPROVE when another trigger has REQUEST_CHANGES', () => {
       const result = coordinateReviewEvents([
@@ -214,15 +263,15 @@ describe('coordinateReviewEvents', () => {
       expect(result).toEqual([]);
     });
 
-    it('handles triggers with undefined reviewEvent', () => {
+    it('passes through undefined reviewEvent without suppression', () => {
       const result = coordinateReviewEvents([
         { triggerName: 'trigger1', reviewEvent: undefined },
-        { triggerName: 'trigger2', reviewEvent: 'APPROVE' },
+        { triggerName: 'trigger2', reviewEvent: 'COMMENT' },
       ]);
 
       expect(result).toEqual([
         { triggerName: 'trigger1', reviewEvent: undefined, approvalSuppressed: false },
-        { triggerName: 'trigger2', reviewEvent: 'APPROVE', approvalSuppressed: false },
+        { triggerName: 'trigger2', reviewEvent: 'COMMENT', approvalSuppressed: false },
       ]);
     });
 
