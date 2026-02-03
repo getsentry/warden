@@ -536,6 +536,10 @@ export async function extractFindingsWithLLM(
   apiKey?: string
 ): Promise<ExtractFindingsResult> {
   if (!apiKey) {
+    // API key required for direct Anthropic SDK fallback (OAuth tokens not supported)
+    console.error(
+      'Warning: LLM fallback extraction skipped - requires API key (OAuth tokens not supported for fallback)'
+    );
     return {
       success: false,
       error: 'no_api_key_for_fallback',
