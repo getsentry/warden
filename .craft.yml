@@ -1,4 +1,5 @@
 changelogPolicy: none
+tagPrefix: v
 preReleaseCommand: bash bin/bump-version.sh
 targets:
   - name: github
