@@ -73,7 +73,10 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 }
 
 interface ActionInputs {
+  /** API key for Anthropic API (empty if using OAuth) */
   anthropicApiKey: string;
+  /** OAuth token for Claude Code (empty if using API key) */
+  oauthToken: string;
   githubToken: string;
   configPath: string;
   failOn?: SeverityThreshold;
@@ -95,18 +98,26 @@ function getInputs(): ActionInputs {
     return value;
   };
 
-  // Check for API key: input first, then env vars as fallback
-  const anthropicApiKey =
+  // Check for auth token: supports both API keys and OAuth tokens
+  // Priority: input > WARDEN_ANTHROPIC_API_KEY > ANTHROPIC_API_KEY > CLAUDE_CODE_OAUTH_TOKEN
+  const authToken =
     getInput('anthropic-api-key') ||
     process.env['WARDEN_ANTHROPIC_API_KEY'] ||
     process.env['ANTHROPIC_API_KEY'] ||
+    process.env['CLAUDE_CODE_OAUTH_TOKEN'] ||
     '';
 
-  if (!anthropicApiKey) {
+  if (!authToken) {
     throw new Error(
-      'Anthropic API key not found. Provide it via the anthropic-api-key input or set WARDEN_ANTHROPIC_API_KEY environment variable.'
+      'Authentication not found. Provide an API key via anthropic-api-key input, ' +
+        'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
     );
   }
+
+  // Detect token type: OAuth tokens start with 'sk-ant-oat', API keys are other 'sk-ant-' prefixes
+  const isOAuthToken = authToken.startsWith('sk-ant-oat');
+  const anthropicApiKey = isOAuthToken ? '' : authToken;
+  const oauthToken = isOAuthToken ? authToken : '';
 
   const failOnInput = getInput('fail-on');
   const failOn = SeverityThresholdSchema.safeParse(failOnInput).success
@@ -120,6 +131,7 @@ function getInputs(): ActionInputs {
 
   return {
     anthropicApiKey,
+    oauthToken,
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
     configPath: getInput('config-path') || 'warden.toml',
     failOn,
@@ -464,9 +476,13 @@ async function run(): Promise<void> {
     setFailed('This action must be run in a GitHub Actions environment');
   }
 
-  // Set both env vars so code using either will work
-  process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
-  process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+  // Set auth env vars based on token type
+  if (inputs.oauthToken) {
+    process.env['CLAUDE_CODE_OAUTH_TOKEN'] = inputs.oauthToken;
+  } else {
+    process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+    process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+  }
 
   const octokit = new Octokit({ auth: inputs.githubToken });
 
