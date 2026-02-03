@@ -1,0 +1,39 @@
+# Source files (dist/ is published)
+src/
+
+# GitHub Action bundle (only needed for action, not npm)
+dist/action/
+action.yml
+
+# Test files
+*.test.ts
+*.test.js
+*.test.d.ts
+**/*.test.*
+vitest*.config.ts
+
+# Development/CI files
+.github/
+.agents/
+.claude/
+.dex/
+.context/
+*.config.js
+tsconfig.json
+pnpm-lock.yaml
+
+# Release tooling
+.craft.yml
+bin/
+
+# Documentation (README is kept)
+AGENTS.md
+CLAUDE.md
+CONTRIBUTING.md
+SPEC.md
+docs/
+assets/
+specs/
+
+# Example config
+warden.toml
