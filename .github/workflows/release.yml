@@ -46,7 +46,35 @@ jobs:
         run: |
           CURRENT=$(node -p "require('./package.json').version")
           NEW=$(npx semver -i ${{ inputs.bump }} $CURRENT)
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
           echo "new=$NEW" >> $GITHUB_OUTPUT
+
+      # Craft uses `git describe --tags` to find the previous version.
+      # Our release process creates tags on dist/ artifact commits (for GitHub
+      # Action users), but those commits aren't ancestors of main. This causes
+      # `git describe` to fail. We create a source tag on main to work around this.
+      - name: Create source tag for git describe
+        run: |
+          VERSION="${{ steps.version.outputs.current }}"
+          TAG="v${VERSION}-src"
+
+          # Find the commit that bumped to this version
+          COMMIT=$(git log --oneline --all --grep="^${VERSION} " --format="%H" | head -1)
+
+          if [ -z "$COMMIT" ]; then
+            echo "::warning::Could not find version bump commit for ${VERSION}"
+            exit 0
+          fi
+
+          # Check if source tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Source tag $TAG already exists"
+            exit 0
+          fi
+
+          echo "Creating source tag $TAG on commit $COMMIT"
+          git tag "$TAG" "$COMMIT"
+          git push origin "$TAG"
 
       - name: Prepare release
         uses: getsentry/action-prepare-release@v1
