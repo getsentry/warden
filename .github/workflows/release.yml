@@ -33,6 +33,7 @@ jobs:
         with:
           token: ${{ steps.token.outputs.token }}
           fetch-depth: 0
+          fetch-tags: true
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
