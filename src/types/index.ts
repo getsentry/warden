@@ -104,6 +104,8 @@ export const SkillReportSchema = z.object({
   skippedFiles: z.array(SkippedFileSchema).optional(),
   /** Number of hunks that failed to analyze (SDK errors, API errors, etc.) */
   failedHunks: z.number().int().nonnegative().optional(),
+  /** Number of hunks where findings extraction failed (JSON parse errors) */
+  failedExtractions: z.number().int().nonnegative().optional(),
   /** Error messages from failed hunks (for debugging) */
   errors: z.array(z.string()).optional(),
 });

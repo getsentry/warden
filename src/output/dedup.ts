@@ -86,12 +86,18 @@ export function generateMarker(path: string, line: number, contentHash: string):
  */
 export function parseMarker(body: string): WardenMarker | null {
   const match = body.match(/<!-- warden:v1:([^:]+):(\d+):([a-f0-9]+) -->/);
-  if (!match) {
+  if (!match || match.length < 4) {
     return null;
   }
 
-  // Capture groups are guaranteed to exist when the regex matches
-  const [, path, lineStr, contentHash] = match as [string, string, string, string];
+  const path = match[1];
+  const lineStr = match[2];
+  const contentHash = match[3];
+
+  // Validate that all capture groups exist (defensive, should always be true when regex matches)
+  if (!path || !lineStr || !contentHash) {
+    return null;
+  }
 
   return {
     path,
