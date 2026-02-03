@@ -1,0 +1,250 @@
+/**
+ * Review Poster
+ *
+ * Handles posting GitHub PR reviews with deduplication and coordination.
+ * Extracted from main.ts to isolate the complex review posting state machine.
+ */
+
+import type { Octokit } from '@octokit/rest';
+import type { EventContext } from '../../types/index.js';
+import { filterFindingsBySeverity } from '../../types/index.js';
+import type { RenderResult } from '../../output/types.js';
+import { renderSkillReport } from '../../output/renderer.js';
+import {
+  deduplicateFindings,
+  processDuplicateActions,
+  findingToExistingComment,
+} from '../../output/dedup.js';
+import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
+import type { TriggerReviewOutput } from '../review-state.js';
+import { applyCoordinationToReview } from '../review-state.js';
+import type { TriggerResult } from '../triggers/executor.js';
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
+
+/**
+ * Context for posting a review for a single trigger.
+ */
+export interface ReviewPostingContext {
+  result: TriggerResult;
+  coordination: TriggerReviewOutput | undefined;
+  existingComments: ExistingComment[];
+  apiKey: string;
+}
+
+/**
+ * Result from posting a review.
+ */
+export interface ReviewPostResult {
+  /** Whether a review was posted */
+  posted: boolean;
+  /** New comments that were posted (for cross-trigger deduplication) */
+  newComments: ExistingComment[];
+  /** Whether this trigger should cause the action to fail */
+  shouldFail: boolean;
+  /** Reason for failure, if any */
+  failureReason?: string;
+}
+
+/**
+ * Dependencies for the review poster.
+ */
+export interface ReviewPosterDeps {
+  octokit: Octokit;
+  context: EventContext;
+}
+
+// -----------------------------------------------------------------------------
+// GitHub Review Posting
+// -----------------------------------------------------------------------------
+
+/**
+ * Post a PR review to GitHub.
+ */
+async function postReviewToGitHub(
+  octokit: Octokit,
+  context: EventContext,
+  result: RenderResult
+): Promise<void> {
+  if (!context.pullRequest) {
+    return;
+  }
+
+  // Only post PR reviews with inline comments - skip standalone summary comments
+  // as they add noise without providing actionable inline feedback
+  if (!result.review) {
+    return;
+  }
+
+  const { owner, name: repo } = context.repository;
+  const pullNumber = context.pullRequest.number;
+  const commitId = context.pullRequest.headSha;
+
+  const reviewComments = result.review.comments
+    .filter((c): c is typeof c & { path: string; line: number } => Boolean(c.path && c.line))
+    .map((c) => ({
+      path: c.path,
+      line: c.line,
+      side: c.side ?? ('RIGHT' as const),
+      body: c.body,
+      start_line: c.start_line,
+      start_side: c.start_line ? c.start_side ?? ('RIGHT' as const) : undefined,
+    }));
+
+  await octokit.pulls.createReview({
+    owner,
+    repo,
+    pull_number: pullNumber,
+    commit_id: commitId,
+    event: result.review.event,
+    body: result.review.body,
+    comments: reviewComments,
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Main Review Posting Logic
+// -----------------------------------------------------------------------------
+
+/**
+ * Post a review for a single trigger result.
+ *
+ * Handles:
+ * - Filtering findings by commentOn threshold
+ * - Deduplicating against existing comments
+ * - Processing duplicate actions (reactions, updates)
+ * - Applying coordination decisions
+ * - Posting the final review
+ */
+export async function postTriggerReview(
+  ctx: ReviewPostingContext,
+  deps: ReviewPosterDeps
+): Promise<ReviewPostResult> {
+  const { result, coordination, existingComments, apiKey } = ctx;
+  const { octokit, context } = deps;
+
+  const newComments: ExistingComment[] = [];
+
+  if (!result.report) {
+    return { posted: false, newComments, shouldFail: false };
+  }
+
+  const needsApproval = coordination?.reviewEvent === 'APPROVE';
+
+  if (coordination?.approvalSuppressed) {
+    console.log(
+      `Suppressing APPROVE for ${result.triggerName}: ${coordination.suppressionReason}`
+    );
+  }
+
+  // Filter findings by commentOn threshold
+  const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
+  const commentOnSuccess = result.commentOnSuccess ?? false;
+
+  // Skip if nothing to post
+  if (!result.renderResult || (filteredFindings.length === 0 && !commentOnSuccess && !needsApproval)) {
+    return { posted: false, newComments, shouldFail: false };
+  }
+
+  try {
+    // Deduplicate findings against existing comments
+    let findingsToPost = filteredFindings;
+    let dedupResult: DeduplicateResult | undefined;
+
+    if (existingComments.length > 0 && filteredFindings.length > 0) {
+      dedupResult = await deduplicateFindings(filteredFindings, existingComments, {
+        apiKey,
+        currentSkill: result.report.skill,
+      });
+      findingsToPost = dedupResult.newFindings;
+
+      if (dedupResult.duplicateActions.length > 0) {
+        console.log(
+          `Found ${dedupResult.duplicateActions.length} duplicate findings for ${result.triggerName}`
+        );
+      }
+    }
+
+    // Process duplicate actions (update Warden comments, add reactions)
+    if (dedupResult && dedupResult.duplicateActions.length > 0) {
+      const actionCounts = await processDuplicateActions(
+        octokit,
+        context.repository.owner,
+        context.repository.name,
+        dedupResult.duplicateActions,
+        result.report.skill
+      );
+
+      if (actionCounts.updated > 0) {
+        console.log(`Updated ${actionCounts.updated} existing Warden comments with skill attribution`);
+      }
+      if (actionCounts.reacted > 0) {
+        console.log(`Added reactions to ${actionCounts.reacted} existing external comments`);
+      }
+      if (actionCounts.failed > 0) {
+        console.warn(`::warning::Failed to process ${actionCounts.failed} duplicate actions`);
+      }
+    }
+
+    // Only post if we have non-duplicate findings, commentOnSuccess is true, or we need to approve
+    if (findingsToPost.length > 0 || commentOnSuccess || needsApproval) {
+      // Re-render with deduplicated findings if any were removed
+      // Don't pass previousReviewState if this trigger's approval was suppressed
+      // (to avoid re-rendering as APPROVE when coordination decided otherwise)
+      const effectivePreviousReviewState = coordination?.approvalSuppressed
+        ? null
+        : result.previousReviewState;
+
+      let renderResultToPost =
+        findingsToPost.length !== filteredFindings.length
+          ? renderSkillReport(
+              { ...result.report, findings: findingsToPost },
+              {
+                maxFindings: result.maxFindings,
+                commentOn: result.commentOn,
+                failOn: result.failOn,
+                checkRunUrl: result.checkRunUrl,
+                totalFindings: result.report.findings.length,
+                // Pass original findings for failOn evaluation (not affected by dedup)
+                allFindings: result.report.findings,
+                previousReviewState: effectivePreviousReviewState,
+              }
+            )
+          : result.renderResult;
+
+      // Apply coordinated review event (may downgrade APPROVE to COMMENT and clear body)
+      if (renderResultToPost?.review) {
+        const coordinatedReview = applyCoordinationToReview(
+          renderResultToPost.review,
+          coordination
+        );
+        if (coordinatedReview !== renderResultToPost.review) {
+          renderResultToPost = { ...renderResultToPost, review: coordinatedReview };
+        }
+      }
+
+      await postReviewToGitHub(octokit, context, renderResultToPost);
+
+      // Add newly posted findings to list for cross-trigger deduplication
+      // Only include findings up to maxFindings since that's what was actually posted
+      const postedFindings = result.maxFindings
+        ? findingsToPost.slice(0, result.maxFindings)
+        : findingsToPost;
+      for (const finding of postedFindings) {
+        const comment = findingToExistingComment(finding, result.report.skill);
+        if (comment) {
+          newComments.push(comment);
+        }
+      }
+
+      return { posted: true, newComments, shouldFail: false };
+    }
+
+    return { posted: false, newComments, shouldFail: false };
+  } catch (error) {
+    console.error(`::warning::Failed to post review for ${result.triggerName}: ${error}`);
+    return { posted: false, newComments, shouldFail: false };
+  }
+}

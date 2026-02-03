@@ -1,0 +1,26 @@
+{
+  "action": "opened",
+  "repository": {
+    "name": "test-repo",
+    "full_name": "test-owner/test-repo",
+    "default_branch": "main",
+    "owner": {
+      "login": "test-owner"
+    }
+  },
+  "pull_request": {
+    "number": 123,
+    "title": "Test PR",
+    "body": "Test body",
+    "user": {
+      "login": "test-user"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "head": {
+      "ref": "feature",
+      "sha": "abc123def456"
+    }
+  }
+}

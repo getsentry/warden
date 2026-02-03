@@ -2,11 +2,66 @@ import { describe, it, expect } from 'vitest';
 import {
   buildReviewCoordination,
   shouldResolveStaleComments,
-  orchestrateReviews,
   type TriggerExecutionResult,
-} from './orchestration.js';
+} from './review/coordination.js';
+import { applyCoordinationToReview } from './review-state.js';
 import type { SkillReport } from '../types/index.js';
 import type { RenderResult } from '../output/types.js';
+
+// -----------------------------------------------------------------------------
+// Test Helper: orchestrateReviews
+// This function is only used for testing the orchestration logic.
+// Production code in main.ts uses the lower-level functions directly.
+// -----------------------------------------------------------------------------
+
+interface SuccessfulTrigger {
+  triggerName: string;
+  report: SkillReport;
+  renderResult: RenderResult;
+  reviewDecision: {
+    approvalSuppressed: boolean;
+    suppressionReason?: string;
+  };
+}
+
+interface OrchestrationResult {
+  successful: SuccessfulTrigger[];
+  canResolveStale: boolean;
+  failedTriggers: string[];
+}
+
+function orchestrateReviews(results: TriggerExecutionResult[]): OrchestrationResult {
+  const coordination = buildReviewCoordination(results);
+  const successful: SuccessfulTrigger[] = [];
+
+  for (const [i, result] of results.entries()) {
+    const coord = coordination[i];
+    if (!result.report || !result.renderResult || !coord) {
+      continue;
+    }
+
+    const coordinatedReview = applyCoordinationToReview(result.renderResult.review, coord);
+
+    successful.push({
+      triggerName: result.triggerName,
+      report: result.report,
+      renderResult:
+        coordinatedReview !== result.renderResult.review
+          ? { ...result.renderResult, review: coordinatedReview }
+          : result.renderResult,
+      reviewDecision: {
+        approvalSuppressed: coord.approvalSuppressed,
+        suppressionReason: coord.suppressionReason,
+      },
+    });
+  }
+
+  return {
+    successful,
+    canResolveStale: shouldResolveStaleComments(results),
+    failedTriggers: results.filter((r) => r.error).map((r) => r.triggerName),
+  };
+}
 
 // -----------------------------------------------------------------------------
 // Test Fixtures

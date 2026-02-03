@@ -24,8 +24,10 @@ function isValidReviewState(state: string): state is ReviewState {
  */
 export interface TriggerReviewInput {
   triggerName: string;
-  /** The review event this trigger wants to post, or undefined if trigger failed */
+  /** The review event this trigger wants to post, or undefined if silent (no review to post) */
   reviewEvent: GitHubReview['event'] | undefined;
+  /** True if this trigger failed with an error (distinct from silent triggers with no review) */
+  failed: boolean;
 }
 
 /**
@@ -57,7 +59,7 @@ export interface TriggerReviewOutput {
  * When APPROVE is blocked, it's downgraded to COMMENT to avoid conflicting state.
  */
 export function coordinateReviewEvents(triggers: TriggerReviewInput[]): TriggerReviewOutput[] {
-  const anyTriggerFailed = triggers.some((t) => t.reviewEvent === undefined);
+  const anyTriggerFailed = triggers.some((t) => t.failed);
   const anyHasBlockingFindings = triggers.some((t) => t.reviewEvent === 'REQUEST_CHANGES');
   let approvalPosted = false;
 
