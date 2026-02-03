@@ -164,7 +164,7 @@ export async function runSkillTask(
       : undefined;
 
     // Process files with concurrency
-    const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; failedHunks: number; errors: string[] }> => {
+    const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number }> => {
       const filename = prepared.filename;
 
       // Update file state to running
@@ -212,11 +212,11 @@ export async function runSkillTask(
         findings: result.findings,
       });
 
-      return { findings: result.findings, usage: result.usage, failedHunks: result.failedHunks, errors: result.errors };
+      return { findings: result.findings, usage: result.usage, failedHunks: result.failedHunks, failedExtractions: result.failedExtractions };
     };
 
     // Process files in batches with concurrency
-    const allResults: { findings: Finding[]; usage?: UsageStats; failedHunks: number; errors: string[] }[] = [];
+    const allResults: { findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number }[] = [];
 
     for (let i = 0; i < preparedFiles.length; i += fileConcurrency) {
       const batch = preparedFiles.slice(i, i + fileConcurrency);
@@ -231,7 +231,7 @@ export async function runSkillTask(
     const allFindings = allResults.flatMap((r) => r.findings);
     const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
     const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
-    const allErrors = allResults.flatMap((r) => r.errors);
+    const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
     const uniqueFindings = deduplicateFindings(allFindings);
 
     const report: SkillReport = {
@@ -247,8 +247,8 @@ export async function runSkillTask(
     if (totalFailedHunks > 0) {
       report.failedHunks = totalFailedHunks;
     }
-    if (allErrors.length > 0) {
-      report.errors = allErrors;
+    if (totalFailedExtractions > 0) {
+      report.failedExtractions = totalFailedExtractions;
     }
 
     // Notify skill complete

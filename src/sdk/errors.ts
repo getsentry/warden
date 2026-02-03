@@ -13,6 +13,24 @@ export class SkillRunnerError extends Error {
   }
 }
 
+/** Patterns that indicate an authentication failure */
+const AUTH_ERROR_PATTERNS = [
+  'authentication',
+  'unauthorized',
+  'invalid.*api.*key',
+  'invalid.*key',
+  'not.*logged.*in',
+  'login.*required',
+  'api key',
+];
+
+/**
+ * Check if an error message indicates an authentication failure.
+ */
+export function isAuthenticationErrorMessage(message: string): boolean {
+  return AUTH_ERROR_PATTERNS.some((pattern) => new RegExp(pattern, 'i').test(message));
+}
+
 /** User-friendly error message for authentication failures */
 const AUTH_ERROR_MESSAGE = `Authentication required.
 
@@ -59,12 +77,5 @@ export function isAuthenticationError(error: unknown): boolean {
 
   // Check error message for common auth failure patterns
   const message = error instanceof Error ? error.message : String(error);
-  const authPatterns = [
-    'authentication',
-    'unauthorized',
-    'invalid.*api.*key',
-    'not.*logged.*in',
-    'login.*required',
-  ];
-  return authPatterns.some((pattern) => new RegExp(pattern, 'i').test(message));
+  return isAuthenticationErrorMessage(message);
 }

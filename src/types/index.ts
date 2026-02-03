@@ -106,8 +106,6 @@ export const SkillReportSchema = z.object({
   failedHunks: z.number().int().nonnegative().optional(),
   /** Number of hunks where findings extraction failed (JSON parse errors) */
   failedExtractions: z.number().int().nonnegative().optional(),
-  /** Error messages from failed hunks (for debugging) */
-  errors: z.array(z.string()).optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 

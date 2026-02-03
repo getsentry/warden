@@ -13,7 +13,7 @@
  */
 
 // Re-export error classes and utilities
-export { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError } from './errors.js';
+export { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
 
 // Re-export retry utilities
 export { calculateRetryDelay } from './retry.js';
