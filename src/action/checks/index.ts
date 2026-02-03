@@ -17,5 +17,4 @@ export type {
   CreateCheckResult,
   CoreCheckSummaryData,
   CheckConclusion,
-  CoreCheckContext,
 } from './manager.js';

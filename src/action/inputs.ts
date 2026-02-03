@@ -70,14 +70,17 @@ export function parseActionInputs(): ActionInputs {
     ? (commentOnInput as SeverityThreshold)
     : undefined;
 
+  const maxFindingsParsed = parseInt(getInput('max-findings') || '50', 10);
+  const parallelParsed = parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10);
+
   return {
     anthropicApiKey,
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
     configPath: getInput('config-path') || 'warden.toml',
     failOn,
     commentOn,
-    maxFindings: parseInt(getInput('max-findings') || '50', 10),
-    parallel: parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10),
+    maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
+    parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
   };
 }
 

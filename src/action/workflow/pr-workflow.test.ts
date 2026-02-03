@@ -305,7 +305,7 @@ describe('runPRWorkflow', () => {
       try {
         await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
         // Should not reach here
-        expect.fail('Expected workflow to throw');
+        throw new Error('Expected workflow to throw');
       } catch (error) {
         // Either our mocked setFailed threw, or process.exit was called
         expect(error).toBeDefined();
