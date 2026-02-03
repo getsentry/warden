@@ -28,3 +28,10 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm build:action
+
+      - run: pnpm pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.sha }}
+          path: "*.tgz"
