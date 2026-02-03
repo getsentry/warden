@@ -11,6 +11,7 @@ import {
   estimateTokens,
   isRetryableError,
   isAuthenticationError,
+  isAuthenticationErrorMessage,
   calculateRetryDelay,
   aggregateUsage,
   WardenAuthenticationError,
@@ -654,6 +655,57 @@ describe('isAuthenticationError', () => {
 
   it('returns false for undefined', () => {
     expect(isAuthenticationError(undefined)).toBe(false);
+  });
+});
+
+describe('isAuthenticationErrorMessage', () => {
+  it('returns true for "authentication failed"', () => {
+    expect(isAuthenticationErrorMessage('authentication failed')).toBe(true);
+  });
+
+  it('returns true for "unauthorized"', () => {
+    expect(isAuthenticationErrorMessage('Request unauthorized')).toBe(true);
+  });
+
+  it('returns true for "invalid api key"', () => {
+    expect(isAuthenticationErrorMessage('Invalid API key provided')).toBe(true);
+  });
+
+  it('returns true for "invalid key" (shorter form)', () => {
+    expect(isAuthenticationErrorMessage('invalid key')).toBe(true);
+  });
+
+  it('returns true for "api key" mentions', () => {
+    expect(isAuthenticationErrorMessage('Your api key is not valid')).toBe(true);
+  });
+
+  it('returns true for "not logged in"', () => {
+    expect(isAuthenticationErrorMessage('User is not logged in')).toBe(true);
+  });
+
+  it('returns true for "login required"', () => {
+    expect(isAuthenticationErrorMessage('Login required to access this resource')).toBe(true);
+  });
+
+  it('is case insensitive', () => {
+    expect(isAuthenticationErrorMessage('AUTHENTICATION FAILED')).toBe(true);
+    expect(isAuthenticationErrorMessage('Invalid API Key')).toBe(true);
+  });
+
+  it('returns false for rate limit messages', () => {
+    expect(isAuthenticationErrorMessage('Rate limit exceeded')).toBe(false);
+  });
+
+  it('returns false for server error messages', () => {
+    expect(isAuthenticationErrorMessage('Internal server error')).toBe(false);
+  });
+
+  it('returns false for generic errors', () => {
+    expect(isAuthenticationErrorMessage('Something went wrong')).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isAuthenticationErrorMessage('')).toBe(false);
   });
 });
 

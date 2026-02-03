@@ -52,6 +52,8 @@ interface HunkAnalysisResult {
   usage: UsageStats;
   /** Whether the hunk analysis failed (SDK error, API error, etc.) */
   failed: boolean;
+  /** Error message if failed (for logging/debugging) */
+  error?: string;
 }
 
 /**
@@ -124,6 +126,24 @@ export function isRetryableError(error: unknown): boolean {
   return false;
 }
 
+/** Patterns that indicate an authentication failure */
+const AUTH_ERROR_PATTERNS = [
+  'authentication',
+  'unauthorized',
+  'invalid.*api.*key',
+  'invalid.*key',
+  'not.*logged.*in',
+  'login.*required',
+  'api key',
+];
+
+/**
+ * Check if an error message indicates an authentication failure.
+ */
+export function isAuthenticationErrorMessage(message: string): boolean {
+  return AUTH_ERROR_PATTERNS.some((pattern) => new RegExp(pattern, 'i').test(message));
+}
+
 /**
  * Check if an error is an authentication failure.
  * These require user action (login or API key) and should not be retried.
@@ -135,14 +155,7 @@ export function isAuthenticationError(error: unknown): boolean {
 
   // Check error message for common auth failure patterns
   const message = error instanceof Error ? error.message : String(error);
-  const authPatterns = [
-    'authentication',
-    'unauthorized',
-    'invalid.*api.*key',
-    'not.*logged.*in',
-    'login.*required',
-  ];
-  return authPatterns.some((pattern) => new RegExp(pattern, 'i').test(message));
+  return isAuthenticationErrorMessage(message);
 }
 
 /** User-friendly error message for authentication failures */
@@ -670,6 +683,15 @@ interface HunkAnalysisCallbacks {
 }
 
 /**
+ * Result from executing an SDK query, including any captured errors.
+ */
+interface QueryExecutionResult {
+  result?: SDKResultMessage;
+  /** Authentication error captured from auth_status message */
+  authError?: string;
+}
+
+/**
  * Execute a single SDK query attempt.
  */
 async function executeQuery(
@@ -677,7 +699,7 @@ async function executeQuery(
   userPrompt: string,
   repoPath: string,
   options: SkillRunnerOptions
-): Promise<SDKResultMessage | undefined> {
+): Promise<QueryExecutionResult> {
   const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
 
   const stream = query({
@@ -698,14 +720,18 @@ async function executeQuery(
   });
 
   let resultMessage: SDKResultMessage | undefined;
+  let authError: string | undefined;
 
   for await (const message of stream) {
     if (message.type === 'result') {
       resultMessage = message;
+    } else if (message.type === 'auth_status' && message.error) {
+      // Capture authentication errors from auth_status messages
+      authError = message.error;
     }
   }
 
-  return resultMessage;
+  return { result: resultMessage, authError };
 }
 
 /**
@@ -751,14 +777,26 @@ async function analyzeHunk(
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
     // Check for abort before each attempt
     if (abortController?.signal.aborted) {
-      return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
+      return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, error: 'Aborted' };
     }
 
     try {
-      const resultMessage = await executeQuery(systemPrompt, userPrompt, repoPath, options);
+      const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options);
+
+      // Check for authentication errors from auth_status messages
+      if (authError) {
+        if (isAuthenticationErrorMessage(authError)) {
+          throw new WardenAuthenticationError();
+        }
+        // Non-auth error from auth_status - log and treat as failure
+        console.error(`SDK auth error: ${authError}`);
+        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, error: authError };
+      }
 
       if (!resultMessage) {
-        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
+        const error = 'SDK returned no result';
+        console.error(error);
+        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, error };
       }
 
       // Extract usage from the result, regardless of success/error status
@@ -769,11 +807,26 @@ async function analyzeHunk(
       const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
 
       if (isError) {
-        // SDK error - we have usage but no valid findings
+        // Extract error messages from SDK result
+        const errorMessages = 'errors' in resultMessage ? resultMessage.errors : [];
+
+        // Check if any error indicates authentication failure
+        for (const err of errorMessages) {
+          if (isAuthenticationErrorMessage(err)) {
+            throw new WardenAuthenticationError();
+          }
+        }
+
+        // SDK error - log and return failure with error details
+        const errorSummary = errorMessages.length > 0
+          ? errorMessages.join('; ')
+          : `SDK error: ${resultMessage.subtype}`;
+        console.error(`SDK execution failed: ${errorSummary}`);
         return {
           findings: [],
           usage: aggregateUsage(accumulatedUsage),
           failed: true,
+          error: errorSummary,
         };
       }
 
@@ -784,6 +837,11 @@ async function analyzeHunk(
       };
     } catch (error) {
       lastError = error;
+
+      // Re-throw authentication errors (they shouldn't be retried)
+      if (error instanceof WardenAuthenticationError) {
+        throw error;
+      }
 
       // Authentication errors should surface immediately with helpful guidance
       if (isAuthenticationError(error)) {
@@ -812,25 +870,29 @@ async function analyzeHunk(
         await sleep(delayMs, abortController?.signal);
       } catch {
         // Aborted during sleep
-        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
+        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, error: 'Aborted' };
       }
     }
   }
 
   // All attempts failed - return failure with any accumulated usage
-  // Log the final error for debugging if verbose
-  if (options.verbose && lastError) {
-    const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+  const finalError = lastError instanceof Error ? lastError.message : String(lastError);
+
+  // Log the final error
+  console.error(`All retry attempts failed: ${finalError}`);
+
+  // Also notify via callback if verbose
+  if (options.verbose) {
     callbacks?.onRetry?.(
       callbacks.lineRange,
       retryConfig.maxRetries + 1,
       retryConfig.maxRetries,
-      `Final failure: ${errorMessage}`,
+      `Final failure: ${finalError}`,
       0
     );
   }
 
-  return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true };
+  return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, error: finalError };
 }
 
 /**
@@ -1001,6 +1063,8 @@ export interface FileAnalysisResult {
   usage: UsageStats;
   /** Number of hunks that failed to analyze */
   failedHunks: number;
+  /** Error messages from failed hunks */
+  errors: string[];
 }
 
 /**
@@ -1018,6 +1082,7 @@ export async function analyzeFile(
   const fileFindings: Finding[] = [];
   const fileUsage: UsageStats[] = [];
   let failedHunks = 0;
+  const errors: string[] = [];
 
   for (const [hunkIndex, hunk] of file.hunks.entries()) {
     if (abortController?.signal.aborted) break;
@@ -1038,6 +1103,9 @@ export async function analyzeFile(
 
     if (result.failed) {
       failedHunks++;
+      if (result.error) {
+        errors.push(`${file.filename}:${lineRange}: ${result.error}`);
+      }
     }
 
     attachElapsedTime(result.findings, callbacks?.skillStartTime);
@@ -1052,6 +1120,7 @@ export async function analyzeFile(
     findings: fileFindings,
     usage: aggregateUsage(fileUsage),
     failedHunks,
+    errors,
   };
 }
 
@@ -1098,6 +1167,9 @@ export async function runSkill(
 
   // Track failed hunks across all files
   let totalFailedHunks = 0;
+
+  // Track all errors for debugging
+  const allErrors: string[] = [];
 
   // Build PR context for inclusion in prompts (helps LLM understand the full scope of changes)
   const prContext: PRPromptContext = {
@@ -1175,6 +1247,7 @@ export async function runSkill(
         allFindings.push(...result.findings);
         allUsage.push(result.usage);
         totalFailedHunks += result.failedHunks;
+        allErrors.push(...result.errors);
       }
     }
   } else {
@@ -1187,6 +1260,7 @@ export async function runSkill(
       allFindings.push(...result.findings);
       allUsage.push(result.usage);
       totalFailedHunks += result.failedHunks;
+      allErrors.push(...result.errors);
     }
   }
 
@@ -1211,6 +1285,9 @@ export async function runSkill(
   }
   if (totalFailedHunks > 0) {
     report.failedHunks = totalFailedHunks;
+  }
+  if (allErrors.length > 0) {
+    report.errors = allErrors;
   }
   return report;
 }
