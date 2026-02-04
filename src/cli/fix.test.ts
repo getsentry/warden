@@ -2,11 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import {
-  applyUnifiedDiff,
-  collectFixableFindings,
-  applyAllFixes,
-} from './fix.js';
+import { collectFixableFindings, applyAllFixes } from './fix.js';
+import { applyUnifiedDiff } from './diff-apply.js';
 import type { Finding, SkillReport } from '../types/index.js';
 
 describe('applyUnifiedDiff', () => {

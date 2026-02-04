@@ -2,14 +2,16 @@
  * Fix application functionality for the warden CLI.
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import chalk from 'chalk';
 import figures from 'figures';
 import type { Finding, SkillReport } from '../types/index.js';
-import { parsePatch, type DiffHunk } from '../diff/index.js';
 import { pluralize, type Reporter } from './output/index.js';
 import { ICON_CHECK } from './output/icons.js';
 import { Verbosity } from './output/verbosity.js';
+import { applyUnifiedDiff } from './diff-apply.js';
+
+// Re-export for backward compatibility
+export { applyUnifiedDiff } from './diff-apply.js';
 
 export interface FixResult {
   success: boolean;
@@ -22,79 +24,6 @@ export interface FixSummary {
   skipped: number;
   failed: number;
   results: FixResult[];
-}
-
-/**
- * Apply a unified diff to a file.
- * Hunks are applied in reverse order by line number to prevent line shift issues.
- */
-export function applyUnifiedDiff(filePath: string, diff: string): void {
-  if (!existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
-  }
-
-  const hunks = parsePatch(diff);
-  if (hunks.length === 0) {
-    throw new Error('No valid hunks found in diff');
-  }
-
-  const content = readFileSync(filePath, 'utf-8');
-  let lines = content.split('\n');
-
-  // Sort hunks by oldStart in descending order to apply from bottom to top
-  const sortedHunks = [...hunks].sort((a, b) => b.oldStart - a.oldStart);
-
-  for (const hunk of sortedHunks) {
-    lines = applyHunk(lines, hunk);
-  }
-
-  writeFileSync(filePath, lines.join('\n'));
-}
-
-/**
- * Apply a single hunk to the file content lines.
- */
-function applyHunk(lines: string[], hunk: DiffHunk): string[] {
-  const result = [...lines];
-
-  // Parse hunk lines into operations
-  const oldLines: string[] = [];
-  const newLines: string[] = [];
-
-  for (const line of hunk.lines) {
-    if (line.startsWith('-')) {
-      oldLines.push(line.slice(1));
-    } else if (line.startsWith('+')) {
-      newLines.push(line.slice(1));
-    } else if (line.startsWith(' ') || line === '') {
-      // Context line - should match in both
-      const contextLine = line.startsWith(' ') ? line.slice(1) : line;
-      oldLines.push(contextLine);
-      newLines.push(contextLine);
-    }
-  }
-
-  // The start index is 0-based (hunk.oldStart is 1-based)
-  const startIndex = hunk.oldStart - 1;
-
-  // Verify the old lines match (context check)
-  for (let i = 0; i < oldLines.length; i++) {
-    const lineIndex = startIndex + i;
-    if (lineIndex >= result.length) {
-      throw new Error(`Hunk context mismatch: line ${lineIndex + 1} doesn't exist`);
-    }
-    if (result[lineIndex] !== oldLines[i]) {
-      throw new Error(
-        `Hunk context mismatch at line ${lineIndex + 1}: ` +
-        `expected "${oldLines[i]}", got "${result[lineIndex]}"`
-      );
-    }
-  }
-
-  // Replace the old lines with new lines
-  result.splice(startIndex, oldLines.length, ...newLines);
-
-  return result;
 }
 
 /**
