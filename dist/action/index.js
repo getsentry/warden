@@ -35219,15 +35219,17 @@ function isAuthenticationErrorMessage(message) {
     return AUTH_ERROR_PATTERNS.some((pattern) => new RegExp(pattern, 'i').test(message));
 }
 /** User-friendly error message for authentication failures */
-const AUTH_ERROR_MESSAGE = `Authentication required.
-
+const AUTH_ERROR_GUIDANCE = `
   claude login                             # Use Claude Code subscription
   export WARDEN_ANTHROPIC_API_KEY=sk-...   # Or use API key
 
 https://console.anthropic.com/ for API keys`;
 class WardenAuthenticationError extends Error {
-    constructor() {
-        super(AUTH_ERROR_MESSAGE);
+    constructor(sdkError) {
+        const message = sdkError
+            ? `Authentication failed: ${sdkError}\n${AUTH_ERROR_GUIDANCE}`
+            : `Authentication required.${AUTH_ERROR_GUIDANCE}`;
+        super(message);
         this.name = 'WardenAuthenticationError';
     }
 }
@@ -36541,13 +36543,9 @@ async function analyzeHunk(skill, hunkCtx, repoPath, options, callbacks, prConte
         try {
             const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options);
             // Check for authentication errors from auth_status messages
+            // auth_status errors are always auth-related - throw immediately
             if (authError) {
-                if (isAuthenticationErrorMessage(authError)) {
-                    throw new WardenAuthenticationError();
-                }
-                // Non-auth error from auth_status - log and treat as failure
-                console.error(`SDK auth error: ${authError}`);
-                return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+                throw new WardenAuthenticationError(authError);
             }
             if (!resultMessage) {
                 console.error('SDK returned no result');

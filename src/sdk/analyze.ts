@@ -172,13 +172,9 @@ async function analyzeHunk(
       const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options);
 
       // Check for authentication errors from auth_status messages
+      // auth_status errors are always auth-related - throw immediately
       if (authError) {
-        if (isAuthenticationErrorMessage(authError)) {
-          throw new WardenAuthenticationError();
-        }
-        // Non-auth error from auth_status - log and treat as failure
-        console.error(`SDK auth error: ${authError}`);
-        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+        throw new WardenAuthenticationError(authError);
       }
 
       if (!resultMessage) {

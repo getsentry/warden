@@ -32,16 +32,18 @@ export function isAuthenticationErrorMessage(message: string): boolean {
 }
 
 /** User-friendly error message for authentication failures */
-const AUTH_ERROR_MESSAGE = `Authentication required.
-
+const AUTH_ERROR_GUIDANCE = `
   claude login                             # Use Claude Code subscription
   export WARDEN_ANTHROPIC_API_KEY=sk-...   # Or use API key
 
 https://console.anthropic.com/ for API keys`;
 
 export class WardenAuthenticationError extends Error {
-  constructor() {
-    super(AUTH_ERROR_MESSAGE);
+  constructor(sdkError?: string) {
+    const message = sdkError
+      ? `Authentication failed: ${sdkError}\n${AUTH_ERROR_GUIDANCE}`
+      : `Authentication required.${AUTH_ERROR_GUIDANCE}`;
+    super(message);
     this.name = 'WardenAuthenticationError';
   }
 }
