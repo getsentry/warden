@@ -132,22 +132,39 @@ export function parseWardenComment(body: string): { title: string; description: 
 
 /**
  * Check if a comment body is a Warden-generated comment.
+ * Supports both old format (<sub>warden: skill</sub>) and new format (<sub>Identified by Warden via `skill`</sub>).
  */
 export function isWardenComment(body: string): boolean {
-  return body.includes('<sub>warden:') || body.includes('<!-- warden:v1:');
+  return body.includes('<sub>warden:') || body.includes('<sub>Identified by Warden via') || body.includes('<!-- warden:v1:');
 }
 
 /**
  * Parse skill names from a Warden comment's attribution line.
- * Handles both single skill: "<sub>warden: skill-name</sub>"
- * And multiple skills: "<sub>warden: skill1, skill2</sub>"
+ * Supports both old format: "<sub>warden: skill1, skill2</sub>"
+ * And new format: "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
  */
 export function parseWardenSkills(body: string): string[] {
-  const match = body.match(/<sub>warden:\s*([^<]+)<\/sub>/);
-  if (!match || !match[1]) {
+  // Try new format first: <sub>Identified by Warden via `skill1`, `skill2` · severity</sub>
+  // Extract the portion between "via " and " ·" (or end of sub tag)
+  const newFormatMatch = body.match(/<sub>Identified by Warden via ([^·<]+)/);
+  if (newFormatMatch?.[1]) {
+    // Extract all backtick-quoted skill names
+    const skillMatches = newFormatMatch[1].matchAll(/`([^`]+)`/g);
+    const skills: string[] = [];
+    for (const m of skillMatches) {
+      if (m[1]) skills.push(m[1]);
+    }
+    if (skills.length > 0) {
+      return skills;
+    }
+  }
+
+  // Fall back to old format: <sub>warden: skill1, skill2</sub>
+  const oldMatch = body.match(/<sub>warden:\s*([^<]+)<\/sub>/);
+  if (!oldMatch?.[1]) {
     return [];
   }
-  return match[1]
+  return oldMatch[1]
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
@@ -155,13 +172,15 @@ export function parseWardenSkills(body: string): string[] {
 
 /**
  * Update a Warden comment body to add a new skill to the attribution.
- * Changes "<sub>warden: skill1</sub>" to "<sub>warden: skill1, skill2</sub>"
- * Returns null if skill is already listed or if no <sub>warden:...</sub> tag exists.
+ * Old format: Changes "<sub>warden: skill1</sub>" to "<sub>warden: skill1, skill2</sub>"
+ * New format: Changes "<sub>Identified by Warden via `skill1` · severity</sub>"
+ *             to "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
+ * Returns null if skill is already listed or if no attribution tag exists.
  */
 export function updateWardenCommentBody(body: string, newSkill: string): string | null {
   const existingSkills = parseWardenSkills(body);
 
-  // If no existing <sub>warden:...</sub> tag exists, we can't update it
+  // If no existing attribution tag exists, we can't update it
   if (existingSkills.length === 0) {
     return null;
   }
@@ -171,6 +190,18 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
     return null;
   }
 
+  // Check if it's the new format
+  const newFormatMatch = body.match(/<sub>Identified by Warden via `([^`]+)`(.*?)<\/sub>/);
+  if (newFormatMatch) {
+    const existingSkillsFormatted = existingSkills.map((s) => `\`${s}\``).join(', ');
+    const suffix = newFormatMatch[2] || '';
+    return body.replace(
+      /<sub>Identified by Warden via `[^`]+`.*?<\/sub>/,
+      () => `<sub>Identified by Warden via ${existingSkillsFormatted}, \`${newSkill}\`${suffix}</sub>`
+    );
+  }
+
+  // Old format: <sub>warden: skill1, skill2</sub>
   const allSkills = [...existingSkills, newSkill].join(', ');
   // Use a replacer function to avoid special $ character interpretation in skill names
   return body.replace(/<sub>warden:\s*[^<]+<\/sub>/, () => `<sub>warden: ${allSkills}</sub>`);

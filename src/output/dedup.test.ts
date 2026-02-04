@@ -121,6 +121,11 @@ describe('isWardenComment', () => {
     expect(isWardenComment(body)).toBe(true);
   });
 
+  it('returns true for new format attribution', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill\` · high</sub>`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
   it('returns false for regular comment', () => {
     const body = 'This is a regular comment.';
     expect(isWardenComment(body)).toBe(false);
@@ -298,6 +303,26 @@ describe('parseWardenSkills', () => {
     const body = 'Regular comment without attribution';
     expect(parseWardenSkills(body)).toEqual([]);
   });
+
+  it('parses new format with severity', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`security-review\` · high</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['security-review']);
+  });
+
+  it('parses new format with severity and confidence', () => {
+    const body = `<sub>Identified by Warden via \`notseer\` · critical, high confidence</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from new format', () => {
+    const body = `<sub>Identified by Warden via \`skill1\`, \`skill2\` · high</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('parses multiple skills with extra whitespace in new format', () => {
+    const body = `<sub>Identified by Warden via \`skill1\`,  \`skill2\`,\`skill3\` · medium</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
 });
 
 describe('updateWardenCommentBody', () => {
@@ -320,6 +345,24 @@ describe('updateWardenCommentBody', () => {
     expect(result).toContain('User input passed to query');
     expect(result).toContain('<sub>warden: security-review, code-quality</sub>');
     expect(result).toContain('<!-- warden:v1:file.ts:10:abc123 -->');
+  });
+
+  it('adds new skill to new format attribution', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill1\` · high</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>Identified by Warden via `skill1`, `skill2` · high</sub>');
+  });
+
+  it('preserves severity and confidence in new format', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`notseer\` · critical, high confidence</sub>`;
+    const result = updateWardenCommentBody(body, 'security-review');
+    expect(result).toContain('<sub>Identified by Warden via `notseer`, `security-review` · critical, high confidence</sub>');
+  });
+
+  it('returns null if skill already listed in new format', () => {
+    const body = `<sub>Identified by Warden via \`skill1\` · medium</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
   });
 });
 
