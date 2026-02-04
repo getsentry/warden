@@ -10,7 +10,39 @@ import { getMajorVersion } from '../../utils/index.js';
  * Template for warden.toml configuration file.
  */
 function generateWardenToml(): string {
-  return `version = 1
+  return `# Warden Configuration
+# https://github.com/getsentry/warden
+#
+# Warden reviews code using AI-powered skills triggered by GitHub events.
+# Skills live in .warden/skills/, .agents/skills/, or .claude/skills/
+#
+# Add skills with: warden add <skill-name>
+
+version = 1
+
+# Default settings inherited by all triggers
+[defaults.output]
+# Severity levels: critical, high, medium, low, info
+# failOn: minimum severity that fails the check
+failOn = "high"
+# commentOn: minimum severity that creates PR annotations
+commentOn = "medium"
+
+# Triggers map GitHub events to skills
+# Add triggers with: warden add <skill-name>
+#
+# Example trigger with path filters:
+#
+# [[triggers]]
+# name = "security-review"
+# event = "pull_request"
+# actions = ["opened", "synchronize", "reopened"]
+# skill = "security-review"
+#
+# # Path filters prevent running on irrelevant files
+# [triggers.filters]
+# paths = ["src/**/*.ts", "src/**/*.tsx"]
+# ignorePaths = ["**/*.test.ts", "**/__fixtures__/**"]
 `;
 }
 
