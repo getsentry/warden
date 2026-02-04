@@ -23,6 +23,7 @@ vi.mock('../review-state.js', () => ({
 }));
 
 import { deduplicateFindings, processDuplicateActions, findingToExistingComment } from '../../output/dedup.js';
+import { renderSkillReport } from '../../output/renderer.js';
 
 describe('postTriggerReview', () => {
   beforeEach(() => {
@@ -208,8 +209,64 @@ describe('postTriggerReview', () => {
 
     expect(deduplicateFindings).toHaveBeenCalledWith([finding], [existingComment], expect.any(Object));
     expect(processDuplicateActions).toHaveBeenCalled();
-    // Since all findings were duplicates, nothing new to post
+    // Since all findings were duplicates and failOn not triggered, nothing new to post
     expect(postResult.posted).toBe(false);
+  });
+
+  it('posts REQUEST_CHANGES when all findings deduplicated but failOn threshold met', async () => {
+    const finding = createFinding({ severity: 'high' });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'REQUEST_CHANGES',
+          body: 'Findings exceed threshold',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      commentOn: 'info',
+      failOn: 'high',
+    };
+
+    const existingComment = createExistingComment({ isWarden: true });
+
+    // Mock that the finding is a duplicate (already posted in previous run)
+    vi.mocked(deduplicateFindings).mockResolvedValue({
+      newFindings: [],
+      duplicateActions: [{ type: 'update_warden', finding, existingComment, matchType: 'hash' }],
+    });
+    vi.mocked(processDuplicateActions).mockResolvedValue({ updated: 1, reacted: 0, skipped: 0, failed: 0 });
+
+    // Mock renderSkillReport to return a REQUEST_CHANGES review when re-rendering with empty findings
+    vi.mocked(renderSkillReport).mockReturnValue({
+      summaryComment: 'Summary',
+      review: {
+        event: 'REQUEST_CHANGES',
+        body: 'Findings exceed the configured threshold. See the GitHub Check for details.',
+        comments: [],
+      },
+    });
+
+    const ctx: ReviewPostingContext = {
+      result,
+      coordination: undefined,
+      existingComments: [existingComment],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(deduplicateFindings).toHaveBeenCalled();
+    expect(processDuplicateActions).toHaveBeenCalled();
+    // Even though all findings were deduplicated, REQUEST_CHANGES should still be posted
+    expect(postResult.posted).toBe(true);
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
   });
 
   it('posts approval review when coordinated', async () => {

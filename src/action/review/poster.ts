@@ -8,6 +8,7 @@
 import type { Octokit } from '@octokit/rest';
 import type { EventContext } from '../../types/index.js';
 import { filterFindingsBySeverity } from '../../types/index.js';
+import { shouldFail } from '../../triggers/matcher.js';
 import type { RenderResult } from '../../output/types.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import {
@@ -188,8 +189,11 @@ export async function postTriggerReview(
       }
     }
 
-    // Only post if we have non-duplicate findings, commentOnSuccess is true, or we need to approve
-    if (findingsToPost.length > 0 || commentOnSuccess || needsApproval) {
+    // Check if failOn threshold is met (even if all findings deduplicated, we still need REQUEST_CHANGES)
+    const needsRequestChanges = result.failOn && shouldFail(result.report, result.failOn);
+
+    // Only post if we have non-duplicate findings, commentOnSuccess, approval needed, or REQUEST_CHANGES needed
+    if (findingsToPost.length > 0 || commentOnSuccess || needsApproval || needsRequestChanges) {
       // Re-render with deduplicated findings if any were removed
       // Don't pass previousReviewState if this trigger's approval was suppressed
       // (to avoid re-rendering as APPROVE when coordination decided otherwise)

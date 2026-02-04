@@ -38789,6 +38789,7 @@ async function executeTrigger(trigger, deps) {
 
 
 
+
 // -----------------------------------------------------------------------------
 // GitHub Review Posting
 // -----------------------------------------------------------------------------
@@ -38885,8 +38886,10 @@ async function postTriggerReview(ctx, deps) {
                 console.warn(`::warning::Failed to process ${actionCounts.failed} duplicate actions`);
             }
         }
-        // Only post if we have non-duplicate findings, commentOnSuccess is true, or we need to approve
-        if (findingsToPost.length > 0 || commentOnSuccess || needsApproval) {
+        // Check if failOn threshold is met (even if all findings deduplicated, we still need REQUEST_CHANGES)
+        const needsRequestChanges = result.failOn && shouldFail(result.report, result.failOn);
+        // Only post if we have non-duplicate findings, commentOnSuccess, approval needed, or REQUEST_CHANGES needed
+        if (findingsToPost.length > 0 || commentOnSuccess || needsApproval || needsRequestChanges) {
             // Re-render with deduplicated findings if any were removed
             // Don't pass previousReviewState if this trigger's approval was suppressed
             // (to avoid re-rendering as APPROVE when coordination decided otherwise)
