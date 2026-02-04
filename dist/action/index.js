@@ -36508,9 +36508,12 @@ async function parseHunkOutput(result, filename, apiKey) {
 }
 /**
  * Execute a single SDK query attempt.
+ * Captures stderr for better error diagnostics when Claude Code fails.
  */
 async function executeQuery(systemPrompt, userPrompt, repoPath, options) {
     const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
+    // Capture stderr output for better error diagnostics
+    const stderrChunks = [];
     const stream = o_({
         prompt: userPrompt,
         options: {
@@ -36525,20 +36528,37 @@ async function executeQuery(systemPrompt, userPrompt, repoPath, options) {
             model,
             abortController,
             pathToClaudeCodeExecutable,
+            stderr: (data) => {
+                stderrChunks.push(data);
+            },
         },
     });
     let resultMessage;
     let authError;
-    for await (const message of stream) {
-        if (message.type === 'result') {
-            resultMessage = message;
-        }
-        else if (message.type === 'auth_status' && message.error) {
-            // Capture authentication errors from auth_status messages
-            authError = message.error;
+    try {
+        for await (const message of stream) {
+            if (message.type === 'result') {
+                resultMessage = message;
+            }
+            else if (message.type === 'auth_status' && message.error) {
+                // Capture authentication errors from auth_status messages
+                authError = message.error;
+            }
         }
     }
-    return { result: resultMessage, authError };
+    catch (error) {
+        // Re-throw with stderr info if available
+        const stderr = stderrChunks.join('').trim();
+        if (stderr) {
+            const originalMessage = error instanceof Error ? error.message : String(error);
+            const enhancedError = new Error(`${originalMessage}\nClaude Code stderr: ${stderr}`);
+            enhancedError.cause = error;
+            throw enhancedError;
+        }
+        throw error;
+    }
+    const stderr = stderrChunks.join('').trim() || undefined;
+    return { result: resultMessage, authError, stderr };
 }
 /**
  * Analyze a single hunk with retry logic for transient failures.
@@ -36776,6 +36796,7 @@ async function runSkill(skill, context, options = {}) {
         return report;
     }
     const totalFiles = fileHunks.length;
+    const totalHunks = fileHunks.reduce((sum, file) => sum + file.hunks.length, 0);
     const allFindings = [];
     // Track all usage stats for aggregation
     const allUsage = [];
@@ -36864,6 +36885,12 @@ async function runSkill(skill, context, options = {}) {
             totalFailedHunks += result.failedHunks;
             totalFailedExtractions += result.failedExtractions;
         }
+    }
+    // Check if all analysis failed (indicates a systemic problem like auth failure)
+    if (totalFailedHunks > 0 && totalFailedHunks === totalHunks && allFindings.length === 0) {
+        throw new SkillRunnerError(`All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
+            `This usually indicates an authentication problem. ` +
+            `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`);
     }
     // Deduplicate findings
     const uniqueFindings = extract_deduplicateFindings(allFindings);
