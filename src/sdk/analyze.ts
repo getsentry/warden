@@ -2,7 +2,7 @@ import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
-import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError } from './errors.js';
+import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
@@ -71,6 +71,15 @@ async function parseHunkOutput(
 }
 
 /**
+ * Result from executing an SDK query, including any captured errors.
+ */
+interface QueryExecutionResult {
+  result?: SDKResultMessage;
+  /** Authentication error captured from auth_status message */
+  authError?: string;
+}
+
+/**
  * Execute a single SDK query attempt.
  */
 async function executeQuery(
@@ -78,7 +87,7 @@ async function executeQuery(
   userPrompt: string,
   repoPath: string,
   options: SkillRunnerOptions
-): Promise<SDKResultMessage | undefined> {
+): Promise<QueryExecutionResult> {
   const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
 
   const stream = query({
@@ -99,14 +108,18 @@ async function executeQuery(
   });
 
   let resultMessage: SDKResultMessage | undefined;
+  let authError: string | undefined;
 
   for await (const message of stream) {
     if (message.type === 'result') {
       resultMessage = message;
+    } else if (message.type === 'auth_status' && message.error) {
+      // Capture authentication errors from auth_status messages
+      authError = message.error;
     }
   }
 
-  return resultMessage;
+  return { result: resultMessage, authError };
 }
 
 /**
@@ -156,9 +169,20 @@ async function analyzeHunk(
     }
 
     try {
-      const resultMessage = await executeQuery(systemPrompt, userPrompt, repoPath, options);
+      const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options);
+
+      // Check for authentication errors from auth_status messages
+      if (authError) {
+        if (isAuthenticationErrorMessage(authError)) {
+          throw new WardenAuthenticationError();
+        }
+        // Non-auth error from auth_status - log and treat as failure
+        console.error(`SDK auth error: ${authError}`);
+        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+      }
 
       if (!resultMessage) {
+        console.error('SDK returned no result');
         return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
       }
 
@@ -170,7 +194,21 @@ async function analyzeHunk(
       const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
 
       if (isError) {
-        // SDK error - we have usage but no valid findings
+        // Extract error messages from SDK result
+        const errorMessages = 'errors' in resultMessage ? resultMessage.errors : [];
+
+        // Check if any error indicates authentication failure
+        for (const err of errorMessages) {
+          if (isAuthenticationErrorMessage(err)) {
+            throw new WardenAuthenticationError();
+          }
+        }
+
+        // SDK error - log and return failure with error details
+        const errorSummary = errorMessages.length > 0
+          ? errorMessages.join('; ')
+          : `SDK error: ${resultMessage.subtype}`;
+        console.error(`SDK execution failed: ${errorSummary}`);
         return {
           findings: [],
           usage: aggregateUsage(accumulatedUsage),
@@ -200,6 +238,11 @@ async function analyzeHunk(
       };
     } catch (error) {
       lastError = error;
+
+      // Re-throw authentication errors (they shouldn't be retried)
+      if (error instanceof WardenAuthenticationError) {
+        throw error;
+      }
 
       // Authentication errors should surface immediately with helpful guidance
       if (isAuthenticationError(error)) {
@@ -234,14 +277,20 @@ async function analyzeHunk(
   }
 
   // All attempts failed - return failure with any accumulated usage
-  // Log the final error for debugging if verbose
-  if (options.verbose && lastError) {
-    const errorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+  const finalError = lastError instanceof Error ? lastError.message : String(lastError);
+
+  // Log the final error
+  if (lastError) {
+    console.error(`All retry attempts failed: ${finalError}`);
+  }
+
+  // Also notify via callback if verbose
+  if (options.verbose) {
     callbacks?.onRetry?.(
       callbacks.lineRange,
       retryConfig.maxRetries + 1,
       retryConfig.maxRetries,
-      `Final failure: ${errorMessage}`,
+      `Final failure: ${finalError}`,
       0
     );
   }
