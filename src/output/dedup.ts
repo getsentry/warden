@@ -191,12 +191,16 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
   }
 
   // Check if it's the new format
-  const newFormatMatch = body.match(/<sub>Identified by Warden via `([^`]+)`(.*?)<\/sub>/);
+  const newFormatMatch = body.match(/<sub>Identified by Warden via `[^`]+`/);
   if (newFormatMatch) {
     const existingSkillsFormatted = existingSkills.map((s) => `\`${s}\``).join(', ');
-    const suffix = newFormatMatch[2] || '';
+    // Extract the suffix (metadata) starting from the · separator, not from the skill list
+    const subTagMatch = body.match(/<sub>Identified by Warden via ([^<]+)<\/sub>/);
+    const fullContent = subTagMatch?.[1] || '';
+    const separatorIndex = fullContent.indexOf(' · ');
+    const suffix = separatorIndex >= 0 ? fullContent.slice(separatorIndex) : '';
     return body.replace(
-      /<sub>Identified by Warden via `[^`]+`.*?<\/sub>/,
+      /<sub>Identified by Warden via [^<]+<\/sub>/,
       () => `<sub>Identified by Warden via ${existingSkillsFormatted}, \`${newSkill}\`${suffix}</sub>`
     );
   }

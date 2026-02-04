@@ -364,6 +364,14 @@ describe('updateWardenCommentBody', () => {
     const result = updateWardenCommentBody(body, 'skill1');
     expect(result).toBeNull();
   });
+
+  it('adds skill to new format with multiple existing skills without duplication', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill1\`, \`skill2\` · high</sub>`;
+    const result = updateWardenCommentBody(body, 'skill3');
+    expect(result).toContain('<sub>Identified by Warden via `skill1`, `skill2`, `skill3` · high</sub>');
+    // Ensure no duplication - skill2 should appear exactly once
+    expect(result!.match(/`skill2`/g)).toHaveLength(1);
+  });
 });
 
 describe('findingToExistingComment', () => {
