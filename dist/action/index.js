@@ -38187,8 +38187,9 @@ function renderReview(findings, report, includeSuggestions, failOn, allFindings,
         if (includeSuggestions && finding.suggestedFix) {
             body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
         }
-        // Add attribution footnote
-        body += `\n\n---\n<sub>warden: ${report.skill}</sub>`;
+        // Add attribution footnote with skill name, severity, and confidence
+        const confidenceSuffix = finding.confidence ? `, ${finding.confidence} confidence` : '';
+        body += `\n\n<sub>Identified by Warden via \`${report.skill}\` · ${finding.severity}${confidenceSuffix}</sub>`;
         // Add deduplication marker
         const contentHash = generateContentHash(finding.title, finding.description);
         const line = location.endLine ?? location.startLine;

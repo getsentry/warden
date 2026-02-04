@@ -69,7 +69,34 @@ describe('renderSkillReport', () => {
     const result = renderSkillReport(report);
 
     expect(result.review).toBeDefined();
-    expect(result.review!.comments[0]!.body).toContain('<sub>warden: code-review</sub>');
+    expect(result.review!.comments[0]!.body).toContain('<sub>Identified by Warden via `code-review` · medium</sub>');
+  });
+
+  it('includes confidence in attribution footnote when present', () => {
+    const report: SkillReport = {
+      ...baseReport,
+      skill: 'security-review',
+      findings: [
+        {
+          id: 'f1',
+          severity: 'high',
+          confidence: 'high',
+          title: 'Issue',
+          description: 'Details',
+          location: {
+            path: 'src/file.ts',
+            startLine: 10,
+          },
+        },
+      ],
+    };
+
+    const result = renderSkillReport(report);
+
+    expect(result.review).toBeDefined();
+    expect(result.review!.comments[0]!.body).toContain(
+      '<sub>Identified by Warden via `security-review` · high, high confidence</sub>'
+    );
   });
 
   it('includes deduplication marker in comments', () => {
