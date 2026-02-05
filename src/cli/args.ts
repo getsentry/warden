@@ -23,6 +23,9 @@ export const CLIOptionsSchema = z.object({
   // Verbosity options
   quiet: z.boolean().default(false),
   verbose: z.number().default(0),
+  debug: z.boolean().default(false),
+  /** Use log output mode (no animations, timestamped) */
+  log: z.boolean().default(false),
   color: z.boolean().optional(),
   /** Automatically apply all suggested fixes */
   fix: z.boolean().default(false),
@@ -92,6 +95,8 @@ Options:
   --quiet              Errors and final summary only
   -v, --verbose        Show real-time findings and hunk details
   -vv                  Show debug info (token counts, latencies)
+  --debug              Enable debug output (equivalent to -vv)
+  --log                Use log output (no animations, timestamped)
   --color / --no-color Override color detection
   --help, -h           Show this help message
   --version, -V        Show version number
@@ -266,9 +271,11 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       offline: { type: 'boolean', default: false },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
+      log: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'V', default: false },
       quiet: { type: 'boolean', default: false },
+      debug: { type: 'boolean', default: false },
       color: { type: 'boolean' },
       'no-color': { type: 'boolean' },
       // setup-app options
@@ -394,10 +401,12 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,
     git: values.git,
+    log: values.log,
     offline: values.offline,
     help: values.help,
     quiet: values.quiet,
     verbose: verboseCount,
+    debug: values.debug,
     color: resolveColorOption(values),
   };
 

@@ -25,6 +25,7 @@ export {
 export {
   runSkillTask,
   runSkillTasks,
+  createDefaultCallbacks,
   type SkillTaskResult,
   type SkillTaskOptions,
   type RunTasksOptions,

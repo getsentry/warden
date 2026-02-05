@@ -40,6 +40,8 @@ export interface SkillRunnerCallbacks {
   onRetry?: (file: string, lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
   /** Called when findings extraction fails (both regex and LLM fallback failed) */
   onExtractionFailure?: (file: string, lineRange: string, error: string, preview: string) => void;
+  /** Called with extraction result details (debug mode) */
+  onExtractionResult?: (file: string, lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
 }
 
 export interface SkillRunnerOptions {
@@ -110,6 +112,8 @@ export interface FileAnalysisCallbacks {
   onRetry?: (lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
   /** Called when findings extraction fails (both regex and LLM fallback failed) */
   onExtractionFailure?: (lineRange: string, error: string, preview: string) => void;
+  /** Called with extraction result details (debug mode) */
+  onExtractionResult?: (lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
 }
 
 /**
@@ -134,4 +138,6 @@ export interface HunkAnalysisCallbacks {
   onPromptSize?: (lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
   onRetry?: (lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
   onExtractionFailure?: (lineRange: string, error: string, preview: string) => void;
+  /** Called with extraction result details (debug mode) */
+  onExtractionResult?: (lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
 }

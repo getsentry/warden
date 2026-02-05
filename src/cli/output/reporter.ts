@@ -16,6 +16,24 @@ import { ICON_CHECK } from './icons.js';
 import { getVersion } from '../../utils/index.js';
 
 /**
+ * Map a file change status to its single-character symbol.
+ */
+function statusSymbol(status: string): string {
+  if (status === 'added') return '+';
+  if (status === 'removed') return '-';
+  return '~';
+}
+
+/**
+ * Map a file change status to a colored symbol for TTY output.
+ */
+function coloredStatusSymbol(status: string): string {
+  if (status === 'added') return chalk.green('+');
+  if (status === 'removed') return chalk.red('-');
+  return chalk.yellow('~');
+}
+
+/**
  * ASCII art logo for TTY header.
  */
 const LOGO = `
@@ -124,16 +142,8 @@ export class Reporter {
       // Show up to 10 files
       const displayFiles = files.slice(0, 10);
       for (const file of displayFiles) {
-        let statusSymbol: string;
-        if (file.status === 'added') {
-          statusSymbol = chalk.green('+');
-        } else if (file.status === 'removed') {
-          statusSymbol = chalk.red('-');
-        } else {
-          statusSymbol = chalk.yellow('~');
-        }
         const chunkInfo = file.chunks ? chalk.dim(` (${file.chunks} chunk${file.chunks !== 1 ? 's' : ''})`) : '';
-        this.log(`  ${statusSymbol} ${file.filename}${chunkInfo}`);
+        this.log(`  ${coloredStatusSymbol(file.status)} ${file.filename}${chunkInfo}`);
       }
 
       if (files.length > 10) {
@@ -143,6 +153,14 @@ export class Reporter {
       this.log('');
     } else {
       this.logCI(`Found ${files.length} changed files with ${totalChunks} chunks`);
+      const displayFiles = files.slice(0, 10);
+      for (const file of displayFiles) {
+        const chunkInfo = file.chunks ? ` (${file.chunks} chunk${file.chunks !== 1 ? 's' : ''})` : '';
+        this.logCI(`  ${statusSymbol(file.status)} ${file.filename}${chunkInfo}`);
+      }
+      if (files.length > 10) {
+        this.logCI(`  ... and ${files.length - 10} more`);
+      }
     }
   }
 

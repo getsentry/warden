@@ -21,6 +21,14 @@ describe('parseVerbosity', () => {
     expect(parseVerbosity(false, 3)).toBe(Verbosity.Debug);
     expect(parseVerbosity(false, 10)).toBe(Verbosity.Debug);
   });
+
+  it('returns Debug when debug flag is true', () => {
+    expect(parseVerbosity(false, 0, true)).toBe(Verbosity.Debug);
+  });
+
+  it('quiet overrides debug flag', () => {
+    expect(parseVerbosity(true, 0, true)).toBe(Verbosity.Quiet);
+  });
 });
 
 describe('Verbosity enum', () => {

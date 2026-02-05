@@ -25,6 +25,8 @@ interface ParseHunkOutputResult {
   findings: Finding[];
   /** Whether extraction failed (both regex and LLM fallback) */
   extractionFailed: boolean;
+  /** Which extraction method succeeded */
+  extractionMethod: 'regex' | 'llm' | 'none';
   /** Error message if extraction failed */
   extractionError?: string;
   /** Preview of the output that failed to parse */
@@ -44,27 +46,28 @@ async function parseHunkOutput(
 ): Promise<ParseHunkOutputResult> {
   if (result.subtype !== 'success') {
     // SDK error - not an extraction failure, just no findings
-    return { findings: [], extractionFailed: false };
+    return { findings: [], extractionFailed: false, extractionMethod: 'none' };
   }
 
   // Tier 1: Try regex-based extraction first (fast)
   const extracted = extractFindingsJson(result.result);
 
   if (extracted.success) {
-    return { findings: validateFindings(extracted.findings, filename), extractionFailed: false };
+    return { findings: validateFindings(extracted.findings, filename), extractionFailed: false, extractionMethod: 'regex' };
   }
 
   // Tier 2: Try LLM fallback for malformed output
   const fallback = await extractFindingsWithLLM(result.result, apiKey);
 
   if (fallback.success) {
-    return { findings: validateFindings(fallback.findings, filename), extractionFailed: false };
+    return { findings: validateFindings(fallback.findings, filename), extractionFailed: false, extractionMethod: 'llm' };
   }
 
   // Both tiers failed - return extraction failure info
   return {
     findings: [],
     extractionFailed: true,
+    extractionMethod: 'none',
     extractionError: fallback.error,
     extractionPreview: fallback.preview,
   };
@@ -237,6 +240,13 @@ async function analyzeHunk(
 
       const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey);
 
+      // Notify about extraction result (debug mode)
+      callbacks?.onExtractionResult?.(
+        callbacks.lineRange,
+        parseResult.findings.length,
+        parseResult.extractionMethod
+      );
+
       // Notify about extraction failure if callback provided
       if (parseResult.extractionFailed) {
         callbacks?.onExtractionFailure?.(
@@ -366,6 +376,7 @@ export async function analyzeFile(
           onPromptSize: callbacks.onPromptSize,
           onRetry: callbacks.onRetry,
           onExtractionFailure: callbacks.onExtractionFailure,
+          onExtractionResult: callbacks.onExtractionResult,
         }
       : undefined;
 
@@ -508,6 +519,11 @@ export async function runSkill(
       onExtractionFailure: callbacks?.onExtractionFailure
         ? (lineRange, error, preview) => {
             callbacks.onExtractionFailure?.(filename, lineRange, error, preview);
+          }
+        : undefined,
+      onExtractionResult: callbacks?.onExtractionResult
+        ? (lineRange, findingsCount, method) => {
+            callbacks.onExtractionResult?.(filename, lineRange, findingsCount, method);
           }
         : undefined,
     };

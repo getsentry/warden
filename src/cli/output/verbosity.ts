@@ -16,12 +16,13 @@ export enum Verbosity {
  * Parse verbosity from CLI flags.
  * @param quiet - If true, return Quiet
  * @param verboseCount - Number of -v flags (0, 1, or 2+)
+ * @param debug - If true, return Debug (overrides verbose count)
  */
-export function parseVerbosity(quiet: boolean, verboseCount: number): Verbosity {
+export function parseVerbosity(quiet: boolean, verboseCount: number, debug?: boolean): Verbosity {
   if (quiet) {
     return Verbosity.Quiet;
   }
-  if (verboseCount >= 2) {
+  if (debug || verboseCount >= 2) {
     return Verbosity.Debug;
   }
   if (verboseCount === 1) {

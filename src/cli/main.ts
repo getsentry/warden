@@ -63,7 +63,10 @@ function loadEnvFiles(dir: string): void {
  */
 function createReporter(options: CLIOptions): Reporter {
   const outputMode = detectOutputMode(options.color);
-  const verbosity = parseVerbosity(options.quiet, options.verbose);
+  if (options.log) {
+    outputMode.isTTY = false;
+  }
+  const verbosity = parseVerbosity(options.quiet, options.verbose, options.debug);
   return new Reporter(outputMode, verbosity);
 }
 

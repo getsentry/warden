@@ -20,6 +20,8 @@ function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     help: false,
     quiet: false,
     verbose: 0,
+    debug: false,
+    log: false,
     fix: false,
     force: false,
     list: false,

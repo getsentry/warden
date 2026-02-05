@@ -282,6 +282,26 @@ describe('parseCliArgs', () => {
     expect(result.options.skill).toBe('security-review');
   });
 
+  it('parses --debug flag', () => {
+    const result = parseCliArgs(['--debug']);
+    expect(result.options.debug).toBe(true);
+  });
+
+  it('defaults debug to false', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.debug).toBe(false);
+  });
+
+  it('parses --log flag', () => {
+    const result = parseCliArgs(['--log']);
+    expect(result.options.log).toBe(true);
+  });
+
+  it('defaults log to false', () => {
+    const result = parseCliArgs([]);
+    expect(result.options.log).toBe(false);
+  });
+
   it('parses --offline flag', () => {
     const result = parseCliArgs(['--offline']);
     expect(result.options.offline).toBe(true);
