@@ -141,7 +141,7 @@ async function outputResultsAndHandleFixes(
   reporter.blank();
   if (options.json) {
     console.log(renderJsonReport(filteredReports));
-  } else {
+  } else if (reporter.mode.isTTY) {
     console.log(renderTerminalReport(filteredReports, reporter.mode));
   }
 
