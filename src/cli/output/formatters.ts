@@ -86,11 +86,12 @@ export function formatLocation(path: string, startLine?: number, endLine?: numbe
  */
 export function formatFindingCompact(finding: Finding): string {
   const badge = formatSeverityBadge(finding.severity);
+  const id = chalk.dim(`[${finding.id}]`);
   const location = finding.location
     ? chalk.dim(formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine))
     : '';
 
-  return `${badge} ${finding.title}${location ? ` ${location}` : ''}`;
+  return `${badge} ${id} ${finding.title}${location ? ` ${location}` : ''}`;
 }
 
 /**

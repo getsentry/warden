@@ -169,7 +169,7 @@ function renderFindingItem(finding: Finding, ctx: LinkContext): string {
     }
   }
 
-  let line = `- ${SEVERITY_EMOJI[finding.severity]} **${escapeHtml(finding.title)}**${locationStr}`;
+  let line = `- ${SEVERITY_EMOJI[finding.severity]} \`${finding.id}\` **${escapeHtml(finding.title)}**${locationStr}`;
   line += `\n  ${escapeHtml(finding.description)}`;
 
   if (finding.suggestedFix) {

@@ -15,6 +15,9 @@ import {
   calculateRetryDelay,
   aggregateUsage,
   WardenAuthenticationError,
+  validateFindings,
+  generateShortId,
+  SHORT_ID_LENGTH,
 } from './runner.js';
 import {
   APIError,
@@ -854,5 +857,103 @@ describe('aggregateUsage', () => {
       cacheCreationInputTokens: 0,
       costUSD: 0.03,
     });
+  });
+});
+
+describe('generateShortId', () => {
+  it('generates an ID of the expected length', () => {
+    const id = generateShortId();
+    expect(id).toHaveLength(SHORT_ID_LENGTH);
+  });
+
+  it('generates unique IDs', () => {
+    const ids = new Set(Array.from({ length: 100 }, () => generateShortId()));
+    expect(ids.size).toBe(100);
+  });
+
+  it('generates URL-safe characters', () => {
+    for (let i = 0; i < 50; i++) {
+      const id = generateShortId();
+      expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
+    }
+  });
+});
+
+describe('validateFindings', () => {
+  it('assigns a nanoid to each validated finding', () => {
+    const rawFindings = [
+      {
+        id: 'llm-provided-id',
+        severity: 'high',
+        title: 'SQL Injection',
+        description: 'User input in query',
+        location: { path: 'src/db.ts', startLine: 42 },
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, 'src/db.ts');
+    expect(validated).toHaveLength(1);
+    // ID should be replaced with a nanoid, not the LLM-provided one
+    expect(validated[0]!.id).not.toBe('llm-provided-id');
+    expect(validated[0]!.id).toHaveLength(SHORT_ID_LENGTH);
+  });
+
+  it('assigns unique IDs to each finding', () => {
+    const rawFindings = [
+      {
+        id: 'id-1',
+        severity: 'high',
+        title: 'Issue A',
+        description: 'Details A',
+        location: { path: 'file.ts', startLine: 10 },
+      },
+      {
+        id: 'id-2',
+        severity: 'medium',
+        title: 'Issue B',
+        description: 'Details B',
+        location: { path: 'file.ts', startLine: 20 },
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, 'file.ts');
+    expect(validated).toHaveLength(2);
+    expect(validated[0]!.id).not.toBe(validated[1]!.id);
+  });
+
+  it('normalizes location path to the provided filename', () => {
+    const rawFindings = [
+      {
+        id: 'id-1',
+        severity: 'medium',
+        title: 'Issue',
+        description: 'Details',
+        location: { path: 'wrong-path.ts', startLine: 5 },
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, 'correct-path.ts');
+    expect(validated[0]!.location!.path).toBe('correct-path.ts');
+  });
+
+  it('filters out invalid findings', () => {
+    const rawFindings = [
+      {
+        // Missing required 'id' field
+        severity: 'high',
+        title: 'Issue',
+        description: 'Details',
+      },
+      {
+        id: 'valid',
+        severity: 'medium',
+        title: 'Valid Issue',
+        description: 'Valid Details',
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, 'file.ts');
+    expect(validated).toHaveLength(1);
+    expect(validated[0]!.title).toBe('Valid Issue');
   });
 });

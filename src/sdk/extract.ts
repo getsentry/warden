@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { nanoid } from 'nanoid';
 import { FindingSchema } from '../types/index.js';
 import type { Finding } from '../types/index.js';
 
@@ -224,8 +225,19 @@ ${truncatedText}`,
   }
 }
 
+/** Length of generated short IDs (nanoid). 8 chars gives ~2.8 trillion IDs before 1% collision probability. */
+export const SHORT_ID_LENGTH = 8;
+
+/**
+ * Generate a short human-readable ID for a finding.
+ */
+export function generateShortId(): string {
+  return nanoid(SHORT_ID_LENGTH);
+}
+
 /**
  * Validate and normalize findings from extracted JSON.
+ * Replaces the LLM-provided ID with a short nanoid for stable cross-referencing.
  */
 export function validateFindings(findings: unknown[], filename: string): Finding[] {
   const validated: Finding[] = [];
@@ -243,6 +255,7 @@ export function validateFindings(findings: unknown[], filename: string): Finding
     if (result.success) {
       validated.push({
         ...result.data,
+        id: generateShortId(),
         location: result.data.location ? { ...result.data.location, path: filename } : undefined,
       });
     }
