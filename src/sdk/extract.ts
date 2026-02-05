@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { nanoid } from 'nanoid';
+import { customAlphabet } from 'nanoid';
 import { FindingSchema } from '../types/index.js';
 import type { Finding } from '../types/index.js';
 
@@ -225,14 +225,19 @@ ${truncatedText}`,
   }
 }
 
-/** Length of generated short IDs (nanoid). 8 chars gives ~2.8 trillion IDs before 1% collision probability. */
-export const SHORT_ID_LENGTH = 8;
+/** Unambiguous uppercase alphanumeric alphabet (no O/0, I/1). */
+const SHORT_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/** Length of each generated short ID (before formatting). */
+export const SHORT_ID_LENGTH = 6;
 
 /**
  * Generate a short human-readable ID for a finding.
+ * Format: XXX-XXX (e.g., K7M-X9P)
  */
 export function generateShortId(): string {
-  return nanoid(SHORT_ID_LENGTH);
+  const raw = customAlphabet(SHORT_ID_ALPHABET, SHORT_ID_LENGTH)();
+  return `${raw.slice(0, 3)}-${raw.slice(3)}`;
 }
 
 /**

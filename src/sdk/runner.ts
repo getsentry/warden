@@ -36,7 +36,6 @@ export {
   deduplicateFindings,
   validateFindings,
   generateShortId,
-  SHORT_ID_LENGTH,
 } from './extract.js';
 export type { ExtractFindingsResult } from './extract.js';
 

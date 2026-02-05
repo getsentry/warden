@@ -17,7 +17,6 @@ import {
   WardenAuthenticationError,
   validateFindings,
   generateShortId,
-  SHORT_ID_LENGTH,
 } from './runner.js';
 import {
   APIError,
@@ -861,9 +860,9 @@ describe('aggregateUsage', () => {
 });
 
 describe('generateShortId', () => {
-  it('generates an ID of the expected length', () => {
+  it('generates an ID in XXX-XXX format', () => {
     const id = generateShortId();
-    expect(id).toHaveLength(SHORT_ID_LENGTH);
+    expect(id).toMatch(/^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
   });
 
   it('generates unique IDs', () => {
@@ -871,16 +870,16 @@ describe('generateShortId', () => {
     expect(ids.size).toBe(100);
   });
 
-  it('generates URL-safe characters', () => {
-    for (let i = 0; i < 50; i++) {
+  it('excludes ambiguous characters (O, I, 0, 1)', () => {
+    for (let i = 0; i < 100; i++) {
       const id = generateShortId();
-      expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(id).not.toMatch(/[OI01]/);
     }
   });
 });
 
 describe('validateFindings', () => {
-  it('assigns a nanoid to each validated finding', () => {
+  it('assigns a short ID to each validated finding', () => {
     const rawFindings = [
       {
         id: 'llm-provided-id',
@@ -893,9 +892,9 @@ describe('validateFindings', () => {
 
     const validated = validateFindings(rawFindings, 'src/db.ts');
     expect(validated).toHaveLength(1);
-    // ID should be replaced with a nanoid, not the LLM-provided one
+    // ID should be replaced with a formatted short ID, not the LLM-provided one
     expect(validated[0]!.id).not.toBe('llm-provided-id');
-    expect(validated[0]!.id).toHaveLength(SHORT_ID_LENGTH);
+    expect(validated[0]!.id).toMatch(/^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
   });
 
   it('assigns unique IDs to each finding', () => {
