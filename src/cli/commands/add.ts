@@ -290,12 +290,18 @@ async function runAddRemote(
 
   if (!skill && !options.force) {
     reporter.debug(`Skill '${skillName}' not in cache, refetching...`);
-    await fetchRemote(remote, {
-      force: true,
-      onProgress: (msg) => reporter.debug(msg),
-    });
-    availableSkills = await discoverRemoteSkills(remote);
-    skill = availableSkills.find((s) => s.name === skillName);
+    try {
+      await fetchRemote(remote, {
+        force: true,
+        onProgress: (msg) => reporter.debug(msg),
+      });
+      availableSkills = await discoverRemoteSkills(remote);
+      skill = availableSkills.find((s) => s.name === skillName);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      reporter.error(`Failed to refetch remote: ${message}`);
+      return 1;
+    }
   }
 
   if (!skill) {
