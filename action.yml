@@ -55,7 +55,7 @@ runs:
     - name: Install Claude Code CLI
       shell: bash
       run: |
-        CLAUDE_CODE_VERSION="2.1.31"
+        CLAUDE_CODE_VERSION="2.1.32"
         echo "Installing Claude Code v${CLAUDE_CODE_VERSION}..."
         for attempt in 1 2 3; do
           echo "Installation attempt $attempt..."
