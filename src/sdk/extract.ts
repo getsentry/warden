@@ -270,12 +270,12 @@ export function validateFindings(findings: unknown[], filename: string): Finding
 }
 
 /**
- * Deduplicate findings by id and location.
+ * Deduplicate findings by title and location.
  */
 export function deduplicateFindings(findings: Finding[]): Finding[] {
   const seen = new Set<string>();
   return findings.filter((f) => {
-    const key = `${f.id}:${f.location?.path}:${f.location?.startLine}`;
+    const key = `${f.title}:${f.location?.path}:${f.location?.startLine}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
