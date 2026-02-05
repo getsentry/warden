@@ -102,6 +102,7 @@ Init Options:
 Add Options:
   --list               List available skills
   --remote <ref>       Remote repository (owner/repo, URL, or with @sha)
+  --force              Bypass skill cache and fetch latest
 
 Run Options:
   --offline            Use cached remote skills without network access
@@ -339,6 +340,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         skill: values.skill ?? skillArg,
         list: values.list,
         remote: values.remote,
+        force: values.force,
         quiet: values.quiet,
         color: resolveColorOption(values),
       }),

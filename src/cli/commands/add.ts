@@ -241,6 +241,7 @@ async function runAddRemote(
   reporter.step(`Fetching skills from ${remote}...`);
   try {
     await fetchRemote(remote, {
+      force: options.force,
       onProgress: (msg) => reporter.debug(msg),
     });
   } catch (err) {
@@ -283,13 +284,25 @@ async function runAddRemote(
     return 1;
   }
 
-  // Validate skill exists in remote
-  const skill = remoteSkills.find((s) => s.name === skillName);
+  // Validate skill exists in remote, retry with fresh fetch if using stale cache
+  let availableSkills = remoteSkills;
+  let skill = availableSkills.find((s) => s.name === skillName);
+
+  if (!skill && !options.force) {
+    reporter.debug(`Skill '${skillName}' not in cache, refetching...`);
+    await fetchRemote(remote, {
+      force: true,
+      onProgress: (msg) => reporter.debug(msg),
+    });
+    availableSkills = await discoverRemoteSkills(remote);
+    skill = availableSkills.find((s) => s.name === skillName);
+  }
+
   if (!skill) {
     reporter.error(`Skill '${skillName}' not found in remote: ${remote}`);
     reporter.blank();
     reporter.tip('Available skills:');
-    for (const s of remoteSkills) {
+    for (const s of availableSkills) {
       reporter.text(`  - ${s.name}`);
     }
     return 1;
