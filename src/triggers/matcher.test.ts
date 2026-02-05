@@ -213,6 +213,44 @@ describe('matchTrigger', () => {
     };
     expect(matchTrigger(baseTrigger, context)).toBe(true);
   });
+
+  describe('environment filtering', () => {
+    it('matches when trigger environments includes the current environment', () => {
+      const trigger = { ...baseTrigger, environments: ['local' as const] };
+      expect(matchTrigger(trigger, baseContext, 'local')).toBe(true);
+    });
+
+    it('does not match when trigger environments excludes the current environment', () => {
+      const trigger = { ...baseTrigger, environments: ['local' as const] };
+      expect(matchTrigger(trigger, baseContext, 'github')).toBe(false);
+    });
+
+    it('matches github-only trigger in github environment', () => {
+      const trigger = { ...baseTrigger, environments: ['github' as const] };
+      expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
+    });
+
+    it('does not match github-only trigger in local environment', () => {
+      const trigger = { ...baseTrigger, environments: ['github' as const] };
+      expect(matchTrigger(trigger, baseContext, 'local')).toBe(false);
+    });
+
+    it('matches when both environments are listed', () => {
+      const trigger = { ...baseTrigger, environments: ['local' as const, 'github' as const] };
+      expect(matchTrigger(trigger, baseContext, 'local')).toBe(true);
+      expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
+    });
+
+    it('matches regardless of environment when environments is not set', () => {
+      expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(true);
+      expect(matchTrigger(baseTrigger, baseContext, 'github')).toBe(true);
+    });
+
+    it('matches when no environment param is passed (backwards compat)', () => {
+      const trigger = { ...baseTrigger, environments: ['local' as const] };
+      expect(matchTrigger(trigger, baseContext)).toBe(true);
+    });
+  });
 });
 
 describe('shouldFail', () => {

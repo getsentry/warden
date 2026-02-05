@@ -125,7 +125,7 @@ export async function runPRWorkflow(
 
   // Resolve triggers with defaults and match
   const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
-  const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
+  const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
 
   if (matchedTriggers.length === 0) {
     console.log('No triggers matched for this event');

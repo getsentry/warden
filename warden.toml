@@ -11,3 +11,11 @@ name = "notseer"
 event = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
 skill = "notseer"
+
+[[triggers]]
+name = "code-simplifier"
+event = "pull_request"
+actions = ["opened", "synchronize", "reopened"]
+skill = "code-simplifier"
+remote = "getsentry/sentry-skills"
+environments = ["local"]

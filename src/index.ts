@@ -53,6 +53,7 @@ export {
   SkillDefinitionSchema,
   TriggerSchema,
   WardenConfigSchema,
+  WardenEnvironmentSchema,
   PathFilterSchema,
   OutputConfigSchema,
   // Functions
@@ -66,6 +67,7 @@ export type {
   SkillDefinition,
   Trigger,
   WardenConfig,
+  WardenEnvironment,
   PathFilter,
   OutputConfig,
   ResolvedTrigger,

@@ -1,4 +1,4 @@
-import type { Trigger } from '../config/schema.js';
+import type { Trigger, WardenEnvironment } from '../config/schema.js';
 import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, Severity, SeverityThreshold, SkillReport } from '../types/index.js';
 
@@ -73,7 +73,11 @@ export function matchGlob(pattern: string, path: string): boolean {
 /**
  * Check if a trigger matches the given event context.
  */
-export function matchTrigger(trigger: Trigger, context: EventContext): boolean {
+export function matchTrigger(trigger: Trigger, context: EventContext, environment?: WardenEnvironment): boolean {
+  if (environment && trigger.environments && !trigger.environments.includes(environment)) {
+    return false;
+  }
+
   if (trigger.event !== context.eventType) {
     return false;
   }

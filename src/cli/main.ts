@@ -222,7 +222,7 @@ async function runSkills(
   } else if (config) {
     // Get skills from matched triggers, preserving remote property
     const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
-    const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
+    const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
     // Dedupe by skill name but keep first occurrence (with its remote property)
     const seen = new Set<string>();
     skillsToRun = matchedTriggers
@@ -459,7 +459,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Resolve triggers with defaults and match
   const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
-  const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context));
+  const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
 
   // Filter by skill if specified
   const triggersToRun = options.skill

@@ -63,6 +63,10 @@ export const ScheduleConfigSchema = z.object({
 });
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 
+// Environment where a trigger can run
+export const WardenEnvironmentSchema = z.enum(['local', 'github']);
+export type WardenEnvironment = z.infer<typeof WardenEnvironmentSchema>;
+
 // Trigger definition
 export const TriggerSchema = z.object({
   name: z.string().min(1),
@@ -78,6 +82,8 @@ export const TriggerSchema = z.object({
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
   maxTurns: z.number().int().positive().optional(),
+  /** Environments where this trigger runs. Omit to run everywhere. */
+  environments: z.array(WardenEnvironmentSchema).min(1).optional(),
   /** Schedule-specific configuration. Only used when event is 'schedule'. */
   schedule: ScheduleConfigSchema.optional(),
 }).refine(

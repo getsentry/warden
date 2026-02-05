@@ -312,6 +312,100 @@ describe('batchDelayMs config', () => {
   });
 });
 
+describe('environments config', () => {
+  it('accepts environments in trigger', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        {
+          name: 'test',
+          event: 'pull_request',
+          actions: ['opened'],
+          skill: 'test-skill',
+          environments: ['local'],
+        },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.triggers[0]?.environments).toEqual(['local']);
+  });
+
+  it('accepts multiple environments', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        {
+          name: 'test',
+          event: 'pull_request',
+          actions: ['opened'],
+          skill: 'test-skill',
+          environments: ['local', 'github'],
+        },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.triggers[0]?.environments).toEqual(['local', 'github']);
+  });
+
+  it('rejects empty environments array', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        {
+          name: 'test',
+          event: 'pull_request',
+          actions: ['opened'],
+          skill: 'test-skill',
+          environments: [],
+        },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid environment name', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        {
+          name: 'test',
+          event: 'pull_request',
+          actions: ['opened'],
+          skill: 'test-skill',
+          environments: ['invalid'],
+        },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('allows trigger without environments (runs everywhere)', () => {
+    const config = {
+      version: 1,
+      triggers: [
+        {
+          name: 'test',
+          event: 'pull_request',
+          actions: ['opened'],
+          skill: 'test-skill',
+        },
+      ],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.triggers[0]?.environments).toBeUndefined();
+  });
+});
+
 describe('trigger name uniqueness', () => {
   it('allows unique trigger names', () => {
     const config = {
