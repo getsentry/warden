@@ -145,4 +145,86 @@ describe('renderTerminalReport', () => {
       expect(output).toContain('This is a test finding');
     });
   });
+
+  describe('CI (non-TTY) rendering', () => {
+    const ciMode = { isTTY: false, supportsColor: false, columns: 80 };
+
+    it('renders clean header with no findings', () => {
+      const report = createReport({ durationMs: 1200 });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('test-skill (1.2s) - No findings');
+      expect(output).not.toContain('===');
+      expect(output).not.toContain('---');
+      expect(output).not.toContain('No issues found.');
+    });
+
+    it('renders header with finding counts', () => {
+      const report = createReport({
+        durationMs: 285600,
+        findings: [
+          createFinding({ severity: 'high', title: 'Bug found' }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('test-skill (285.6s) - 1 finding (1 high)');
+      expect(output).not.toContain('===');
+      expect(output).not.toContain('---');
+    });
+
+    it('renders findings with severity and description', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [
+          createFinding({
+            severity: 'high',
+            title: 'Missing null check',
+            description: 'Variable could be null',
+            location: { path: 'src/foo.ts', startLine: 42 },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('[high]');
+      expect(output).toContain('src/foo.ts:42');
+      expect(output).toContain('Missing null check');
+      expect(output).toContain('Variable could be null');
+    });
+
+    it('separates multiple findings with blank lines', () => {
+      const report = createReport({
+        durationMs: 3000,
+        findings: [
+          createFinding({ severity: 'high', title: 'First issue' }),
+          createFinding({ severity: 'medium', title: 'Second issue' }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+      const lines = output.split('\n');
+
+      // Find the two finding lines and check there's a blank line between them
+      const firstIdx = lines.findIndex((l) => l.includes('First issue'));
+      const secondIdx = lines.findIndex((l) => l.includes('Second issue'));
+      expect(firstIdx).toBeGreaterThan(-1);
+      expect(secondIdx).toBeGreaterThan(firstIdx);
+      // There should be a blank line between the description of the first and the badge of the second
+      const between = lines.slice(firstIdx, secondIdx);
+      expect(between.some((l) => l.trim() === '')).toBe(true);
+    });
+
+    it('renders without duration when not provided', () => {
+      const report = createReport();
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('test-skill - No findings');
+      expect(output).not.toContain('()');
+    });
+  });
 });

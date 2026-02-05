@@ -173,21 +173,15 @@ function renderSkillBoxTTY(report: SkillReport, mode: OutputMode): string[] {
 function renderSkillCI(report: SkillReport): string[] {
   const lines: string[] = [];
   const counts = countBySeverity(report.findings);
-  const durationStr = report.durationMs !== undefined ? formatDuration(report.durationMs) : '';
+  const durationStr = report.durationMs !== undefined ? ` (${formatDuration(report.durationMs)})` : '';
+  const summary = formatFindingCountsPlain(counts);
 
-  // Header
-  lines.push(`=== ${report.skill} (${durationStr}) ===`);
-  lines.push(`${formatFindingCountsPlain(counts)}`);
+  // Header: skill (duration) - summary
+  lines.push(`${report.skill}${durationStr} - ${summary}`);
 
-  if (report.findings.length === 0) {
-    lines.push('No issues found.');
-  } else {
-    lines.push('---');
-    for (const finding of report.findings) {
-      const findingLines = formatFindingCI(finding);
-      lines.push(...findingLines);
-      lines.push('---');
-    }
+  for (const [index, finding] of report.findings.entries()) {
+    if (index > 0) lines.push('');
+    lines.push(...formatFindingCI(finding));
   }
 
   return lines;
