@@ -62,10 +62,8 @@ function loadEnvFiles(dir: string): void {
  * Create a Reporter instance from CLI options.
  */
 function createReporter(options: CLIOptions): Reporter {
-  const outputMode = detectOutputMode(options.color);
-  if (options.log) {
-    outputMode.isTTY = false;
-  }
+  const detected = detectOutputMode(options.color);
+  const outputMode = options.log ? { ...detected, isTTY: false } : detected;
   const verbosity = parseVerbosity(options.quiet, options.verbose, options.debug);
   return new Reporter(outputMode, verbosity);
 }

@@ -408,7 +408,7 @@ export function createDefaultCallbacks(
     // Debug mode: show extraction results
     onExtractionResult: verbosity >= Verbosity.Debug
       ? (_skillName, filename, lineRange, findingsCount, method) => {
-          debugLog(mode, `Extracted ${findingsCount} finding(s) from ${filename}:${lineRange} via ${method}`);
+          debugLog(mode, `Extracted ${findingsCount} ${pluralize(findingsCount, 'finding')} from ${filename}:${lineRange} via ${method}`);
         }
       : undefined,
   };
