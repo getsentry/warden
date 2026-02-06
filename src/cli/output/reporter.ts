@@ -10,6 +10,7 @@ import {
   formatUsage,
   formatUsagePlain,
   countBySeverity,
+  pluralize,
 } from './formatters.js';
 import { BoxRenderer } from './box.js';
 import { ICON_CHECK } from './icons.js';
@@ -28,9 +29,10 @@ function statusSymbol(status: string): string {
  * Map a file change status to a colored symbol for TTY output.
  */
 function coloredStatusSymbol(status: string): string {
-  if (status === 'added') return chalk.green('+');
-  if (status === 'removed') return chalk.red('-');
-  return chalk.yellow('~');
+  const sym = statusSymbol(status);
+  if (status === 'added') return chalk.green(sym);
+  if (status === 'removed') return chalk.red(sym);
+  return chalk.yellow(sym);
 }
 
 /**
@@ -80,9 +82,9 @@ export class Reporter {
   }
 
   /**
-   * Output to stderr with timestamp (CI mode).
+   * Output to stderr with timestamp (plain/log mode).
    */
-  private logCI(message: string): void {
+  private logPlain(message: string): void {
     console.error(`[${timestamp()}] warden: ${message}`);
   }
 
@@ -102,7 +104,7 @@ export class Reporter {
       this.log(chalk.dim(`v${getVersion()}`));
       this.log('');
     } else {
-      this.logCI(`Warden v${getVersion()}`);
+      this.logPlain(`Warden v${getVersion()}`);
     }
   }
 
@@ -118,7 +120,7 @@ export class Reporter {
       this.log(chalk.dim(description));
       this.log('');
     } else {
-      this.logCI(description);
+      this.logPlain(description);
     }
   }
 
@@ -131,6 +133,7 @@ export class Reporter {
     }
 
     const totalChunks = files.reduce((sum, f) => sum + (f.chunks ?? 0), 0);
+    const displayFiles = files.slice(0, 10);
 
     if (this.mode.isTTY) {
       this.log(
@@ -139,10 +142,8 @@ export class Reporter {
           chalk.dim(` · ${totalChunks} chunks`)
       );
 
-      // Show up to 10 files
-      const displayFiles = files.slice(0, 10);
       for (const file of displayFiles) {
-        const chunkInfo = file.chunks ? chalk.dim(` (${file.chunks} chunk${file.chunks !== 1 ? 's' : ''})`) : '';
+        const chunkInfo = file.chunks ? chalk.dim(` (${file.chunks} ${pluralize(file.chunks, 'chunk')})`) : '';
         this.log(`  ${coloredStatusSymbol(file.status)} ${file.filename}${chunkInfo}`);
       }
 
@@ -152,14 +153,13 @@ export class Reporter {
 
       this.log('');
     } else {
-      this.logCI(`Found ${files.length} changed files with ${totalChunks} chunks`);
-      const displayFiles = files.slice(0, 10);
+      this.logPlain(`Found ${files.length} changed files with ${totalChunks} chunks`);
       for (const file of displayFiles) {
-        const chunkInfo = file.chunks ? ` (${file.chunks} chunk${file.chunks !== 1 ? 's' : ''})` : '';
-        this.logCI(`  ${statusSymbol(file.status)} ${file.filename}${chunkInfo}`);
+        const chunkInfo = file.chunks ? ` (${file.chunks} ${pluralize(file.chunks, 'chunk')})` : '';
+        this.logPlain(`  ${statusSymbol(file.status)} ${file.filename}${chunkInfo}`);
       }
       if (files.length > 10) {
-        this.logCI(`  ... and ${files.length - 10} more`);
+        this.logPlain(`  ... and ${files.length - 10} more`);
       }
     }
   }
@@ -204,7 +204,7 @@ export class Reporter {
       this.log(chalk.bold('SUMMARY'));
       this.log(formatFindingCounts(counts));
       if (totalFailedHunks > 0) {
-        this.log(chalk.yellow(`${figures.warning}  ${totalFailedHunks} chunk${totalFailedHunks === 1 ? '' : 's'} failed to analyze`));
+        this.log(chalk.yellow(`${figures.warning}  ${totalFailedHunks} ${pluralize(totalFailedHunks, 'chunk')} failed to analyze`));
       }
       const durationLine = `Analysis completed in ${formatDuration(totalDuration)}`;
       if (totalUsage) {
@@ -213,14 +213,14 @@ export class Reporter {
         this.log(chalk.dim(durationLine));
       }
     } else {
-      this.logCI(`Summary: ${formatFindingCountsPlain(counts)}`);
+      this.logPlain(`Summary: ${formatFindingCountsPlain(counts)}`);
       if (totalFailedHunks > 0) {
-        this.logCI(`WARN: ${totalFailedHunks} chunk(s) failed to analyze`);
+        this.logPlain(`WARN: ${totalFailedHunks} ${pluralize(totalFailedHunks, 'chunk')} failed to analyze`);
       }
       if (totalUsage) {
-        this.logCI(`Usage: ${formatUsagePlain(totalUsage)}`);
+        this.logPlain(`Usage: ${formatUsagePlain(totalUsage)}`);
       }
-      this.logCI(`Total time: ${formatDuration(totalDuration)}`);
+      this.logPlain(`Total time: ${formatDuration(totalDuration)}`);
     }
   }
 
@@ -250,9 +250,9 @@ export class Reporter {
 
       this.log('');
     } else {
-      this.logCI(`Config: ${loaded} triggers, ${matched} matched`);
+      this.logPlain(`Config: ${loaded} triggers, ${matched} matched`);
       for (const trigger of triggers) {
-        this.logCI(`  ${trigger.name} (${trigger.skill})`);
+        this.logPlain(`  ${trigger.name} (${trigger.skill})`);
       }
     }
   }
@@ -268,7 +268,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(`${chalk.cyan(figures.arrowRight)} ${message}`);
     } else {
-      this.logCI(message);
+      this.logPlain(message);
     }
   }
 
@@ -283,7 +283,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(`${chalk.green(ICON_CHECK)} ${message}`);
     } else {
-      this.logCI(message);
+      this.logPlain(message);
     }
   }
 
@@ -298,7 +298,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(`${chalk.green('Created')} ${filename}`);
     } else {
-      this.logCI(`Created ${filename}`);
+      this.logPlain(`Created ${filename}`);
     }
   }
 
@@ -314,7 +314,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(`${chalk.yellow('Skipped')} ${filename}${suffix}`);
     } else {
-      this.logCI(`Skipped ${filename}${reason ? ` (${reason})` : ''}`);
+      this.logPlain(`Skipped ${filename}${reason ? ` (${reason})` : ''}`);
     }
   }
 
@@ -329,7 +329,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(`${chalk.yellow(figures.warning)}  ${message}`);
     } else {
-      this.logCI(`WARN: ${message}`);
+      this.logPlain(`WARN: ${message}`);
     }
   }
 
@@ -356,7 +356,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(chalk.dim(`[debug] ${message}`));
     } else {
-      this.logCI(`DEBUG: ${message}`);
+      this.logPlain(`DEBUG: ${message}`);
     }
   }
 
@@ -385,7 +385,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(message);
     } else {
-      this.logCI(message);
+      this.logPlain(message);
     }
   }
 
@@ -400,7 +400,7 @@ export class Reporter {
     if (this.mode.isTTY) {
       this.log(chalk.bold(message));
     } else {
-      this.logCI(message);
+      this.logPlain(message);
     }
   }
 
@@ -443,9 +443,9 @@ export class Reporter {
         this.log(line);
       }
     } else {
-      this.logCI(`WARN: ${message}`);
+      this.logPlain(`WARN: ${message}`);
       if (tip) {
-        this.logCI(`Tip: ${tip}`);
+        this.logPlain(`Tip: ${tip}`);
       }
     }
   }

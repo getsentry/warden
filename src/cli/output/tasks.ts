@@ -26,9 +26,9 @@ import { formatDuration, formatLocation, formatSeverityPlain, formatFindingCount
 
 /**
  * Write a log-mode message to stderr with timestamp prefix.
- * Used for non-TTY / CI output.
+ * Used for non-TTY / plain output.
  */
-function logCI(message: string): void {
+function logPlain(message: string): void {
   console.error(`[${timestamp()}] warden: ${message}`);
 }
 
@@ -40,8 +40,16 @@ function debugLog(mode: OutputMode, message: string): void {
   if (mode.isTTY) {
     console.error(chalk.dim(`[debug] ${message}`));
   } else {
-    logCI(`DEBUG: ${message}`);
+    logPlain(`DEBUG: ${message}`);
   }
+}
+
+/**
+ * Format a finding's location as a compact string, falling back to 'unknown'.
+ */
+function findingLocation(finding: Finding): string {
+  if (!finding.location) return 'unknown';
+  return formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine);
 }
 
 /**
@@ -319,14 +327,14 @@ export function createDefaultCallbacks(
       if (verbosity === Verbosity.Quiet) return;
       if (!mode.isTTY) {
         const fileCount = skill.files.length;
-        logCI(`Running ${displayNameFor(skill.name)} (${fileCount} ${pluralize(fileCount, 'file')})...`);
+        logPlain(`Running ${displayNameFor(skill.name)} (${fileCount} ${pluralize(fileCount, 'file')})...`);
       }
     },
     onSkillUpdate: () => { /* no-op for default callbacks */ },
     onFileUpdate: () => { /* no-op for default callbacks */ },
     onHunkStart: (skillName, filename, hunkNum, totalHunks, lineRange) => {
       if (verbosity === Verbosity.Quiet || mode.isTTY) return;
-      logCI(`  ${displayNameFor(skillName)} > ${filename} [${hunkNum}/${totalHunks}] ${lineRange}`);
+      logPlain(`  ${displayNameFor(skillName)} > ${filename} [${hunkNum}/${totalHunks}] ${lineRange}`);
     },
     onSkillComplete: (name, report) => {
       if (verbosity === Verbosity.Quiet) return;
@@ -339,11 +347,7 @@ export function createDefaultCallbacks(
         // Debug: log finding details
         if (verbosity >= Verbosity.Debug && report.findings.length > 0) {
           for (const finding of report.findings) {
-            const location = finding.location
-              ? formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine)
-              : 'unknown';
-            const severity = formatSeverityPlain(finding.severity);
-            debugLog(mode, `${severity} ${location}: ${finding.title}`);
+            debugLog(mode, `${formatSeverityPlain(finding.severity)} ${findingLocation(finding)}: ${finding.title}`);
             if (finding.suggestedFix) {
               debugLog(mode, `  fix: ${finding.suggestedFix.description}`);
             }
@@ -354,19 +358,13 @@ export function createDefaultCallbacks(
         const duration = report.durationMs ? formatDuration(report.durationMs) : '?';
         const counts = countBySeverity(report.findings);
         const summary = formatFindingCountsPlain(counts);
-        logCI(`${displayName} completed in ${duration} - ${summary}`);
+        logPlain(`${displayName} completed in ${duration} - ${summary}`);
 
         // Show per-finding lines at Normal+ verbosity in log mode
-        if (report.findings.length > 0) {
-          for (const finding of report.findings) {
-            const location = finding.location
-              ? formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine)
-              : 'unknown';
-            const severity = formatSeverityPlain(finding.severity);
-            logCI(`  ${severity} ${location}: ${finding.title}`);
-            if (verbosity >= Verbosity.Debug && finding.suggestedFix) {
-              logCI(`    fix: ${finding.suggestedFix.description}`);
-            }
+        for (const finding of report.findings) {
+          logPlain(`  ${formatSeverityPlain(finding.severity)} ${findingLocation(finding)}: ${finding.title}`);
+          if (verbosity >= Verbosity.Debug && finding.suggestedFix) {
+            logPlain(`    fix: ${finding.suggestedFix.description}`);
           }
         }
       }
@@ -377,7 +375,7 @@ export function createDefaultCallbacks(
       if (mode.isTTY) {
         console.error(`${chalk.yellow(ICON_SKIPPED)} ${displayName} ${chalk.dim('[skipped]')}`);
       } else {
-        logCI(`${displayName} skipped`);
+        logPlain(`${displayName} skipped`);
       }
     },
     onSkillError: (name, error) => {
@@ -386,7 +384,7 @@ export function createDefaultCallbacks(
       if (mode.isTTY) {
         console.error(`${chalk.red('\u2717')} ${displayName} - ${chalk.red(error)}`);
       } else {
-        logCI(`ERROR: ${displayName} - ${error}`);
+        logPlain(`ERROR: ${displayName} - ${error}`);
       }
     },
     // Warn about large prompts (always shown unless quiet)
@@ -397,7 +395,7 @@ export function createDefaultCallbacks(
       if (mode.isTTY) {
         console.error(`${chalk.yellow(figures.warning)}  Large prompt for ${location}: ${size}`);
       } else {
-        logCI(`WARN: Large prompt for ${location}: ${size}`);
+        logPlain(`WARN: Large prompt for ${location}: ${size}`);
       }
     },
     // Debug mode: show prompt sizes
