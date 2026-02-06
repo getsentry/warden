@@ -341,7 +341,7 @@ export function createDefaultCallbacks(
       const displayName = displayNameFor(name);
 
       if (mode.isTTY) {
-        const duration = report.durationMs ? ` ${chalk.dim(`[${formatDuration(report.durationMs)}]`)}` : '';
+        const duration = report.durationMs !== undefined ? ` ${chalk.dim(`[${formatDuration(report.durationMs)}]`)}` : '';
         console.error(`${chalk.green(ICON_CHECK)} ${displayName}${duration}`);
 
         // Debug: log finding details
@@ -355,7 +355,7 @@ export function createDefaultCallbacks(
         }
       } else {
         // Log mode: timestamped completion with duration and finding summary
-        const duration = report.durationMs ? formatDuration(report.durationMs) : '?';
+        const duration = report.durationMs !== undefined ? formatDuration(report.durationMs) : '?';
         const counts = countBySeverity(report.findings);
         const summary = formatFindingCountsPlain(counts);
         logPlain(`${displayName} completed in ${duration} - ${summary}`);
