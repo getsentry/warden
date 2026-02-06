@@ -183,7 +183,7 @@ function renderSummaryComment(
       lines.push(renderHiddenFindingsLink(hiddenCount, checkRunUrl));
     }
     // Add stats footer even when there are no findings
-    const statsLine = formatStatsCompact(report.durationMs, report.usage);
+    const statsLine = formatStatsCompact(report.durationMs, report.usage, report.auxiliaryUsage);
     if (statsLine) {
       lines.push('', '---', `<sub>${statsLine}</sub>`);
     }
@@ -239,7 +239,7 @@ ${Object.entries(counts)
   }
 
   // Add stats footer
-  const statsLine = formatStatsCompact(report.durationMs, report.usage);
+  const statsLine = formatStatsCompact(report.durationMs, report.usage, report.auxiliaryUsage);
   if (statsLine) {
     lines.push('', '---', `<sub>${statsLine}</sub>`);
   }

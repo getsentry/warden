@@ -9,6 +9,7 @@ import {
   prepareFiles,
   analyzeFile,
   aggregateUsage,
+  aggregateAuxiliaryUsage,
   deduplicateFindings,
   generateSummary,
   type SkillRunnerOptions,
@@ -197,7 +198,7 @@ export async function runSkillTask(
       : undefined;
 
     // Process files with concurrency
-    const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number }> => {
+    const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }> => {
       const filename = prepared.filename;
 
       // Update file state to running
@@ -251,11 +252,11 @@ export async function runSkillTask(
         findings: result.findings,
       });
 
-      return { findings: result.findings, usage: result.usage, failedHunks: result.failedHunks, failedExtractions: result.failedExtractions };
+      return { findings: result.findings, usage: result.usage, failedHunks: result.failedHunks, failedExtractions: result.failedExtractions, auxiliaryUsage: result.auxiliaryUsage };
     };
 
     // Process files in batches with concurrency
-    const allResults: { findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number }[] = [];
+    const allResults: { findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }[] = [];
 
     for (let i = 0; i < preparedFiles.length; i += fileConcurrency) {
       const batch = preparedFiles.slice(i, i + fileConcurrency);
@@ -269,6 +270,10 @@ export async function runSkillTask(
     const duration = Date.now() - startTime;
     const allFindings = allResults.flatMap((r) => r.findings);
     const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
+    const allAuxEntries: { agent: string; usage: UsageStats }[] = [];
+    for (const r of allResults) {
+      if (r.auxiliaryUsage) allAuxEntries.push(...r.auxiliaryUsage);
+    }
     const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
     const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
     const uniqueFindings = deduplicateFindings(allFindings);
@@ -288,6 +293,10 @@ export async function runSkillTask(
     }
     if (totalFailedExtractions > 0) {
       report.failedExtractions = totalFailedExtractions;
+    }
+    const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
+    if (auxUsage) {
+      report.auxiliaryUsage = auxUsage;
     }
 
     // Notify skill complete

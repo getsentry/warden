@@ -84,6 +84,10 @@ export const UsageStatsSchema = z.object({
 });
 export type UsageStats = z.infer<typeof UsageStatsSchema>;
 
+// Auxiliary usage from non-SDK LLM calls (extraction repair, semantic dedup, etc.)
+export const AuxiliaryUsageMapSchema = z.record(z.string(), UsageStatsSchema);
+export type AuxiliaryUsageMap = z.infer<typeof AuxiliaryUsageMapSchema>;
+
 // Skipped file info for chunking
 export const SkippedFileSchema = z.object({
   filename: z.string(),
@@ -106,6 +110,8 @@ export const SkillReportSchema = z.object({
   failedHunks: z.number().int().nonnegative().optional(),
   /** Number of hunks where findings extraction failed (JSON parse errors) */
   failedExtractions: z.number().int().nonnegative().optional(),
+  /** Usage from auxiliary LLM calls (extraction repair, semantic dedup, etc.) */
+  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 

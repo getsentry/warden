@@ -5,11 +5,12 @@
  * Wraps the core github-checks module with action-specific logic.
  */
 
-import type { SkillReport, UsageStats } from '../../types/index.js';
+import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 import {
   aggregateSeverityCounts,
   determineConclusion,
 } from '../../output/github-checks.js';
+import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import type { TriggerResult } from '../triggers/executor.js';
 
 // Re-export types and functions that are used directly
@@ -63,6 +64,7 @@ export function buildCoreSummaryData(
   findingsBySeverity: Record<string, number>;
   totalDurationMs?: number;
   totalUsage?: UsageStats;
+  totalAuxiliaryUsage?: AuxiliaryUsageMap;
   findings: SkillReport['findings'];
   skillResults: {
     name: string;
@@ -72,6 +74,14 @@ export function buildCoreSummaryData(
     usage?: UsageStats;
   }[];
 } {
+  // Aggregate auxiliary usage across all reports
+  let totalAuxiliaryUsage: AuxiliaryUsageMap | undefined;
+  for (const r of reports) {
+    if (r.auxiliaryUsage) {
+      totalAuxiliaryUsage = mergeAuxiliaryUsage(totalAuxiliaryUsage, r.auxiliaryUsage);
+    }
+  }
+
   return {
     totalSkills: results.length,
     totalFindings: reports.reduce((sum, r) => sum + r.findings.length, 0),
@@ -80,6 +90,7 @@ export function buildCoreSummaryData(
       ? reports.reduce((sum, r) => sum + (r.durationMs ?? 0), 0)
       : undefined,
     totalUsage: aggregateUsage(reports),
+    totalAuxiliaryUsage,
     findings: reports.flatMap((r) => r.findings),
     skillResults: results.map((r) => ({
       name: r.triggerName,

@@ -1,5 +1,6 @@
 import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { UsageStats } from '../types/index.js';
+import type { AuxiliaryUsageMap } from '../types/index.js';
 
 /**
  * Extract usage stats from an SDK result message.
@@ -41,6 +42,57 @@ export function aggregateUsage(usages: UsageStats[]): UsageStats {
     }),
     emptyUsage()
   );
+}
+
+/**
+ * Aggregate auxiliary usage entries by agent name.
+ * Merges multiple entries for the same agent into a single UsageStats.
+ * Returns undefined if no entries are provided.
+ */
+export function aggregateAuxiliaryUsage(
+  entries: { agent: string; usage: UsageStats }[]
+): AuxiliaryUsageMap | undefined {
+  if (entries.length === 0) return undefined;
+
+  const map: AuxiliaryUsageMap = {};
+  for (const { agent, usage } of entries) {
+    const existing = map[agent];
+    if (existing) {
+      map[agent] = {
+        inputTokens: existing.inputTokens + usage.inputTokens,
+        outputTokens: existing.outputTokens + usage.outputTokens,
+        cacheReadInputTokens: (existing.cacheReadInputTokens ?? 0) + (usage.cacheReadInputTokens ?? 0),
+        cacheCreationInputTokens: (existing.cacheCreationInputTokens ?? 0) + (usage.cacheCreationInputTokens ?? 0),
+        costUSD: existing.costUSD + usage.costUSD,
+      };
+    } else {
+      map[agent] = { ...usage };
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Merge two AuxiliaryUsageMaps together.
+ * Entries for the same agent are summed.
+ */
+export function mergeAuxiliaryUsage(
+  a: AuxiliaryUsageMap | undefined,
+  b: AuxiliaryUsageMap | undefined
+): AuxiliaryUsageMap | undefined {
+  if (!a && !b) return undefined;
+  if (!a) return b;
+  if (!b) return a;
+
+  const entries: { agent: string; usage: UsageStats }[] = [];
+  for (const [agent, usage] of Object.entries(a)) {
+    entries.push({ agent, usage });
+  }
+  for (const [agent, usage] of Object.entries(b)) {
+    entries.push({ agent, usage });
+  }
+  return aggregateAuxiliaryUsage(entries);
 }
 
 /**

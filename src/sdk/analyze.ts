@@ -4,7 +4,7 @@ import type { Finding, RetryConfig } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
-import { extractUsage, aggregateUsage, emptyUsage, estimateTokens } from './usage.js';
+import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings } from './extract.js';
 import {
@@ -31,6 +31,8 @@ interface ParseHunkOutputResult {
   extractionError?: string;
   /** Preview of the output that failed to parse */
   extractionPreview?: string;
+  /** Usage from LLM extraction fallback, if invoked */
+  extractionUsage?: UsageStats;
 }
 
 /**
@@ -60,7 +62,7 @@ async function parseHunkOutput(
   const fallback = await extractFindingsWithLLM(result.result, apiKey);
 
   if (fallback.success) {
-    return { findings: validateFindings(fallback.findings, filename), extractionFailed: false, extractionMethod: 'llm' };
+    return { findings: validateFindings(fallback.findings, filename), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
   }
 
   // Both tiers failed - return extraction failure info
@@ -70,6 +72,7 @@ async function parseHunkOutput(
     extractionMethod: 'none',
     extractionError: fallback.error,
     extractionPreview: fallback.preview,
+    extractionUsage: fallback.usage,
   };
 }
 
@@ -256,6 +259,12 @@ async function analyzeHunk(
         );
       }
 
+      // Collect auxiliary usage from extraction repair
+      const auxiliaryUsage: { agent: string; usage: UsageStats }[] = [];
+      if (parseResult.extractionUsage) {
+        auxiliaryUsage.push({ agent: 'extraction', usage: parseResult.extractionUsage });
+      }
+
       return {
         findings: parseResult.findings,
         usage: aggregateUsage(accumulatedUsage),
@@ -263,6 +272,7 @@ async function analyzeHunk(
         extractionFailed: parseResult.extractionFailed,
         extractionError: parseResult.extractionError,
         extractionPreview: parseResult.extractionPreview,
+        auxiliaryUsage: auxiliaryUsage.length > 0 ? auxiliaryUsage : undefined,
       };
     } catch (error) {
       lastError = error;
@@ -360,6 +370,7 @@ export async function analyzeFile(
   const { abortController } = options;
   const fileFindings: Finding[] = [];
   const fileUsage: UsageStats[] = [];
+  const fileAuxiliaryUsage: { agent: string; usage: UsageStats }[] = [];
   let failedHunks = 0;
   let failedExtractions = 0;
 
@@ -394,6 +405,9 @@ export async function analyzeFile(
 
     fileFindings.push(...result.findings);
     fileUsage.push(result.usage);
+    if (result.auxiliaryUsage) {
+      fileAuxiliaryUsage.push(...result.auxiliaryUsage);
+    }
   }
 
   return {
@@ -402,6 +416,7 @@ export async function analyzeFile(
     usage: aggregateUsage(fileUsage),
     failedHunks,
     failedExtractions,
+    auxiliaryUsage: fileAuxiliaryUsage.length > 0 ? fileAuxiliaryUsage : undefined,
   };
 }
 
@@ -469,6 +484,7 @@ export async function runSkill(
 
   // Track all usage stats for aggregation
   const allUsage: UsageStats[] = [];
+  const allAuxiliaryUsage: { agent: string; usage: UsageStats }[] = [];
 
   // Track failed hunks across all files
   let totalFailedHunks = 0;
@@ -561,6 +577,9 @@ export async function runSkill(
         allUsage.push(result.usage);
         totalFailedHunks += result.failedHunks;
         totalFailedExtractions += result.failedExtractions;
+        if (result.auxiliaryUsage) {
+          allAuxiliaryUsage.push(...result.auxiliaryUsage);
+        }
       }
     }
   } else {
@@ -574,6 +593,9 @@ export async function runSkill(
       allUsage.push(result.usage);
       totalFailedHunks += result.failedHunks;
       totalFailedExtractions += result.failedExtractions;
+      if (result.auxiliaryUsage) {
+        allAuxiliaryUsage.push(...result.auxiliaryUsage);
+      }
     }
   }
 
@@ -610,6 +632,10 @@ export async function runSkill(
   }
   if (totalFailedExtractions > 0) {
     report.failedExtractions = totalFailedExtractions;
+  }
+  const auxUsage = aggregateAuxiliaryUsage(allAuxiliaryUsage);
+  if (auxUsage) {
+    report.auxiliaryUsage = auxUsage;
   }
   return report;
 }

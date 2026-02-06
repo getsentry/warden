@@ -17,6 +17,7 @@ import {
   findingToExistingComment,
 } from '../../output/dedup.js';
 import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
+import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import type { TriggerReviewOutput } from '../review-state.js';
 import { applyCoordinationToReview } from '../review-state.js';
 import type { TriggerResult } from '../triggers/executor.js';
@@ -160,6 +161,12 @@ export async function postTriggerReview(
         currentSkill: result.report.skill,
       });
       findingsToPost = dedupResult.newFindings;
+
+      // Merge dedup usage into the report's auxiliary usage
+      if (dedupResult.dedupUsage) {
+        const dedupAux = { dedup: dedupResult.dedupUsage };
+        result.report.auxiliaryUsage = mergeAuxiliaryUsage(result.report.auxiliaryUsage, dedupAux);
+      }
 
       if (dedupResult.duplicateActions.length > 0) {
         console.log(

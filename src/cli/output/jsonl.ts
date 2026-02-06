@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import type { SkillReport, UsageStats } from '../../types/index.js';
+import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 import { countBySeverity } from './formatters.js';
 
 /**
@@ -54,6 +54,7 @@ export interface JsonlRecord {
   metadata?: Record<string, unknown>;
   durationMs?: number;
   usage?: UsageStats;
+  auxiliaryUsage?: AuxiliaryUsageMap;
 }
 
 /**
@@ -104,6 +105,7 @@ export function writeJsonlReport(
       metadata: report.metadata,
       durationMs: report.durationMs,
       usage: report.usage,
+      auxiliaryUsage: report.auxiliaryUsage,
     };
     lines.push(JSON.stringify(record));
   }

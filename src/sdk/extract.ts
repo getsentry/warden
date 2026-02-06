@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { customAlphabet } from 'nanoid';
 import { FindingSchema } from '../types/index.js';
-import type { Finding } from '../types/index.js';
+import type { Finding, UsageStats } from '../types/index.js';
+import { apiUsageToStats } from './pricing.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
@@ -10,8 +11,8 @@ export const FINDINGS_JSON_START = /\{\s*"findings"/;
  * Result from extracting findings JSON from text.
  */
 export type ExtractFindingsResult =
-  | { success: true; findings: unknown[] }
-  | { success: false; error: string; preview: string };
+  | { success: true; findings: unknown[]; usage?: UsageStats }
+  | { success: false; error: string; preview: string; usage?: UsageStats };
 
 /**
  * Extract JSON object from text, handling nested braces correctly.
@@ -204,17 +205,21 @@ ${truncatedText}`,
       ],
     });
 
+    const usage = apiUsageToStats('claude-haiku-4-5', response.usage);
+
     const content = response.content[0];
     if (!content || content.type !== 'text') {
       return {
         success: false,
         error: 'llm_unexpected_response',
         preview: rawText.slice(0, 200),
+        usage,
       };
     }
 
     // Parse the LLM response as JSON
-    return extractFindingsJson(content.text);
+    const result = extractFindingsJson(content.text);
+    return { ...result, usage };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {

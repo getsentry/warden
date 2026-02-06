@@ -20,6 +20,8 @@ export interface HunkAnalysisResult {
   extractionError?: string;
   /** Preview of the output that failed to parse */
   extractionPreview?: string;
+  /** Usage from auxiliary LLM calls (e.g., extraction repair) */
+  auxiliaryUsage?: { agent: string; usage: UsageStats }[];
 }
 
 /**
@@ -127,6 +129,8 @@ export interface FileAnalysisResult {
   failedHunks: number;
   /** Number of hunks where findings extraction failed */
   failedExtractions: number;
+  /** Usage from auxiliary LLM calls across all hunks */
+  auxiliaryUsage?: { agent: string; usage: UsageStats }[];
 }
 
 /**

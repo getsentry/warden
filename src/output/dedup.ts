@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import type { Finding } from '../types/index.js';
+import type { Finding, UsageStats } from '../types/index.js';
+import { apiUsageToStats } from '../sdk/pricing.js';
 
 /**
  * Parsed marker data from a Warden comment.
@@ -61,6 +62,8 @@ export interface DeduplicateResult {
   newFindings: Finding[];
   /** Actions to take for duplicate findings */
   duplicateActions: DuplicateAction[];
+  /** Usage from semantic dedup LLM call, if invoked */
+  dedupUsage?: UsageStats;
 }
 
 /**
@@ -363,16 +366,24 @@ const DuplicateMatchesSchema = z.array(
 );
 
 /**
+ * Result from semantic dedup LLM call.
+ */
+interface SemanticDuplicateResult {
+  matches: Map<string, ExistingComment>;
+  usage?: UsageStats;
+}
+
+/**
  * Use LLM to identify which findings are semantic duplicates of existing comments.
- * Returns a Map of finding ID to matched ExistingComment.
+ * Returns a Map of finding ID to matched ExistingComment, plus usage stats.
  */
 async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
   apiKey: string
-): Promise<Map<string, ExistingComment>> {
+): Promise<SemanticDuplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
-    return new Map();
+    return { matches: new Map() };
   }
 
   const client = new Anthropic({ apiKey });
@@ -413,6 +424,8 @@ Return [] if none are duplicates.`;
       messages: [{ role: 'user', content: prompt }],
     });
 
+    const usage = apiUsageToStats('claude-haiku-4-5', response.usage);
+
     const content = response.content[0];
     if (!content || content.type !== 'text') {
       throw new Error('Unexpected response type');
@@ -429,10 +442,10 @@ Return [] if none are duplicates.`;
       }
     }
 
-    return matches;
+    return { matches, usage };
   } catch (error) {
     console.warn(`LLM deduplication failed, falling back to hash-only: ${error}`);
-    return new Map();
+    return { matches: new Map() };
   }
 }
 
@@ -623,15 +636,15 @@ export async function deduplicateFindings(
   }
 
   // Second pass: LLM semantic comparison for remaining findings
-  const semanticMatches = await findSemanticDuplicates(hashDedupedFindings, existingComments, options.apiKey);
+  const semanticResult = await findSemanticDuplicates(hashDedupedFindings, existingComments, options.apiKey);
 
-  if (semanticMatches.size > 0) {
-    console.log(`Dedup: ${semanticMatches.size} findings identified as semantic duplicates by LLM`);
+  if (semanticResult.matches.size > 0) {
+    console.log(`Dedup: ${semanticResult.matches.size} findings identified as semantic duplicates by LLM`);
   }
 
   const newFindings: Finding[] = [];
   for (const finding of hashDedupedFindings) {
-    const matchingComment = semanticMatches.get(finding.id);
+    const matchingComment = semanticResult.matches.get(finding.id);
     if (matchingComment) {
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',
@@ -644,5 +657,5 @@ export async function deduplicateFindings(
     }
   }
 
-  return { newFindings, duplicateActions };
+  return { newFindings, duplicateActions, dedupUsage: semanticResult.usage };
 }

@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import figures from 'figures';
-import type { Severity, Finding, FileChange, UsageStats } from '../../types/index.js';
+import type { Severity, Finding, FileChange, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 
 /**
  * Pluralize a word based on count.
@@ -247,13 +247,37 @@ export function formatUsagePlain(usage: UsageStats): string {
 }
 
 /**
+ * Calculate total auxiliary cost from an AuxiliaryUsageMap.
+ */
+function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
+  return Object.values(auxiliaryUsage).reduce((sum, u) => sum + u.costUSD, 0);
+}
+
+/**
+ * Format auxiliary cost breakdown as a parenthetical suffix.
+ * @example "(+extraction: $0.0012, +dedup: $0.0008)"
+ */
+function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap): string {
+  const entries = Object.entries(auxiliaryUsage).filter(([, u]) => u.costUSD > 0);
+  if (entries.length === 0) return '';
+  const parts = entries.map(([agent, u]) => `+${agent}: ${formatCost(u.costUSD)}`);
+  return ` (${parts.join(', ')})`;
+}
+
+/**
  * Format stats (duration, tokens, cost) into a compact single-line format.
  * Used for markdown footers in PR comments and check annotations.
  *
+ * When auxiliaryUsage is provided, the cost shown is primary + auxiliary total,
+ * with a breakdown suffix showing per-agent auxiliary costs.
+ *
  * @example formatStatsCompact(15800, { inputTokens: 3000, outputTokens: 680, costUSD: 0.0048 })
  * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.0048"
+ *
+ * @example formatStatsCompact(15800, usage, { extraction: { ... costUSD: 0.001 } })
+ * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.0058 (+extraction: $0.0010)"
  */
-export function formatStatsCompact(durationMs?: number, usage?: UsageStats): string {
+export function formatStatsCompact(durationMs?: number, usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
   const parts: string[] = [];
 
   if (durationMs !== undefined) {
@@ -263,7 +287,12 @@ export function formatStatsCompact(durationMs?: number, usage?: UsageStats): str
   if (usage) {
     const totalInput = usage.inputTokens + (usage.cacheReadInputTokens ?? 0);
     parts.push(`${formatTokens(totalInput)} in / ${formatTokens(usage.outputTokens)} out`);
-    parts.push(formatCost(usage.costUSD));
+
+    const auxCost = auxiliaryUsage ? totalAuxiliaryCost(auxiliaryUsage) : 0;
+    const totalCost = usage.costUSD + auxCost;
+    const costStr = formatCost(totalCost);
+    const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
+    parts.push(`${costStr}${auxSuffix}`);
   }
 
   return parts.join(' · ');
