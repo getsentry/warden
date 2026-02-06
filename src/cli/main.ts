@@ -41,6 +41,12 @@ import { runSync } from './commands/sync.js';
 export const abortController = new AbortController();
 
 /**
+ * Track whether SIGINT was received so the main flow can
+ * render partial results and exit with code 130.
+ */
+export const interrupted = { value: false };
+
+/**
  * Load environment variables from .env files in the given directory.
  * Loads .env first, then .env.local for local overrides.
  */
@@ -143,20 +149,31 @@ async function outputResultsAndHandleFixes(
     console.log(renderTerminalReport(filteredReports, reporter.mode));
   }
 
+  // Show interrupted banner before summary (read live to catch SIGINT during rendering)
+  if (interrupted.value) {
+    reporter.blank();
+    reporter.warning('Interrupted — showing partial results');
+  }
+
   // Show summary (uses filtered reports for display)
   reporter.blank();
   reporter.renderSummary(filteredReports, totalDuration);
 
-  // Handle fixes (uses filtered reports - only show fixes for visible findings)
+  // Handle fixes: --fix (automatic) always runs, interactive prompt is skipped on interrupt
   const fixableFindings = collectFixableFindings(filteredReports);
   if (fixableFindings.length > 0) {
     if (options.fix) {
       const fixSummary = applyAllFixes(fixableFindings);
       renderFixSummary(fixSummary, reporter);
-    } else if (!options.json && reporter.verbosity !== Verbosity.Quiet && reporter.mode.isTTY) {
+    } else if (!interrupted.value && !options.json && reporter.verbosity !== Verbosity.Quiet && reporter.mode.isTTY) {
       const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
       renderFixSummary(fixSummary, reporter);
     }
+  }
+
+  // Interrupted takes precedence for exit code
+  if (interrupted.value) {
+    return 130;
   }
 
   // Determine exit code (based on original reports, not filtered)

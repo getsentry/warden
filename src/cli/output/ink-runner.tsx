@@ -41,6 +41,7 @@ import figures from 'figures';
 interface SkillRunnerProps {
   skills: SkillState[];
   completedItems: SkillState[];
+  interrupted: boolean;
 }
 
 function Spinner(): React.ReactElement {
@@ -156,7 +157,7 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
  * We use a SINGLE Static component to avoid layout conflicts from multiple
  * absolutely-positioned Static containers.
  */
-function SkillRunner({ skills, completedItems }: SkillRunnerProps): React.ReactElement {
+function SkillRunner({ skills, completedItems, interrupted }: SkillRunnerProps): React.ReactElement {
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
 
@@ -180,6 +181,11 @@ function SkillRunner({ skills, completedItems }: SkillRunnerProps): React.ReactE
           {ICON_PENDING} {skill.displayName}
         </Text>
       ))}
+      {interrupted && (
+        <Text color="yellow" dimColor>
+          {figures.warning} Interrupted, finishing up... (press Ctrl+C again to force exit)
+        </Text>
+      )}
     </Box>
   );
 }
@@ -209,6 +215,7 @@ export async function runSkillTasksWithInk(
     // No tasks or quiet mode - run without UI
     const results: SkillTaskResult[] = [];
     for (const task of tasks) {
+      if (task.runnerOptions?.abortController?.signal.aborted) break;
       const result = await runSkillTask(task, 5, noopCallbacks);
       results.push(result);
     }
@@ -224,9 +231,12 @@ export async function runSkillTasksWithInk(
   // which can cause layout conflicts due to absolute positioning
   process.stderr.write('\x1b[1mSKILLS\x1b[0m\n');
 
+  // Track interrupt state for rendering in the Ink component
+  let interrupted = false;
+
   // Create Ink instance
   const { rerender, unmount } = render(
-    <SkillRunner skills={skillStates} completedItems={completedItems} />,
+    <SkillRunner skills={skillStates} completedItems={completedItems} interrupted={false} />,
     { stdout: process.stderr }
   );
 
@@ -235,14 +245,25 @@ export async function runSkillTasksWithInk(
   // starting simultaneously) trigger 5 immediate rerenders, which Ink cannot
   // process correctly, resulting in the same line appearing multiple times.
   let updatePending = false;
+  let unmounted = false;
   const updateUI = () => {
-    if (updatePending) return;
+    if (updatePending || unmounted) return;
     updatePending = true;
     setImmediate(() => {
       updatePending = false;
-      rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} />);
+      if (unmounted) return;
+      rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} interrupted={interrupted} />);
     });
   };
+
+  // Listen for abort signal to show interrupt message in the Ink UI
+  const abortSignal = tasks[0]?.runnerOptions?.abortController?.signal;
+  if (abortSignal && !abortSignal.aborted) {
+    abortSignal.addEventListener('abort', () => {
+      interrupted = true;
+      updateUI();
+    }, { once: true });
+  }
 
   // Callbacks to update state
   const callbacks: SkillProgressCallbacks = {
@@ -346,11 +367,13 @@ export async function runSkillTasksWithInk(
 
   if (concurrency <= 1) {
     for (const task of tasks) {
+      if (task.runnerOptions?.abortController?.signal.aborted) break;
       const result = await runSkillTask(task, fileConcurrency, callbacks);
       results.push(result);
     }
   } else {
     for (let i = 0; i < tasks.length; i += concurrency) {
+      if (tasks[i]?.runnerOptions?.abortController?.signal.aborted) break;
       const batch = tasks.slice(i, i + concurrency);
       const batchResults = await Promise.all(
         batch.map((task) => runSkillTask(task, fileConcurrency, callbacks))
@@ -359,7 +382,9 @@ export async function runSkillTasksWithInk(
     }
   }
 
-  // Cleanup
+  // Cleanup - set unmounted flag before unmount to prevent pending setImmediate
+  // callbacks from calling rerender on the unmounted Ink instance
+  unmounted = true;
   unmount();
 
   return results;

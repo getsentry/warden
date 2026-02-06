@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createDefaultCallbacks } from './tasks.js';
+import { createDefaultCallbacks, runSkillTasks } from './tasks.js';
 import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
 import type { SkillReport, Finding } from '../../types/index.js';
@@ -304,5 +304,55 @@ describe('createDefaultCallbacks', () => {
       const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
       expect(cb.onExtractionResult).toBeUndefined();
     });
+  });
+});
+
+describe('runSkillTasks', () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  function makeAbortedTasks(): { tasks: SkillTaskOptions[]; resolveSkill: ReturnType<typeof vi.fn> } {
+    const controller = new AbortController();
+    controller.abort();
+    const resolveSkill = vi.fn();
+    const context = { eventType: 'pull_request', repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' }, repoPath: '/tmp' } as SkillTaskOptions['context'];
+    const tasks: SkillTaskOptions[] = [
+      { name: 'task-a', resolveSkill, context, runnerOptions: { abortController: controller } },
+      { name: 'task-b', resolveSkill, context, runnerOptions: { abortController: controller } },
+    ];
+    return { tasks, resolveSkill };
+  }
+
+  it('skips all tasks when abort signal is already set', async () => {
+    const { tasks, resolveSkill } = makeAbortedTasks();
+
+    const results = await runSkillTasks(tasks, {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 1,
+    });
+
+    expect(results).toHaveLength(0);
+    expect(resolveSkill).not.toHaveBeenCalled();
+  });
+
+  it('skips remaining batches when abort signal is already set (parallel)', async () => {
+    const { tasks, resolveSkill } = makeAbortedTasks();
+
+    const results = await runSkillTasks(tasks, {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 4,
+    });
+
+    expect(results).toHaveLength(0);
+    expect(resolveSkill).not.toHaveBeenCalled();
   });
 });

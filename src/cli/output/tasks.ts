@@ -435,17 +435,29 @@ export async function runSkillTasks(
     console.error(chalk.bold('SKILLS'));
   }
 
+  // Listen for abort signal to show interrupt message (non-TTY only; Ink handles TTY)
+  const abortSignal = tasks[0]?.runnerOptions?.abortController?.signal;
+  if (abortSignal && !abortSignal.aborted && !mode.isTTY && verbosity !== Verbosity.Quiet) {
+    abortSignal.addEventListener('abort', () => {
+      logPlain('Interrupted, finishing up... (press Ctrl+C again to force exit)');
+    }, { once: true });
+  }
+
   const results: SkillTaskResult[] = [];
 
   if (concurrency <= 1) {
     // Sequential execution
     for (const task of tasks) {
+      // Skip remaining tasks if abort was signaled (graceful interrupt)
+      if (task.runnerOptions?.abortController?.signal.aborted) break;
       const result = await runSkillTask(task, fileConcurrency, effectiveCallbacks);
       results.push(result);
     }
   } else {
     // Parallel execution with concurrency limit
     for (let i = 0; i < tasks.length; i += concurrency) {
+      // Skip remaining batches if abort was signaled (graceful interrupt)
+      if (tasks[i]?.runnerOptions?.abortController?.signal.aborted) break;
       const batch = tasks.slice(i, i + concurrency);
       const batchResults = await Promise.all(
         batch.map((task) => runSkillTask(task, fileConcurrency, effectiveCallbacks))

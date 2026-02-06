@@ -1,11 +1,21 @@
 #!/usr/bin/env node
-import { main, abortController } from './main.js';
+import { main, abortController, interrupted } from './main.js';
+
+let interruptCount = 0;
 
 process.on('SIGINT', () => {
-  // Abort any running SDK queries
+  interruptCount++;
   abortController.abort();
-  process.stderr.write('\n');
-  process.exit(130);
+  interrupted.value = true;
+
+  if (interruptCount > 1) {
+    // Second Ctrl+C: force exit immediately
+    process.exit(130);
+  }
+
+  // First Ctrl+C: let the main flow collect partial results.
+  // The interrupt message is rendered by Ink (TTY) or logPlain (non-TTY)
+  // via the abort signal listener -- no direct stderr writes needed here.
 });
 
 main().catch((error) => {
