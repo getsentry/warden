@@ -8,6 +8,7 @@ import { filterFindingsBySeverity } from '../../types/index.js';
 import { shouldFail } from '../../triggers/matcher.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import { deduplicateFindings, processDuplicateActions, findingToExistingComment, } from '../../output/dedup.js';
+import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { applyCoordinationToReview } from '../review-state.js';
 // -----------------------------------------------------------------------------
 // GitHub Review Posting
@@ -88,6 +89,11 @@ export async function postTriggerReview(ctx, deps) {
                 currentSkill: result.report.skill,
             });
             findingsToPost = dedupResult.newFindings;
+            // Merge dedup usage into the report's auxiliary usage
+            if (dedupResult.dedupUsage) {
+                const dedupAux = { dedup: dedupResult.dedupUsage };
+                result.report.auxiliaryUsage = mergeAuxiliaryUsage(result.report.auxiliaryUsage, dedupAux);
+            }
             if (dedupResult.duplicateActions.length > 0) {
                 console.log(`Found ${dedupResult.duplicateActions.length} duplicate findings for ${result.triggerName}`);
             }

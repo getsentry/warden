@@ -4,7 +4,7 @@
  * Manages GitHub Check runs for Warden triggers.
  * Wraps the core github-checks module with action-specific logic.
  */
-import type { SkillReport, UsageStats } from '../../types/index.js';
+import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 export { createCoreCheck, updateCoreCheck, createSkillCheck, updateSkillCheck, failSkillCheck, aggregateSeverityCounts, determineConclusion, } from '../../output/github-checks.js';
 export type { CheckOptions, UpdateSkillCheckOptions, CreateCheckResult, CoreCheckSummaryData, CheckConclusion, } from '../../output/github-checks.js';
@@ -21,6 +21,7 @@ export declare function buildCoreSummaryData(results: TriggerResult[], reports: 
     findingsBySeverity: Record<string, number>;
     totalDurationMs?: number;
     totalUsage?: UsageStats;
+    totalAuxiliaryUsage?: AuxiliaryUsageMap;
     findings: SkillReport['findings'];
     skillResults: {
         name: string;

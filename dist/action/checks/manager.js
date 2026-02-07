@@ -5,6 +5,7 @@
  * Wraps the core github-checks module with action-specific logic.
  */
 import { aggregateSeverityCounts, determineConclusion, } from '../../output/github-checks.js';
+import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 // Re-export types and functions that are used directly
 export { createCoreCheck, updateCoreCheck, createSkillCheck, updateSkillCheck, failSkillCheck, aggregateSeverityCounts, determineConclusion, } from '../../output/github-checks.js';
 // -----------------------------------------------------------------------------
@@ -29,6 +30,13 @@ export function aggregateUsage(reports) {
  * Build core check summary data from trigger results.
  */
 export function buildCoreSummaryData(results, reports) {
+    // Aggregate auxiliary usage across all reports
+    let totalAuxiliaryUsage;
+    for (const r of reports) {
+        if (r.auxiliaryUsage) {
+            totalAuxiliaryUsage = mergeAuxiliaryUsage(totalAuxiliaryUsage, r.auxiliaryUsage);
+        }
+    }
     return {
         totalSkills: results.length,
         totalFindings: reports.reduce((sum, r) => sum + r.findings.length, 0),
@@ -37,6 +45,7 @@ export function buildCoreSummaryData(results, reports) {
             ? reports.reduce((sum, r) => sum + (r.durationMs ?? 0), 0)
             : undefined,
         totalUsage: aggregateUsage(reports),
+        totalAuxiliaryUsage,
         findings: reports.flatMap((r) => r.findings),
         skillResults: results.map((r) => ({
             name: r.triggerName,
