@@ -551,23 +551,16 @@ export async function runSkill(
     return result;
   }
 
-  // Track per-file results for report.files
-  const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
-
-  /** Process a file with timing, accumulating results into shared arrays. */
-  async function processFileWithTiming(fileHunkEntry: PreparedFile, fileIndex: number): Promise<void> {
+  /** Process a file with timing, returning a self-contained result. */
+  async function processFileWithTiming(fileHunkEntry: PreparedFile, fileIndex: number) {
     const fileStart = Date.now();
     const result = await processFile(fileHunkEntry, fileIndex);
-    const fileDurationMs = Date.now() - fileStart;
-    allFindings.push(...result.findings);
-    allUsage.push(result.usage);
-    totalFailedHunks += result.failedHunks;
-    totalFailedExtractions += result.failedExtractions;
-    if (result.auxiliaryUsage) {
-      allAuxiliaryUsage.push(...result.auxiliaryUsage);
-    }
-    fileResults.push({ filename: fileHunkEntry.filename, result, durationMs: fileDurationMs });
+    const durationMs = Date.now() - fileStart;
+    return { filename: fileHunkEntry.filename, result, durationMs };
   }
+
+  // Collect results in input order (Promise.all preserves order)
+  const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
 
   // Process files - parallel or sequential based on options
   if (parallel) {
@@ -585,11 +578,12 @@ export async function runSkill(
       }
 
       const batch = fileHunks.slice(i, i + fileConcurrency);
-      await Promise.all(
+      const batchResults = await Promise.all(
         batch.map((fileHunkEntry, batchIndex) =>
           processFileWithTiming(fileHunkEntry, i + batchIndex)
         )
       );
+      fileResults.push(...batchResults);
     }
   } else {
     // Process files sequentially
@@ -597,7 +591,18 @@ export async function runSkill(
       // Check for abort before starting new file
       if (abortController?.signal.aborted) break;
 
-      await processFileWithTiming(fileHunkEntry, fileIndex);
+      fileResults.push(await processFileWithTiming(fileHunkEntry, fileIndex));
+    }
+  }
+
+  // Accumulate results from ordered fileResults
+  for (const fr of fileResults) {
+    allFindings.push(...fr.result.findings);
+    allUsage.push(fr.result.usage);
+    totalFailedHunks += fr.result.failedHunks;
+    totalFailedExtractions += fr.result.failedExtractions;
+    if (fr.result.auxiliaryUsage) {
+      allAuxiliaryUsage.push(...fr.result.auxiliaryUsage);
     }
   }
 
