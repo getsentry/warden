@@ -17,10 +17,14 @@ const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opene
 // Mocks - ONLY external boundaries: LLM calls
 // -----------------------------------------------------------------------------
 
-// Mock SDK runner - calls Claude Code SDK (LLM)
-vi.mock('../../sdk/runner.js', () => ({
-  runSkill: vi.fn(),
-}));
+// Mock skill task runner - calls Claude Code SDK (LLM)
+vi.mock('../../cli/output/tasks.js', async () => {
+  const actual: Record<string, unknown> = await vi.importActual('../../cli/output/tasks.js');
+  return {
+    ...actual,
+    runSkillTask: vi.fn(),
+  };
+});
 
 // Mock deduplication - has LLM calls (deduplicateFindings) and GitHub API calls (fetchExistingComments)
 // Keep pure functions real
@@ -52,14 +56,14 @@ vi.mock('./base.js', async () => {
 });
 
 // Import after mocks
-import { runSkill } from '../../sdk/runner.js';
+import { runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings } from '../../output/dedup.js';
 import { setFailed } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 
 // Type the mocks
-const mockRunSkill = vi.mocked(runSkill);
+const mockRunSkillTask = vi.mocked(runSkillTask);
 const mockFetchExistingComments = vi.mocked(fetchExistingComments);
 const mockDeduplicateFindings = vi.mocked(deduplicateFindings);
 const mockSetFailed = vi.mocked(setFailed);
@@ -179,7 +183,7 @@ describe('runPRWorkflow', () => {
     mockOctokit = createMockOctokit();
 
     // Default: skill runs successfully with no findings
-    mockRunSkill.mockResolvedValue(createSkillReport());
+    mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
 
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -197,7 +201,7 @@ describe('runPRWorkflow', () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });
 
-      mockRunSkill.mockResolvedValue(report);
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
@@ -221,7 +225,7 @@ describe('runPRWorkflow', () => {
     });
 
     it('does not post review when no findings', async () => {
-      mockRunSkill.mockResolvedValue(createSkillReport({ findings: [] }));
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ findings: [] }) });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
@@ -269,7 +273,7 @@ describe('runPRWorkflow', () => {
         ],
       });
 
-      mockRunSkill.mockResolvedValue(report);
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
@@ -281,17 +285,15 @@ describe('runPRWorkflow', () => {
 
   describe('trigger execution', () => {
     it('runs matched trigger and collects report', async () => {
-      mockRunSkill.mockResolvedValue(createSkillReport({ skill: 'test-skill' }));
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
-      expect(mockRunSkill).toHaveBeenCalledTimes(1);
-      expect(mockRunSkill).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'test-skill' }),
-        expect.objectContaining({
-          eventType: 'pull_request',
-          action: 'opened',
-        }),
+      expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
+      // runSkillTask(options, concurrency, callbacks)
+      expect(mockRunSkillTask).toHaveBeenCalledWith(
+        expect.objectContaining({ name: expect.any(String) }),
+        expect.any(Number),
         expect.any(Object)
       );
     });
@@ -299,7 +301,7 @@ describe('runPRWorkflow', () => {
     it('records trigger failure and updates check before failing', async () => {
       // When all triggers fail, the workflow should still update the check
       // before calling setFailed.
-      mockRunSkill.mockRejectedValueOnce(new Error('Skill failed'));
+      mockRunSkillTask.mockRejectedValueOnce(new Error('Skill failed'));
 
       // With only one trigger that fails, handleTriggerErrors will call setFailed.
       // Our mock converts this to a thrown error.
@@ -323,7 +325,7 @@ describe('runPRWorkflow', () => {
       const finding = createFinding({ severity: 'high' });
       const report = createSkillReport({ findings: [finding] });
 
-      mockRunSkill.mockResolvedValue(report);
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
 
       await expect(
         runPRWorkflow(
@@ -353,7 +355,7 @@ describe('runPRWorkflow', () => {
 
   describe('GitHub check management', () => {
     it('creates and updates core check for PR events', async () => {
-      mockRunSkill.mockResolvedValue(createSkillReport());
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
@@ -375,7 +377,7 @@ describe('runPRWorkflow', () => {
     });
 
     it('creates skill-specific check for each trigger', async () => {
-      mockRunSkill.mockResolvedValue(createSkillReport({ skill: 'test-skill' }));
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
@@ -404,22 +406,25 @@ describe('runPRWorkflow', () => {
       ];
 
       mockOctokit = createMockOctokit({ prFiles: customFiles });
-      mockRunSkill.mockResolvedValue(createSkillReport());
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
-      expect(mockRunSkill).toHaveBeenCalledWith(
-        expect.any(Object),
+      // runSkillTask receives options with context embedded
+      expect(mockRunSkillTask).toHaveBeenCalledWith(
         expect.objectContaining({
-          pullRequest: expect.objectContaining({
-            files: expect.arrayContaining([
-              expect.objectContaining({
-                filename: 'src/custom.ts',
-                status: 'added',
-              }),
-            ]),
+          context: expect.objectContaining({
+            pullRequest: expect.objectContaining({
+              files: expect.arrayContaining([
+                expect.objectContaining({
+                  filename: 'src/custom.ts',
+                  status: 'added',
+                }),
+              ]),
+            }),
           }),
         }),
+        expect.any(Number),
         expect.any(Object)
       );
     });

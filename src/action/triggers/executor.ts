@@ -10,8 +10,10 @@ import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
 import type { EventContext, SkillReport, SeverityThreshold } from '../../types/index.js';
 import type { RenderResult, ReviewState } from '../../output/types.js';
+import type { OutputMode } from '../../cli/output/tty.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
-import { runSkill } from '../../sdk/runner.js';
+import { runSkillTask, createDefaultCallbacks } from '../../cli/output/tasks.js';
+import type { SkillTaskOptions } from '../../cli/output/tasks.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import {
   createSkillCheck,
@@ -19,6 +21,11 @@ import {
   failSkillCheck,
 } from '../../output/github-checks.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
+import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
+import { Verbosity } from '../../cli/output/verbosity.js';
+
+/** Log-mode output for CI: no TTY, no color. */
+const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns: 120 };
 
 // -----------------------------------------------------------------------------
 // Types
@@ -100,27 +107,31 @@ export async function executeTrigger(
   const commentOn = trigger.output.commentOn ?? deps.globalCommentOn;
 
   try {
-    const skill = await resolveSkillAsync(trigger.skill, context.repoPath, {
-      remote: trigger.remote,
-    });
-    const report = await runSkill(skill, context, {
-      apiKey: anthropicApiKey,
-      model: trigger.model,
-      maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
-      batchDelayMs: config.defaults?.batchDelayMs,
-      pathToClaudeCodeExecutable: claudePath,
-      callbacks: {
-        onFileStart: (file, index, total) => {
-          console.log(`  [${index + 1}/${total}] ${file}`);
-        },
-        onHunkStart: (file, hunkNum, totalHunks, lineRange) => {
-          console.log(`  ${file} [${hunkNum}/${totalHunks}] ${lineRange}`);
-        },
-        onFileComplete: (file, _index, _total) => {
-          console.log(`  ${file} done`);
-        },
+    const taskOptions: SkillTaskOptions = {
+      name: trigger.name,
+      displayName: trigger.skill,
+      failOn,
+      resolveSkill: () => resolveSkillAsync(trigger.skill, context.repoPath, {
+        remote: trigger.remote,
+      }),
+      context,
+      runnerOptions: {
+        apiKey: anthropicApiKey,
+        model: trigger.model,
+        maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+        batchDelayMs: config.defaults?.batchDelayMs,
+        pathToClaudeCodeExecutable: claudePath,
       },
-    });
+    };
+
+    const callbacks = createDefaultCallbacks([taskOptions], CI_OUTPUT_MODE, Verbosity.Normal);
+    const result = await runSkillTask(taskOptions, DEFAULT_FILE_CONCURRENCY, callbacks);
+    const report = result.report;
+
+    if (!report) {
+      throw result.error ?? new Error('Skill task returned no report');
+    }
+
     console.log(`Found ${report.findings.length} findings`);
 
     // Update skill check with results

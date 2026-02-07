@@ -3,7 +3,6 @@ import type { Octokit } from '@octokit/rest';
 import { executeTrigger, type TriggerExecutorDeps } from './executor.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
-import type { SkillDefinition } from '../../config/schema.js';
 import type { RenderResult } from '../../output/types.js';
 
 // Mock dependencies
@@ -11,9 +10,13 @@ vi.mock('../../skills/loader.js', () => ({
   resolveSkillAsync: vi.fn(),
 }));
 
-vi.mock('../../sdk/runner.js', () => ({
-  runSkill: vi.fn(),
-}));
+vi.mock('../../cli/output/tasks.js', async (importOriginal) => {
+  const actual: Record<string, unknown> = await importOriginal();
+  return {
+    ...actual,
+    runSkillTask: vi.fn(),
+  };
+});
 
 vi.mock('../../output/github-checks.js', () => ({
   createSkillCheck: vi.fn(),
@@ -25,8 +28,7 @@ vi.mock('../../output/renderer.js', () => ({
   renderSkillReport: vi.fn(),
 }));
 
-import { resolveSkillAsync } from '../../skills/loader.js';
-import { runSkill } from '../../sdk/runner.js';
+import { runSkillTask } from '../../cli/output/tasks.js';
 import { createSkillCheck, updateSkillCheck, failSkillCheck } from '../../output/github-checks.js';
 import { renderSkillReport } from '../../output/renderer.js';
 
@@ -78,12 +80,6 @@ describe('executeTrigger', () => {
     globalMaxFindings: 10,
   };
 
-  const mockSkill: SkillDefinition = {
-    name: 'test-skill',
-    description: 'A test skill',
-    prompt: 'Test prompt',
-  };
-
   const createReport = (findings: SkillReport['findings'] = []): SkillReport => ({
     skill: 'test-skill',
     summary: findings.length > 0 ? 'Found issues' : 'No issues found',
@@ -102,8 +98,7 @@ describe('executeTrigger', () => {
     ]);
     const mockRenderResult = createRenderResult();
 
-    vi.mocked(resolveSkillAsync).mockResolvedValue(mockSkill);
-    vi.mocked(runSkill).mockResolvedValue(mockReport);
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
     vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
     vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
     vi.mocked(renderSkillReport).mockReturnValue(mockRenderResult);
@@ -121,8 +116,7 @@ describe('executeTrigger', () => {
   it('executes a trigger successfully with no findings', async () => {
     const mockReport = createReport();
 
-    vi.mocked(resolveSkillAsync).mockResolvedValue(mockSkill);
-    vi.mocked(runSkill).mockResolvedValue(mockReport);
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
     vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
     vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
 
@@ -134,7 +128,7 @@ describe('executeTrigger', () => {
   });
 
   it('handles skill resolution failure', async () => {
-    vi.mocked(resolveSkillAsync).mockRejectedValue(new Error('Skill not found'));
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', error: new Error('Skill not found') });
     vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
     vi.mocked(failSkillCheck).mockResolvedValue(undefined);
 
@@ -147,8 +141,7 @@ describe('executeTrigger', () => {
   });
 
   it('handles skill execution failure', async () => {
-    vi.mocked(resolveSkillAsync).mockResolvedValue(mockSkill);
-    vi.mocked(runSkill).mockRejectedValue(new Error('API error'));
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', error: new Error('API error') });
     vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
     vi.mocked(failSkillCheck).mockResolvedValue(undefined);
 
@@ -163,8 +156,7 @@ describe('executeTrigger', () => {
   it('continues if check creation fails', async () => {
     const mockReport = createReport();
 
-    vi.mocked(resolveSkillAsync).mockResolvedValue(mockSkill);
-    vi.mocked(runSkill).mockResolvedValue(mockReport);
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
     vi.mocked(createSkillCheck).mockRejectedValue(new Error('Rate limited'));
 
     const result = await executeTrigger(mockTrigger, mockDeps);
@@ -181,8 +173,7 @@ describe('executeTrigger', () => {
     const mockRenderResult = createRenderResult();
     mockRenderResult.review = { event: 'REQUEST_CHANGES', body: '', comments: [] };
 
-    vi.mocked(resolveSkillAsync).mockResolvedValue(mockSkill);
-    vi.mocked(runSkill).mockResolvedValue(mockReport);
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
     vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
     vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
     vi.mocked(renderSkillReport).mockReturnValue(mockRenderResult);
@@ -205,8 +196,7 @@ describe('executeTrigger', () => {
   it('uses global failOn when trigger does not specify', async () => {
     const mockReport = createReport();
 
-    vi.mocked(resolveSkillAsync).mockResolvedValue(mockSkill);
-    vi.mocked(runSkill).mockResolvedValue(mockReport);
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
     vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
     vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
 
@@ -223,8 +213,7 @@ describe('executeTrigger', () => {
   it('skips check creation for non-PR events', async () => {
     const mockReport = createReport();
 
-    vi.mocked(resolveSkillAsync).mockResolvedValue(mockSkill);
-    vi.mocked(runSkill).mockResolvedValue(mockReport);
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
 
     const nonPRContext: EventContext = {
       ...mockContext,
