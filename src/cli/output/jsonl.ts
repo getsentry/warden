@@ -44,6 +44,16 @@ export interface JsonlRunMetadata {
 }
 
 /**
+ * Per-file record within a JSONL skill record.
+ */
+export interface JsonlFileRecord {
+  filename: string;
+  findings: number;
+  durationMs?: number;
+  usage?: UsageStats;
+}
+
+/**
  * A single JSONL record representing one skill's report.
  */
 export interface JsonlRecord {
@@ -55,6 +65,7 @@ export interface JsonlRecord {
   durationMs?: number;
   usage?: UsageStats;
   auxiliaryUsage?: AuxiliaryUsageMap;
+  files?: JsonlFileRecord[];
 }
 
 /**
@@ -106,6 +117,12 @@ export function writeJsonlReport(
       durationMs: report.durationMs,
       usage: report.usage,
       auxiliaryUsage: report.auxiliaryUsage,
+      files: report.files?.map((f) => ({
+        filename: f.filename,
+        findings: f.findingCount,
+        durationMs: f.durationMs,
+        usage: f.usage,
+      })),
     };
     lines.push(JSON.stringify(record));
   }

@@ -551,6 +551,24 @@ export async function runSkill(
     return result;
   }
 
+  // Track per-file results for report.files
+  const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
+
+  /** Process a file with timing, accumulating results into shared arrays. */
+  async function processFileWithTiming(fileHunkEntry: PreparedFile, fileIndex: number): Promise<void> {
+    const fileStart = Date.now();
+    const result = await processFile(fileHunkEntry, fileIndex);
+    const fileDurationMs = Date.now() - fileStart;
+    allFindings.push(...result.findings);
+    allUsage.push(result.usage);
+    totalFailedHunks += result.failedHunks;
+    totalFailedExtractions += result.failedExtractions;
+    if (result.auxiliaryUsage) {
+      allAuxiliaryUsage.push(...result.auxiliaryUsage);
+    }
+    fileResults.push({ filename: fileHunkEntry.filename, result, durationMs: fileDurationMs });
+  }
+
   // Process files - parallel or sequential based on options
   if (parallel) {
     // Process files in parallel with concurrency limit
@@ -567,20 +585,11 @@ export async function runSkill(
       }
 
       const batch = fileHunks.slice(i, i + fileConcurrency);
-      const batchPromises = batch.map((fileHunkEntry, batchIndex) =>
-        processFile(fileHunkEntry, i + batchIndex)
+      await Promise.all(
+        batch.map((fileHunkEntry, batchIndex) =>
+          processFileWithTiming(fileHunkEntry, i + batchIndex)
+        )
       );
-
-      const batchResults = await Promise.all(batchPromises);
-      for (const result of batchResults) {
-        allFindings.push(...result.findings);
-        allUsage.push(result.usage);
-        totalFailedHunks += result.failedHunks;
-        totalFailedExtractions += result.failedExtractions;
-        if (result.auxiliaryUsage) {
-          allAuxiliaryUsage.push(...result.auxiliaryUsage);
-        }
-      }
     }
   } else {
     // Process files sequentially
@@ -588,14 +597,7 @@ export async function runSkill(
       // Check for abort before starting new file
       if (abortController?.signal.aborted) break;
 
-      const result = await processFile(fileHunkEntry, fileIndex);
-      allFindings.push(...result.findings);
-      allUsage.push(result.usage);
-      totalFailedHunks += result.failedHunks;
-      totalFailedExtractions += result.failedExtractions;
-      if (result.auxiliaryUsage) {
-        allAuxiliaryUsage.push(...result.auxiliaryUsage);
-      }
+      await processFileWithTiming(fileHunkEntry, fileIndex);
     }
   }
 
@@ -623,6 +625,12 @@ export async function runSkill(
     findings: uniqueFindings,
     usage: totalUsage,
     durationMs: Date.now() - startTime,
+    files: fileResults.map((fr) => ({
+      filename: fr.filename,
+      findingCount: fr.result.findings.length,
+      durationMs: fr.durationMs,
+      usage: fr.result.usage,
+    })),
   };
   if (skippedFiles.length > 0) {
     report.skippedFiles = skippedFiles;

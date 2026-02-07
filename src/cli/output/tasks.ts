@@ -23,7 +23,7 @@ import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
 import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
 import { timestamp } from './tty.js';
-import { formatDuration, formatLocation, formatSeverityPlain, formatFindingCountsPlain, countBySeverity, pluralize } from './formatters.js';
+import { formatDuration, formatCost, formatLocation, formatSeverityPlain, formatFindingCountsPlain, countBySeverity, pluralize } from './formatters.js';
 
 /**
  * Write a log-mode message to stderr with timestamp prefix.
@@ -62,6 +62,8 @@ export interface FileState {
   currentHunk: number;
   totalHunks: number;
   findings: Finding[];
+  usage?: UsageStats;
+  durationMs?: number;
 }
 
 /**
@@ -198,8 +200,9 @@ export async function runSkillTask(
       : undefined;
 
     // Process files with concurrency
-    const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }> => {
+    const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; durationMs: number; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }> => {
       const filename = prepared.filename;
+      const fileStartTime = Date.now();
 
       // Update file state to running
       callbacks.onFileUpdate(name, filename, { status: 'running' });
@@ -247,16 +250,19 @@ export async function runSkillTask(
       );
 
       // Update file state to done
+      const fileDurationMs = Date.now() - fileStartTime;
       callbacks.onFileUpdate(name, filename, {
         status: 'done',
         findings: result.findings,
+        usage: result.usage,
+        durationMs: fileDurationMs,
       });
 
-      return { findings: result.findings, usage: result.usage, failedHunks: result.failedHunks, failedExtractions: result.failedExtractions, auxiliaryUsage: result.auxiliaryUsage };
+      return { findings: result.findings, usage: result.usage, durationMs: fileDurationMs, failedHunks: result.failedHunks, failedExtractions: result.failedExtractions, auxiliaryUsage: result.auxiliaryUsage };
     };
 
     // Process files in batches with concurrency
-    const allResults: { findings: Finding[]; usage?: UsageStats; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }[] = [];
+    const allResults: { findings: Finding[]; usage?: UsageStats; durationMs: number; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }[] = [];
 
     for (let i = 0; i < preparedFiles.length; i += fileConcurrency) {
       const batch = preparedFiles.slice(i, i + fileConcurrency);
@@ -284,6 +290,15 @@ export async function runSkillTask(
       findings: uniqueFindings,
       usage: aggregateUsage(allUsage),
       durationMs: duration,
+      files: preparedFiles.map((file, i) => {
+        const r = allResults[i];
+        return {
+          filename: file.filename,
+          findingCount: r?.findings.length ?? 0,
+          durationMs: r?.durationMs,
+          usage: r?.usage,
+        };
+      }),
     };
     if (skippedFiles.length > 0) {
       report.skippedFiles = skippedFiles;
@@ -340,7 +355,15 @@ export function createDefaultCallbacks(
       }
     },
     onSkillUpdate: () => { /* no-op for default callbacks */ },
-    onFileUpdate: () => { /* no-op for default callbacks */ },
+    onFileUpdate: (_skillName, filename, updates) => {
+      if (verbosity === Verbosity.Quiet || mode.isTTY) return;
+      if (updates.status !== 'done') return;
+      const duration = updates.durationMs !== undefined ? formatDuration(updates.durationMs) : '?';
+      const cost = updates.usage ? ` ${formatCost(updates.usage.costUSD)}` : '';
+      const n = updates.findings?.length ?? 0;
+      const suffix = n > 0 ? ` ${n} ${pluralize(n, 'finding')}` : '';
+      logPlain(`  ${displayNameFor(_skillName)} > ${filename} done ${duration}${cost}${suffix}`);
+    },
     onHunkStart: (skillName, filename, hunkNum, totalHunks, lineRange) => {
       if (verbosity === Verbosity.Quiet || mode.isTTY) return;
       logPlain(`  ${displayNameFor(skillName)} > ${filename} [${hunkNum}/${totalHunks}] ${lineRange}`);

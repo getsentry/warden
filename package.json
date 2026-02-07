@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "test:examples": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
+    "update-pricing": "tsx scripts/update-pricing.ts",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {

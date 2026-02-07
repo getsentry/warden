@@ -33,7 +33,7 @@ import {
   type SkillState,
   type FileState,
 } from './tasks.js';
-import { formatDuration, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
+import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
@@ -70,6 +70,7 @@ function FileProgress({ file }: { file: FileState }): React.ReactElement | null 
       <Box>
         <Text color="green">{ICON_CHECK}</Text>
         <Text> {filename}</Text>
+        <Text dimColor> [{file.totalHunks}/{file.totalHunks}]</Text>
         {hasFindings && (
           <Text>
             {'  '}
@@ -80,6 +81,8 @@ function FileProgress({ file }: { file: FileState }): React.ReactElement | null 
             {counts.info > 0 && <Text>{formatSeverityDot('info')} {counts.info}</Text>}
           </Text>
         )}
+        {file.durationMs !== undefined && <Text dimColor>  {formatDuration(file.durationMs)}</Text>}
+        {file.usage !== undefined && <Text dimColor>  {formatCost(file.usage.costUSD)}</Text>}
       </Box>
     );
   }

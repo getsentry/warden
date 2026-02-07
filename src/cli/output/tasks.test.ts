@@ -239,6 +239,76 @@ describe('createDefaultCallbacks', () => {
     });
   });
 
+  describe('onFileUpdate', () => {
+    it('logs file completion with duration, cost, and findings in log mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'src/api/auth.ts', {
+        status: 'done',
+        findings: [makeFinding({ severity: 'high' })],
+        durationMs: 1800,
+        usage: { inputTokens: 3000, outputTokens: 500, costUSD: 0.003 },
+      });
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toContain('code-scanner > src/api/auth.ts done 1.8s $0.0030 1 finding');
+    });
+
+    it('logs without cost when usage is not present', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'src/utils.ts', {
+        status: 'done',
+        findings: [],
+        durationMs: 500,
+      });
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toContain('code-scanner > src/utils.ts done 500ms');
+      expect(msg).not.toContain('$');
+      expect(msg).not.toContain('finding');
+    });
+
+    it('is silent for non-done status updates', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'src/api/auth.ts', { status: 'running' });
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('is silent in TTY mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, ttyMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'src/api/auth.ts', {
+        status: 'done',
+        findings: [],
+        durationMs: 1000,
+      });
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('is silent in Quiet mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Quiet);
+
+      cb.onFileUpdate('my-trigger', 'src/api/auth.ts', {
+        status: 'done',
+        findings: [],
+        durationMs: 1000,
+      });
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('onSkillSkipped', () => {
     it('logs skipped with timestamp in log mode', () => {
       const tasks = [makeTask('my-trigger', 'code-scanner')];

@@ -1,0 +1,104 @@
+{
+  "claude-2": {
+    "inputPerMTok": 8,
+    "outputPerMTok": 24,
+    "cacheReadPerMTok": 0,
+    "cacheWritePerMTok": 0
+  },
+  "claude-3-5-haiku-latest": {
+    "inputPerMTok": 0.8,
+    "outputPerMTok": 4,
+    "cacheReadPerMTok": 0.08,
+    "cacheWritePerMTok": 1
+  },
+  "claude-3-5-sonnet": {
+    "inputPerMTok": 3,
+    "outputPerMTok": 15,
+    "cacheReadPerMTok": 0.3,
+    "cacheWritePerMTok": 3.75
+  },
+  "claude-3-7-sonnet-latest": {
+    "inputPerMTok": 3,
+    "outputPerMTok": 15,
+    "cacheReadPerMTok": 0.3,
+    "cacheWritePerMTok": 3.75
+  },
+  "claude-3-haiku": {
+    "inputPerMTok": 0.25,
+    "outputPerMTok": 1.25,
+    "cacheReadPerMTok": 0.03,
+    "cacheWritePerMTok": 0.3
+  },
+  "claude-3-opus-latest": {
+    "inputPerMTok": 15,
+    "outputPerMTok": 75,
+    "cacheReadPerMTok": 1.5,
+    "cacheWritePerMTok": 18.75
+  },
+  "claude-3-sonnet": {
+    "inputPerMTok": 3,
+    "outputPerMTok": 15,
+    "cacheReadPerMTok": 0.3,
+    "cacheWritePerMTok": 3.75
+  },
+  "claude-haiku-4-5": {
+    "inputPerMTok": 1,
+    "outputPerMTok": 5,
+    "cacheReadPerMTok": 0.1,
+    "cacheWritePerMTok": 1.25
+  },
+  "claude-instant-1": {
+    "inputPerMTok": 1.63,
+    "outputPerMTok": 55.1,
+    "cacheReadPerMTok": 0,
+    "cacheWritePerMTok": 0
+  },
+  "claude-instant-1.2": {
+    "inputPerMTok": 1.63,
+    "outputPerMTok": 5.51,
+    "cacheReadPerMTok": 0,
+    "cacheWritePerMTok": 0
+  },
+  "claude-opus-4-0": {
+    "inputPerMTok": 15,
+    "outputPerMTok": 75,
+    "cacheReadPerMTok": 1.5,
+    "cacheWritePerMTok": 18.75
+  },
+  "claude-opus-4-1": {
+    "inputPerMTok": 15,
+    "outputPerMTok": 75,
+    "cacheReadPerMTok": 1.5,
+    "cacheWritePerMTok": 18.75
+  },
+  "claude-opus-4-5": {
+    "inputPerMTok": 5,
+    "outputPerMTok": 25,
+    "cacheReadPerMTok": 0.5,
+    "cacheWritePerMTok": 6.25
+  },
+  "claude-opus-4-6": {
+    "inputPerMTok": 5,
+    "outputPerMTok": 25,
+    "cacheReadPerMTok": 0.5,
+    "cacheWritePerMTok": 6.25
+  },
+  "claude-sonnet-4-0": {
+    "inputPerMTok": 3,
+    "outputPerMTok": 15,
+    "cacheReadPerMTok": 0.3,
+    "cacheWritePerMTok": 3.75
+  },
+  "claude-sonnet-4-5": {
+    "inputPerMTok": 3,
+    "outputPerMTok": 15,
+    "cacheReadPerMTok": 0.3,
+    "cacheWritePerMTok": 3.75
+  },
+  "claude-v1": {
+    "inputPerMTok": 8,
+    "outputPerMTok": 24,
+    "cacheReadPerMTok": 0,
+    "cacheWritePerMTok": 0
+  }
+}

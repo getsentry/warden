@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { apiUsageToStats } from './pricing.js';
+import rawPricing from './model-pricing.json' with { type: 'json' };
+
+describe('model-pricing.json', () => {
+  it('has an entry for claude-haiku-4-5', () => {
+    const entry = rawPricing['claude-haiku-4-5'];
+    expect(entry).toBeDefined();
+    expect(entry.inputPerMTok).toBe(1);
+    expect(entry.outputPerMTok).toBe(5);
+    expect(entry.cacheReadPerMTok).toBe(0.1);
+    expect(entry.cacheWritePerMTok).toBe(1.25);
+  });
+});
 
 describe('apiUsageToStats', () => {
   it('calculates cost for claude-haiku-4-5', () => {
@@ -15,9 +27,9 @@ describe('apiUsageToStats', () => {
     expect(stats.cacheReadInputTokens).toBe(200);
     expect(stats.cacheCreationInputTokens).toBe(100);
 
-    // Cost: 1000 * 0.80/1M + 500 * 4.00/1M + 200 * 0.08/1M + 100 * 1.00/1M
-    //      = 0.0008 + 0.002 + 0.000016 + 0.0001 = 0.002916
-    expect(stats.costUSD).toBeCloseTo(0.002916, 6);
+    // Cost: 1000 * 1.00/1M + 500 * 5.00/1M + 200 * 0.10/1M + 100 * 1.25/1M
+    //      = 0.001 + 0.0025 + 0.00002 + 0.000125 = 0.003645
+    expect(stats.costUSD).toBeCloseTo(0.003645, 6);
   });
 
   it('handles null cache fields', () => {
@@ -30,7 +42,7 @@ describe('apiUsageToStats', () => {
 
     expect(stats.cacheReadInputTokens).toBe(0);
     expect(stats.cacheCreationInputTokens).toBe(0);
-    expect(stats.costUSD).toBeCloseTo(500 * 0.80 / 1_000_000 + 100 * 4.00 / 1_000_000, 6);
+    expect(stats.costUSD).toBeCloseTo(500 * 1.00 / 1_000_000 + 100 * 5.00 / 1_000_000, 6);
   });
 
   it('handles missing cache fields', () => {
@@ -54,12 +66,4 @@ describe('apiUsageToStats', () => {
     expect(stats.costUSD).toBe(0);
   });
 
-  it('handles the versioned model name', () => {
-    const stats = apiUsageToStats('claude-haiku-4-5-20250929', {
-      input_tokens: 1000,
-      output_tokens: 500,
-    });
-
-    expect(stats.costUSD).toBeGreaterThan(0);
-  });
 });

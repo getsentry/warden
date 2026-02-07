@@ -96,6 +96,15 @@ export const SkippedFileSchema = z.object({
 });
 export type SkippedFile = z.infer<typeof SkippedFileSchema>;
 
+// Per-file report within a skill
+export const FileReportSchema = z.object({
+  filename: z.string(),
+  findingCount: z.number().int().nonnegative(),
+  durationMs: z.number().nonnegative().optional(),
+  usage: UsageStatsSchema.optional(),
+});
+export type FileReport = z.infer<typeof FileReportSchema>;
+
 // Skill report output
 export const SkillReportSchema = z.object({
   skill: z.string(),
@@ -112,6 +121,8 @@ export const SkillReportSchema = z.object({
   failedExtractions: z.number().int().nonnegative().optional(),
   /** Usage from auxiliary LLM calls (extraction repair, semantic dedup, etc.) */
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+  /** Per-file breakdown of findings, timing, and usage */
+  files: z.array(FileReportSchema).optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 

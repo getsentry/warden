@@ -18,6 +18,8 @@ export {
   SuggestedFixSchema,
   // Finding
   FindingSchema,
+  // File Report (per-file breakdown within a skill)
+  FileReportSchema,
   // Skill Report
   SkillReportSchema,
   // GitHub Events
@@ -36,6 +38,7 @@ export type {
   Location,
   SuggestedFix,
   Finding,
+  FileReport,
   SkillReport,
   GitHubEventType,
   PullRequestAction,
