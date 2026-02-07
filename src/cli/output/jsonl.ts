@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
+import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { countBySeverity } from './formatters.js';
 
 /**
@@ -129,13 +130,20 @@ export function writeJsonlReport(
 
   // Write a summary line at the end
   const allFindings = reports.flatMap((r) => r.findings);
-  const summaryRecord = {
+  const totalAuxiliaryUsage = reports.reduce<AuxiliaryUsageMap | undefined>(
+    (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
+    undefined
+  );
+  const summaryRecord: Record<string, unknown> = {
     run: runMetadata,
     type: 'summary',
     totalFindings: allFindings.length,
     bySeverity: countBySeverity(allFindings),
     usage: aggregateUsage(reports),
   };
+  if (totalAuxiliaryUsage) {
+    summaryRecord['auxiliaryUsage'] = totalAuxiliaryUsage;
+  }
   lines.push(JSON.stringify(summaryRecord));
 
   // Ensure parent directory exists

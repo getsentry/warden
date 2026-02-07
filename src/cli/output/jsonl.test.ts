@@ -203,6 +203,61 @@ describe('writeJsonlReport', () => {
     expect(record.files).toBeUndefined();
   });
 
+  it('aggregates auxiliary usage in summary', () => {
+    const outputPath = join(testDir, 'aux.jsonl');
+    const reports: SkillReport[] = [
+      {
+        skill: 'skill-1',
+        summary: 'Done',
+        findings: [],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+        auxiliaryUsage: {
+          extraction: { inputTokens: 20, outputTokens: 10, costUSD: 0.0001 },
+        },
+      },
+      {
+        skill: 'skill-2',
+        summary: 'Done',
+        findings: [],
+        usage: { inputTokens: 200, outputTokens: 100, costUSD: 0.002 },
+        auxiliaryUsage: {
+          extraction: { inputTokens: 30, outputTokens: 15, costUSD: 0.0002 },
+        },
+      },
+    ];
+
+    writeJsonlReport(outputPath, reports, 1000);
+
+    const content = readFileSync(outputPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const summary = JSON.parse(lines[2]!);
+
+    expect(summary.auxiliaryUsage).toBeDefined();
+    expect(summary.auxiliaryUsage.extraction.inputTokens).toBe(50);
+    expect(summary.auxiliaryUsage.extraction.outputTokens).toBe(25);
+    expect(summary.auxiliaryUsage.extraction.costUSD).toBeCloseTo(0.0003);
+  });
+
+  it('omits auxiliary usage from summary when none present', () => {
+    const outputPath = join(testDir, 'noaux.jsonl');
+    const reports: SkillReport[] = [
+      {
+        skill: 'skill-1',
+        summary: 'Done',
+        findings: [],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+      },
+    ];
+
+    writeJsonlReport(outputPath, reports, 1000);
+
+    const content = readFileSync(outputPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const summary = JSON.parse(lines[1]!);
+
+    expect(summary.auxiliaryUsage).toBeUndefined();
+  });
+
   it('counts findings by severity in summary', () => {
     const outputPath = join(testDir, 'severity.jsonl');
     const reports: SkillReport[] = [

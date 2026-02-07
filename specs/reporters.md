@@ -92,9 +92,12 @@ Final line with aggregate stats:
   "type": "summary",
   "totalFindings": 2,
   "bySeverity": { "critical": 0, "high": 1, "medium": 1, "low": 0, "info": 0 },
-  "usage": { "inputTokens": 5000, "outputTokens": 800, "costUSD": 0.0048 }
+  "usage": { "inputTokens": 5000, "outputTokens": 800, "costUSD": 0.0048 },
+  "auxiliaryUsage": { "extraction": { "inputTokens": 200, "outputTokens": 50, "costUSD": 0.0003 } }
 }
 ```
+
+`auxiliaryUsage` is present only when auxiliary LLM calls (e.g. findings extraction) occurred. Omitted when there are none.
 
 ### Output Location
 
