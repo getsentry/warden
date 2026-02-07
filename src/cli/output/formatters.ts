@@ -249,7 +249,7 @@ export function formatUsagePlain(usage: UsageStats): string {
 /**
  * Calculate total auxiliary cost from an AuxiliaryUsageMap.
  */
-function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
+export function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
   return Object.values(auxiliaryUsage).reduce((sum, u) => sum + u.costUSD, 0);
 }
 
@@ -257,7 +257,7 @@ function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
  * Format auxiliary cost breakdown as a parenthetical suffix.
  * @example "(+extraction: $0.0012, +dedup: $0.0008)"
  */
-function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap): string {
+export function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap): string {
   const entries = Object.entries(auxiliaryUsage).filter(([, u]) => u.costUSD > 0);
   if (entries.length === 0) return '';
   const parts = entries.map(([agent, u]) => `+${agent}: ${formatCost(u.costUSD)}`);

@@ -417,6 +417,8 @@ Return ONLY the JSON array in this format:
 where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
 Return [] if none are duplicates.`;
 
+  let usage: UsageStats | undefined;
+
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5',
@@ -424,7 +426,7 @@ Return [] if none are duplicates.`;
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const usage = apiUsageToStats('claude-haiku-4-5', response.usage);
+    usage = apiUsageToStats('claude-haiku-4-5', response.usage);
 
     const content = response.content[0];
     if (!content || content.type !== 'text') {
@@ -445,7 +447,7 @@ Return [] if none are duplicates.`;
     return { matches, usage };
   } catch (error) {
     console.warn(`LLM deduplication failed, falling back to hash-only: ${error}`);
-    return { matches: new Map() };
+    return { matches: new Map(), usage };
   }
 }
 

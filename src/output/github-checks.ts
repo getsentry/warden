@@ -1,7 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { Severity, SeverityThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
-import { formatDuration, formatCost, formatTokens } from '../cli/output/formatters.js';
+import { formatDuration, formatCost, formatTokens, totalAuxiliaryCost, formatAuxiliarySuffix } from '../cli/output/formatters.js';
 import { escapeHtml } from '../utils/index.js';
 
 /**
@@ -340,9 +340,9 @@ function buildSkillSummary(report: SkillReport): string {
     if (report.usage) {
       const totalInput = report.usage.inputTokens + (report.usage.cacheReadInputTokens ?? 0);
       statsParts.push(`**Tokens:** ${formatTokens(totalInput)} in / ${formatTokens(report.usage.outputTokens)} out`);
-      const auxCost = report.auxiliaryUsage ? totalAuxCost(report.auxiliaryUsage) : 0;
+      const auxCost = report.auxiliaryUsage ? totalAuxiliaryCost(report.auxiliaryUsage) : 0;
       const totalCost = report.usage.costUSD + auxCost;
-      const auxSuffix = report.auxiliaryUsage ? formatAuxSuffix(report.auxiliaryUsage) : '';
+      const auxSuffix = report.auxiliaryUsage ? formatAuxiliarySuffix(report.auxiliaryUsage) : '';
       statsParts.push(`**Cost:** ${formatCost(totalCost)}${auxSuffix}`);
     }
     lines.push('---', statsParts.join(' · '));
@@ -351,22 +351,6 @@ function buildSkillSummary(report: SkillReport): string {
   return lines.join('\n');
 }
 
-/**
- * Calculate total cost from auxiliary usage map.
- */
-function totalAuxCost(aux: AuxiliaryUsageMap): number {
-  return Object.values(aux).reduce((sum, u) => sum + u.costUSD, 0);
-}
-
-/**
- * Format auxiliary cost breakdown suffix for check summaries.
- */
-function formatAuxSuffix(aux: AuxiliaryUsageMap): string {
-  const entries = Object.entries(aux).filter(([, u]) => u.costUSD > 0);
-  if (entries.length === 0) return '';
-  const parts = entries.map(([agent, u]) => `+${agent}: ${formatCost(u.costUSD)}`);
-  return ` (${parts.join(', ')})`;
-}
 
 /**
  * Format a file location as a markdown code span.
@@ -466,9 +450,9 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
     if (data.totalUsage) {
       const totalInput = data.totalUsage.inputTokens + (data.totalUsage.cacheReadInputTokens ?? 0);
       statsParts.push(`**Tokens:** ${formatTokens(totalInput)} in / ${formatTokens(data.totalUsage.outputTokens)} out`);
-      const auxCost = data.totalAuxiliaryUsage ? totalAuxCost(data.totalAuxiliaryUsage) : 0;
+      const auxCost = data.totalAuxiliaryUsage ? totalAuxiliaryCost(data.totalAuxiliaryUsage) : 0;
       const totalCost = data.totalUsage.costUSD + auxCost;
-      const auxSuffix = data.totalAuxiliaryUsage ? formatAuxSuffix(data.totalAuxiliaryUsage) : '';
+      const auxSuffix = data.totalAuxiliaryUsage ? formatAuxiliarySuffix(data.totalAuxiliaryUsage) : '';
       statsParts.push(`**Cost:** ${formatCost(totalCost)}${auxSuffix}`);
     }
     lines.push('---', statsParts.join(' · '));
