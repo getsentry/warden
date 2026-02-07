@@ -109,6 +109,17 @@ export async function executeTrigger(
       maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
       batchDelayMs: config.defaults?.batchDelayMs,
       pathToClaudeCodeExecutable: claudePath,
+      callbacks: {
+        onFileStart: (file, index, total) => {
+          console.log(`  [${index + 1}/${total}] ${file}`);
+        },
+        onHunkStart: (file, hunkNum, totalHunks, lineRange) => {
+          console.log(`  ${file} [${hunkNum}/${totalHunks}] ${lineRange}`);
+        },
+        onFileComplete: (file, _index, _total) => {
+          console.log(`  ${file} done`);
+        },
+      },
     });
     console.log(`Found ${report.findings.length} findings`);
 
