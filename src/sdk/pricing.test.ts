@@ -65,5 +65,4 @@ describe('apiUsageToStats', () => {
     expect(stats.outputTokens).toBe(500);
     expect(stats.costUSD).toBe(0);
   });
-
 });

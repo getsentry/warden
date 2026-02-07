@@ -12,6 +12,7 @@ import {
   aggregateAuxiliaryUsage,
   deduplicateFindings,
   generateSummary,
+  type AuxiliaryUsageEntry,
   type SkillRunnerOptions,
   type FileAnalysisCallbacks,
   type PreparedFile,
@@ -24,6 +25,18 @@ import type { OutputMode } from './tty.js';
 import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
 import { timestamp } from './tty.js';
 import { formatDuration, formatCost, formatLocation, formatSeverityPlain, formatFindingCountsPlain, countBySeverity, pluralize } from './formatters.js';
+
+/**
+ * Result from processing a single file within a skill task.
+ */
+interface FileProcessResult {
+  findings: Finding[];
+  usage?: UsageStats;
+  durationMs: number;
+  failedHunks: number;
+  failedExtractions: number;
+  auxiliaryUsage?: AuxiliaryUsageEntry[];
+}
 
 /**
  * Write a log-mode message to stderr with timestamp prefix.
@@ -200,7 +213,7 @@ export async function runSkillTask(
       : undefined;
 
     // Process files with concurrency
-    const processFile = async (prepared: PreparedFile, index: number): Promise<{ findings: Finding[]; usage?: UsageStats; durationMs: number; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }> => {
+    const processFile = async (prepared: PreparedFile, index: number): Promise<FileProcessResult> => {
       const filename = prepared.filename;
       const fileStartTime = Date.now();
 
@@ -262,7 +275,7 @@ export async function runSkillTask(
     };
 
     // Process files in batches with concurrency
-    const allResults: { findings: Finding[]; usage?: UsageStats; durationMs: number; failedHunks: number; failedExtractions: number; auxiliaryUsage?: { agent: string; usage: UsageStats }[] }[] = [];
+    const allResults: FileProcessResult[] = [];
 
     for (let i = 0; i < preparedFiles.length; i += fileConcurrency) {
       const batch = preparedFiles.slice(i, i + fileConcurrency);
@@ -276,10 +289,7 @@ export async function runSkillTask(
     const duration = Date.now() - startTime;
     const allFindings = allResults.flatMap((r) => r.findings);
     const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
-    const allAuxEntries: { agent: string; usage: UsageStats }[] = [];
-    for (const r of allResults) {
-      if (r.auxiliaryUsage) allAuxEntries.push(...r.auxiliaryUsage);
-    }
+    const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
     const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
     const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
     const uniqueFindings = deduplicateFindings(allFindings);

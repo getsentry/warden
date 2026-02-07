@@ -36,6 +36,13 @@ interface ProviderEntry {
   models: ModelEntry[];
 }
 
+interface ModelPricingRecord {
+  inputPerMTok: number;
+  outputPerMTok: number;
+  cacheReadPerMTok: number;
+  cacheWritePerMTok: number;
+}
+
 async function main() {
   const res = await fetch(SOURCE_URL);
   if (!res.ok) {
@@ -48,15 +55,11 @@ async function main() {
     throw new Error('Anthropic provider not found in pricing data');
   }
 
-  const pricing: Record<
-    string,
-    {
-      inputPerMTok: number;
-      outputPerMTok: number;
-      cacheReadPerMTok: number;
-      cacheWritePerMTok: number;
-    }
-  > = {};
+  const pricing: Record<string, ModelPricingRecord> = {};
+
+  if (!anthropic.models || !Array.isArray(anthropic.models)) {
+    throw new Error('Anthropic provider has invalid or missing models array');
+  }
 
   for (const model of anthropic.models) {
     const p = model.prices;

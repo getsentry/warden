@@ -70,7 +70,8 @@ One line per skill with full findings and optional per-file breakdown:
   "skill": "security-review",
   "summary": "security-review: Found 2 issues (1 high, 1 medium)",
   "findings": [
-    { "id": "SEC-001", "severity": "high", "title": "SQL injection risk", "description": "..." }
+    { "id": "SEC-001", "severity": "high", "title": "SQL injection risk", "description": "..." },
+    { "id": "SEC-002", "severity": "medium", "title": "Unsafe type assertion", "description": "..." }
   ],
   "durationMs": 3500,
   "usage": { "inputTokens": 5000, "outputTokens": 800, "costUSD": 0.0048 },

@@ -1,6 +1,6 @@
 import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { UsageStats } from '../types/index.js';
-import type { AuxiliaryUsageMap } from '../types/index.js';
+import type { UsageStats, AuxiliaryUsageMap } from '../types/index.js';
+import type { AuxiliaryUsageEntry } from './types.js';
 
 /**
  * Extract usage stats from an SDK result message.
@@ -50,7 +50,7 @@ export function aggregateUsage(usages: UsageStats[]): UsageStats {
  * Returns undefined if no entries are provided.
  */
 export function aggregateAuxiliaryUsage(
-  entries: { agent: string; usage: UsageStats }[]
+  entries: AuxiliaryUsageEntry[]
 ): AuxiliaryUsageMap | undefined {
   if (entries.length === 0) return undefined;
 

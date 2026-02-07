@@ -10,6 +10,7 @@ import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplic
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
+  type AuxiliaryUsageEntry,
   type HunkAnalysisResult,
   type HunkAnalysisCallbacks,
   type SkillRunnerOptions,
@@ -259,12 +260,6 @@ async function analyzeHunk(
         );
       }
 
-      // Collect auxiliary usage from extraction repair
-      const auxiliaryUsage: { agent: string; usage: UsageStats }[] = [];
-      if (parseResult.extractionUsage) {
-        auxiliaryUsage.push({ agent: 'extraction', usage: parseResult.extractionUsage });
-      }
-
       return {
         findings: parseResult.findings,
         usage: aggregateUsage(accumulatedUsage),
@@ -272,7 +267,9 @@ async function analyzeHunk(
         extractionFailed: parseResult.extractionFailed,
         extractionError: parseResult.extractionError,
         extractionPreview: parseResult.extractionPreview,
-        auxiliaryUsage: auxiliaryUsage.length > 0 ? auxiliaryUsage : undefined,
+        auxiliaryUsage: parseResult.extractionUsage
+          ? [{ agent: 'extraction', usage: parseResult.extractionUsage }]
+          : undefined,
       };
     } catch (error) {
       lastError = error;
@@ -370,7 +367,7 @@ export async function analyzeFile(
   const { abortController } = options;
   const fileFindings: Finding[] = [];
   const fileUsage: UsageStats[] = [];
-  const fileAuxiliaryUsage: { agent: string; usage: UsageStats }[] = [];
+  const fileAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
   let failedHunks = 0;
   let failedExtractions = 0;
 
@@ -484,7 +481,7 @@ export async function runSkill(
 
   // Track all usage stats for aggregation
   const allUsage: UsageStats[] = [];
-  const allAuxiliaryUsage: { agent: string; usage: UsageStats }[] = [];
+  const allAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
 
   // Track failed hunks across all files
   let totalFailedHunks = 0;

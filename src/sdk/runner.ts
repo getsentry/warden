@@ -50,6 +50,7 @@ export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 
 // Re-export types
 export type {
+  AuxiliaryUsageEntry,
   SkillRunnerCallbacks,
   SkillRunnerOptions,
   PreparedFile,
