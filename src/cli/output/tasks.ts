@@ -276,8 +276,13 @@ export async function runSkillTask(
 
     // Process files in batches with concurrency
     const allResults: FileProcessResult[] = [];
+    const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
 
     for (let i = 0; i < preparedFiles.length; i += fileConcurrency) {
+      if (i > 0 && batchDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+      }
+
       const batch = preparedFiles.slice(i, i + fileConcurrency);
       const batchResults = await Promise.all(
         batch.map((file, batchIndex) => processFile(file, i + batchIndex))

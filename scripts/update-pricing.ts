@@ -63,6 +63,9 @@ async function main() {
 
   for (const model of anthropic.models) {
     const p = model.prices;
+    if (!p || typeof p !== 'object') {
+      continue;
+    }
     pricing[model.id] = {
       inputPerMTok: basePrice(p.input_mtok),
       outputPerMTok: basePrice(p.output_mtok),
