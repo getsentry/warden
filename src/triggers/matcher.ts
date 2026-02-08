@@ -108,6 +108,49 @@ function matchPathFilters(
 }
 
 /**
+ * Return a copy of the context with only files matching the path filters.
+ * If no filters are set, returns the original context unchanged (no copy).
+ */
+export function filterContextByPaths(
+  context: EventContext,
+  filters: { paths?: string[]; ignorePaths?: string[] }
+): EventContext {
+  const { paths: pathPatterns, ignorePaths: ignorePatterns } = filters;
+
+  // No filters — return original reference
+  if (!pathPatterns && !ignorePatterns) {
+    return context;
+  }
+
+  // No PR context — nothing to filter
+  if (!context.pullRequest) {
+    return context;
+  }
+
+  let files = context.pullRequest.files;
+
+  if (pathPatterns) {
+    files = files.filter((f) =>
+      pathPatterns.some((pattern) => matchGlob(pattern, f.filename))
+    );
+  }
+
+  if (ignorePatterns) {
+    files = files.filter(
+      (f) => !ignorePatterns.some((pattern) => matchGlob(pattern, f.filename))
+    );
+  }
+
+  return {
+    ...context,
+    pullRequest: {
+      ...context.pullRequest,
+      files,
+    },
+  };
+}
+
+/**
  * Check if a trigger matches the given event context and environment.
  *
  * Trigger types:

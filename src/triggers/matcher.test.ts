@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   matchGlob,
   matchTrigger,
+  filterContextByPaths,
   shouldFail,
   countFindingsAtOrAbove,
   countSeverity,
@@ -248,6 +249,83 @@ describe('matchTrigger', () => {
       const trigger = { ...wildcardTrigger, filters: { paths: ['src/**/*.ts'] } };
       expect(matchTrigger(trigger, baseContext, 'local')).toBe(true);
     });
+  });
+});
+
+describe('filterContextByPaths', () => {
+  const baseContext: EventContext = {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: {
+      owner: 'test',
+      name: 'repo',
+      fullName: 'test/repo',
+      defaultBranch: 'main',
+    },
+    pullRequest: {
+      number: 1,
+      title: 'Test PR',
+      body: 'Test body',
+      author: 'user',
+      baseBranch: 'main',
+      headBranch: 'feature',
+      headSha: 'abc123',
+      files: [
+        { filename: 'src/index.ts', status: 'modified', additions: 10, deletions: 5 },
+        { filename: 'src/utils/helper.ts', status: 'added', additions: 20, deletions: 0 },
+        { filename: 'README.md', status: 'modified', additions: 2, deletions: 0 },
+        { filename: 'docs/guide.md', status: 'added', additions: 30, deletions: 0 },
+      ],
+    },
+    repoPath: '/test/repo',
+  };
+
+  it('returns same reference when no filters', () => {
+    const result = filterContextByPaths(baseContext, {});
+    expect(result).toBe(baseContext);
+  });
+
+  it('filters to matching files with paths only', () => {
+    const result = filterContextByPaths(baseContext, { paths: ['src/**/*.ts'] });
+    expect(result).not.toBe(baseContext);
+    expect(result.pullRequest!.files.map((f) => f.filename)).toEqual([
+      'src/index.ts',
+      'src/utils/helper.ts',
+    ]);
+  });
+
+  it('excludes matching files with ignorePaths only', () => {
+    const result = filterContextByPaths(baseContext, { ignorePaths: ['**/*.md'] });
+    expect(result.pullRequest!.files.map((f) => f.filename)).toEqual([
+      'src/index.ts',
+      'src/utils/helper.ts',
+    ]);
+  });
+
+  it('applies both paths and ignorePaths', () => {
+    const result = filterContextByPaths(baseContext, {
+      paths: ['src/**/*.ts', '**/*.md'],
+      ignorePaths: ['README.md'],
+    });
+    expect(result.pullRequest!.files.map((f) => f.filename)).toEqual([
+      'src/index.ts',
+      'src/utils/helper.ts',
+      'docs/guide.md',
+    ]);
+  });
+
+  it('returns unchanged context when no PR context', () => {
+    const noPrContext: EventContext = { ...baseContext, pullRequest: undefined };
+    const result = filterContextByPaths(noPrContext, { paths: ['src/**/*.ts'] });
+    expect(result).toBe(noPrContext);
+  });
+
+  it('preserves other context fields', () => {
+    const result = filterContextByPaths(baseContext, { paths: ['src/**/*.ts'] });
+    expect(result.eventType).toBe(baseContext.eventType);
+    expect(result.repository).toBe(baseContext.repository);
+    expect(result.repoPath).toBe(baseContext.repoPath);
+    expect(result.pullRequest!.title).toBe('Test PR');
   });
 });
 

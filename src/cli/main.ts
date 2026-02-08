@@ -4,7 +4,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync } from '../skills/loader.js';
-import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
+import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
@@ -231,17 +231,17 @@ async function runSkills(
   const defaultsBatchDelayMs = config?.defaults?.batchDelayMs;
 
   // Determine which triggers/skills to run
-  // We need to preserve trigger objects (not just skill names) to retain the `remote` property
-  interface SkillToRun { skill: string; remote?: string }
+  // We need to preserve trigger objects (not just skill names) to retain the `remote` property and filters
+  interface SkillToRun { skill: string; remote?: string; filters: { paths?: string[]; ignorePaths?: string[] } }
   let skillsToRun: SkillToRun[];
   if (options.skill) {
-    // Explicit skill specified via CLI (no remote support in this mode)
-    skillsToRun = [{ skill: options.skill }];
+    // Explicit skill specified via CLI (no remote support or filters in this mode)
+    skillsToRun = [{ skill: options.skill, filters: {} }];
   } else if (config) {
-    // Get skills from matched triggers, preserving remote property
+    // Get skills from matched triggers, preserving remote property and filters
     const resolvedTriggers = resolveSkillConfigs(config, options.model);
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
-    // Dedupe by skill name but keep first occurrence (with its remote property)
+    // Dedupe by skill name but keep first occurrence (with its remote property and filters)
     const seen = new Set<string>();
     skillsToRun = matchedTriggers
       .filter((t) => {
@@ -249,7 +249,7 @@ async function runSkills(
         seen.add(t.skill);
         return true;
       })
-      .map((t) => ({ skill: t.skill, remote: t.remote }));
+      .map((t) => ({ skill: t.skill, remote: t.remote, filters: t.filters }));
   } else {
     skillsToRun = [];
   }
@@ -275,14 +275,14 @@ async function runSkills(
     maxTurns: defaultsMaxTurns,
     batchDelayMs: defaultsBatchDelayMs,
   };
-  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote }) => ({
+  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters }) => ({
     name: skill,
     failOn: options.failOn,
     resolveSkill: () => resolveSkillAsync(skill, repoPath, {
       remote,
       offline: options.offline,
     }),
-    context,
+    context: filterContextByPaths(context, filters),
     runnerOptions,
   }));
 
@@ -520,7 +520,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       remote: trigger.remote,
       offline: options.offline,
     }),
-    context,
+    context: filterContextByPaths(context, trigger.filters),
     runnerOptions: {
       apiKey,
       model: trigger.model,

@@ -5,6 +5,7 @@
  * Extracted from main.ts to enable isolated testing and clearer dependencies.
  */
 import { resolveSkillAsync } from '../../skills/loader.js';
+import { filterContextByPaths } from '../../triggers/matcher.js';
 import { runSkillTask, createDefaultCallbacks } from '../../cli/output/tasks.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import { createSkillCheck, updateSkillCheck, failSkillCheck, } from '../../output/github-checks.js';
@@ -54,7 +55,7 @@ export async function executeTrigger(trigger, deps) {
             resolveSkill: () => resolveSkillAsync(trigger.skill, context.repoPath, {
                 remote: trigger.remote,
             }),
-            context,
+            context: filterContextByPaths(context, trigger.filters),
             runnerOptions: {
                 apiKey: anthropicApiKey,
                 model: trigger.model,

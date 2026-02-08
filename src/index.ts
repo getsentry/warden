@@ -100,6 +100,7 @@ export { buildEventContext, EventContextError } from './event/context.js';
 export {
   matchTrigger,
   matchGlob,
+  filterContextByPaths,
   shouldFail,
   countFindingsAtOrAbove,
   countSeverity,

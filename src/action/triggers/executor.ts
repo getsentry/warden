@@ -12,6 +12,7 @@ import type { EventContext, SkillReport, SeverityThreshold } from '../../types/i
 import type { RenderResult, ReviewState } from '../../output/types.js';
 import type { OutputMode } from '../../cli/output/tty.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
+import { filterContextByPaths } from '../../triggers/matcher.js';
 import { runSkillTask, createDefaultCallbacks } from '../../cli/output/tasks.js';
 import type { SkillTaskOptions } from '../../cli/output/tasks.js';
 import { renderSkillReport } from '../../output/renderer.js';
@@ -114,7 +115,7 @@ export async function executeTrigger(
       resolveSkill: () => resolveSkillAsync(trigger.skill, context.repoPath, {
         remote: trigger.remote,
       }),
-      context,
+      context: filterContextByPaths(context, trigger.filters),
       runnerOptions: {
         apiKey: anthropicApiKey,
         model: trigger.model,
