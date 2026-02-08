@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "warden",
+  "description": "AI code review agents that watch over your code locally and on every PR",
+  "owner": {
+    "name": "dcramer",
+    "email": "dcramer@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "warden",
+      "description": "Run Warden to analyze code changes before committing",
+      "author": {
+        "name": "Sentry"
+      },
+      "source": "./plugins/warden",
+      "category": "code-review"
+    }
+  ]
+}

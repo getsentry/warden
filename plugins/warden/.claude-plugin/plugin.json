@@ -1,0 +1,7 @@
+{
+  "name": "warden",
+  "description": "Run Warden to analyze code changes before committing",
+  "author": {
+    "name": "Sentry"
+  }
+}
