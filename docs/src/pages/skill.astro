@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import Terminal from '../components/Terminal.astro';
+import PackageManagerTabs from '../components/PackageManagerTabs.astro';
 import { Code } from 'astro:components';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -9,7 +10,28 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 <Base title="Skill" description="Use the /warden agent skill to run Warden from your AI coding agent">
   <h1>Skill</h1>
 
-  <p>Warden ships with an <a href="https://agentskills.io">agentskills.io</a> skill that lets AI coding agents run Warden on your behalf. The skill lives in <code>.claude/skills/warden/</code> and is installed automatically when you add Warden to a project.</p>
+  <p>Warden ships with an <a href="https://agentskills.io">agentskills.io</a> skill that lets AI coding agents run Warden on your behalf.</p>
+
+  <h2 id="install">Install</h2>
+
+  <p>Use the skills installer for Claude Code, OpenCode, Codex, or Cursor:</p>
+
+  <PackageManagerTabs
+    npm="npx skills add getsentry/warden"
+    pnpm="pnpx skills add getsentry/warden"
+    bun="bunx skills add getsentry/warden"
+  />
+
+  <h3>Claude Code Marketplace</h3>
+
+  <p>Install directly from the Claude Code marketplace:</p>
+
+  <Terminal showCopy={true}>
+    <pre class="cli-output"><span class="cli-dim">$</span> claude plugin marketplace add getsentry/warden
+<span class="cli-dim">$</span> claude plugin install warden@warden</pre>
+  </Terminal>
+
+  <p>The <code>/warden</code> skill will be available immediately.</p>
 
   <h2 id="what-it-does">What It Does</h2>
 
