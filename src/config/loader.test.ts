@@ -121,6 +121,29 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.maxFindings).toBe(10);
   });
 
+  it('trigger-level reportOnSuccess overrides skill and defaults', () => {
+    const skill: SkillConfig = {
+      name: 'test-skill',
+      reportOnSuccess: false,
+      triggers: [
+        {
+          type: 'pull_request',
+          actions: ['opened'],
+          reportOnSuccess: true,
+        },
+      ],
+    };
+
+    const config: WardenConfig = {
+      version: 1,
+      skills: [skill],
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.reportOnSuccess).toBe(true);
+  });
+
   it('produces wildcard entry for skill with no triggers', () => {
     const config: WardenConfig = {
       version: 1,

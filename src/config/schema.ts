@@ -58,6 +58,7 @@ export const SkillTriggerSchema = z.object({
   failOn: SeverityThresholdSchema.optional(),
   reportOn: SeverityThresholdSchema.optional(),
   maxFindings: z.number().int().positive().optional(),
+  reportOnSuccess: z.boolean().optional(),
   model: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
   /** Schedule-specific configuration. Only used when type is 'schedule'. */

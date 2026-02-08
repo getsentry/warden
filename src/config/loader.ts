@@ -166,7 +166,7 @@ export function resolveSkillConfigs(
           failOn: trigger.failOn ?? skill.failOn ?? defaults?.failOn,
           reportOn: trigger.reportOn ?? skill.reportOn ?? defaults?.reportOn,
           maxFindings: trigger.maxFindings ?? skill.maxFindings ?? defaults?.maxFindings,
-          reportOnSuccess: skill.reportOnSuccess ?? defaults?.reportOnSuccess,
+          reportOnSuccess: trigger.reportOnSuccess ?? skill.reportOnSuccess ?? defaults?.reportOnSuccess,
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? skill.maxTurns ?? defaults?.maxTurns,
           schedule: trigger.schedule,

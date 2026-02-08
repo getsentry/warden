@@ -80,6 +80,10 @@ export function generateSkillToml(skill: SkillConfig): string {
         lines.push(`maxTurns = ${trigger.maxTurns}`);
       }
 
+      if (trigger.reportOnSuccess !== undefined) {
+        lines.push(`reportOnSuccess = ${trigger.reportOnSuccess}`);
+      }
+
       if (trigger.schedule) {
         lines.push('');
         lines.push('[skills.triggers.schedule]');
