@@ -186,9 +186,13 @@ export class Reporter {
   renderSummary(reports: SkillReport[], totalDuration: number): void {
     const allFindings: Finding[] = [];
     let totalFailedHunks = 0;
+    let totalFailedExtractions = 0;
+    let totalSkippedFiles = 0;
     for (const report of reports) {
       allFindings.push(...report.findings);
       totalFailedHunks += report.failedHunks ?? 0;
+      totalFailedExtractions += report.failedExtractions ?? 0;
+      totalSkippedFiles += report.skippedFiles?.length ?? 0;
     }
     const counts = countBySeverity(allFindings);
     const totalUsage = this.aggregateUsage(reports);
@@ -206,6 +210,12 @@ export class Reporter {
       if (totalFailedHunks > 0) {
         this.log(chalk.yellow(`${figures.warning}  ${totalFailedHunks} ${pluralize(totalFailedHunks, 'chunk')} failed to analyze`));
       }
+      if (totalFailedExtractions > 0) {
+        this.log(chalk.yellow(`${figures.warning}  ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`));
+      }
+      if (totalSkippedFiles > 0) {
+        this.log(chalk.dim(`${totalSkippedFiles} ${pluralize(totalSkippedFiles, 'file')} skipped`));
+      }
       const durationLine = `Analysis completed in ${formatDuration(totalDuration)}`;
       if (totalUsage) {
         this.log(chalk.dim(`${durationLine} · ${formatUsage(totalUsage)}`));
@@ -216,6 +226,12 @@ export class Reporter {
       this.logPlain(`Summary: ${formatFindingCountsPlain(counts)}`);
       if (totalFailedHunks > 0) {
         this.logPlain(`WARN: ${totalFailedHunks} ${pluralize(totalFailedHunks, 'chunk')} failed to analyze`);
+      }
+      if (totalFailedExtractions > 0) {
+        this.logPlain(`WARN: ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`);
+      }
+      if (totalSkippedFiles > 0) {
+        this.logPlain(`${totalSkippedFiles} ${pluralize(totalSkippedFiles, 'file')} skipped`);
       }
       if (totalUsage) {
         this.logPlain(`Usage: ${formatUsagePlain(totalUsage)}`);

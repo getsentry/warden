@@ -167,9 +167,30 @@ describe('createDefaultCallbacks', () => {
   });
 
   describe('onSkillComplete', () => {
-    it('logs completion with duration and finding summary in log mode', () => {
+    it('logs completion with duration and finding summary in log mode (Normal verbosity omits per-finding lines)', () => {
       const tasks = [makeTask('my-trigger', 'code-scanner')];
       const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+      const findings: Finding[] = [
+        makeFinding({ severity: 'critical', title: 'SQL injection', location: { path: 'src/api.ts', startLine: 45 } }),
+        makeFinding({ id: 'TEST-002', severity: 'high', title: 'Missing error handling', location: { path: 'src/utils.ts', startLine: 20 } }),
+      ];
+      const report = makeReport({ findings, durationMs: 1200 });
+
+      cb.onSkillComplete('my-trigger', report);
+
+      // At Normal verbosity, only the completion summary line is shown (no per-finding lines)
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+
+      const completionMsg = errorSpy.mock.calls[0]![0] as string;
+      expect(completionMsg).toMatch(/warden: code-scanner completed in 1\.2s/);
+      expect(completionMsg).toContain('2 findings');
+      expect(completionMsg).toContain('1 critical');
+      expect(completionMsg).toContain('1 high');
+    });
+
+    it('shows per-finding lines at Verbose verbosity in log mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
       const findings: Finding[] = [
         makeFinding({ severity: 'critical', title: 'SQL injection', location: { path: 'src/api.ts', startLine: 45 } }),
         makeFinding({ id: 'TEST-002', severity: 'high', title: 'Missing error handling', location: { path: 'src/utils.ts', startLine: 20 } }),
@@ -183,9 +204,6 @@ describe('createDefaultCallbacks', () => {
 
       const completionMsg = errorSpy.mock.calls[0]![0] as string;
       expect(completionMsg).toMatch(/warden: code-scanner completed in 1\.2s/);
-      expect(completionMsg).toContain('2 findings');
-      expect(completionMsg).toContain('1 critical');
-      expect(completionMsg).toContain('1 high');
 
       const finding1 = errorSpy.mock.calls[1]![0] as string;
       expect(finding1).toContain('[critical]');
@@ -217,10 +235,16 @@ describe('createDefaultCallbacks', () => {
       });
       const report = makeReport({ findings: [finding] });
 
-      // Normal: no fix line
+      // Normal: no finding lines at all (gated behind Verbose)
       const cbNormal = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
       cbNormal.onSkillComplete('t', report);
-      expect(errorSpy).toHaveBeenCalledTimes(2); // completion + 1 finding
+      expect(errorSpy).toHaveBeenCalledTimes(1); // completion only
+      errorSpy.mockClear();
+
+      // Verbose: finding line shown, but no fix line
+      const cbVerbose = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+      cbVerbose.onSkillComplete('t', report);
+      expect(errorSpy).toHaveBeenCalledTimes(2); // completion + finding
       errorSpy.mockClear();
 
       // Debug: fix line shown

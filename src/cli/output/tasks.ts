@@ -407,11 +407,14 @@ export function createDefaultCallbacks(
         const summary = formatFindingCountsPlain(counts);
         logPlain(`${displayName} completed in ${duration} - ${summary}`);
 
-        // Show per-finding lines at Normal+ verbosity in log mode
-        for (const finding of report.findings) {
-          logPlain(`  ${formatSeverityPlain(finding.severity)} ${findingLocation(finding)}: ${finding.title}`);
-          if (verbosity >= Verbosity.Debug && finding.suggestedFix) {
-            logPlain(`    fix: ${finding.suggestedFix.description}`);
+        // Show per-finding lines at Verbose+ verbosity in log mode
+        // (the final report already shows findings with full detail)
+        if (verbosity >= Verbosity.Verbose) {
+          for (const finding of report.findings) {
+            logPlain(`  ${formatSeverityPlain(finding.severity)} ${findingLocation(finding)}: ${finding.title}`);
+            if (verbosity >= Verbosity.Debug && finding.suggestedFix) {
+              logPlain(`    fix: ${finding.suggestedFix.description}`);
+            }
           }
         }
       }

@@ -226,5 +226,117 @@ describe('renderTerminalReport', () => {
       expect(output).toContain('test-skill - No findings');
       expect(output).not.toContain('()');
     });
+
+    it('renders endLine range in location', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [
+          createFinding({
+            severity: 'high',
+            title: 'SQL injection risk',
+            location: { path: 'src/api.ts', startLine: 45, endLine: 52 },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('src/api.ts:45-52');
+    });
+
+    it('renders confidence when present', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [
+          createFinding({
+            severity: 'high',
+            title: 'SQL injection risk',
+            confidence: 'high',
+            location: { path: 'src/api.ts', startLine: 45 },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('confidence: high');
+    });
+
+    it('does not render confidence line when not present', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [
+          createFinding({
+            severity: 'high',
+            title: 'SQL injection risk',
+            location: { path: 'src/api.ts', startLine: 45 },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).not.toContain('confidence:');
+    });
+
+    it('renders suggested fix diff in plain text', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [
+          createFinding({
+            severity: 'high',
+            title: 'SQL injection risk',
+            location: { path: 'src/api.ts', startLine: 45 },
+            suggestedFix: {
+              description: 'Use parameterized queries',
+              diff: '--- a/src/api.ts\n+++ b/src/api.ts\n@@ -45,3 +45,3 @@\n-  const result = db.query(`SELECT * FROM users WHERE id = ${userId}`);\n+  const result = db.query(\'SELECT * FROM users WHERE id = ?\', [userId]);',
+            },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('Suggested fix:');
+      expect(output).toContain('--- a/src/api.ts');
+      expect(output).toContain('+++ b/src/api.ts');
+    });
+
+    it('renders per-skill failedHunks warning', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [createFinding({ severity: 'high', title: 'Bug found' })],
+        failedHunks: 2,
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('WARN: 2 chunks failed to analyze');
+    });
+
+    it('renders per-skill failedExtractions warning', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [createFinding({ severity: 'high', title: 'Bug found' })],
+        failedExtractions: 1,
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('WARN: 1 finding extraction failed');
+    });
+
+    it('does not render warnings when counts are zero', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [createFinding({ severity: 'high', title: 'Bug found' })],
+        failedHunks: 0,
+        failedExtractions: 0,
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).not.toContain('WARN:');
+    });
   });
 });

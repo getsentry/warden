@@ -9,7 +9,9 @@ import {
   formatFindingCountsPlain,
   formatDuration,
   formatElapsed,
+  formatLocation,
   countBySeverity,
+  pluralize,
 } from './output/index.js';
 import { BoxRenderer } from './output/box.js';
 import type { OutputMode } from './output/tty.js';
@@ -109,10 +111,10 @@ function formatFindingCI(finding: Finding): string[] {
   const lines: string[] = [];
   const badge = formatSeverityPlain(finding.severity);
 
-  // Title line with location and elapsed time
+  // Title line with location (including endLine range) and elapsed time
   const titleParts = [badge];
   if (finding.location) {
-    titleParts.push(`${finding.location.path}:${finding.location.startLine}`);
+    titleParts.push(formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine));
   }
   titleParts.push('-', finding.title);
   if (finding.elapsedMs !== undefined) {
@@ -120,8 +122,22 @@ function formatFindingCI(finding: Finding): string[] {
   }
   lines.push(titleParts.join(' '));
 
+  // Confidence
+  if (finding.confidence) {
+    lines.push(`  confidence: ${finding.confidence}`);
+  }
+
   // Description
   lines.push(`  ${finding.description}`);
+
+  // Suggested fix diff (plain text, no color)
+  if (finding.suggestedFix?.diff) {
+    lines.push('');
+    lines.push('  Suggested fix:');
+    for (const line of finding.suggestedFix.diff.split('\n')) {
+      lines.push(`  ${line}`);
+    }
+  }
 
   return lines;
 }
@@ -178,6 +194,14 @@ function renderSkillCI(report: SkillReport): string[] {
 
   // Header: skill (duration) - summary
   lines.push(`${report.skill}${durationStr} - ${summary}`);
+
+  // Per-skill warnings for operational issues
+  if (report.failedHunks) {
+    lines.push(`  WARN: ${report.failedHunks} ${pluralize(report.failedHunks, 'chunk')} failed to analyze`);
+  }
+  if (report.failedExtractions) {
+    lines.push(`  WARN: ${report.failedExtractions} finding ${pluralize(report.failedExtractions, 'extraction')} failed`);
+  }
 
   for (const [index, finding] of report.findings.entries()) {
     if (index > 0) lines.push('');
