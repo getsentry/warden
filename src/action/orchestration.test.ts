@@ -57,7 +57,7 @@ function makeReport(skill: string, findings: SkillReport['findings'] = []): Skil
   return { skill, summary: `${skill} report`, findings };
 }
 
-function makeRenderResult(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): RenderResult {
+function makeRenderResult(event: 'REQUEST_CHANGES' | 'COMMENT'): RenderResult {
   return {
     review: { event, body: '', comments: [] },
     summaryComment: '',
@@ -69,12 +69,12 @@ function makeRenderResult(event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'): Ren
  * Each method returns a TriggerExecutionResult representing that scenario.
  */
 const Trigger = {
-  /** Succeeded, wants to approve (e.g., no findings, clearing previous REQUEST_CHANGES) */
-  approving(name: string): TriggerExecutionResult {
+  /** Succeeded, no findings (clean run) */
+  clean(name: string): TriggerExecutionResult {
     return {
       triggerName: name,
       report: makeReport(name),
-      renderResult: makeRenderResult('APPROVE'),
+      renderResult: makeRenderResult('COMMENT'),
     };
   },
 
@@ -146,7 +146,7 @@ describe('orchestrateReviews', () => {
 
   describe('stale comment resolution', () => {
     it('allows stale resolution when all triggers succeed', () => {
-      const results = [Trigger.commenting('security-review'), Trigger.approving('code-review')];
+      const results = [Trigger.commenting('security-review'), Trigger.clean('code-review')];
 
       const { canResolveStale } = orchestrateReviews(results);
 
@@ -154,7 +154,7 @@ describe('orchestrateReviews', () => {
     });
 
     it('blocks stale resolution when any trigger failed', () => {
-      const results = [Trigger.failed('security-review'), Trigger.approving('code-review')];
+      const results = [Trigger.failed('security-review'), Trigger.clean('code-review')];
 
       const { canResolveStale, failedTriggers } = orchestrateReviews(results);
 
@@ -196,7 +196,7 @@ describe('orchestrateReviews', () => {
 describe('buildReviewCoordination', () => {
   it('returns coordination array matching input order', () => {
     const results: TriggerExecutionResult[] = [
-      Trigger.approving('a'),
+      Trigger.clean('a'),
       Trigger.failed('b'),
       Trigger.blocking('c'),
     ];
@@ -212,7 +212,7 @@ describe('buildReviewCoordination', () => {
 
 describe('shouldResolveStaleComments', () => {
   it('returns true when no errors', () => {
-    expect(shouldResolveStaleComments([Trigger.commenting('a'), Trigger.approving('b')])).toBe(
+    expect(shouldResolveStaleComments([Trigger.commenting('a'), Trigger.clean('b')])).toBe(
       true
     );
   });

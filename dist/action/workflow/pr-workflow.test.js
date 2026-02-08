@@ -327,7 +327,8 @@ describe('runPRWorkflow', () => {
             });
             // Current run has no findings
             mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ findings: [] }) });
-            await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            // failOn must be configured for dismiss to work
+            await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
             const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
             expect(dismissReview).toHaveBeenCalledWith(expect.objectContaining({
                 owner: 'test-owner',
@@ -359,6 +360,18 @@ describe('runPRWorkflow', () => {
             });
             mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ findings: [] }) });
             await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
+            expect(dismissReview).not.toHaveBeenCalled();
+        });
+        it('does not dismiss when failOn is removed from config', async () => {
+            // Previous review was CHANGES_REQUESTED (from when failOn was configured)
+            vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+                data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+            });
+            // Current run has no findings and no failOn — config was changed between runs
+            mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ findings: [] }) });
+            await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: undefined }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            // Should NOT dismiss — without failOn we can't verify the threshold is still met
             const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
             expect(dismissReview).not.toHaveBeenCalled();
         });

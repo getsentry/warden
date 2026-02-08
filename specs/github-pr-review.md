@@ -16,9 +16,9 @@ Two thresholds control PR behavior:
 GitHub PR reviews have three event types:
 - `COMMENT` - Posts comments without blocking
 - `REQUEST_CHANGES` - Posts comments with "changes requested" status
-- `APPROVE` - Approves the PR, clearing a previous "changes requested" status
+Note: PR reviews are only posted when there are inline comments to show. When `reportOn` filters out all findings (or is set to `off`), no PR review is posted. The GitHub Check still fails independently based on `failOn`.
 
-Note: PR reviews are only posted when there are inline comments to show, OR when transitioning from REQUEST_CHANGES to APPROVE. When `reportOn` filters out all findings (or is set to `off`), no PR review is posted unless an approval is needed. The GitHub Check still fails independently based on `failOn`.
+Warden does not post `APPROVE` reviews. To clear a previous `REQUEST_CHANGES`, it uses the `dismissReview` API instead.
 
 ## Expected Behavior
 
@@ -37,20 +37,20 @@ When a PR review is posted (i.e., when there are comments), the event type is de
 | `medium` | critical, high, or medium | REQUEST_CHANGES |
 | `medium` | low or info | COMMENT |
 
-### Approval After Fixes
+### Dismissal After Fixes
 
 When Warden previously posted a `REQUEST_CHANGES` review and the blocking issues are now fixed:
 
-| Previous State | Current Blocking Findings | Review Event |
-|----------------|---------------------------|--------------|
-| REQUEST_CHANGES | none | APPROVE |
+| Previous State | Current Blocking Findings | Action |
+|----------------|---------------------------|--------|
+| REQUEST_CHANGES | none | DISMISS previous review |
 | REQUEST_CHANGES | some | REQUEST_CHANGES |
 | COMMENT or none | any | (follow table above) |
 
-The approval clears Warden's "changes requested" status so the PR can be merged without manual dismissal.
+Dismissal clears Warden's "changes requested" status so the PR can be merged without manual dismissal.
 
-**Requirements for approval**:
-- `failOn` must be configured (approval is meaningless without a threshold)
+**Requirements for dismissal**:
+- `failOn` must be configured (dismissal is meaningless without a threshold)
 - Must use a GitHub App token (PAT/GITHUB_TOKEN cannot reliably identify previous reviews)
 
 See [Comment Lifecycle](comment-lifecycle.md) for details on how Warden tracks its previous review state.

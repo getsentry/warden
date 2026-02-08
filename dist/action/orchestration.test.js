@@ -37,12 +37,12 @@ function makeRenderResult(event) {
  * Each method returns a TriggerExecutionResult representing that scenario.
  */
 const Trigger = {
-    /** Succeeded, wants to approve (e.g., no findings, clearing previous REQUEST_CHANGES) */
-    approving(name) {
+    /** Succeeded, no findings (clean run) */
+    clean(name) {
         return {
             triggerName: name,
             report: makeReport(name),
-            renderResult: makeRenderResult('APPROVE'),
+            renderResult: makeRenderResult('COMMENT'),
         };
     },
     /** Succeeded, has blocking findings (REQUEST_CHANGES) */
@@ -102,12 +102,12 @@ describe('orchestrateReviews', () => {
     });
     describe('stale comment resolution', () => {
         it('allows stale resolution when all triggers succeed', () => {
-            const results = [Trigger.commenting('security-review'), Trigger.approving('code-review')];
+            const results = [Trigger.commenting('security-review'), Trigger.clean('code-review')];
             const { canResolveStale } = orchestrateReviews(results);
             expect(canResolveStale).toBe(true);
         });
         it('blocks stale resolution when any trigger failed', () => {
-            const results = [Trigger.failed('security-review'), Trigger.approving('code-review')];
+            const results = [Trigger.failed('security-review'), Trigger.clean('code-review')];
             const { canResolveStale, failedTriggers } = orchestrateReviews(results);
             expect(canResolveStale).toBe(false);
             expect(failedTriggers).toEqual(['security-review']);
@@ -139,7 +139,7 @@ describe('orchestrateReviews', () => {
 describe('buildReviewCoordination', () => {
     it('returns coordination array matching input order', () => {
         const results = [
-            Trigger.approving('a'),
+            Trigger.clean('a'),
             Trigger.failed('b'),
             Trigger.blocking('c'),
         ];
@@ -152,7 +152,7 @@ describe('buildReviewCoordination', () => {
 });
 describe('shouldResolveStaleComments', () => {
     it('returns true when no errors', () => {
-        expect(shouldResolveStaleComments([Trigger.commenting('a'), Trigger.approving('b')])).toBe(true);
+        expect(shouldResolveStaleComments([Trigger.commenting('a'), Trigger.clean('b')])).toBe(true);
     });
     it('returns false when any error exists', () => {
         expect(shouldResolveStaleComments([Trigger.commenting('a'), Trigger.failed('b')])).toBe(false);

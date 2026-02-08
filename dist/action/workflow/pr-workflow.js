@@ -214,11 +214,14 @@ export async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoP
         console.log('Skipping stale comment resolution due to trigger failures');
     }
     // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
-    // Requires: all triggers succeeded (canResolveStale), no trigger exceeded failOn threshold.
+    // Requires: all triggers succeeded, no trigger exceeded failOn threshold,
+    // and at least one trigger has an active failOn (prevents accidental dismiss when config changes).
+    const hasActiveFailOn = results.some((r) => r.failOn && r.failOn !== 'off');
     if (context.pullRequest &&
         previousReviewInfo?.state === 'CHANGES_REQUESTED' &&
         canResolveStale &&
-        !shouldFailAction) {
+        !shouldFailAction &&
+        hasActiveFailOn) {
         try {
             await dismissPreviousReview(octokit, context.repository.owner, context.repository.name, context.pullRequest.number, previousReviewInfo.reviewId);
             console.log('Dismissed previous CHANGES_REQUESTED review');
