@@ -211,7 +211,7 @@ export class Reporter {
         this.log(chalk.yellow(`${figures.warning}  ${totalFailedHunks} ${pluralize(totalFailedHunks, 'chunk')} failed to analyze`));
       }
       if (totalFailedExtractions > 0) {
-        this.log(chalk.yellow(`${figures.warning}  ${totalFailedExtractions} ${pluralize(totalFailedExtractions, 'finding')} ${pluralize(totalFailedExtractions, 'extraction')} failed`));
+        this.log(chalk.yellow(`${figures.warning}  ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`));
       }
       if (totalSkippedFiles > 0) {
         this.log(chalk.dim(`${totalSkippedFiles} ${pluralize(totalSkippedFiles, 'file')} skipped`));
@@ -228,7 +228,7 @@ export class Reporter {
         this.logPlain(`WARN: ${totalFailedHunks} ${pluralize(totalFailedHunks, 'chunk')} failed to analyze`);
       }
       if (totalFailedExtractions > 0) {
-        this.logPlain(`WARN: ${totalFailedExtractions} ${pluralize(totalFailedExtractions, 'finding')} ${pluralize(totalFailedExtractions, 'extraction')} failed`);
+        this.logPlain(`WARN: ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`);
       }
       if (totalSkippedFiles > 0) {
         this.logPlain(`${totalSkippedFiles} ${pluralize(totalSkippedFiles, 'file')} skipped`);
