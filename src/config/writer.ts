@@ -43,6 +43,10 @@ export function generateSkillToml(skill: SkillConfig): string {
     lines.push(`maxTurns = ${skill.maxTurns}`);
   }
 
+  if (skill.reportOnSuccess !== undefined) {
+    lines.push(`reportOnSuccess = ${skill.reportOnSuccess}`);
+  }
+
   // Nested triggers
   if (skill.triggers) {
     for (const trigger of skill.triggers) {
@@ -70,6 +74,24 @@ export function generateSkillToml(skill: SkillConfig): string {
 
       if (trigger.maxFindings) {
         lines.push(`maxFindings = ${trigger.maxFindings}`);
+      }
+
+      if (trigger.maxTurns) {
+        lines.push(`maxTurns = ${trigger.maxTurns}`);
+      }
+
+      if (trigger.schedule) {
+        lines.push('');
+        lines.push('[skills.triggers.schedule]');
+        if (trigger.schedule.issueTitle) {
+          lines.push(`issueTitle = "${trigger.schedule.issueTitle}"`);
+        }
+        if (trigger.schedule.createFixPR !== undefined) {
+          lines.push(`createFixPR = ${trigger.schedule.createFixPR}`);
+        }
+        if (trigger.schedule.fixBranchPrefix && trigger.schedule.fixBranchPrefix !== 'warden-fix') {
+          lines.push(`fixBranchPrefix = "${trigger.schedule.fixBranchPrefix}"`);
+        }
       }
     }
   }
