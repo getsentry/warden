@@ -10,7 +10,7 @@
            C22 52 14 45 14 35
            L14 17
            Z"
-        fill="#cc3300"/>
+        fill="#ffffff"/>
 
   <!-- Inner shield -->
   <path d="M32 17
@@ -23,5 +23,5 @@
         fill="#0d0d0d"/>
 
   <!-- Eye in shield -->
-  <circle cx="32" cy="33" r="5" fill="#ff5500"/>
+  <circle cx="32" cy="33" r="5" fill="#ffffff"/>
 </svg>
