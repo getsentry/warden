@@ -5,7 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { loadWardenConfig, resolveTrigger } from '../../config/loader.js';
+import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
 import { buildEventContext } from '../../event/context.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
 import { fetchExistingComments, } from '../../output/dedup.js';
@@ -77,8 +77,8 @@ export async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoP
     logGroupEnd();
     const configFullPath = join(repoPath, inputs.configPath);
     const config = loadWardenConfig(dirname(configFullPath));
-    // Resolve triggers with defaults and match
-    const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
+    // Resolve skills into triggers and match
+    const resolvedTriggers = resolveSkillConfigs(config);
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
     if (matchedTriggers.length === 0) {
         console.log('No triggers matched for this event');
@@ -128,7 +128,7 @@ export async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoP
         claudePath,
         previousReviewState,
         globalFailOn: inputs.failOn,
-        globalCommentOn: inputs.commentOn,
+        globalReportOn: inputs.reportOn,
         globalMaxFindings: inputs.maxFindings,
     }), concurrency);
     // Fetch existing comments for deduplication (only for PRs)

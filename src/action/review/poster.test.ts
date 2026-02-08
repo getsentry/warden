@@ -107,7 +107,7 @@ describe('postTriggerReview', () => {
     expect(postResult.shouldFail).toBe(false);
   });
 
-  it('skips posting when no findings and commentOnSuccess is false', async () => {
+  it('skips posting when no findings and reportOnSuccess is false', async () => {
     const result: TriggerResult = {
       triggerName: 'test-trigger',
       report: {
@@ -117,7 +117,7 @@ describe('postTriggerReview', () => {
         usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
       },
       renderResult: createRenderResult(),
-      commentOnSuccess: false,
+      reportOnSuccess: false,
     };
 
     const ctx: ReviewPostingContext = {
@@ -150,7 +150,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      commentOn: 'info',
+      reportOn: 'info',
     };
 
     vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
@@ -186,7 +186,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      commentOn: 'info',
+      reportOn: 'info',
     };
 
     const existingComment = createExistingComment({ isWarden: false });
@@ -230,7 +230,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      commentOn: 'info',
+      reportOn: 'info',
       failOn: 'high',
     };
 
@@ -325,7 +325,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      commentOn: 'info',
+      reportOn: 'info',
     };
 
     vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('API rate limit'));

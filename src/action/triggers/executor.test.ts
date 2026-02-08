@@ -61,14 +61,13 @@ describe('executeTrigger', () => {
 
   const mockTrigger: ResolvedTrigger = {
     name: 'test-trigger',
-    event: 'pull_request',
-    actions: ['opened'],
     skill: 'test-skill',
+    type: 'pull_request',
+    actions: ['opened'],
     filters: {},
-    output: {},
   };
 
-  const mockConfig = { version: 1 as const, triggers: [] };
+  const mockConfig = { version: 1 as const, skills: [] };
 
   const mockDeps: TriggerExecutorDeps = {
     octokit: mockOctokit,
@@ -180,7 +179,7 @@ describe('executeTrigger', () => {
 
     const triggerWithFailOn: ResolvedTrigger = {
       ...mockTrigger,
-      output: { failOn: 'high' },
+      failOn: 'high',
     };
 
     const depsWithGlobalFailOn = {

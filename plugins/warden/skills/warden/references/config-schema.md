@@ -5,8 +5,8 @@
 ```toml
 version = 1                    # Required, must be 1
 
-[defaults]                     # Optional, inherited by all triggers
-[[triggers]]                   # Required, array of trigger configs
+[defaults]                     # Optional, inherited by all skills
+[[skills]]                     # Required, array of skill configs
 ```
 
 ## Defaults Section
@@ -16,14 +16,10 @@ version = 1                    # Required, must be 1
 model = "claude-sonnet-4-20250514"    # Default model
 maxTurns = 50                         # Max agentic turns per hunk
 defaultBranch = "main"                # Base branch for comparisons
-
-[defaults.output]
 failOn = "high"                # Exit 1 if findings >= this severity
-commentOn = "medium"           # Show findings >= this severity
+reportOn = "medium"            # Show findings >= this severity
 maxFindings = 50               # Max findings to report (0 = unlimited)
-commentOnSuccess = false       # Post comment even with no findings
-
-[defaults.filters]
+reportOnSuccess = false        # Post report even with no findings
 paths = ["src/**/*.ts"]        # Include only matching files
 ignorePaths = ["*.test.ts"]    # Exclude matching files
 
@@ -40,49 +36,48 @@ pattern = "*.config.*"         # Glob pattern
 mode = "whole-file"            # per-hunk | whole-file | skip
 ```
 
-## Triggers Section
+## Skills Section
 
 ```toml
-[[triggers]]
-name = "trigger-name"          # Required, unique identifier
-event = "pull_request"         # Required: pull_request | issues | issue_comment | schedule
-actions = ["opened", "synchronize"]  # Required for non-schedule events
-skill = "find-bugs"            # Required, skill name or path
+[[skills]]
+name = "skill-name"            # Required, unique identifier
 remote = "owner/repo@sha"      # Optional, fetch skill from GitHub repo
+paths = ["src/**"]             # Include only matching files
+ignorePaths = ["**/*.test.ts"] # Exclude matching files
 
 # Optional overrides (inherit from defaults if not set)
 model = "claude-opus-4-20250514"
 maxTurns = 100
-
-[triggers.filters]
-paths = ["src/**"]
-ignorePaths = ["**/*.test.ts"]
-
-[triggers.output]
 failOn = "critical"
-commentOn = "high"
+reportOn = "high"
 maxFindings = 20
-commentOnSuccess = true
+reportOnSuccess = true
 
-# Schedule-specific (only for event = "schedule")
-[triggers.schedule]
+[[skills.triggers]]
+type = "pull_request"          # Required: pull_request | local | schedule
+actions = ["opened", "synchronize"]  # Required for pull_request
+
+# Schedule-specific (only for type = "schedule")
+[[skills.triggers]]
+type = "schedule"
+
+[skills.triggers.schedule]
 issueTitle = "Daily Security Review"   # GitHub issue title for tracking
 createFixPR = true                     # Create PR with fixes
 fixBranchPrefix = "security-fix"       # Branch name prefix
 ```
 
-**Event types:**
+**Trigger types:**
 - `pull_request` - Triggers on PR events
-- `issues` - Triggers on issue events
-- `issue_comment` - Triggers on issue/PR comments
+- `local` - Triggers on local CLI runs
 - `schedule` - Triggers on cron schedule (GitHub Action)
 
-**Actions (for non-schedule):**
+**Actions (for pull_request):**
 - `opened`, `synchronize`, `reopened`, `closed`
 
 ## Severity Values
 
-Used in `failOn` and `commentOn`:
+Used in `failOn` and `reportOn`:
 - `critical` - Most severe
 - `high`
 - `medium`
@@ -109,7 +104,7 @@ Always skipped (cannot be overridden):
 
 ## Model Precedence (highest to lowest)
 
-1. Trigger-level `model`
+1. Skill-level `model`
 2. `[defaults]` `model`
 3. CLI `--model` flag
 4. `WARDEN_MODEL` env var

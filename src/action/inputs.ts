@@ -20,7 +20,7 @@ export interface ActionInputs {
   githubToken: string;
   configPath: string;
   failOn?: SeverityThreshold;
-  commentOn?: SeverityThreshold;
+  reportOn?: SeverityThreshold;
   maxFindings: number;
   /** Max concurrent trigger executions */
   parallel: number;
@@ -76,9 +76,9 @@ export function parseActionInputs(): ActionInputs {
     ? (failOnInput as SeverityThreshold)
     : undefined;
 
-  const commentOnInput = getInput('comment-on');
-  const commentOn = SeverityThresholdSchema.safeParse(commentOnInput).success
-    ? (commentOnInput as SeverityThreshold)
+  const reportOnInput = getInput('report-on');
+  const reportOn = SeverityThresholdSchema.safeParse(reportOnInput).success
+    ? (reportOnInput as SeverityThreshold)
     : undefined;
 
   const maxFindingsParsed = parseInt(getInput('max-findings') || '50', 10);
@@ -90,7 +90,7 @@ export function parseActionInputs(): ActionInputs {
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
     configPath: getInput('config-path') || 'warden.toml',
     failOn,
-    commentOn,
+    reportOn,
     maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
   };

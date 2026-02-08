@@ -1,4 +1,5 @@
-import type { Trigger, WardenEnvironment } from '../config/schema.js';
+import type { ResolvedTrigger } from '../config/loader.js';
+import type { TriggerType } from '../config/schema.js';
 import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, Severity, SeverityThreshold, SkillReport } from '../types/index.js';
 
@@ -71,34 +72,16 @@ export function matchGlob(pattern: string, path: string): boolean {
 }
 
 /**
- * Check if a trigger matches the given event context.
+ * Check if a file list matches the path filters.
+ * Returns true if paths match (or no filters), false if all files are excluded.
  */
-export function matchTrigger(trigger: Trigger, context: EventContext, environment?: WardenEnvironment): boolean {
-  if (environment && trigger.environments && !trigger.environments.includes(environment)) {
-    return false;
-  }
-
-  if (trigger.event !== context.eventType) {
-    return false;
-  }
-
-  // Schedule events don't have actions - they match based on whether
-  // any files match the paths filter (context was already built with matching files)
-  if (trigger.event === 'schedule') {
-    return (context.pullRequest?.files.length ?? 0) > 0;
-  }
-
-  // For non-schedule events, actions must match
-  if (!trigger.actions?.includes(context.action)) {
-    return false;
-  }
-
-  const filenames = context.pullRequest?.files.map((f) => f.filename);
-  const pathPatterns = trigger.filters?.paths;
-  const ignorePatterns = trigger.filters?.ignorePaths;
+function matchPathFilters(
+  filters: { paths?: string[]; ignorePaths?: string[] },
+  filenames: string[] | undefined
+): boolean {
+  const { paths: pathPatterns, ignorePaths: ignorePatterns } = filters;
 
   // Fail trigger match when path filters are defined but filenames unavailable
-  // This prevents filters from being silently bypassed on API failures
   if ((pathPatterns || ignorePatterns) && (!filenames || filenames.length === 0)) {
     return false;
   }
@@ -122,6 +105,57 @@ export function matchTrigger(trigger: Trigger, context: EventContext, environmen
   }
 
   return true;
+}
+
+/**
+ * Check if a trigger matches the given event context and environment.
+ *
+ * Trigger types:
+ * - '*' (wildcard): matches all environments, skips event/action checks
+ * - 'local': matches only when environment is 'local'
+ * - 'pull_request': matches when environment is 'github' and event is pull_request
+ * - 'schedule': matches when event is schedule
+ */
+export function matchTrigger(
+  trigger: ResolvedTrigger,
+  context: EventContext,
+  environment?: TriggerType | 'github'
+): boolean {
+  // Wildcard triggers match everywhere, only check path filters
+  if (trigger.type === '*') {
+    const filenames = context.pullRequest?.files.map((f) => f.filename);
+    return matchPathFilters(trigger.filters, filenames);
+  }
+
+  // Type-based matching with early returns
+  if (trigger.type === 'local') {
+    if (environment !== 'local') {
+      return false;
+    }
+  }
+
+  if (trigger.type === 'pull_request') {
+    if (environment === 'local') {
+      return false;
+    }
+    if (context.eventType !== 'pull_request') {
+      return false;
+    }
+    if (!trigger.actions?.includes(context.action)) {
+      return false;
+    }
+  }
+
+  if (trigger.type === 'schedule') {
+    if (context.eventType !== 'schedule') {
+      return false;
+    }
+    return (context.pullRequest?.files.length ?? 0) > 0;
+  }
+
+  // Apply path filters
+  const filenames = context.pullRequest?.files.map((f) => f.filename);
+  return matchPathFilters(trigger.filters, filenames);
 }
 
 /**

@@ -54,25 +54,23 @@ export type {
 export {
   // Schemas
   SkillDefinitionSchema,
-  TriggerSchema,
+  SkillConfigSchema,
+  SkillTriggerSchema,
+  TriggerTypeSchema,
   WardenConfigSchema,
-  WardenEnvironmentSchema,
-  PathFilterSchema,
-  OutputConfigSchema,
   // Functions
   loadWardenConfig,
-  resolveTrigger,
+  resolveSkillConfigs,
   // Errors
   ConfigLoadError,
 } from './config/index.js';
 
 export type {
   SkillDefinition,
-  Trigger,
+  SkillConfig,
+  SkillTrigger,
+  TriggerType,
   WardenConfig,
-  WardenEnvironment,
-  PathFilter,
-  OutputConfig,
   ResolvedTrigger,
 } from './config/index.js';
 

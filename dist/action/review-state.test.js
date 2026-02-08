@@ -253,7 +253,7 @@ describe('coordinateReviewEvents', () => {
     });
     describe('silent triggers (no review but not failed)', () => {
         it('does not block approval from other triggers', () => {
-            // Silent trigger: succeeded but has no review to post (e.g., commentOn: 'off')
+            // Silent trigger: succeeded but has no review to post (e.g., reportOn: 'off')
             const result = coordinateReviewEvents([
                 { triggerName: 'silent-trigger', reviewEvent: undefined, failed: false },
                 { triggerName: 'approving-trigger', reviewEvent: 'APPROVE', failed: false },

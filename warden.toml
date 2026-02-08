@@ -1,21 +1,25 @@
 version = 1
 
-[defaults.output]
+[defaults]
 # Fail check on high+ severity findings (critical, high)
 failOn = "high"
 # Show annotations for medium+ severity findings
-commentOn = "medium"
+reportOn = "medium"
+# Exclude build output from all skills
+ignorePaths = ["dist/**"]
 
-[[triggers]]
+[[skills]]
 name = "notseer"
-event = "pull_request"
-actions = ["opened", "synchronize", "reopened"]
-skill = "notseer"
+paths = ["src/**/*.ts"]
+ignorePaths = ["src/**/*.test.ts"]
 
-[[triggers]]
-name = "code-simplifier"
-event = "pull_request"
+[[skills.triggers]]
+type = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
-skill = "code-simplifier"
+
+[[skills]]
+name = "code-simplifier"
 remote = "getsentry/sentry-skills"
-environments = ["local"]
+
+[[skills.triggers]]
+type = "local"

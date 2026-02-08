@@ -28,8 +28,8 @@ export interface RenderOptions {
   maxFindings?: number;
   groupByFile?: boolean;
   extraLabels?: string[];
-  /** Only include findings at or above this severity level in rendered output. Use 'off' to disable comments. */
-  commentOn?: SeverityThreshold;
+  /** Only include findings at or above this severity level in rendered output. Use 'off' to disable reporting. */
+  reportOn?: SeverityThreshold;
   /** Fail threshold - determines REQUEST_CHANGES vs COMMENT for PR reviews */
   failOn?: SeverityThreshold;
   /** URL to the GitHub Check run containing the full report (used when findings are filtered) */

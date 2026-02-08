@@ -1,119 +1,178 @@
 import { describe, it, expect } from 'vitest';
-import { generateTriggerToml } from './writer.js';
-import type { Trigger } from './schema.js';
+import { generateSkillToml } from './writer.js';
+import type { SkillConfig } from './schema.js';
 
-describe('generateTriggerToml', () => {
-  it('generates basic trigger TOML', () => {
-    const trigger: Trigger = {
+describe('generateSkillToml', () => {
+  it('generates basic skill TOML with trigger', () => {
+    const skill: SkillConfig = {
       name: 'security-review',
-      event: 'pull_request',
-      actions: ['opened', 'synchronize'],
-      skill: 'security-review',
+      triggers: [
+        { type: 'pull_request', actions: ['opened', 'synchronize'] },
+      ],
     };
 
-    const result = generateTriggerToml(trigger);
+    const result = generateSkillToml(skill);
 
-    expect(result).toContain('[[triggers]]');
+    expect(result).toContain('[[skills]]');
     expect(result).toContain('name = "security-review"');
-    expect(result).toContain('event = "pull_request"');
+    expect(result).toContain('[[skills.triggers]]');
+    expect(result).toContain('type = "pull_request"');
     expect(result).toContain('actions = ["opened", "synchronize"]');
-    expect(result).toContain('skill = "security-review"');
   });
 
   it('includes remote field when present', () => {
-    const trigger: Trigger = {
+    const skill: SkillConfig = {
       name: 'security-review',
-      event: 'pull_request',
-      actions: ['opened'],
-      skill: 'security-review',
       remote: 'getsentry/skills@abc123',
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+      ],
     };
 
-    const result = generateTriggerToml(trigger);
+    const result = generateSkillToml(skill);
 
     expect(result).toContain('remote = "getsentry/skills@abc123"');
   });
 
   it('omits remote field when not present', () => {
-    const trigger: Trigger = {
+    const skill: SkillConfig = {
       name: 'security-review',
-      event: 'pull_request',
-      actions: ['opened'],
-      skill: 'security-review',
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+      ],
     };
 
-    const result = generateTriggerToml(trigger);
+    const result = generateSkillToml(skill);
 
     expect(result).not.toContain('remote');
   });
 
-  it('includes filters when present', () => {
-    const trigger: Trigger = {
+  it('includes paths when present', () => {
+    const skill: SkillConfig = {
       name: 'security-review',
-      event: 'pull_request',
-      actions: ['opened'],
-      skill: 'security-review',
-      filters: {
-        paths: ['src/**/*.ts'],
-        ignorePaths: ['**/*.test.ts'],
-      },
+      paths: ['src/**/*.ts'],
+      ignorePaths: ['**/*.test.ts'],
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+      ],
     };
 
-    const result = generateTriggerToml(trigger);
+    const result = generateSkillToml(skill);
 
-    expect(result).toContain('[triggers.filters]');
     expect(result).toContain('paths = ["src/**/*.ts"]');
     expect(result).toContain('ignorePaths = ["**/*.test.ts"]');
   });
 
-  it('includes output config when present', () => {
-    const trigger: Trigger = {
+  it('includes flattened output fields when present', () => {
+    const skill: SkillConfig = {
       name: 'security-review',
-      event: 'pull_request',
-      actions: ['opened'],
-      skill: 'security-review',
-      output: {
-        failOn: 'high',
-        commentOn: 'medium',
-        maxFindings: 10,
-      },
+      failOn: 'high',
+      reportOn: 'medium',
+      maxFindings: 10,
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+      ],
     };
 
-    const result = generateTriggerToml(trigger);
+    const result = generateSkillToml(skill);
 
-    expect(result).toContain('[triggers.output]');
     expect(result).toContain('failOn = "high"');
-    expect(result).toContain('commentOn = "medium"');
+    expect(result).toContain('reportOn = "medium"');
     expect(result).toContain('maxFindings = 10');
   });
 
   it('includes model when present', () => {
-    const trigger: Trigger = {
+    const skill: SkillConfig = {
       name: 'security-review',
-      event: 'pull_request',
-      actions: ['opened'],
-      skill: 'security-review',
       model: 'claude-sonnet-4-20250514',
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+      ],
     };
 
-    const result = generateTriggerToml(trigger);
+    const result = generateSkillToml(skill);
 
     expect(result).toContain('model = "claude-sonnet-4-20250514"');
   });
 
-  it('handles schedule events without actions', () => {
-    const trigger: Trigger = {
-      name: 'weekly-scan',
-      event: 'schedule',
-      skill: 'security-review',
-      filters: {
-        paths: ['src/**/*.ts'],
-      },
+  it('handles local trigger type', () => {
+    const skill: SkillConfig = {
+      name: 'code-simplifier',
+      triggers: [
+        { type: 'local' },
+      ],
     };
 
-    const result = generateTriggerToml(trigger);
+    const result = generateSkillToml(skill);
 
-    expect(result).toContain('event = "schedule"');
+    expect(result).toContain('type = "local"');
     expect(result).not.toContain('actions');
+  });
+
+  it('handles schedule trigger without actions', () => {
+    const skill: SkillConfig = {
+      name: 'weekly-scan',
+      paths: ['src/**/*.ts'],
+      triggers: [
+        { type: 'schedule' },
+      ],
+    };
+
+    const result = generateSkillToml(skill);
+
+    expect(result).toContain('type = "schedule"');
+    expect(result).not.toContain('actions');
+  });
+
+  it('handles skill with no triggers', () => {
+    const skill: SkillConfig = {
+      name: 'wildcard-skill',
+    };
+
+    const result = generateSkillToml(skill);
+
+    expect(result).toContain('[[skills]]');
+    expect(result).toContain('name = "wildcard-skill"');
+    expect(result).not.toContain('[[skills.triggers]]');
+  });
+
+  it('includes trigger-level overrides', () => {
+    const skill: SkillConfig = {
+      name: 'security-review',
+      triggers: [
+        {
+          type: 'pull_request',
+          actions: ['opened'],
+          model: 'claude-opus-4-20250514',
+          failOn: 'critical',
+          reportOn: 'high',
+          maxFindings: 5,
+        },
+      ],
+    };
+
+    const result = generateSkillToml(skill);
+
+    // Trigger-level overrides should appear after the [[skills.triggers]] header
+    const triggerSection = result.split('[[skills.triggers]]')[1]!;
+    expect(triggerSection).toContain('model = "claude-opus-4-20250514"');
+    expect(triggerSection).toContain('failOn = "critical"');
+    expect(triggerSection).toContain('reportOn = "high"');
+    expect(triggerSection).toContain('maxFindings = 5');
+  });
+
+  it('generates multiple triggers for one skill', () => {
+    const skill: SkillConfig = {
+      name: 'multi-trigger',
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+        { type: 'local' },
+      ],
+    };
+
+    const result = generateSkillToml(skill);
+
+    const triggerCount = (result.match(/\[\[skills\.triggers\]\]/g) || []).length;
+    expect(triggerCount).toBe(2);
   });
 });

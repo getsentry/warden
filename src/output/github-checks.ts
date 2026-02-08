@@ -36,7 +36,7 @@ export interface CheckOptions {
 export interface UpdateSkillCheckOptions extends CheckOptions {
   failOn?: SeverityThreshold;
   /** Only include findings at or above this severity level in annotations */
-  commentOn?: SeverityThreshold;
+  reportOn?: SeverityThreshold;
 }
 
 /**
@@ -97,11 +97,11 @@ export function severityToAnnotationLevel(
  * Convert findings to GitHub Check annotations.
  * Only findings with locations can be converted to annotations.
  * Returns at most MAX_ANNOTATIONS_PER_REQUEST annotations.
- * If commentOn is specified, only include findings at or above that severity.
+ * If reportOn is specified, only include findings at or above that severity.
  */
-export function findingsToAnnotations(findings: Finding[], commentOn?: SeverityThreshold): CheckAnnotation[] {
-  // Filter by commentOn threshold if specified
-  const filtered = filterFindingsBySeverity(findings, commentOn);
+export function findingsToAnnotations(findings: Finding[], reportOn?: SeverityThreshold): CheckAnnotation[] {
+  // Filter by reportOn threshold if specified
+  const filtered = filterFindingsBySeverity(findings, reportOn);
 
   // Filter to findings with location using type predicate
   const withLocation = filtered.filter(
@@ -189,8 +189,8 @@ export async function updateSkillCheck(
 ): Promise<void> {
   // Conclusion is based on all findings (failOn behavior)
   const conclusion = determineConclusion(report.findings, options.failOn);
-  // Annotations are filtered by commentOn threshold
-  const annotations = findingsToAnnotations(report.findings, options.commentOn);
+  // Annotations are filtered by reportOn threshold
+  const annotations = findingsToAnnotations(report.findings, options.reportOn);
 
   const summary = buildSkillSummary(report);
 

@@ -1,73 +1,90 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import type { Trigger } from './schema.js';
+import type { SkillConfig } from './schema.js';
 
 /**
- * Generate TOML representation of a trigger.
+ * Generate TOML representation of a skill.
  */
-export function generateTriggerToml(trigger: Trigger): string {
-  const lines: string[] = ['[[triggers]]'];
-  lines.push(`name = "${trigger.name}"`);
-  lines.push(`event = "${trigger.event}"`);
+export function generateSkillToml(skill: SkillConfig): string {
+  const lines: string[] = ['[[skills]]'];
+  lines.push(`name = "${skill.name}"`);
 
-  // Format actions array (optional for schedule events)
-  if (trigger.actions && trigger.actions.length > 0) {
-    const actionsStr = trigger.actions.map((a) => `"${a}"`).join(', ');
-    lines.push(`actions = [${actionsStr}]`);
+  if (skill.remote) {
+    lines.push(`remote = "${skill.remote}"`);
   }
 
-  lines.push(`skill = "${trigger.skill}"`);
-
-  if (trigger.remote) {
-    lines.push(`remote = "${trigger.remote}"`);
+  // Skill-level fields
+  if (skill.paths && skill.paths.length > 0) {
+    const pathsStr = skill.paths.map((p) => `"${p}"`).join(', ');
+    lines.push(`paths = [${pathsStr}]`);
   }
 
-  // Optional fields
-  if (trigger.filters) {
-    if (trigger.filters.paths && trigger.filters.paths.length > 0) {
+  if (skill.ignorePaths && skill.ignorePaths.length > 0) {
+    const ignoreStr = skill.ignorePaths.map((p) => `"${p}"`).join(', ');
+    lines.push(`ignorePaths = [${ignoreStr}]`);
+  }
+
+  if (skill.model) {
+    lines.push(`model = "${skill.model}"`);
+  }
+
+  if (skill.failOn) {
+    lines.push(`failOn = "${skill.failOn}"`);
+  }
+
+  if (skill.reportOn) {
+    lines.push(`reportOn = "${skill.reportOn}"`);
+  }
+
+  if (skill.maxFindings) {
+    lines.push(`maxFindings = ${skill.maxFindings}`);
+  }
+
+  if (skill.maxTurns) {
+    lines.push(`maxTurns = ${skill.maxTurns}`);
+  }
+
+  // Nested triggers
+  if (skill.triggers) {
+    for (const trigger of skill.triggers) {
       lines.push('');
-      lines.push('[triggers.filters]');
-      const pathsStr = trigger.filters.paths.map((p) => `"${p}"`).join(', ');
-      lines.push(`paths = [${pathsStr}]`);
-    }
-    if (trigger.filters.ignorePaths && trigger.filters.ignorePaths.length > 0) {
-      if (!trigger.filters.paths) {
-        lines.push('');
-        lines.push('[triggers.filters]');
+      lines.push('[[skills.triggers]]');
+      lines.push(`type = "${trigger.type}"`);
+
+      if (trigger.actions && trigger.actions.length > 0) {
+        const actionsStr = trigger.actions.map((a) => `"${a}"`).join(', ');
+        lines.push(`actions = [${actionsStr}]`);
       }
-      const ignoreStr = trigger.filters.ignorePaths.map((p) => `"${p}"`).join(', ');
-      lines.push(`ignorePaths = [${ignoreStr}]`);
-    }
-  }
 
-  if (trigger.output) {
-    lines.push('');
-    lines.push('[triggers.output]');
-    if (trigger.output.failOn) {
-      lines.push(`failOn = "${trigger.output.failOn}"`);
-    }
-    if (trigger.output.commentOn) {
-      lines.push(`commentOn = "${trigger.output.commentOn}"`);
-    }
-    if (trigger.output.maxFindings) {
-      lines.push(`maxFindings = ${trigger.output.maxFindings}`);
-    }
-  }
+      // Trigger-level overrides
+      if (trigger.model) {
+        lines.push(`model = "${trigger.model}"`);
+      }
 
-  if (trigger.model) {
-    lines.push(`model = "${trigger.model}"`);
+      if (trigger.failOn) {
+        lines.push(`failOn = "${trigger.failOn}"`);
+      }
+
+      if (trigger.reportOn) {
+        lines.push(`reportOn = "${trigger.reportOn}"`);
+      }
+
+      if (trigger.maxFindings) {
+        lines.push(`maxFindings = ${trigger.maxFindings}`);
+      }
+    }
   }
 
   return lines.join('\n');
 }
 
 /**
- * Append a trigger to the warden.toml configuration file.
+ * Append a skill to the warden.toml configuration file.
  * Preserves existing content and formatting by appending to the end.
  */
-export function appendTrigger(configPath: string, trigger: Trigger): void {
+export function appendSkill(configPath: string, skill: SkillConfig): void {
   const existingContent = readFileSync(configPath, 'utf-8');
 
-  // Ensure proper spacing before the new trigger
+  // Ensure proper spacing before the new skill
   let separator: string;
   if (existingContent.endsWith('\n\n')) {
     separator = '';
@@ -77,8 +94,8 @@ export function appendTrigger(configPath: string, trigger: Trigger): void {
     separator = '\n\n';
   }
 
-  const triggerToml = generateTriggerToml(trigger);
-  const newContent = existingContent + separator + triggerToml + '\n';
+  const skillToml = generateSkillToml(skill);
+  const newContent = existingContent + separator + skillToml + '\n';
 
   writeFileSync(configPath, newContent, 'utf-8');
 }

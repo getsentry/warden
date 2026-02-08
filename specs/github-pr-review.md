@@ -8,7 +8,7 @@ Two thresholds control PR behavior:
 
 | Option | Purpose | Default |
 |--------|---------|---------|
-| `commentOn` | Which findings appear as inline PR comments | all severities |
+| `reportOn` | Which findings appear as inline PR comments | all severities |
 | `failOn` | When to fail the GitHub Check (blocks merge via branch protection) | off |
 
 ## Review Event Types
@@ -18,7 +18,7 @@ GitHub PR reviews have three event types:
 - `REQUEST_CHANGES` - Posts comments with "changes requested" status
 - `APPROVE` - Approves the PR, clearing a previous "changes requested" status
 
-Note: PR reviews are only posted when there are inline comments to show, OR when transitioning from REQUEST_CHANGES to APPROVE. When `commentOn` filters out all findings (or is set to `off`), no PR review is posted unless an approval is needed. The GitHub Check still fails independently based on `failOn`.
+Note: PR reviews are only posted when there are inline comments to show, OR when transitioning from REQUEST_CHANGES to APPROVE. When `reportOn` filters out all findings (or is set to `off`), no PR review is posted unless an approval is needed. The GitHub Check still fails independently based on `failOn`.
 
 ## Expected Behavior
 
@@ -57,9 +57,9 @@ See [Comment Lifecycle](comment-lifecycle.md) for details on how Warden tracks i
 
 ### Comment Filtering
 
-The `commentOn` threshold controls which findings appear as comments, independent of `failOn`:
+The `reportOn` threshold controls which findings appear as comments, independent of `failOn`:
 
-| commentOn | Findings Shown |
+| reportOn | Findings Shown |
 |-----------|----------------|
 | not set | all findings |
 | `off` | none (no comments posted) |
@@ -71,17 +71,17 @@ The `commentOn` threshold controls which findings appear as comments, independen
 
 ### Independence of Thresholds
 
-`commentOn` and `failOn` operate independently:
+`reportOn` and `failOn` operate independently:
 
-- A finding can be commented (`commentOn`) but not fail the check (`failOn`)
-- A finding can fail the check but be filtered from comments (if `commentOn` is more restrictive)
+- A finding can be reported (`reportOn`) but not fail the check (`failOn`)
+- A finding can fail the check but be filtered from reports (if `reportOn` is more restrictive)
 - Setting `failOn: off` never fails the check, regardless of severity
-- Setting `commentOn: off` posts no PR review, but `failOn` still fails the check
+- Setting `reportOn: off` posts no PR review, but `failOn` still fails the check
 
-When `commentOn` is more restrictive than `failOn`:
+When `reportOn` is more restrictive than `failOn`:
 - The GitHub Check fails (blocks merge via branch protection)
 - The PR review uses `REQUEST_CHANGES` if any comments are posted
-- If all findings are filtered from comments, no PR review is posted but the check still fails
+- If all findings are filtered from reports, no PR review is posted but the check still fails
 
 ### Inline Comment Format
 
@@ -118,32 +118,35 @@ The GitHub Check conclusion follows the same logic as the review event:
 ### Block on Critical Only
 
 ```toml
-[triggers.security]
-output.failOn = "critical"
-output.commentOn = "high"
+[[skills]]
+name = "security-review"
+failOn = "critical"
+reportOn = "high"
 ```
 
-- Critical findings: REQUEST_CHANGES, commented
-- High findings: COMMENT, commented
-- Medium/low/info: COMMENT, not commented
+- Critical findings: REQUEST_CHANGES, reported
+- High findings: COMMENT, reported
+- Medium/low/info: COMMENT, not reported
 
 ### Comment Everything, Never Block
 
 ```toml
-[triggers.style]
-output.failOn = "off"
-# commentOn defaults to all
+[[skills]]
+name = "style-review"
+failOn = "off"
+# reportOn defaults to all
 ```
 
-- All findings: COMMENT, commented
+- All findings: COMMENT, reported
 - PR never blocked regardless of severity
 
 ### Silent Blocking
 
 ```toml
-[triggers.security]
-output.failOn = "critical"
-output.commentOn = "off"
+[[skills]]
+name = "security-review"
+failOn = "critical"
+reportOn = "off"
 ```
 
 - No PR review or comments posted
@@ -153,9 +156,10 @@ output.commentOn = "off"
 ### Silent Monitoring
 
 ```toml
-[triggers.experimental]
-output.failOn = "off"
-output.commentOn = "off"
+[[skills]]
+name = "experimental-review"
+failOn = "off"
+reportOn = "off"
 ```
 
 - No PR review or comments posted

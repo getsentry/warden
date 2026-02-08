@@ -68,15 +68,16 @@ warden sync getsentry/skills
 warden --offline
 ```
 
-**Remote trigger in warden.toml:**
+**Remote skill in warden.toml:**
 
 ```toml
-[[triggers]]
+[[skills]]
 name = "security-review"
-event = "pull_request"
-actions = ["opened", "synchronize"]
-skill = "security-review"
 remote = "getsentry/skills@abc123"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
 ```
 
 **Cache location:** `~/.local/warden/skills/` (override with `WARDEN_STATE_DIR`)

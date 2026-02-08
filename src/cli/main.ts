@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
-import { loadWardenConfig, resolveTrigger } from '../config/loader.js';
+import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
@@ -97,7 +97,7 @@ interface ProcessedResults {
  */
 function processTaskResults(
   results: Awaited<ReturnType<typeof runSkillTasks>>,
-  commentOn: CLIOptions['commentOn']
+  reportOn: CLIOptions['reportOn']
 ): ProcessedResults {
   const reports: SkillReport[] = [];
   let hasFailure = false;
@@ -114,7 +114,7 @@ function processTaskResults(
     }
   }
 
-  const filteredReports = filterReportsBySeverity(reports, commentOn);
+  const filteredReports = filterReportsBySeverity(reports, reportOn);
   return { reports, filteredReports, hasFailure, failureReasons };
 }
 
@@ -239,7 +239,7 @@ async function runSkills(
     skillsToRun = [{ skill: options.skill }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property
-    const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
+    const resolvedTriggers = resolveSkillConfigs(config, options.model);
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
     // Dedupe by skill name but keep first occurrence (with its remote property)
     const seen = new Set<string>();
@@ -299,7 +299,7 @@ async function runSkills(
 
   // Process results and output
   const totalDuration = Date.now() - startTime;
-  const processed = processTaskResults(results, options.commentOn);
+  const processed = processTaskResults(results, options.reportOn);
   return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration);
 }
 
@@ -475,8 +475,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   reporter.contextFiles(pullRequest.files);
 
-  // Resolve triggers with defaults and match
-  const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config, options.model));
+  // Resolve skills into triggers and match
+  const resolvedTriggers = resolveSkillConfigs(config, options.model);
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
 
   // Filter by skill if specified
@@ -500,7 +500,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Display configuration section
   reporter.configTriggers(
-    config.triggers.length,
+    config.skills.length,
     triggersToRun.length,
     triggersToRun.map((t) => ({ name: t.name, skill: t.skill }))
   );
@@ -515,7 +515,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const tasks: SkillTaskOptions[] = triggersToRun.map((trigger) => ({
     name: trigger.name,
     displayName: trigger.skill,
-    failOn: trigger.output.failOn ?? options.failOn,
+    failOn: trigger.failOn ?? options.failOn,
     resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, {
       remote: trigger.remote,
       offline: options.offline,
@@ -525,7 +525,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       apiKey,
       model: trigger.model,
       abortController,
-      maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+      maxTurns: trigger.maxTurns,
     },
   }));
 
@@ -542,7 +542,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Process results and output
   const totalDuration = Date.now() - startTime;
-  const processed = processTaskResults(results, options.commentOn);
+  const processed = processTaskResults(results, options.reportOn);
   return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration);
 }
 

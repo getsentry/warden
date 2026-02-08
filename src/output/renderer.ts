@@ -14,10 +14,10 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, commentOn, failOn, checkRunUrl, totalFindings, allFindings, previousReviewState } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, failOn, checkRunUrl, totalFindings, allFindings, previousReviewState } = options;
 
-  // Filter by commentOn threshold first, then apply maxFindings limit
-  const filteredFindings = filterFindingsBySeverity(report.findings, commentOn);
+  // Filter by reportOn threshold first, then apply maxFindings limit
+  const filteredFindings = filterFindingsBySeverity(report.findings, reportOn);
   const findings = maxFindings ? filteredFindings.slice(0, maxFindings) : filteredFindings;
   const sortedFindings = [...findings].sort(
     (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
@@ -46,11 +46,11 @@ function renderReview(
   const findingsWithLocation = findings.filter((f) => f.location);
 
   // Determine review event type based on failOn threshold against ALL findings.
-  // Use allFindings (or report.findings) so failOn operates independently of commentOn and deduplication.
+  // Use allFindings (or report.findings) so failOn operates independently of reportOn and deduplication.
   const event = determineReviewEvent(allFindings ?? report.findings, failOn, previousReviewState);
 
   // If no comments to post, only create a review if REQUEST_CHANGES or APPROVE is needed
-  // This ensures failOn can block the PR even when commentOn filters out all findings,
+  // This ensures failOn can block the PR even when reportOn filters out all findings,
   // and APPROVE can clear a previous REQUEST_CHANGES
   if (findingsWithLocation.length === 0) {
     if (event === 'REQUEST_CHANGES') {

@@ -238,13 +238,13 @@ function aggregateUsage(reports: SkillReport[]) {
 /**
  * Filter reports to only include findings at or above the given severity threshold.
  * Returns new report objects with filtered findings; does not mutate the originals.
- * If commentOn is 'off', returns reports with empty findings.
+ * If reportOn is 'off', returns reports with empty findings.
  */
-export function filterReportsBySeverity(reports: SkillReport[], commentOn?: SeverityThreshold): SkillReport[] {
-  if (!commentOn) return reports;
+export function filterReportsBySeverity(reports: SkillReport[], reportOn?: SeverityThreshold): SkillReport[] {
+  if (!reportOn) return reports;
   return reports.map((report) => ({
     ...report,
-    findings: filterFindingsBySeverity(report.findings, commentOn),
+    findings: filterFindingsBySeverity(report.findings, reportOn),
   }));
 }
 

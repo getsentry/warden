@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
-import { loadWardenConfig, resolveTrigger } from '../../config/loader.js';
+import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
 import { buildEventContext } from '../../event/context.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
 import {
@@ -123,8 +123,8 @@ export async function runPRWorkflow(
   const configFullPath = join(repoPath, inputs.configPath);
   const config = loadWardenConfig(dirname(configFullPath));
 
-  // Resolve triggers with defaults and match
-  const resolvedTriggers = config.triggers.map((t) => resolveTrigger(t, config));
+  // Resolve skills into triggers and match
+  const resolvedTriggers = resolveSkillConfigs(config);
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
 
   if (matchedTriggers.length === 0) {
@@ -187,7 +187,7 @@ export async function runPRWorkflow(
         claudePath,
         previousReviewState,
         globalFailOn: inputs.failOn,
-        globalCommentOn: inputs.commentOn,
+        globalReportOn: inputs.reportOn,
         globalMaxFindings: inputs.maxFindings,
       }),
     concurrency

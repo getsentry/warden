@@ -33,28 +33,9 @@ export const SkillDefinitionSchema = z.object({
 });
 export type SkillDefinition = z.infer<typeof SkillDefinitionSchema>;
 
-// Path filter for triggers
-export const PathFilterSchema = z.object({
-  paths: z.array(z.string()).optional(),
-  ignorePaths: z.array(z.string()).optional(),
-});
-export type PathFilter = z.infer<typeof PathFilterSchema>;
-
-// Output configuration per trigger
-export const OutputConfigSchema = z.object({
-  /** Fail the build and request PR changes when findings meet this severity */
-  failOn: SeverityThresholdSchema.optional(),
-  /** Only post comments for findings at or above this severity */
-  commentOn: SeverityThresholdSchema.optional(),
-  maxFindings: z.number().int().positive().optional(),
-  /** Post a PR comment even when there are no findings (default: false) */
-  commentOnSuccess: z.boolean().optional(),
-});
-export type OutputConfig = z.infer<typeof OutputConfigSchema>;
-
 // Schedule-specific configuration
 export const ScheduleConfigSchema = z.object({
-  /** Title for the tracking issue (default: "Warden: {triggerName}") */
+  /** Title for the tracking issue (default: "Warden: {skillName}") */
   issueTitle: z.string().optional(),
   /** Create PR with fixes when suggestedFix is available */
   createFixPR: z.boolean().default(false),
@@ -63,55 +44,61 @@ export const ScheduleConfigSchema = z.object({
 });
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 
-// Environment where a trigger can run
-export const WardenEnvironmentSchema = z.enum(['local', 'github']);
-export type WardenEnvironment = z.infer<typeof WardenEnvironmentSchema>;
+// Trigger type: where the trigger runs
+export const TriggerTypeSchema = z.enum(['pull_request', 'local', 'schedule']);
+export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 
-// Trigger definition
-export const TriggerSchema = z.object({
-  name: z.string().min(1),
-  event: z.enum(['pull_request', 'issues', 'issue_comment', 'schedule']),
-  /** Actions to trigger on. Required for all events except 'schedule'. */
+// Skill trigger definition (nested under [[skills.triggers]])
+export const SkillTriggerSchema = z.object({
+  /** Trigger type: pull_request (GitHub), local (CLI), or schedule (cron) */
+  type: TriggerTypeSchema,
+  /** Actions to trigger on (only for pull_request type) */
   actions: z.array(z.string()).min(1).optional(),
-  skill: z.string().min(1),
-  /** Remote repository reference for the skill (e.g., "owner/repo" or "owner/repo@sha") */
-  remote: z.string().optional(),
-  filters: PathFilterSchema.optional(),
-  output: OutputConfigSchema.optional(),
-  /** Model to use for this trigger (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
+  // Per-trigger overrides (flattened output fields)
+  failOn: SeverityThresholdSchema.optional(),
+  reportOn: SeverityThresholdSchema.optional(),
+  maxFindings: z.number().int().positive().optional(),
   model: z.string().optional(),
-  /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
   maxTurns: z.number().int().positive().optional(),
-  /** Environments where this trigger runs. Omit to run everywhere. */
-  environments: z.array(WardenEnvironmentSchema).min(1).optional(),
-  /** Schedule-specific configuration. Only used when event is 'schedule'. */
+  /** Schedule-specific configuration. Only used when type is 'schedule'. */
   schedule: ScheduleConfigSchema.optional(),
 }).refine(
   (data) => {
-    // actions is required unless event is 'schedule'
-    if (data.event !== 'schedule') {
+    // actions is required for pull_request type
+    if (data.type === 'pull_request') {
       return data.actions !== undefined && data.actions.length > 0;
     }
     return true;
   },
   {
-    message: "actions is required for non-schedule events",
+    message: "actions is required for pull_request triggers",
     path: ["actions"],
   }
-).refine(
-  (data) => {
-    // paths filter is required for schedule events
-    if (data.event === 'schedule') {
-      return data.filters?.paths !== undefined && data.filters.paths.length > 0;
-    }
-    return true;
-  },
-  {
-    message: "filters.paths is required for schedule events",
-    path: ["filters", "paths"],
-  }
 );
-export type Trigger = z.infer<typeof TriggerSchema>;
+export type SkillTrigger = z.infer<typeof SkillTriggerSchema>;
+
+// Skill configuration (top-level [[skills]])
+export const SkillConfigSchema = z.object({
+  name: z.string().min(1),
+  /** Path patterns to include */
+  paths: z.array(z.string()).optional(),
+  /** Path patterns to exclude */
+  ignorePaths: z.array(z.string()).optional(),
+  /** Remote repository reference for the skill (e.g., "owner/repo" or "owner/repo@sha") */
+  remote: z.string().optional(),
+  // Flattened output fields (skill-level defaults)
+  failOn: SeverityThresholdSchema.optional(),
+  reportOn: SeverityThresholdSchema.optional(),
+  maxFindings: z.number().int().positive().optional(),
+  reportOnSuccess: z.boolean().optional(),
+  /** Model to use for this skill (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
+  model: z.string().optional(),
+  /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
+  maxTurns: z.number().int().positive().optional(),
+  /** Triggers defining when/where this skill runs. Omit to run everywhere (wildcard). */
+  triggers: z.array(SkillTriggerSchema).optional(),
+});
+export type SkillConfig = z.infer<typeof SkillConfigSchema>;
 
 // Runner configuration
 export const RunnerConfigSchema = z.object({
@@ -149,14 +136,21 @@ export const ChunkingConfigSchema = z.object({
 });
 export type ChunkingConfig = z.infer<typeof ChunkingConfigSchema>;
 
-// Default configuration that triggers inherit from
+// Default configuration that skills inherit from
 export const DefaultsSchema = z.object({
-  filters: PathFilterSchema.optional(),
-  output: OutputConfigSchema.optional(),
-  /** Default model for all triggers (e.g., 'claude-sonnet-4-20250514') */
+  /** Fail the build when findings meet this severity */
+  failOn: SeverityThresholdSchema.optional(),
+  /** Only report findings at or above this severity */
+  reportOn: SeverityThresholdSchema.optional(),
+  maxFindings: z.number().int().positive().optional(),
+  /** Report even when there are no findings (default: false) */
+  reportOnSuccess: z.boolean().optional(),
+  /** Default model for all skills (e.g., 'claude-sonnet-4-20250514') */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
   maxTurns: z.number().int().positive().optional(),
+  /** Path patterns to exclude from all skills */
+  ignorePaths: z.array(z.string()).optional(),
   /** Default branch for the repository (e.g., 'main', 'master', 'develop'). Auto-detected if not specified. */
   defaultBranch: z.string().optional(),
   /** Chunking configuration for controlling how files are processed */
@@ -171,18 +165,33 @@ export const WardenConfigSchema = z
   .object({
     version: z.literal(1),
     defaults: DefaultsSchema.optional(),
-    triggers: z.array(TriggerSchema).default([]),
+    skills: z.array(SkillConfigSchema).default([]),
     runner: RunnerConfigSchema.optional(),
   })
   .superRefine((config, ctx) => {
-    const names = config.triggers.map((t) => t.name);
+    const names = config.skills.map((s) => s.name);
     const duplicates = names.filter((name, i) => names.indexOf(name) !== i);
     if (duplicates.length > 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Duplicate trigger names: ${[...new Set(duplicates)].join(', ')}`,
-        path: ['triggers'],
+        message: `Duplicate skill names: ${[...new Set(duplicates)].join(', ')}`,
+        path: ['skills'],
       });
+    }
+
+    // Validate schedule skills have paths
+    for (const [i, skill] of config.skills.entries()) {
+      if (skill.triggers) {
+        for (const trigger of skill.triggers) {
+          if (trigger.type === 'schedule' && (!skill.paths || skill.paths.length === 0)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "paths is required for skills with schedule triggers",
+              path: ['skills', i, 'paths'],
+            });
+          }
+        }
+      }
     }
   });
 export type WardenConfig = z.infer<typeof WardenConfigSchema>;

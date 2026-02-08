@@ -8,7 +8,7 @@ import {
   clearGlobCache,
   getGlobCacheSize,
 } from './matcher.js';
-import type { Trigger } from '../config/schema.js';
+import type { ResolvedTrigger } from '../config/loader.js';
 import { SEVERITY_ORDER } from '../types/index.js';
 import type { EventContext, SkillReport } from '../types/index.js';
 
@@ -133,35 +133,35 @@ describe('matchTrigger', () => {
     repoPath: '/test/repo',
   };
 
-  const baseTrigger: Trigger = {
+  const baseTrigger: ResolvedTrigger = {
     name: 'test-trigger',
-    event: 'pull_request',
-    actions: ['opened', 'synchronize'],
     skill: 'test-skill',
+    type: 'pull_request',
+    actions: ['opened', 'synchronize'],
+    filters: {},
   };
 
-  it('matches when event and action match', () => {
-    expect(matchTrigger(baseTrigger, baseContext)).toBe(true);
+  it('matches when type and action match', () => {
+    expect(matchTrigger(baseTrigger, baseContext, 'github')).toBe(true);
   });
 
-  it('does not match wrong event type', () => {
-    const trigger = { ...baseTrigger, event: 'issues' as const };
-    expect(matchTrigger(trigger, baseContext)).toBe(false);
+  it('does not match PR trigger in local environment', () => {
+    expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(false);
   });
 
   it('does not match wrong action', () => {
     const trigger = { ...baseTrigger, actions: ['closed'] };
-    expect(matchTrigger(trigger, baseContext)).toBe(false);
+    expect(matchTrigger(trigger, baseContext, 'github')).toBe(false);
   });
 
   it('matches with path filter', () => {
     const trigger = { ...baseTrigger, filters: { paths: ['src/**/*.ts'] } };
-    expect(matchTrigger(trigger, baseContext)).toBe(true);
+    expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
   });
 
   it('does not match when no files match path filter', () => {
     const trigger = { ...baseTrigger, filters: { paths: ['lib/**/*.ts'] } };
-    expect(matchTrigger(trigger, baseContext)).toBe(false);
+    expect(matchTrigger(trigger, baseContext, 'github')).toBe(false);
   });
 
   it('ignores files matching ignorePaths', () => {
@@ -173,7 +173,7 @@ describe('matchTrigger', () => {
       },
     };
     const trigger = { ...baseTrigger, filters: { ignorePaths: ['*.md'] } };
-    expect(matchTrigger(trigger, context)).toBe(false);
+    expect(matchTrigger(trigger, context, 'github')).toBe(false);
   });
 
   it('fails when path filters defined but filenames undefined', () => {
@@ -182,7 +182,7 @@ describe('matchTrigger', () => {
       pullRequest: undefined,
     };
     const trigger = { ...baseTrigger, filters: { paths: ['src/**/*.ts'] } };
-    expect(matchTrigger(trigger, context)).toBe(false);
+    expect(matchTrigger(trigger, context, 'github')).toBe(false);
   });
 
   it('fails when ignorePaths defined but filenames undefined', () => {
@@ -191,7 +191,7 @@ describe('matchTrigger', () => {
       pullRequest: undefined,
     };
     const trigger = { ...baseTrigger, filters: { ignorePaths: ['*.md'] } };
-    expect(matchTrigger(trigger, context)).toBe(false);
+    expect(matchTrigger(trigger, context, 'github')).toBe(false);
   });
 
   it('fails when path filters defined but files array empty', () => {
@@ -203,7 +203,7 @@ describe('matchTrigger', () => {
       },
     };
     const trigger = { ...baseTrigger, filters: { paths: ['src/**/*.ts'] } };
-    expect(matchTrigger(trigger, context)).toBe(false);
+    expect(matchTrigger(trigger, context, 'github')).toBe(false);
   });
 
   it('matches when no filters defined and filenames unavailable', () => {
@@ -211,44 +211,42 @@ describe('matchTrigger', () => {
       ...baseContext,
       pullRequest: undefined,
     };
-    expect(matchTrigger(baseTrigger, context)).toBe(true);
+    expect(matchTrigger(baseTrigger, context, 'github')).toBe(true);
   });
 
-  describe('environment filtering', () => {
-    it('matches when trigger environments includes the current environment', () => {
-      const trigger = { ...baseTrigger, environments: ['local' as const] };
-      expect(matchTrigger(trigger, baseContext, 'local')).toBe(true);
+  describe('type-based matching', () => {
+    const localTrigger: ResolvedTrigger = { ...baseTrigger, type: 'local', actions: undefined };
+    const wildcardTrigger: ResolvedTrigger = { ...baseTrigger, type: '*', actions: undefined };
+
+    it('local trigger matches in local environment', () => {
+      expect(matchTrigger(localTrigger, baseContext, 'local')).toBe(true);
     });
 
-    it('does not match when trigger environments excludes the current environment', () => {
-      const trigger = { ...baseTrigger, environments: ['local' as const] };
-      expect(matchTrigger(trigger, baseContext, 'github')).toBe(false);
+    it('local trigger does not match in github environment', () => {
+      expect(matchTrigger(localTrigger, baseContext, 'github')).toBe(false);
     });
 
-    it('matches github-only trigger in github environment', () => {
-      const trigger = { ...baseTrigger, environments: ['github' as const] };
-      expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
-    });
-
-    it('does not match github-only trigger in local environment', () => {
-      const trigger = { ...baseTrigger, environments: ['github' as const] };
-      expect(matchTrigger(trigger, baseContext, 'local')).toBe(false);
-    });
-
-    it('matches when both environments are listed', () => {
-      const trigger = { ...baseTrigger, environments: ['local' as const, 'github' as const] };
-      expect(matchTrigger(trigger, baseContext, 'local')).toBe(true);
-      expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
-    });
-
-    it('matches regardless of environment when environments is not set', () => {
-      expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(true);
+    it('pull_request trigger matches in github environment', () => {
       expect(matchTrigger(baseTrigger, baseContext, 'github')).toBe(true);
     });
 
-    it('matches when no environment param is passed (backwards compat)', () => {
-      const trigger = { ...baseTrigger, environments: ['local' as const] };
-      expect(matchTrigger(trigger, baseContext)).toBe(true);
+    it('pull_request trigger does not match in local environment', () => {
+      expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(false);
+    });
+
+    it('wildcard trigger matches in any environment', () => {
+      expect(matchTrigger(wildcardTrigger, baseContext, 'local')).toBe(true);
+      expect(matchTrigger(wildcardTrigger, baseContext, 'github')).toBe(true);
+    });
+
+    it('wildcard trigger still applies path filters', () => {
+      const trigger = { ...wildcardTrigger, filters: { paths: ['lib/**/*.ts'] } };
+      expect(matchTrigger(trigger, baseContext, 'local')).toBe(false);
+    });
+
+    it('wildcard trigger matches when path filters match', () => {
+      const trigger = { ...wildcardTrigger, filters: { paths: ['src/**/*.ts'] } };
+      expect(matchTrigger(trigger, baseContext, 'local')).toBe(true);
     });
   });
 });

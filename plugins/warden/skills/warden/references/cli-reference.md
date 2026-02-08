@@ -12,9 +12,9 @@ Analyze code for security issues and code quality.
 
 | Command | Description |
 |---------|-------------|
-| `(default)` | Run analysis on targets or using warden.toml triggers |
+| `(default)` | Run analysis on targets or using warden.toml skills |
 | `init` | Initialize warden.toml and GitHub workflow |
-| `add [skill]` | Add a skill trigger to warden.toml |
+| `add [skill]` | Add a skill to warden.toml |
 | `sync [remote]` | Update cached remote skills to latest |
 | `setup-app` | Create a GitHub App for Warden via manifest flow |
 
@@ -25,7 +25,7 @@ Analyze code for security issues and code quality.
 | `<files>` | Analyze specific files (e.g., `src/auth.ts`) |
 | `<glob>` | Analyze files matching pattern (e.g., `"src/**/*.ts"`) |
 | `<git-ref>` | Analyze changes from git ref (e.g., `HEAD~3`, `main..feature`) |
-| `(none)` | Analyze uncommitted changes using warden.toml triggers |
+| `(none)` | Analyze uncommitted changes using warden.toml skills |
 
 Ambiguous targets (no path separator, no extension) are resolved by checking if a file exists at the path. Use `--git` to force git ref interpretation.
 
@@ -39,9 +39,9 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 | `--json` | Output results as JSON |
 | `-o, --output <path>` | Write full run output to a JSONL file |
 | `--fail-on <severity>` | Exit with code 1 if findings >= severity |
-| `--comment-on <severity>` | Only show findings >= severity in output |
+| `--report-on <severity>` | Only show findings >= severity in output |
 | `--fix` | Automatically apply all suggested fixes |
-| `--parallel <n>` | Max concurrent trigger/skill executions (default: 4) |
+| `--parallel <n>` | Max concurrent skill executions (default: 4) |
 | `--git` | Force ambiguous targets to be treated as git refs |
 | `--offline` | Use cached remote skills without network access |
 | `-q, --quiet` | Errors and final summary only |
@@ -83,7 +83,7 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 
 ## Severity Levels
 
-Used in `--fail-on` and `--comment-on`:
+Used in `--fail-on` and `--report-on`:
 
 | Level | Meaning |
 |-------|---------|
@@ -118,7 +118,7 @@ warden add --remote https://github.com/getsentry/skills --skill security-review
 warden add --remote getsentry/skills@abc123 --skill security-review
 
 # Run analysis
-warden                                  # Triggers from warden.toml
+warden                                  # Skills from warden.toml
 warden src/auth.ts                      # Specific file
 warden src/auth.ts --skill security-review
 warden "src/**/*.ts"                    # Glob pattern

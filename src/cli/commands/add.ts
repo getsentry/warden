@@ -3,8 +3,8 @@ import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import select from '@inquirer/select';
 import { getRepoRoot } from '../git.js';
-import { loadWardenConfig, appendTrigger } from '../../config/index.js';
-import type { Trigger } from '../../config/schema.js';
+import { loadWardenConfig, appendSkill } from '../../config/index.js';
+import type { SkillConfig } from '../../config/schema.js';
 import { discoverAllSkills, type DiscoveredSkill } from '../../skills/loader.js';
 import {
   fetchRemote,
@@ -187,28 +187,31 @@ async function promptRemoteSkillSelection(
   }
 }
 
+const DEFAULT_TRIGGERS = [
+  {
+    type: 'pull_request' as const,
+    actions: ['opened', 'synchronize', 'reopened'],
+  },
+];
+
 /**
- * Create a default trigger for a local skill.
+ * Create a default skill config for a local skill.
  */
-function createDefaultTrigger(skillName: string): Trigger {
+function createDefaultSkillConfig(skillName: string): SkillConfig {
   return {
     name: skillName,
-    event: 'pull_request',
-    actions: ['opened', 'synchronize', 'reopened'],
-    skill: skillName,
+    triggers: DEFAULT_TRIGGERS,
   };
 }
 
 /**
- * Create a trigger for a remote skill.
+ * Create a skill config for a remote skill.
  */
-function createRemoteTrigger(skillName: string, remote: string): Trigger {
+function createRemoteSkillConfig(skillName: string, remote: string): SkillConfig {
   return {
     name: skillName,
-    event: 'pull_request',
-    actions: ['opened', 'synchronize', 'reopened'],
-    skill: skillName,
     remote,
+    triggers: DEFAULT_TRIGGERS,
   };
 }
 
@@ -314,18 +317,18 @@ async function runAddRemote(
     return 1;
   }
 
-  // Check for duplicate trigger
+  // Check for duplicate skill
   if (configuredSkills.has(skillName)) {
-    reporter.warning(`Trigger '${skillName}' already exists in warden.toml`);
-    reporter.skipped(relative(cwd, configPath), 'trigger already configured');
+    reporter.warning(`Skill '${skillName}' already exists in warden.toml`);
+    reporter.skipped(relative(cwd, configPath), 'skill already configured');
     return 0;
   }
 
-  // Append trigger to warden.toml
-  const trigger = createRemoteTrigger(skillName, remote);
+  // Append skill to warden.toml
+  const skillConfig = createRemoteSkillConfig(skillName, remote);
   try {
-    appendTrigger(configPath, trigger);
-    reporter.success(`Added trigger '${skillName}' to ${relative(cwd, configPath)}`);
+    appendSkill(configPath, skillConfig);
+    reporter.success(`Added skill '${skillName}' to ${relative(cwd, configPath)}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     reporter.error(`Failed to update warden.toml: ${message}`);
@@ -334,7 +337,7 @@ async function runAddRemote(
 
   // Show success message
   reporter.blank();
-  reporter.text(`The trigger will run on pull requests using skill from ${chalk.cyan(remote)}.`);
+  reporter.text(`The skill will run on pull requests using skill from ${chalk.cyan(remote)}.`);
   reporter.text(`Edit ${chalk.cyan('warden.toml')} to customize filters and output options.`);
 
   return 0;
@@ -364,7 +367,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
   if (hasConfig) {
     try {
       const config = loadWardenConfig(repoRoot);
-      configuredSkills = new Set(config.triggers.map((t) => t.name));
+      configuredSkills = new Set(config.skills.map((s) => s.name));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       reporter.error(`Failed to load warden.toml: ${message}`);
@@ -439,18 +442,18 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  // 10. Check for duplicate trigger
+  // 10. Check for duplicate skill
   if (configuredSkills.has(skillName)) {
-    reporter.warning(`Trigger '${skillName}' already exists in warden.toml`);
-    reporter.skipped(relative(cwd, configPath), 'trigger already configured');
+    reporter.warning(`Skill '${skillName}' already exists in warden.toml`);
+    reporter.skipped(relative(cwd, configPath), 'skill already configured');
     return 0;
   }
 
-  // 11. Append trigger to warden.toml
-  const trigger = createDefaultTrigger(skillName);
+  // 11. Append skill to warden.toml
+  const skillConfig = createDefaultSkillConfig(skillName);
   try {
-    appendTrigger(configPath, trigger);
-    reporter.success(`Added trigger '${skillName}' to ${relative(cwd, configPath)}`);
+    appendSkill(configPath, skillConfig);
+    reporter.success(`Added skill '${skillName}' to ${relative(cwd, configPath)}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     reporter.error(`Failed to update warden.toml: ${message}`);
@@ -459,7 +462,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
 
   // 12. Show success message with next steps
   reporter.blank();
-  reporter.text(`The trigger will run on pull requests.`);
+  reporter.text(`The skill will run on pull requests.`);
   reporter.text(`Edit ${chalk.cyan('warden.toml')} to customize filters and output options.`);
 
   return 0;

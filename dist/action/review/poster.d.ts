@@ -42,7 +42,7 @@ export interface ReviewPosterDeps {
  * Post a review for a single trigger result.
  *
  * Handles:
- * - Filtering findings by commentOn threshold
+ * - Filtering findings by reportOn threshold
  * - Deduplicating against existing comments
  * - Processing duplicate actions (reactions, updates)
  * - Applying coordination decisions

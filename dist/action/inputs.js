@@ -46,9 +46,9 @@ export function parseActionInputs() {
     const failOn = SeverityThresholdSchema.safeParse(failOnInput).success
         ? failOnInput
         : undefined;
-    const commentOnInput = getInput('comment-on');
-    const commentOn = SeverityThresholdSchema.safeParse(commentOnInput).success
-        ? commentOnInput
+    const reportOnInput = getInput('report-on');
+    const reportOn = SeverityThresholdSchema.safeParse(reportOnInput).success
+        ? reportOnInput
         : undefined;
     const maxFindingsParsed = parseInt(getInput('max-findings') || '50', 10);
     const parallelParsed = parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10);
@@ -58,7 +58,7 @@ export function parseActionInputs() {
         githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
         configPath: getInput('config-path') || 'warden.toml',
         failOn,
-        commentOn,
+        reportOn,
         maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
         parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
     };

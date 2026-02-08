@@ -1,196 +1,289 @@
 import { describe, it, expect } from 'vitest';
-import { resolveTrigger } from './loader.js';
-import { WardenConfigSchema, type Trigger, type WardenConfig } from './schema.js';
+import { resolveSkillConfigs } from './loader.js';
+import { WardenConfigSchema, type SkillConfig, type WardenConfig } from './schema.js';
 
-describe('resolveTrigger', () => {
-  const baseTrigger: Trigger = {
-    name: 'test-trigger',
-    event: 'pull_request',
-    actions: ['opened'],
-    skill: 'test-skill',
+describe('resolveSkillConfigs', () => {
+  const baseSkill: SkillConfig = {
+    name: 'test-skill',
+    triggers: [
+      { type: 'pull_request', actions: ['opened'] },
+    ],
   };
 
   const baseConfig: WardenConfig = {
     version: 1,
-    triggers: [baseTrigger],
+    skills: [baseSkill],
   };
 
-  it('returns trigger with empty filters and output when no defaults', () => {
-    const resolved = resolveTrigger(baseTrigger, baseConfig);
+  it('returns resolved trigger with empty filters when no defaults', () => {
+    const [resolved] = resolveSkillConfigs(baseConfig);
 
-    expect(resolved.filters).toEqual({
+    expect(resolved?.filters).toEqual({
       paths: undefined,
       ignorePaths: undefined,
     });
-    expect(resolved.output).toEqual({
-      failOn: undefined,
-      commentOn: undefined,
-      maxFindings: undefined,
-    });
-    expect(resolved.model).toBeUndefined();
+    expect(resolved?.failOn).toBeUndefined();
+    expect(resolved?.reportOn).toBeUndefined();
+    expect(resolved?.maxFindings).toBeUndefined();
+    expect(resolved?.model).toBeUndefined();
   });
 
-  it('applies defaults when trigger has no config', () => {
+  it('applies defaults when skill has no config', () => {
     const config: WardenConfig = {
       ...baseConfig,
       defaults: {
-        filters: { paths: ['src/**'], ignorePaths: ['*.test.ts'] },
-        output: { failOn: 'high', commentOn: 'critical', maxFindings: 10 },
+        failOn: 'high',
+        reportOn: 'critical',
+        maxFindings: 10,
         model: 'claude-sonnet-4-20250514',
       },
     };
 
-    const resolved = resolveTrigger(baseTrigger, config);
+    const [resolved] = resolveSkillConfigs(config);
 
-    expect(resolved.filters.paths).toEqual(['src/**']);
-    expect(resolved.filters.ignorePaths).toEqual(['*.test.ts']);
-    expect(resolved.output.failOn).toBe('high');
-    expect(resolved.output.commentOn).toBe('critical');
-    expect(resolved.output.maxFindings).toBe(10);
-    expect(resolved.model).toBe('claude-sonnet-4-20250514');
+    expect(resolved?.failOn).toBe('high');
+    expect(resolved?.reportOn).toBe('critical');
+    expect(resolved?.maxFindings).toBe(10);
+    expect(resolved?.model).toBe('claude-sonnet-4-20250514');
   });
 
-  it('trigger config overrides defaults', () => {
-    const trigger: Trigger = {
-      ...baseTrigger,
-      filters: { paths: ['lib/**'] },
-      output: { failOn: 'critical', commentOn: 'high' },
+  it('skill config overrides defaults', () => {
+    const skill: SkillConfig = {
+      name: 'test-skill',
+      paths: ['lib/**'],
+      failOn: 'critical',
+      reportOn: 'high',
       model: 'claude-opus-4-20250514',
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+      ],
     };
 
     const config: WardenConfig = {
-      ...baseConfig,
-      triggers: [trigger],
+      version: 1,
+      skills: [skill],
       defaults: {
-        filters: { paths: ['src/**'], ignorePaths: ['*.test.ts'] },
-        output: { failOn: 'high', commentOn: 'critical', maxFindings: 10 },
+        failOn: 'high',
+        reportOn: 'critical',
+        maxFindings: 10,
         model: 'claude-sonnet-4-20250514',
       },
     };
 
-    const resolved = resolveTrigger(trigger, config);
+    const [resolved] = resolveSkillConfigs(config);
+
+    // Skill overrides
+    expect(resolved?.filters.paths).toEqual(['lib/**']);
+    expect(resolved?.failOn).toBe('critical');
+    expect(resolved?.reportOn).toBe('high');
+    expect(resolved?.model).toBe('claude-opus-4-20250514');
+
+    // Defaults still applied where skill doesn't specify
+    expect(resolved?.maxFindings).toBe(10);
+  });
+
+  it('trigger overrides skill and defaults (3-level merge)', () => {
+    const skill: SkillConfig = {
+      name: 'test-skill',
+      failOn: 'high',
+      reportOn: 'medium',
+      model: 'claude-sonnet-4-20250514',
+      triggers: [
+        {
+          type: 'pull_request',
+          actions: ['opened'],
+          failOn: 'critical',
+          model: 'claude-opus-4-20250514',
+        },
+      ],
+    };
+
+    const config: WardenConfig = {
+      version: 1,
+      skills: [skill],
+      defaults: {
+        failOn: 'low',
+        reportOn: 'info',
+        maxFindings: 10,
+      },
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
 
     // Trigger overrides
-    expect(resolved.filters.paths).toEqual(['lib/**']);
-    expect(resolved.output.failOn).toBe('critical');
-    expect(resolved.output.commentOn).toBe('high');
-    expect(resolved.model).toBe('claude-opus-4-20250514');
+    expect(resolved?.failOn).toBe('critical');
+    expect(resolved?.model).toBe('claude-opus-4-20250514');
 
-    // Defaults still applied where trigger doesn't specify
-    expect(resolved.filters.ignorePaths).toEqual(['*.test.ts']);
-    expect(resolved.output.maxFindings).toBe(10);
+    // Skill overrides defaults
+    expect(resolved?.reportOn).toBe('medium');
+
+    // Defaults applied where neither trigger nor skill specifies
+    expect(resolved?.maxFindings).toBe(10);
   });
 
-  it('partial defaults are applied correctly', () => {
+  it('produces wildcard entry for skill with no triggers', () => {
     const config: WardenConfig = {
-      ...baseConfig,
-      defaults: {
-        filters: { ignorePaths: ['*.md'] },
-      },
+      version: 1,
+      skills: [{ name: 'test-skill' }],
     };
 
-    const resolved = resolveTrigger(baseTrigger, config);
+    const [resolved] = resolveSkillConfigs(config);
 
-    expect(resolved.filters.paths).toBeUndefined();
-    expect(resolved.filters.ignorePaths).toEqual(['*.md']);
-    expect(resolved.output.failOn).toBeUndefined();
-    expect(resolved.model).toBeUndefined();
+    expect(resolved?.type).toBe('*');
+    expect(resolved?.name).toBe('test-skill');
+    expect(resolved?.skill).toBe('test-skill');
   });
 
-  it('preserves other trigger properties', () => {
-    const trigger: Trigger = {
-      ...baseTrigger,
-      name: 'my-trigger',
-      skill: 'security-review',
+  it('produces one entry per trigger', () => {
+    const skill: SkillConfig = {
+      name: 'test-skill',
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+        { type: 'local' },
+      ],
     };
 
-    const resolved = resolveTrigger(trigger, baseConfig);
+    const config: WardenConfig = {
+      version: 1,
+      skills: [skill],
+    };
 
-    expect(resolved.name).toBe('my-trigger');
-    expect(resolved.event).toBe('pull_request');
-    expect(resolved.actions).toEqual(['opened']);
-    expect(resolved.skill).toBe('security-review');
+    const resolved = resolveSkillConfigs(config);
+
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]?.type).toBe('pull_request');
+    expect(resolved[1]?.type).toBe('local');
+  });
+
+  it('preserves skill properties', () => {
+    const skill: SkillConfig = {
+      name: 'security-review',
+      remote: 'org/repo',
+      paths: ['src/**'],
+      ignorePaths: ['*.test.ts'],
+      triggers: [
+        { type: 'pull_request', actions: ['opened'] },
+      ],
+    };
+
+    const config: WardenConfig = {
+      version: 1,
+      skills: [skill],
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.name).toBe('security-review');
+    expect(resolved?.skill).toBe('security-review');
+    expect(resolved?.remote).toBe('org/repo');
+    expect(resolved?.filters.paths).toEqual(['src/**']);
+    expect(resolved?.filters.ignorePaths).toEqual(['*.test.ts']);
+  });
+
+  describe('ignorePaths merging', () => {
+    it('uses defaults.ignorePaths when skill has none', () => {
+      const config: WardenConfig = {
+        version: 1,
+        skills: [baseSkill],
+        defaults: { ignorePaths: ['dist/**'] },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.filters.ignorePaths).toEqual(['dist/**']);
+    });
+
+    it('merges defaults.ignorePaths with skill.ignorePaths', () => {
+      const skill: SkillConfig = {
+        name: 'test-skill',
+        ignorePaths: ['*.test.ts'],
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      };
+
+      const config: WardenConfig = {
+        version: 1,
+        skills: [skill],
+        defaults: { ignorePaths: ['dist/**'] },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.filters.ignorePaths).toEqual(['dist/**', '*.test.ts']);
+    });
+
+    it('returns undefined ignorePaths when neither defaults nor skill has them', () => {
+      const [resolved] = resolveSkillConfigs(baseConfig);
+      expect(resolved?.filters.ignorePaths).toBeUndefined();
+    });
   });
 
   describe('model precedence', () => {
-    it('trigger.model takes precedence over cliModel', () => {
-      const trigger: Trigger = {
-        ...baseTrigger,
-        model: 'claude-opus-4-20250514',
+    it('trigger.model takes precedence over skill.model', () => {
+      const skill: SkillConfig = {
+        name: 'test-skill',
+        model: 'claude-sonnet-4-20250514',
+        triggers: [
+          { type: 'pull_request', actions: ['opened'], model: 'claude-opus-4-20250514' },
+        ],
       };
 
-      const resolved = resolveTrigger(trigger, baseConfig, 'claude-haiku-3-5-20241022');
+      const [resolved] = resolveSkillConfigs({ version: 1, skills: [skill] });
+      expect(resolved?.model).toBe('claude-opus-4-20250514');
+    });
 
-      expect(resolved.model).toBe('claude-opus-4-20250514');
+    it('skill.model takes precedence over defaults.model', () => {
+      const config: WardenConfig = {
+        version: 1,
+        skills: [{
+          name: 'test-skill',
+          model: 'claude-opus-4-20250514',
+          triggers: [{ type: 'pull_request', actions: ['opened'] }],
+        }],
+        defaults: { model: 'claude-sonnet-4-20250514' },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.model).toBe('claude-opus-4-20250514');
     });
 
     it('defaults.model takes precedence over cliModel', () => {
       const config: WardenConfig = {
         ...baseConfig,
-        defaults: {
-          model: 'claude-sonnet-4-20250514',
-        },
+        defaults: { model: 'claude-sonnet-4-20250514' },
       };
 
-      const resolved = resolveTrigger(baseTrigger, config, 'claude-haiku-3-5-20241022');
-
-      expect(resolved.model).toBe('claude-sonnet-4-20250514');
+      const [resolved] = resolveSkillConfigs(config, 'claude-haiku-3-5-20241022');
+      expect(resolved?.model).toBe('claude-sonnet-4-20250514');
     });
 
     it('cliModel is used when no config model is set', () => {
-      const resolved = resolveTrigger(baseTrigger, baseConfig, 'claude-haiku-3-5-20241022');
-
-      expect(resolved.model).toBe('claude-haiku-3-5-20241022');
-    });
-
-    it('trigger.model takes precedence over defaults.model', () => {
-      const trigger: Trigger = {
-        ...baseTrigger,
-        model: 'claude-opus-4-20250514',
-      };
-      const config: WardenConfig = {
-        ...baseConfig,
-        triggers: [trigger],
-        defaults: {
-          model: 'claude-sonnet-4-20250514',
-        },
-      };
-
-      const resolved = resolveTrigger(trigger, config, 'claude-haiku-3-5-20241022');
-
-      expect(resolved.model).toBe('claude-opus-4-20250514');
+      const [resolved] = resolveSkillConfigs(baseConfig, 'claude-haiku-3-5-20241022');
+      expect(resolved?.model).toBe('claude-haiku-3-5-20241022');
     });
 
     it('empty string cliModel is treated as undefined', () => {
       const config: WardenConfig = {
         ...baseConfig,
-        defaults: {
-          model: 'claude-sonnet-4-20250514',
-        },
+        defaults: { model: 'claude-sonnet-4-20250514' },
       };
 
-      const resolved = resolveTrigger(baseTrigger, config, '');
-
-      expect(resolved.model).toBe('claude-sonnet-4-20250514');
+      const [resolved] = resolveSkillConfigs(config, '');
+      expect(resolved?.model).toBe('claude-sonnet-4-20250514');
     });
 
     it('empty string model values fall through to next in precedence', () => {
-      // Simulates GitHub Actions substituting unconfigured secrets with ''
-      const trigger: Trigger = {
-        ...baseTrigger,
+      const skill: SkillConfig = {
+        name: 'test-skill',
         model: '',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
       };
+
       const config: WardenConfig = {
-        ...baseConfig,
-        triggers: [trigger],
-        defaults: {
-          model: '',
-        },
+        version: 1,
+        skills: [skill],
+        defaults: { model: '' },
       };
 
-      const resolved = resolveTrigger(trigger, config, 'claude-haiku-3-5-20241022');
-
-      expect(resolved.model).toBe('claude-haiku-3-5-20241022');
+      const [resolved] = resolveSkillConfigs(config, 'claude-haiku-3-5-20241022');
+      expect(resolved?.model).toBe('claude-haiku-3-5-20241022');
     });
   });
 });
@@ -199,10 +292,8 @@ describe('maxTurns config', () => {
   it('accepts maxTurns in defaults', () => {
     const config = {
       version: 1,
-      defaults: {
-        maxTurns: 25,
-      },
-      triggers: [],
+      defaults: { maxTurns: 25 },
+      skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
@@ -210,32 +301,36 @@ describe('maxTurns config', () => {
     expect(result.data?.defaults?.maxTurns).toBe(25);
   });
 
-  it('accepts maxTurns in trigger', () => {
+  it('accepts maxTurns in skill', () => {
     const config = {
       version: 1,
-      triggers: [
-        {
-          name: 'test',
-          event: 'pull_request',
-          actions: ['opened'],
-          skill: 'security-review',
-          maxTurns: 30,
-        },
-      ],
+      skills: [{ name: 'test', maxTurns: 30 }],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
-    expect(result.data?.triggers[0]?.maxTurns).toBe(30);
+    expect(result.data?.skills[0]?.maxTurns).toBe(30);
+  });
+
+  it('accepts maxTurns in skill trigger', () => {
+    const config = {
+      version: 1,
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'pull_request', actions: ['opened'], maxTurns: 30 }],
+      }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.skills[0]?.triggers?.[0]?.maxTurns).toBe(30);
   });
 
   it('rejects non-positive maxTurns', () => {
     const config = {
       version: 1,
-      defaults: {
-        maxTurns: 0,
-      },
-      triggers: [],
+      defaults: { maxTurns: 0 },
+      skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
@@ -245,10 +340,8 @@ describe('maxTurns config', () => {
   it('rejects non-integer maxTurns', () => {
     const config = {
       version: 1,
-      defaults: {
-        maxTurns: 10.5,
-      },
-      triggers: [],
+      defaults: { maxTurns: 10.5 },
+      skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
@@ -260,10 +353,8 @@ describe('batchDelayMs config', () => {
   it('accepts batchDelayMs in defaults', () => {
     const config = {
       version: 1,
-      defaults: {
-        batchDelayMs: 1000,
-      },
-      triggers: [],
+      defaults: { batchDelayMs: 1000 },
+      skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
@@ -274,10 +365,8 @@ describe('batchDelayMs config', () => {
   it('accepts zero batchDelayMs', () => {
     const config = {
       version: 1,
-      defaults: {
-        batchDelayMs: 0,
-      },
-      triggers: [],
+      defaults: { batchDelayMs: 0 },
+      skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
@@ -288,10 +377,8 @@ describe('batchDelayMs config', () => {
   it('rejects negative batchDelayMs', () => {
     const config = {
       version: 1,
-      defaults: {
-        batchDelayMs: -100,
-      },
-      triggers: [],
+      defaults: { batchDelayMs: -100 },
+      skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
@@ -301,10 +388,8 @@ describe('batchDelayMs config', () => {
   it('rejects non-integer batchDelayMs', () => {
     const config = {
       version: 1,
-      defaults: {
-        batchDelayMs: 100.5,
-      },
-      triggers: [],
+      defaults: { batchDelayMs: 100.5 },
+      skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
@@ -312,107 +397,108 @@ describe('batchDelayMs config', () => {
   });
 });
 
-describe('environments config', () => {
-  it('accepts environments in trigger', () => {
+describe('trigger type config', () => {
+  it('accepts pull_request trigger type', () => {
     const config = {
       version: 1,
-      triggers: [
-        {
-          name: 'test',
-          event: 'pull_request',
-          actions: ['opened'],
-          skill: 'test-skill',
-          environments: ['local'],
-        },
-      ],
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
-    expect(result.data?.triggers[0]?.environments).toEqual(['local']);
+    expect(result.data?.skills[0]?.triggers?.[0]?.type).toBe('pull_request');
   });
 
-  it('accepts multiple environments', () => {
+  it('accepts local trigger type', () => {
     const config = {
       version: 1,
-      triggers: [
-        {
-          name: 'test',
-          event: 'pull_request',
-          actions: ['opened'],
-          skill: 'test-skill',
-          environments: ['local', 'github'],
-        },
-      ],
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'local' }],
+      }],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
-    expect(result.data?.triggers[0]?.environments).toEqual(['local', 'github']);
+    expect(result.data?.skills[0]?.triggers?.[0]?.type).toBe('local');
   });
 
-  it('rejects empty environments array', () => {
+  it('accepts schedule trigger type', () => {
     const config = {
       version: 1,
-      triggers: [
-        {
-          name: 'test',
-          event: 'pull_request',
-          actions: ['opened'],
-          skill: 'test-skill',
-          environments: [],
-        },
-      ],
+      skills: [{
+        name: 'test',
+        paths: ['src/**/*.ts'],
+        triggers: [{ type: 'schedule' }],
+      }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.skills[0]?.triggers?.[0]?.type).toBe('schedule');
+  });
+
+  it('rejects invalid trigger type', () => {
+    const config = {
+      version: 1,
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'invalid' }],
+      }],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(false);
   });
 
-  it('rejects invalid environment name', () => {
+  it('requires actions for pull_request triggers', () => {
     const config = {
       version: 1,
-      triggers: [
-        {
-          name: 'test',
-          event: 'pull_request',
-          actions: ['opened'],
-          skill: 'test-skill',
-          environments: ['invalid'],
-        },
-      ],
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'pull_request' }],
+      }],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(false);
   });
 
-  it('allows trigger without environments (runs everywhere)', () => {
+  it('does not require actions for local triggers', () => {
     const config = {
       version: 1,
-      triggers: [
-        {
-          name: 'test',
-          event: 'pull_request',
-          actions: ['opened'],
-          skill: 'test-skill',
-        },
-      ],
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'local' }],
+      }],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
-    expect(result.data?.triggers[0]?.environments).toBeUndefined();
+  });
+
+  it('allows skill without triggers (wildcard)', () => {
+    const config = {
+      version: 1,
+      skills: [{ name: 'test' }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.skills[0]?.triggers).toBeUndefined();
   });
 });
 
-describe('trigger name uniqueness', () => {
-  it('allows unique trigger names', () => {
+describe('skill name uniqueness', () => {
+  it('allows unique skill names', () => {
     const config = {
       version: 1,
-      triggers: [
-        { name: 'trigger-a', event: 'pull_request', actions: ['opened'], skill: 'skill-a' },
-        { name: 'trigger-b', event: 'pull_request', actions: ['opened'], skill: 'skill-b' },
+      skills: [
+        { name: 'skill-a' },
+        { name: 'skill-b' },
       ],
     };
 
@@ -420,31 +506,31 @@ describe('trigger name uniqueness', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects duplicate trigger names', () => {
+  it('rejects duplicate skill names', () => {
     const config = {
       version: 1,
-      triggers: [
-        { name: 'my-trigger', event: 'pull_request', actions: ['opened'], skill: 'skill-a' },
-        { name: 'my-trigger', event: 'pull_request', actions: ['opened'], skill: 'skill-b' },
+      skills: [
+        { name: 'my-skill' },
+        { name: 'my-skill' },
       ],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0]?.message).toContain('Duplicate trigger names: my-trigger');
+      expect(result.error.issues[0]?.message).toContain('Duplicate skill names: my-skill');
     }
   });
 
   it('reports all duplicate names in error message', () => {
     const config = {
       version: 1,
-      triggers: [
-        { name: 'dup-a', event: 'pull_request', actions: ['opened'], skill: 'skill-1' },
-        { name: 'dup-a', event: 'pull_request', actions: ['opened'], skill: 'skill-2' },
-        { name: 'dup-b', event: 'pull_request', actions: ['opened'], skill: 'skill-3' },
-        { name: 'dup-b', event: 'pull_request', actions: ['opened'], skill: 'skill-4' },
-        { name: 'unique', event: 'pull_request', actions: ['opened'], skill: 'skill-5' },
+      skills: [
+        { name: 'dup-a' },
+        { name: 'dup-a' },
+        { name: 'dup-b' },
+        { name: 'dup-b' },
+        { name: 'unique' },
       ],
     };
 
@@ -456,5 +542,48 @@ describe('trigger name uniqueness', () => {
       expect(message).toContain('dup-b');
       expect(message).not.toContain('unique');
     }
+  });
+});
+
+describe('schedule skill validation', () => {
+  it('requires paths for skills with schedule triggers', () => {
+    const config = {
+      version: 1,
+      skills: [{
+        name: 'weekly-scan',
+        triggers: [{ type: 'schedule' }],
+      }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts schedule skills with paths', () => {
+    const config = {
+      version: 1,
+      skills: [{
+        name: 'weekly-scan',
+        paths: ['src/**/*.ts'],
+        triggers: [{ type: 'schedule' }],
+      }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('defaults.ignorePaths config', () => {
+  it('accepts ignorePaths in defaults', () => {
+    const config = {
+      version: 1,
+      defaults: { ignorePaths: ['dist/**', 'node_modules/**'] },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.ignorePaths).toEqual(['dist/**', 'node_modules/**']);
   });
 });

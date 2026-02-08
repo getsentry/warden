@@ -14,7 +14,7 @@ export const CLIOptionsSchema = z.object({
   output: z.string().optional(),
   failOn: SeverityThresholdSchema.optional(),
   /** Only show findings at or above this severity in output */
-  commentOn: SeverityThresholdSchema.optional(),
+  reportOn: SeverityThresholdSchema.optional(),
   help: z.boolean().default(false),
   /** Max concurrent trigger/skill executions (default: 4) */
   parallel: z.number().int().positive().optional(),
@@ -87,7 +87,7 @@ Options:
   -o, --output <path>  Write full run output to a JSONL file
   --fail-on <severity> Exit with code 1 if findings >= severity
                        (off, critical, high, medium, low, info)
-  --comment-on <sev>   Only show findings >= severity in output
+  --report-on <sev>    Only show findings >= severity in output
                        (off, critical, high, medium, low, info)
   --fix                Automatically apply all suggested fixes
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
@@ -263,7 +263,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       json: { type: 'boolean', default: false },
       output: { type: 'string', short: 'o' },
       'fail-on': { type: 'string' },
-      'comment-on': { type: 'string' },
+      'report-on': { type: 'string' },
       fix: { type: 'boolean', default: false },
       force: { type: 'boolean', short: 'f', default: false },
       list: { type: 'boolean', short: 'l', default: false },
@@ -396,7 +396,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     json: values.json,
     output: values.output,
     failOn: values['fail-on'] as SeverityThreshold | undefined,
-    commentOn: values['comment-on'] as SeverityThreshold | undefined,
+    reportOn: values['report-on'] as SeverityThreshold | undefined,
     fix: values.fix,
     force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,

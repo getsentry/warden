@@ -10,62 +10,56 @@ version = 1
 [defaults]
 model = "claude-sonnet-4-20250514"
 
-[[triggers]]
+[[skills]]
 name = "find-bugs"
-event = "pull_request"
-actions = ["opened", "synchronize"]
-skill = "find-bugs"
-
-[triggers.filters]
 paths = ["src/**/*.ts"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
 ```
 
-## Trigger Configuration
+## Skill Configuration
 
-Triggers map events to skills. Each trigger requires a name, event, actions, and skill:
+Skills define what to analyze and when. Each skill requires a name and at least one trigger:
 
 ```toml
-[[triggers]]
-name = "security-strict"
-event = "pull_request"
-actions = ["opened", "synchronize"]
-skill = "security-review"
-
-[triggers.filters]
+[[skills]]
+name = "security-review"
 paths = ["src/auth/**", "src/payments/**"]
-
-[triggers.output]
 failOn = "critical"
-commentOn = "high"
+reportOn = "high"
 maxFindings = 20
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
 ```
 
-**Event types:** `pull_request`, `issues`, `issue_comment`, `schedule`
+**Trigger types:** `pull_request`, `local`, `schedule`
 
-**Actions (non-schedule):** `opened`, `synchronize`, `reopened`, `closed`
+**Actions (pull_request):** `opened`, `synchronize`, `reopened`, `closed`
 
 ## Common Patterns
 
 **Strict security on critical files:**
 ```toml
-[[triggers]]
-name = "auth-security"
-event = "pull_request"
-actions = ["opened", "synchronize"]
-skill = "security-review"
+[[skills]]
+name = "security-review"
 model = "claude-opus-4-20250514"
 maxTurns = 100
-
-[triggers.filters]
 paths = ["src/auth/**", "src/payments/**"]
-
-[triggers.output]
 failOn = "critical"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
 ```
 
 **Skip test files:**
 ```toml
-[triggers.filters]
+[[skills]]
+name = "find-bugs"
 paths = ["src/**/*.ts"]
 ignorePaths = ["**/*.test.ts", "**/*.spec.ts"]
 ```
@@ -81,7 +75,7 @@ mode = "whole-file"
 
 From highest to lowest priority:
 
-1. Trigger-level `model`
+1. Skill-level `model`
 2. `[defaults]` `model`
 3. CLI `--model` flag
 4. `WARDEN_MODEL` env var
@@ -99,8 +93,8 @@ From highest to lowest priority:
 ## Troubleshooting
 
 **No findings reported:**
-- Check `--comment-on` threshold (default shows all)
-- Verify skill matches file types in `filters.paths`
+- Check `--report-on` threshold (default shows all)
+- Verify skill matches file types in `paths`
 - Use `-v` to see which files are being analyzed
 
 **Files being skipped:**

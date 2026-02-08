@@ -114,7 +114,7 @@ async function postReviewToGitHub(
  * Post a review for a single trigger result.
  *
  * Handles:
- * - Filtering findings by commentOn threshold
+ * - Filtering findings by reportOn threshold
  * - Deduplicating against existing comments
  * - Processing duplicate actions (reactions, updates)
  * - Applying coordination decisions
@@ -141,12 +141,12 @@ export async function postTriggerReview(
     );
   }
 
-  // Filter findings by commentOn threshold
-  const filteredFindings = filterFindingsBySeverity(result.report.findings, result.commentOn);
-  const commentOnSuccess = result.commentOnSuccess ?? false;
+  // Filter findings by reportOn threshold
+  const filteredFindings = filterFindingsBySeverity(result.report.findings, result.reportOn);
+  const reportOnSuccess = result.reportOnSuccess ?? false;
 
   // Skip if nothing to post
-  if (!result.renderResult || (filteredFindings.length === 0 && !commentOnSuccess && !needsApproval)) {
+  if (!result.renderResult || (filteredFindings.length === 0 && !reportOnSuccess && !needsApproval)) {
     return { posted: false, newComments, shouldFail: false };
   }
 
@@ -199,8 +199,8 @@ export async function postTriggerReview(
     // Check if failOn threshold is met (even if all findings deduplicated, we still need REQUEST_CHANGES)
     const needsRequestChanges = result.failOn && shouldFail(result.report, result.failOn);
 
-    // Only post if we have non-duplicate findings, commentOnSuccess, approval needed, or REQUEST_CHANGES needed
-    if (findingsToPost.length > 0 || commentOnSuccess || needsApproval || needsRequestChanges) {
+    // Only post if we have non-duplicate findings, reportOnSuccess, approval needed, or REQUEST_CHANGES needed
+    if (findingsToPost.length > 0 || reportOnSuccess || needsApproval || needsRequestChanges) {
       // Re-render with deduplicated findings if any were removed
       // Don't pass previousReviewState if this trigger's approval was suppressed
       // (to avoid re-rendering as APPROVE when coordination decided otherwise)
@@ -214,7 +214,7 @@ export async function postTriggerReview(
               { ...result.report, findings: findingsToPost },
               {
                 maxFindings: result.maxFindings,
-                commentOn: result.commentOn,
+                reportOn: result.reportOn,
                 failOn: result.failOn,
                 checkRunUrl: result.checkRunUrl,
                 totalFindings: result.report.findings.length,

@@ -44,8 +44,8 @@ export interface TriggerExecutorDeps {
   previousReviewState: ReviewState | null;
   /** Global fail-on from action inputs (trigger-specific takes precedence) */
   globalFailOn?: SeverityThreshold;
-  /** Global comment-on from action inputs (trigger-specific takes precedence) */
-  globalCommentOn?: SeverityThreshold;
+  /** Global report-on from action inputs (trigger-specific takes precedence) */
+  globalReportOn?: SeverityThreshold;
   /** Global max-findings from action inputs (trigger-specific takes precedence) */
   globalMaxFindings: number;
 }
@@ -58,8 +58,8 @@ export interface TriggerResult {
   report?: SkillReport;
   renderResult?: RenderResult;
   failOn?: SeverityThreshold;
-  commentOn?: SeverityThreshold;
-  commentOnSuccess?: boolean;
+  reportOn?: SeverityThreshold;
+  reportOnSuccess?: boolean;
   checkRunUrl?: string;
   maxFindings?: number;
   previousReviewState?: ReviewState | null;
@@ -103,8 +103,8 @@ export async function executeTrigger(
     }
   }
 
-  const failOn = trigger.output.failOn ?? deps.globalFailOn;
-  const commentOn = trigger.output.commentOn ?? deps.globalCommentOn;
+  const failOn = trigger.failOn ?? deps.globalFailOn;
+  const reportOn = trigger.reportOn ?? deps.globalReportOn;
 
   try {
     const taskOptions: SkillTaskOptions = {
@@ -118,7 +118,7 @@ export async function executeTrigger(
       runnerOptions: {
         apiKey: anthropicApiKey,
         model: trigger.model,
-        maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+        maxTurns: trigger.maxTurns,
         batchDelayMs: config.defaults?.batchDelayMs,
         pathToClaudeCodeExecutable: claudePath,
       },
@@ -142,7 +142,7 @@ export async function executeTrigger(
           repo: context.repository.name,
           headSha: context.pullRequest.headSha,
           failOn,
-          commentOn,
+          reportOn,
         });
       } catch (error) {
         console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
@@ -152,12 +152,12 @@ export async function executeTrigger(
     // Render if we're going to post comments OR if we might need to approve
     // (approval can happen even with no comments when previousReviewState is CHANGES_REQUESTED)
     const mightNeedApproval = previousReviewState === 'CHANGES_REQUESTED' && failOn && failOn !== 'off';
-    const maxFindings = trigger.output.maxFindings ?? deps.globalMaxFindings;
+    const maxFindings = trigger.maxFindings ?? deps.globalMaxFindings;
     const renderResult =
-      commentOn !== 'off' || mightNeedApproval
+      reportOn !== 'off' || mightNeedApproval
         ? renderSkillReport(report, {
             maxFindings,
-            commentOn,
+            reportOn,
             failOn,
             checkRunUrl: skillCheckUrl,
             totalFindings: report.findings.length,
@@ -171,8 +171,8 @@ export async function executeTrigger(
       report,
       renderResult,
       failOn,
-      commentOn,
-      commentOnSuccess: trigger.output.commentOnSuccess,
+      reportOn,
+      reportOnSuccess: trigger.reportOnSuccess,
       checkRunUrl: skillCheckUrl,
       maxFindings,
       previousReviewState,

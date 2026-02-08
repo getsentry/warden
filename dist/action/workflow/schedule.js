@@ -4,7 +4,7 @@
  * Handles schedule and workflow_dispatch events.
  */
 import { dirname, join } from 'node:path';
-import { loadWardenConfig, resolveTrigger } from '../../config/loader.js';
+import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
 import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
@@ -21,7 +21,7 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
     const configFullPath = join(repoPath, inputs.configPath);
     const config = loadWardenConfig(dirname(configFullPath));
     // Find schedule triggers
-    const scheduleTriggers = config.triggers.filter((t) => t.event === 'schedule');
+    const scheduleTriggers = resolveSkillConfigs(config).filter((t) => t.type === 'schedule');
     if (scheduleTriggers.length === 0) {
         console.log('No schedule triggers configured');
         setOutput('findings-count', 0);
@@ -55,9 +55,8 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
     const triggerErrors = [];
     let shouldFailAction = false;
     // Process each schedule trigger
-    for (const trigger of scheduleTriggers) {
-        const resolved = resolveTrigger(trigger, config);
-        logGroup(`Running trigger: ${trigger.name} (skill: ${resolved.skill})`);
+    for (const resolved of scheduleTriggers) {
+        logGroup(`Running trigger: ${resolved.name} (skill: ${resolved.skill})`);
         try {
             // Build context from paths filter
             const patterns = resolved.filters?.paths ?? ['**/*'];
@@ -73,7 +72,7 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
             });
             // Skip if no matching files
             if (!context.pullRequest?.files.length) {
-                console.log(`No files match trigger ${trigger.name}`);
+                console.log(`No files match trigger ${resolved.name}`);
                 logGroupEnd();
                 continue;
             }
@@ -86,7 +85,7 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
             const report = await runSkill(skill, context, {
                 apiKey: inputs.anthropicApiKey,
                 model: resolved.model,
-                maxTurns: trigger.maxTurns ?? config.defaults?.maxTurns,
+                maxTurns: resolved.maxTurns,
                 batchDelayMs: config.defaults?.batchDelayMs,
                 pathToClaudeCodeExecutable: claudePath,
             });
@@ -94,8 +93,8 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
             allReports.push(report);
             totalFindings += report.findings.length;
             // Create/update issue with findings
-            const scheduleConfig = trigger.schedule ?? {};
-            const issueTitle = scheduleConfig.issueTitle ?? `Warden: ${trigger.name}`;
+            const scheduleConfig = resolved.schedule ?? {};
+            const issueTitle = scheduleConfig.issueTitle ?? `Warden: ${resolved.name}`;
             const issueResult = await createOrUpdateIssue(octokit, owner, repo, [report], {
                 title: issueTitle,
                 commitSha: headSha,
@@ -111,7 +110,7 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
                     baseBranch: defaultBranch,
                     baseSha: headSha,
                     repoPath,
-                    triggerName: trigger.name,
+                    triggerName: resolved.name,
                 });
                 if (fixResult) {
                     console.log(`Created fix PR #${fixResult.prNumber} with ${fixResult.fixCount} fixes`);
@@ -119,18 +118,18 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
                 }
             }
             // Check failure condition
-            const failOn = resolved.output?.failOn ?? inputs.failOn;
+            const failOn = resolved.failOn ?? inputs.failOn;
             if (failOn && shouldFail(report, failOn)) {
                 shouldFailAction = true;
                 const count = countFindingsAtOrAbove(report, failOn);
-                failureReasons.push(`${trigger.name}: Found ${count} ${failOn}+ severity issues`);
+                failureReasons.push(`${resolved.name}: Found ${count} ${failOn}+ severity issues`);
             }
             logGroupEnd();
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            triggerErrors.push(`${trigger.name}: ${errorMessage}`);
-            console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
+            triggerErrors.push(`${resolved.name}: ${errorMessage}`);
+            console.error(`::warning::Trigger ${resolved.name} failed: ${error}`);
             logGroupEnd();
         }
     }

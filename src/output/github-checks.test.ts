@@ -150,7 +150,7 @@ describe('findingsToAnnotations', () => {
     expect(annotations).toHaveLength(50);
   });
 
-  it('filters by commentOn threshold', () => {
+  it('filters by reportOn threshold', () => {
     const findings: Finding[] = [
       {
         id: 'f1',
@@ -182,14 +182,14 @@ describe('findingsToAnnotations', () => {
       },
     ];
 
-    // commentOn='high' should only include critical and high
+    // reportOn='high' should only include critical and high
     const annotations = findingsToAnnotations(findings, 'high');
 
     expect(annotations).toHaveLength(2);
     expect(annotations.map((a) => a.title)).toEqual(['Critical', 'High']);
   });
 
-  it('returns all findings when commentOn is undefined', () => {
+  it('returns all findings when reportOn is undefined', () => {
     const findings: Finding[] = [
       {
         id: 'f1',

@@ -1,7 +1,8 @@
 version = 1
 
-[[triggers]]
-name = "test-trigger"
-skill = "test-skill"
-event = "pull_request"
+[[skills]]
+name = "test-skill"
+
+[[skills.triggers]]
+type = "pull_request"
 actions = ["opened", "synchronize"]

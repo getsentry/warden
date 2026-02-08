@@ -20,29 +20,27 @@ function generateWardenToml(): string {
 
 version = 1
 
-# Default settings inherited by all triggers
-[defaults.output]
+# Default settings inherited by all skills
+[defaults]
 # Severity levels: critical, high, medium, low, info
 # failOn: minimum severity that fails the check
 failOn = "high"
-# commentOn: minimum severity that creates PR annotations
-commentOn = "medium"
+# reportOn: minimum severity that creates PR annotations
+reportOn = "medium"
 
-# Triggers map GitHub events to skills
-# Add triggers with: warden add <skill-name>
+# Skills define what to analyze and when to run
+# Add skills with: warden add <skill-name>
 #
-# Example trigger with path filters:
+# Example skill with path filters and triggers:
 #
-# [[triggers]]
+# [[skills]]
 # name = "security-review"
-# event = "pull_request"
-# actions = ["opened", "synchronize", "reopened"]
-# skill = "security-review"
-#
-# # Path filters prevent running on irrelevant files
-# [triggers.filters]
 # paths = ["src/**/*.ts", "src/**/*.tsx"]
 # ignorePaths = ["**/*.test.ts", "**/__fixtures__/**"]
+#
+# [[skills.triggers]]
+# type = "pull_request"
+# actions = ["opened", "synchronize", "reopened"]
 `;
 }
 

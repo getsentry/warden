@@ -22,8 +22,8 @@ export interface TriggerExecutorDeps {
     previousReviewState: ReviewState | null;
     /** Global fail-on from action inputs (trigger-specific takes precedence) */
     globalFailOn?: SeverityThreshold;
-    /** Global comment-on from action inputs (trigger-specific takes precedence) */
-    globalCommentOn?: SeverityThreshold;
+    /** Global report-on from action inputs (trigger-specific takes precedence) */
+    globalReportOn?: SeverityThreshold;
     /** Global max-findings from action inputs (trigger-specific takes precedence) */
     globalMaxFindings: number;
 }
@@ -35,8 +35,8 @@ export interface TriggerResult {
     report?: SkillReport;
     renderResult?: RenderResult;
     failOn?: SeverityThreshold;
-    commentOn?: SeverityThreshold;
-    commentOnSuccess?: boolean;
+    reportOn?: SeverityThreshold;
+    reportOnSuccess?: boolean;
     checkRunUrl?: string;
     maxFindings?: number;
     previousReviewState?: ReviewState | null;

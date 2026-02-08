@@ -48,13 +48,12 @@ describe('executeTrigger', () => {
     };
     const mockTrigger = {
         name: 'test-trigger',
-        event: 'pull_request',
-        actions: ['opened'],
         skill: 'test-skill',
+        type: 'pull_request',
+        actions: ['opened'],
         filters: {},
-        output: {},
     };
-    const mockConfig = { version: 1, triggers: [] };
+    const mockConfig = { version: 1, skills: [] };
     const mockDeps = {
         octokit: mockOctokit,
         context: mockContext,
@@ -142,7 +141,7 @@ describe('executeTrigger', () => {
         vi.mocked(renderSkillReport).mockReturnValue(mockRenderResult);
         const triggerWithFailOn = {
             ...mockTrigger,
-            output: { failOn: 'high' },
+            failOn: 'high',
         };
         const depsWithGlobalFailOn = {
             ...mockDeps,
