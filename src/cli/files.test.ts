@@ -73,8 +73,10 @@ describe('expandFileGlobs', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `warden-test-${Date.now()}`);
+    tempDir = join(tmpdir(), `warden-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tempDir, { recursive: true });
+    // Create .git so findGitRoot stops here and doesn't pick up ancestor gitignore rules
+    mkdirSync(join(tempDir, '.git'), { recursive: true });
   });
 
   afterEach(() => {
@@ -184,6 +186,8 @@ describe('expandFileGlobs', () => {
     });
 
     it('skips gitignore rules when not in a git repository', async () => {
+      // Remove .git created by beforeEach so this looks like a non-repo dir
+      rmSync(join(tempDir, '.git'), { recursive: true, force: true });
       writeFileSync(join(tempDir, 'file1.ts'), 'content');
       writeFileSync(join(tempDir, 'file2.ts'), 'content');
       writeFileSync(join(tempDir, '.gitignore'), 'file2.ts\n');
