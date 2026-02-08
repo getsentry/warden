@@ -75,7 +75,6 @@ describe('executeTrigger', () => {
     config: mockConfig,
     anthropicApiKey: 'test-key',
     claudePath: '/test/claude',
-    previousReviewState: null,
     globalMaxFindings: 10,
   };
 

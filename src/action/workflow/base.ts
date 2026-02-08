@@ -187,16 +187,42 @@ export function setWorkflowOutputs(outputs: WorkflowOutputs): void {
 
 /**
  * Get the authenticated bot's login name.
- * For GitHub Apps, this returns the app's slug with [bot] suffix (e.g., "warden[bot]").
+ *
+ * Tries three strategies in order:
+ * 1. GraphQL `viewer` query (works for both installation tokens and PATs)
+ * 2. `octokit.apps.getAuthenticated()` → `${slug}[bot]` (GitHub App JWT fallback)
+ * 3. `octokit.users.getAuthenticated()` (PAT fallback)
  */
 export async function getAuthenticatedBotLogin(octokit: Octokit): Promise<string | null> {
+  // Strategy 1: GraphQL viewer (works for installation tokens and PATs)
+  try {
+    const result: { viewer: { login: string } } = await octokit.graphql('query { viewer { login } }');
+    if (result.viewer?.login) {
+      return result.viewer.login;
+    }
+  } catch {
+    // GraphQL may not be available or may fail for certain token types
+  }
+
+  // Strategy 2: GitHub App JWT endpoint
+  try {
+    const { data: app } = await octokit.apps.getAuthenticated();
+    if (app?.slug) {
+      return `${app.slug}[bot]`;
+    }
+  } catch {
+    // Not a GitHub App token
+  }
+
+  // Strategy 3: PAT user endpoint
   try {
     const { data: user } = await octokit.users.getAuthenticated();
     return user.login;
   } catch {
-    // May fail if using a non-app token (e.g., PAT or GITHUB_TOKEN)
-    return null;
+    // Token doesn't have user scope
   }
+
+  return null;
 }
 
 /**

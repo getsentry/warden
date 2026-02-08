@@ -72,6 +72,7 @@ function createMockOctokit(options = {}) {
             listReviews: vi.fn(() => Promise.resolve({ data: [] })),
             createReview: vi.fn(() => Promise.resolve({ data: {} })),
             updateReviewComment: vi.fn(() => Promise.resolve({ data: {} })),
+            dismissReview: vi.fn(() => Promise.resolve({ data: {} })),
         },
         checks: {
             create: vi.fn(() => Promise.resolve({ data: { id: 1, html_url: 'https://example.com/check' } })),
@@ -316,6 +317,50 @@ describe('runPRWorkflow', () => {
                     }),
                 }),
             }), expect.any(Number), expect.any(Object));
+        });
+    });
+    describe('review dismissal', () => {
+        it('dismisses previous CHANGES_REQUESTED when all comments resolved', async () => {
+            // Previous review was CHANGES_REQUESTED
+            vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+                data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+            });
+            // Current run has no findings
+            mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ findings: [] }) });
+            await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
+            expect(dismissReview).toHaveBeenCalledWith(expect.objectContaining({
+                owner: 'test-owner',
+                repo: 'test-repo',
+                pull_number: 123,
+                review_id: 42,
+                message: expect.stringContaining('resolved'),
+            }));
+        });
+        it('does not dismiss when unresolved blocking findings remain', async () => {
+            // Previous review was CHANGES_REQUESTED
+            vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+                data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+            });
+            // Current run still has blocking findings
+            const finding = createFinding({ severity: 'high' });
+            mockRunSkillTask.mockResolvedValue({
+                name: 'test-trigger',
+                report: createSkillReport({ findings: [finding] }),
+            });
+            await expect(runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR)).rejects.toThrow('setFailed');
+            const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
+            expect(dismissReview).not.toHaveBeenCalled();
+        });
+        it('does not dismiss when no previous CHANGES_REQUESTED review', async () => {
+            // Previous review was just a COMMENT (not CHANGES_REQUESTED)
+            vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+                data: [{ id: 42, state: 'COMMENTED', user: { login: 'warden[bot]' } }],
+            });
+            mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ findings: [] }) });
+            await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
+            expect(dismissReview).not.toHaveBeenCalled();
         });
     });
 });

@@ -41,9 +41,4 @@ export interface RenderOptions {
    * modified (e.g., for deduplication) but failOn should evaluate against all findings.
    */
   allFindings?: Finding[];
-  /**
-   * Previous Warden review state on this PR. When set to 'CHANGES_REQUESTED' and
-   * current run has no blocking findings, the review will be APPROVE to clear the block.
-   */
-  previousReviewState?: ReviewState | null;
 }

@@ -8,7 +8,7 @@ import type { Octokit } from '@octokit/rest';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
 import type { EventContext, SkillReport, SeverityThreshold } from '../../types/index.js';
-import type { RenderResult, ReviewState } from '../../output/types.js';
+import type { RenderResult } from '../../output/types.js';
 /**
  * Dependencies required for trigger execution.
  * Making these explicit enables testing with mock implementations.
@@ -19,7 +19,6 @@ export interface TriggerExecutorDeps {
     config: WardenConfig;
     anthropicApiKey: string;
     claudePath: string;
-    previousReviewState: ReviewState | null;
     /** Global fail-on from action inputs (trigger-specific takes precedence) */
     globalFailOn?: SeverityThreshold;
     /** Global report-on from action inputs (trigger-specific takes precedence) */
@@ -39,7 +38,6 @@ export interface TriggerResult {
     reportOnSuccess?: boolean;
     checkRunUrl?: string;
     maxFindings?: number;
-    previousReviewState?: ReviewState | null;
     error?: unknown;
 }
 /**

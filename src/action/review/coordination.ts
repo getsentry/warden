@@ -1,12 +1,9 @@
 /**
  * Review Coordination
  *
- * Coordinates GitHub review posting across multiple triggers to ensure
- * consistent PR state. Handles three key rules:
- *
- * 1. Failed triggers block approval (can't verify issues are fixed)
- * 2. REQUEST_CHANGES from any trigger blocks approval
- * 3. Only one trigger posts APPROVE (prevents duplicate reviews)
+ * Coordinates GitHub review posting across multiple triggers. Since Warden
+ * no longer posts APPROVE reviews (it dismisses instead), this module
+ * provides simple pass-through coordination and stale comment safety checks.
  */
 
 import type { SkillReport } from '../../types/index.js';

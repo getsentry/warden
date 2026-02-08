@@ -31,14 +31,13 @@ How Warden manages PR comments throughout their lifecycle: posting, deduplicatio
 
 **Expected behavior**: Fixed issues are marked resolved; unfixed issues remain visible.
 
-### Approving After Fixes
+### Clearing Review Block After Fixes
 
 **As a developer**, when I address all blocking issues Warden found, I want:
 - The "changes requested" status cleared
-- Indication that Warden is satisfied
 - No manual dismissal required
 
-**Expected behavior**: Warden approves the PR when previously-blocking issues are resolved.
+**Expected behavior**: Warden dismisses its previous review when previously-blocking issues are resolved.
 
 ---
 
@@ -120,35 +119,35 @@ A Warden comment is automatically resolved when:
 
 ---
 
-## PR Approval Flow
+## PR Review Flow
 
 ### State Transitions
 
-| Previous State | Current Findings | New State |
-|----------------|------------------|-----------|
+| Previous State | Current Findings | Action |
+|----------------|------------------|--------|
 | None | Blocking | REQUEST_CHANGES |
 | None | Non-blocking | COMMENT |
 | None | None | No review |
 | CHANGES_REQUESTED | Blocking | REQUEST_CHANGES |
-| CHANGES_REQUESTED | Non-blocking | APPROVE |
-| CHANGES_REQUESTED | None | APPROVE |
+| CHANGES_REQUESTED | Non-blocking | DISMISS previous review |
+| CHANGES_REQUESTED | None | DISMISS previous review |
 | APPROVED | Blocking | REQUEST_CHANGES |
 | APPROVED | Non-blocking | COMMENT |
 | COMMENTED | Any | (follow "None" rules) |
 
 "Blocking" means findings at or above the `failOn` severity threshold.
 
-**Important**: Approval only occurs when `failOn` is configured. Without an active threshold, Warden uses COMMENT even if it previously requested changes. This prevents accidental approval when configuration changes between runs.
+Warden uses `dismissReview` instead of `APPROVE` to clear a previous REQUEST_CHANGES. This lifts the block without implying endorsement of the code.
 
-### Approval Message
+### Dismissal Message
 
-When Warden approves after previously requesting changes:
+When Warden dismisses its previous review:
 
 > All previously reported issues have been resolved.
 
 ### Bot Identity
 
-Warden only considers its own previous reviews when deciding to approve. Reviews from other bots (dependabot, renovate, etc.) are ignored. Warden identifies itself by the authenticated GitHub App's login.
+Warden only considers its own previous reviews when deciding to dismiss. Reviews from other bots (dependabot, renovate, etc.) are ignored. Warden identifies itself by the authenticated GitHub App's login.
 
 ---
 
@@ -200,7 +199,7 @@ Run 2: Warden finds no issues
 
 Result:
 - Original comment marked resolved
-- PR approved (if previously CHANGES_REQUESTED)
+- Previous review dismissed (if previously CHANGES_REQUESTED)
 ```
 
 ### Partial Fix
@@ -234,10 +233,10 @@ Without an Anthropic API key:
 - Near-duplicates (same issue, different wording) may be posted
 - External comment matching is less accurate
 
-### GitHub App Required for Approval
+### GitHub App Required for Dismissal
 
-The approval flow requires a GitHub App token to reliably identify Warden's own reviews. When using a PAT or `GITHUB_TOKEN`:
-- Approval flow is skipped
+The dismiss flow requires a GitHub App token to reliably identify Warden's own reviews. When using a PAT or `GITHUB_TOKEN`:
+- Dismiss flow is skipped
 - Previous CHANGES_REQUESTED state is not cleared automatically
 - User must dismiss the review manually
 
@@ -248,7 +247,7 @@ The approval flow requires a GitHub App token to reliably identify Warden's own 
 | Finds issues | Yes | Yes |
 | Posts PR comments | No | Yes |
 | Resolves stale comments | No | Yes |
-| Approval flow | No | Yes |
+| Dismiss flow | No | Yes |
 | Tracks review state | No | Yes |
 
 The CLI is for local development and CI checks. Full comment lifecycle features require the GitHub Action.

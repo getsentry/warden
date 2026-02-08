@@ -26,7 +26,7 @@ const CI_OUTPUT_MODE = { isTTY: false, supportsColor: false, columns: 120 };
  * - Rendering results for GitHub review
  */
 export async function executeTrigger(trigger, deps) {
-    const { octokit, context, config, anthropicApiKey, claudePath, previousReviewState } = deps;
+    const { octokit, context, config, anthropicApiKey, claudePath } = deps;
     logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
     // Create skill check (only for PRs)
     let skillCheckId;
@@ -86,18 +86,14 @@ export async function executeTrigger(trigger, deps) {
                 console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
             }
         }
-        // Render if we're going to post comments OR if we might need to approve
-        // (approval can happen even with no comments when previousReviewState is CHANGES_REQUESTED)
-        const mightNeedApproval = previousReviewState === 'CHANGES_REQUESTED' && failOn && failOn !== 'off';
         const maxFindings = trigger.maxFindings ?? deps.globalMaxFindings;
-        const renderResult = reportOn !== 'off' || mightNeedApproval
+        const renderResult = reportOn !== 'off'
             ? renderSkillReport(report, {
                 maxFindings,
                 reportOn,
                 failOn,
                 checkRunUrl: skillCheckUrl,
                 totalFindings: report.findings.length,
-                previousReviewState,
             })
             : undefined;
         logGroupEnd();
@@ -110,7 +106,6 @@ export async function executeTrigger(trigger, deps) {
             reportOnSuccess: trigger.reportOnSuccess,
             checkRunUrl: skillCheckUrl,
             maxFindings,
-            previousReviewState,
         };
     }
     catch (error) {

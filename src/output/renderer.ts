@@ -1,6 +1,6 @@
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
-import type { RenderResult, RenderOptions, GitHubReview, GitHubComment, ReviewState } from './types.js';
+import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
 import { formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
 import { generateContentHash, generateMarker } from './dedup.js';
 import { escapeHtml } from '../utils/index.js';
@@ -14,7 +14,7 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, failOn, checkRunUrl, totalFindings, allFindings, previousReviewState } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, failOn, checkRunUrl, totalFindings, allFindings } = options;
 
   // Filter by reportOn threshold first, then apply maxFindings limit
   const filteredFindings = filterFindingsBySeverity(report.findings, reportOn);
@@ -29,7 +29,7 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
 
   // Use allFindings for failOn evaluation if provided (e.g., when report.findings was modified for dedup)
   const findingsForFailOn = allFindings ?? report.findings;
-  const review = renderReview(sortedFindings, report, includeSuggestions, failOn, findingsForFailOn, previousReviewState);
+  const review = renderReview(sortedFindings, report, includeSuggestions, failOn, findingsForFailOn);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile, checkRunUrl, hiddenCount);
 
   return { review, summaryComment };
@@ -41,30 +41,21 @@ function renderReview(
   includeSuggestions: boolean,
   failOn?: SeverityThreshold,
   allFindings?: Finding[],
-  previousReviewState?: ReviewState | null
 ): GitHubReview | undefined {
   const findingsWithLocation = findings.filter((f) => f.location);
 
   // Determine review event type based on failOn threshold against ALL findings.
   // Use allFindings (or report.findings) so failOn operates independently of reportOn and deduplication.
-  const event = determineReviewEvent(allFindings ?? report.findings, failOn, previousReviewState);
+  const event = determineReviewEvent(allFindings ?? report.findings, failOn);
 
-  // If no comments to post, only create a review if REQUEST_CHANGES or APPROVE is needed
-  // This ensures failOn can block the PR even when reportOn filters out all findings,
-  // and APPROVE can clear a previous REQUEST_CHANGES
+  // If no comments to post, only create a review if REQUEST_CHANGES is needed
+  // This ensures failOn can block the PR even when reportOn filters out all findings
   if (findingsWithLocation.length === 0) {
     if (event === 'REQUEST_CHANGES') {
       return {
         event,
         // GitHub API requires non-empty body for REQUEST_CHANGES
         body: 'Findings exceed the configured threshold. See the GitHub Check for details.',
-        comments: [],
-      };
-    }
-    if (event === 'APPROVE') {
-      return {
-        event,
-        body: 'All previously reported issues have been resolved.',
         comments: [],
       };
     }
@@ -112,33 +103,26 @@ function renderReview(
 }
 
 /**
- * Determine the PR review event type based on failOn threshold and previous review state.
+ * Determine the PR review event type based on failOn threshold.
  * Returns:
  * - REQUEST_CHANGES if failOn is set and findings meet/exceed the threshold
- * - APPROVE if failOn is set, we previously requested changes, and no longer have blocking findings
  * - COMMENT otherwise
+ *
+ * Clearing a previous REQUEST_CHANGES is handled by dismissing the review
+ * in the PR workflow, not by posting an APPROVE.
  */
 function determineReviewEvent(
   findings: Finding[],
   failOn?: SeverityThreshold,
-  previousReviewState?: ReviewState | null
 ): GitHubReview['event'] {
-  // failOn must be set (and not 'off') for REQUEST_CHANGES or APPROVE
   const hasActiveThreshold = failOn && failOn !== 'off';
 
-  // Check if any finding meets or exceeds the failOn threshold
   const hasBlockingFinding =
     hasActiveThreshold &&
     findings.some((f) => SEVERITY_ORDER[f.severity] <= SEVERITY_ORDER[failOn]);
 
   if (hasBlockingFinding) {
     return 'REQUEST_CHANGES';
-  }
-
-  // Only approve if we have an active threshold configured.
-  // Without failOn, approval is meaningless (we never would have requested changes).
-  if (hasActiveThreshold && previousReviewState === 'CHANGES_REQUESTED') {
-    return 'APPROVE';
   }
 
   return 'COMMENT';

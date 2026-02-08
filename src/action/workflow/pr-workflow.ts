@@ -16,8 +16,8 @@ import {
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
-import type { ReviewState } from '../../output/types.js';
 import { findBotReviewState } from '../review-state.js';
+import type { BotReviewInfo } from '../review-state.js';
 import { processInBatches } from '../../utils/index.js';
 import type { ActionInputs } from '../inputs.js';
 import { executeTrigger } from '../triggers/executor.js';
@@ -47,25 +47,22 @@ import {
 // -----------------------------------------------------------------------------
 
 /**
- * Get Warden's previous review state on a PR.
- * Returns the most recent review state if Warden (the authenticated app) previously reviewed.
- * Returns null if we can't reliably identify our own reviews (e.g., using PAT instead of GitHub App).
+ * Get Warden's previous review info on a PR.
+ * Returns the most recent review state and ID if Warden previously reviewed.
+ * Returns null if we can't reliably identify our own reviews.
  */
-async function getWardenPreviousReviewState(
+async function getWardenPreviousReviewInfo(
   octokit: Octokit,
   owner: string,
   repo: string,
   prNumber: number
-): Promise<ReviewState | null> {
+): Promise<BotReviewInfo | null> {
   try {
-    // Get the authenticated bot's login to identify our own reviews
     const botLogin = await getAuthenticatedBotLogin(octokit);
 
-    // Without a bot login, we can't reliably identify our own reviews.
-    // Skip approval flow to avoid approving based on another bot's review.
     if (!botLogin) {
       console.log(
-        'Skipping approval flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
+        'Skipping dismiss flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
       );
       return null;
     }
@@ -81,9 +78,28 @@ async function getWardenPreviousReviewState(
 
     return findBotReviewState(reviews, botLogin);
   } catch (error) {
-    console.warn(`::warning::Failed to fetch previous review state: ${error}`);
+    console.warn(`::warning::Failed to fetch previous review info: ${error}`);
     return null;
   }
+}
+
+/**
+ * Dismiss a previous Warden review to clear a REQUEST_CHANGES block.
+ */
+async function dismissPreviousReview(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  reviewId: number
+): Promise<void> {
+  await octokit.pulls.dismissReview({
+    owner,
+    repo,
+    pull_number: prNumber,
+    review_id: reviewId,
+    message: 'All previously reported issues have been resolved.',
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -158,17 +174,17 @@ export async function runPRWorkflow(
     }
   }
 
-  // Fetch previous review state for APPROVE logic (only for PRs)
-  let previousReviewState: ReviewState | null = null;
+  // Fetch previous review info for dismiss logic (only for PRs)
+  let previousReviewInfo: BotReviewInfo | null = null;
   if (context.pullRequest) {
-    previousReviewState = await getWardenPreviousReviewState(
+    previousReviewInfo = await getWardenPreviousReviewInfo(
       octokit,
       context.repository.owner,
       context.repository.name,
       context.pullRequest.number
     );
-    if (previousReviewState) {
-      console.log(`Previous Warden review state: ${previousReviewState}`);
+    if (previousReviewInfo) {
+      console.log(`Previous Warden review state: ${previousReviewInfo.state}`);
     }
   }
 
@@ -185,7 +201,6 @@ export async function runPRWorkflow(
         config,
         anthropicApiKey: inputs.anthropicApiKey,
         claudePath,
-        previousReviewState,
         globalFailOn: inputs.failOn,
         globalReportOn: inputs.reportOn,
         globalMaxFindings: inputs.maxFindings,
@@ -282,6 +297,28 @@ export async function runPRWorkflow(
     }
   } else if (!canResolveStale && wardenComments.length > 0) {
     console.log('Skipping stale comment resolution due to trigger failures');
+  }
+
+  // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
+  // Requires: all triggers succeeded (canResolveStale), no trigger exceeded failOn threshold.
+  if (
+    context.pullRequest &&
+    previousReviewInfo?.state === 'CHANGES_REQUESTED' &&
+    canResolveStale &&
+    !shouldFailAction
+  ) {
+    try {
+      await dismissPreviousReview(
+        octokit,
+        context.repository.owner,
+        context.repository.name,
+        context.pullRequest.number,
+        previousReviewInfo.reviewId
+      );
+      console.log('Dismissed previous CHANGES_REQUESTED review');
+    } catch (error) {
+      console.warn(`::warning::Failed to dismiss previous review: ${error}`);
+    }
   }
 
   // Set outputs

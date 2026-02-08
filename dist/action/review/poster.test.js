@@ -9,9 +9,6 @@ vi.mock('../../output/dedup.js', () => ({
 vi.mock('../../output/renderer.js', () => ({
     renderSkillReport: vi.fn(),
 }));
-vi.mock('../review-state.js', () => ({
-    applyCoordinationToReview: vi.fn((review) => review),
-}));
 import { deduplicateFindings, processDuplicateActions, findingToExistingComment } from '../../output/dedup.js';
 import { renderSkillReport } from '../../output/renderer.js';
 describe('postTriggerReview', () => {
@@ -222,40 +219,6 @@ describe('postTriggerReview', () => {
         expect(deduplicateFindings).toHaveBeenCalled();
         expect(processDuplicateActions).toHaveBeenCalled();
         // Even though all findings were deduplicated, REQUEST_CHANGES should still be posted
-        expect(postResult.posted).toBe(true);
-        expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
-    });
-    it('posts approval review when coordinated', async () => {
-        const result = {
-            triggerName: 'test-trigger',
-            report: {
-                skill: 'test-skill',
-                summary: 'No issues found',
-                findings: [],
-                usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
-            },
-            renderResult: createRenderResult({
-                review: {
-                    event: 'APPROVE',
-                    body: 'All clear',
-                    comments: [],
-                },
-            }),
-            previousReviewState: 'CHANGES_REQUESTED',
-            failOn: 'high',
-        };
-        const coordination = {
-            triggerName: 'test-trigger',
-            reviewEvent: 'APPROVE',
-            approvalSuppressed: false,
-        };
-        const ctx = {
-            result,
-            coordination,
-            existingComments: [],
-            apiKey: 'test-key',
-        };
-        const postResult = await postTriggerReview(ctx, mockDeps);
         expect(postResult.posted).toBe(true);
         expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
     });
