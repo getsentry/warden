@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findBotReviewState, coordinateReviewEvents, } from './review-state.js';
+import { findBotReviewState, } from './review-state.js';
 describe('findBotReviewState', () => {
     const botLogin = 'warden[bot]';
     it('returns null when no reviews exist', () => {
@@ -71,24 +71,6 @@ describe('findBotReviewState', () => {
         ];
         // Should skip PENDING and return CHANGES_REQUESTED
         expect(findBotReviewState(reviews, botLogin)).toEqual({ state: 'CHANGES_REQUESTED', reviewId: 10 });
-    });
-});
-describe('coordinateReviewEvents', () => {
-    it('passes through review events unchanged', () => {
-        const result = coordinateReviewEvents([
-            { triggerName: 'trigger1', reviewEvent: 'REQUEST_CHANGES', failed: false },
-            { triggerName: 'trigger2', reviewEvent: 'COMMENT', failed: false },
-            { triggerName: 'trigger3', reviewEvent: undefined, failed: true },
-        ]);
-        expect(result).toEqual([
-            { triggerName: 'trigger1', reviewEvent: 'REQUEST_CHANGES' },
-            { triggerName: 'trigger2', reviewEvent: 'COMMENT' },
-            { triggerName: 'trigger3', reviewEvent: undefined },
-        ]);
-    });
-    it('handles empty trigger list', () => {
-        const result = coordinateReviewEvents([]);
-        expect(result).toEqual([]);
     });
 });
 //# sourceMappingURL=review-state.test.js.map

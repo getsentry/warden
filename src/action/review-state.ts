@@ -1,59 +1,15 @@
 /**
  * GitHub Review State Management
  *
- * Handles coordination of GitHub PR reviews across multiple Warden triggers
- * and tracking the bot's previous review state for dismissal.
+ * Tracks the bot's previous review state on a PR for dismissal logic.
  */
 
-import type { ReviewState, GitHubReview } from '../output/types.js';
+import type { ReviewState } from '../output/types.js';
 
 const VALID_REVIEW_STATES: ReadonlySet<string> = new Set(['CHANGES_REQUESTED', 'APPROVED', 'COMMENTED']);
 
 function isValidReviewState(state: string): state is ReviewState {
   return VALID_REVIEW_STATES.has(state);
-}
-
-// -----------------------------------------------------------------------------
-// Review Coordination Types
-// -----------------------------------------------------------------------------
-
-/**
- * Input to the review coordination function.
- * Represents what review event a trigger wants to post.
- */
-export interface TriggerReviewInput {
-  triggerName: string;
-  /** The review event this trigger wants to post, or undefined if silent (no review to post) */
-  reviewEvent: GitHubReview['event'] | undefined;
-  /** True if this trigger failed with an error (distinct from silent triggers with no review) */
-  failed: boolean;
-}
-
-/**
- * Output from review coordination.
- * Contains the final decision about what review event to post.
- */
-export interface TriggerReviewOutput {
-  triggerName: string;
-  /** The final event to post (pass-through from input) */
-  reviewEvent: GitHubReview['event'] | undefined;
-}
-
-// -----------------------------------------------------------------------------
-// Review Coordination
-// -----------------------------------------------------------------------------
-
-/**
- * Coordinate review events across multiple triggers.
- *
- * Since Warden no longer posts APPROVE (it dismisses previous reviews instead),
- * this is a simple pass-through that preserves trigger order.
- */
-export function coordinateReviewEvents(triggers: TriggerReviewInput[]): TriggerReviewOutput[] {
-  return triggers.map((trigger) => ({
-    triggerName: trigger.triggerName,
-    reviewEvent: trigger.reviewEvent,
-  }));
 }
 
 // -----------------------------------------------------------------------------

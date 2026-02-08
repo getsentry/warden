@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { buildReviewCoordination, shouldResolveStaleComments, } from './review/coordination.js';
+import { shouldResolveStaleComments, } from './review/coordination.js';
 function orchestrateReviews(results) {
-    const coordination = buildReviewCoordination(results);
     const successful = [];
-    for (const [i, result] of results.entries()) {
-        const coord = coordination[i];
-        if (!result.report || !result.renderResult || !coord) {
+    for (const result of results) {
+        if (!result.report || !result.renderResult) {
             continue;
         }
         successful.push({
@@ -85,7 +83,7 @@ const Trigger = {
 // Scenario Tests
 // -----------------------------------------------------------------------------
 describe('orchestrateReviews', () => {
-    describe('coordination pass-through', () => {
+    describe('successful trigger filtering', () => {
         it('passes review events through unchanged', () => {
             const results = [Trigger.blocking('security-review'), Trigger.commenting('code-review')];
             const { successful } = orchestrateReviews(results);
@@ -136,20 +134,6 @@ describe('orchestrateReviews', () => {
 // -----------------------------------------------------------------------------
 // Unit Tests
 // -----------------------------------------------------------------------------
-describe('buildReviewCoordination', () => {
-    it('returns coordination array matching input order', () => {
-        const results = [
-            Trigger.clean('a'),
-            Trigger.failed('b'),
-            Trigger.blocking('c'),
-        ];
-        const coordination = buildReviewCoordination(results);
-        expect(coordination).toHaveLength(3);
-        expect(coordination[0]?.triggerName).toBe('a');
-        expect(coordination[1]?.triggerName).toBe('b');
-        expect(coordination[2]?.triggerName).toBe('c');
-    });
-});
 describe('shouldResolveStaleComments', () => {
     it('returns true when no errors', () => {
         expect(shouldResolveStaleComments([Trigger.commenting('a'), Trigger.clean('b')])).toBe(true);

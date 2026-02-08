@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildReviewCoordination,
   shouldResolveStaleComments,
   type TriggerExecutionResult,
 } from './review/coordination.js';
@@ -26,12 +25,10 @@ interface OrchestrationResult {
 }
 
 function orchestrateReviews(results: TriggerExecutionResult[]): OrchestrationResult {
-  const coordination = buildReviewCoordination(results);
   const successful: SuccessfulTrigger[] = [];
 
-  for (const [i, result] of results.entries()) {
-    const coord = coordination[i];
-    if (!result.report || !result.renderResult || !coord) {
+  for (const result of results) {
+    if (!result.report || !result.renderResult) {
       continue;
     }
 
@@ -123,7 +120,7 @@ const Trigger = {
 // -----------------------------------------------------------------------------
 
 describe('orchestrateReviews', () => {
-  describe('coordination pass-through', () => {
+  describe('successful trigger filtering', () => {
     it('passes review events through unchanged', () => {
       const results = [Trigger.blocking('security-review'), Trigger.commenting('code-review')];
 
@@ -192,23 +189,6 @@ describe('orchestrateReviews', () => {
 // -----------------------------------------------------------------------------
 // Unit Tests
 // -----------------------------------------------------------------------------
-
-describe('buildReviewCoordination', () => {
-  it('returns coordination array matching input order', () => {
-    const results: TriggerExecutionResult[] = [
-      Trigger.clean('a'),
-      Trigger.failed('b'),
-      Trigger.blocking('c'),
-    ];
-
-    const coordination = buildReviewCoordination(results);
-
-    expect(coordination).toHaveLength(3);
-    expect(coordination[0]?.triggerName).toBe('a');
-    expect(coordination[1]?.triggerName).toBe('b');
-    expect(coordination[2]?.triggerName).toBe('c');
-  });
-});
 
 describe('shouldResolveStaleComments', () => {
   it('returns true when no errors', () => {

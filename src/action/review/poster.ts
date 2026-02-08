@@ -1,7 +1,7 @@
 /**
  * Review Poster
  *
- * Handles posting GitHub PR reviews with deduplication and coordination.
+ * Handles posting GitHub PR reviews with deduplication.
  * Extracted from main.ts to isolate the complex review posting state machine.
  */
 
@@ -18,7 +18,6 @@ import {
 } from '../../output/dedup.js';
 import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
-import type { TriggerReviewOutput } from '../review-state.js';
 import type { TriggerResult } from '../triggers/executor.js';
 
 // -----------------------------------------------------------------------------
@@ -30,7 +29,6 @@ import type { TriggerResult } from '../triggers/executor.js';
  */
 export interface ReviewPostingContext {
   result: TriggerResult;
-  coordination: TriggerReviewOutput | undefined;
   existingComments: ExistingComment[];
   apiKey: string;
 }
@@ -116,7 +114,6 @@ async function postReviewToGitHub(
  * - Filtering findings by reportOn threshold
  * - Deduplicating against existing comments
  * - Processing duplicate actions (reactions, updates)
- * - Applying coordination decisions
  * - Posting the final review
  */
 export async function postTriggerReview(

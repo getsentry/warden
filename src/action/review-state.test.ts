@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   findBotReviewState,
-  coordinateReviewEvents,
 } from './review-state.js';
 
 describe('findBotReviewState', () => {
@@ -88,24 +87,4 @@ describe('findBotReviewState', () => {
   });
 });
 
-describe('coordinateReviewEvents', () => {
-  it('passes through review events unchanged', () => {
-    const result = coordinateReviewEvents([
-      { triggerName: 'trigger1', reviewEvent: 'REQUEST_CHANGES', failed: false },
-      { triggerName: 'trigger2', reviewEvent: 'COMMENT', failed: false },
-      { triggerName: 'trigger3', reviewEvent: undefined, failed: true },
-    ]);
-
-    expect(result).toEqual([
-      { triggerName: 'trigger1', reviewEvent: 'REQUEST_CHANGES' },
-      { triggerName: 'trigger2', reviewEvent: 'COMMENT' },
-      { triggerName: 'trigger3', reviewEvent: undefined },
-    ]);
-  });
-
-  it('handles empty trigger list', () => {
-    const result = coordinateReviewEvents([]);
-    expect(result).toEqual([]);
-  });
-});
 

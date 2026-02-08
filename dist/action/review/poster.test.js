@@ -73,7 +73,6 @@ describe('postTriggerReview', () => {
         };
         const ctx = {
             result,
-            coordination: undefined,
             existingComments: [],
             apiKey: 'test-key',
         };
@@ -96,7 +95,6 @@ describe('postTriggerReview', () => {
         };
         const ctx = {
             result,
-            coordination: undefined,
             existingComments: [],
             apiKey: 'test-key',
         };
@@ -126,7 +124,6 @@ describe('postTriggerReview', () => {
         vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
         const ctx = {
             result,
-            coordination: undefined,
             existingComments: [],
             apiKey: 'test-key',
         };
@@ -163,7 +160,6 @@ describe('postTriggerReview', () => {
         vi.mocked(processDuplicateActions).mockResolvedValue({ updated: 0, reacted: 1, skipped: 0, failed: 0 });
         const ctx = {
             result,
-            coordination: undefined,
             existingComments: [existingComment],
             apiKey: 'test-key',
         };
@@ -211,7 +207,6 @@ describe('postTriggerReview', () => {
         });
         const ctx = {
             result,
-            coordination: undefined,
             existingComments: [existingComment],
             apiKey: 'test-key',
         };
@@ -244,7 +239,6 @@ describe('postTriggerReview', () => {
         vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('API rate limit'));
         const ctx = {
             result,
-            coordination: undefined,
             existingComments: [],
             apiKey: 'test-key',
         };

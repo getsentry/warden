@@ -14,7 +14,7 @@ import { findBotReviewState } from '../review-state.js';
 import { processInBatches } from '../../utils/index.js';
 import { executeTrigger } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
-import { buildReviewCoordination, shouldResolveStaleComments } from '../review/coordination.js';
+import { shouldResolveStaleComments } from '../review/coordination.js';
 import { createCoreCheck, updateCoreCheck, buildCoreSummaryData, determineCoreConclusion, } from '../checks/manager.js';
 import { setOutput, setFailed, logGroup, logGroupEnd, findClaudeCodeExecutable, handleTriggerErrors, collectTriggerErrors, computeWorkflowOutputs, setWorkflowOutputs, getAuthenticatedBotLogin, } from './base.js';
 // -----------------------------------------------------------------------------
@@ -161,17 +161,12 @@ export async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoP
     const reports = [];
     let shouldFailAction = false;
     const failureReasons = [];
-    // Coordinate review events across triggers to ensure consistent PR state
-    const reviewCoordination = buildReviewCoordination(results);
-    // Use index-based lookup to handle duplicate trigger names correctly
-    for (const [i, result] of results.entries()) {
-        const coordination = reviewCoordination[i];
+    for (const result of results) {
         if (result.report) {
             reports.push(result.report);
             // Post review
             const postResult = await postTriggerReview({
                 result,
-                coordination,
                 existingComments,
                 apiKey: inputs.anthropicApiKey,
             }, { octokit, context });

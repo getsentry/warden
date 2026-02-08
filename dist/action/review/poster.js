@@ -1,7 +1,7 @@
 /**
  * Review Poster
  *
- * Handles posting GitHub PR reviews with deduplication and coordination.
+ * Handles posting GitHub PR reviews with deduplication.
  * Extracted from main.ts to isolate the complex review posting state machine.
  */
 import { filterFindingsBySeverity } from '../../types/index.js';
@@ -57,7 +57,6 @@ async function postReviewToGitHub(octokit, context, result) {
  * - Filtering findings by reportOn threshold
  * - Deduplicating against existing comments
  * - Processing duplicate actions (reactions, updates)
- * - Applying coordination decisions
  * - Posting the final review
  */
 export async function postTriggerReview(ctx, deps) {

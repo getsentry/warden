@@ -1,20 +1,18 @@
 /**
  * Review Poster
  *
- * Handles posting GitHub PR reviews with deduplication and coordination.
+ * Handles posting GitHub PR reviews with deduplication.
  * Extracted from main.ts to isolate the complex review posting state machine.
  */
 import type { Octokit } from '@octokit/rest';
 import type { EventContext } from '../../types/index.js';
 import type { ExistingComment } from '../../output/dedup.js';
-import type { TriggerReviewOutput } from '../review-state.js';
 import type { TriggerResult } from '../triggers/executor.js';
 /**
  * Context for posting a review for a single trigger.
  */
 export interface ReviewPostingContext {
     result: TriggerResult;
-    coordination: TriggerReviewOutput | undefined;
     existingComments: ExistingComment[];
     apiKey: string;
 }
@@ -45,7 +43,6 @@ export interface ReviewPosterDeps {
  * - Filtering findings by reportOn threshold
  * - Deduplicating against existing comments
  * - Processing duplicate actions (reactions, updates)
- * - Applying coordination decisions
  * - Posting the final review
  */
 export declare function postTriggerReview(ctx: ReviewPostingContext, deps: ReviewPosterDeps): Promise<ReviewPostResult>;

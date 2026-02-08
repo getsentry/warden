@@ -1,27 +1,11 @@
 /**
  * GitHub Review State Management
  *
- * Handles coordination of GitHub PR reviews across multiple Warden triggers
- * and tracking the bot's previous review state for dismissal.
+ * Tracks the bot's previous review state on a PR for dismissal logic.
  */
 const VALID_REVIEW_STATES = new Set(['CHANGES_REQUESTED', 'APPROVED', 'COMMENTED']);
 function isValidReviewState(state) {
     return VALID_REVIEW_STATES.has(state);
-}
-// -----------------------------------------------------------------------------
-// Review Coordination
-// -----------------------------------------------------------------------------
-/**
- * Coordinate review events across multiple triggers.
- *
- * Since Warden no longer posts APPROVE (it dismisses previous reviews instead),
- * this is a simple pass-through that preserves trigger order.
- */
-export function coordinateReviewEvents(triggers) {
-    return triggers.map((trigger) => ({
-        triggerName: trigger.triggerName,
-        reviewEvent: trigger.reviewEvent,
-    }));
 }
 /**
  * Find the bot's most recent review state on a PR.

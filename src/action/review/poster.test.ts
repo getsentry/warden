@@ -91,7 +91,7 @@ describe('postTriggerReview', () => {
 
     const ctx: ReviewPostingContext = {
       result,
-      coordination: undefined,
+
       existingComments: [],
       apiKey: 'test-key',
     };
@@ -118,7 +118,7 @@ describe('postTriggerReview', () => {
 
     const ctx: ReviewPostingContext = {
       result,
-      coordination: undefined,
+
       existingComments: [],
       apiKey: 'test-key',
     };
@@ -153,7 +153,7 @@ describe('postTriggerReview', () => {
 
     const ctx: ReviewPostingContext = {
       result,
-      coordination: undefined,
+
       existingComments: [],
       apiKey: 'test-key',
     };
@@ -196,7 +196,7 @@ describe('postTriggerReview', () => {
 
     const ctx: ReviewPostingContext = {
       result,
-      coordination: undefined,
+
       existingComments: [existingComment],
       apiKey: 'test-key',
     };
@@ -251,7 +251,7 @@ describe('postTriggerReview', () => {
 
     const ctx: ReviewPostingContext = {
       result,
-      coordination: undefined,
+
       existingComments: [existingComment],
       apiKey: 'test-key',
     };
@@ -289,7 +289,7 @@ describe('postTriggerReview', () => {
 
     const ctx: ReviewPostingContext = {
       result,
-      coordination: undefined,
+
       existingComments: [],
       apiKey: 'test-key',
     };

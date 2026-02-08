@@ -22,7 +22,7 @@ import { processInBatches } from '../../utils/index.js';
 import type { ActionInputs } from '../inputs.js';
 import { executeTrigger } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
-import { buildReviewCoordination, shouldResolveStaleComments } from '../review/coordination.js';
+import { shouldResolveStaleComments } from '../review/coordination.js';
 import {
   createCoreCheck,
   updateCoreCheck,
@@ -238,12 +238,7 @@ export async function runPRWorkflow(
   let shouldFailAction = false;
   const failureReasons: string[] = [];
 
-  // Coordinate review events across triggers to ensure consistent PR state
-  const reviewCoordination = buildReviewCoordination(results);
-
-  // Use index-based lookup to handle duplicate trigger names correctly
-  for (const [i, result] of results.entries()) {
-    const coordination = reviewCoordination[i];
+  for (const result of results) {
     if (result.report) {
       reports.push(result.report);
 
@@ -251,7 +246,6 @@ export async function runPRWorkflow(
       const postResult = await postTriggerReview(
         {
           result,
-          coordination,
           existingComments,
           apiKey: inputs.anthropicApiKey,
         },
