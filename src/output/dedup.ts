@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
-import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
-import { apiUsageToStats } from '../sdk/pricing.js';
+import { callHaiku } from '../sdk/haiku.js';
 
 /**
  * Parsed marker data from a Warden comment.
@@ -386,8 +385,6 @@ async function findSemanticDuplicates(
     return { matches: new Map() };
   }
 
-  const client = new Anthropic({ apiKey });
-
   const existingList = existingComments
     .map((c, i) => `${i + 1}. [${c.path}:${c.line}] "${c.title}" - ${c.description}`)
     .join('\n');
@@ -417,38 +414,28 @@ Return ONLY the JSON array in this format:
 where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
 Return [] if none are duplicates.`;
 
-  let usage: UsageStats | undefined;
+  const result = await callHaiku({
+    apiKey,
+    prompt,
+    schema: DuplicateMatchesSchema,
+    maxTokens: 512,
+  });
 
-  try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 512,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    usage = apiUsageToStats('claude-haiku-4-5', response.usage);
-
-    const content = response.content[0];
-    if (!content || content.type !== 'text') {
-      throw new Error('Unexpected response type');
-    }
-
-    const parsed = DuplicateMatchesSchema.parse(JSON.parse(content.text));
-    const matches = new Map<string, ExistingComment>();
-
-    for (const match of parsed) {
-      const finding = findings[match.findingIndex - 1];
-      const existing = existingComments[match.existingIndex - 1];
-      if (finding && existing) {
-        matches.set(finding.id, existing);
-      }
-    }
-
-    return { matches, usage };
-  } catch (error) {
-    console.warn(`LLM deduplication failed, falling back to hash-only: ${error}`);
-    return { matches: new Map(), usage };
+  if (!result.success) {
+    console.warn(`LLM deduplication failed, falling back to hash-only: ${result.error}`);
+    return { matches: new Map(), usage: result.usage };
   }
+
+  const matches = new Map<string, ExistingComment>();
+  for (const match of result.data) {
+    const finding = findings[match.findingIndex - 1];
+    const existing = existingComments[match.existingIndex - 1];
+    if (finding && existing) {
+      matches.set(finding.id, existing);
+    }
+  }
+
+  return { matches, usage: result.usage };
 }
 
 /**

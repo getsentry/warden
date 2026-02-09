@@ -126,6 +126,7 @@ describe('matchTrigger', () => {
       baseBranch: 'main',
       headBranch: 'feature',
       headSha: 'abc123',
+      baseSha: 'base123',
       files: [
         { filename: 'src/index.ts', status: 'modified', additions: 10, deletions: 5 },
         { filename: 'README.md', status: 'modified', additions: 2, deletions: 0 },
@@ -270,6 +271,7 @@ describe('filterContextByPaths', () => {
       baseBranch: 'main',
       headBranch: 'feature',
       headSha: 'abc123',
+      baseSha: 'base123',
       files: [
         { filename: 'src/index.ts', status: 'modified', additions: 10, deletions: 5 },
         { filename: 'src/utils/helper.ts', status: 'added', additions: 20, deletions: 0 },

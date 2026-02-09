@@ -31,6 +31,18 @@ vi.mock('../../output/dedup.js', async () => {
         processDuplicateActions: vi.fn(() => Promise.resolve({ updated: 0, reacted: 0, failed: 0 })),
     };
 });
+// Mock fix evaluation - has LLM calls
+vi.mock('../fix-evaluation/index.js', () => ({
+    evaluateFixAttempts: vi.fn(() => Promise.resolve({
+        toResolve: [],
+        toReply: [],
+        skipped: 0,
+        evaluated: 0,
+        failedEvaluations: 0,
+        usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+    })),
+    postThreadReply: vi.fn(() => Promise.resolve()),
+}));
 // Mock base utilities that call process.exit or need system access
 vi.mock('./base.js', async () => {
     const actual = await vi.importActual('./base.js');
@@ -46,6 +58,7 @@ vi.mock('./base.js', async () => {
 // Import after mocks
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings } from '../../output/dedup.js';
+import { evaluateFixAttempts } from '../fix-evaluation/index.js';
 import { setFailed } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
@@ -53,6 +66,7 @@ import { clearSkillsCache } from '../../skills/loader.js';
 const mockRunSkillTask = vi.mocked(runSkillTask);
 const mockFetchExistingComments = vi.mocked(fetchExistingComments);
 const mockDeduplicateFindings = vi.mocked(deduplicateFindings);
+const mockEvaluateFixAttempts = vi.mocked(evaluateFixAttempts);
 const mockSetFailed = vi.mocked(setFailed);
 function createMockOctokit(options = {}) {
     const defaultFiles = [
@@ -374,6 +388,38 @@ describe('runPRWorkflow', () => {
             // Should NOT dismiss — without failOn we can't verify the threshold is still met
             const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
             expect(dismissReview).not.toHaveBeenCalled();
+        });
+    });
+    describe('fix evaluation integration', () => {
+        it('calls evaluateFixAttempts when unresolved Warden comments exist', async () => {
+            // Existing unresolved Warden comments
+            mockFetchExistingComments.mockResolvedValue([
+                {
+                    id: 1,
+                    path: 'src/test.ts',
+                    line: 10,
+                    title: 'SQL injection',
+                    description: 'User input in query',
+                    contentHash: 'abc',
+                    isWarden: true,
+                    isResolved: false,
+                    threadId: 'thread-1',
+                },
+            ]);
+            mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+            await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(mockOctokit, expect.arrayContaining([expect.objectContaining({ isWarden: true })]), expect.objectContaining({
+                owner: 'test-owner',
+                repo: 'test-repo',
+                baseSha: 'base123sha456',
+                headSha: 'abc123def456',
+            }), expect.any(Array), 'test-api-key');
+        });
+        it('does not call evaluateFixAttempts when no existing comments', async () => {
+            mockFetchExistingComments.mockResolvedValue([]);
+            mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+            await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
         });
     });
 });

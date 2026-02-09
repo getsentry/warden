@@ -47,6 +47,7 @@ describe('postTriggerReview', () => {
       baseBranch: 'main',
       headBranch: 'feature',
       headSha: 'abc123',
+      baseSha: 'base123',
       files: [],
     },
     repoPath: '/test/path',

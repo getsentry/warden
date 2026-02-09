@@ -16,9 +16,10 @@ import {
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
+import { processInBatches } from '../../utils/index.js';
+import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
 import { findBotReviewState } from '../review-state.js';
 import type { BotReviewInfo } from '../review-state.js';
-import { processInBatches } from '../../utils/index.js';
 import type { ActionInputs } from '../inputs.js';
 import { executeTrigger } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
@@ -268,17 +269,89 @@ export async function runPRWorkflow(
   const triggerErrors = collectTriggerErrors(results);
   handleTriggerErrors(triggerErrors, matchedTriggers.length);
 
-  // Resolve stale Warden comments (comments that no longer have matching findings)
-  // Use fetchedComments (not existingComments) to only check comments that have threadIds
-  // Only resolve if ALL triggers succeeded - otherwise findings may be missing due to failures
-  // Filter to only Warden comments - we don't resolve external comments
+  // Evaluate follow-up commit fix attempts
   const canResolveStale = shouldResolveStaleComments(results);
   const wardenComments = fetchedComments.filter((c) => c.isWarden);
+  const allFindings = reports.flatMap((r) => r.findings);
+  const commentsResolvedByFixEval = new Set<number>();
+
+  if (
+    context.pullRequest &&
+    wardenComments.length > 0 &&
+    canResolveStale &&
+    inputs.anthropicApiKey
+  ) {
+    try {
+      logGroup('Fix evaluation');
+      const unresolvedCount = wardenComments.filter((c) => !c.isResolved && c.threadId).length;
+      if (unresolvedCount > 0) {
+        console.log(`Fix evaluation: evaluating ${unresolvedCount} unresolved comments`);
+      }
+
+      const fixEvaluation = await evaluateFixAttempts(
+        octokit,
+        wardenComments,
+        {
+          owner: context.repository.owner,
+          repo: context.repository.name,
+          baseSha: context.pullRequest.baseSha,
+          headSha: context.pullRequest.headSha,
+        },
+        allFindings,
+        inputs.anthropicApiKey
+      );
+
+      // Resolve successful fixes
+      if (fixEvaluation.toResolve.length > 0) {
+        const resolvedCount = await resolveStaleComments(octokit, fixEvaluation.toResolve);
+        if (resolvedCount > 0) {
+          console.log(`Resolved ${resolvedCount} comments via fix evaluation`);
+        }
+        if (resolvedCount === fixEvaluation.toResolve.length) {
+          fixEvaluation.toResolve.forEach((c) => commentsResolvedByFixEval.add(c.id));
+        }
+      }
+
+      // Post replies for failed fixes
+      for (const reply of fixEvaluation.toReply) {
+        if (reply.comment.threadId) {
+          try {
+            await postThreadReply(octokit, reply.comment.threadId, reply.replyBody);
+          } catch {
+            // Already logged in postThreadReply
+          }
+        }
+      }
+
+      if (fixEvaluation.evaluated > 0) {
+        const totalTokens = fixEvaluation.usage.inputTokens + fixEvaluation.usage.outputTokens;
+        const usageStr =
+          totalTokens > 0
+            ? `, ${totalTokens} tok, $${fixEvaluation.usage.costUSD.toFixed(4)}`
+            : '';
+        console.log(
+          `Fix evaluation: ${fixEvaluation.toResolve.length} resolved, ` +
+            `${fixEvaluation.toReply.length} need attention, ` +
+            `${fixEvaluation.skipped} skipped` +
+            usageStr
+        );
+      }
+      logGroupEnd();
+    } catch (error) {
+      console.warn(`::warning::Failed to evaluate fix attempts: ${error}`);
+      logGroupEnd();
+    }
+  }
+
+  // Resolve stale Warden comments (comments that no longer have matching findings)
+  // Exclude comments already resolved by fix evaluation
   if (context.pullRequest && wardenComments.length > 0 && canResolveStale) {
     try {
-      const allFindings = reports.flatMap((r) => r.findings);
       const scope = buildAnalyzedScope(context.pullRequest.files);
-      const staleComments = findStaleComments(wardenComments, allFindings, scope);
+      const commentsForStaleCheck = wardenComments.filter(
+        (c) => !commentsResolvedByFixEval.has(c.id)
+      );
+      const staleComments = findStaleComments(commentsForStaleCheck, allFindings, scope);
 
       if (staleComments.length > 0) {
         const resolvedCount = await resolveStaleComments(octokit, staleComments);

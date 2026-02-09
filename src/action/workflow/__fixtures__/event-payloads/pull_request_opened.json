@@ -16,7 +16,8 @@
       "login": "test-user"
     },
     "base": {
-      "ref": "main"
+      "ref": "main",
+      "sha": "base123sha456"
     },
     "head": {
       "ref": "feature",

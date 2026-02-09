@@ -33,6 +33,7 @@ describe('buildEventContext', () => {
       },
       base: {
         ref: 'main',
+        sha: 'base123sha456',
       },
       head: {
         ref: 'feature-branch',
@@ -79,6 +80,7 @@ describe('buildEventContext', () => {
     expect(context.pullRequest?.baseBranch).toBe('main');
     expect(context.pullRequest?.headBranch).toBe('feature-branch');
     expect(context.pullRequest?.headSha).toBe('abc123def456');
+    expect(context.pullRequest?.baseSha).toBe('base123sha456');
     expect(context.pullRequest?.files).toHaveLength(2);
     expect(context.repoPath).toBe('/test/repo');
 

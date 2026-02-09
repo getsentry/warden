@@ -69,6 +69,7 @@ export async function buildScheduleEventContext(
       baseBranch: defaultBranch,
       headBranch: defaultBranch,
       headSha,
+      baseSha: headSha, // No actual base for scheduled runs
       files: fileChanges,
     },
     repoPath,

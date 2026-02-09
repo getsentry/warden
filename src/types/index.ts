@@ -176,6 +176,7 @@ export const PullRequestContextSchema = z.object({
   baseBranch: z.string(),
   headBranch: z.string(),
   headSha: z.string(),
+  baseSha: z.string(),
   files: z.array(FileChangeSchema),
 });
 export type PullRequestContext = z.infer<typeof PullRequestContextSchema>;
