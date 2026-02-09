@@ -4,7 +4,9 @@ import { buildEventContext, EventContextError } from './context.js';
 
 describe('buildEventContext', () => {
   const mockListFiles = vi.fn();
+  const mockPaginate = vi.fn();
   const mockOctokit = {
+    paginate: mockPaginate,
     pulls: {
       listFiles: mockListFiles,
     },
@@ -60,7 +62,7 @@ describe('buildEventContext', () => {
       },
     ];
 
-    mockListFiles.mockResolvedValue({ data: mockFiles });
+    mockPaginate.mockResolvedValue(mockFiles);
 
     const context = await buildEventContext('pull_request', validPayload, '/test/repo', mockOctokit);
 
@@ -84,7 +86,7 @@ describe('buildEventContext', () => {
     expect(context.pullRequest?.files).toHaveLength(2);
     expect(context.repoPath).toBe('/test/repo');
 
-    expect(mockListFiles).toHaveBeenCalledWith({
+    expect(mockPaginate).toHaveBeenCalledWith(mockListFiles, {
       owner: 'test-owner',
       repo: 'test-repo',
       pull_number: 1,
@@ -101,7 +103,7 @@ describe('buildEventContext', () => {
       },
     };
 
-    mockListFiles.mockResolvedValue({ data: [] });
+    mockPaginate.mockResolvedValue([]);
 
     const context = await buildEventContext('pull_request', payloadWithNullBody, '/test/repo', mockOctokit);
 
@@ -144,7 +146,7 @@ describe('buildEventContext', () => {
 
     expect(context.eventType).toBe('issues');
     expect(context.pullRequest).toBeUndefined();
-    expect(mockListFiles).not.toHaveBeenCalled();
+    expect(mockPaginate).not.toHaveBeenCalled();
   });
 
   it('maps file statuses correctly', async () => {
@@ -155,7 +157,7 @@ describe('buildEventContext', () => {
       { filename: 'renamed.ts', status: 'renamed', additions: 0, deletions: 0, patch: undefined },
     ];
 
-    mockListFiles.mockResolvedValue({ data: mockFiles });
+    mockPaginate.mockResolvedValue(mockFiles);
 
     const context = await buildEventContext('pull_request', validPayload, '/test/repo', mockOctokit);
 
@@ -176,7 +178,7 @@ describe('buildEventContext', () => {
       },
     ];
 
-    mockListFiles.mockResolvedValue({ data: mockFiles });
+    mockPaginate.mockResolvedValue(mockFiles);
 
     const context = await buildEventContext('pull_request', validPayload, '/test/repo', mockOctokit);
 

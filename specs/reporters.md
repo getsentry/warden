@@ -660,7 +660,7 @@ Inside `::group::Fix evaluation`:
 [2026-02-08T14:30:53.600Z] warden: Resolved 3 comments via fix evaluation
 ```
 
-On fallback: `[...] warden: WARN:   [3/5] ... → fallback (...)`
+On eval error: `[...] warden: WARN:   [3/5] ... → eval_error (...)`
 
 ### Stale Resolution
 

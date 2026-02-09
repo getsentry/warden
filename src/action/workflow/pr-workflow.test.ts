@@ -113,13 +113,12 @@ function createMockOctokit(options: MockOctokitOptions = {}): Octokit {
     },
   ];
 
+  const files = options.prFiles ?? defaultFiles;
+
   return {
+    paginate: vi.fn(() => Promise.resolve(files)),
     pulls: {
-      listFiles: vi.fn(() =>
-        Promise.resolve({
-          data: options.prFiles ?? defaultFiles,
-        })
-      ),
+      listFiles: vi.fn(),
       listReviews: vi.fn(() => Promise.resolve({ data: [] })),
       createReview: vi.fn(() => Promise.resolve({ data: {} })),
       updateReviewComment: vi.fn(() => Promise.resolve({ data: {} })),

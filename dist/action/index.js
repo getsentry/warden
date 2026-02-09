@@ -29181,7 +29181,7 @@ async function buildEventContext(eventName, eventPayload, repoPath, octokit) {
     return result.data;
 }
 async function fetchPullRequestFiles(octokit, owner, repo, pullNumber) {
-    const { data: files } = await octokit.pulls.listFiles({
+    const files = await octokit.paginate(octokit.pulls.listFiles, {
         owner,
         repo,
         pull_number: pullNumber,
@@ -40610,7 +40610,7 @@ function logFixEvaluation(ev, index, total) {
     const totalTokens = ev.usage.inputTokens + ev.usage.outputTokens;
     const costStr = ev.usage.costUSD > 0 ? `, ${formatCost(ev.usage.costUSD)}` : '';
     const idPrefix = ev.findingId ? `${ev.findingId} ` : '';
-    const verdict = ev.usedFallback ? 'fallback' : ev.verdict;
+    const verdict = ev.usedFallback ? 'eval_error' : ev.verdict;
     const line = `  [${index + 1}/${total}] ${idPrefix}${ev.path}:${ev.line} → ${verdict} (${formatDuration(ev.durationMs)}, ${formatTokens(totalTokens)} tok${costStr})`;
     if (ev.usedFallback) {
         warnAction(line);

@@ -117,7 +117,7 @@ async function fetchPullRequestFiles(
   repo: string,
   pullNumber: number
 ): Promise<FileChange[]> {
-  const { data: files } = await octokit.pulls.listFiles({
+  const files = await octokit.paginate(octokit.pulls.listFiles, {
     owner,
     repo,
     pull_number: pullNumber,
