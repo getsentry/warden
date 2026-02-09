@@ -21,33 +21,28 @@ export async function fetchFollowUpChanges(
   baseSha: string,
   headSha: string
 ): Promise<FollowUpChanges> {
-  try {
-    const { data } = await octokit.repos.compareCommits({
-      owner,
-      repo,
-      base: baseSha,
-      head: headSha,
-    });
+  const { data } = await octokit.repos.compareCommits({
+    owner,
+    repo,
+    base: baseSha,
+    head: headSha,
+  });
 
-    const patches = new Map<string, string>();
-    for (const file of data.files ?? []) {
-      if (file.patch) {
-        patches.set(file.filename, file.patch);
-      }
+  const patches = new Map<string, string>();
+  for (const file of data.files ?? []) {
+    if (file.patch) {
+      patches.set(file.filename, file.patch);
     }
-
-    const commitMessages: string[] = [];
-    for (const commit of data.commits ?? []) {
-      if (commit.commit.message) {
-        commitMessages.push(commit.commit.message);
-      }
-    }
-
-    return { patches, commitMessages };
-  } catch (error) {
-    warnAction(`Failed to fetch follow-up changes: ${error}`);
-    return { patches: new Map(), commitMessages: [] };
   }
+
+  const commitMessages: string[] = [];
+  for (const commit of data.commits ?? []) {
+    if (commit.commit.message) {
+      commitMessages.push(commit.commit.message);
+    }
+  }
+
+  return { patches, commitMessages };
 }
 
 /**
