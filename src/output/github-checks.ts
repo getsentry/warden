@@ -292,6 +292,74 @@ export async function updateCoreCheck(
 }
 
 /**
+ * Format a file location as a markdown code span.
+ */
+function formatLocation(location: { path: string; startLine: number; endLine?: number }): string {
+  const { path, startLine, endLine } = location;
+  const lineRange = endLine && endLine !== startLine ? `${startLine}-${endLine}` : `${startLine}`;
+  return `\`${path}:${lineRange}\``;
+}
+
+/**
+ * Render findings grouped by severity as collapsible markdown sections.
+ */
+function renderFindingsSections(findings: Finding[]): string[] {
+  const lines: string[] = [];
+
+  const findingsBySeverity = new Map<Severity, Finding[]>();
+  for (const finding of findings) {
+    const existing = findingsBySeverity.get(finding.severity) ?? [];
+    existing.push(finding);
+    findingsBySeverity.set(finding.severity, existing);
+  }
+
+  const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+  for (const severity of severityOrder) {
+    const group = findingsBySeverity.get(severity);
+    if (!group?.length) continue;
+
+    const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+    lines.push(`### ${label}`, '');
+
+    for (const finding of group) {
+      const location = finding.location ? ` - ${formatLocation(finding.location)}` : '';
+      lines.push('<details>');
+      lines.push(`<summary><strong>${escapeHtml(finding.title)}</strong>${location}</summary>`, '');
+      lines.push(escapeHtml(finding.description), '');
+      lines.push('</details>', '');
+    }
+  }
+
+  return lines;
+}
+
+/**
+ * Render a stats footer line (duration, tokens, cost).
+ */
+function renderStatsFooter(
+  durationMs: number | undefined,
+  usage: UsageStats | undefined,
+  auxiliaryUsage: AuxiliaryUsageMap | undefined
+): string[] {
+  if (durationMs === undefined && !usage) return [];
+
+  const parts: string[] = [];
+  if (durationMs !== undefined) {
+    parts.push(`**Duration:** ${formatDuration(durationMs)}`);
+  }
+  if (usage) {
+    const totalInput = usage.inputTokens + (usage.cacheReadInputTokens ?? 0);
+    parts.push(`**Tokens:** ${formatTokens(totalInput)} in / ${formatTokens(usage.outputTokens)} out`);
+    const auxCost = auxiliaryUsage ? totalAuxiliaryCost(auxiliaryUsage) : 0;
+    const totalCost = usage.costUSD + auxCost;
+    const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
+    parts.push(`**Cost:** ${formatCost(totalCost)}${auxSuffix}`);
+  }
+
+  return ['---', parts.join(' · ')];
+}
+
+/**
  * Build the summary markdown for a skill check.
  */
 function buildSkillSummary(report: SkillReport): string {
@@ -300,65 +368,15 @@ function buildSkillSummary(report: SkillReport): string {
   if (report.findings.length === 0) {
     lines.push('No issues found.');
   } else {
-    // Sort findings by severity
     const sortedFindings = [...report.findings].sort(
       (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
     );
-
-    // Group findings by severity
-    const findingsBySeverity = new Map<Severity, Finding[]>();
-    for (const finding of sortedFindings) {
-      const existing = findingsBySeverity.get(finding.severity) ?? [];
-      existing.push(finding);
-      findingsBySeverity.set(finding.severity, existing);
-    }
-
-    const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
-    for (const severity of severityOrder) {
-      const findings = findingsBySeverity.get(severity);
-      if (!findings?.length) continue;
-
-      const label = severity.charAt(0).toUpperCase() + severity.slice(1);
-      lines.push(`### ${label}`, '');
-
-      for (const finding of findings) {
-        const location = finding.location ? ` - ${formatLocation(finding.location)}` : '';
-        lines.push('<details>');
-        lines.push(`<summary><strong>${escapeHtml(finding.title)}</strong>${location}</summary>`, '');
-        lines.push(escapeHtml(finding.description), '');
-        lines.push('</details>', '');
-      }
-    }
+    lines.push(...renderFindingsSections(sortedFindings));
   }
 
-  // Add stats footer if available
-  if (report.durationMs !== undefined || report.usage) {
-    const statsParts: string[] = [];
-    if (report.durationMs !== undefined) {
-      statsParts.push(`**Duration:** ${formatDuration(report.durationMs)}`);
-    }
-    if (report.usage) {
-      const totalInput = report.usage.inputTokens + (report.usage.cacheReadInputTokens ?? 0);
-      statsParts.push(`**Tokens:** ${formatTokens(totalInput)} in / ${formatTokens(report.usage.outputTokens)} out`);
-      const auxCost = report.auxiliaryUsage ? totalAuxiliaryCost(report.auxiliaryUsage) : 0;
-      const totalCost = report.usage.costUSD + auxCost;
-      const auxSuffix = report.auxiliaryUsage ? formatAuxiliarySuffix(report.auxiliaryUsage) : '';
-      statsParts.push(`**Cost:** ${formatCost(totalCost)}${auxSuffix}`);
-    }
-    lines.push('---', statsParts.join(' · '));
-  }
+  lines.push(...renderStatsFooter(report.durationMs, report.usage, report.auxiliaryUsage));
 
   return lines.join('\n');
-}
-
-
-/**
- * Format a file location as a markdown code span.
- */
-function formatLocation(location: { path: string; startLine: number; endLine?: number }): string {
-  const { path, startLine, endLine } = location;
-  const lineRange = endLine && endLine !== startLine ? `${startLine}-${endLine}` : `${startLine}`;
-  return `\`${path}:${lineRange}\``;
 }
 
 /** Maximum findings to show in the summary */
@@ -376,33 +394,9 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
   );
   const topFindings = sortedFindings.slice(0, MAX_SUMMARY_FINDINGS);
 
-  // Show findings grouped by severity, each in a collapsible details
   if (topFindings.length > 0) {
-    const findingsBySeverity = new Map<Severity, Finding[]>();
-    for (const finding of topFindings) {
-      const existing = findingsBySeverity.get(finding.severity) ?? [];
-      existing.push(finding);
-      findingsBySeverity.set(finding.severity, existing);
-    }
+    lines.push(...renderFindingsSections(topFindings));
 
-    const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
-    for (const severity of severityOrder) {
-      const findings = findingsBySeverity.get(severity);
-      if (!findings?.length) continue;
-
-      const label = severity.charAt(0).toUpperCase() + severity.slice(1);
-      lines.push(`### ${label}`, '');
-
-      for (const finding of findings) {
-        const location = finding.location ? ` - ${formatLocation(finding.location)}` : '';
-        lines.push('<details>');
-        lines.push(`<summary><strong>${escapeHtml(finding.title)}</strong>${location}</summary>`, '');
-        lines.push(escapeHtml(finding.description), '');
-        lines.push('</details>', '');
-      }
-    }
-
-    // Note if there are more findings not shown
     if (data.totalFindings > topFindings.length) {
       const remaining = data.totalFindings - topFindings.length;
       lines.push(`*...and ${remaining} more*`, '');
@@ -440,23 +434,7 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
 
   lines.push('', '</details>', '');
 
-  // Stats footer with labeled inline format
-  const hasStats = data.totalDurationMs !== undefined || data.totalUsage;
-  if (hasStats) {
-    const statsParts: string[] = [];
-    if (data.totalDurationMs !== undefined) {
-      statsParts.push(`**Duration:** ${formatDuration(data.totalDurationMs)}`);
-    }
-    if (data.totalUsage) {
-      const totalInput = data.totalUsage.inputTokens + (data.totalUsage.cacheReadInputTokens ?? 0);
-      statsParts.push(`**Tokens:** ${formatTokens(totalInput)} in / ${formatTokens(data.totalUsage.outputTokens)} out`);
-      const auxCost = data.totalAuxiliaryUsage ? totalAuxiliaryCost(data.totalAuxiliaryUsage) : 0;
-      const totalCost = data.totalUsage.costUSD + auxCost;
-      const auxSuffix = data.totalAuxiliaryUsage ? formatAuxiliarySuffix(data.totalAuxiliaryUsage) : '';
-      statsParts.push(`**Cost:** ${formatCost(totalCost)}${auxSuffix}`);
-    }
-    lines.push('---', statsParts.join(' · '));
-  }
+  lines.push(...renderStatsFooter(data.totalDurationMs, data.totalUsage, data.totalAuxiliaryUsage));
 
   return lines.join('\n');
 }
