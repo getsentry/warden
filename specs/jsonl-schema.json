@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warden.dev/schemas/jsonl-v1.json",
+  "title": "Warden JSONL Output",
+  "description": "Schema for a single line in Warden's JSONL output. Each line is one of: skill record, summary record, or fix-evaluation record.",
+  "oneOf": [
+    { "$ref": "#/$defs/SkillRecord" },
+    { "$ref": "#/$defs/SummaryRecord" },
+    { "$ref": "#/$defs/FixEvaluationRecord" }
+  ],
+  "$defs": {
+    "RunMetadata": {
+      "type": "object",
+      "description": "Metadata common to every JSONL record.",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp when the run started."
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total wall-clock duration of the run in milliseconds."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory where warden was invoked."
+        }
+      },
+      "required": ["timestamp", "durationMs", "cwd"],
+      "additionalProperties": false
+    },
+
+    "UsageStats": {
+      "type": "object",
+      "description": "Token usage and cost from an LLM call.",
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Fresh (non-cached) input tokens."
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Output tokens generated."
+        },
+        "cacheReadInputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Input tokens served from cache. Omitted when zero."
+        },
+        "cacheCreationInputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Input tokens that created new cache entries. Omitted when zero."
+        },
+        "costUSD": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Estimated cost in USD."
+        }
+      },
+      "required": ["inputTokens", "outputTokens", "costUSD"],
+      "additionalProperties": false
+    },
+
+    "Location": {
+      "type": "object",
+      "description": "Source location of a finding.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the repository root."
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Starting line number (1-based)."
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Ending line number (1-based). Omitted for single-line findings."
+        }
+      },
+      "required": ["path", "startLine"],
+      "additionalProperties": false
+    },
+
+    "SuggestedFix": {
+      "type": "object",
+      "description": "A suggested code fix for a finding.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the fix."
+        },
+        "diff": {
+          "type": "string",
+          "description": "Unified diff of the suggested change."
+        }
+      },
+      "required": ["description", "diff"],
+      "additionalProperties": false
+    },
+
+    "Finding": {
+      "type": "object",
+      "description": "A single finding from a skill analysis.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique finding identifier (e.g., SEC-001)."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "info"],
+          "description": "Severity level."
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "Confidence level. Omitted when not assessed."
+        },
+        "title": {
+          "type": "string",
+          "description": "Short title describing the finding."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation of the finding."
+        },
+        "location": {
+          "$ref": "#/$defs/Location",
+          "description": "Source location. Omitted for findings without a specific location."
+        },
+        "suggestedFix": {
+          "$ref": "#/$defs/SuggestedFix",
+          "description": "Suggested fix. Omitted when no fix is available."
+        },
+        "elapsedMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Time elapsed since skill start when this finding was produced. Omitted when not tracked."
+        }
+      },
+      "required": ["id", "severity", "title", "description"],
+      "additionalProperties": false
+    },
+
+    "FileRecord": {
+      "type": "object",
+      "description": "Per-file breakdown within a skill record.",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "File path relative to the repository root."
+        },
+        "findings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of findings in this file."
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Analysis duration for this file. Omitted when not tracked."
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats",
+          "description": "Token usage for this file. Omitted when not tracked."
+        }
+      },
+      "required": ["filename", "findings"],
+      "additionalProperties": false
+    },
+
+    "BySeverity": {
+      "type": "object",
+      "description": "Finding counts broken down by severity level.",
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "high": { "type": "integer", "minimum": 0 },
+        "medium": { "type": "integer", "minimum": 0 },
+        "low": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["critical", "high", "medium", "low", "info"],
+      "additionalProperties": false
+    },
+
+    "FixEvalDetail": {
+      "type": "object",
+      "description": "Per-comment evaluation result in fix evaluation.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path of the evaluated comment."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Line number of the evaluated comment."
+        },
+        "findingId": {
+          "type": "string",
+          "description": "Original finding ID, if available."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["not_attempted", "attempted_failed", "resolved", "re_detected"],
+          "description": "Evaluation verdict."
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "LLM reasoning for the verdict. Present for attempted_failed."
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Duration of this evaluation in milliseconds."
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats",
+          "description": "Token usage for this evaluation."
+        }
+      },
+      "required": ["path", "line", "verdict", "durationMs", "usage"],
+      "additionalProperties": false
+    },
+
+    "SkillRecord": {
+      "type": "object",
+      "description": "One skill's analysis results. Discriminated by having a 'skill' field and no 'type' field.",
+      "properties": {
+        "run": { "$ref": "#/$defs/RunMetadata" },
+        "skill": {
+          "type": "string",
+          "description": "Skill name that produced this record."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable summary of the skill's findings."
+        },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Finding" },
+          "description": "All findings from this skill."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Arbitrary skill metadata. Omitted when empty.",
+          "additionalProperties": true
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Skill execution duration in milliseconds."
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats",
+          "description": "Aggregate token usage for the skill."
+        },
+        "auxiliaryUsage": {
+          "type": "object",
+          "description": "Usage from auxiliary LLM calls (extraction repair, semantic dedup). Keys are agent names, values are UsageStats. Omitted when no auxiliary calls occurred.",
+          "additionalProperties": { "$ref": "#/$defs/UsageStats" }
+        },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FileRecord" },
+          "description": "Per-file breakdown. Omitted when not available."
+        },
+        "skippedFiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "filename": { "type": "string" },
+              "reason": { "type": "string", "enum": ["pattern", "builtin"] },
+              "pattern": { "type": "string" }
+            },
+            "required": ["filename", "reason"],
+            "additionalProperties": false
+          },
+          "description": "Files skipped due to chunking patterns. NOT YET WRITTEN by writeJsonlReport()."
+        },
+        "failedHunks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of hunks that failed to analyze (SDK/API errors). NOT YET WRITTEN by writeJsonlReport()."
+        },
+        "failedExtractions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of hunks where findings extraction failed (parse errors). NOT YET WRITTEN by writeJsonlReport()."
+        }
+      },
+      "required": ["run", "skill", "summary", "findings"],
+      "not": {
+        "required": ["type"]
+      },
+      "additionalProperties": false
+    },
+
+    "SummaryRecord": {
+      "type": "object",
+      "description": "Aggregate summary across all skills. Always the last line in a JSONL file.",
+      "properties": {
+        "run": { "$ref": "#/$defs/RunMetadata" },
+        "type": {
+          "const": "summary",
+          "description": "Discriminator for summary records."
+        },
+        "totalFindings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total findings across all skills."
+        },
+        "bySeverity": {
+          "$ref": "#/$defs/BySeverity",
+          "description": "Breakdown of findings by severity."
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats",
+          "description": "Aggregate token usage across all skills."
+        },
+        "auxiliaryUsage": {
+          "type": "object",
+          "description": "Merged auxiliary usage across all skills. Omitted when no auxiliary calls occurred.",
+          "additionalProperties": { "$ref": "#/$defs/UsageStats" }
+        }
+      },
+      "required": ["run", "type", "totalFindings", "bySeverity"],
+      "additionalProperties": false
+    },
+
+    "FixEvaluationRecord": {
+      "type": "object",
+      "description": "Fix evaluation results for unresolved PR comments. Defined but not yet wired to JSONL output.",
+      "properties": {
+        "run": { "$ref": "#/$defs/RunMetadata" },
+        "type": {
+          "const": "fix-evaluation",
+          "description": "Discriminator for fix evaluation records."
+        },
+        "evaluated": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of comments sent to LLM for evaluation."
+        },
+        "resolved": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of comments where the fix was confirmed."
+        },
+        "needsAttention": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of comments where the fix attempt failed."
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of comments not evaluated (no patches, over limit)."
+        },
+        "failedEvaluations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of evaluations that failed (API errors, invalid responses)."
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats",
+          "description": "Aggregate usage from all fix evaluations."
+        },
+        "evaluations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FixEvalDetail" },
+          "description": "Per-comment evaluation details. Omitted when empty."
+        }
+      },
+      "required": ["run", "type", "evaluated", "resolved", "needsAttention", "skipped", "failedEvaluations"],
+      "additionalProperties": false
+    }
+  }
+}
