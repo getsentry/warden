@@ -1,1 +1,0 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../../src/action/checks/index.ts"],"names":[],"mappings":"AAAA,OAAO,EACL,eAAe,EACf,eAAe,EACf,gBAAgB,EAChB,gBAAgB,EAChB,cAAc,EACd,uBAAuB,EACvB,mBAAmB,EACnB,cAAc,EACd,oBAAoB,EACpB,uBAAuB,GACxB,MAAM,cAAc,CAAC;AAEtB,YAAY,EACV,YAAY,EACZ,uBAAuB,EACvB,iBAAiB,EACjB,oBAAoB,EACpB,eAAe,GAChB,MAAM,cAAc,CAAC"}
