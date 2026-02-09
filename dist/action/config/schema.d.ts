@@ -63,12 +63,25 @@ export declare const SkillDefinitionSchema: z.ZodObject<{
     rootDir: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export type SkillDefinition = z.infer<typeof SkillDefinitionSchema>;
-export declare const PathFilterSchema: z.ZodObject<{
-    paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
+export declare const ScheduleConfigSchema: z.ZodObject<{
+    issueTitle: z.ZodOptional<z.ZodString>;
+    createFixPR: z.ZodDefault<z.ZodBoolean>;
+    fixBranchPrefix: z.ZodDefault<z.ZodString>;
 }, z.core.$strip>;
-export type PathFilter = z.infer<typeof PathFilterSchema>;
-export declare const OutputConfigSchema: z.ZodObject<{
+export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
+export declare const TriggerTypeSchema: z.ZodEnum<{
+    schedule: "schedule";
+    pull_request: "pull_request";
+    local: "local";
+}>;
+export type TriggerType = z.infer<typeof TriggerTypeSchema>;
+export declare const SkillTriggerSchema: z.ZodObject<{
+    type: z.ZodEnum<{
+        schedule: "schedule";
+        pull_request: "pull_request";
+        local: "local";
+    }>;
+    actions: z.ZodOptional<z.ZodArray<z.ZodString>>;
     failOn: z.ZodOptional<z.ZodEnum<{
         off: "off";
         critical: "critical";
@@ -77,7 +90,7 @@ export declare const OutputConfigSchema: z.ZodObject<{
         low: "low";
         info: "info";
     }>>;
-    commentOn: z.ZodOptional<z.ZodEnum<{
+    reportOn: z.ZodOptional<z.ZodEnum<{
         off: "off";
         critical: "critical";
         high: "high";
@@ -86,36 +99,48 @@ export declare const OutputConfigSchema: z.ZodObject<{
         info: "info";
     }>>;
     maxFindings: z.ZodOptional<z.ZodNumber>;
-    commentOnSuccess: z.ZodOptional<z.ZodBoolean>;
-}, z.core.$strip>;
-export type OutputConfig = z.infer<typeof OutputConfigSchema>;
-export declare const ScheduleConfigSchema: z.ZodObject<{
-    issueTitle: z.ZodOptional<z.ZodString>;
-    createFixPR: z.ZodDefault<z.ZodBoolean>;
-    fixBranchPrefix: z.ZodDefault<z.ZodString>;
-}, z.core.$strip>;
-export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
-export declare const WardenEnvironmentSchema: z.ZodEnum<{
-    local: "local";
-    github: "github";
-}>;
-export type WardenEnvironment = z.infer<typeof WardenEnvironmentSchema>;
-export declare const TriggerSchema: z.ZodObject<{
-    name: z.ZodString;
-    event: z.ZodEnum<{
-        schedule: "schedule";
-        pull_request: "pull_request";
-        issues: "issues";
-        issue_comment: "issue_comment";
-    }>;
-    actions: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    skill: z.ZodString;
-    remote: z.ZodOptional<z.ZodString>;
-    filters: z.ZodOptional<z.ZodObject<{
-        paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
+    model: z.ZodOptional<z.ZodString>;
+    maxTurns: z.ZodOptional<z.ZodNumber>;
+    schedule: z.ZodOptional<z.ZodObject<{
+        issueTitle: z.ZodOptional<z.ZodString>;
+        createFixPR: z.ZodDefault<z.ZodBoolean>;
+        fixBranchPrefix: z.ZodDefault<z.ZodString>;
     }, z.core.$strip>>;
-    output: z.ZodOptional<z.ZodObject<{
+}, z.core.$strip>;
+export type SkillTrigger = z.infer<typeof SkillTriggerSchema>;
+export declare const SkillConfigSchema: z.ZodObject<{
+    name: z.ZodString;
+    paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    remote: z.ZodOptional<z.ZodString>;
+    failOn: z.ZodOptional<z.ZodEnum<{
+        off: "off";
+        critical: "critical";
+        high: "high";
+        medium: "medium";
+        low: "low";
+        info: "info";
+    }>>;
+    reportOn: z.ZodOptional<z.ZodEnum<{
+        off: "off";
+        critical: "critical";
+        high: "high";
+        medium: "medium";
+        low: "low";
+        info: "info";
+    }>>;
+    maxFindings: z.ZodOptional<z.ZodNumber>;
+    reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
+    model: z.ZodOptional<z.ZodString>;
+    maxTurns: z.ZodOptional<z.ZodNumber>;
+    triggers: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        type: z.ZodEnum<{
+            schedule: "schedule";
+            pull_request: "pull_request";
+            local: "local";
+        }>;
+        actions: z.ZodOptional<z.ZodArray<z.ZodString>>;
         failOn: z.ZodOptional<z.ZodEnum<{
             off: "off";
             critical: "critical";
@@ -124,7 +149,7 @@ export declare const TriggerSchema: z.ZodObject<{
             low: "low";
             info: "info";
         }>>;
-        commentOn: z.ZodOptional<z.ZodEnum<{
+        reportOn: z.ZodOptional<z.ZodEnum<{
             off: "off";
             critical: "critical";
             high: "high";
@@ -133,21 +158,17 @@ export declare const TriggerSchema: z.ZodObject<{
             info: "info";
         }>>;
         maxFindings: z.ZodOptional<z.ZodNumber>;
-        commentOnSuccess: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$strip>>;
-    model: z.ZodOptional<z.ZodString>;
-    maxTurns: z.ZodOptional<z.ZodNumber>;
-    environments: z.ZodOptional<z.ZodArray<z.ZodEnum<{
-        local: "local";
-        github: "github";
-    }>>>;
-    schedule: z.ZodOptional<z.ZodObject<{
-        issueTitle: z.ZodOptional<z.ZodString>;
-        createFixPR: z.ZodDefault<z.ZodBoolean>;
-        fixBranchPrefix: z.ZodDefault<z.ZodString>;
-    }, z.core.$strip>>;
+        reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
+        model: z.ZodOptional<z.ZodString>;
+        maxTurns: z.ZodOptional<z.ZodNumber>;
+        schedule: z.ZodOptional<z.ZodObject<{
+            issueTitle: z.ZodOptional<z.ZodString>;
+            createFixPR: z.ZodDefault<z.ZodBoolean>;
+            fixBranchPrefix: z.ZodDefault<z.ZodString>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>>;
 }, z.core.$strip>;
-export type Trigger = z.infer<typeof TriggerSchema>;
+export type SkillConfig = z.infer<typeof SkillConfigSchema>;
 export declare const RunnerConfigSchema: z.ZodObject<{
     concurrency: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strip>;
@@ -184,32 +205,27 @@ export declare const ChunkingConfigSchema: z.ZodObject<{
 }, z.core.$strip>;
 export type ChunkingConfig = z.infer<typeof ChunkingConfigSchema>;
 export declare const DefaultsSchema: z.ZodObject<{
-    filters: z.ZodOptional<z.ZodObject<{
-        paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    }, z.core.$strip>>;
-    output: z.ZodOptional<z.ZodObject<{
-        failOn: z.ZodOptional<z.ZodEnum<{
-            off: "off";
-            critical: "critical";
-            high: "high";
-            medium: "medium";
-            low: "low";
-            info: "info";
-        }>>;
-        commentOn: z.ZodOptional<z.ZodEnum<{
-            off: "off";
-            critical: "critical";
-            high: "high";
-            medium: "medium";
-            low: "low";
-            info: "info";
-        }>>;
-        maxFindings: z.ZodOptional<z.ZodNumber>;
-        commentOnSuccess: z.ZodOptional<z.ZodBoolean>;
-    }, z.core.$strip>>;
+    failOn: z.ZodOptional<z.ZodEnum<{
+        off: "off";
+        critical: "critical";
+        high: "high";
+        medium: "medium";
+        low: "low";
+        info: "info";
+    }>>;
+    reportOn: z.ZodOptional<z.ZodEnum<{
+        off: "off";
+        critical: "critical";
+        high: "high";
+        medium: "medium";
+        low: "low";
+        info: "info";
+    }>>;
+    maxFindings: z.ZodOptional<z.ZodNumber>;
+    reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
     model: z.ZodOptional<z.ZodString>;
     maxTurns: z.ZodOptional<z.ZodNumber>;
+    ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
     defaultBranch: z.ZodOptional<z.ZodString>;
     chunking: z.ZodOptional<z.ZodObject<{
         filePatterns: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -232,32 +248,27 @@ export type Defaults = z.infer<typeof DefaultsSchema>;
 export declare const WardenConfigSchema: z.ZodObject<{
     version: z.ZodLiteral<1>;
     defaults: z.ZodOptional<z.ZodObject<{
-        filters: z.ZodOptional<z.ZodObject<{
-            paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-            ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        }, z.core.$strip>>;
-        output: z.ZodOptional<z.ZodObject<{
-            failOn: z.ZodOptional<z.ZodEnum<{
-                off: "off";
-                critical: "critical";
-                high: "high";
-                medium: "medium";
-                low: "low";
-                info: "info";
-            }>>;
-            commentOn: z.ZodOptional<z.ZodEnum<{
-                off: "off";
-                critical: "critical";
-                high: "high";
-                medium: "medium";
-                low: "low";
-                info: "info";
-            }>>;
-            maxFindings: z.ZodOptional<z.ZodNumber>;
-            commentOnSuccess: z.ZodOptional<z.ZodBoolean>;
-        }, z.core.$strip>>;
+        failOn: z.ZodOptional<z.ZodEnum<{
+            off: "off";
+            critical: "critical";
+            high: "high";
+            medium: "medium";
+            low: "low";
+            info: "info";
+        }>>;
+        reportOn: z.ZodOptional<z.ZodEnum<{
+            off: "off";
+            critical: "critical";
+            high: "high";
+            medium: "medium";
+            low: "low";
+            info: "info";
+        }>>;
+        maxFindings: z.ZodOptional<z.ZodNumber>;
+        reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
         model: z.ZodOptional<z.ZodString>;
         maxTurns: z.ZodOptional<z.ZodNumber>;
+        ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
         defaultBranch: z.ZodOptional<z.ZodString>;
         chunking: z.ZodOptional<z.ZodObject<{
             filePatterns: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -276,22 +287,38 @@ export declare const WardenConfigSchema: z.ZodObject<{
         }, z.core.$strip>>;
         batchDelayMs: z.ZodOptional<z.ZodNumber>;
     }, z.core.$strip>>;
-    triggers: z.ZodDefault<z.ZodArray<z.ZodObject<{
+    skills: z.ZodDefault<z.ZodArray<z.ZodObject<{
         name: z.ZodString;
-        event: z.ZodEnum<{
-            schedule: "schedule";
-            pull_request: "pull_request";
-            issues: "issues";
-            issue_comment: "issue_comment";
-        }>;
-        actions: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        skill: z.ZodString;
+        paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
         remote: z.ZodOptional<z.ZodString>;
-        filters: z.ZodOptional<z.ZodObject<{
-            paths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-            ignorePaths: z.ZodOptional<z.ZodArray<z.ZodString>>;
-        }, z.core.$strip>>;
-        output: z.ZodOptional<z.ZodObject<{
+        failOn: z.ZodOptional<z.ZodEnum<{
+            off: "off";
+            critical: "critical";
+            high: "high";
+            medium: "medium";
+            low: "low";
+            info: "info";
+        }>>;
+        reportOn: z.ZodOptional<z.ZodEnum<{
+            off: "off";
+            critical: "critical";
+            high: "high";
+            medium: "medium";
+            low: "low";
+            info: "info";
+        }>>;
+        maxFindings: z.ZodOptional<z.ZodNumber>;
+        reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
+        model: z.ZodOptional<z.ZodString>;
+        maxTurns: z.ZodOptional<z.ZodNumber>;
+        triggers: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            type: z.ZodEnum<{
+                schedule: "schedule";
+                pull_request: "pull_request";
+                local: "local";
+            }>;
+            actions: z.ZodOptional<z.ZodArray<z.ZodString>>;
             failOn: z.ZodOptional<z.ZodEnum<{
                 off: "off";
                 critical: "critical";
@@ -300,7 +327,7 @@ export declare const WardenConfigSchema: z.ZodObject<{
                 low: "low";
                 info: "info";
             }>>;
-            commentOn: z.ZodOptional<z.ZodEnum<{
+            reportOn: z.ZodOptional<z.ZodEnum<{
                 off: "off";
                 critical: "critical";
                 high: "high";
@@ -309,19 +336,15 @@ export declare const WardenConfigSchema: z.ZodObject<{
                 info: "info";
             }>>;
             maxFindings: z.ZodOptional<z.ZodNumber>;
-            commentOnSuccess: z.ZodOptional<z.ZodBoolean>;
-        }, z.core.$strip>>;
-        model: z.ZodOptional<z.ZodString>;
-        maxTurns: z.ZodOptional<z.ZodNumber>;
-        environments: z.ZodOptional<z.ZodArray<z.ZodEnum<{
-            local: "local";
-            github: "github";
-        }>>>;
-        schedule: z.ZodOptional<z.ZodObject<{
-            issueTitle: z.ZodOptional<z.ZodString>;
-            createFixPR: z.ZodDefault<z.ZodBoolean>;
-            fixBranchPrefix: z.ZodDefault<z.ZodString>;
-        }, z.core.$strip>>;
+            reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
+            model: z.ZodOptional<z.ZodString>;
+            maxTurns: z.ZodOptional<z.ZodNumber>;
+            schedule: z.ZodOptional<z.ZodObject<{
+                issueTitle: z.ZodOptional<z.ZodString>;
+                createFixPR: z.ZodDefault<z.ZodBoolean>;
+                fixBranchPrefix: z.ZodDefault<z.ZodString>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>>;
     }, z.core.$strip>>>;
     runner: z.ZodOptional<z.ZodObject<{
         concurrency: z.ZodOptional<z.ZodNumber>;

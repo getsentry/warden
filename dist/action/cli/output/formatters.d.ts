@@ -85,7 +85,7 @@ export declare function formatUsagePlain(usage: UsageStats): string;
 export declare function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number;
 /**
  * Format auxiliary cost breakdown as a parenthetical suffix.
- * @example "(+extraction: $0.0012, +dedup: $0.0008)"
+ * @example "(+extraction: $0.00, +dedup: $0.00)"
  */
 export declare function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap): string;
 /**
@@ -96,10 +96,10 @@ export declare function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap)
  * with a breakdown suffix showing per-agent auxiliary costs.
  *
  * @example formatStatsCompact(15800, { inputTokens: 3000, outputTokens: 680, costUSD: 0.0048 })
- * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.0048"
+ * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.00"
  *
  * @example formatStatsCompact(15800, usage, { extraction: { ... costUSD: 0.001 } })
- * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.0058 (+extraction: $0.0010)"
+ * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.01 (+extraction: $0.00)"
  */
 export declare function formatStatsCompact(durationMs?: number, usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string;
 //# sourceMappingURL=formatters.d.ts.map

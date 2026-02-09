@@ -1,8 +1,8 @@
 import type { Octokit } from '@octokit/rest';
 import type { ExistingComment } from '../../output/dedup.js';
-import { generateContentHash } from '../../output/dedup.js';
 import type { Finding, UsageStats } from '../../types/index.js';
 import { aggregateUsage, emptyUsage } from '../../sdk/usage.js';
+import { findingMatchesComment } from '../../output/stale.js';
 import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
 import { evaluateFix } from './judge.js';
 import type { FixJudgeContext } from './judge.js';
@@ -59,34 +59,6 @@ async function fetchCodeAtLocation(
     }
     throw error;
   }
-}
-
-/**
- * Check if a finding matches a comment (same location and similar content).
- */
-function findingMatchesComment(finding: Finding, comment: ExistingComment): boolean {
-  if (!finding.location) {
-    return false;
-  }
-
-  if (finding.location.path !== comment.path) {
-    return false;
-  }
-
-  const findingLine = finding.location.endLine ?? finding.location.startLine;
-  const lineDiff = Math.abs(findingLine - comment.line);
-  if (lineDiff > 5) {
-    return false;
-  }
-
-  const findingHash = generateContentHash(finding.title, finding.description);
-  if (findingHash === comment.contentHash) {
-    return true;
-  }
-
-  const normalizedFindingTitle = finding.title.toLowerCase().trim();
-  const normalizedCommentTitle = comment.title.toLowerCase().trim();
-  return normalizedFindingTitle === normalizedCommentTitle;
 }
 
 /**
@@ -175,6 +147,7 @@ export async function evaluateFixAttempts(
         context.baseSha
       );
     } catch {
+      result.skipped++;
       continue;
     }
 

@@ -9,9 +9,9 @@ export declare function renderTerminalReport(reports: SkillReport[], mode?: Outp
 /**
  * Filter reports to only include findings at or above the given severity threshold.
  * Returns new report objects with filtered findings; does not mutate the originals.
- * If commentOn is 'off', returns reports with empty findings.
+ * If reportOn is 'off', returns reports with empty findings.
  */
-export declare function filterReportsBySeverity(reports: SkillReport[], commentOn?: SeverityThreshold): SkillReport[];
+export declare function filterReportsBySeverity(reports: SkillReport[], reportOn?: SeverityThreshold): SkillReport[];
 /**
  * Render skill reports as JSON.
  */

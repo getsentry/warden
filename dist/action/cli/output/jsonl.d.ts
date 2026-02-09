@@ -1,4 +1,5 @@
 import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
+import type { FixStatus } from '../../action/fix-evaluation/types.js';
 /**
  * Get the default run logs directory.
  * Uses WARDEN_STATE_DIR env var if set, otherwise ~/.local/warden/runs
@@ -44,6 +45,32 @@ export interface JsonlRecord {
     usage?: UsageStats;
     auxiliaryUsage?: AuxiliaryUsageMap;
     files?: JsonlFileRecord[];
+}
+/**
+ * Per-evaluation detail for JSONL fix evaluation records.
+ */
+export interface JsonlFixEvalDetail {
+    path: string;
+    line: number;
+    findingId?: string;
+    verdict: FixStatus | 're_detected';
+    reasoning?: string;
+    durationMs: number;
+    usage: UsageStats;
+}
+/**
+ * JSONL record for fix evaluation results.
+ */
+export interface JsonlFixEvaluationRecord {
+    run: JsonlRunMetadata;
+    type: 'fix-evaluation';
+    evaluated: number;
+    resolved: number;
+    needsAttention: number;
+    skipped: number;
+    failedEvaluations: number;
+    usage?: UsageStats;
+    evaluations?: JsonlFixEvalDetail[];
 }
 /**
  * Write skill reports to a JSONL file.

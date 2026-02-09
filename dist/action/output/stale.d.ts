@@ -18,6 +18,10 @@ export declare function buildAnalyzedScope(fileChanges: FileChange[]): AnalyzedS
  */
 export declare function isInAnalyzedScope(comment: ExistingComment, scope: AnalyzedScope): boolean;
 /**
+ * Check if a finding matches a comment (same location and similar content).
+ */
+export declare function findingMatchesComment(finding: Finding, comment: ExistingComment): boolean;
+/**
  * Find comments that no longer have matching findings (stale comments).
  * Only considers comments on files that were in the analyzed scope.
  */

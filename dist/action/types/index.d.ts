@@ -231,6 +231,7 @@ export declare const PullRequestContextSchema: z.ZodObject<{
     baseBranch: z.ZodString;
     headBranch: z.ZodString;
     headSha: z.ZodString;
+    baseSha: z.ZodString;
     files: z.ZodArray<z.ZodObject<{
         filename: z.ZodString;
         status: z.ZodEnum<{
@@ -280,6 +281,7 @@ export declare const EventContextSchema: z.ZodObject<{
         baseBranch: z.ZodString;
         headBranch: z.ZodString;
         headSha: z.ZodString;
+        baseSha: z.ZodString;
         files: z.ZodArray<z.ZodObject<{
             filename: z.ZodString;
             status: z.ZodEnum<{

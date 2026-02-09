@@ -29,7 +29,7 @@ export interface CheckOptions {
 export interface UpdateSkillCheckOptions extends CheckOptions {
     failOn?: SeverityThreshold;
     /** Only include findings at or above this severity level in annotations */
-    commentOn?: SeverityThreshold;
+    reportOn?: SeverityThreshold;
 }
 /**
  * Summary data for the core warden check.
@@ -68,9 +68,9 @@ export declare function severityToAnnotationLevel(severity: Severity): CheckAnno
  * Convert findings to GitHub Check annotations.
  * Only findings with locations can be converted to annotations.
  * Returns at most MAX_ANNOTATIONS_PER_REQUEST annotations.
- * If commentOn is specified, only include findings at or above that severity.
+ * If reportOn is specified, only include findings at or above that severity.
  */
-export declare function findingsToAnnotations(findings: Finding[], commentOn?: SeverityThreshold): CheckAnnotation[];
+export declare function findingsToAnnotations(findings: Finding[], reportOn?: SeverityThreshold): CheckAnnotation[];
 /**
  * Determine the check conclusion based on findings and failOn threshold.
  * - No findings: success

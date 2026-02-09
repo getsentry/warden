@@ -23,8 +23,8 @@ export interface RenderOptions {
     maxFindings?: number;
     groupByFile?: boolean;
     extraLabels?: string[];
-    /** Only include findings at or above this severity level in rendered output. Use 'off' to disable comments. */
-    commentOn?: SeverityThreshold;
+    /** Only include findings at or above this severity level in rendered output. Use 'off' to disable reporting. */
+    reportOn?: SeverityThreshold;
     /** Fail threshold - determines REQUEST_CHANGES vs COMMENT for PR reviews */
     failOn?: SeverityThreshold;
     /** URL to the GitHub Check run containing the full report (used when findings are filtered) */
@@ -36,10 +36,5 @@ export interface RenderOptions {
      * modified (e.g., for deduplication) but failOn should evaluate against all findings.
      */
     allFindings?: Finding[];
-    /**
-     * Previous Warden review state on this PR. When set to 'CHANGES_REQUESTED' and
-     * current run has no blocking findings, the review will be APPROVE to clear the block.
-     */
-    previousReviewState?: ReviewState | null;
 }
 //# sourceMappingURL=types.d.ts.map

@@ -12,7 +12,7 @@ export interface ActionInputs {
     githubToken: string;
     configPath: string;
     failOn?: SeverityThreshold;
-    commentOn?: SeverityThreshold;
+    reportOn?: SeverityThreshold;
     maxFindings: number;
     /** Max concurrent trigger executions */
     parallel: number;

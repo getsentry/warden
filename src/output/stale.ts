@@ -28,10 +28,15 @@ export function isInAnalyzedScope(comment: ExistingComment, scope: AnalyzedScope
   return scope.files.has(comment.path);
 }
 
+/** Strip finding ID prefix like "[WRZ-XPL] " from a title */
+function stripFindingIdPrefix(title: string): string {
+  return title.replace(/^\[[A-Z0-9]{3}-[A-Z0-9]{3}\]\s*/, '');
+}
+
 /**
  * Check if a finding matches a comment (same location and similar content).
  */
-function findingMatchesComment(finding: Finding, comment: ExistingComment): boolean {
+export function findingMatchesComment(finding: Finding, comment: ExistingComment): boolean {
   // Must have a location to match
   if (!finding.location) {
     return false;
@@ -57,8 +62,9 @@ function findingMatchesComment(finding: Finding, comment: ExistingComment): bool
 
   // If hashes don't match exactly, check if the title is similar enough
   // This handles cases where description might have minor changes
+  // Strip ID prefix (e.g. "[WRZ-XPL] ") from comment titles before comparing
   const normalizedFindingTitle = finding.title.toLowerCase().trim();
-  const normalizedCommentTitle = comment.title.toLowerCase().trim();
+  const normalizedCommentTitle = stripFindingIdPrefix(comment.title).toLowerCase().trim();
   return normalizedFindingTitle === normalizedCommentTitle;
 }
 

@@ -277,6 +277,41 @@ describe('evaluateFixAttempts', () => {
     expect(result.evaluations[0]?.findingId).toBe('WRZ-XPL');
   });
 
+  it('counts skipped when pre-fix code fetch fails', async () => {
+    const comment = createComment();
+    mockFetchFileContent.mockRejectedValueOnce(new Error('API rate limit'));
+
+    const result = await evaluateFixAttempts(mockOctokit, [comment], defaultContext, [], 'api-key');
+
+    expect(result.skipped).toBe(1);
+    expect(result.evaluated).toBe(0);
+    expect(mockEvaluateFix).not.toHaveBeenCalled();
+  });
+
+  it('re-detects findings when comment title has ID prefix', async () => {
+    const comment = createComment({ title: '[WRZ-SQL] SQL injection' });
+    const finding = createFinding({ title: 'SQL injection' }); // No prefix
+
+    mockEvaluateFix.mockResolvedValue({
+      verdict: { status: 'resolved', reasoning: 'Fix applied' },
+      usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+      usedFallback: false,
+    });
+
+    const result = await evaluateFixAttempts(
+      mockOctokit,
+      [comment],
+      defaultContext,
+      [finding],
+      'api-key'
+    );
+
+    // Re-detection should match despite ID prefix on comment title
+    expect(result.toResolve).toHaveLength(0);
+    expect(result.toReply).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({ verdict: 're_detected' });
+  });
+
   it('handles multiple comments with mixed verdicts', async () => {
     const comments = [
       createComment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' }),

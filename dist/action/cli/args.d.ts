@@ -13,7 +13,7 @@ export declare const CLIOptionsSchema: z.ZodObject<{
         low: "low";
         info: "info";
     }>>;
-    commentOn: z.ZodOptional<z.ZodEnum<{
+    reportOn: z.ZodOptional<z.ZodEnum<{
         off: "off";
         critical: "critical";
         high: "high";

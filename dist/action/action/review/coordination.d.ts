@@ -1,19 +1,13 @@
 /**
  * Review Coordination
  *
- * Coordinates GitHub review posting across multiple triggers to ensure
- * consistent PR state. Handles three key rules:
- *
- * 1. Failed triggers block approval (can't verify issues are fixed)
- * 2. REQUEST_CHANGES from any trigger blocks approval
- * 3. Only one trigger posts APPROVE (prevents duplicate reviews)
+ * Safety checks for stale comment resolution across multiple triggers.
  */
 import type { SkillReport } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
-import type { TriggerReviewOutput } from '../review-state.js';
 /**
- * A trigger's execution result. This is the subset of fields from TriggerResult
- * that coordination needs to make decisions.
+ * A trigger's execution result. The subset of fields from TriggerResult
+ * needed for stale comment resolution decisions.
  */
 export interface TriggerExecutionResult {
     /** Name of the trigger (e.g., "security-review") */
@@ -25,13 +19,6 @@ export interface TriggerExecutionResult {
     /** Error, present when trigger failed */
     error?: unknown;
 }
-/**
- * Build review coordination decisions for all triggers.
- *
- * This determines which triggers can post APPROVE vs must downgrade to COMMENT.
- * The returned array has the same order as the input.
- */
-export declare function buildReviewCoordination(results: TriggerExecutionResult[]): TriggerReviewOutput[];
 /**
  * Check if stale comment resolution should proceed.
  *

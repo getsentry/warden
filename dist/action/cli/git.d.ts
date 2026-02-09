@@ -15,6 +15,10 @@ export declare function getCurrentBranch(cwd?: string): string;
  */
 export declare function getHeadSha(cwd?: string): string;
 /**
+ * Resolve a ref (branch name, tag, SHA) to a full commit SHA.
+ */
+export declare function resolveRef(ref: string, cwd?: string): string;
+/**
  * Detect the default branch by checking common branch names locally.
  * Does not perform any remote operations to avoid SSH prompts.
  */

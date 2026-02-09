@@ -1,4 +1,5 @@
 import type { Octokit } from '@octokit/rest';
+import { warnAction } from '../../cli/output/tty.js';
 
 /**
  * Result from fetching follow-up changes between two commits.
@@ -44,7 +45,7 @@ export async function fetchFollowUpChanges(
 
     return { patches, commitMessages };
   } catch (error) {
-    console.warn(`Failed to fetch follow-up changes: ${error}`);
+    warnAction(`Failed to fetch follow-up changes: ${error}`);
     return { patches: new Map(), commitMessages: [] };
   }
 }
@@ -125,7 +126,7 @@ export async function postThreadReply(
       body,
     });
   } catch (error) {
-    console.warn(`Failed to post thread reply: ${error}`);
+    warnAction(`Failed to post thread reply: ${error}`);
     throw error;
   }
 }

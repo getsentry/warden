@@ -51,7 +51,11 @@ export declare function computeWorkflowOutputs(reports: SkillReport[]): Workflow
 export declare function setWorkflowOutputs(outputs: WorkflowOutputs): void;
 /**
  * Get the authenticated bot's login name.
- * For GitHub Apps, this returns the app's slug with [bot] suffix (e.g., "warden[bot]").
+ *
+ * Tries three strategies in order:
+ * 1. GraphQL `viewer` query (works for both installation tokens and PATs)
+ * 2. `octokit.apps.getAuthenticated()` → `${slug}[bot]` (GitHub App JWT fallback)
+ * 3. `octokit.users.getAuthenticated()` (PAT fallback)
  */
 export declare function getAuthenticatedBotLogin(octokit: Octokit): Promise<string | null>;
 /**
