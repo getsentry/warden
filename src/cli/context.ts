@@ -10,6 +10,7 @@ import {
   getRepoRoot,
   getRepoName,
   getCommitMessage,
+  resolveRef,
   type GitFileChange,
 } from './git.js';
 
@@ -85,7 +86,7 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
       baseBranch: base,
       headBranch: currentBranch,
       headSha,
-      baseSha: base,
+      baseSha: resolveRef(base, cwd),
       files,
     },
     repoPath,

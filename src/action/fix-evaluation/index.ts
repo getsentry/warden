@@ -161,7 +161,6 @@ export async function evaluateFixAttempts(
   for (let i = 0; i < commentsToEvaluate.length; i++) {
     const comment = commentsToEvaluate[i];
     if (!comment) continue;
-    result.evaluated++;
 
     // Fetch code at the issue location before the fix
     let codeBeforeFix: string;
@@ -177,6 +176,8 @@ export async function evaluateFixAttempts(
       console.warn(`Failed to fetch code for ${comment.path}:${comment.line}: ${error}`);
       continue;
     }
+
+    result.evaluated++;
 
     // Fetch code after fix (optional, reduces tool calls)
     let codeAfterFix: string | undefined;

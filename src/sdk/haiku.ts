@@ -173,14 +173,12 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
   } = options;
 
   const client = new Anthropic({ apiKey, timeout });
-  const prefill = inferPrefill(schema);
 
+  // No prefill for tool-use loops: prefill biases the model to output JSON
+  // immediately instead of calling tools to gather information first.
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: prompt },
   ];
-  if (prefill) {
-    messages.push({ role: 'assistant', content: prefill });
-  }
 
   const usages: UsageStats[] = [];
 
@@ -236,8 +234,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         return { success: false, error: 'No text in final response', usage: aggregateUsage(usages) };
       }
 
-      const fullText = prefill ? prefill + textBlock.text : textBlock.text;
-      const jsonStr = extractJson(fullText);
+      const jsonStr = extractJson(textBlock.text);
       if (!jsonStr) {
         return { success: false, error: 'No JSON found in response', usage: aggregateUsage(usages) };
       }

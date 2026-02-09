@@ -38,6 +38,13 @@ export function getHeadSha(cwd: string = process.cwd()): string {
 }
 
 /**
+ * Resolve a ref (branch name, tag, SHA) to a full commit SHA.
+ */
+export function resolveRef(ref: string, cwd: string = process.cwd()): string {
+  return git(`rev-parse ${ref}`, cwd);
+}
+
+/**
  * Detect the default branch by checking common branch names locally.
  * Does not perform any remote operations to avoid SSH prompts.
  */
