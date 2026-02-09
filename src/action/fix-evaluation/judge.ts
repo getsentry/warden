@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Octokit } from '@octokit/rest';
+import { z } from 'zod';
 import type { ExistingComment } from '../../output/dedup.js';
 import { callHaikuWithTools } from '../../sdk/haiku.js';
 import { emptyUsage } from '../../sdk/usage.js';
@@ -150,19 +151,34 @@ IMPORTANT: Your response must be ONLY a JSON object with no other text. Do not e
 {"status": "resolved|attempted_failed|not_attempted", "reasoning": "One sentence explaining your verdict"}`;
 }
 
+const GetFileDiffInput = z.object({
+  path: z.string(),
+});
+
+const GetFileAtCommitInput = z.object({
+  path: z.string(),
+  commit: z.enum(['before', 'after']),
+  startLine: z.number().optional(),
+  endLine: z.number().optional(),
+});
+
 function createToolExecutor(ctx: FixJudgeContext): (name: string, input: Record<string, unknown>) => Promise<string> {
   return async (name: string, input: Record<string, unknown>): Promise<string> => {
     if (name === 'get_file_diff') {
-      const path = input['path'] as string;
-      const patch = ctx.patches.get(path);
+      const parsed = GetFileDiffInput.safeParse(input);
+      if (!parsed.success) {
+        return `Invalid input: ${parsed.error.message}`;
+      }
+      const patch = ctx.patches.get(parsed.data.path);
       return patch ?? 'No changes found for this file';
     }
 
     if (name === 'get_file_at_commit') {
-      const path = input['path'] as string;
-      const commit = input['commit'] as 'before' | 'after';
-      const startLine = input['startLine'] as number | undefined;
-      const endLine = input['endLine'] as number | undefined;
+      const parsed = GetFileAtCommitInput.safeParse(input);
+      if (!parsed.success) {
+        return `Invalid input: ${parsed.error.message}`;
+      }
+      const { path, commit, startLine, endLine } = parsed.data;
       const sha = commit === 'before' ? ctx.baseSha : ctx.headSha;
 
       try {
