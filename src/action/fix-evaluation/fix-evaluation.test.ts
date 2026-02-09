@@ -81,6 +81,7 @@ describe('evaluateFixAttempts', () => {
     expect(result.skipped).toBe(0);
     expect(result.toResolve).toHaveLength(0);
     expect(result.toReply).toHaveLength(0);
+    expect(result.evaluations).toHaveLength(0);
   });
 
   it('skips resolved comments', async () => {
@@ -123,6 +124,13 @@ describe('evaluateFixAttempts', () => {
     expect(result.toResolve).toHaveLength(1);
     expect(result.toResolve[0]).toBe(comment);
     expect(result.toReply).toHaveLength(0);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({
+      path: 'src/handler.ts',
+      line: 15,
+      verdict: 'resolved',
+      usedFallback: false,
+    });
   });
 
   it('categorizes attempted_failed verdicts into toReply', async () => {
@@ -139,6 +147,11 @@ describe('evaluateFixAttempts', () => {
     expect(result.toReply).toHaveLength(1);
     expect(result.toReply[0]?.comment).toBe(comment);
     expect(result.toResolve).toHaveLength(0);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({
+      verdict: 'attempted_failed',
+      reasoning: 'Only partial fix',
+    });
   });
 
   it('skips not_attempted verdicts', async () => {
@@ -154,6 +167,10 @@ describe('evaluateFixAttempts', () => {
     expect(result.evaluated).toBe(1);
     expect(result.toResolve).toHaveLength(0);
     expect(result.toReply).toHaveLength(0);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({
+      verdict: 'not_attempted',
+    });
   });
 
   it('overrides resolved verdict when issue is re-detected', async () => {
@@ -177,6 +194,10 @@ describe('evaluateFixAttempts', () => {
     // Judge said resolved, but re-detection overrides to toReply
     expect(result.toResolve).toHaveLength(0);
     expect(result.toReply).toHaveLength(1);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({
+      verdict: 're_detected',
+    });
   });
 
   it('limits evaluation to MAX_EVALUATIONS (20)', async () => {
@@ -211,6 +232,10 @@ describe('evaluateFixAttempts', () => {
     expect(result.failedEvaluations).toBe(1);
     expect(result.toResolve).toHaveLength(0);
     expect(result.toReply).toHaveLength(0);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({
+      usedFallback: true,
+    });
   });
 
   it('aggregates usage across multiple evaluations', async () => {
@@ -236,6 +261,20 @@ describe('evaluateFixAttempts', () => {
     expect(result.usage.inputTokens).toBe(180);
     expect(result.usage.outputTokens).toBe(80);
     expect(result.usage.costUSD).toBeCloseTo(0.0018);
+  });
+
+  it('extracts finding ID from comment title into evaluations', async () => {
+    const comment = createComment({ title: '[WRZ-XPL] baseSha is set to branch name' });
+    mockEvaluateFix.mockResolvedValue({
+      verdict: { status: 'resolved', reasoning: 'Fixed' },
+      usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+      usedFallback: false,
+    });
+
+    const result = await evaluateFixAttempts(mockOctokit, [comment], defaultContext, [], 'api-key');
+
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]?.findingId).toBe('WRZ-XPL');
   });
 
   it('handles multiple comments with mixed verdicts', async () => {

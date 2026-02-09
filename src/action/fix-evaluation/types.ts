@@ -17,6 +17,19 @@ export interface FixJudgeResult {
   usedFallback: boolean;
 }
 
+/** Per-comment evaluation detail for structured reporting. */
+export interface FixEvaluation {
+  findingId?: string;
+  path: string;
+  line: number;
+  title: string;
+  verdict: FixStatus | 're_detected';
+  reasoning?: string;
+  durationMs: number;
+  usage: UsageStats;
+  usedFallback: boolean;
+}
+
 export interface EvaluateFixAttemptsResult {
   /** Comments where fix was successful and should be resolved */
   toResolve: ExistingComment[];
@@ -30,6 +43,8 @@ export interface EvaluateFixAttemptsResult {
   failedEvaluations: number;
   /** Accumulated usage stats from all fix evaluations */
   usage: UsageStats;
+  /** Per-comment evaluation details for logging/reporting */
+  evaluations: FixEvaluation[];
 }
 
 export interface EvaluateFixAttemptsContext {

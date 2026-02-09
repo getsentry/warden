@@ -203,9 +203,6 @@ export function countBySeverity(findings: Finding[]): Record<Severity, number> {
  * Format a USD cost for display.
  */
 export function formatCost(costUSD: number): string {
-  if (costUSD < 0.01) {
-    return `$${costUSD.toFixed(4)}`;
-  }
   return `$${costUSD.toFixed(2)}`;
 }
 
@@ -255,7 +252,7 @@ export function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
 
 /**
  * Format auxiliary cost breakdown as a parenthetical suffix.
- * @example "(+extraction: $0.0012, +dedup: $0.0008)"
+ * @example "(+extraction: $0.00, +dedup: $0.00)"
  */
 export function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap): string {
   const entries = Object.entries(auxiliaryUsage).filter(([, u]) => u.costUSD > 0);
@@ -272,10 +269,10 @@ export function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap): string
  * with a breakdown suffix showing per-agent auxiliary costs.
  *
  * @example formatStatsCompact(15800, { inputTokens: 3000, outputTokens: 680, costUSD: 0.0048 })
- * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.0048"
+ * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.00"
  *
  * @example formatStatsCompact(15800, usage, { extraction: { ... costUSD: 0.001 } })
- * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.0058 (+extraction: $0.0010)"
+ * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.01 (+extraction: $0.00)"
  */
 export function formatStatsCompact(durationMs?: number, usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
   const parts: string[] = [];

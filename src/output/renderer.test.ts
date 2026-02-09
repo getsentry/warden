@@ -822,7 +822,7 @@ describe('renderSkillReport', () => {
 
       expect(result.summaryComment).toContain('⏱ 15.8s');
       expect(result.summaryComment).toContain('3.0k in / 680 out');
-      expect(result.summaryComment).toContain('$0.0048');
+      expect(result.summaryComment).toContain('$0.00');
       expect(result.summaryComment).toContain('<sub>');
     });
 
@@ -869,7 +869,7 @@ describe('renderSkillReport', () => {
       expect(result.summaryComment).toContain('No findings to report');
       expect(result.summaryComment).toContain('⏱ 8.2s');
       expect(result.summaryComment).toContain('1.8k in / 320 out');
-      expect(result.summaryComment).toContain('$0.0021');
+      expect(result.summaryComment).toContain('$0.00');
     });
 
     it('omits stats footer when no stats available', () => {

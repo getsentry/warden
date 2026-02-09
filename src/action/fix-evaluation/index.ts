@@ -3,16 +3,22 @@ import type { ExistingComment } from '../../output/dedup.js';
 import { generateContentHash } from '../../output/dedup.js';
 import type { Finding, UsageStats } from '../../types/index.js';
 import { aggregateUsage, emptyUsage } from '../../sdk/usage.js';
-import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult } from './types.js';
+import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
 import { evaluateFix } from './judge.js';
 import type { FixJudgeContext } from './judge.js';
 import { fetchFollowUpChanges, fetchFileContent, formatFailedFixReply } from './github.js';
 
 export { postThreadReply } from './github.js';
-export type { EvaluateFixAttemptsResult } from './types.js';
+export type { EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
 
 /** Maximum comments to evaluate per run */
 const MAX_EVALUATIONS = 20;
+
+/** Extract finding ID (e.g. "WRZ-XPL") from a comment title like "[WRZ-XPL] Some title" */
+function extractFindingId(title: string): string | undefined {
+  const match = title.match(/^\[([A-Z0-9]{3}-[A-Z0-9]{3})\]\s*/);
+  return match?.[1];
+}
 
 /** Number of lines of context around the finding location */
 const CONTEXT_LINES = 20;
@@ -114,6 +120,7 @@ export async function evaluateFixAttempts(
     evaluated: 0,
     failedEvaluations: 0,
     usage: emptyUsage(),
+    evaluations: [],
   };
 
   // Filter to unresolved Warden comments only
@@ -141,9 +148,6 @@ export async function evaluateFixAttempts(
   const commentsToEvaluate = unresolvedComments.slice(0, MAX_EVALUATIONS);
   if (unresolvedComments.length > MAX_EVALUATIONS) {
     result.skipped = unresolvedComments.length - MAX_EVALUATIONS;
-    console.log(
-      `Limiting fix evaluation to ${MAX_EVALUATIONS} of ${unresolvedComments.length} unresolved comments`
-    );
   }
 
   const toolContext: FixJudgeContext = {
@@ -158,9 +162,7 @@ export async function evaluateFixAttempts(
   const changedFiles = [...patches.keys()];
   const usages: UsageStats[] = [];
 
-  for (let i = 0; i < commentsToEvaluate.length; i++) {
-    const comment = commentsToEvaluate[i];
-    if (!comment) continue;
+  for (const comment of commentsToEvaluate) {
 
     // Fetch code at the issue location before the fix
     let codeBeforeFix: string;
@@ -172,8 +174,7 @@ export async function evaluateFixAttempts(
         comment,
         context.baseSha
       );
-    } catch (error) {
-      console.warn(`Failed to fetch code for ${comment.path}:${comment.line}: ${error}`);
+    } catch {
       continue;
     }
 
@@ -199,37 +200,49 @@ export async function evaluateFixAttempts(
       toolContext,
       apiKey
     );
-    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+    const durationMs = performance.now() - startTime;
 
     usages.push(evalResult.usage);
 
-    // Log per-comment detail
-    const totalTokens = evalResult.usage.inputTokens + evalResult.usage.outputTokens;
-    const costStr = evalResult.usage.costUSD > 0 ? `, $${evalResult.usage.costUSD.toFixed(4)}` : '';
-    const prefix = `  [${i + 1}/${commentsToEvaluate.length}] ${comment.path}:${comment.line} "${comment.title}"`;
+    const findingId = extractFindingId(comment.title);
 
     if (evalResult.usedFallback) {
       result.failedEvaluations++;
-      console.warn(`${prefix} → fallback (${elapsed}s, ${totalTokens} tok${costStr})`);
+      result.evaluations.push({
+        findingId,
+        path: comment.path,
+        line: comment.line,
+        title: comment.title,
+        verdict: evalResult.verdict.status,
+        reasoning: evalResult.verdict.reasoning,
+        durationMs,
+        usage: evalResult.usage,
+        usedFallback: true,
+      });
       continue;
     }
 
-    console.log(
-      `${prefix} → ${evalResult.verdict.status} (${elapsed}s, ${totalTokens} tok${costStr})`
-    );
-
-    if (evalResult.verdict.status === 'attempted_failed') {
-      console.log(`        Reason: "${evalResult.verdict.reasoning}"`);
-    }
-
     if (evalResult.verdict.status === 'not_attempted') {
+      result.evaluations.push({
+        findingId,
+        path: comment.path,
+        line: comment.line,
+        title: comment.title,
+        verdict: 'not_attempted',
+        reasoning: evalResult.verdict.reasoning,
+        durationMs,
+        usage: evalResult.usage,
+        usedFallback: false,
+      });
       continue;
     }
 
     // Check if the issue was re-detected (overrides LLM judgment)
     const reDetected = wasReDetected(comment, currentFindings);
+    let finalVerdict: FixEvaluation['verdict'] = evalResult.verdict.status;
 
     if (reDetected) {
+      finalVerdict = 're_detected';
       result.toReply.push({
         comment,
         replyBody: formatFailedFixReply(
@@ -238,10 +251,7 @@ export async function evaluateFixAttempts(
         ),
         commitSha: context.headSha,
       });
-      continue;
-    }
-
-    if (evalResult.verdict.status === 'resolved') {
+    } else if (evalResult.verdict.status === 'resolved') {
       result.toResolve.push(comment);
     } else {
       result.toReply.push({
@@ -250,6 +260,18 @@ export async function evaluateFixAttempts(
         commitSha: context.headSha,
       });
     }
+
+    result.evaluations.push({
+      findingId,
+      path: comment.path,
+      line: comment.line,
+      title: comment.title,
+      verdict: finalVerdict,
+      reasoning: evalResult.verdict.reasoning,
+      durationMs,
+      usage: evalResult.usage,
+      usedFallback: false,
+    });
   }
 
   result.usage = usages.length > 0 ? aggregateUsage(usages) : emptyUsage();

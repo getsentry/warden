@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
+import type { FixStatus } from '../../action/fix-evaluation/types.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { countBySeverity } from './formatters.js';
 
@@ -67,6 +68,34 @@ export interface JsonlRecord {
   usage?: UsageStats;
   auxiliaryUsage?: AuxiliaryUsageMap;
   files?: JsonlFileRecord[];
+}
+
+/**
+ * Per-evaluation detail for JSONL fix evaluation records.
+ */
+export interface JsonlFixEvalDetail {
+  path: string;
+  line: number;
+  findingId?: string;
+  verdict: FixStatus | 're_detected';
+  reasoning?: string;
+  durationMs: number;
+  usage: UsageStats;
+}
+
+/**
+ * JSONL record for fix evaluation results.
+ */
+export interface JsonlFixEvaluationRecord {
+  run: JsonlRunMetadata;
+  type: 'fix-evaluation';
+  evaluated: number;
+  resolved: number;
+  needsAttention: number;
+  skipped: number;
+  failedEvaluations: number;
+  usage?: UsageStats;
+  evaluations?: JsonlFixEvalDetail[];
 }
 
 /**

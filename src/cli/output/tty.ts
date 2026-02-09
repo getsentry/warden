@@ -58,3 +58,18 @@ export function detectOutputMode(colorOverride?: boolean): OutputMode {
 export function timestamp(): string {
   return new Date().toISOString();
 }
+
+/**
+ * Log a timestamped action message to stderr.
+ * Used by action workflow steps (dedup, fix eval, stale resolution) for consistent output.
+ */
+export function logAction(message: string): void {
+  console.error(`[${timestamp()}] warden: ${message}`);
+}
+
+/**
+ * Log a timestamped warning to stderr.
+ */
+export function warnAction(message: string): void {
+  console.error(`[${timestamp()}] warden: WARN: ${message}`);
+}

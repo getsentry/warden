@@ -19,6 +19,7 @@ import {
 import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import type { TriggerResult } from '../triggers/executor.js';
+import { logAction, warnAction } from '../../cli/output/tty.js';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -157,7 +158,7 @@ export async function postTriggerReview(
       }
 
       if (dedupResult.duplicateActions.length > 0) {
-        console.log(
+        logAction(
           `Found ${dedupResult.duplicateActions.length} duplicate findings for ${result.triggerName}`
         );
       }
@@ -174,13 +175,13 @@ export async function postTriggerReview(
       );
 
       if (actionCounts.updated > 0) {
-        console.log(`Updated ${actionCounts.updated} existing Warden comments with skill attribution`);
+        logAction(`Updated ${actionCounts.updated} existing Warden comments with skill attribution`);
       }
       if (actionCounts.reacted > 0) {
-        console.log(`Added reactions to ${actionCounts.reacted} existing external comments`);
+        logAction(`Added reactions to ${actionCounts.reacted} existing external comments`);
       }
       if (actionCounts.failed > 0) {
-        console.warn(`::warning::Failed to process ${actionCounts.failed} duplicate actions`);
+        warnAction(`Failed to process ${actionCounts.failed} duplicate actions`);
       }
     }
 
@@ -225,7 +226,7 @@ export async function postTriggerReview(
 
     return { posted: false, newComments, shouldFail: false };
   } catch (error) {
-    console.error(`::warning::Failed to post review for ${result.triggerName}: ${error}`);
+    warnAction(`Failed to post review for ${result.triggerName}: ${error}`);
     return { posted: false, newComments, shouldFail: false };
   }
 }

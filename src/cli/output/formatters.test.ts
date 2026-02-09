@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatCost,
   formatDuration,
   formatLocation,
   formatFindingCountsPlain,
@@ -135,6 +136,16 @@ describe('padRight', () => {
   });
 });
 
+describe('formatCost', () => {
+  it('always formats to 2 decimal places', () => {
+    expect(formatCost(0.0048)).toBe('$0.00');
+    expect(formatCost(0.01)).toBe('$0.01');
+    expect(formatCost(1.5)).toBe('$1.50');
+    expect(formatCost(0.0892)).toBe('$0.09');
+    expect(formatCost(0)).toBe('$0.00');
+  });
+});
+
 describe('formatStatsCompact', () => {
   it('formats duration only', () => {
     expect(formatStatsCompact(15800)).toBe('⏱ 15.8s');
@@ -146,7 +157,7 @@ describe('formatStatsCompact', () => {
       outputTokens: 680,
       costUSD: 0.0048,
     };
-    expect(formatStatsCompact(undefined, usage)).toBe('3.0k in / 680 out · $0.0048');
+    expect(formatStatsCompact(undefined, usage)).toBe('3.0k in / 680 out · $0.00');
   });
 
   it('formats both duration and usage', () => {
@@ -155,7 +166,7 @@ describe('formatStatsCompact', () => {
       outputTokens: 680,
       costUSD: 0.0048,
     };
-    expect(formatStatsCompact(15800, usage)).toBe('⏱ 15.8s · 3.0k in / 680 out · $0.0048');
+    expect(formatStatsCompact(15800, usage)).toBe('⏱ 15.8s · 3.0k in / 680 out · $0.00');
   });
 
   it('includes cache read tokens in input total', () => {
@@ -165,7 +176,7 @@ describe('formatStatsCompact', () => {
       outputTokens: 500,
       costUSD: 0.003,
     };
-    expect(formatStatsCompact(undefined, usage)).toBe('3.0k in / 500 out · $0.0030');
+    expect(formatStatsCompact(undefined, usage)).toBe('3.0k in / 500 out · $0.00');
   });
 
   it('returns empty string when no stats provided', () => {
@@ -196,7 +207,7 @@ describe('formatStatsCompact', () => {
     };
     // Total cost: 0.0048 + 0.0012 = 0.0060
     expect(formatStatsCompact(15800, usage, auxiliaryUsage)).toBe(
-      '⏱ 15.8s · 3.0k in / 680 out · $0.0060 (+extraction: $0.0012)'
+      '⏱ 15.8s · 3.0k in / 680 out · $0.01 (+extraction: $0.00)'
     );
   });
 
@@ -211,10 +222,10 @@ describe('formatStatsCompact', () => {
       dedup: { inputTokens: 200, outputTokens: 80, costUSD: 0.0008 },
     };
     const result = formatStatsCompact(undefined, usage, auxiliaryUsage);
-    expect(result).toContain('+extraction: $0.0012');
-    expect(result).toContain('+dedup: $0.0008');
+    expect(result).toContain('+extraction: $0.00');
+    expect(result).toContain('+dedup: $0.00');
     // Total: 0.0048 + 0.0012 + 0.0008 = 0.0068
-    expect(result).toContain('$0.0068');
+    expect(result).toContain('$0.01');
   });
 
   it('omits auxiliary suffix when all agents have zero cost', () => {
@@ -226,7 +237,7 @@ describe('formatStatsCompact', () => {
     const auxiliaryUsage: AuxiliaryUsageMap = {
       extraction: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
     };
-    expect(formatStatsCompact(undefined, usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $0.0048');
+    expect(formatStatsCompact(undefined, usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $0.00');
   });
 
   it('ignores auxiliary when usage is not provided', () => {

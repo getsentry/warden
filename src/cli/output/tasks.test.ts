@@ -277,7 +277,7 @@ describe('createDefaultCallbacks', () => {
 
       expect(errorSpy).toHaveBeenCalledTimes(1);
       const msg = errorSpy.mock.calls[0]![0] as string;
-      expect(msg).toContain('code-scanner > src/api/auth.ts done 1.8s $0.0030 1 finding');
+      expect(msg).toContain('code-scanner > src/api/auth.ts done 1.8s $0.00 1 finding');
     });
 
     it('logs without cost when usage is not present', () => {
