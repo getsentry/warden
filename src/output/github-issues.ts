@@ -86,20 +86,16 @@ async function findExistingIssue(
   repo: string,
   title: string
 ): Promise<{ number: number; html_url: string } | null> {
-  try {
-    // Search for open issues with exact title match
-    const { data: issues } = await octokit.issues.listForRepo({
-      owner,
-      repo,
-      state: 'open',
-      per_page: 100,
-    });
+  // Search for open issues with exact title match
+  const { data: issues } = await octokit.issues.listForRepo({
+    owner,
+    repo,
+    state: 'open',
+    per_page: 100,
+  });
 
-    const matching = issues.find((issue) => issue.title === title);
-    return matching ? { number: matching.number, html_url: matching.html_url } : null;
-  } catch {
-    return null;
-  }
+  const matching = issues.find((issue) => issue.title === title);
+  return matching ? { number: matching.number, html_url: matching.html_url } : null;
 }
 
 export interface FixPRResult {
