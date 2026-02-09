@@ -34,7 +34,7 @@ export function getCurrentBranch(cwd: string = process.cwd()): string {
  * Get the HEAD commit SHA.
  */
 export function getHeadSha(cwd: string = process.cwd()): string {
-  return git('rev-parse HEAD', cwd);
+  return resolveRef('HEAD', cwd);
 }
 
 /**

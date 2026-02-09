@@ -18,6 +18,9 @@ import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../
 import type { EventContext, SkillReport } from '../../types/index.js';
 import { processInBatches } from '../../utils/index.js';
 import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
+import type { FixEvaluation } from '../fix-evaluation/index.js';
+import { logAction, warnAction } from '../../cli/output/tty.js';
+import { formatCost, formatTokens, formatDuration } from '../../cli/output/formatters.js';
 import { findBotReviewState } from '../review-state.js';
 import type { BotReviewInfo } from '../review-state.js';
 import type { ActionInputs } from '../inputs.js';
@@ -62,7 +65,7 @@ async function getWardenPreviousReviewInfo(
     const botLogin = await getAuthenticatedBotLogin(octokit);
 
     if (!botLogin) {
-      console.log(
+      logAction(
         'Skipping dismiss flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
       );
       return null;
@@ -79,7 +82,7 @@ async function getWardenPreviousReviewInfo(
 
     return findBotReviewState(reviews, botLogin);
   } catch (error) {
-    console.warn(`::warning::Failed to fetch previous review info: ${error}`);
+    warnAction(`Failed to fetch previous review info: ${error}`);
     return null;
   }
 }
@@ -101,6 +104,29 @@ async function dismissPreviousReview(
     review_id: reviewId,
     message: 'All previously reported issues have been resolved.',
   });
+}
+
+// -----------------------------------------------------------------------------
+// Fix Evaluation Logging
+// -----------------------------------------------------------------------------
+
+function logFixEvaluation(ev: FixEvaluation, index: number, total: number): void {
+  const totalTokens = ev.usage.inputTokens + ev.usage.outputTokens;
+  const costStr = ev.usage.costUSD > 0 ? `, ${formatCost(ev.usage.costUSD)}` : '';
+  const idPrefix = ev.findingId ? `${ev.findingId} ` : '';
+  const verdict = ev.usedFallback ? 'fallback' : ev.verdict;
+
+  const line = `  [${index + 1}/${total}] ${idPrefix}${ev.path}:${ev.line} → ${verdict} (${formatDuration(ev.durationMs)}, ${formatTokens(totalTokens)} tok${costStr})`;
+
+  if (ev.usedFallback) {
+    warnAction(line);
+  } else {
+    logAction(line);
+  }
+
+  if (ev.verdict === 'attempted_failed' && ev.reasoning) {
+    logAction(`        reason: "${ev.reasoning}"`);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -169,9 +195,9 @@ export async function runPRWorkflow(
         headSha: context.pullRequest.headSha,
       });
       coreCheckId = coreCheck.checkRunId;
-      console.log(`Created core check: ${coreCheck.url}`);
+      logAction(`Created core check: ${coreCheck.url}`);
     } catch (error) {
-      console.error(`::warning::Failed to create core check: ${error}`);
+      warnAction(`Failed to create core check: ${error}`);
     }
   }
 
@@ -185,7 +211,7 @@ export async function runPRWorkflow(
       context.pullRequest.number
     );
     if (previousReviewInfo) {
-      console.log(`Previous Warden review state: ${previousReviewInfo.state}`);
+      logAction(`Previous Warden review state: ${previousReviewInfo.state}`);
     }
   }
 
@@ -225,12 +251,12 @@ export async function runPRWorkflow(
       if (fetchedComments.length > 0) {
         const wardenCount = fetchedComments.filter((c) => c.isWarden).length;
         const externalCount = fetchedComments.length - wardenCount;
-        console.log(
+        logAction(
           `Found ${fetchedComments.length} existing comments for deduplication (${wardenCount} Warden, ${externalCount} external)`
         );
       }
     } catch (error) {
-      console.warn(`::warning::Failed to fetch existing comments for deduplication: ${error}`);
+      warnAction(`Failed to fetch existing comments for deduplication: ${error}`);
     }
   }
 
@@ -285,7 +311,7 @@ export async function runPRWorkflow(
       logGroup('Fix evaluation');
       const unresolvedCount = wardenComments.filter((c) => !c.isResolved && c.threadId).length;
       if (unresolvedCount > 0) {
-        console.log(`Fix evaluation: evaluating ${unresolvedCount} unresolved comments`);
+        logAction(`Fix evaluation: evaluating ${unresolvedCount} unresolved comments`);
       }
 
       const fixEvaluation = await evaluateFixAttempts(
@@ -301,11 +327,16 @@ export async function runPRWorkflow(
         inputs.anthropicApiKey
       );
 
+      // Log per-evaluation details
+      fixEvaluation.evaluations.forEach((ev, i) =>
+        logFixEvaluation(ev, i, fixEvaluation.evaluations.length)
+      );
+
       // Resolve successful fixes
       if (fixEvaluation.toResolve.length > 0) {
         const resolvedCount = await resolveStaleComments(octokit, fixEvaluation.toResolve);
         if (resolvedCount > 0) {
-          console.log(`Resolved ${resolvedCount} comments via fix evaluation`);
+          logAction(`Resolved ${resolvedCount} comments via fix evaluation`);
         }
         // Track all attempted resolves so stale-comment pass skips them
         // (resolveStaleComments handles individual failures internally)
@@ -325,11 +356,11 @@ export async function runPRWorkflow(
 
       if (fixEvaluation.evaluated > 0) {
         const totalTokens = fixEvaluation.usage.inputTokens + fixEvaluation.usage.outputTokens;
-        const usageStr =
-          totalTokens > 0
-            ? `, ${totalTokens} tok, $${fixEvaluation.usage.costUSD.toFixed(4)}`
-            : '';
-        console.log(
+        let usageStr = '';
+        if (totalTokens > 0) {
+          usageStr = `, ${formatTokens(totalTokens)} tok, ${formatCost(fixEvaluation.usage.costUSD)}`;
+        }
+        logAction(
           `Fix evaluation: ${fixEvaluation.toResolve.length} resolved, ` +
             `${fixEvaluation.toReply.length} need attention, ` +
             `${fixEvaluation.skipped} skipped` +
@@ -338,7 +369,7 @@ export async function runPRWorkflow(
       }
       logGroupEnd();
     } catch (error) {
-      console.warn(`::warning::Failed to evaluate fix attempts: ${error}`);
+      warnAction(`Failed to evaluate fix attempts: ${error}`);
       logGroupEnd();
     }
   }
@@ -356,14 +387,14 @@ export async function runPRWorkflow(
       if (staleComments.length > 0) {
         const resolvedCount = await resolveStaleComments(octokit, staleComments);
         if (resolvedCount > 0) {
-          console.log(`Resolved ${resolvedCount} stale Warden comments`);
+          logAction(`Resolved ${resolvedCount} stale Warden comments`);
         }
       }
     } catch (error) {
-      console.warn(`::warning::Failed to resolve stale comments: ${error}`);
+      warnAction(`Failed to resolve stale comments: ${error}`);
     }
   } else if (!canResolveStale && wardenComments.length > 0) {
-    console.log('Skipping stale comment resolution due to trigger failures');
+    logAction('Skipping stale comment resolution due to trigger failures');
   }
 
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
@@ -385,9 +416,9 @@ export async function runPRWorkflow(
         context.pullRequest.number,
         previousReviewInfo.reviewId
       );
-      console.log('Dismissed previous CHANGES_REQUESTED review');
+      logAction('Dismissed previous CHANGES_REQUESTED review');
     } catch (error) {
-      console.warn(`::warning::Failed to dismiss previous review: ${error}`);
+      warnAction(`Failed to dismiss previous review: ${error}`);
     }
   }
 
@@ -406,7 +437,7 @@ export async function runPRWorkflow(
         repo: context.repository.name,
       });
     } catch (error) {
-      console.error(`::warning::Failed to update core check: ${error}`);
+      warnAction(`Failed to update core check: ${error}`);
     }
   }
 
@@ -414,5 +445,5 @@ export async function runPRWorkflow(
     setFailed(failureReasons.join('; '));
   }
 
-  console.log(`\nAnalysis complete: ${outputs.findingsCount} total findings`);
+  logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
 }

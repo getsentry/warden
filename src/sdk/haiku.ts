@@ -34,8 +34,14 @@ export function extractJson(text: string): string | null {
   // Find first { or [
   const objStart = stripped.indexOf('{');
   const arrStart = stripped.indexOf('[');
-  const start =
-    objStart === -1 ? arrStart : arrStart === -1 ? objStart : Math.min(objStart, arrStart);
+  let start: number;
+  if (objStart === -1) {
+    start = arrStart;
+  } else if (arrStart === -1) {
+    start = objStart;
+  } else {
+    start = Math.min(objStart, arrStart);
+  }
 
   if (start === -1) {
     return null;
@@ -121,7 +127,10 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
       return { success: false, error: 'Empty response from model', usage };
     }
 
-    const fullText = prefill ? prefill + content.text : content.text;
+    let fullText = content.text;
+    if (prefill) {
+      fullText = prefill + fullText;
+    }
     const jsonStr = extractJson(fullText);
     if (!jsonStr) {
       return { success: false, error: 'No JSON found in response', usage };

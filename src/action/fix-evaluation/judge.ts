@@ -150,7 +150,7 @@ IMPORTANT: Your response must be ONLY a JSON object with no other text. Do not e
 {"status": "resolved|attempted_failed|not_attempted", "reasoning": "One sentence explaining your verdict"}`;
 }
 
-function createToolExecutor(ctx: FixJudgeContext) {
+function createToolExecutor(ctx: FixJudgeContext): (name: string, input: Record<string, unknown>) => Promise<string> {
   return async (name: string, input: Record<string, unknown>): Promise<string> => {
     if (name === 'get_file_diff') {
       const path = input['path'] as string;
