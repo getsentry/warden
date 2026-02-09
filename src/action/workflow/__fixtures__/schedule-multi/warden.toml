@@ -1,0 +1,15 @@
+version = 1
+
+[[skills]]
+name = "test-skill-a"
+paths = ["src/**/*.ts"]
+
+[[skills.triggers]]
+type = "schedule"
+
+[[skills]]
+name = "test-skill-b"
+paths = ["lib/**/*.js"]
+
+[[skills.triggers]]
+type = "schedule"

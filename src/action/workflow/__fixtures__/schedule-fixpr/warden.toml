@@ -1,0 +1,12 @@
+version = 1
+
+[[skills]]
+name = "test-skill"
+paths = ["src/**/*.ts"]
+
+[[skills.triggers]]
+type = "schedule"
+
+[skills.triggers.schedule]
+createFixPR = true
+fixBranchPrefix = "warden-fix"

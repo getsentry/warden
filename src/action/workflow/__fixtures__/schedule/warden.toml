@@ -1,0 +1,8 @@
+version = 1
+
+[[skills]]
+name = "test-skill"
+paths = ["src/**/*.ts"]
+
+[[skills.triggers]]
+type = "schedule"
