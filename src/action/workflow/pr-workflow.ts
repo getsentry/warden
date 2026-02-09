@@ -8,6 +8,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
+import type { ResolvedTrigger } from '../../config/loader.js';
+import type { WardenConfig } from '../../config/schema.js';
 import { buildEventContext } from '../../event/context.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
 import {
@@ -15,7 +17,7 @@ import {
 } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
-import type { EventContext, SkillReport } from '../../types/index.js';
+import type { EventContext, SkillReport, Finding } from '../../types/index.js';
 import { processInBatches } from '../../utils/index.js';
 import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
 import type { FixEvaluation } from '../fix-evaluation/index.js';
@@ -25,6 +27,7 @@ import { findBotReviewState } from '../review-state.js';
 import type { BotReviewInfo } from '../review-state.js';
 import type { ActionInputs } from '../inputs.js';
 import { executeTrigger } from '../triggers/executor.js';
+import type { TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import {
@@ -47,63 +50,26 @@ import {
 } from './base.js';
 
 // -----------------------------------------------------------------------------
-// Review State
+// Phase Result Types
 // -----------------------------------------------------------------------------
 
-/**
- * Get Warden's previous review info on a PR.
- * Returns the most recent review state and ID if Warden previously reviewed.
- * Returns null if we can't reliably identify our own reviews.
- */
-async function getWardenPreviousReviewInfo(
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  prNumber: number
-): Promise<BotReviewInfo | null> {
-  try {
-    const botLogin = await getAuthenticatedBotLogin(octokit);
-
-    if (!botLogin) {
-      logAction(
-        'Skipping dismiss flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
-      );
-      return null;
-    }
-
-    // Note: No pagination. PRs with 100+ reviews are rare; if Warden's review
-    // is beyond page 1, user can manually dismiss. Not worth the complexity.
-    const { data: reviews } = await octokit.pulls.listReviews({
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-    });
-
-    return findBotReviewState(reviews, botLogin);
-  } catch (error) {
-    warnAction(`Failed to fetch previous review info: ${error}`);
-    return null;
-  }
+interface InitResult {
+  context: EventContext;
+  config: WardenConfig;
+  matchedTriggers: ResolvedTrigger[];
 }
 
-/**
- * Dismiss a previous Warden review to clear a REQUEST_CHANGES block.
- */
-async function dismissPreviousReview(
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  prNumber: number,
-  reviewId: number
-): Promise<void> {
-  await octokit.pulls.dismissReview({
-    owner,
-    repo,
-    pull_number: prNumber,
-    review_id: reviewId,
-    message: 'All previously reported issues have been resolved.',
-  });
+interface GitHubSetupResult {
+  coreCheckId?: number;
+  previousReviewInfo: BotReviewInfo | null;
+}
+
+interface ReviewPhaseResult {
+  reports: SkillReport[];
+  fetchedComments: ExistingComment[];
+  existingComments: ExistingComment[];
+  shouldFailAction: boolean;
+  failureReasons: string[];
 }
 
 // -----------------------------------------------------------------------------
@@ -130,16 +96,19 @@ function logFixEvaluation(ev: FixEvaluation, index: number, total: number): void
 }
 
 // -----------------------------------------------------------------------------
-// Main PR Workflow
+// Phase Functions
 // -----------------------------------------------------------------------------
 
-export async function runPRWorkflow(
+/**
+ * Parse event payload, build context, load config, match triggers.
+ */
+async function initializeWorkflow(
   octokit: Octokit,
   inputs: ActionInputs,
   eventName: string,
   eventPath: string,
   repoPath: string
-): Promise<void> {
+): Promise<InitResult> {
   let eventPayload: unknown;
   try {
     eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
@@ -170,56 +139,91 @@ export async function runPRWorkflow(
   const resolvedTriggers = resolveSkillConfigs(config);
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
 
-  if (matchedTriggers.length === 0) {
+  if (matchedTriggers.length > 0) {
+    logGroup('Matched triggers');
+    for (const trigger of matchedTriggers) {
+      console.log(`- ${trigger.name}: ${trigger.skill}`);
+    }
+    logGroupEnd();
+  } else {
     console.log('No triggers matched for this event');
-    setOutput('findings-count', 0);
-    setOutput('critical-count', 0);
-    setOutput('high-count', 0);
-    setOutput('summary', 'No triggers matched');
-    return;
   }
 
-  logGroup('Matched triggers');
-  for (const trigger of matchedTriggers) {
-    console.log(`- ${trigger.name}: ${trigger.skill}`);
-  }
-  logGroupEnd();
+  return { context, config, matchedTriggers };
+}
 
-  // Create core warden check (only for PRs)
+/**
+ * Create core check and fetch previous review info. PR-only.
+ */
+async function setupGitHubState(
+  octokit: Octokit,
+  context: EventContext
+): Promise<GitHubSetupResult> {
   let coreCheckId: number | undefined;
-  if (context.pullRequest) {
-    try {
-      const coreCheck = await createCoreCheck(octokit, {
+  let previousReviewInfo: BotReviewInfo | null = null;
+
+  if (!context.pullRequest) {
+    return { coreCheckId, previousReviewInfo };
+  }
+
+  // Create core warden check
+  try {
+    const coreCheck = await createCoreCheck(octokit, {
+      owner: context.repository.owner,
+      repo: context.repository.name,
+      headSha: context.pullRequest.headSha,
+    });
+    coreCheckId = coreCheck.checkRunId;
+    logAction(`Created core check: ${coreCheck.url}`);
+  } catch (error) {
+    warnAction(`Failed to create core check: ${error}`);
+  }
+
+  // Fetch previous review info for dismiss logic
+  try {
+    const botLogin = await getAuthenticatedBotLogin(octokit);
+
+    if (!botLogin) {
+      logAction(
+        'Skipping dismiss flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
+      );
+    } else {
+      // Note: No pagination. PRs with 100+ reviews are rare; if Warden's review
+      // is beyond page 1, user can manually dismiss. Not worth the complexity.
+      const { data: reviews } = await octokit.pulls.listReviews({
         owner: context.repository.owner,
         repo: context.repository.name,
-        headSha: context.pullRequest.headSha,
+        pull_number: context.pullRequest.number,
+        per_page: 100,
       });
-      coreCheckId = coreCheck.checkRunId;
-      logAction(`Created core check: ${coreCheck.url}`);
-    } catch (error) {
-      warnAction(`Failed to create core check: ${error}`);
+
+      previousReviewInfo = findBotReviewState(reviews, botLogin);
     }
+  } catch (error) {
+    warnAction(`Failed to fetch previous review info: ${error}`);
   }
 
-  // Fetch previous review info for dismiss logic (only for PRs)
-  let previousReviewInfo: BotReviewInfo | null = null;
-  if (context.pullRequest) {
-    previousReviewInfo = await getWardenPreviousReviewInfo(
-      octokit,
-      context.repository.owner,
-      context.repository.name,
-      context.pullRequest.number
-    );
-    if (previousReviewInfo) {
-      logAction(`Previous Warden review state: ${previousReviewInfo.state}`);
-    }
+  if (previousReviewInfo) {
+    logAction(`Previous Warden review state: ${previousReviewInfo.state}`);
   }
 
-  // Run triggers in parallel
+  return { coreCheckId, previousReviewInfo };
+}
+
+/**
+ * Run all matched triggers in parallel batches.
+ */
+async function executeAllTriggers(
+  matchedTriggers: ResolvedTrigger[],
+  octokit: Octokit,
+  context: EventContext,
+  config: WardenConfig,
+  inputs: ActionInputs
+): Promise<TriggerResult[]> {
   const concurrency = config.runner?.concurrency ?? inputs.parallel;
   const claudePath = findClaudeCodeExecutable();
 
-  const results = await processInBatches(
+  return processInBatches(
     matchedTriggers,
     (trigger) =>
       executeTrigger(trigger, {
@@ -234,7 +238,17 @@ export async function runPRWorkflow(
       }),
     concurrency
   );
+}
 
+/**
+ * Fetch existing comments, post reviews with cross-trigger dedup, accumulate failure state.
+ */
+async function postReviewsAndTrackFailures(
+  octokit: Octokit,
+  context: EventContext,
+  results: TriggerResult[],
+  inputs: ActionInputs
+): Promise<ReviewPhaseResult> {
   // Fetch existing comments for deduplication (only for PRs)
   // Keep original list separate for stale detection (modified list includes newly posted comments)
   let fetchedComments: ExistingComment[] = [];
@@ -291,21 +305,29 @@ export async function runPRWorkflow(
     }
   }
 
-  // Collect trigger errors for summary
-  const triggerErrors = collectTriggerErrors(results);
-  handleTriggerErrors(triggerErrors, matchedTriggers.length);
+  return { reports, fetchedComments, existingComments, shouldFailAction, failureReasons };
+}
 
-  // Evaluate follow-up commit fix attempts
-  const canResolveStale = shouldResolveStaleComments(results);
+/**
+ * Evaluate fix attempts on unresolved comments and resolve stale comments.
+ */
+async function evaluateFixesAndResolveStale(
+  octokit: Octokit,
+  context: EventContext,
+  fetchedComments: ExistingComment[],
+  allFindings: Finding[],
+  canResolveStale: boolean,
+  anthropicApiKey: string
+): Promise<void> {
   const wardenComments = fetchedComments.filter((c) => c.isWarden);
-  const allFindings = reports.flatMap((r) => r.findings);
   const commentsResolvedByFixEval = new Set<number>();
 
+  // Evaluate follow-up commit fix attempts
   if (
     context.pullRequest &&
     wardenComments.length > 0 &&
     canResolveStale &&
-    inputs.anthropicApiKey
+    anthropicApiKey
   ) {
     try {
       logGroup('Fix evaluation');
@@ -324,7 +346,7 @@ export async function runPRWorkflow(
           headSha: context.pullRequest.headSha,
         },
         allFindings,
-        inputs.anthropicApiKey
+        anthropicApiKey
       );
 
       // Log per-evaluation details
@@ -396,7 +418,22 @@ export async function runPRWorkflow(
   } else if (!canResolveStale && wardenComments.length > 0) {
     logAction('Skipping stale comment resolution due to trigger failures');
   }
+}
 
+/**
+ * Dismiss review, set outputs, update core check, fail action.
+ */
+async function finalizeWorkflow(
+  octokit: Octokit,
+  context: EventContext,
+  previousReviewInfo: BotReviewInfo | null,
+  coreCheckId: number | undefined,
+  results: TriggerResult[],
+  reports: SkillReport[],
+  shouldFailAction: boolean,
+  failureReasons: string[],
+  canResolveStale: boolean
+): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, no trigger exceeded failOn threshold,
   // and at least one trigger has an active failOn (prevents accidental dismiss when config changes).
@@ -409,13 +446,13 @@ export async function runPRWorkflow(
     hasActiveFailOn
   ) {
     try {
-      await dismissPreviousReview(
-        octokit,
-        context.repository.owner,
-        context.repository.name,
-        context.pullRequest.number,
-        previousReviewInfo.reviewId
-      );
+      await octokit.pulls.dismissReview({
+        owner: context.repository.owner,
+        repo: context.repository.name,
+        pull_number: context.pullRequest.number,
+        review_id: previousReviewInfo.reviewId,
+        message: 'All previously reported issues have been resolved.',
+      });
       logAction('Dismissed previous CHANGES_REQUESTED review');
     } catch (error) {
       warnAction(`Failed to dismiss previous review: ${error}`);
@@ -446,4 +483,52 @@ export async function runPRWorkflow(
   }
 
   logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
+}
+
+// -----------------------------------------------------------------------------
+// Main PR Workflow
+// -----------------------------------------------------------------------------
+
+export async function runPRWorkflow(
+  octokit: Octokit,
+  inputs: ActionInputs,
+  eventName: string,
+  eventPath: string,
+  repoPath: string
+): Promise<void> {
+  const { context, config, matchedTriggers } = await initializeWorkflow(
+    octokit, inputs, eventName, eventPath, repoPath
+  );
+
+  if (matchedTriggers.length === 0) {
+    setOutput('findings-count', 0);
+    setOutput('critical-count', 0);
+    setOutput('high-count', 0);
+    setOutput('summary', 'No triggers matched');
+    return;
+  }
+
+  const { coreCheckId, previousReviewInfo } = await setupGitHubState(octokit, context);
+
+  const results = await executeAllTriggers(matchedTriggers, octokit, context, config, inputs);
+
+  const reviewPhase = await postReviewsAndTrackFailures(octokit, context, results, inputs);
+
+  const triggerErrors = collectTriggerErrors(results);
+  handleTriggerErrors(triggerErrors, matchedTriggers.length);
+
+  const canResolveStale = shouldResolveStaleComments(results);
+  const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+
+  await evaluateFixesAndResolveStale(
+    octokit, context, reviewPhase.fetchedComments,
+    allFindings, canResolveStale, inputs.anthropicApiKey
+  );
+
+  await finalizeWorkflow(
+    octokit, context, previousReviewInfo, coreCheckId,
+    results, reviewPhase.reports,
+    reviewPhase.shouldFailAction, reviewPhase.failureReasons,
+    canResolveStale
+  );
 }
