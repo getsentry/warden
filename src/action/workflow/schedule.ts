@@ -55,16 +55,16 @@ export async function runScheduleWorkflow(
   // Get repo info from environment
   const githubRepository = process.env['GITHUB_REPOSITORY'];
   if (!githubRepository) {
-    setFailed('GITHUB_REPOSITORY environment variable not set');
+    return setFailed('GITHUB_REPOSITORY environment variable not set');
   }
   const [owner, repo] = githubRepository.split('/');
   if (!owner || !repo) {
-    setFailed('Invalid GITHUB_REPOSITORY format');
+    return setFailed('Invalid GITHUB_REPOSITORY format');
   }
 
   const headSha = process.env['GITHUB_SHA'] ?? '';
   if (!headSha) {
-    setFailed('GITHUB_SHA environment variable not set');
+    return setFailed('GITHUB_SHA environment variable not set');
   }
 
   const defaultBranch = await getDefaultBranchFromAPI(octokit, owner, repo);

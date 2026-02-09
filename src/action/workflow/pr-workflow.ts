@@ -113,7 +113,7 @@ async function initializeWorkflow(
   try {
     eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
   } catch (error) {
-    setFailed(`Failed to read event payload: ${error}`);
+    return setFailed(`Failed to read event payload: ${error}`);
   }
 
   logGroup('Building event context');
@@ -125,7 +125,7 @@ async function initializeWorkflow(
   try {
     context = await buildEventContext(eventName, eventPayload, repoPath, octokit);
   } catch (error) {
-    setFailed(`Failed to build event context: ${error}`);
+    return setFailed(`Failed to build event context: ${error}`);
   }
 
   logGroup('Loading configuration');
