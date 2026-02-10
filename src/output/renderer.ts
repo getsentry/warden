@@ -43,18 +43,25 @@ function renderReview(
   allFindings?: Finding[],
 ): GitHubReview | undefined {
   const findingsWithLocation = findings.filter((f) => f.location);
+  const findingsWithoutLocation = findings.filter((f) => !f.location);
 
   // Determine review event type based on failOn threshold against ALL findings.
   // Use allFindings (or report.findings) so failOn operates independently of reportOn and deduplication.
   const event = determineReviewEvent(allFindings ?? report.findings, failOn);
 
-  // If no comments to post, only create a review if REQUEST_CHANGES is needed
-  // This ensures failOn can block the PR even when reportOn filters out all findings
+  // No inline comments to post. Create a review only for REQUEST_CHANGES or locationless findings.
   if (findingsWithLocation.length === 0) {
+    if (findingsWithoutLocation.length > 0) {
+      return {
+        event,
+        body: renderFindingsBody(findingsWithoutLocation, report.skill),
+        comments: [],
+      };
+    }
+    // Generic fallback for REQUEST_CHANGES when failOn triggers on findings below reportOn threshold
     if (event === 'REQUEST_CHANGES') {
       return {
         event,
-        // GitHub API requires non-empty body for REQUEST_CHANGES
         body: 'Findings exceed the configured threshold. See the GitHub Check for details.',
         comments: [],
       };
@@ -95,9 +102,14 @@ function renderReview(
     };
   });
 
+  // Include locationless findings in the review body when mixed with inline comments
+  const body = findingsWithoutLocation.length > 0
+    ? renderFindingsBody(findingsWithoutLocation, report.skill)
+    : '';
+
   return {
     event,
-    body: '',
+    body,
     comments,
   };
 }
@@ -242,6 +254,24 @@ function renderFindingItem(finding: Finding): string {
   const location = finding.location ? ` (${formatLineRange(finding.location)})` : '';
   const confidence = finding.confidence ? ` [${finding.confidence} confidence]` : '';
   return `- ${SEVERITY_EMOJI[finding.severity]} \`${finding.id}\` **${escapeHtml(finding.title)}**${location}${confidence}: ${escapeHtml(finding.description)}`;
+}
+
+/** Render findings as markdown for inclusion in a review body. */
+export function renderFindingsBody(findings: Finding[], skill: string): string {
+  const lines: string[] = [];
+  for (const finding of findings) {
+    const emoji = SEVERITY_EMOJI[finding.severity];
+    const location = finding.location
+      ? ` (\`${finding.location.path}:${finding.location.startLine}\`)`
+      : '';
+    const confidence = finding.confidence ? ` (${finding.confidence} confidence)` : '';
+    lines.push(`${emoji} **[${finding.id}] ${escapeHtml(finding.title)}**${location}${confidence}`);
+    lines.push('');
+    lines.push(escapeHtml(finding.description));
+    lines.push('');
+  }
+  lines.push(`<sub>Identified by Warden via \`${skill}\`</sub>`);
+  return lines.join('\n');
 }
 
 function groupFindingsByFile(findings: Finding[]): Record<string, Finding[]> {

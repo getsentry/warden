@@ -6,7 +6,7 @@
  */
 import { filterFindingsBySeverity } from '../../types/index.js';
 import { shouldFail } from '../../triggers/matcher.js';
-import { renderSkillReport } from '../../output/renderer.js';
+import { renderSkillReport, renderFindingsBody } from '../../output/renderer.js';
 import { deduplicateFindings, processDuplicateActions, findingToExistingComment, } from '../../output/dedup.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
@@ -47,6 +47,35 @@ async function postReviewToGitHub(octokit, context, result) {
         body: result.review.body,
         comments: reviewComments,
     });
+}
+/**
+ * Move inline comments into the review body as markdown.
+ * Used as a fallback when GitHub rejects inline comments (e.g. lines outside the diff).
+ */
+function moveCommentsToBody(renderResult, findings, skill) {
+    if (!renderResult.review) {
+        return renderResult;
+    }
+    const body = renderFindingsBody(findings, skill);
+    return {
+        ...renderResult,
+        review: {
+            ...renderResult.review,
+            body,
+            comments: [],
+        },
+    };
+}
+/**
+ * Check if an error is a GitHub 422 "line could not be resolved" error.
+ */
+function isLineResolutionError(error) {
+    if (!(error instanceof Error))
+        return false;
+    const msg = error.message.toLowerCase();
+    return msg.includes('pull_request_review_thread.line') ||
+        msg.includes('line must be part of the diff') ||
+        msg.includes('line could not be resolved');
 }
 // -----------------------------------------------------------------------------
 // Main Review Posting Logic
@@ -122,12 +151,21 @@ export async function postTriggerReview(ctx, deps) {
                     allFindings: result.report.findings,
                 })
                 : result.renderResult;
-            await postReviewToGitHub(octokit, context, renderResultToPost);
-            // Add newly posted findings to list for cross-trigger deduplication
-            // Only include findings up to maxFindings since that's what was actually posted
+            // Apply maxFindings limit consistently for both the fallback body and dedup tracking
             const postedFindings = result.maxFindings
                 ? findingsToPost.slice(0, result.maxFindings)
                 : findingsToPost;
+            try {
+                await postReviewToGitHub(octokit, context, renderResultToPost);
+            }
+            catch (error) {
+                if (!isLineResolutionError(error)) {
+                    throw error;
+                }
+                warnAction(`Inline comments failed for ${result.triggerName}, posting findings in review body`);
+                const fallback = moveCommentsToBody(renderResultToPost, postedFindings, result.report.skill);
+                await postReviewToGitHub(octokit, context, fallback);
+            }
             for (const finding of postedFindings) {
                 const comment = findingToExistingComment(finding, result.report.skill);
                 if (comment) {

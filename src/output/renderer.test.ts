@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderSkillReport } from './renderer.js';
+import { renderSkillReport, renderFindingsBody } from './renderer.js';
 import { parseMarker } from './dedup.js';
 import type { SkillReport } from '../types/index.js';
 
@@ -502,6 +502,28 @@ describe('renderSkillReport', () => {
       expect(result.review!.comments[0]!.body).toContain('Critical Issue');
     });
 
+    it('REQUEST_CHANGES with locationless findings shows them in body', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical General Issue',
+            description: 'No specific location',
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'critical' });
+      expect(result.review).toBeDefined();
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+      expect(result.review!.comments).toHaveLength(0);
+      expect(result.review!.body).toContain('Critical General Issue');
+      expect(result.review!.body).toContain('No specific location');
+      expect(result.review!.body).not.toContain('threshold');
+    });
+
     it('REQUEST_CHANGES when reportOn is more restrictive than failOn', () => {
       const report: SkillReport = {
         ...baseReport,
@@ -640,7 +662,7 @@ describe('renderSkillReport', () => {
     expect(result.review!.comments).toHaveLength(3);
   });
 
-  it('handles findings without location', () => {
+  it('renders findings without location in review body', () => {
     const report: SkillReport = {
       ...baseReport,
       findings: [
@@ -655,7 +677,11 @@ describe('renderSkillReport', () => {
 
     const result = renderSkillReport(report);
 
-    expect(result.review).toBeUndefined();
+    expect(result.review).toBeDefined();
+    expect(result.review!.comments).toHaveLength(0);
+    expect(result.review!.body).toContain('General Issue');
+    expect(result.review!.body).toContain('Applies to whole project');
+    expect(result.review!.body).toContain('Identified by Warden via `security-review`');
     expect(result.summaryComment).toContain('General Issue');
     expect(result.summaryComment).toContain('General');
   });
@@ -1024,5 +1050,142 @@ describe('renderSkillReport', () => {
       expect(result.summaryComment).not.toContain('View');
       expect(result.summaryComment).not.toContain('additional finding');
     });
+  });
+
+  describe('mixed inline and locationless findings', () => {
+    it('includes locationless findings in review body alongside inline comments', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'Inline Issue',
+            description: 'Has a location',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'medium',
+            title: 'General Issue',
+            description: 'No specific location',
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report);
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.comments).toHaveLength(1);
+      expect(result.review!.comments[0]!.body).toContain('Inline Issue');
+      expect(result.review!.body).toContain('General Issue');
+      expect(result.review!.body).toContain('No specific location');
+    });
+
+    it('leaves review body empty when all findings have locations', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'Issue A',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 10 },
+          },
+          {
+            id: 'f2',
+            severity: 'medium',
+            title: 'Issue B',
+            description: 'Details',
+            location: { path: 'src/b.ts', startLine: 20 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report);
+
+      expect(result.review).toBeDefined();
+      expect(result.review!.body).toBe('');
+      expect(result.review!.comments).toHaveLength(2);
+    });
+  });
+});
+
+describe('renderFindingsBody', () => {
+  it('renders findings as markdown', () => {
+    const findings = [
+      {
+        id: 'f1',
+        severity: 'high' as const,
+        title: 'SQL Injection',
+        description: 'User input in query',
+        location: { path: 'src/db.ts', startLine: 42 },
+      },
+    ];
+
+    const body = renderFindingsBody(findings, 'security-review');
+
+    expect(body).toContain(':warning: **[f1] SQL Injection**');
+    expect(body).toContain('(`src/db.ts:42`)');
+    expect(body).toContain('User input in query');
+    expect(body).toContain('<sub>Identified by Warden via `security-review`</sub>');
+  });
+
+  it('renders findings without location', () => {
+    const findings = [
+      {
+        id: 'f1',
+        severity: 'medium' as const,
+        title: 'General Issue',
+        description: 'Applies broadly',
+      },
+    ];
+
+    const body = renderFindingsBody(findings, 'code-review');
+
+    expect(body).toContain(':orange_circle: **[f1] General Issue**');
+    expect(body).not.toContain('(`');
+    expect(body).toContain('Applies broadly');
+  });
+
+  it('includes confidence when present', () => {
+    const findings = [
+      {
+        id: 'f1',
+        severity: 'critical' as const,
+        confidence: 'high' as const,
+        title: 'Critical Bug',
+        description: 'Details',
+      },
+    ];
+
+    const body = renderFindingsBody(findings, 'test-skill');
+
+    expect(body).toContain('(high confidence)');
+  });
+
+  it('renders multiple findings', () => {
+    const findings = [
+      {
+        id: 'f1',
+        severity: 'high' as const,
+        title: 'Issue A',
+        description: 'First issue',
+      },
+      {
+        id: 'f2',
+        severity: 'low' as const,
+        title: 'Issue B',
+        description: 'Second issue',
+      },
+    ];
+
+    const body = renderFindingsBody(findings, 'test-skill');
+
+    expect(body).toContain('Issue A');
+    expect(body).toContain('Issue B');
+    expect(body).toContain('First issue');
+    expect(body).toContain('Second issue');
   });
 });

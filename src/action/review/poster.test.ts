@@ -15,6 +15,7 @@ vi.mock('../../output/dedup.js', () => ({
 
 vi.mock('../../output/renderer.js', () => ({
   renderSkillReport: vi.fn(),
+  renderFindingsBody: vi.fn().mockReturnValue('rendered findings body'),
 }));
 
 
@@ -299,5 +300,82 @@ describe('postTriggerReview', () => {
 
     expect(postResult.posted).toBe(false);
     expect(postResult.shouldFail).toBe(false);
+  });
+
+  it('retries with findings in body when GitHub returns line resolution error', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: '',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'info',
+    };
+
+    vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
+
+    // First call fails with line resolution error, second succeeds
+    vi.mocked(mockOctokit.pulls.createReview)
+      .mockRejectedValueOnce(new Error('Validation Failed: pull_request_review_thread.line does not form part of the diff'))
+      .mockResolvedValueOnce({} as never);
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.posted).toBe(true);
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(2);
+    // Second call should have no inline comments and findings in body
+    const secondCall = vi.mocked(mockOctokit.pulls.createReview).mock.calls[1]![0]!;
+    expect(secondCall.comments).toEqual([]);
+    expect(secondCall.body).toBe('rendered findings body');
+  });
+
+  it('does not retry on non-line-resolution errors', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: '',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'info',
+    };
+
+    vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('Resource not accessible by integration'));
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
   });
 });
