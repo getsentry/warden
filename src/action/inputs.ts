@@ -22,6 +22,10 @@ export interface ActionInputs {
   failOn?: SeverityThreshold;
   reportOn?: SeverityThreshold;
   maxFindings: number;
+  /** Whether to use REQUEST_CHANGES review event when findings exceed failOn */
+  requestChanges?: boolean;
+  /** Whether to fail the check run when findings exceed failOn */
+  failCheck?: boolean;
   /** Max concurrent trigger executions */
   parallel: number;
 }
@@ -43,6 +47,15 @@ function getInput(name: string, required = false): string {
     throw new Error(`Input required and not supplied: ${name}`);
   }
   return value;
+}
+
+/**
+ * Parse a string input as a boolean, returning undefined for unrecognized values.
+ */
+function parseBooleanInput(value: string): boolean | undefined {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
 }
 
 /**
@@ -84,6 +97,9 @@ export function parseActionInputs(): ActionInputs {
   const maxFindingsParsed = parseInt(getInput('max-findings') || '50', 10);
   const parallelParsed = parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10);
 
+  const requestChanges = parseBooleanInput(getInput('request-changes'));
+  const failCheck = parseBooleanInput(getInput('fail-check'));
+
   return {
     anthropicApiKey,
     oauthToken,
@@ -92,6 +108,8 @@ export function parseActionInputs(): ActionInputs {
     failOn,
     reportOn,
     maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
+    requestChanges,
+    failCheck,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
   };
 }

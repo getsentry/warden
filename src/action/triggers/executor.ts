@@ -48,6 +48,10 @@ export interface TriggerExecutorDeps {
   globalReportOn?: SeverityThreshold;
   /** Global max-findings from action inputs (trigger-specific takes precedence) */
   globalMaxFindings: number;
+  /** Global request-changes from action inputs (trigger-specific takes precedence) */
+  globalRequestChanges?: boolean;
+  /** Global fail-check from action inputs (trigger-specific takes precedence) */
+  globalFailCheck?: boolean;
 }
 
 /**
@@ -60,6 +64,8 @@ export interface TriggerResult {
   failOn?: SeverityThreshold;
   reportOn?: SeverityThreshold;
   reportOnSuccess?: boolean;
+  requestChanges?: boolean;
+  failCheck?: boolean;
   checkRunUrl?: string;
   maxFindings?: number;
   error?: unknown;
@@ -104,6 +110,8 @@ export async function executeTrigger(
 
   const failOn = trigger.failOn ?? deps.globalFailOn;
   const reportOn = trigger.reportOn ?? deps.globalReportOn;
+  const requestChanges = trigger.requestChanges ?? deps.globalRequestChanges;
+  const failCheck = trigger.failCheck ?? deps.globalFailCheck;
 
   try {
     const taskOptions: SkillTaskOptions = {
@@ -142,6 +150,7 @@ export async function executeTrigger(
           headSha: context.pullRequest.headSha,
           failOn,
           reportOn,
+          failCheck,
         });
       } catch (error) {
         console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
@@ -155,6 +164,7 @@ export async function executeTrigger(
             maxFindings,
             reportOn,
             failOn,
+            requestChanges,
             checkRunUrl: skillCheckUrl,
             totalFindings: report.findings.length,
           })
@@ -168,6 +178,8 @@ export async function executeTrigger(
       failOn,
       reportOn,
       reportOnSuccess: trigger.reportOnSuccess,
+      requestChanges,
+      failCheck,
       checkRunUrl: skillCheckUrl,
       maxFindings,
     };

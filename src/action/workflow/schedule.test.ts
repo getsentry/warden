@@ -395,14 +395,14 @@ describe('runScheduleWorkflow', () => {
   // ---------------------------------------------------------------------------
 
   describe('failure and error handling', () => {
-    it('fails when failOn threshold is met', async () => {
+    it('fails when failOn threshold is met and failCheck is true', async () => {
       const finding = createFinding({ severity: 'high' });
       mockRunSkill.mockResolvedValue(createSkillReport({ findings: [finding] }));
 
       await expect(
         runScheduleWorkflow(
           mockOctokit,
-          createDefaultInputs({ failOn: 'high' }),
+          createDefaultInputs({ failOn: 'high', failCheck: true }),
           SCHEDULE_FIXTURES
         )
       ).rejects.toThrow('setFailed');
@@ -410,6 +410,20 @@ describe('runScheduleWorkflow', () => {
       expect(mockSetFailed).toHaveBeenCalledWith(
         expect.stringContaining('high+ severity')
       );
+    });
+
+    it('does not fail when failOn threshold is met but failCheck is false', async () => {
+      const finding = createFinding({ severity: 'high' });
+      mockRunSkill.mockResolvedValue(createSkillReport({ findings: [finding] }));
+
+      // Should complete without throwing (failCheck defaults to false)
+      await runScheduleWorkflow(
+        mockOctokit,
+        createDefaultInputs({ failOn: 'high' }),
+        SCHEDULE_FIXTURES
+      );
+
+      expect(mockSetFailed).not.toHaveBeenCalled();
     });
 
     it('records error and calls handleTriggerErrors when trigger throws', async () => {

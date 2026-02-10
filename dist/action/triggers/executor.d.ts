@@ -25,6 +25,10 @@ export interface TriggerExecutorDeps {
     globalReportOn?: SeverityThreshold;
     /** Global max-findings from action inputs (trigger-specific takes precedence) */
     globalMaxFindings: number;
+    /** Global request-changes from action inputs (trigger-specific takes precedence) */
+    globalRequestChanges?: boolean;
+    /** Global fail-check from action inputs (trigger-specific takes precedence) */
+    globalFailCheck?: boolean;
 }
 /**
  * Result from executing a single trigger.
@@ -36,6 +40,8 @@ export interface TriggerResult {
     failOn?: SeverityThreshold;
     reportOn?: SeverityThreshold;
     reportOnSuccess?: boolean;
+    requestChanges?: boolean;
+    failCheck?: boolean;
     checkRunUrl?: string;
     maxFindings?: number;
     error?: unknown;

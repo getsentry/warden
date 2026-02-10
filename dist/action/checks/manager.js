@@ -51,7 +51,7 @@ export function buildCoreSummaryData(results, reports) {
             name: r.triggerName,
             findingCount: r.report?.findings.length ?? 0,
             conclusion: r.report
-                ? determineConclusion(r.report.findings, r.failOn)
+                ? determineConclusion(r.report.findings, r.failOn, r.failCheck)
                 : 'failure',
             durationMs: r.report?.durationMs,
             usage: r.report?.usage,

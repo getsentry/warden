@@ -121,6 +121,73 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.maxFindings).toBe(10);
   });
 
+  it('requestChanges and failCheck follow 3-level merge (trigger > skill > defaults)', () => {
+    const skill: SkillConfig = {
+      name: 'test-skill',
+      requestChanges: false,
+      failCheck: true,
+      triggers: [
+        {
+          type: 'pull_request',
+          actions: ['opened'],
+          requestChanges: true,
+        },
+      ],
+    };
+
+    const config: WardenConfig = {
+      version: 1,
+      skills: [skill],
+      defaults: {
+        requestChanges: false,
+        failCheck: false,
+      },
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    // Trigger overrides skill for requestChanges
+    expect(resolved?.requestChanges).toBe(true);
+    // Skill overrides defaults for failCheck (trigger doesn't set it)
+    expect(resolved?.failCheck).toBe(true);
+  });
+
+  it('requestChanges and failCheck use defaults when not set at skill or trigger level', () => {
+    const config: WardenConfig = {
+      ...baseConfig,
+      defaults: {
+        requestChanges: false,
+        failCheck: true,
+      },
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.requestChanges).toBe(false);
+    expect(resolved?.failCheck).toBe(true);
+  });
+
+  it('requestChanges and failCheck are undefined when not configured', () => {
+    const [resolved] = resolveSkillConfigs(baseConfig);
+
+    expect(resolved?.requestChanges).toBeUndefined();
+    expect(resolved?.failCheck).toBeUndefined();
+  });
+
+  it('wildcard entries inherit requestChanges and failCheck from skill and defaults', () => {
+    const config: WardenConfig = {
+      version: 1,
+      skills: [{ name: 'test-skill', requestChanges: true }],
+      defaults: { failCheck: true },
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.type).toBe('*');
+    expect(resolved?.requestChanges).toBe(true);
+    expect(resolved?.failCheck).toBe(true);
+  });
+
   it('trigger-level reportOnSuccess overrides skill and defaults', () => {
     const skill: SkillConfig = {
       name: 'test-skill',
@@ -594,6 +661,68 @@ describe('schedule skill validation', () => {
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
+  });
+});
+
+describe('requestChanges and failCheck config', () => {
+  it('accepts requestChanges in defaults', () => {
+    const config = {
+      version: 1,
+      defaults: { requestChanges: false },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.requestChanges).toBe(false);
+  });
+
+  it('accepts failCheck in defaults', () => {
+    const config = {
+      version: 1,
+      defaults: { failCheck: true },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.failCheck).toBe(true);
+  });
+
+  it('accepts requestChanges in skill', () => {
+    const config = {
+      version: 1,
+      skills: [{ name: 'test', requestChanges: false }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.skills[0]?.requestChanges).toBe(false);
+  });
+
+  it('accepts failCheck in skill trigger', () => {
+    const config = {
+      version: 1,
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'pull_request', actions: ['opened'], failCheck: true }],
+      }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.skills[0]?.triggers?.[0]?.failCheck).toBe(true);
+  });
+
+  it('rejects non-boolean requestChanges', () => {
+    const config = {
+      version: 1,
+      defaults: { requestChanges: 'yes' },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
   });
 });
 

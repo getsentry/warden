@@ -59,6 +59,10 @@ export const SkillTriggerSchema = z.object({
   reportOn: SeverityThresholdSchema.optional(),
   maxFindings: z.number().int().positive().optional(),
   reportOnSuccess: z.boolean().optional(),
+  /** Use REQUEST_CHANGES review event when findings exceed failOn */
+  requestChanges: z.boolean().optional(),
+  /** Fail the check run when findings exceed failOn */
+  failCheck: z.boolean().optional(),
   model: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
   /** Schedule-specific configuration. Only used when type is 'schedule'. */
@@ -92,6 +96,10 @@ export const SkillConfigSchema = z.object({
   reportOn: SeverityThresholdSchema.optional(),
   maxFindings: z.number().int().positive().optional(),
   reportOnSuccess: z.boolean().optional(),
+  /** Use REQUEST_CHANGES review event when findings exceed failOn */
+  requestChanges: z.boolean().optional(),
+  /** Fail the check run when findings exceed failOn */
+  failCheck: z.boolean().optional(),
   /** Model to use for this skill (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
@@ -146,6 +154,10 @@ export const DefaultsSchema = z.object({
   maxFindings: z.number().int().positive().optional(),
   /** Report even when there are no findings (default: false) */
   reportOnSuccess: z.boolean().optional(),
+  /** Use REQUEST_CHANGES review event when findings exceed failOn. Default: true */
+  requestChanges: z.boolean().optional(),
+  /** Fail the check run when findings exceed failOn. Default: false */
+  failCheck: z.boolean().optional(),
   /** Default model for all skills (e.g., 'claude-sonnet-4-20250514') */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */

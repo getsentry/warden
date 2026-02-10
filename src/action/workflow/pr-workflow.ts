@@ -235,6 +235,8 @@ async function executeAllTriggers(
         globalFailOn: inputs.failOn,
         globalReportOn: inputs.reportOn,
         globalMaxFindings: inputs.maxFindings,
+        globalRequestChanges: inputs.requestChanges,
+        globalFailCheck: inputs.failCheck,
       }),
     concurrency
   );
@@ -297,7 +299,8 @@ async function postReviewsAndTrackFailures(
       existingComments.push(...postResult.newComments);
 
       // Check if we should fail based on this trigger's config
-      if (result.failOn && shouldFail(result.report, result.failOn)) {
+      const failCheck = result.failCheck ?? false;
+      if (failCheck && result.failOn && shouldFail(result.report, result.failOn)) {
         shouldFailAction = true;
         const count = countFindingsAtOrAbove(result.report, result.failOn);
         failureReasons.push(`${result.triggerName}: Found ${count} ${result.failOn}+ severity issues`);
@@ -435,14 +438,18 @@ async function finalizeWorkflow(
   canResolveStale: boolean
 ): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
-  // Requires: all triggers succeeded, no trigger exceeded failOn threshold,
+  // Requires: all triggers succeeded, current run would not request changes,
   // and at least one trigger has an active failOn (prevents accidental dismiss when config changes).
+  const wouldRequestChanges = results.some(
+    (r) => r.failOn && r.failOn !== 'off' && (r.requestChanges ?? true) &&
+      r.report && shouldFail(r.report, r.failOn)
+  );
   const hasActiveFailOn = results.some((r) => r.failOn && r.failOn !== 'off');
   if (
     context.pullRequest &&
     previousReviewInfo?.state === 'CHANGES_REQUESTED' &&
     canResolveStale &&
-    !shouldFailAction &&
+    !wouldRequestChanges &&
     hasActiveFailOn
   ) {
     try {

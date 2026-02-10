@@ -1,0 +1,31 @@
+/**
+ * GitHub App manifest builder for the setup-app flow.
+ */
+/**
+ * Build a GitHub App manifest for Warden.
+ */
+export function buildManifest(options) {
+    const name = options.name ?? 'Warden';
+    return {
+        name,
+        url: 'https://github.com/getsentry/warden',
+        hook_attributes: {
+            // URL is required by GitHub even when webhooks are disabled
+            url: 'https://example.com/webhook',
+            active: false,
+        },
+        redirect_url: `http://localhost:${options.port}/callback`,
+        public: false,
+        // contents: write required for resolving review threads via GraphQL
+        // See: https://github.com/orgs/community/discussions/44650
+        default_permissions: {
+            contents: 'write',
+            pull_requests: 'write',
+            issues: 'write',
+            checks: 'write',
+            metadata: 'read',
+        },
+        default_events: ['pull_request'],
+    };
+}
+//# sourceMappingURL=manifest.js.map

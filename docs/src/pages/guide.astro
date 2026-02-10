@@ -300,7 +300,8 @@ Focus on issues in the changed code. For each issue found, report:
     <li>GitHub Actions runs the Warden workflow</li>
     <li>Warden analyzes changed files against configured triggers</li>
     <li>Findings are posted as inline review comments</li>
-    <li>Check passes or fails based on <code>failOn</code> severity</li>
+    <li>If <code>requestChanges</code> is enabled, the review requests changes when findings exceed <code>failOn</code></li>
+    <li>If <code>failCheck</code> is enabled, the check run fails when findings exceed <code>failOn</code></li>
   </ol>
 
   <h3>Configuring Triggers</h3>
@@ -339,8 +340,10 @@ actions = ["opened", "synchronize"]`}
   <Terminal showCopy={true}>
     <Code
       code={`[defaults]
-failOn = "high"      # Fail the check on high or critical findings
-reportOn = "medium"  # Report findings at medium and above`}
+failOn = "high"          # Threshold for blocking findings
+requestChanges = true    # Request changes on the PR
+failCheck = false        # Fail the check run
+reportOn = "medium"      # Report findings at medium and above`}
       lang="toml"
       theme="vitesse-black"
     />

@@ -266,12 +266,28 @@ describe('runPRWorkflow', () => {
         });
     });
     describe('failure conditions', () => {
-        it('fails when findings exceed fail-on threshold', async () => {
+        it('fails when findings exceed fail-on threshold and failCheck is true', async () => {
             const finding = createFinding({ severity: 'high' });
             const report = createSkillReport({ findings: [finding] });
             mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
-            await expect(runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR)).rejects.toThrow('setFailed');
+            await expect(runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high', failCheck: true }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR)).rejects.toThrow('setFailed');
             expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining('high+ severity'));
+        });
+        it('does not fail when findings exceed fail-on threshold but failCheck is false', async () => {
+            const finding = createFinding({ severity: 'high' });
+            const report = createSkillReport({ findings: [finding] });
+            mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+            // Should complete without throwing
+            await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high', failCheck: false }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            expect(mockSetFailed).not.toHaveBeenCalled();
+        });
+        it('does not fail when findings exceed fail-on threshold and failCheck is default (undefined)', async () => {
+            const finding = createFinding({ severity: 'high' });
+            const report = createSkillReport({ findings: [finding] });
+            mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+            // Should complete without throwing (failCheck defaults to false)
+            await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+            expect(mockSetFailed).not.toHaveBeenCalled();
         });
         it('fails when event payload is unreadable', async () => {
             await expect(runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', '/nonexistent/event.json', FIXTURES_DIR)).rejects.toThrow('setFailed');
@@ -363,7 +379,7 @@ describe('runPRWorkflow', () => {
                 name: 'test-trigger',
                 report: createSkillReport({ findings: [finding] }),
             });
-            await expect(runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR)).rejects.toThrow('setFailed');
+            await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
             const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
             expect(dismissReview).not.toHaveBeenCalled();
         });

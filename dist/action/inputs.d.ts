@@ -14,6 +14,10 @@ export interface ActionInputs {
     failOn?: SeverityThreshold;
     reportOn?: SeverityThreshold;
     maxFindings: number;
+    /** Whether to use REQUEST_CHANGES review event when findings exceed failOn */
+    requestChanges?: boolean;
+    /** Whether to fail the check run when findings exceed failOn */
+    failCheck?: boolean;
     /** Max concurrent trigger executions */
     parallel: number;
 }

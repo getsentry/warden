@@ -119,7 +119,8 @@ export async function runScheduleWorkflow(octokit, inputs, repoPath) {
             }
             // Check failure condition
             const failOn = resolved.failOn ?? inputs.failOn;
-            if (failOn && shouldFail(report, failOn)) {
+            const failCheck = resolved.failCheck ?? inputs.failCheck ?? false;
+            if (failCheck && failOn && shouldFail(report, failOn)) {
                 shouldFailAction = true;
                 const count = countFindingsAtOrAbove(report, failOn);
                 failureReasons.push(`${resolved.name}: Found ${count} ${failOn}+ severity issues`);

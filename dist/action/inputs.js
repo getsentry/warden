@@ -23,6 +23,16 @@ function getInput(name, required = false) {
     return value;
 }
 /**
+ * Parse a string input as a boolean, returning undefined for unrecognized values.
+ */
+function parseBooleanInput(value) {
+    if (value === 'true')
+        return true;
+    if (value === 'false')
+        return false;
+    return undefined;
+}
+/**
  * Parse action inputs from the GitHub Actions environment.
  * Throws if required inputs are missing.
  */
@@ -52,6 +62,8 @@ export function parseActionInputs() {
         : undefined;
     const maxFindingsParsed = parseInt(getInput('max-findings') || '50', 10);
     const parallelParsed = parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10);
+    const requestChanges = parseBooleanInput(getInput('request-changes'));
+    const failCheck = parseBooleanInput(getInput('fail-check'));
     return {
         anthropicApiKey,
         oauthToken,
@@ -60,6 +72,8 @@ export function parseActionInputs() {
         failOn,
         reportOn,
         maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
+        requestChanges,
+        failCheck,
         parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
     };
 }

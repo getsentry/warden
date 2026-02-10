@@ -37,6 +37,8 @@ export interface UpdateSkillCheckOptions extends CheckOptions {
   failOn?: SeverityThreshold;
   /** Only include findings at or above this severity level in annotations */
   reportOn?: SeverityThreshold;
+  /** Whether to fail the check run when findings exceed failOn. Default: false */
+  failCheck?: boolean;
 }
 
 /**
@@ -134,7 +136,8 @@ export function findingsToAnnotations(findings: Finding[], reportOn?: SeverityTh
  */
 export function determineConclusion(
   findings: Finding[],
-  failOn?: SeverityThreshold
+  failOn?: SeverityThreshold,
+  failCheck?: boolean,
 ): CheckConclusion {
   if (findings.length === 0) {
     return 'success';
@@ -150,7 +153,7 @@ export function determineConclusion(
     (f) => SEVERITY_ORDER[f.severity] <= failOnOrder
   );
 
-  return hasFailingSeverity ? 'failure' : 'neutral';
+  return hasFailingSeverity && failCheck ? 'failure' : 'neutral';
 }
 
 /**
@@ -188,7 +191,7 @@ export async function updateSkillCheck(
   options: UpdateSkillCheckOptions
 ): Promise<void> {
   // Conclusion is based on all findings (failOn behavior)
-  const conclusion = determineConclusion(report.findings, options.failOn);
+  const conclusion = determineConclusion(report.findings, options.failOn, options.failCheck);
   // Annotations are filtered by reportOn threshold
   const annotations = findingsToAnnotations(report.findings, options.reportOn);
 

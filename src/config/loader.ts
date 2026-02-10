@@ -82,6 +82,10 @@ export interface ResolvedTrigger {
   reportOn?: SeverityThreshold;
   maxFindings?: number;
   reportOnSuccess?: boolean;
+  /** Use REQUEST_CHANGES review event when findings exceed failOn */
+  requestChanges?: boolean;
+  /** Fail the check run when findings exceed failOn */
+  failCheck?: boolean;
   /** Model (merged: trigger > skill > defaults > cli > env) */
   model?: string;
   /** Max agentic turns (merged: trigger > skill > defaults) */
@@ -150,6 +154,8 @@ export function resolveSkillConfigs(
         reportOn: skill.reportOn ?? defaults?.reportOn,
         maxFindings: skill.maxFindings ?? defaults?.maxFindings,
         reportOnSuccess: skill.reportOnSuccess ?? defaults?.reportOnSuccess,
+        requestChanges: skill.requestChanges ?? defaults?.requestChanges,
+        failCheck: skill.failCheck ?? defaults?.failCheck,
         model: baseModel,
         maxTurns: skill.maxTurns ?? defaults?.maxTurns,
       });
@@ -167,6 +173,8 @@ export function resolveSkillConfigs(
           reportOn: trigger.reportOn ?? skill.reportOn ?? defaults?.reportOn,
           maxFindings: trigger.maxFindings ?? skill.maxFindings ?? defaults?.maxFindings,
           reportOnSuccess: trigger.reportOnSuccess ?? skill.reportOnSuccess ?? defaults?.reportOnSuccess,
+          requestChanges: trigger.requestChanges ?? skill.requestChanges ?? defaults?.requestChanges,
+          failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? skill.maxTurns ?? defaults?.maxTurns,
           schedule: trigger.schedule,

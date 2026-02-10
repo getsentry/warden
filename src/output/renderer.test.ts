@@ -608,6 +608,60 @@ describe('renderSkillReport', () => {
       expect(result.review!.comments[0]!.body).toContain('Low Issue');
     });
 
+    it('uses COMMENT when requestChanges is false even if failOn threshold is met', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'high', requestChanges: false });
+      expect(result.review!.event).toBe('COMMENT');
+    });
+
+    it('uses REQUEST_CHANGES when requestChanges is true and threshold is met', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'high', requestChanges: true });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
+    it('defaults to REQUEST_CHANGES when requestChanges is undefined and threshold is met', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'critical',
+            title: 'Critical Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'high' });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
     it('REQUEST_CHANGES when some findings are filtered by reportOn but others meet both thresholds', () => {
       const report: SkillReport = {
         ...baseReport,

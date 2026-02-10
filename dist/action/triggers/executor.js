@@ -47,6 +47,8 @@ export async function executeTrigger(trigger, deps) {
     }
     const failOn = trigger.failOn ?? deps.globalFailOn;
     const reportOn = trigger.reportOn ?? deps.globalReportOn;
+    const requestChanges = trigger.requestChanges ?? deps.globalRequestChanges;
+    const failCheck = trigger.failCheck ?? deps.globalFailCheck;
     try {
         const taskOptions = {
             name: trigger.name,
@@ -80,6 +82,7 @@ export async function executeTrigger(trigger, deps) {
                     headSha: context.pullRequest.headSha,
                     failOn,
                     reportOn,
+                    failCheck,
                 });
             }
             catch (error) {
@@ -92,6 +95,7 @@ export async function executeTrigger(trigger, deps) {
                 maxFindings,
                 reportOn,
                 failOn,
+                requestChanges,
                 checkRunUrl: skillCheckUrl,
                 totalFindings: report.findings.length,
             })
@@ -104,6 +108,8 @@ export async function executeTrigger(trigger, deps) {
             failOn,
             reportOn,
             reportOnSuccess: trigger.reportOnSuccess,
+            requestChanges,
+            failCheck,
             checkRunUrl: skillCheckUrl,
             maxFindings,
         };

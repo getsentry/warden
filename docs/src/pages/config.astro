@@ -113,6 +113,10 @@ actions = ["opened", "synchronize"]`}
     <dd>Maximum findings to report</dd>
     <dt>reportOnSuccess</dt>
     <dd>Post comment when no findings. Default: <code>false</code></dd>
+    <dt>requestChanges</dt>
+    <dd>Use REQUEST_CHANGES review event when findings exceed <code>failOn</code>. Default: <code>true</code></dd>
+    <dt>failCheck</dt>
+    <dd>Fail the check run when findings exceed <code>failOn</code>. Default: <code>false</code></dd>
   </dl>
 
   <Terminal showCopy={true}>
@@ -142,6 +146,10 @@ maxFindings = 20`}
     <dd>Default failure threshold</dd>
     <dt>reportOn</dt>
     <dd>Default reporting threshold</dd>
+    <dt>requestChanges</dt>
+    <dd>Default REQUEST_CHANGES behavior. Default: <code>true</code></dd>
+    <dt>failCheck</dt>
+    <dd>Default check failure behavior. Default: <code>false</code></dd>
     <dt>ignorePaths</dt>
     <dd>Default paths to exclude</dd>
     <dt>chunking</dt>
@@ -155,6 +163,8 @@ model = "claude-sonnet-4-20250514"
 maxTurns = 30
 failOn = "high"
 reportOn = "medium"
+requestChanges = true
+failCheck = false
 ignorePaths = ["**/vendor/**", "**/node_modules/**"]`}
       lang="toml"
       theme="vitesse-black"
@@ -403,5 +413,9 @@ jobs:
     <dd>Minimum severity to fail the check</dd>
     <dt>report-on</dt>
     <dd>Minimum severity to post comments</dd>
+    <dt>request-changes</dt>
+    <dd>Whether to request changes on PR reviews</dd>
+    <dt>fail-check</dt>
+    <dd>Whether to fail the check run</dd>
   </dl>
 </Base>

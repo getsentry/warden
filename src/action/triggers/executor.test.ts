@@ -209,6 +209,48 @@ describe('executeTrigger', () => {
     expect(result.failOn).toBe('critical');
   });
 
+  it('passes requestChanges and failCheck through from trigger', async () => {
+    const mockReport = createReport([
+      { id: 'test-1', severity: 'high', confidence: 'high', title: 'Test', description: 'Test' },
+    ]);
+    const mockRenderResult = createRenderResult();
+
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+    vi.mocked(renderSkillReport).mockReturnValue(mockRenderResult);
+
+    const triggerWithFlags: ResolvedTrigger = {
+      ...mockTrigger,
+      requestChanges: false,
+      failCheck: true,
+    };
+
+    const result = await executeTrigger(triggerWithFlags, mockDeps);
+
+    expect(result.requestChanges).toBe(false);
+    expect(result.failCheck).toBe(true);
+  });
+
+  it('uses global requestChanges and failCheck when trigger does not specify', async () => {
+    const mockReport = createReport();
+
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    const depsWithGlobals = {
+      ...mockDeps,
+      globalRequestChanges: false,
+      globalFailCheck: true,
+    };
+
+    const result = await executeTrigger(mockTrigger, depsWithGlobals);
+
+    expect(result.requestChanges).toBe(false);
+    expect(result.failCheck).toBe(true);
+  });
+
   it('skips check creation for non-PR events', async () => {
     const mockReport = createReport();
 

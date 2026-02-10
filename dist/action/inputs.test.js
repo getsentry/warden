@@ -38,6 +38,36 @@ describe('parseActionInputs', () => {
             expect(() => parseActionInputs()).toThrow('Authentication not found');
         });
     });
+    describe('boolean input handling', () => {
+        it('parses request-changes as true', () => {
+            process.env['INPUT_REQUEST_CHANGES'] = 'true';
+            const inputs = parseActionInputs();
+            expect(inputs.requestChanges).toBe(true);
+        });
+        it('parses request-changes as false', () => {
+            process.env['INPUT_REQUEST_CHANGES'] = 'false';
+            const inputs = parseActionInputs();
+            expect(inputs.requestChanges).toBe(false);
+        });
+        it('leaves requestChanges undefined when not set', () => {
+            const inputs = parseActionInputs();
+            expect(inputs.requestChanges).toBeUndefined();
+        });
+        it('parses fail-check as true', () => {
+            process.env['INPUT_FAIL_CHECK'] = 'true';
+            const inputs = parseActionInputs();
+            expect(inputs.failCheck).toBe(true);
+        });
+        it('parses fail-check as false', () => {
+            process.env['INPUT_FAIL_CHECK'] = 'false';
+            const inputs = parseActionInputs();
+            expect(inputs.failCheck).toBe(false);
+        });
+        it('leaves failCheck undefined when not set', () => {
+            const inputs = parseActionInputs();
+            expect(inputs.failCheck).toBeUndefined();
+        });
+    });
     describe('numeric input handling', () => {
         it('parses valid max-findings input', () => {
             process.env['INPUT_MAX_FINDINGS'] = '25';

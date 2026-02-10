@@ -136,7 +136,8 @@ export async function postTriggerReview(ctx, deps) {
             }
         }
         // Check if failOn threshold is met (even if all findings deduplicated, we still need REQUEST_CHANGES)
-        const needsRequestChanges = result.failOn && shouldFail(result.report, result.failOn);
+        const useRequestChanges = result.requestChanges ?? true;
+        const needsRequestChanges = useRequestChanges && result.failOn && shouldFail(result.report, result.failOn);
         // Only post if we have non-duplicate findings, reportOnSuccess, or REQUEST_CHANGES needed
         if (findingsToPost.length > 0 || reportOnSuccess || needsRequestChanges) {
             // Re-render with deduplicated findings if any were removed
@@ -145,6 +146,7 @@ export async function postTriggerReview(ctx, deps) {
                     maxFindings: result.maxFindings,
                     reportOn: result.reportOn,
                     failOn: result.failOn,
+                    requestChanges: result.requestChanges,
                     checkRunUrl: result.checkRunUrl,
                     totalFindings: result.report.findings.length,
                     // Pass original findings for failOn evaluation (not affected by dedup)

@@ -226,13 +226,22 @@ describe('determineConclusion', () => {
     expect(determineConclusion(findings, undefined)).toBe('neutral');
   });
 
-  it('returns failure when findings meet threshold', () => {
+  it('returns failure when findings meet threshold and failCheck is true', () => {
     const findings: Finding[] = [
       { id: 'f1', severity: 'high', title: 'High Issue', description: 'Details' },
     ];
 
-    expect(determineConclusion(findings, 'high')).toBe('failure');
-    expect(determineConclusion(findings, 'medium')).toBe('failure');
+    expect(determineConclusion(findings, 'high', true)).toBe('failure');
+    expect(determineConclusion(findings, 'medium', true)).toBe('failure');
+  });
+
+  it('returns neutral when findings meet threshold but failCheck is default (false)', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'High Issue', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, 'high')).toBe('neutral');
+    expect(determineConclusion(findings, 'medium')).toBe('neutral');
   });
 
   it('returns neutral when findings below threshold', () => {
@@ -249,7 +258,20 @@ describe('determineConclusion', () => {
       { id: 'f1', severity: 'critical', title: 'Critical', description: 'Details' },
     ];
 
-    expect(determineConclusion(findings, 'high')).toBe('failure');
+    expect(determineConclusion(findings, 'high')).toBe('neutral');
+  });
+
+  it('returns neutral when failCheck is explicitly false and threshold is met', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'High Issue', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, 'high', false)).toBe('neutral');
+  });
+
+  it('returns success for empty findings regardless of failCheck', () => {
+    expect(determineConclusion([], 'high', true)).toBe('success');
+    expect(determineConclusion([], 'high', false)).toBe('success');
   });
 });
 

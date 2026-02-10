@@ -14,7 +14,7 @@ const SEVERITY_EMOJI: Record<Severity, string> = {
 };
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, failOn, checkRunUrl, totalFindings, allFindings } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, failOn, requestChanges, checkRunUrl, totalFindings, allFindings } = options;
 
   // Filter by reportOn threshold first, then apply maxFindings limit
   const filteredFindings = filterFindingsBySeverity(report.findings, reportOn);
@@ -29,7 +29,7 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
 
   // Use allFindings for failOn evaluation if provided (e.g., when report.findings was modified for dedup)
   const findingsForFailOn = allFindings ?? report.findings;
-  const review = renderReview(sortedFindings, report, includeSuggestions, failOn, findingsForFailOn);
+  const review = renderReview(sortedFindings, report, includeSuggestions, failOn, findingsForFailOn, requestChanges);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile, checkRunUrl, hiddenCount);
 
   return { review, summaryComment };
@@ -41,13 +41,14 @@ function renderReview(
   includeSuggestions: boolean,
   failOn?: SeverityThreshold,
   allFindings?: Finding[],
+  requestChanges?: boolean,
 ): GitHubReview | undefined {
   const findingsWithLocation = findings.filter((f) => f.location);
   const findingsWithoutLocation = findings.filter((f) => !f.location);
 
   // Determine review event type based on failOn threshold against ALL findings.
   // Use allFindings (or report.findings) so failOn operates independently of reportOn and deduplication.
-  const event = determineReviewEvent(allFindings ?? report.findings, failOn);
+  const event = determineReviewEvent(allFindings ?? report.findings, failOn, requestChanges);
 
   // No inline comments to post. Create a review only for REQUEST_CHANGES or locationless findings.
   if (findingsWithLocation.length === 0) {
@@ -126,7 +127,10 @@ function renderReview(
 function determineReviewEvent(
   findings: Finding[],
   failOn?: SeverityThreshold,
+  requestChanges?: boolean,
 ): GitHubReview['event'] {
+  if (requestChanges === false) return 'COMMENT';
+
   const hasActiveThreshold = failOn && failOn !== 'off';
 
   const hasBlockingFinding =

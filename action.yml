@@ -30,6 +30,14 @@ inputs:
     description: 'Maximum number of findings to report (0 for unlimited)'
     required: false
     default: '50'
+  request-changes:
+    description: 'Whether to use REQUEST_CHANGES review event when findings exceed fail-on threshold'
+    required: false
+    default: 'true'
+  fail-check:
+    description: 'Whether to fail the check run when findings exceed fail-on threshold'
+    required: false
+    default: 'false'
   parallel:
     description: 'Maximum number of concurrent trigger executions'
     required: false
@@ -82,6 +90,8 @@ runs:
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_REPORT_ON: ${{ inputs.report-on }}
         INPUT_MAX_FINDINGS: ${{ inputs.max-findings }}
+        INPUT_REQUEST_CHANGES: ${{ inputs.request-changes }}
+        INPUT_FAIL_CHECK: ${{ inputs.fail-check }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
         CLAUDE_CODE_PATH: ${{ env.HOME }}/.local/bin/claude
       run: node ${{ github.action_path }}/dist/action/index.js
