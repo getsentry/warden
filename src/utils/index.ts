@@ -1,4 +1,4 @@
-export { processInBatches } from './async.js';
+export { processInBatches, runPool } from './async.js';
 export { getVersion, getMajorVersion } from './version.js';
 export {
   ExecError,

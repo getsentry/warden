@@ -34,6 +34,7 @@ import {
   type FileState,
 } from './tasks.js';
 import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
+import { runPool } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
@@ -375,14 +376,10 @@ export async function runSkillTasksWithInk(
       results.push(result);
     }
   } else {
-    for (let i = 0; i < tasks.length; i += concurrency) {
-      if (tasks[i]?.runnerOptions?.abortController?.signal.aborted) break;
-      const batch = tasks.slice(i, i + concurrency);
-      const batchResults = await Promise.all(
-        batch.map((task) => runSkillTask(task, fileConcurrency, callbacks))
-      );
-      results.push(...batchResults);
-    }
+    results.push(...await runPool(tasks, concurrency,
+      (task) => runSkillTask(task, fileConcurrency, callbacks),
+      { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
+    ));
   }
 
   // Cleanup - set unmounted flag before unmount to prevent pending setImmediate

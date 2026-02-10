@@ -25,6 +25,7 @@ import type { OutputMode } from './tty.js';
 import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
 import { timestamp } from './tty.js';
 import { formatDuration, formatCost, formatLocation, formatSeverityPlain, formatFindingCountsPlain, countBySeverity, pluralize } from './formatters.js';
+import { runPool } from '../../utils/index.js';
 
 /**
  * Result from processing a single file within a skill task.
@@ -274,21 +275,8 @@ export async function runSkillTask(
       return { findings: result.findings, usage: result.usage, durationMs: fileDurationMs, failedHunks: result.failedHunks, failedExtractions: result.failedExtractions, auxiliaryUsage: result.auxiliaryUsage };
     };
 
-    // Process files in batches with concurrency
-    const allResults: FileProcessResult[] = [];
-    const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
-
-    for (let i = 0; i < preparedFiles.length; i += fileConcurrency) {
-      if (i > 0 && batchDelayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
-      }
-
-      const batch = preparedFiles.slice(i, i + fileConcurrency);
-      const batchResults = await Promise.all(
-        batch.map((file, batchIndex) => processFile(file, i + batchIndex))
-      );
-      allResults.push(...batchResults);
-    }
+    // Process files with sliding-window concurrency pool
+    const allResults = await runPool(preparedFiles, fileConcurrency, processFile);
 
     // Build report
     const duration = Date.now() - startTime;
@@ -498,22 +486,16 @@ export async function runSkillTasks(
   if (concurrency <= 1) {
     // Sequential execution
     for (const task of tasks) {
-      // Skip remaining tasks if abort was signaled (graceful interrupt)
       if (task.runnerOptions?.abortController?.signal.aborted) break;
       const result = await runSkillTask(task, fileConcurrency, effectiveCallbacks);
       results.push(result);
     }
   } else {
-    // Parallel execution with concurrency limit
-    for (let i = 0; i < tasks.length; i += concurrency) {
-      // Skip remaining batches if abort was signaled (graceful interrupt)
-      if (tasks[i]?.runnerOptions?.abortController?.signal.aborted) break;
-      const batch = tasks.slice(i, i + concurrency);
-      const batchResults = await Promise.all(
-        batch.map((task) => runSkillTask(task, fileConcurrency, effectiveCallbacks))
-      );
-      results.push(...batchResults);
-    }
+    // Parallel execution with sliding-window concurrency pool
+    results.push(...await runPool(tasks, concurrency,
+      (task) => runSkillTask(task, fileConcurrency, effectiveCallbacks),
+      { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
+    ));
   }
 
   return results;

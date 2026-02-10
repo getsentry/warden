@@ -20,6 +20,7 @@ import {
 } from './types.js';
 import { prepareFiles } from './prepare.js';
 import type { EventContext, SkillReport, UsageStats } from '../types/index.js';
+import { runPool } from '../utils/index.js';
 
 /** Result from parsing hunk output */
 interface ParseHunkOutputResult {
@@ -561,27 +562,19 @@ export async function runSkill(
 
   // Process files - parallel or sequential based on options
   if (parallel) {
-    // Process files in parallel with concurrency limit
+    // Process files with sliding-window concurrency pool
     const fileConcurrency = options.concurrency ?? DEFAULT_FILE_CONCURRENCY;
     const batchDelayMs = options.batchDelayMs ?? 0;
 
-    for (let i = 0; i < fileHunks.length; i += fileConcurrency) {
-      // Check for abort before starting new batch
-      if (abortController?.signal.aborted) break;
-
-      // Apply rate limiting delay between batches (not before the first batch)
-      if (i > 0 && batchDelayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
-      }
-
-      const batch = fileHunks.slice(i, i + fileConcurrency);
-      const batchResults = await Promise.all(
-        batch.map((fileHunkEntry, batchIndex) =>
-          processFileWithTiming(fileHunkEntry, i + batchIndex)
-        )
-      );
-      fileResults.push(...batchResults);
-    }
+    fileResults.push(...await runPool(fileHunks, fileConcurrency,
+      async (fileHunkEntry, index) => {
+        if (index > 0 && batchDelayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+        }
+        return processFileWithTiming(fileHunkEntry, index);
+      },
+      { shouldAbort: () => abortController?.signal.aborted ?? false }
+    ));
   } else {
     // Process files sequentially
     for (const [fileIndex, fileHunkEntry] of fileHunks.entries()) {
