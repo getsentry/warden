@@ -64,6 +64,10 @@ export { SkillReport, runSkill } from "./types/index.js";
 - Cover every user entry point with at least a happy-path test
 - Co-locate tests with source (`foo.ts` → `foo.test.ts`)
 
+## Build & Dist
+
+The `dist/` directory is checked into the repo. Always run `pnpm build` and commit `dist/` alongside source changes.
+
 ## Verifying Changes
 
 ```bash
