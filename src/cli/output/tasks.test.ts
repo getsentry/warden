@@ -331,6 +331,35 @@ describe('createDefaultCallbacks', () => {
 
       expect(errorSpy).not.toHaveBeenCalled();
     });
+
+    it('logs skipped message in log mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'src/api/auth.ts', { status: 'skipped' });
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toContain('code-scanner > src/api/auth.ts skipped');
+    });
+
+    it('is silent for skipped status in TTY mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, ttyMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'src/api/auth.ts', { status: 'skipped' });
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('is silent for skipped status in Quiet mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Quiet);
+
+      cb.onFileUpdate('my-trigger', 'src/api/auth.ts', { status: 'skipped' });
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('onSkillSkipped', () => {

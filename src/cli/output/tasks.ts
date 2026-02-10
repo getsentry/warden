@@ -72,7 +72,7 @@ function findingLocation(finding: Finding): string {
  */
 export interface FileState {
   filename: string;
-  status: 'pending' | 'running' | 'done';
+  status: 'pending' | 'running' | 'done' | 'skipped';
   currentHunk: number;
   totalHunks: number;
   findings: Finding[];
@@ -263,10 +263,14 @@ export async function runSkillTask(
         prContext
       );
 
-      // Update file state to done
+      // Detect if this file was aborted before any real work happened
       const fileDurationMs = Date.now() - fileStartTime;
+      const aborted = runnerOptions.abortController?.signal.aborted ?? false;
+      const noWork = !result.usage || (result.usage.inputTokens === 0 && result.usage.outputTokens === 0);
+      const fileStatus = (aborted && noWork) ? 'skipped' : 'done';
+
       callbacks.onFileUpdate(name, filename, {
-        status: 'done',
+        status: fileStatus,
         findings: result.findings,
         usage: result.usage,
         durationMs: fileDurationMs,
@@ -277,6 +281,7 @@ export async function runSkillTask(
 
     // Process files with sliding-window concurrency pool
     const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
+    const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
     const allResults = await runPool(preparedFiles, fileConcurrency,
       async (file, index) => {
         // Rate-limit: delay items beyond the first concurrent wave
@@ -284,8 +289,16 @@ export async function runSkillTask(
           await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
         }
         return processFile(file, index);
-      }
+      },
+      { shouldAbort }
     );
+
+    // Mark never-dispatched files as skipped
+    for (const fileState of fileStates) {
+      if (fileState.status === 'pending') {
+        callbacks.onFileUpdate(name, fileState.filename, { status: 'skipped' });
+      }
+    }
 
     // Build report
     const duration = Date.now() - startTime;
@@ -369,6 +382,10 @@ export function createDefaultCallbacks(
     onSkillUpdate: () => { /* no-op for default callbacks */ },
     onFileUpdate: (_skillName, filename, updates) => {
       if (verbosity === Verbosity.Quiet || mode.isTTY) return;
+      if (updates.status === 'skipped') {
+        logPlain(`  ${displayNameFor(_skillName)} > ${filename} skipped`);
+        return;
+      }
       if (updates.status !== 'done') return;
       const duration = updates.durationMs !== undefined ? formatDuration(updates.durationMs) : '?';
       const cost = updates.usage ? ` ${formatCost(updates.usage.costUSD)}` : '';

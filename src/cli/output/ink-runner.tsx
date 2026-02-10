@@ -63,6 +63,16 @@ function FileProgress({ file }: { file: FileState }): React.ReactElement | null 
 
   const filename = truncate(file.filename, 50);
 
+  if (file.status === 'skipped') {
+    return (
+      <Box>
+        <Text color="yellow">{ICON_SKIPPED}</Text>
+        <Text> {filename}</Text>
+        <Text dimColor> [skipped]</Text>
+      </Box>
+    );
+  }
+
   if (file.status === 'done') {
     const counts = countBySeverity(file.findings);
     const hasFindings = file.findings.length > 0;
