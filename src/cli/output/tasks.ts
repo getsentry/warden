@@ -218,7 +218,9 @@ export async function runSkillTask(
       const filename = prepared.filename;
       const fileStartTime = Date.now();
 
-      // Update file state to running
+      // Update file state to running (local + callback)
+      const localState = fileStates[index];
+      if (localState) localState.status = 'running';
       callbacks.onFileUpdate(name, filename, { status: 'running' });
 
       const fileCallbacks: FileAnalysisCallbacks = {
@@ -269,6 +271,7 @@ export async function runSkillTask(
       const noWork = !result.usage || (result.usage.inputTokens === 0 && result.usage.outputTokens === 0);
       const fileStatus = (aborted && noWork) ? 'skipped' : 'done';
 
+      if (localState) localState.status = fileStatus;
       callbacks.onFileUpdate(name, filename, {
         status: fileStatus,
         findings: result.findings,
