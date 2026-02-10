@@ -276,7 +276,16 @@ export async function runSkillTask(
     };
 
     // Process files with sliding-window concurrency pool
-    const allResults = await runPool(preparedFiles, fileConcurrency, processFile);
+    const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
+    const allResults = await runPool(preparedFiles, fileConcurrency,
+      async (file, index) => {
+        // Rate-limit: delay items beyond the first concurrent wave
+        if (index >= fileConcurrency && batchDelayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+        }
+        return processFile(file, index);
+      }
+    );
 
     // Build report
     const duration = Date.now() - startTime;

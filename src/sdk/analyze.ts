@@ -568,7 +568,8 @@ export async function runSkill(
 
     fileResults.push(...await runPool(fileHunks, fileConcurrency,
       async (fileHunkEntry, index) => {
-        if (index > 0 && batchDelayMs > 0) {
+        // Rate-limit: delay items beyond the first concurrent wave
+        if (index >= fileConcurrency && batchDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
         }
         return processFileWithTiming(fileHunkEntry, index);
