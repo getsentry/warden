@@ -38,11 +38,12 @@ describe('git error handling', () => {
 /**
  * Creates a mock that simulates git branch detection.
  * Returns success for branches in existingBranches, and optionally a config value.
+ * remoteHead simulates the output of `git symbolic-ref refs/remotes/origin/HEAD`.
  * Note: execNonInteractive returns trimmed output, so no trailing newlines.
  */
 function mockBranchDetection(
   existingBranches: string[],
-  configDefault?: string
+  options?: { configDefault?: string; remoteHead?: string }
 ): (cmd: string) => string {
   return (cmd: string) => {
     for (const branch of existingBranches) {
@@ -50,8 +51,11 @@ function mockBranchDetection(
         return 'abc123';
       }
     }
-    if (cmd === 'git config init.defaultBranch' && configDefault) {
-      return configDefault;
+    if (cmd === 'git symbolic-ref refs/remotes/origin/HEAD' && options?.remoteHead) {
+      return options.remoteHead;
+    }
+    if (cmd === 'git config init.defaultBranch' && options?.configDefault) {
+      return options.configDefault;
     }
     throw new Error('Not found');
   };
@@ -73,8 +77,30 @@ describe('getDefaultBranch', () => {
     expect(getDefaultBranch()).toBe('develop');
   });
 
+  it('returns origin/main in shallow clone where only remote tracking refs exist', () => {
+    mockExecNonInteractive.mockImplementation(mockBranchDetection(['origin/main']));
+    expect(getDefaultBranch()).toBe('origin/main');
+  });
+
+  it('returns origin/master when origin/main does not exist', () => {
+    mockExecNonInteractive.mockImplementation(mockBranchDetection(['origin/master']));
+    expect(getDefaultBranch()).toBe('origin/master');
+  });
+
+  it('prefers local branch over remote tracking ref', () => {
+    mockExecNonInteractive.mockImplementation(mockBranchDetection(['main', 'origin/main']));
+    expect(getDefaultBranch()).toBe('main');
+  });
+
+  it('returns remote HEAD symbolic ref when no branches exist', () => {
+    mockExecNonInteractive.mockImplementation(
+      mockBranchDetection([], { remoteHead: 'refs/remotes/origin/main' })
+    );
+    expect(getDefaultBranch()).toBe('origin/main');
+  });
+
   it('returns git config init.defaultBranch when no common branches exist', () => {
-    mockExecNonInteractive.mockImplementation(mockBranchDetection([], 'trunk'));
+    mockExecNonInteractive.mockImplementation(mockBranchDetection([], { configDefault: 'trunk' }));
     expect(getDefaultBranch()).toBe('trunk');
   });
 

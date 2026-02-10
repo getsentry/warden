@@ -46,6 +46,8 @@ export function resolveRef(ref: string, cwd: string = process.cwd()): string {
 
 /**
  * Detect the default branch by checking common branch names locally.
+ * Also checks remote tracking refs (origin/*) for shallow clones
+ * where local branches may not exist (e.g. GitHub Actions).
  * Does not perform any remote operations to avoid SSH prompts.
  */
 export function getDefaultBranch(cwd: string = process.cwd()): string {
@@ -57,6 +59,30 @@ export function getDefaultBranch(cwd: string = process.cwd()): string {
     } catch {
       // Try next branch
     }
+  }
+
+  // Check remote tracking refs (common in shallow clones / CI)
+  for (const branch of ['main', 'master', 'develop']) {
+    try {
+      git(`rev-parse --verify origin/${branch}`, cwd);
+      return `origin/${branch}`;
+    } catch {
+      // Try next branch
+    }
+  }
+
+  // Check remote HEAD symbolic ref (set by clone, no network needed)
+  try {
+    const remoteHead = git('symbolic-ref refs/remotes/origin/HEAD', cwd);
+    if (remoteHead) {
+      // Returns e.g. "refs/remotes/origin/main" → extract "origin/main"
+      const match = remoteHead.match(/refs\/remotes\/(.*)/);
+      if (match?.[1]) {
+        return match[1];
+      }
+    }
+  } catch {
+    // No remote HEAD configured
   }
 
   // Check git config for user-configured default branch
