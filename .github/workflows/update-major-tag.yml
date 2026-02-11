@@ -41,7 +41,8 @@ jobs:
           # Add chunk files if ncc produced any (code-split dynamic imports)
           git add -f dist/action/*.index.js 2>/dev/null || true
 
-          git commit -m "Build dist/action for $GITHUB_REF_NAME"
+          # Skip commit if bundle is already present (idempotent re-runs)
+          git diff --cached --quiet || git commit -m "Build dist/action for $GITHUB_REF_NAME"
 
           # Update version tag to include the bundle
           git tag -fa "$GITHUB_REF_NAME" -m "Release $GITHUB_REF_NAME"
