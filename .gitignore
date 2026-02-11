@@ -4,10 +4,17 @@
 # Dependencies
 node_modules/
 
-# Build output - type declarations and source maps are generated artifacts
-dist/**/*.d.ts
-dist/**/*.d.ts.map
-dist/**/*.js.map
+# Build output (only dist/action/ ncc bundle is committed)
+dist/*
+!dist/action/
+
+# Only ncc bundle files in dist/action/
+dist/action/*
+!dist/action/index.js
+!dist/action/*.index.js
+!dist/action/licenses.txt
+!dist/action/sourcemap-register.cjs
+!dist/action/package.json
 
 # IDE
 .idea/
