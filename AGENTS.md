@@ -66,7 +66,7 @@ export { SkillReport, runSkill } from "./types/index.js";
 
 ## Build & Dist
 
-The `dist/` directory is checked into the repo. Always run `pnpm build` and commit `dist/` alongside source changes.
+Only the `dist/action/` ncc bundle is checked into the repo (for the GitHub Action). All other tsc output in `dist/` is gitignored. Run `pnpm build:action` and commit `dist/action/` when action source changes.
 
 ## Verifying Changes
 
