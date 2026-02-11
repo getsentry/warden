@@ -50,7 +50,7 @@ actions = ["opened", "synchronize"]`}
 
   <h2>Triggers</h2>
 
-  <p>Triggers define when a skill runs. Each skill can have one or more triggers.</p>
+  <p>Triggers define when a skill runs. Each skill can have one or more triggers. Triggers can override any output setting.</p>
 
   <dl>
     <dt>type</dt>
@@ -59,6 +59,20 @@ actions = ["opened", "synchronize"]`}
     <dd>Event actions for <code>pull_request</code> type</dd>
     <dt>failOn</dt>
     <dd>Override failure threshold for this trigger</dd>
+    <dt>reportOn</dt>
+    <dd>Override reporting threshold</dd>
+    <dt>maxFindings</dt>
+    <dd>Override max findings</dd>
+    <dt>reportOnSuccess</dt>
+    <dd>Override report-on-success behavior</dd>
+    <dt>requestChanges</dt>
+    <dd>Override REQUEST_CHANGES behavior</dd>
+    <dt>failCheck</dt>
+    <dd>Override check failure behavior</dd>
+    <dt>model</dt>
+    <dd>Override model for this trigger</dd>
+    <dt>maxTurns</dt>
+    <dd>Override max agentic turns</dd>
   </dl>
 
   <h3>Pull Request Actions</h3>
@@ -146,6 +160,10 @@ maxFindings = 20`}
     <dd>Default failure threshold</dd>
     <dt>reportOn</dt>
     <dd>Default reporting threshold</dd>
+    <dt>maxFindings</dt>
+    <dd>Default max findings to report</dd>
+    <dt>reportOnSuccess</dt>
+    <dd>Post comment when no findings. Default: <code>false</code></dd>
     <dt>requestChanges</dt>
     <dd>Default REQUEST_CHANGES behavior. Default: <code>true</code></dd>
     <dt>failCheck</dt>
@@ -413,9 +431,13 @@ jobs:
     <dd>Minimum severity to fail the check</dd>
     <dt>report-on</dt>
     <dd>Minimum severity to post comments</dd>
+    <dt>max-findings</dt>
+    <dd>Maximum findings to report. Default: <code>50</code></dd>
     <dt>request-changes</dt>
-    <dd>Whether to request changes on PR reviews</dd>
+    <dd>Whether to request changes on PR reviews. Default: <code>true</code></dd>
     <dt>fail-check</dt>
-    <dd>Whether to fail the check run</dd>
+    <dd>Whether to fail the check run. Default: <code>false</code></dd>
+    <dt>parallel</dt>
+    <dd>Maximum concurrent trigger executions. Default: <code>5</code></dd>
   </dl>
 </Base>
