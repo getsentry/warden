@@ -235,8 +235,11 @@ async function runSkills(
   interface SkillToRun { skill: string; remote?: string; filters: { paths?: string[]; ignorePaths?: string[] } }
   let skillsToRun: SkillToRun[];
   if (options.skill) {
-    // Explicit skill specified via CLI (no remote support or filters in this mode)
-    skillsToRun = [{ skill: options.skill, filters: {} }];
+    // Explicit skill specified via CLI — check config for remote/filters if available
+    const match = config
+      ? resolveSkillConfigs(config, options.model).find((t) => t.skill === options.skill)
+      : undefined;
+    skillsToRun = [{ skill: options.skill, remote: match?.remote, filters: match?.filters ?? {} }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property and filters
     const resolvedTriggers = resolveSkillConfigs(config, options.model);
