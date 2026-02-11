@@ -66,7 +66,7 @@ export { SkillReport, runSkill } from "./types/index.js";
 
 ## Build & Dist
 
-Only the `dist/action/` ncc bundle is checked into the repo (for the GitHub Action). All other tsc output in `dist/` is gitignored. Run `pnpm build:action` and commit `dist/action/` when action source changes.
+All of `dist/` is gitignored. The ncc action bundle (`dist/action/`) is built and committed to release tags only by the `update-major-tag` workflow. Never commit build artifacts to main.
 
 ## Verifying Changes
 

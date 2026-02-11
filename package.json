@@ -12,7 +12,7 @@
   "scripts": {
     "cli": "tsx src/cli/index.ts",
     "build": "tsc",
-    "build:action": "ncc build src/action/main.ts -o dist/action --source-map --license licenses.txt",
+    "build:action": "ncc build src/action/main.ts -o dist/action --no-source-map-register --license licenses.txt",
     "dev": "tsc --watch",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",

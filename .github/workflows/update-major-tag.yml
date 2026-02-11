@@ -13,13 +13,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
 
-      - name: Update major version tag
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build action bundle
+        run: pnpm build:action
+
+      - name: Commit bundle and update tags
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           MAJOR="v${VERSION%%.*}"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage only the bundle files needed by the action
+          git add -f dist/action/index.js dist/action/licenses.txt dist/action/package.json
+          # Add chunk files if ncc produced any (code-split dynamic imports)
+          git add -f dist/action/*.index.js 2>/dev/null || true
+
+          git commit -m "Build dist/action for $GITHUB_REF_NAME"
+
+          # Update version tag to include the bundle
+          git tag -fa "$GITHUB_REF_NAME" -m "Release $GITHUB_REF_NAME"
+          git push -f origin "$GITHUB_REF_NAME"
+
+          # Update major version tag
           git tag -fa "$MAJOR" -m "Update $MAJOR to $GITHUB_REF_NAME"
           git push -f origin "$MAJOR"

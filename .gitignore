@@ -4,17 +4,8 @@
 # Dependencies
 node_modules/
 
-# Build output (only dist/action/ ncc bundle is committed)
-dist/*
-!dist/action/
-
-# Only ncc bundle files in dist/action/
-dist/action/*
-!dist/action/index.js
-!dist/action/*.index.js
-!dist/action/licenses.txt
-!dist/action/sourcemap-register.cjs
-!dist/action/package.json
+# Build output
+dist/
 
 # IDE
 .idea/
