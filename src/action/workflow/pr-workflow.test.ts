@@ -11,6 +11,7 @@ import type { SkillReport, Finding } from '../../types/index.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const FIXTURES_DIR = join(__dirname, '__fixtures__');
+const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 
 // -----------------------------------------------------------------------------
@@ -614,6 +615,203 @@ describe('runPRWorkflow', () => {
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('no triggers matched cleanup', () => {
+    it('resolves stale comments when no triggers match but Warden comments exist', async () => {
+      // PR files are src/test.ts, but no-match fixture has paths: ["docs/**"]
+      // so no triggers will match
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Unused import',
+          description: 'Remove unused import',
+          contentHash: 'hash1',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        },
+      ]);
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, NO_MATCH_FIXTURES_DIR
+      );
+
+      // Should fetch existing comments for cleanup
+      expect(mockFetchExistingComments).toHaveBeenCalledWith(
+        mockOctokit, 'test-owner', 'test-repo', 123
+      );
+
+      // Should run fix evaluation with empty findings
+      expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(
+        mockOctokit,
+        expect.arrayContaining([expect.objectContaining({ isWarden: true })]),
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+        }),
+        [],
+        'test-api-key'
+      );
+
+      // Should NOT run skill tasks (no triggers matched)
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+    });
+
+    it('dismisses CHANGES_REQUESTED when all comments resolved during cleanup', async () => {
+      // Previous review was CHANGES_REQUESTED
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+
+      // One unresolved Warden comment
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Bug',
+          description: 'Fix this',
+          contentHash: 'hash1',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        },
+      ]);
+
+      // Fix evaluation resolves the comment
+      mockEvaluateFixAttempts.mockResolvedValue({
+        toResolve: [{
+          id: 1,
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Bug',
+          description: 'Fix this',
+          contentHash: 'hash1',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        }],
+        toReply: [],
+        evaluations: [],
+        skipped: 0,
+        evaluated: 1,
+        failedEvaluations: 0,
+        usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      });
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, NO_MATCH_FIXTURES_DIR
+      );
+
+      const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
+      expect(dismissReview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+          pull_number: 123,
+          review_id: 42,
+          message: expect.stringContaining('resolved'),
+        })
+      );
+    });
+
+    it('does NOT dismiss when unresolved comments remain after cleanup', async () => {
+      // Previous review was CHANGES_REQUESTED
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+
+      // One unresolved Warden comment
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Bug',
+          description: 'Fix this',
+          contentHash: 'hash1',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        },
+      ]);
+
+      // Fix evaluation says comment is NOT fixed (toReply has it)
+      mockEvaluateFixAttempts.mockResolvedValue({
+        toResolve: [],
+        toReply: [{
+          comment: {
+            id: 1,
+            path: 'src/old-file.ts',
+            line: 5,
+            title: 'Bug',
+            description: 'Fix this',
+            contentHash: 'hash1',
+            isWarden: true,
+            isResolved: false,
+            threadId: 'thread-1',
+          },
+          replyBody: 'Still not fixed',
+          commitSha: 'abc123def456',
+        }],
+        evaluations: [],
+        skipped: 0,
+        evaluated: 1,
+        failedEvaluations: 0,
+        usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      });
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, NO_MATCH_FIXTURES_DIR
+      );
+
+      const dismissReview = vi.mocked(mockOctokit.pulls.dismissReview);
+      expect(dismissReview).not.toHaveBeenCalled();
+    });
+
+    it('skips cleanup when no existing Warden comments', async () => {
+      mockFetchExistingComments.mockResolvedValue([]);
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, NO_MATCH_FIXTURES_DIR
+      );
+
+      // fetchExistingComments called, but evaluateFixAttempts should NOT be called
+      expect(mockFetchExistingComments).toHaveBeenCalled();
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+    });
+
+    it('skips cleanup when only non-Warden comments exist', async () => {
+      // External comments should not trigger cleanup
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/test.ts',
+          line: 10,
+          title: 'Human review',
+          description: 'Please fix this',
+          contentHash: 'hash1',
+          isWarden: false,
+          isResolved: false,
+        },
+      ]);
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, NO_MATCH_FIXTURES_DIR
+      );
+
+      // Comments fetched, but no fix evaluation since no Warden comments
+      expect(mockFetchExistingComments).toHaveBeenCalled();
       expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
     });
   });

@@ -1,0 +1,9 @@
+version = 1
+
+[[skills]]
+name = "test-skill"
+paths = ["docs/**"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]

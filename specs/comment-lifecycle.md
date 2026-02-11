@@ -102,12 +102,23 @@ A Warden comment is automatically resolved when:
 2. **File removed**: The commented file no longer exists in the PR
 3. **File out of scope**: File was reverted or excluded from analysis
 
+### No Triggers Matched
+
+When a push only changes files outside all skills' `paths` filters, no triggers match. Warden still cleans up existing comments from earlier pushes:
+
+1. Fetches existing Warden comments on the PR
+2. If unresolved Warden comments exist, runs fix evaluation and stale resolution with empty findings
+3. Dismisses previous CHANGES_REQUESTED only when all unresolved comments are resolved during cleanup
+
+This prevents comments from going stale indefinitely when later pushes touch unrelated files.
+
 ### Safety Guards
 
 | Guard | Purpose |
 |-------|---------|
 | Only Warden comments | Never touches human or external bot comments |
 | All triggers must succeed | Won't resolve if analysis incomplete |
+| Runs cleanup with zero matched triggers | Prevents orphaned comments from stale pushes |
 | Max 50 per run | Prevents runaway resolution |
 | Requires `contents:write` | Fails gracefully if permission missing |
 

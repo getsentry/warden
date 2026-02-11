@@ -153,6 +153,44 @@ async function initializeWorkflow(
 }
 
 /**
+ * Fetch the bot's previous review state on a PR.
+ * Returns null if the bot has no actionable reviews or identity cannot be determined.
+ */
+async function fetchPreviousReviewInfo(
+  octokit: Octokit,
+  context: EventContext
+): Promise<BotReviewInfo | null> {
+  if (!context.pullRequest) {
+    return null;
+  }
+
+  try {
+    const botLogin = await getAuthenticatedBotLogin(octokit);
+
+    if (!botLogin) {
+      logAction(
+        'Skipping dismiss flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
+      );
+      return null;
+    }
+
+    // Note: No pagination. PRs with 100+ reviews are rare; if Warden's review
+    // is beyond page 1, user can manually dismiss. Not worth the complexity.
+    const { data: reviews } = await octokit.pulls.listReviews({
+      owner: context.repository.owner,
+      repo: context.repository.name,
+      pull_number: context.pullRequest.number,
+      per_page: 100,
+    });
+
+    return findBotReviewState(reviews, botLogin);
+  } catch (error) {
+    warnAction(`Failed to fetch previous review info: ${error}`);
+    return null;
+  }
+}
+
+/**
  * Create core check and fetch previous review info. PR-only.
  */
 async function setupGitHubState(
@@ -179,29 +217,7 @@ async function setupGitHubState(
     warnAction(`Failed to create core check: ${error}`);
   }
 
-  // Fetch previous review info for dismiss logic
-  try {
-    const botLogin = await getAuthenticatedBotLogin(octokit);
-
-    if (!botLogin) {
-      logAction(
-        'Skipping dismiss flow: cannot identify bot (using PAT or GITHUB_TOKEN instead of GitHub App)'
-      );
-    } else {
-      // Note: No pagination. PRs with 100+ reviews are rare; if Warden's review
-      // is beyond page 1, user can manually dismiss. Not worth the complexity.
-      const { data: reviews } = await octokit.pulls.listReviews({
-        owner: context.repository.owner,
-        repo: context.repository.name,
-        pull_number: context.pullRequest.number,
-        per_page: 100,
-      });
-
-      previousReviewInfo = findBotReviewState(reviews, botLogin);
-    }
-  } catch (error) {
-    warnAction(`Failed to fetch previous review info: ${error}`);
-  }
+  previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
 
   if (previousReviewInfo) {
     logAction(`Previous Warden review state: ${previousReviewInfo.state}`);
@@ -313,6 +329,8 @@ async function postReviewsAndTrackFailures(
 
 /**
  * Evaluate fix attempts on unresolved comments and resolve stale comments.
+ *
+ * Returns whether all Warden comments are resolved after evaluation.
  */
 async function evaluateFixesAndResolveStale(
   octokit: Octokit,
@@ -321,9 +339,11 @@ async function evaluateFixesAndResolveStale(
   allFindings: Finding[],
   canResolveStale: boolean,
   anthropicApiKey: string
-): Promise<void> {
+): Promise<{ allResolved: boolean }> {
   const wardenComments = fetchedComments.filter((c) => c.isWarden);
   const commentsResolvedByFixEval = new Set<number>();
+  const commentsEvaluatedByFixEval = new Set<number>();
+  const commentsResolvedByStale = new Set<number>();
 
   // Evaluate follow-up commit fix attempts
   if (
@@ -368,8 +388,9 @@ async function evaluateFixesAndResolveStale(
         fixEvaluation.toResolve.forEach((c) => commentsResolvedByFixEval.add(c.id));
       }
 
-      // Post replies for failed fixes
+      // Post replies for failed fixes and track them so stale pass doesn't override
       for (const reply of fixEvaluation.toReply) {
+        commentsEvaluatedByFixEval.add(reply.comment.id);
         if (reply.comment.threadId) {
           try {
             await postThreadReply(octokit, reply.comment.threadId, reply.replyBody);
@@ -400,12 +421,12 @@ async function evaluateFixesAndResolveStale(
   }
 
   // Resolve stale Warden comments (comments that no longer have matching findings)
-  // Exclude comments already resolved by fix evaluation
+  // Exclude comments already handled by fix evaluation (resolved or flagged as needing attention)
   if (context.pullRequest && wardenComments.length > 0 && canResolveStale) {
     try {
       const scope = buildAnalyzedScope(context.pullRequest.files);
       const commentsForStaleCheck = wardenComments.filter(
-        (c) => !commentsResolvedByFixEval.has(c.id)
+        (c) => !commentsResolvedByFixEval.has(c.id) && !commentsEvaluatedByFixEval.has(c.id)
       );
       const staleComments = findStaleComments(commentsForStaleCheck, allFindings, scope);
 
@@ -414,6 +435,7 @@ async function evaluateFixesAndResolveStale(
         if (resolvedCount > 0) {
           logAction(`Resolved ${resolvedCount} stale Warden comments`);
         }
+        staleComments.forEach((c) => commentsResolvedByStale.add(c.id));
       }
     } catch (error) {
       warnAction(`Failed to resolve stale comments: ${error}`);
@@ -421,6 +443,14 @@ async function evaluateFixesAndResolveStale(
   } else if (!canResolveStale && wardenComments.length > 0) {
     logAction('Skipping stale comment resolution due to trigger failures');
   }
+
+  // Determine if all unresolved Warden comments were resolved during this run
+  const unresolvedBefore = wardenComments.filter((c) => !c.isResolved);
+  const allResolved = unresolvedBefore.every(
+    (c) => commentsResolvedByFixEval.has(c.id) || commentsResolvedByStale.has(c.id)
+  );
+
+  return { allResolved };
 }
 
 /**
@@ -492,6 +522,66 @@ async function finalizeWorkflow(
   logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
 }
 
+/**
+ * Clean up orphaned Warden comments when no triggers matched.
+ *
+ * Runs fix evaluation and stale resolution on existing comments so that
+ * comments from earlier pushes get resolved even when the current push
+ * only touches files outside all skills' paths filters.
+ */
+async function cleanupOrphanedComments(
+  octokit: Octokit,
+  context: EventContext,
+  anthropicApiKey: string
+): Promise<void> {
+  if (!context.pullRequest) {
+    return;
+  }
+
+  let existingComments: ExistingComment[];
+  try {
+    existingComments = await fetchExistingComments(
+      octokit,
+      context.repository.owner,
+      context.repository.name,
+      context.pullRequest.number
+    );
+  } catch (error) {
+    warnAction(`Failed to fetch existing comments for cleanup: ${error}`);
+    return;
+  }
+
+  const wardenComments = existingComments.filter((c) => c.isWarden);
+  if (wardenComments.length === 0) {
+    return;
+  }
+
+  logAction(`No triggers matched, but found ${wardenComments.length} existing Warden comments. Running cleanup.`);
+
+  const { allResolved } = await evaluateFixesAndResolveStale(
+    octokit, context, existingComments, [], true, anthropicApiKey
+  );
+
+  // Dismiss CHANGES_REQUESTED only if every unresolved comment was resolved
+  if (allResolved) {
+    const previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
+    if (previousReviewInfo?.state === 'CHANGES_REQUESTED') {
+      try {
+        await octokit.pulls.dismissReview({
+          owner: context.repository.owner,
+          repo: context.repository.name,
+          pull_number: context.pullRequest.number,
+          review_id: previousReviewInfo.reviewId,
+          message: 'All previously reported issues have been resolved.',
+        });
+        logAction('Dismissed previous CHANGES_REQUESTED review');
+      } catch (error) {
+        warnAction(`Failed to dismiss previous review: ${error}`);
+      }
+    }
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Main PR Workflow
 // -----------------------------------------------------------------------------
@@ -508,6 +598,7 @@ export async function runPRWorkflow(
   );
 
   if (matchedTriggers.length === 0) {
+    await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey);
     setOutput('findings-count', 0);
     setOutput('critical-count', 0);
     setOutput('high-count', 0);
