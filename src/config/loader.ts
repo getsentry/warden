@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
+import { Sentry } from '../sentry.js';
 import {
   WardenConfigSchema,
   type WardenConfig,
@@ -17,46 +18,51 @@ export class ConfigLoadError extends Error {
 }
 
 export function loadWardenConfig(repoPath: string): WardenConfig {
-  const configPath = join(repoPath, 'warden.toml');
+  return Sentry.startSpan(
+    { op: 'config', name: 'config.load' },
+    () => {
+      const configPath = join(repoPath, 'warden.toml');
 
-  if (!existsSync(configPath)) {
-    throw new ConfigLoadError(`Configuration file not found: ${configPath}`);
-  }
+      if (!existsSync(configPath)) {
+        throw new ConfigLoadError(`Configuration file not found: ${configPath}`);
+      }
 
-  let content: string;
-  try {
-    content = readFileSync(configPath, 'utf-8');
-  } catch (error) {
-    throw new ConfigLoadError(`Failed to read configuration file: ${configPath}`, { cause: error });
-  }
+      let content: string;
+      try {
+        content = readFileSync(configPath, 'utf-8');
+      } catch (error) {
+        throw new ConfigLoadError(`Failed to read configuration file: ${configPath}`, { cause: error });
+      }
 
-  let rawConfig: unknown;
-  try {
-    rawConfig = parseToml(content);
-  } catch (error) {
-    throw new ConfigLoadError('Failed to parse TOML configuration', { cause: error });
-  }
+      let rawConfig: unknown;
+      try {
+        rawConfig = parseToml(content);
+      } catch (error) {
+        throw new ConfigLoadError('Failed to parse TOML configuration', { cause: error });
+      }
 
-  // Detect legacy [[triggers]] format and provide migration guidance
-  if (rawConfig && typeof rawConfig === 'object' && 'triggers' in rawConfig) {
-    throw new ConfigLoadError(
-      'Legacy [[triggers]] format detected. Migrate to [[skills]] format:\n\n' +
-      '  [[triggers]]               →  [[skills]]\n' +
-      '  name = "my-skill"              name = "my-skill"\n' +
-      '  event = "pull_request"     →  [[skills.triggers]]\n' +
-      '  skill = "my-skill"              type = "pull_request"\n' +
-      '  actions = [...]                 actions = [...]\n\n' +
-      'See the migration guide for details.'
-    );
-  }
+      // Detect legacy [[triggers]] format and provide migration guidance
+      if (rawConfig && typeof rawConfig === 'object' && 'triggers' in rawConfig) {
+        throw new ConfigLoadError(
+          'Legacy [[triggers]] format detected. Migrate to [[skills]] format:\n\n' +
+          '  [[triggers]]               →  [[skills]]\n' +
+          '  name = "my-skill"              name = "my-skill"\n' +
+          '  event = "pull_request"     →  [[skills.triggers]]\n' +
+          '  skill = "my-skill"              type = "pull_request"\n' +
+          '  actions = [...]                 actions = [...]\n\n' +
+          'See the migration guide for details.'
+        );
+      }
 
-  const result = WardenConfigSchema.safeParse(rawConfig);
-  if (!result.success) {
-    const issues = result.error.issues.map(i => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
-    throw new ConfigLoadError(`Invalid configuration:\n${issues}`);
-  }
+      const result = WardenConfigSchema.safeParse(rawConfig);
+      if (!result.success) {
+        const issues = result.error.issues.map(i => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+        throw new ConfigLoadError(`Invalid configuration:\n${issues}`);
+      }
 
-  return result.data;
+      return result.data;
+    },
+  );
 }
 
 /**

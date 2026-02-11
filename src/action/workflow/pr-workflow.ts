@@ -7,14 +7,13 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
+import { Sentry, logger } from '../../sentry.js';
 import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
 import { buildEventContext } from '../../event/context.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
-import {
-  fetchExistingComments,
-} from '../../output/dedup.js';
+import { fetchExistingComments } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
 import type { EventContext, SkillReport, Finding } from '../../types/index.js';
@@ -113,7 +112,7 @@ async function initializeWorkflow(
   try {
     eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
   } catch (error) {
-    return setFailed(`Failed to read event payload: ${error}`);
+    return await setFailed(`Failed to read event payload: ${error}`);
   }
 
   logGroup('Building event context');
@@ -125,7 +124,7 @@ async function initializeWorkflow(
   try {
     context = await buildEventContext(eventName, eventPayload, repoPath, octokit);
   } catch (error) {
-    return setFailed(`Failed to build event context: ${error}`);
+    return await setFailed(`Failed to build event context: ${error}`);
   }
 
   logGroup('Loading configuration');
@@ -197,12 +196,12 @@ async function setupGitHubState(
   octokit: Octokit,
   context: EventContext
 ): Promise<GitHubSetupResult> {
+  if (!context.pullRequest) {
+    return { previousReviewInfo: null };
+  }
+
   let coreCheckId: number | undefined;
   let previousReviewInfo: BotReviewInfo | null = null;
-
-  if (!context.pullRequest) {
-    return { coreCheckId, previousReviewInfo };
-  }
 
   // Create core warden check
   try {
@@ -214,6 +213,7 @@ async function setupGitHubState(
     coreCheckId = coreCheck.checkRunId;
     logAction(`Created core check: ${coreCheck.url}`);
   } catch (error) {
+    Sentry.captureException(error, { level: 'warning' });
     warnAction(`Failed to create core check: ${error}`);
   }
 
@@ -237,7 +237,7 @@ async function executeAllTriggers(
   inputs: ActionInputs
 ): Promise<TriggerResult[]> {
   const concurrency = config.runner?.concurrency ?? inputs.parallel;
-  const claudePath = findClaudeCodeExecutable();
+  const claudePath = await findClaudeCodeExecutable();
 
   return processInBatches(
     matchedTriggers,
@@ -288,6 +288,7 @@ async function postReviewsAndTrackFailures(
         );
       }
     } catch (error) {
+      Sentry.captureException(error, { level: 'warning' });
       warnAction(`Failed to fetch existing comments for deduplication: ${error}`);
     }
   }
@@ -393,8 +394,8 @@ async function evaluateFixesAndResolveStale(
         if (reply.comment.threadId) {
           try {
             await postThreadReply(octokit, reply.comment.threadId, reply.replyBody);
-          } catch {
-            // Already logged in postThreadReply
+          } catch (error) {
+            Sentry.captureException(error, { level: 'warning' });
           }
         }
       }
@@ -414,6 +415,7 @@ async function evaluateFixesAndResolveStale(
       }
       logGroupEnd();
     } catch (error) {
+      Sentry.captureException(error, { level: 'warning' });
       warnAction(`Failed to evaluate fix attempts: ${error}`);
       logGroupEnd();
     }
@@ -437,6 +439,7 @@ async function evaluateFixesAndResolveStale(
         resolvedIds.forEach((id) => commentsResolvedByStale.add(id));
       }
     } catch (error) {
+      Sentry.captureException(error, { level: 'warning' });
       warnAction(`Failed to resolve stale comments: ${error}`);
     }
   } else if (!canResolveStale && wardenComments.length > 0) {
@@ -491,6 +494,7 @@ async function finalizeWorkflow(
       });
       logAction('Dismissed previous CHANGES_REQUESTED review');
     } catch (error) {
+      Sentry.captureException(error, { level: 'warning' });
       warnAction(`Failed to dismiss previous review: ${error}`);
     }
   }
@@ -510,12 +514,13 @@ async function finalizeWorkflow(
         repo: context.repository.name,
       });
     } catch (error) {
+      Sentry.captureException(error, { level: 'warning' });
       warnAction(`Failed to update core check: ${error}`);
     }
   }
 
   if (shouldFailAction) {
-    setFailed(failureReasons.join('; '));
+    await setFailed(failureReasons.join('; '));
   }
 
   logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
@@ -592,40 +597,79 @@ export async function runPRWorkflow(
   eventPath: string,
   repoPath: string
 ): Promise<void> {
-  const { context, config, matchedTriggers } = await initializeWorkflow(
-    octokit, inputs, eventName, eventPath, repoPath
-  );
+  return Sentry.startSpan(
+    { op: 'action.pr', name: 'warden.action' },
+    async (span) => {
+      span.setAttribute('github.event', eventName);
 
-  if (matchedTriggers.length === 0) {
-    await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey);
-    setOutput('findings-count', 0);
-    setOutput('critical-count', 0);
-    setOutput('high-count', 0);
-    setOutput('summary', 'No triggers matched');
-    return;
-  }
+      const { context, config, matchedTriggers } = await Sentry.startSpan(
+        { op: 'workflow.phase', name: 'workflow.init' },
+        () => initializeWorkflow(octokit, inputs, eventName, eventPath, repoPath),
+      );
 
-  const { coreCheckId, previousReviewInfo } = await setupGitHubState(octokit, context);
+      // Set Sentry context after building event context
+      if (context.pullRequest) {
+        Sentry.setUser({ username: context.pullRequest.author });
+      }
+      Sentry.setContext('repository', {
+        owner: context.repository.owner,
+        name: context.repository.name,
+      });
+      if (context.pullRequest) {
+        Sentry.setContext('pull_request', {
+          number: context.pullRequest.number,
+          baseBranch: context.pullRequest.baseBranch,
+          headBranch: context.pullRequest.headBranch,
+        });
+      }
 
-  const results = await executeAllTriggers(matchedTriggers, octokit, context, config, inputs);
+      logger.info('Workflow initialized', { triggers: matchedTriggers.length });
 
-  const reviewPhase = await postReviewsAndTrackFailures(octokit, context, results, inputs);
+      if (matchedTriggers.length === 0) {
+        await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey);
+        setOutput('findings-count', 0);
+        setOutput('critical-count', 0);
+        setOutput('high-count', 0);
+        setOutput('summary', 'No triggers matched');
+        return;
+      }
 
-  const triggerErrors = collectTriggerErrors(results);
-  handleTriggerErrors(triggerErrors, matchedTriggers.length);
+      const { coreCheckId, previousReviewInfo } = await Sentry.startSpan(
+        { op: 'workflow.phase', name: 'workflow.setupGitHubState' },
+        () => setupGitHubState(octokit, context),
+      );
 
-  const canResolveStale = shouldResolveStaleComments(results);
-  const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+      const results = await Sentry.startSpan(
+        { op: 'workflow.phase', name: 'workflow.executeAllTriggers' },
+        () => executeAllTriggers(matchedTriggers, octokit, context, config, inputs),
+      );
 
-  await evaluateFixesAndResolveStale(
-    octokit, context, reviewPhase.fetchedComments,
-    allFindings, canResolveStale, inputs.anthropicApiKey
-  );
+      const reviewPhase = await Sentry.startSpan(
+        { op: 'workflow.phase', name: 'workflow.postReviews' },
+        () => postReviewsAndTrackFailures(octokit, context, results, inputs),
+      );
 
-  await finalizeWorkflow(
-    octokit, context, previousReviewInfo, coreCheckId,
-    results, reviewPhase.reports,
-    reviewPhase.shouldFailAction, reviewPhase.failureReasons,
-    canResolveStale
+      const triggerErrors = collectTriggerErrors(results);
+      await handleTriggerErrors(triggerErrors, matchedTriggers.length);
+
+      const canResolveStale = shouldResolveStaleComments(results);
+      const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+
+      await Sentry.startSpan(
+        { op: 'workflow.phase', name: 'workflow.resolveStale' },
+        () =>
+          evaluateFixesAndResolveStale(
+            octokit, context, reviewPhase.fetchedComments,
+            allFindings, canResolveStale, inputs.anthropicApiKey,
+          ),
+      );
+
+      await finalizeWorkflow(
+        octokit, context, previousReviewInfo, coreCheckId,
+        results, reviewPhase.reports,
+        reviewPhase.shouldFailAction, reviewPhase.failureReasons,
+        canResolveStale,
+      );
+    },
   );
 }

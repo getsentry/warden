@@ -7,6 +7,7 @@
 import { appendFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
+import { Sentry, flushSentry } from '../../sentry.js';
 import { execNonInteractive } from '../../utils/exec.js';
 import type { SkillReport } from '../../types/index.js';
 import { countSeverity } from '../../triggers/matcher.js';
@@ -37,7 +38,9 @@ export function setOutput(name: string, value: string | number): void {
 /**
  * Fail the GitHub Action with an error message.
  */
-export function setFailed(message: string): never {
+export async function setFailed(message: string): Promise<never> {
+  Sentry.captureMessage(message, 'error');
+  await flushSentry();
   console.error(`::error::${message}`);
   process.exit(1);
 }
@@ -61,53 +64,49 @@ export function logGroupEnd(): void {
 // -----------------------------------------------------------------------------
 
 /**
+ * Test whether a path is an executable file.
+ */
+function isExecutable(path: string): boolean {
+  try {
+    execNonInteractive(`test -x "${path}"`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Find the Claude Code CLI executable path.
  * Required in CI environments where the SDK can't auto-detect the CLI location.
  */
-export function findClaudeCodeExecutable(): string {
+export async function findClaudeCodeExecutable(): Promise<string> {
   // Check environment variable first (set by action.yml)
   const envPath = process.env['CLAUDE_CODE_PATH'];
-  if (envPath) {
-    try {
-      execNonInteractive(`test -x "${envPath}"`);
-      return envPath;
-    } catch {
-      // Path from env doesn't exist, continue to fallbacks
-    }
+  if (envPath && isExecutable(envPath)) {
+    return envPath;
   }
 
   // Standard install location from claude.ai/install.sh
   const homeLocalBin = `${process.env['HOME']}/.local/bin/claude`;
-  try {
-    execNonInteractive(`test -x "${homeLocalBin}"`);
+  if (isExecutable(homeLocalBin)) {
     return homeLocalBin;
-  } catch {
-    // Not found in standard location
   }
 
   // Try which command
   try {
     const path = execNonInteractive('which claude');
-    if (path) {
-      return path;
-    }
+    if (path) return path;
   } catch {
     // which command failed
   }
 
   // Other common installation paths as fallback
   const commonPaths = ['/usr/local/bin/claude', '/usr/bin/claude'];
-
   for (const p of commonPaths) {
-    try {
-      execNonInteractive(`test -x "${p}"`);
-      return p;
-    } catch {
-      // Path doesn't exist or isn't executable
-    }
+    if (isExecutable(p)) return p;
   }
 
-  setFailed(
+  return await setFailed(
     'Claude Code CLI not found. Ensure Claude Code is installed via https://claude.ai/install.sh'
   );
 }
@@ -119,7 +118,7 @@ export function findClaudeCodeExecutable(): string {
 /**
  * Log trigger error summary and fail if all triggers failed.
  */
-export function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): void {
+export async function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): Promise<void> {
   if (triggerErrors.length === 0) {
     return;
   }
@@ -132,7 +131,7 @@ export function handleTriggerErrors(triggerErrors: string[], totalTriggers: numb
 
   // Fail if ALL triggers failed (no successful analysis was performed)
   if (triggerErrors.length === totalTriggers && totalTriggers > 0) {
-    setFailed(`All ${totalTriggers} trigger(s) failed: ${triggerErrors.join('; ')}`);
+    await setFailed(`All ${totalTriggers} trigger(s) failed: ${triggerErrors.join('; ')}`);
   }
 }
 

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
+import { Sentry, flushSentry } from '../sentry.js';
 import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync } from '../skills/loader.js';
@@ -85,6 +86,12 @@ function resolveConfigPath(options: CLIOptions, repoPath: string): string {
 /**
  * Result of processing skill task results.
  */
+interface SkillToRun {
+  skill: string;
+  remote?: string;
+  filters: { paths?: string[]; ignorePaths?: string[] };
+}
+
 interface ProcessedResults {
   reports: SkillReport[];
   filteredReports: SkillReport[];
@@ -226,13 +233,7 @@ async function runSkills(
     ? loadWardenConfig(dirname(configPath))
     : null;
 
-  const defaultsModel = config?.defaults?.model;
-  const defaultsMaxTurns = config?.defaults?.maxTurns;
-  const defaultsBatchDelayMs = config?.defaults?.batchDelayMs;
-
   // Determine which triggers/skills to run
-  // We need to preserve trigger objects (not just skill names) to retain the `remote` property and filters
-  interface SkillToRun { skill: string; remote?: string; filters: { paths?: string[]; ignorePaths?: string[] } }
   let skillsToRun: SkillToRun[];
   if (options.skill) {
     // Explicit skill specified via CLI — check config for remote/filters if available
@@ -270,13 +271,13 @@ async function runSkills(
 
   // Build skill tasks
   // Model precedence: defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
-  const model = defaultsModel ?? options.model ?? process.env['WARDEN_MODEL'];
+  const model = config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'];
   const runnerOptions: SkillRunnerOptions = {
     apiKey,
     model,
     abortController,
-    maxTurns: defaultsMaxTurns,
-    batchDelayMs: defaultsBatchDelayMs,
+    maxTurns: config?.defaults?.maxTurns,
+    batchDelayMs: config?.defaults?.batchDelayMs,
   };
   const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters }) => ({
     name: skill,
@@ -671,23 +672,30 @@ export async function main(): Promise<void> {
     reporter.header();
   }
 
-  let exitCode: number;
+  const exitCode = await Sentry.startSpan(
+    { op: 'cli.command', name: 'warden.cli' },
+    async (span) => {
+      span.setAttribute('warden.command', command);
 
-  if (command === 'init') {
-    exitCode = await runInit(options, reporter);
-  } else if (command === 'add') {
-    exitCode = await runAdd(options, reporter);
-  } else if (command === 'setup-app') {
-    if (!setupAppOptions) {
-      reporter.error('Missing setup-app options');
-      process.exit(1);
-    }
-    exitCode = await runSetupApp(setupAppOptions, reporter);
-  } else if (command === 'sync') {
-    exitCode = await runSync(options, reporter);
-  } else {
-    exitCode = await runCommand(options, reporter);
-  }
+      switch (command) {
+        case 'init':
+          return runInit(options, reporter);
+        case 'add':
+          return runAdd(options, reporter);
+        case 'setup-app':
+          if (!setupAppOptions) {
+            reporter.error('Missing setup-app options');
+            process.exit(1);
+          }
+          return runSetupApp(setupAppOptions, reporter);
+        case 'sync':
+          return runSync(options, reporter);
+        default:
+          return runCommand(options, reporter);
+      }
+    },
+  );
 
+  await flushSentry();
   process.exit(exitCode);
 }

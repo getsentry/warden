@@ -5,6 +5,7 @@
 
 import type { SkillReport, SeverityThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
+import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import {
   prepareFiles,
   analyzeFile,
@@ -158,6 +159,32 @@ export async function runSkillTask(
   callbacks: SkillProgressCallbacks
 ): Promise<SkillTaskResult> {
   const { name, displayName = name, failOn, resolveSkill, context, runnerOptions = {} } = options;
+
+  return Sentry.startSpan(
+    { op: 'skill.run', name: displayName },
+    async (span) => {
+      span.setAttribute('skill.name', name);
+      const files = context.pullRequest?.files ?? [];
+      span.setAttribute('file.count', files.length);
+      logger.info(logger.fmt`Skill execution started: ${displayName}`, {
+        fileCount: files.length,
+      });
+
+      return _runSkillTaskInner(name, displayName, failOn, resolveSkill, context, runnerOptions, fileConcurrency, callbacks);
+    },
+  );
+}
+
+async function _runSkillTaskInner(
+  name: string,
+  displayName: string,
+  failOn: SeverityThreshold | undefined,
+  resolveSkill: () => Promise<SkillDefinition>,
+  context: EventContext,
+  runnerOptions: SkillRunnerOptions,
+  fileConcurrency: number,
+  callbacks: SkillProgressCallbacks
+): Promise<SkillTaskResult> {
   const startTime = Date.now();
 
   try {
@@ -279,7 +306,14 @@ export async function runSkillTask(
         durationMs: fileDurationMs,
       });
 
-      return { findings: result.findings, usage: result.usage, durationMs: fileDurationMs, failedHunks: result.failedHunks, failedExtractions: result.failedExtractions, auxiliaryUsage: result.auxiliaryUsage };
+      return {
+        findings: result.findings,
+        usage: result.usage,
+        durationMs: fileDurationMs,
+        failedHunks: result.failedHunks,
+        failedExtractions: result.failedExtractions,
+        auxiliaryUsage: result.auxiliaryUsage,
+      };
     };
 
     // Process files with sliding-window concurrency pool
@@ -341,6 +375,13 @@ export async function runSkillTask(
     if (auxUsage) {
       report.auxiliaryUsage = auxUsage;
     }
+
+    // Emit metrics and log completion
+    emitSkillMetrics(report);
+    logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
+      findings: report.findings.length,
+      durationMs: report.durationMs,
+    });
 
     // Notify skill complete
     callbacks.onSkillUpdate(name, {

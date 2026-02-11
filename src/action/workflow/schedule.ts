@@ -55,16 +55,16 @@ export async function runScheduleWorkflow(
   // Get repo info from environment
   const githubRepository = process.env['GITHUB_REPOSITORY'];
   if (!githubRepository) {
-    return setFailed('GITHUB_REPOSITORY environment variable not set');
+    return await setFailed('GITHUB_REPOSITORY environment variable not set');
   }
   const [owner, repo] = githubRepository.split('/');
   if (!owner || !repo) {
-    return setFailed('Invalid GITHUB_REPOSITORY format');
+    return await setFailed('Invalid GITHUB_REPOSITORY format');
   }
 
   const headSha = process.env['GITHUB_SHA'] ?? '';
   if (!headSha) {
-    return setFailed('GITHUB_SHA environment variable not set');
+    return await setFailed('GITHUB_SHA environment variable not set');
   }
 
   const defaultBranch = await getDefaultBranchFromAPI(octokit, owner, repo);
@@ -113,7 +113,7 @@ export async function runScheduleWorkflow(
       const skill = await resolveSkillAsync(resolved.skill, repoPath, {
         remote: resolved.remote,
       });
-      const claudePath = findClaudeCodeExecutable();
+      const claudePath = await findClaudeCodeExecutable();
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
@@ -174,7 +174,7 @@ export async function runScheduleWorkflow(
     }
   }
 
-  handleTriggerErrors(triggerErrors, scheduleTriggers.length);
+  await handleTriggerErrors(triggerErrors, scheduleTriggers.length);
 
   // Set outputs
   const criticalCount = countSeverity(allReports, 'critical');
@@ -186,7 +186,7 @@ export async function runScheduleWorkflow(
   setOutput('summary', allReports.map((r) => r.summary).join('\n') || 'Scheduled analysis complete');
 
   if (shouldFailAction) {
-    setFailed(failureReasons.join('; '));
+    await setFailed(failureReasons.join('; '));
   }
 
   console.log(`\nScheduled analysis complete: ${totalFindings} total findings`);

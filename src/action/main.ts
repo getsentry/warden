@@ -24,6 +24,9 @@
  * - ALL triggers failed (no successful analysis)
  */
 
+import { initSentry, Sentry, flushSentry } from '../sentry.js';
+initSentry('action');
+
 import { Octokit } from '@octokit/rest';
 import { parseActionInputs, validateInputs, setupAuthEnv } from './inputs.js';
 import { setFailed } from './workflow/base.js';
@@ -39,7 +42,7 @@ async function run(): Promise<void> {
   const repoPath = process.env['GITHUB_WORKSPACE'];
 
   if (!eventName || !eventPath || !repoPath) {
-    setFailed('This action must be run in a GitHub Actions environment');
+    return await setFailed('This action must be run in a GitHub Actions environment');
   }
 
   // Set up authentication environment variables
@@ -56,6 +59,10 @@ async function run(): Promise<void> {
   return runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath);
 }
 
-run().catch((error) => {
-  setFailed(`Unexpected error: ${error}`);
-});
+run()
+  .then(() => flushSentry())
+  .catch(async (error) => {
+    Sentry.captureException(error);
+    await flushSentry();
+    await setFailed(`Unexpected error: ${error}`);
+  });

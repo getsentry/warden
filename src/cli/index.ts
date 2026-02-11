@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { initSentry, Sentry, flushSentry } from '../sentry.js';
+initSentry('cli');
+
 import { main, abortController, interrupted } from './main.js';
 
 let interruptCount = 0;
@@ -18,7 +21,9 @@ process.on('SIGINT', () => {
   // via the abort signal listener -- no direct stderr writes needed here.
 });
 
-main().catch((error) => {
+main().catch(async (error) => {
+  Sentry.captureException(error);
+  await flushSentry();
   console.error('Fatal error:', error);
   process.exit(1);
 });
