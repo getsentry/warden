@@ -4,19 +4,10 @@
 # Dependencies
 node_modules/
 
-# Build output (but allow dist/action/ for GitHub Action bundle)
-dist/*
-!dist/action/
-
-# GitHub Action bundle - only ncc output files (must be committed for action to work)
-dist/action/*
-!dist/action/index.js
-!dist/action/index.js.map
-!dist/action/*.index.js
-!dist/action/*.index.js.map
-!dist/action/licenses.txt
-!dist/action/sourcemap-register.cjs
-!dist/action/package.json
+# Build output - type declarations and source maps are generated artifacts
+dist/**/*.d.ts
+dist/**/*.d.ts.map
+dist/**/*.js.map
 
 # IDE
 .idea/
