@@ -161,13 +161,13 @@ export async function runSkillTask(
   const { name, displayName = name, failOn, resolveSkill, context, runnerOptions = {} } = options;
 
   return Sentry.startSpan(
-    { op: 'skill.run', name: displayName },
+    { op: 'skill.run', name: `run ${displayName}` },
     async (span) => {
       span.setAttribute('skill.name', name);
       const files = context.pullRequest?.files ?? [];
       span.setAttribute('file.count', files.length);
       logger.info(logger.fmt`Skill execution started: ${displayName}`, {
-        fileCount: files.length,
+        'file.count': files.length,
       });
 
       return _runSkillTaskInner(name, displayName, failOn, resolveSkill, context, runnerOptions, fileConcurrency, callbacks);
@@ -379,8 +379,8 @@ async function _runSkillTaskInner(
     // Emit metrics and log completion
     emitSkillMetrics(report);
     logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
-      findings: report.findings.length,
-      durationMs: report.durationMs,
+      'finding.count': report.findings.length,
+      'duration_ms': report.durationMs,
     });
 
     // Notify skill complete

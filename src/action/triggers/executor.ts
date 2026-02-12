@@ -89,7 +89,7 @@ export async function executeTrigger(
   deps: TriggerExecutorDeps
 ): Promise<TriggerResult> {
   return Sentry.startSpan(
-    { op: 'trigger.execute', name: trigger.name },
+    { op: 'trigger.execute', name: `execute ${trigger.name}` },
     async (span) => {
       span.setAttribute('skill.name', trigger.skill);
       const { octokit, context, config, anthropicApiKey, claudePath } = deps;

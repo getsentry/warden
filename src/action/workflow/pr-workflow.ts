@@ -598,12 +598,12 @@ export async function runPRWorkflow(
   repoPath: string
 ): Promise<void> {
   return Sentry.startSpan(
-    { op: 'action.pr', name: 'warden.action' },
+    { op: 'workflow.run', name: 'review pull_request' },
     async (span) => {
       span.setAttribute('github.event', eventName);
 
       const { context, config, matchedTriggers } = await Sentry.startSpan(
-        { op: 'workflow.phase', name: 'workflow.init' },
+        { op: 'workflow.init', name: 'initialize workflow' },
         () => initializeWorkflow(octokit, inputs, eventName, eventPath, repoPath),
       );
 
@@ -623,7 +623,7 @@ export async function runPRWorkflow(
         });
       }
 
-      logger.info('Workflow initialized', { triggers: matchedTriggers.length });
+      logger.info('Workflow initialized', { 'trigger.count': matchedTriggers.length });
 
       if (matchedTriggers.length === 0) {
         await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey);
@@ -635,17 +635,17 @@ export async function runPRWorkflow(
       }
 
       const { coreCheckId, previousReviewInfo } = await Sentry.startSpan(
-        { op: 'workflow.phase', name: 'workflow.setupGitHubState' },
+        { op: 'workflow.setup', name: 'setup github state' },
         () => setupGitHubState(octokit, context),
       );
 
       const results = await Sentry.startSpan(
-        { op: 'workflow.phase', name: 'workflow.executeAllTriggers' },
+        { op: 'workflow.execute', name: 'execute triggers' },
         () => executeAllTriggers(matchedTriggers, octokit, context, config, inputs),
       );
 
       const reviewPhase = await Sentry.startSpan(
-        { op: 'workflow.phase', name: 'workflow.postReviews' },
+        { op: 'workflow.review', name: 'post reviews' },
         () => postReviewsAndTrackFailures(octokit, context, results, inputs),
       );
 
@@ -656,7 +656,7 @@ export async function runPRWorkflow(
       const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
 
       await Sentry.startSpan(
-        { op: 'workflow.phase', name: 'workflow.resolveStale' },
+        { op: 'workflow.resolve', name: 'resolve stale comments' },
         () =>
           evaluateFixesAndResolveStale(
             octokit, context, reviewPhase.fetchedComments,

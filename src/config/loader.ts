@@ -19,7 +19,7 @@ export class ConfigLoadError extends Error {
 
 export function loadWardenConfig(repoPath: string): WardenConfig {
   return Sentry.startSpan(
-    { op: 'config', name: 'config.load' },
+    { op: 'config.load', name: 'load config' },
     () => {
       const configPath = join(repoPath, 'warden.toml');
 

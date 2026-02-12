@@ -673,9 +673,9 @@ export async function main(): Promise<void> {
   }
 
   const exitCode = await Sentry.startSpan(
-    { op: 'cli.command', name: 'warden.cli' },
+    { op: 'cli.command', name: `run ${command}` },
     async (span) => {
-      span.setAttribute('warden.command', command);
+      span.setAttribute('cli.command', command);
 
       switch (command) {
         case 'init':

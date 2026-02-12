@@ -23,8 +23,8 @@ export function initSentry(context: SentryContext): void {
     ],
   });
 
-  Sentry.setTag('warden.context', context);
-  Sentry.setTag('warden.version', getVersion());
+  Sentry.setTag('deployment.context', context);
+  Sentry.setTag('service.version', getVersion());
 }
 
 export { Sentry };
