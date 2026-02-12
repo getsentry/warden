@@ -8,7 +8,7 @@ import { appendFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { flushSentry } from '../../sentry.js';
-import { execNonInteractive } from '../../utils/exec.js';
+import { execFileNonInteractive } from '../../utils/exec.js';
 import type { SkillReport } from '../../types/index.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { TriggerResult } from '../triggers/executor.js';
@@ -67,7 +67,7 @@ export function logGroupEnd(): void {
  */
 function isExecutable(path: string): boolean {
   try {
-    execNonInteractive(`test -x "${path}"`);
+    execFileNonInteractive('test', ['-x', path]);
     return true;
   } catch {
     return false;
@@ -93,7 +93,7 @@ export async function findClaudeCodeExecutable(): Promise<string> {
 
   // Try which command
   try {
-    const path = execNonInteractive('which claude');
+    const path = execFileNonInteractive('which', ['claude']);
     if (path) return path;
   } catch {
     // which command failed

@@ -1,5 +1,5 @@
 import { countPatchChunks } from '../types/index.js';
-import { execNonInteractive } from '../utils/exec.js';
+import { execGitNonInteractive } from '../utils/exec.js';
 
 export interface GitFileChange {
   filename: string;
@@ -12,14 +12,14 @@ export interface GitFileChange {
 
 /**
  * Execute a git command and return stdout.
- * Uses non-interactive mode to prevent SSH passphrase prompts.
+ * Uses array-based arguments to avoid shell injection.
  */
-function git(args: string, cwd: string = process.cwd()): string {
+function git(args: string[], cwd: string = process.cwd()): string {
   try {
-    return execNonInteractive(`git ${args}`, { cwd });
+    return execGitNonInteractive(args, { cwd });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Git command failed: git ${args}\n${message}`);
+    throw new Error(`Git command failed: git ${args.join(' ')}\n${message}`);
   }
 }
 
@@ -27,7 +27,7 @@ function git(args: string, cwd: string = process.cwd()): string {
  * Get the current branch name.
  */
 export function getCurrentBranch(cwd: string = process.cwd()): string {
-  return git('rev-parse --abbrev-ref HEAD', cwd);
+  return git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
 }
 
 /**
@@ -41,7 +41,7 @@ export function getHeadSha(cwd: string = process.cwd()): string {
  * Resolve a ref (branch name, tag, SHA) to a full commit SHA.
  */
 export function resolveRef(ref: string, cwd: string = process.cwd()): string {
-  return git(`rev-parse ${ref}`, cwd);
+  return git(['rev-parse', ref], cwd);
 }
 
 /**
@@ -54,7 +54,7 @@ export function getDefaultBranch(cwd: string = process.cwd()): string {
   // Check common default branches locally (no remote operations)
   for (const branch of ['main', 'master', 'develop']) {
     try {
-      git(`rev-parse --verify ${branch}`, cwd);
+      git(['rev-parse', '--verify', branch], cwd);
       return branch;
     } catch {
       // Try next branch
@@ -64,7 +64,7 @@ export function getDefaultBranch(cwd: string = process.cwd()): string {
   // Check remote tracking refs (common in shallow clones / CI)
   for (const branch of ['main', 'master', 'develop']) {
     try {
-      git(`rev-parse --verify origin/${branch}`, cwd);
+      git(['rev-parse', '--verify', `origin/${branch}`], cwd);
       return `origin/${branch}`;
     } catch {
       // Try next branch
@@ -73,7 +73,7 @@ export function getDefaultBranch(cwd: string = process.cwd()): string {
 
   // Check remote HEAD symbolic ref (set by clone, no network needed)
   try {
-    const remoteHead = git('symbolic-ref refs/remotes/origin/HEAD', cwd);
+    const remoteHead = git(['symbolic-ref', 'refs/remotes/origin/HEAD'], cwd);
     if (remoteHead) {
       // Returns e.g. "refs/remotes/origin/main" → extract "origin/main"
       const match = remoteHead.match(/refs\/remotes\/(.*)/);
@@ -87,7 +87,7 @@ export function getDefaultBranch(cwd: string = process.cwd()): string {
 
   // Check git config for user-configured default branch
   try {
-    const configuredDefault = git('config init.defaultBranch', cwd);
+    const configuredDefault = git(['config', 'init.defaultBranch'], cwd);
     if (configuredDefault) {
       return configuredDefault;
     }
@@ -102,7 +102,7 @@ export function getDefaultBranch(cwd: string = process.cwd()): string {
  * Get the repository root path.
  */
 export function getRepoRoot(cwd: string = process.cwd()): string {
-  return git('rev-parse --show-toplevel', cwd);
+  return git(['rev-parse', '--show-toplevel'], cwd);
 }
 
 /**
@@ -110,7 +110,7 @@ export function getRepoRoot(cwd: string = process.cwd()): string {
  */
 export function getRepoName(cwd: string = process.cwd()): { owner: string; name: string } {
   try {
-    const remoteUrl = git('config --get remote.origin.url', cwd);
+    const remoteUrl = git(['config', '--get', 'remote.origin.url'], cwd);
     // Handle SSH: git@github.com:owner/repo.git
     // Handle HTTPS: https://github.com/owner/repo.git
     const match = remoteUrl.match(/[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
@@ -133,7 +133,7 @@ export function getRepoName(cwd: string = process.cwd()): { owner: string; name:
  */
 export function getGitHubRepoUrl(cwd: string = process.cwd()): string | null {
   try {
-    const remoteUrl = git('config --get remote.origin.url', cwd);
+    const remoteUrl = git(['config', '--get', 'remote.origin.url'], cwd);
     // Handle SSH: git@github.com:owner/repo.git
     const sshMatch = remoteUrl.match(/git@github\.com:([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
     if (sshMatch && sshMatch[1] && sshMatch[2]) {
@@ -180,8 +180,8 @@ export function getChangedFiles(
   cwd: string = process.cwd()
 ): GitFileChange[] {
   // Get file statuses
-  const diffArgs = head ? `${base}...${head}` : base;
-  const nameStatusOutput = git(`diff --name-status ${diffArgs}`, cwd);
+  const diffRef = head ? `${base}...${head}` : base;
+  const nameStatusOutput = git(['diff', '--name-status', diffRef], cwd);
 
   if (!nameStatusOutput) {
     return [];
@@ -207,7 +207,7 @@ export function getChangedFiles(
   }
 
   // Get numstat for additions/deletions
-  const numstatOutput = git(`diff --numstat ${diffArgs}`, cwd);
+  const numstatOutput = git(['diff', '--numstat', diffRef], cwd);
   if (numstatOutput) {
     for (const line of numstatOutput.split('\n')) {
       if (!line.trim()) continue;
@@ -236,8 +236,8 @@ export function getFilePatch(
   cwd: string = process.cwd()
 ): string | undefined {
   try {
-    const diffArgs = head ? `${base}...${head}` : base;
-    return git(`diff ${diffArgs} -- "${filename}"`, cwd);
+    const diffRef = head ? `${base}...${head}` : base;
+    return git(['diff', diffRef, '--', filename], cwd);
   } catch {
     return undefined;
   }
@@ -286,8 +286,8 @@ export function getChangedFilesWithPatches(
 
   // Get all patches in a single git diff command
   try {
-    const diffArgs = head ? `${base}...${head}` : base;
-    const combinedDiff = git(`diff ${diffArgs}`, cwd);
+    const diffRef = head ? `${base}...${head}` : base;
+    const combinedDiff = git(['diff', diffRef], cwd);
     const patches = parseCombinedDiff(combinedDiff);
 
     for (const file of files) {
@@ -309,7 +309,7 @@ export function getChangedFilesWithPatches(
  * Check if there are uncommitted changes in the working tree.
  */
 export function hasUncommittedChanges(cwd: string = process.cwd()): boolean {
-  const status = git('status --porcelain', cwd);
+  const status = git(['status', '--porcelain'], cwd);
   return status.length > 0;
 }
 
@@ -318,7 +318,7 @@ export function hasUncommittedChanges(cwd: string = process.cwd()): boolean {
  */
 export function refExists(ref: string, cwd: string = process.cwd()): boolean {
   try {
-    git(`rev-parse --verify ${ref}`, cwd);
+    git(['rev-parse', '--verify', ref], cwd);
     return true;
   } catch {
     return false;
@@ -341,7 +341,7 @@ export interface CommitMessage {
  */
 export function getCommitMessage(ref: string, cwd: string = process.cwd()): CommitMessage {
   // %s = subject, %b = body
-  const subject = git(`log -1 --format=%s ${ref}`, cwd);
-  const body = git(`log -1 --format=%b ${ref}`, cwd);
+  const subject = git(['log', '-1', `--format=%s`, ref], cwd);
+  const body = git(['log', '-1', `--format=%b`, ref], cwd);
   return { subject, body };
 }

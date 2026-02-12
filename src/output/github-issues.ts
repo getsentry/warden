@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import type { SkillReport, Finding } from '../types/index.js';
 import { renderIssueBody, renderNoFindingsUpdate } from './issue-renderer.js';
@@ -163,8 +163,14 @@ export async function createFixPR(
 
   for (const [filePath, fileFindings] of fixesByFile) {
     try {
-      // Read current file content
+      // Read current file content (validate path stays within repo)
       const fullPath = join(repoPath, filePath);
+      const resolvedFull = resolve(fullPath);
+      const resolvedRepo = resolve(repoPath);
+      if (!resolvedFull.startsWith(resolvedRepo + '/')) {
+        console.error(`Skipping fix for path outside repo: ${filePath}`);
+        continue;
+      }
       let content = readFileSync(fullPath, 'utf-8');
 
       // Sort findings by line number descending to apply from bottom to top

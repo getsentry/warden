@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { DiffHunk, ParsedDiff } from './parser.js';
 import { getExpandedLineRange } from './parser.js';
 
@@ -116,6 +116,12 @@ export function expandHunkContext(
   contextLines = 20
 ): HunkWithContext {
   const filePath = join(repoPath, filename);
+
+  // Defense-in-depth: ensure filename doesn't escape repo directory
+  if (!resolve(filePath).startsWith(resolve(repoPath) + '/')) {
+    return { filename, hunk, contextBefore: [], contextAfter: [], contextStartLine: 1, language: detectLanguage(filename) };
+  }
+
   const expandedRange = getExpandedLineRange(hunk, contextLines);
 
   // Read context before the hunk
