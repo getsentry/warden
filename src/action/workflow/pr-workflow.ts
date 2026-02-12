@@ -213,7 +213,7 @@ async function setupGitHubState(
     coreCheckId = coreCheck.checkRunId;
     logAction(`Created core check: ${coreCheck.url}`);
   } catch (error) {
-    Sentry.captureException(error, { level: 'warning', tags: { operation: 'create_core_check' } });
+    Sentry.captureException(error, { tags: { operation: 'create_core_check' } });
     warnAction(`Failed to create core check: ${error}`);
   }
 
@@ -288,7 +288,7 @@ async function postReviewsAndTrackFailures(
         );
       }
     } catch (error) {
-      Sentry.captureException(error, { level: 'warning', tags: { operation: 'fetch_existing_comments' } });
+      Sentry.captureException(error, { tags: { operation: 'fetch_existing_comments' } });
       warnAction(`Failed to fetch existing comments for deduplication: ${error}`);
     }
   }
@@ -395,7 +395,7 @@ async function evaluateFixesAndResolveStale(
           try {
             await postThreadReply(octokit, reply.comment.threadId, reply.replyBody);
           } catch (error) {
-            Sentry.captureException(error, { level: 'warning', tags: { operation: 'post_thread_reply' } });
+            Sentry.captureException(error, { tags: { operation: 'post_thread_reply' } });
           }
         }
       }
@@ -415,7 +415,7 @@ async function evaluateFixesAndResolveStale(
       }
       logGroupEnd();
     } catch (error) {
-      Sentry.captureException(error, { level: 'warning', tags: { operation: 'evaluate_fix_attempts' } });
+      Sentry.captureException(error, { tags: { operation: 'evaluate_fix_attempts' } });
       warnAction(`Failed to evaluate fix attempts: ${error}`);
       logGroupEnd();
     }
@@ -440,7 +440,7 @@ async function evaluateFixesAndResolveStale(
         resolvedIds.forEach((id) => commentsResolvedByStale.add(id));
       }
     } catch (error) {
-      Sentry.captureException(error, { level: 'warning', tags: { operation: 'resolve_stale_comments' } });
+      Sentry.captureException(error, { tags: { operation: 'resolve_stale_comments' } });
       warnAction(`Failed to resolve stale comments: ${error}`);
     }
   } else if (!canResolveStale && wardenComments.length > 0) {
@@ -495,7 +495,7 @@ async function finalizeWorkflow(
       });
       logAction('Dismissed previous CHANGES_REQUESTED review');
     } catch (error) {
-      Sentry.captureException(error, { level: 'warning', tags: { operation: 'dismiss_review' } });
+      Sentry.captureException(error, { tags: { operation: 'dismiss_review' } });
       warnAction(`Failed to dismiss previous review: ${error}`);
     }
   }
@@ -515,7 +515,7 @@ async function finalizeWorkflow(
         repo: context.repository.name,
       });
     } catch (error) {
-      Sentry.captureException(error, { level: 'warning', tags: { operation: 'update_core_check' } });
+      Sentry.captureException(error, { tags: { operation: 'update_core_check' } });
       warnAction(`Failed to update core check: ${error}`);
     }
   }

@@ -190,7 +190,6 @@ export async function executeTrigger(
         };
       } catch (error) {
         Sentry.captureException(error, {
-          level: 'warning',
           tags: { 'trigger.name': trigger.name, 'skill.name': trigger.skill },
         });
 

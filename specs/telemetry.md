@@ -147,9 +147,15 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 
 ---
 
-## Error Context
+## Error Reporting
 
-All `Sentry.captureException` calls in the PR workflow include an `operation` tag for filtering in Sentry issues.
+`Sentry.captureException` is reserved for real errors: unexpected failures where something went wrong. Every call represents a genuine exception that we want to see in Sentry's Issues stream. We never override the `level` parameter. If something isn't worth reporting as an error, don't call `captureException` at all.
+
+Non-fatal errors (the workflow continues despite the failure) are still real errors. A GitHub API call that 500s is an error whether or not we can recover from it.
+
+### Operation tags
+
+All `captureException` calls include an `operation` tag for filtering in Sentry issues.
 
 | Tag value | Location | What failed |
 |-----------|----------|-------------|
@@ -162,7 +168,7 @@ All `Sentry.captureException` calls in the PR workflow include an `operation` ta
 | `update_core_check` | `finalizeWorkflow` | Updating check run with summary |
 | `fetch_fix_context` | `evaluateFixAttempts` | Fetching code at finding location |
 
-All are captured at `level: 'warning'` because they are non-fatal.
+Untagged `captureException` calls exist at top-level catch handlers in `src/cli/index.ts`, `src/action/main.ts`, and `src/action/triggers/executor.ts` (tagged with `trigger.name` and `skill.name` instead).
 
 ---
 
