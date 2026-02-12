@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { loadSkillFromMarkdown, SkillLoaderError, AGENT_MARKER_FILE } from './loader.js';
@@ -141,6 +141,16 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
   }
   if (sha?.startsWith('-')) {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (SHA cannot start with -)`);
+  }
+
+  // Security: Prevent path traversal via '..' in owner or repo.
+  // Only allow characters valid in GitHub usernames/repo names: alphanumeric, hyphens, dots, underscores.
+  const safeNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+  if (!safeNamePattern.test(owner)) {
+    throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner contains invalid characters)`);
+  }
+  if (!safeNamePattern.test(repo)) {
+    throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo contains invalid characters)`);
   }
 
   return { owner, repo, sha };
@@ -500,6 +510,13 @@ async function discoverMarketplaceSkills(
     // Resolve plugin source path (e.g., "./plugins/sentry-skills" -> "plugins/sentry-skills")
     const pluginSource = plugin.source.replace(/^\.\//, '');
     const skillsPath = join(remotePath, pluginSource, 'skills');
+
+    // Security: Ensure plugin source doesn't escape the repo directory via path traversal
+    const resolvedSkillsPath = resolve(skillsPath);
+    const resolvedRemotePath = resolve(remotePath);
+    if (!resolvedSkillsPath.startsWith(resolvedRemotePath + '/')) {
+      continue; // Silently skip — attacker-controlled marketplace.json, don't leak info
+    }
 
     if (!existsSync(skillsPath)) continue;
 

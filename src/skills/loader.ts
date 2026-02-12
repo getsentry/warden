@@ -392,7 +392,7 @@ interface ResolveConfig {
   markerFile: string;
   directories: readonly string[];
   label: string;
-  remoteImport: string;
+  kind: 'skill' | 'agent';
 }
 
 /**
@@ -416,9 +416,8 @@ async function resolveEntry(
   // 1. Remote repository resolution takes priority when specified
   if (remote) {
     // Dynamic import to avoid circular dependencies
-    const remoteModule = await import('./remote.js');
-    const resolver = remoteModule[config.remoteImport as keyof typeof remoteModule] as
-      (ref: string, name: string, opts: { offline?: boolean }) => Promise<SkillDefinition>;
+    const { resolveRemoteSkill, resolveRemoteAgent } = await import('./remote.js');
+    const resolver = config.kind === 'skill' ? resolveRemoteSkill : resolveRemoteAgent;
     return resolver(remote, nameOrPath, { offline });
   }
 
@@ -462,14 +461,14 @@ const SKILL_RESOLVE_CONFIG: ResolveConfig = {
   markerFile: 'SKILL.md',
   directories: SKILL_DIRECTORIES,
   label: 'Skill',
-  remoteImport: 'resolveRemoteSkill',
+  kind: 'skill',
 };
 
 const AGENT_RESOLVE_CONFIG: ResolveConfig = {
   markerFile: AGENT_MARKER_FILE,
   directories: AGENT_DIRECTORIES,
   label: 'Agent',
-  remoteImport: 'resolveRemoteAgent',
+  kind: 'agent',
 };
 
 /**

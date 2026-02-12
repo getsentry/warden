@@ -111,6 +111,26 @@ describe('parseRemoteRef', () => {
     expect(() => parseRemoteRef('owner/repo@--upload-pack=evil')).toThrow('SHA cannot start with -');
   });
 
+  it('throws for path traversal in owner (..)', () => {
+    expect(() => parseRemoteRef('../evil')).toThrow(SkillLoaderError);
+    expect(() => parseRemoteRef('../evil')).toThrow('invalid characters');
+  });
+
+  it('throws for path traversal in repo (..)', () => {
+    expect(() => parseRemoteRef('owner/..')).toThrow(SkillLoaderError);
+    expect(() => parseRemoteRef('owner/..')).toThrow('invalid characters');
+  });
+
+  it('throws for dot-only owner', () => {
+    expect(() => parseRemoteRef('./repo')).toThrow(SkillLoaderError);
+    expect(() => parseRemoteRef('./repo')).toThrow('invalid characters');
+  });
+
+  it('allows valid GitHub names with dots, hyphens, underscores', () => {
+    const result = parseRemoteRef('my.org/my_repo-name.js');
+    expect(result).toEqual({ owner: 'my.org', repo: 'my_repo-name.js', sha: undefined });
+  });
+
   // GitHub URL support
   it('parses HTTPS GitHub URL', () => {
     const result = parseRemoteRef('https://github.com/getsentry/skills');
@@ -621,6 +641,23 @@ describe('discoverRemoteSkills', () => {
 
       expect(skills[0]?.name).toBe('my-skill');
       expect(skills[0]?.pluginName).toBeUndefined();
+    });
+
+    it('ignores plugins with path traversal in source', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': marketplaceJson([
+          { name: 'malicious', source: '../../..' },
+          { name: 'legit', source: './plugins/legit' },
+        ]),
+        'plugins/legit/skills/good-skill/SKILL.md': skillMd('good-skill', 'Legit skill'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills.length).toBe(1);
+      expect(skills[0]?.name).toBe('good-skill');
+      expect(skills[0]?.pluginName).toBe('legit');
     });
   });
 });
