@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   generateContentHash,
   generateMarker,
@@ -9,6 +9,7 @@ import {
   findingToExistingComment,
   parseWardenSkills,
   updateWardenCommentBody,
+  consolidateBatchFindings,
 } from './dedup.js';
 import type { Finding } from '../types/index.js';
 import type { ExistingComment } from './dedup.js';
@@ -466,5 +467,175 @@ ${marker}`;
 
     const parsed = parseMarker(body);
     expect(parsed).toEqual({ path, line, contentHash: hash });
+  });
+});
+
+describe('consolidateBatchFindings', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns single finding unchanged', async () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const result = await consolidateBatchFindings([finding]);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toBe(finding);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('returns empty array unchanged', async () => {
+    const result = await consolidateBatchFindings([]);
+    expect(result.findings).toHaveLength(0);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('removes exact hash duplicates within batch', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toBe(finding1);
+    expect(result.removedCount).toBe(1);
+  });
+
+  it('keeps findings with different hashes at same location in hashOnly mode', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'allResolved incorrectly reports true',
+      description: 'Resolution API calls may fail',
+      location: { path: 'src/workflow.ts', startLine: 438 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'medium',
+      title: 'commentsResolvedByStale tracks all stale comments',
+      description: 'Not just successfully resolved ones',
+      location: { path: 'src/workflow.ts', startLine: 438 },
+    };
+
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('does not group findings more than 5 lines apart', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Bug A',
+      description: 'Description A',
+      location: { path: 'src/file.ts', startLine: 10 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'Bug B',
+      description: 'Description B',
+      location: { path: 'src/file.ts', startLine: 20 },
+    };
+
+    // In hashOnly mode, these should both pass through since they're different hashes
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('does not group findings in different files', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Same Issue',
+      description: 'Same description',
+      location: { path: 'src/a.ts', startLine: 42 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'Same Issue',
+      description: 'Same description but different file',
+      location: { path: 'src/b.ts', startLine: 42 },
+    };
+
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('skips LLM when no proximity clusters exist', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Bug A',
+      description: 'Description A',
+      location: { path: 'src/file.ts', startLine: 10 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'medium',
+      title: 'Bug B',
+      description: 'Description B',
+      location: { path: 'src/file.ts', startLine: 100 },
+    };
+
+    // Even with an API key, no LLM call should be made since findings are far apart
+    const result = await consolidateBatchFindings([finding1, finding2], { apiKey: 'test-key' });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+    expect(result.usage).toBeUndefined();
+  });
+
+  it('groups findings within 5 lines of each other for proximity check', async () => {
+    // This tests the proximity grouping logic (without LLM since no API key)
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Bug A at line 10',
+      description: 'Issue at line 10',
+      location: { path: 'src/file.ts', startLine: 10 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'medium',
+      title: 'Bug B at line 13',
+      description: 'Issue at line 13',
+      location: { path: 'src/file.ts', startLine: 13 },
+    };
+
+    // Without API key, LLM phase is skipped, both findings kept
+    const result = await consolidateBatchFindings([finding1, finding2]);
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
   });
 });

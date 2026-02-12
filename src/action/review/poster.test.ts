@@ -11,6 +11,7 @@ vi.mock('../../output/dedup.js', () => ({
   deduplicateFindings: vi.fn(),
   processDuplicateActions: vi.fn(),
   findingToExistingComment: vi.fn(),
+  consolidateBatchFindings: vi.fn(),
 }));
 
 vi.mock('../../output/renderer.js', () => ({
@@ -18,8 +19,7 @@ vi.mock('../../output/renderer.js', () => ({
   renderFindingsBody: vi.fn().mockReturnValue('rendered findings body'),
 }));
 
-
-import { deduplicateFindings, processDuplicateActions, findingToExistingComment } from '../../output/dedup.js';
+import { deduplicateFindings, processDuplicateActions, findingToExistingComment, consolidateBatchFindings } from '../../output/dedup.js';
 import { renderSkillReport } from '../../output/renderer.js';
 
 describe('postTriggerReview', () => {
@@ -28,6 +28,12 @@ describe('postTriggerReview', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Default: consolidation passes findings through unchanged
+    vi.mocked(consolidateBatchFindings).mockImplementation(async (findings) => ({
+      findings,
+      removedCount: 0,
+    }));
   });
 
   const mockOctokit = {
@@ -377,5 +383,101 @@ describe('postTriggerReview', () => {
 
     expect(postResult.posted).toBe(false);
     expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('consolidates batch findings before dedup when multiple findings exist', async () => {
+    const finding1 = createFinding({ id: 'f1', severity: 'high', title: 'Root cause' });
+    const finding2 = createFinding({ id: 'f2', severity: 'medium', title: 'Same root cause, different framing' });
+
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 2 issues',
+        findings: [finding1, finding2],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [
+            { path: 'test.ts', line: 10, body: 'Comment 1' },
+            { path: 'test.ts', line: 10, body: 'Comment 2' },
+          ],
+        },
+      }),
+      reportOn: 'info',
+    };
+
+    // Mock consolidation removing the duplicate
+    vi.mocked(consolidateBatchFindings).mockResolvedValue({
+      findings: [finding1],
+      removedCount: 1,
+    });
+
+    vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
+
+    // Re-render mock for the consolidated findings
+    vi.mocked(renderSkillReport).mockReturnValue(createRenderResult({
+      review: {
+        event: 'COMMENT',
+        body: 'Re-rendered review',
+        comments: [{ path: 'test.ts', line: 10, body: 'Comment 1' }],
+      },
+    }));
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    // Consolidation should have been called with both findings
+    expect(consolidateBatchFindings).toHaveBeenCalledWith(
+      [finding1, finding2],
+      { apiKey: 'test-key', hashOnly: false }
+    );
+
+    expect(postResult.posted).toBe(true);
+    // Only the consolidated finding should be posted
+    expect(postResult.newComments).toHaveLength(1);
+  });
+
+  it('skips consolidation when only one finding exists', async () => {
+    const finding = createFinding();
+
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'info',
+    };
+
+    vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    await postTriggerReview(ctx, mockDeps);
+
+    // Consolidation should NOT be called for a single finding
+    expect(consolidateBatchFindings).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
+import { SEVERITY_ORDER, CONFIDENCE_ORDER } from '../types/index.js';
 import { callHaiku } from '../sdk/haiku.js';
 
 /**
@@ -562,6 +563,223 @@ export function findingToExistingComment(finding: Finding, skill?: string): Exis
     isWarden: true,
     skills: skill ? [skill] : [],
   };
+}
+
+// -----------------------------------------------------------------------------
+// Intra-batch consolidation
+// -----------------------------------------------------------------------------
+
+const PROXIMITY_THRESHOLD = 5;
+
+/**
+ * Result from consolidating findings within a single batch.
+ */
+export interface ConsolidateResult {
+  findings: Finding[];
+  removedCount: number;
+  usage?: UsageStats;
+}
+
+/** Schema for LLM consolidation response: groups of finding indices that share a root cause. */
+const ConsolidationGroupsSchema = z.array(
+  z.array(z.number().int())
+);
+
+/**
+ * Get the effective line number for a finding (endLine if present, otherwise startLine).
+ */
+function findingLine(f: Finding): number {
+  return f.location?.endLine ?? f.location?.startLine ?? 0;
+}
+
+/**
+ * Compare two findings by severity (lower = more severe), then confidence, then position.
+ * Returns negative if `a` should be preferred over `b`.
+ */
+function compareFindingPriority(a: Finding, b: Finding): number {
+  const sevDiff = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+  if (sevDiff !== 0) return sevDiff;
+
+  const confA = CONFIDENCE_ORDER[a.confidence ?? 'low'];
+  const confB = CONFIDENCE_ORDER[b.confidence ?? 'low'];
+  const confDiff = confA - confB;
+  if (confDiff !== 0) return confDiff;
+
+  return findingLine(a) - findingLine(b);
+}
+
+/**
+ * Pick the best finding from a group (highest severity, then confidence, then position).
+ */
+function pickWinner(group: Finding[]): Finding {
+  const sorted = [...group].sort(compareFindingPriority);
+  // group is guaranteed to have at least 2 elements by callers
+  const winner = sorted[0];
+  if (!winner) throw new Error('pickWinner called with empty group');
+  return winner;
+}
+
+/**
+ * Group findings by file path, then identify clusters where findings are within
+ * PROXIMITY_THRESHOLD lines of each other. Returns only clusters with 2+ findings.
+ */
+function findProximityClusters(findings: Finding[]): Finding[][] {
+  // Group by file path
+  const byPath = new Map<string, Finding[]>();
+  for (const f of findings) {
+    const path = f.location?.path ?? '';
+    const existing = byPath.get(path);
+    if (existing) {
+      existing.push(f);
+    } else {
+      byPath.set(path, [f]);
+    }
+  }
+
+  const clusters: Finding[][] = [];
+
+  for (const group of byPath.values()) {
+    if (group.length < 2) continue;
+
+    // Sort by line number
+    const sorted = [...group].sort((a, b) => findingLine(a) - findingLine(b));
+
+    // Single-linkage clustering: consecutive findings within PROXIMITY_THRESHOLD
+    // lines of each other are grouped together.
+    const first = sorted[0];
+    if (!first) continue;
+    let current: Finding[] = [first];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      if (!prev || !curr) continue;
+
+      if (findingLine(curr) - findingLine(prev) <= PROXIMITY_THRESHOLD) {
+        current.push(curr);
+      } else {
+        if (current.length >= 2) clusters.push(current);
+        current = [curr];
+      }
+    }
+    if (current.length >= 2) clusters.push(current);
+  }
+
+  return clusters;
+}
+
+/**
+ * Consolidate findings within a single batch to remove duplicates that describe
+ * the same root cause. Three-phase approach:
+ *
+ * 1. Hash dedup: remove exact duplicates (same path:line:contentHash)
+ * 2. Proximity grouping: identify clusters of findings within 5 lines of each other
+ * 3. LLM consolidation: ask Haiku to group findings by root cause (only when proximity matches exist)
+ *
+ * For each group, keeps the highest-severity finding.
+ */
+export async function consolidateBatchFindings(
+  findings: Finding[],
+  options: { apiKey?: string; hashOnly?: boolean } = {}
+): Promise<ConsolidateResult> {
+  if (findings.length <= 1) {
+    return { findings, removedCount: 0 };
+  }
+
+  // Phase 1: Hash dedup within batch
+  const seen = new Set<string>();
+  const hashDeduped: Finding[] = [];
+
+  for (const f of findings) {
+    const hash = generateContentHash(f.title, f.description);
+    const line = findingLine(f);
+    const path = f.location?.path ?? '';
+    const key = `${path}:${line}:${hash}`;
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hashDeduped.push(f);
+  }
+
+  const hashRemovedCount = findings.length - hashDeduped.length;
+
+  if (hashRemovedCount > 0) {
+    console.log(`Consolidate: ${hashRemovedCount} exact duplicate findings removed within batch`);
+  }
+
+  // Phase 2: Proximity grouping
+  const clusters = findProximityClusters(hashDeduped);
+
+  // If no proximity clusters or hash-only mode or no API key, return hash-deduped results
+  if (clusters.length === 0 || options.hashOnly || !options.apiKey) {
+    return { findings: hashDeduped, removedCount: hashRemovedCount };
+  }
+
+  // Phase 3: LLM consolidation for proximity clusters
+  // Only send clustered findings to the LLM (deduplicated across clusters)
+  const clusteredList = [...new Set(clusters.flat())];
+  const findingsList = clusteredList
+    .map((f, i) => {
+      const line = findingLine(f);
+      const loc = f.location ? `${f.location.path}:${line}` : 'general';
+      return `${i + 1}. [${loc}] (${f.severity}) "${f.title}" - ${f.description}`;
+    })
+    .join('\n');
+
+  const prompt = `You are deduplicating code review findings. Group findings that describe the SAME root cause or bug.
+
+Findings:
+${findingsList}
+
+Return a JSON array of arrays, where each inner array contains the 1-based indices of findings that describe the same root cause.
+Only group findings that are truly about the same underlying issue. Findings about different issues should NOT be grouped even if they're nearby.
+Singletons (findings with no duplicates) should not appear in any group.
+
+Return ONLY the JSON array. Return [] if no findings share a root cause.`;
+
+  const result = await callHaiku({
+    apiKey: options.apiKey,
+    prompt,
+    schema: ConsolidationGroupsSchema,
+    maxTokens: 512,
+  });
+
+  if (!result.success) {
+    console.warn(`LLM batch consolidation failed, keeping all findings: ${result.error}`);
+    return { findings: hashDeduped, removedCount: hashRemovedCount, usage: result.usage };
+  }
+
+  // Process LLM groups: for each group, keep the winner and drop the rest
+  const droppedFindings = new Set<Finding>();
+
+  for (const group of result.data) {
+    if (group.length < 2) continue;
+
+    // Convert 1-based indices to findings
+    const groupFindings = group
+      .map((idx) => clusteredList[idx - 1])
+      .filter((f): f is Finding => f !== undefined);
+
+    if (groupFindings.length < 2) continue;
+
+    const winner = pickWinner(groupFindings);
+    for (const f of groupFindings) {
+      if (f !== winner) {
+        droppedFindings.add(f);
+      }
+    }
+  }
+
+  if (droppedFindings.size === 0) {
+    return { findings: hashDeduped, removedCount: hashRemovedCount, usage: result.usage };
+  }
+
+  const consolidated = hashDeduped.filter((f) => !droppedFindings.has(f));
+  const totalRemoved = hashRemovedCount + droppedFindings.size;
+
+  console.log(`Consolidate: ${droppedFindings.size} findings merged by LLM (same root cause)`);
+
+  return { findings: consolidated, removedCount: totalRemoved, usage: result.usage };
 }
 
 /**

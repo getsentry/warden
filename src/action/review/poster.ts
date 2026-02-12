@@ -15,6 +15,7 @@ import {
   deduplicateFindings,
   processDuplicateActions,
   findingToExistingComment,
+  consolidateBatchFindings,
 } from '../../output/dedup.js';
 import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
@@ -172,12 +173,33 @@ export async function postTriggerReview(
   }
 
   try {
-    // Deduplicate findings against existing comments
+    // Consolidate findings within this batch (intra-batch dedup)
     let findingsToPost = filteredFindings;
+
+    if (findingsToPost.length > 1) {
+      const consolidateResult = await consolidateBatchFindings(findingsToPost, {
+        apiKey,
+        hashOnly: !apiKey,
+      });
+      findingsToPost = consolidateResult.findings;
+
+      if (consolidateResult.usage) {
+        const consolidateAux = { consolidate: consolidateResult.usage };
+        result.report.auxiliaryUsage = mergeAuxiliaryUsage(result.report.auxiliaryUsage, consolidateAux);
+      }
+
+      if (consolidateResult.removedCount > 0) {
+        logAction(
+          `Consolidated ${consolidateResult.removedCount} duplicate findings within batch for ${result.triggerName}`
+        );
+      }
+    }
+
+    // Deduplicate findings against existing comments
     let dedupResult: DeduplicateResult | undefined;
 
-    if (existingComments.length > 0 && filteredFindings.length > 0) {
-      dedupResult = await deduplicateFindings(filteredFindings, existingComments, {
+    if (existingComments.length > 0 && findingsToPost.length > 0) {
+      dedupResult = await deduplicateFindings(findingsToPost, existingComments, {
         apiKey,
         currentSkill: result.report.skill,
       });
@@ -197,7 +219,7 @@ export async function postTriggerReview(
     }
 
     // Process duplicate actions (update Warden comments, add reactions)
-    if (dedupResult && dedupResult.duplicateActions.length > 0) {
+    if (dedupResult?.duplicateActions.length) {
       const actionCounts = await processDuplicateActions(
         octokit,
         context.repository.owner,
