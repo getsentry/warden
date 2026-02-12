@@ -112,6 +112,7 @@ async function initializeWorkflow(
   try {
     eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
   } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'read_event_payload' } });
     return await setFailed(`Failed to read event payload: ${error}`);
   }
 
@@ -124,6 +125,7 @@ async function initializeWorkflow(
   try {
     context = await buildEventContext(eventName, eventPayload, repoPath, octokit);
   } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'build_event_context' } });
     return await setFailed(`Failed to build event context: ${error}`);
   }
 

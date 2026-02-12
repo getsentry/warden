@@ -7,7 +7,7 @@
 import { appendFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
-import { Sentry, flushSentry } from '../../sentry.js';
+import { flushSentry } from '../../sentry.js';
 import { execNonInteractive } from '../../utils/exec.js';
 import type { SkillReport } from '../../types/index.js';
 import { countSeverity } from '../../triggers/matcher.js';
@@ -39,7 +39,6 @@ export function setOutput(name: string, value: string | number): void {
  * Fail the GitHub Action with an error message.
  */
 export async function setFailed(message: string): Promise<never> {
-  Sentry.captureMessage(message, 'error');
   await flushSentry();
   console.error(`::error::${message}`);
   process.exit(1);

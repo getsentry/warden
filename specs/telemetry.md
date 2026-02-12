@@ -153,12 +153,16 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 
 Non-fatal errors (the workflow continues despite the failure) are still real errors. A GitHub API call that 500s is an error whether or not we can recover from it.
 
+`setFailed()` is an exit mechanism, not error reporting. It flushes pending Sentry events and terminates the process. It does NOT send its own Sentry event. Callers that need Sentry reporting must call `captureException` explicitly before `setFailed`. Expected failures (threshold exceeded, missing env vars, CLI not found) should NOT be reported to Sentry.
+
 ### Operation tags
 
 All `captureException` calls include an `operation` tag for filtering in Sentry issues.
 
 | Tag value | Location | What failed |
 |-----------|----------|-------------|
+| `read_event_payload` | `initializeWorkflow` | Reading GitHub event JSON |
+| `build_event_context` | `initializeWorkflow` | Parsing event into context |
 | `create_core_check` | `setupGitHubState` | Creating the GitHub check run |
 | `fetch_existing_comments` | `postReviewsAndTrackFailures` | Fetching PR comments for dedup |
 | `post_thread_reply` | `evaluateFixesAndResolveStale` | Posting fix evaluation reply |

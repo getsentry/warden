@@ -63,6 +63,5 @@ run()
   .then(() => flushSentry())
   .catch(async (error) => {
     Sentry.captureException(error);
-    await flushSentry();
     await setFailed(`Unexpected error: ${error}`);
   });
