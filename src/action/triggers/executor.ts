@@ -7,6 +7,7 @@
 
 import type { Octokit } from '@octokit/rest';
 import { Sentry } from '../../sentry.js';
+import { ActionFailedError } from '../workflow/base.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
 import type { EventContext, SkillReport, SeverityThreshold } from '../../types/index.js';
@@ -189,6 +190,7 @@ export async function executeTrigger(
           maxFindings,
         };
       } catch (error) {
+        if (error instanceof ActionFailedError) throw error;
         Sentry.captureException(error, {
           tags: { 'trigger.name': trigger.name, 'skill.name': trigger.skill },
         });

@@ -18,6 +18,7 @@ import type { ActionInputs } from '../inputs.js';
 import {
   setOutput,
   setFailed,
+  ActionFailedError,
   logGroup,
   logGroupEnd,
   findClaudeCodeExecutable,
@@ -167,6 +168,7 @@ export async function runScheduleWorkflow(
 
       logGroupEnd();
     } catch (error) {
+      if (error instanceof ActionFailedError) throw error;
       const errorMessage = error instanceof Error ? error.message : String(error);
       triggerErrors.push(`${resolved.name}: ${errorMessage}`);
       console.error(`::warning::Trigger ${resolved.name} failed: ${error}`);
