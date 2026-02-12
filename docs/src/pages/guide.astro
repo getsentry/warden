@@ -267,12 +267,21 @@ Focus on issues in the changed code. For each issue found, report:
 
   <h3>Organization Setup</h3>
 
-  <p>Add your Anthropic API key as an organization secret so all repos can use it:</p>
+  <p>Add these as organization or repository secrets so all repos can use them. Organization-level secrets are recommended so you configure once.</p>
 
   <ol>
     <li>Go to <strong>Organization Settings → Secrets and variables → Actions</strong></li>
-    <li>Add <code>WARDEN_ANTHROPIC_API_KEY</code> with your key from <a href="https://console.anthropic.com/">console.anthropic.com</a></li>
+    <li>Add the following secrets:</li>
   </ol>
+
+  <dl>
+    <dt>WARDEN_ANTHROPIC_API_KEY</dt>
+    <dd>Your Anthropic API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></dd>
+    <dt>WARDEN_MODEL <em>(optional)</em></dt>
+    <dd>Override the default model (e.g. <code>claude-haiku-4-5-20251001</code>)</dd>
+    <dt>WARDEN_SENTRY_DSN <em>(optional)</em></dt>
+    <dd>Sentry DSN for error and performance telemetry</dd>
+  </dl>
 
   <h3>Repository Setup</h3>
 

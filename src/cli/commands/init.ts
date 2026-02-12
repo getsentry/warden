@@ -65,6 +65,9 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
+    env:
+      WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
+      WARDEN_SENTRY_DSN: \${{ secrets.WARDEN_SENTRY_DSN }}
     steps:
       - uses: actions/checkout@v4
       - uses: getsentry/warden@v${majorVersion}
@@ -152,7 +155,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   reporter.bold('Next steps:');
   reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
   reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
-  reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to repository secrets`);
+  reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to organization or repository secrets`);
 
   // Show GitHub secrets URL if available
   const githubUrl = getGitHubRepoUrl(repoRoot);
