@@ -379,13 +379,12 @@ async function evaluateFixesAndResolveStale(
 
       // Resolve successful fixes
       if (fixEvaluation.toResolve.length > 0) {
-        const resolvedCount = await resolveStaleComments(octokit, fixEvaluation.toResolve);
+        const { resolvedCount, resolvedIds } = await resolveStaleComments(octokit, fixEvaluation.toResolve);
         if (resolvedCount > 0) {
           logAction(`Resolved ${resolvedCount} comments via fix evaluation`);
         }
-        // Track all attempted resolves so stale-comment pass skips them
-        // (resolveStaleComments handles individual failures internally)
-        fixEvaluation.toResolve.forEach((c) => commentsResolvedByFixEval.add(c.id));
+        // Track only actually resolved comments for allResolved check
+        resolvedIds.forEach((id) => commentsResolvedByFixEval.add(id));
       }
 
       // Post replies for failed fixes and track them so stale pass doesn't override
@@ -431,11 +430,11 @@ async function evaluateFixesAndResolveStale(
       const staleComments = findStaleComments(commentsForStaleCheck, allFindings, scope);
 
       if (staleComments.length > 0) {
-        const resolvedCount = await resolveStaleComments(octokit, staleComments);
+        const { resolvedCount, resolvedIds } = await resolveStaleComments(octokit, staleComments);
         if (resolvedCount > 0) {
           logAction(`Resolved ${resolvedCount} stale Warden comments`);
         }
-        staleComments.forEach((c) => commentsResolvedByStale.add(c.id));
+        resolvedIds.forEach((id) => commentsResolvedByStale.add(id));
       }
     } catch (error) {
       warnAction(`Failed to resolve stale comments: ${error}`);

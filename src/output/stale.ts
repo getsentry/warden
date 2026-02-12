@@ -124,16 +124,21 @@ const RESOLVE_THREAD_MUTATION = `
 /** Maximum stale comments to resolve per run (matches default maxFindings) */
 const MAX_STALE_RESOLUTIONS = 50;
 
+export interface ResolveResult {
+  resolvedCount: number;
+  resolvedIds: Set<number>;
+}
+
 /**
  * Resolve stale comment threads via GraphQL.
- * Returns the number of threads successfully resolved.
+ * Returns the count and IDs of threads successfully resolved.
  * Limited to MAX_STALE_RESOLUTIONS per run as a safeguard.
  */
 export async function resolveStaleComments(
   octokit: Octokit,
   staleComments: ExistingComment[]
-): Promise<number> {
-  let resolvedCount = 0;
+): Promise<ResolveResult> {
+  const resolvedIds = new Set<number>();
 
   const commentsToResolve = staleComments.slice(0, MAX_STALE_RESOLUTIONS);
   if (staleComments.length > MAX_STALE_RESOLUTIONS) {
@@ -151,7 +156,7 @@ export async function resolveStaleComments(
       await octokit.graphql(RESOLVE_THREAD_MUTATION, {
         threadId: comment.threadId,
       });
-      resolvedCount++;
+      resolvedIds.add(comment.id);
     } catch (error) {
       const errorMessage = String(error);
       if (errorMessage.includes('Resource not accessible')) {
@@ -166,5 +171,5 @@ export async function resolveStaleComments(
     }
   }
 
-  return resolvedCount;
+  return { resolvedCount: resolvedIds.size, resolvedIds };
 }
