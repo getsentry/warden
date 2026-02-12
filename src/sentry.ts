@@ -20,6 +20,8 @@ export function initSentry(context: SentryContext): void {
     enableLogs: true,
     integrations: [
       Sentry.consoleLoggingIntegration({ levels: ['warn', 'error'] }),
+      Sentry.anthropicAIIntegration({ recordInputs: true, recordOutputs: true }),
+      Sentry.httpIntegration(),
     ],
   });
 
@@ -30,45 +32,91 @@ export function initSentry(context: SentryContext): void {
 export { Sentry };
 export const { logger } = Sentry;
 
-export function emitSkillMetrics(report: SkillReport): void {
+/**
+ * Run a metrics callback only when Sentry is initialized.
+ * Swallows errors so metrics never break the main workflow.
+ */
+function safeEmit(fn: () => void): void {
   if (!initialized) return;
-
   try {
+    fn();
+  } catch {
+    // Metrics emission should never break the main workflow
+  }
+}
+
+export function emitSkillMetrics(report: SkillReport): void {
+  safeEmit(() => {
+    const attrs = { skill: report.skill };
+
     Sentry.metrics.distribution('skill.duration', report.durationMs ?? 0, {
       unit: 'millisecond',
-      attributes: { skill: report.skill },
+      attributes: attrs,
     });
 
     if (report.usage) {
       Sentry.metrics.distribution('tokens.input', report.usage.inputTokens, {
         unit: 'none',
-        attributes: { skill: report.skill },
+        attributes: attrs,
       });
       Sentry.metrics.distribution('tokens.output', report.usage.outputTokens, {
         unit: 'none',
-        attributes: { skill: report.skill },
+        attributes: attrs,
       });
       if (report.usage.costUSD) {
-        Sentry.metrics.distribution('cost.usd', report.usage.costUSD, {
-          attributes: { skill: report.skill },
-        });
+        Sentry.metrics.distribution('cost.usd', report.usage.costUSD, { attributes: attrs });
       }
     }
 
-    Sentry.metrics.count('findings.total', report.findings.length, {
-      attributes: { skill: report.skill },
-    });
+    Sentry.metrics.count('findings.total', report.findings.length, { attributes: attrs });
     for (const severity of Object.keys(SEVERITY_ORDER) as Severity[]) {
       const count = report.findings.filter((f) => f.severity === severity).length;
       if (count > 0) {
         Sentry.metrics.count('findings', count, {
-          attributes: { skill: report.skill, severity },
+          attributes: { ...attrs, severity },
         });
       }
     }
-  } catch {
-    // Metrics emission should never break the main workflow
-  }
+  });
+}
+
+export function emitExtractionMetrics(skill: string, method: 'regex' | 'llm' | 'none', count: number): void {
+  safeEmit(() => {
+    const attrs = { skill, method };
+    Sentry.metrics.count('extraction.attempts', 1, { attributes: attrs });
+    Sentry.metrics.count('extraction.findings', count, { attributes: attrs });
+  });
+}
+
+export function emitFixEvalMetrics(evaluated: number, resolved: number, failed: number, skipped: number): void {
+  safeEmit(() => {
+    Sentry.metrics.count('fix_eval.evaluated', evaluated);
+    Sentry.metrics.count('fix_eval.resolved', resolved);
+    Sentry.metrics.count('fix_eval.failed', failed);
+    Sentry.metrics.count('fix_eval.skipped', skipped);
+  });
+}
+
+export function emitRetryMetric(skill: string, attempt: number): void {
+  safeEmit(() => {
+    Sentry.metrics.count('skill.retries', 1, { attributes: { skill, attempt } });
+  });
+}
+
+export function emitDedupMetrics(total: number, unique: number): void {
+  safeEmit(() => {
+    Sentry.metrics.distribution('dedup.total', total);
+    Sentry.metrics.distribution('dedup.unique', unique);
+    if (total > 0) {
+      Sentry.metrics.distribution('dedup.removed', total - unique);
+    }
+  });
+}
+
+export function emitStaleResolutionMetric(count: number): void {
+  safeEmit(() => {
+    Sentry.metrics.count('stale.resolved', count);
+  });
 }
 
 /**

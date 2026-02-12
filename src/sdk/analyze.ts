@@ -2,6 +2,7 @@ import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
+import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
@@ -100,56 +101,111 @@ async function executeQuery(
   options: SkillRunnerOptions
 ): Promise<QueryExecutionResult> {
   const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
+  const modelId = model ?? 'unknown';
 
-  // Capture stderr output for better error diagnostics
-  const stderrChunks: string[] = [];
-
-  const stream = query({
-    prompt: userPrompt,
-    options: {
-      maxTurns,
-      cwd: repoPath,
-      systemPrompt,
-      // Only allow read-only tools - context is already provided in the prompt
-      allowedTools: ['Read', 'Grep'],
-      // Explicitly block modification/side-effect tools as defense-in-depth
-      disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
-      permissionMode: 'bypassPermissions',
-      model,
-      abortController,
-      pathToClaudeCodeExecutable,
-      stderr: (data: string) => {
-        stderrChunks.push(data);
+  return Sentry.startSpan(
+    {
+      op: 'gen_ai.invoke_agent',
+      name: `invoke_agent ${modelId}`,
+      attributes: {
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.system': 'anthropic',
+        'gen_ai.provider.name': 'anthropic',
+        'gen_ai.request.model': modelId,
+        'gen_ai.request.max_turns': maxTurns,
       },
     },
-  });
+    async (span) => {
+      // Capture stderr output for better error diagnostics
+      const stderrChunks: string[] = [];
 
-  let resultMessage: SDKResultMessage | undefined;
-  let authError: string | undefined;
+      const stream = query({
+        prompt: userPrompt,
+        options: {
+          maxTurns,
+          cwd: repoPath,
+          systemPrompt,
+          // Only allow read-only tools - context is already provided in the prompt
+          allowedTools: ['Read', 'Grep'],
+          // Explicitly block modification/side-effect tools as defense-in-depth
+          disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
+          permissionMode: 'bypassPermissions',
+          model,
+          abortController,
+          pathToClaudeCodeExecutable,
+          stderr: (data: string) => {
+            stderrChunks.push(data);
+          },
+        },
+      });
 
-  try {
-    for await (const message of stream) {
-      if (message.type === 'result') {
-        resultMessage = message;
-      } else if (message.type === 'auth_status' && message.error) {
-        // Capture authentication errors from auth_status messages
-        authError = message.error;
+      let resultMessage: SDKResultMessage | undefined;
+      let authError: string | undefined;
+
+      try {
+        for await (const message of stream) {
+          if (message.type === 'result') {
+            resultMessage = message;
+          } else if (message.type === 'auth_status' && message.error) {
+            // Capture authentication errors from auth_status messages
+            authError = message.error;
+          }
+        }
+      } catch (error) {
+        // Re-throw with stderr info if available
+        const stderr = stderrChunks.join('').trim();
+        if (stderr) {
+          const originalMessage = error instanceof Error ? error.message : String(error);
+          const enhancedError = new Error(`${originalMessage}\nClaude Code stderr: ${stderr}`);
+          enhancedError.cause = error;
+          throw enhancedError;
+        }
+        throw error;
       }
-    }
-  } catch (error) {
-    // Re-throw with stderr info if available
-    const stderr = stderrChunks.join('').trim();
-    if (stderr) {
-      const originalMessage = error instanceof Error ? error.message : String(error);
-      const enhancedError = new Error(`${originalMessage}\nClaude Code stderr: ${stderr}`);
-      enhancedError.cause = error;
-      throw enhancedError;
-    }
-    throw error;
-  }
 
-  const stderr = stderrChunks.join('').trim() || undefined;
-  return { result: resultMessage, authError, stderr };
+      // Set response attributes from SDK result
+      if (resultMessage) {
+        const usage = resultMessage.usage;
+        if (usage) {
+          const inputTokens = usage.input_tokens ?? 0;
+          const outputTokens = usage.output_tokens ?? 0;
+          const cacheRead = usage.cache_read_input_tokens ?? 0;
+          const cacheWrite = usage.cache_creation_input_tokens ?? 0;
+          span.setAttribute('gen_ai.usage.input_tokens', inputTokens);
+          span.setAttribute('gen_ai.usage.output_tokens', outputTokens);
+          span.setAttribute('gen_ai.usage.input_tokens.cached', cacheRead);
+          span.setAttribute('gen_ai.usage.input_tokens.cache_write', cacheWrite);
+          span.setAttribute('gen_ai.usage.total_tokens', inputTokens + outputTokens + cacheRead + cacheWrite);
+        }
+        if (resultMessage.uuid) {
+          span.setAttribute('gen_ai.response.id', resultMessage.uuid);
+        }
+        if (resultMessage.modelUsage) {
+          const models = Object.keys(resultMessage.modelUsage);
+          if (models[0]) {
+            span.setAttribute('gen_ai.response.model', models[0]);
+          }
+        }
+
+        // Optional SDK metadata attributes
+        const optionalAttrs: Record<string, string | number | undefined> = {
+          'sdk.session_id': resultMessage.session_id,
+          'sdk.duration_ms': resultMessage.duration_ms,
+          'sdk.duration_api_ms': resultMessage.duration_api_ms,
+          'sdk.num_turns': resultMessage.num_turns,
+          'gen_ai.cost.total_tokens': resultMessage.total_cost_usd,
+        };
+        for (const [key, value] of Object.entries(optionalAttrs)) {
+          if (value !== undefined) {
+            span.setAttribute(key, value);
+          }
+        }
+      }
+
+      const stderr = stderrChunks.join('').trim() || undefined;
+      return { result: resultMessage, authError, stderr };
+    },
+  );
 }
 
 /**
@@ -163,175 +219,206 @@ async function analyzeHunk(
   callbacks?: HunkAnalysisCallbacks,
   prContext?: PRPromptContext
 ): Promise<HunkAnalysisResult> {
-  const { apiKey, abortController, retry } = options;
+  const lineRange = callbacks?.lineRange ?? getHunkLineRange(hunkCtx);
 
-  const systemPrompt = buildHunkSystemPrompt(skill);
-  const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
+  return Sentry.startSpan(
+    {
+      op: 'skill.analyze_hunk',
+      name: `analyze hunk ${hunkCtx.filename}:${lineRange}`,
+      attributes: {
+        'code.filepath': hunkCtx.filename,
+        'hunk.line_range': lineRange,
+      },
+    },
+    async (span) => {
+      const { apiKey, abortController, retry } = options;
 
-  // Report prompt size information
-  const systemChars = systemPrompt.length;
-  const userChars = userPrompt.length;
-  const totalChars = systemChars + userChars;
-  const estimatedTokensCount = estimateTokens(totalChars);
+      const systemPrompt = buildHunkSystemPrompt(skill);
+      const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
 
-  // Always call onPromptSize if provided (for debug mode)
-  callbacks?.onPromptSize?.(callbacks.lineRange, systemChars, userChars, totalChars, estimatedTokensCount);
+      // Report prompt size information
+      const systemChars = systemPrompt.length;
+      const userChars = userPrompt.length;
+      const totalChars = systemChars + userChars;
+      const estimatedTokensCount = estimateTokens(totalChars);
 
-  // Warn about large prompts
-  if (totalChars > LARGE_PROMPT_THRESHOLD_CHARS) {
-    callbacks?.onLargePrompt?.(callbacks.lineRange, totalChars, estimatedTokensCount);
-  }
+      // Always call onPromptSize if provided (for debug mode)
+      callbacks?.onPromptSize?.(callbacks.lineRange, systemChars, userChars, totalChars, estimatedTokensCount);
 
-  // Merge retry config with defaults
-  const retryConfig: Required<RetryConfig> = {
-    ...DEFAULT_RETRY_CONFIG,
-    ...retry,
-  };
-
-  let lastError: unknown;
-  // Track accumulated usage across retry attempts for accurate cost reporting
-  const accumulatedUsage: UsageStats[] = [];
-
-  for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
-    // Check for abort before each attempt
-    if (abortController?.signal.aborted) {
-      return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
-    }
-
-    try {
-      const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options);
-
-      // Check for authentication errors from auth_status messages
-      // auth_status errors are always auth-related - throw immediately
-      if (authError) {
-        throw new WardenAuthenticationError(authError);
+      // Warn about large prompts
+      if (totalChars > LARGE_PROMPT_THRESHOLD_CHARS) {
+        callbacks?.onLargePrompt?.(callbacks.lineRange, totalChars, estimatedTokensCount);
       }
 
-      if (!resultMessage) {
-        console.error('SDK returned no result');
-        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
-      }
+      // Merge retry config with defaults
+      const retryConfig: Required<RetryConfig> = {
+        ...DEFAULT_RETRY_CONFIG,
+        ...retry,
+      };
 
-      // Extract usage from the result, regardless of success/error status
-      const usage = extractUsage(resultMessage);
-      accumulatedUsage.push(usage);
+      let lastError: unknown;
+      // Track accumulated usage across retry attempts for accurate cost reporting
+      const accumulatedUsage: UsageStats[] = [];
 
-      // Check if the SDK returned an error result (e.g., max turns, budget exceeded)
-      const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
-
-      if (isError) {
-        // Extract error messages from SDK result
-        const errorMessages = 'errors' in resultMessage ? resultMessage.errors : [];
-
-        // Check if any error indicates authentication failure
-        for (const err of errorMessages) {
-          if (isAuthenticationErrorMessage(err)) {
-            throw new WardenAuthenticationError();
-          }
+      for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+        // Check for abort before each attempt
+        if (abortController?.signal.aborted) {
+          return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
         }
 
-        // SDK error - log and return failure with error details
-        const errorSummary = errorMessages.length > 0
-          ? errorMessages.join('; ')
-          : `SDK error: ${resultMessage.subtype}`;
-        console.error(`SDK execution failed: ${errorSummary}`);
-        return {
-          findings: [],
-          usage: aggregateUsage(accumulatedUsage),
-          failed: true,
-          extractionFailed: false,
-        };
+        try {
+          const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options);
+
+          // Check for authentication errors from auth_status messages
+          // auth_status errors are always auth-related - throw immediately
+          if (authError) {
+            throw new WardenAuthenticationError(authError);
+          }
+
+          if (!resultMessage) {
+            console.error('SDK returned no result');
+            return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+          }
+
+          // Extract usage from the result, regardless of success/error status
+          const usage = extractUsage(resultMessage);
+          accumulatedUsage.push(usage);
+
+          // Check if the SDK returned an error result (e.g., max turns, budget exceeded)
+          const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
+
+          if (isError) {
+            // Extract error messages from SDK result
+            const errorMessages = 'errors' in resultMessage ? resultMessage.errors : [];
+
+            // Check if any error indicates authentication failure
+            for (const err of errorMessages) {
+              if (isAuthenticationErrorMessage(err)) {
+                throw new WardenAuthenticationError();
+              }
+            }
+
+            // SDK error - log and return failure with error details
+            const errorSummary = errorMessages.length > 0
+              ? errorMessages.join('; ')
+              : `SDK error: ${resultMessage.subtype}`;
+            console.error(`SDK execution failed: ${errorSummary}`);
+            return {
+              findings: [],
+              usage: aggregateUsage(accumulatedUsage),
+              failed: true,
+              extractionFailed: false,
+            };
+          }
+
+          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey);
+
+          // Emit extraction metrics
+          emitExtractionMetrics(skill.name, parseResult.extractionMethod, parseResult.findings.length);
+
+          // Notify about extraction result (debug mode)
+          callbacks?.onExtractionResult?.(
+            callbacks.lineRange,
+            parseResult.findings.length,
+            parseResult.extractionMethod
+          );
+
+          // Notify about extraction failure if callback provided
+          if (parseResult.extractionFailed) {
+            callbacks?.onExtractionFailure?.(
+              callbacks.lineRange,
+              parseResult.extractionError ?? 'unknown_error',
+              parseResult.extractionPreview ?? ''
+            );
+          }
+
+          span.setAttribute('hunk.failed', false);
+          span.setAttribute('finding.count', parseResult.findings.length);
+
+          return {
+            findings: parseResult.findings,
+            usage: aggregateUsage(accumulatedUsage),
+            failed: false,
+            extractionFailed: parseResult.extractionFailed,
+            extractionError: parseResult.extractionError,
+            extractionPreview: parseResult.extractionPreview,
+            auxiliaryUsage: parseResult.extractionUsage
+              ? [{ agent: 'extraction', usage: parseResult.extractionUsage }]
+              : undefined,
+          };
+        } catch (error) {
+          lastError = error;
+
+          // Re-throw authentication errors (they shouldn't be retried)
+          if (error instanceof WardenAuthenticationError) {
+            throw error;
+          }
+
+          // Authentication errors should surface immediately with helpful guidance
+          if (isAuthenticationError(error)) {
+            throw new WardenAuthenticationError();
+          }
+
+          // Don't retry if not a retryable error or we've exhausted retries
+          if (!isRetryableError(error) || attempt >= retryConfig.maxRetries) {
+            break;
+          }
+
+          // Calculate delay and wait before retry
+          const delayMs = calculateRetryDelay(attempt, retryConfig);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+
+          Sentry.addBreadcrumb({
+            category: 'retry',
+            message: `Retrying hunk analysis`,
+            data: { attempt: attempt + 1, error: errorMessage, delayMs },
+            level: 'warning',
+          });
+          emitRetryMetric(skill.name, attempt + 1);
+
+          // Notify about retry in verbose mode
+          callbacks?.onRetry?.(
+            callbacks.lineRange,
+            attempt + 1,
+            retryConfig.maxRetries,
+            errorMessage,
+            delayMs
+          );
+
+          try {
+            await sleep(delayMs, abortController?.signal);
+          } catch {
+            // Aborted during sleep
+            return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+          }
+        }
       }
 
-      const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey);
+      // All attempts failed - return failure with any accumulated usage
+      const finalError = lastError instanceof Error ? lastError.message : String(lastError);
 
-      // Notify about extraction result (debug mode)
-      callbacks?.onExtractionResult?.(
-        callbacks.lineRange,
-        parseResult.findings.length,
-        parseResult.extractionMethod
-      );
+      // Log the final error
+      if (lastError) {
+        console.error(`All retry attempts failed: ${finalError}`);
+      }
 
-      // Notify about extraction failure if callback provided
-      if (parseResult.extractionFailed) {
-        callbacks?.onExtractionFailure?.(
+      // Also notify via callback if verbose
+      if (options.verbose) {
+        callbacks?.onRetry?.(
           callbacks.lineRange,
-          parseResult.extractionError ?? 'unknown_error',
-          parseResult.extractionPreview ?? ''
+          retryConfig.maxRetries + 1,
+          retryConfig.maxRetries,
+          `Final failure: ${finalError}`,
+          0
         );
       }
 
-      return {
-        findings: parseResult.findings,
-        usage: aggregateUsage(accumulatedUsage),
-        failed: false,
-        extractionFailed: parseResult.extractionFailed,
-        extractionError: parseResult.extractionError,
-        extractionPreview: parseResult.extractionPreview,
-        auxiliaryUsage: parseResult.extractionUsage
-          ? [{ agent: 'extraction', usage: parseResult.extractionUsage }]
-          : undefined,
-      };
-    } catch (error) {
-      lastError = error;
+      span.setAttribute('hunk.failed', true);
+      span.setAttribute('finding.count', 0);
 
-      // Re-throw authentication errors (they shouldn't be retried)
-      if (error instanceof WardenAuthenticationError) {
-        throw error;
-      }
-
-      // Authentication errors should surface immediately with helpful guidance
-      if (isAuthenticationError(error)) {
-        throw new WardenAuthenticationError();
-      }
-
-      // Don't retry if not a retryable error or we've exhausted retries
-      if (!isRetryableError(error) || attempt >= retryConfig.maxRetries) {
-        break;
-      }
-
-      // Calculate delay and wait before retry
-      const delayMs = calculateRetryDelay(attempt, retryConfig);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // Notify about retry in verbose mode
-      callbacks?.onRetry?.(
-        callbacks.lineRange,
-        attempt + 1,
-        retryConfig.maxRetries,
-        errorMessage,
-        delayMs
-      );
-
-      try {
-        await sleep(delayMs, abortController?.signal);
-      } catch {
-        // Aborted during sleep
-        return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
-      }
-    }
-  }
-
-  // All attempts failed - return failure with any accumulated usage
-  const finalError = lastError instanceof Error ? lastError.message : String(lastError);
-
-  // Log the final error
-  if (lastError) {
-    console.error(`All retry attempts failed: ${finalError}`);
-  }
-
-  // Also notify via callback if verbose
-  if (options.verbose) {
-    callbacks?.onRetry?.(
-      callbacks.lineRange,
-      retryConfig.maxRetries + 1,
-      retryConfig.maxRetries,
-      `Final failure: ${finalError}`,
-      0
-    );
-  }
-
-  return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+      return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+    },
+  );
 }
 
 /**
@@ -365,57 +452,73 @@ export async function analyzeFile(
   callbacks?: FileAnalysisCallbacks,
   prContext?: PRPromptContext
 ): Promise<FileAnalysisResult> {
-  const { abortController } = options;
-  const fileFindings: Finding[] = [];
-  const fileUsage: UsageStats[] = [];
-  const fileAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
-  let failedHunks = 0;
-  let failedExtractions = 0;
+  return Sentry.startSpan(
+    {
+      op: 'skill.analyze_file',
+      name: `analyze file ${file.filename}`,
+      attributes: {
+        'code.filepath': file.filename,
+        'hunk.count': file.hunks.length,
+      },
+    },
+    async (span) => {
+      const { abortController } = options;
+      const fileFindings: Finding[] = [];
+      const fileUsage: UsageStats[] = [];
+      const fileAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
+      let failedHunks = 0;
+      let failedExtractions = 0;
 
-  for (const [hunkIndex, hunk] of file.hunks.entries()) {
-    if (abortController?.signal.aborted) break;
+      for (const [hunkIndex, hunk] of file.hunks.entries()) {
+        if (abortController?.signal.aborted) break;
 
-    const lineRange = getHunkLineRange(hunk);
-    callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
+        const lineRange = getHunkLineRange(hunk);
+        callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
 
-    const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
-      ? {
-          lineRange,
-          onLargePrompt: callbacks.onLargePrompt,
-          onPromptSize: callbacks.onPromptSize,
-          onRetry: callbacks.onRetry,
-          onExtractionFailure: callbacks.onExtractionFailure,
-          onExtractionResult: callbacks.onExtractionResult,
+        const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
+          ? {
+              lineRange,
+              onLargePrompt: callbacks.onLargePrompt,
+              onPromptSize: callbacks.onPromptSize,
+              onRetry: callbacks.onRetry,
+              onExtractionFailure: callbacks.onExtractionFailure,
+              onExtractionResult: callbacks.onExtractionResult,
+            }
+          : undefined;
+
+        const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
+
+        if (result.failed) {
+          failedHunks++;
         }
-      : undefined;
+        if (result.extractionFailed) {
+          failedExtractions++;
+        }
 
-    const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
+        attachElapsedTime(result.findings, callbacks?.skillStartTime);
+        callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings);
 
-    if (result.failed) {
-      failedHunks++;
-    }
-    if (result.extractionFailed) {
-      failedExtractions++;
-    }
+        fileFindings.push(...result.findings);
+        fileUsage.push(result.usage);
+        if (result.auxiliaryUsage) {
+          fileAuxiliaryUsage.push(...result.auxiliaryUsage);
+        }
+      }
 
-    attachElapsedTime(result.findings, callbacks?.skillStartTime);
-    callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings);
+      span.setAttribute('finding.count', fileFindings.length);
+      span.setAttribute('hunk.failed_count', failedHunks);
+      span.setAttribute('extraction.failed_count', failedExtractions);
 
-    fileFindings.push(...result.findings);
-    fileUsage.push(result.usage);
-    if (result.auxiliaryUsage) {
-      fileAuxiliaryUsage.push(...result.auxiliaryUsage);
-    }
-  }
-
-  return {
-    filename: file.filename,
-    findings: fileFindings,
-    usage: aggregateUsage(fileUsage),
-    failedHunks,
-    failedExtractions,
-    auxiliaryUsage: fileAuxiliaryUsage.length > 0 ? fileAuxiliaryUsage : undefined,
-  };
+      return {
+        filename: file.filename,
+        findings: fileFindings,
+        usage: aggregateUsage(fileUsage),
+        failedHunks,
+        failedExtractions,
+        auxiliaryUsage: fileAuxiliaryUsage.length > 0 ? fileAuxiliaryUsage : undefined,
+      };
+    },
+  );
 }
 
 /**
@@ -608,6 +711,7 @@ export async function runSkill(
 
   // Deduplicate findings
   const uniqueFindings = deduplicateFindings(allFindings);
+  emitDedupMetrics(allFindings.length, uniqueFindings.length);
 
   // Generate summary
   const summary = generateSummary(skill.name, uniqueFindings);

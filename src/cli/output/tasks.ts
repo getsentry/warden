@@ -5,7 +5,7 @@
 
 import type { SkillReport, SeverityThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
-import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
+import { Sentry, emitSkillMetrics, emitDedupMetrics, logger } from '../../sentry.js';
 import {
   prepareFiles,
   analyzeFile,
@@ -170,234 +170,222 @@ export async function runSkillTask(
         'file.count': files.length,
       });
 
-      return _runSkillTaskInner(name, displayName, failOn, resolveSkill, context, runnerOptions, fileConcurrency, callbacks);
+      const startTime = Date.now();
+
+      try {
+        // Resolve the skill
+        const skill = await resolveSkill();
+
+        // Prepare files (parse patches into hunks)
+        const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
+          contextLines: runnerOptions.contextLines,
+        });
+
+        if (preparedFiles.length === 0) {
+          // No files to analyze - skip
+          callbacks.onSkillSkipped(name);
+          return {
+            name,
+            report: {
+              skill: skill.name,
+              summary: 'No code changes to analyze',
+              findings: [],
+              usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+              skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
+            },
+            failOn,
+          };
+        }
+
+        // Initialize file states
+        const fileStates: FileState[] = preparedFiles.map((file) => ({
+          filename: file.filename,
+          status: 'pending',
+          currentHunk: 0,
+          totalHunks: file.hunks.length,
+          findings: [],
+        }));
+
+        // Notify skill start
+        callbacks.onSkillStart({
+          name,
+          displayName,
+          status: 'running',
+          startTime,
+          files: fileStates,
+          findings: [],
+        });
+
+        // Build PR context for inclusion in prompts (if available)
+        const prContext: PRPromptContext | undefined = context.pullRequest
+          ? {
+              changedFiles: context.pullRequest.files.map((f) => f.filename),
+              title: context.pullRequest.title,
+              body: context.pullRequest.body,
+            }
+          : undefined;
+
+        // Process files with concurrency
+        const processFile = async (prepared: PreparedFile, index: number): Promise<FileProcessResult> => {
+          const filename = prepared.filename;
+          const fileStartTime = Date.now();
+
+          // Update file state to running (local + callback)
+          const localState = fileStates[index];
+          if (localState) localState.status = 'running';
+          callbacks.onFileUpdate(name, filename, { status: 'running' });
+
+          const fileCallbacks: FileAnalysisCallbacks = {
+            skillStartTime: startTime,
+            onHunkStart: (hunkNum, totalHunks, lineRange) => {
+              callbacks.onFileUpdate(name, filename, {
+                currentHunk: hunkNum,
+                totalHunks,
+              });
+              callbacks.onHunkStart?.(name, filename, hunkNum, totalHunks, lineRange);
+            },
+            onHunkComplete: (_hunkNum, findings) => {
+              // Accumulate findings for this file
+              const current = fileStates[index];
+              if (current) {
+                current.findings.push(...findings);
+              }
+            },
+            onLargePrompt: callbacks.onLargePrompt
+              ? (lineRange, chars, estimatedTokens) => {
+                  callbacks.onLargePrompt?.(name, filename, lineRange, chars, estimatedTokens);
+                }
+              : undefined,
+            onPromptSize: callbacks.onPromptSize
+              ? (lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
+                  callbacks.onPromptSize?.(name, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens);
+                }
+              : undefined,
+            onExtractionResult: callbacks.onExtractionResult
+              ? (lineRange, findingsCount, method) => {
+                  callbacks.onExtractionResult?.(name, filename, lineRange, findingsCount, method);
+                }
+              : undefined,
+          };
+
+          const result = await analyzeFile(
+            skill,
+            prepared,
+            context.repoPath,
+            runnerOptions,
+            fileCallbacks,
+            prContext
+          );
+
+          // Detect if this file was aborted before any real work happened
+          const fileDurationMs = Date.now() - fileStartTime;
+          const aborted = runnerOptions.abortController?.signal.aborted ?? false;
+          const noWork = !result.usage || (result.usage.inputTokens === 0 && result.usage.outputTokens === 0);
+          const fileStatus = (aborted && noWork) ? 'skipped' : 'done';
+
+          if (localState) localState.status = fileStatus;
+          callbacks.onFileUpdate(name, filename, {
+            status: fileStatus,
+            findings: result.findings,
+            usage: result.usage,
+            durationMs: fileDurationMs,
+          });
+
+          return {
+            findings: result.findings,
+            usage: result.usage,
+            durationMs: fileDurationMs,
+            failedHunks: result.failedHunks,
+            failedExtractions: result.failedExtractions,
+            auxiliaryUsage: result.auxiliaryUsage,
+          };
+        };
+
+        // Process files with sliding-window concurrency pool
+        const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
+        const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
+        const allResults = await runPool(preparedFiles, fileConcurrency,
+          async (file, index) => {
+            // Rate-limit: delay items beyond the first concurrent wave
+            if (index >= fileConcurrency && batchDelayMs > 0) {
+              await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+            }
+            return processFile(file, index);
+          },
+          { shouldAbort }
+        );
+
+        // Mark never-dispatched files as skipped
+        for (const fileState of fileStates) {
+          if (fileState.status === 'pending') {
+            callbacks.onFileUpdate(name, fileState.filename, { status: 'skipped' });
+          }
+        }
+
+        // Build report
+        const duration = Date.now() - startTime;
+        const allFindings = allResults.flatMap((r) => r.findings);
+        const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
+        const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
+        const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
+        const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
+        const uniqueFindings = deduplicateFindings(allFindings);
+        emitDedupMetrics(allFindings.length, uniqueFindings.length);
+
+        const report: SkillReport = {
+          skill: skill.name,
+          summary: generateSummary(skill.name, uniqueFindings),
+          findings: uniqueFindings,
+          usage: aggregateUsage(allUsage),
+          durationMs: duration,
+          files: preparedFiles.map((file, i) => {
+            const r = allResults[i];
+            return {
+              filename: file.filename,
+              findingCount: r?.findings.length ?? 0,
+              durationMs: r?.durationMs,
+              usage: r?.usage,
+            };
+          }),
+        };
+        if (skippedFiles.length > 0) {
+          report.skippedFiles = skippedFiles;
+        }
+        if (totalFailedHunks > 0) {
+          report.failedHunks = totalFailedHunks;
+        }
+        if (totalFailedExtractions > 0) {
+          report.failedExtractions = totalFailedExtractions;
+        }
+        const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
+        if (auxUsage) {
+          report.auxiliaryUsage = auxUsage;
+        }
+
+        // Emit metrics and log completion
+        emitSkillMetrics(report);
+        logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
+          'finding.count': report.findings.length,
+          'duration_ms': report.durationMs,
+        });
+
+        // Notify skill complete
+        callbacks.onSkillUpdate(name, {
+          status: 'done',
+          durationMs: duration,
+          findings: uniqueFindings,
+          usage: report.usage,
+        });
+        callbacks.onSkillComplete(name, report);
+
+        return { name, report, failOn };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        callbacks.onSkillError(name, errorMessage);
+        return { name, error: err, failOn };
+      }
     },
   );
-}
-
-async function _runSkillTaskInner(
-  name: string,
-  displayName: string,
-  failOn: SeverityThreshold | undefined,
-  resolveSkill: () => Promise<SkillDefinition>,
-  context: EventContext,
-  runnerOptions: SkillRunnerOptions,
-  fileConcurrency: number,
-  callbacks: SkillProgressCallbacks
-): Promise<SkillTaskResult> {
-  const startTime = Date.now();
-
-  try {
-    // Resolve the skill
-    const skill = await resolveSkill();
-
-    // Prepare files (parse patches into hunks)
-    const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
-      contextLines: runnerOptions.contextLines,
-    });
-
-    if (preparedFiles.length === 0) {
-      // No files to analyze - skip
-      callbacks.onSkillSkipped(name);
-      return {
-        name,
-        report: {
-          skill: skill.name,
-          summary: 'No code changes to analyze',
-          findings: [],
-          usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
-          skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
-        },
-        failOn,
-      };
-    }
-
-    // Initialize file states
-    const fileStates: FileState[] = preparedFiles.map((file) => ({
-      filename: file.filename,
-      status: 'pending',
-      currentHunk: 0,
-      totalHunks: file.hunks.length,
-      findings: [],
-    }));
-
-    // Notify skill start
-    callbacks.onSkillStart({
-      name,
-      displayName,
-      status: 'running',
-      startTime,
-      files: fileStates,
-      findings: [],
-    });
-
-    // Build PR context for inclusion in prompts (if available)
-    const prContext: PRPromptContext | undefined = context.pullRequest
-      ? {
-          changedFiles: context.pullRequest.files.map((f) => f.filename),
-          title: context.pullRequest.title,
-          body: context.pullRequest.body,
-        }
-      : undefined;
-
-    // Process files with concurrency
-    const processFile = async (prepared: PreparedFile, index: number): Promise<FileProcessResult> => {
-      const filename = prepared.filename;
-      const fileStartTime = Date.now();
-
-      // Update file state to running (local + callback)
-      const localState = fileStates[index];
-      if (localState) localState.status = 'running';
-      callbacks.onFileUpdate(name, filename, { status: 'running' });
-
-      const fileCallbacks: FileAnalysisCallbacks = {
-        skillStartTime: startTime,
-        onHunkStart: (hunkNum, totalHunks, lineRange) => {
-          callbacks.onFileUpdate(name, filename, {
-            currentHunk: hunkNum,
-            totalHunks,
-          });
-          callbacks.onHunkStart?.(name, filename, hunkNum, totalHunks, lineRange);
-        },
-        onHunkComplete: (_hunkNum, findings) => {
-          // Accumulate findings for this file
-          const current = fileStates[index];
-          if (current) {
-            current.findings.push(...findings);
-          }
-        },
-        onLargePrompt: callbacks.onLargePrompt
-          ? (lineRange, chars, estimatedTokens) => {
-              callbacks.onLargePrompt?.(name, filename, lineRange, chars, estimatedTokens);
-            }
-          : undefined,
-        onPromptSize: callbacks.onPromptSize
-          ? (lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
-              callbacks.onPromptSize?.(name, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens);
-            }
-          : undefined,
-        onExtractionResult: callbacks.onExtractionResult
-          ? (lineRange, findingsCount, method) => {
-              callbacks.onExtractionResult?.(name, filename, lineRange, findingsCount, method);
-            }
-          : undefined,
-      };
-
-      const result = await analyzeFile(
-        skill,
-        prepared,
-        context.repoPath,
-        runnerOptions,
-        fileCallbacks,
-        prContext
-      );
-
-      // Detect if this file was aborted before any real work happened
-      const fileDurationMs = Date.now() - fileStartTime;
-      const aborted = runnerOptions.abortController?.signal.aborted ?? false;
-      const noWork = !result.usage || (result.usage.inputTokens === 0 && result.usage.outputTokens === 0);
-      const fileStatus = (aborted && noWork) ? 'skipped' : 'done';
-
-      if (localState) localState.status = fileStatus;
-      callbacks.onFileUpdate(name, filename, {
-        status: fileStatus,
-        findings: result.findings,
-        usage: result.usage,
-        durationMs: fileDurationMs,
-      });
-
-      return {
-        findings: result.findings,
-        usage: result.usage,
-        durationMs: fileDurationMs,
-        failedHunks: result.failedHunks,
-        failedExtractions: result.failedExtractions,
-        auxiliaryUsage: result.auxiliaryUsage,
-      };
-    };
-
-    // Process files with sliding-window concurrency pool
-    const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
-    const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
-    const allResults = await runPool(preparedFiles, fileConcurrency,
-      async (file, index) => {
-        // Rate-limit: delay items beyond the first concurrent wave
-        if (index >= fileConcurrency && batchDelayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
-        }
-        return processFile(file, index);
-      },
-      { shouldAbort }
-    );
-
-    // Mark never-dispatched files as skipped
-    for (const fileState of fileStates) {
-      if (fileState.status === 'pending') {
-        callbacks.onFileUpdate(name, fileState.filename, { status: 'skipped' });
-      }
-    }
-
-    // Build report
-    const duration = Date.now() - startTime;
-    const allFindings = allResults.flatMap((r) => r.findings);
-    const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
-    const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
-    const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
-    const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
-    const uniqueFindings = deduplicateFindings(allFindings);
-
-    const report: SkillReport = {
-      skill: skill.name,
-      summary: generateSummary(skill.name, uniqueFindings),
-      findings: uniqueFindings,
-      usage: aggregateUsage(allUsage),
-      durationMs: duration,
-      files: preparedFiles.map((file, i) => {
-        const r = allResults[i];
-        return {
-          filename: file.filename,
-          findingCount: r?.findings.length ?? 0,
-          durationMs: r?.durationMs,
-          usage: r?.usage,
-        };
-      }),
-    };
-    if (skippedFiles.length > 0) {
-      report.skippedFiles = skippedFiles;
-    }
-    if (totalFailedHunks > 0) {
-      report.failedHunks = totalFailedHunks;
-    }
-    if (totalFailedExtractions > 0) {
-      report.failedExtractions = totalFailedExtractions;
-    }
-    const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
-    if (auxUsage) {
-      report.auxiliaryUsage = auxUsage;
-    }
-
-    // Emit metrics and log completion
-    emitSkillMetrics(report);
-    logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
-      'finding.count': report.findings.length,
-      'duration_ms': report.durationMs,
-    });
-
-    // Notify skill complete
-    callbacks.onSkillUpdate(name, {
-      status: 'done',
-      durationMs: duration,
-      findings: uniqueFindings,
-      usage: report.usage,
-    });
-    callbacks.onSkillComplete(name, report);
-
-    return { name, report, failOn };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    callbacks.onSkillError(name, errorMessage);
-    return { name, error: err, failOn };
-  }
 }
 
 /**
