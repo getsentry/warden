@@ -7,11 +7,21 @@
 import { appendFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
-import { flushSentry } from '../../sentry.js';
 import { execFileNonInteractive } from '../../utils/exec.js';
 import type { SkillReport } from '../../types/index.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { TriggerResult } from '../triggers/executor.js';
+
+/**
+ * Sentinel error thrown by setFailed() so the top-level catch handler
+ * can distinguish expected failures from unexpected crashes.
+ */
+export class ActionFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ActionFailedError';
+  }
+}
 
 // -----------------------------------------------------------------------------
 // GitHub Actions Helpers
@@ -37,11 +47,10 @@ export function setOutput(name: string, value: string | number): void {
 
 /**
  * Fail the GitHub Action with an error message.
+ * Throws ActionFailedError so spans end cleanly before the process exits.
  */
-export async function setFailed(message: string): Promise<never> {
-  await flushSentry();
-  console.error(`::error::${message}`);
-  process.exit(1);
+export function setFailed(message: string): never {
+  throw new ActionFailedError(message);
 }
 
 /**
@@ -105,7 +114,7 @@ export async function findClaudeCodeExecutable(): Promise<string> {
     if (isExecutable(p)) return p;
   }
 
-  return await setFailed(
+  setFailed(
     'Claude Code CLI not found. Ensure Claude Code is installed via https://claude.ai/install.sh'
   );
 }
@@ -117,7 +126,7 @@ export async function findClaudeCodeExecutable(): Promise<string> {
 /**
  * Log trigger error summary and fail if all triggers failed.
  */
-export async function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): Promise<void> {
+export function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): void {
   if (triggerErrors.length === 0) {
     return;
   }
@@ -130,7 +139,7 @@ export async function handleTriggerErrors(triggerErrors: string[], totalTriggers
 
   // Fail if ALL triggers failed (no successful analysis was performed)
   if (triggerErrors.length === totalTriggers && totalTriggers > 0) {
-    await setFailed(`All ${totalTriggers} trigger(s) failed: ${triggerErrors.join('; ')}`);
+    setFailed(`All ${totalTriggers} trigger(s) failed: ${triggerErrors.join('; ')}`);
   }
 }
 

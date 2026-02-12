@@ -111,6 +111,7 @@ async function executeQuery(
         'gen_ai.operation.name': 'invoke_agent',
         'gen_ai.system': 'anthropic',
         'gen_ai.provider.name': 'anthropic',
+        'gen_ai.agent.name': modelId,
         'gen_ai.request.model': modelId,
         'gen_ai.request.max_turns': maxTurns,
       },
@@ -171,11 +172,17 @@ async function executeQuery(
           const outputTokens = usage.output_tokens ?? 0;
           const cacheRead = usage.cache_read_input_tokens ?? 0;
           const cacheWrite = usage.cache_creation_input_tokens ?? 0;
-          span.setAttribute('gen_ai.usage.input_tokens', inputTokens);
+          // Anthropic API's input_tokens is only the non-cached portion.
+          // OpenTelemetry gen_ai.usage.input_tokens expects the total input tokens.
+          const totalInputTokens = inputTokens + cacheRead + cacheWrite;
+          span.setAttribute('gen_ai.usage.input_tokens', totalInputTokens);
           span.setAttribute('gen_ai.usage.output_tokens', outputTokens);
           span.setAttribute('gen_ai.usage.input_tokens.cached', cacheRead);
           span.setAttribute('gen_ai.usage.input_tokens.cache_write', cacheWrite);
-          span.setAttribute('gen_ai.usage.total_tokens', inputTokens + outputTokens + cacheRead + cacheWrite);
+          span.setAttribute('gen_ai.usage.total_tokens', totalInputTokens + outputTokens);
+        }
+        if (resultMessage.total_cost_usd !== undefined) {
+          span.setAttribute('gen_ai.cost.total_tokens', resultMessage.total_cost_usd);
         }
         if (resultMessage.uuid) {
           span.setAttribute('gen_ai.response.id', resultMessage.uuid);

@@ -29,7 +29,7 @@ initSentry('action');
 
 import { Octokit } from '@octokit/rest';
 import { parseActionInputs, validateInputs, setupAuthEnv } from './inputs.js';
-import { setFailed } from './workflow/base.js';
+import { setFailed, ActionFailedError } from './workflow/base.js';
 import { runPRWorkflow } from './workflow/pr-workflow.js';
 import { runScheduleWorkflow } from './workflow/schedule.js';
 
@@ -42,7 +42,7 @@ async function run(): Promise<void> {
   const repoPath = process.env['GITHUB_WORKSPACE'];
 
   if (!eventName || !eventPath || !repoPath) {
-    return await setFailed('This action must be run in a GitHub Actions environment');
+    setFailed('This action must be run in a GitHub Actions environment');
   }
 
   // Set up authentication environment variables
@@ -62,6 +62,12 @@ async function run(): Promise<void> {
 run()
   .then(() => flushSentry())
   .catch(async (error) => {
-    Sentry.captureException(error);
-    await setFailed(`Unexpected error: ${error}`);
+    if (error instanceof ActionFailedError) {
+      console.error(`::error::${error.message}`);
+    } else {
+      Sentry.captureException(error);
+      console.error(`::error::Unexpected error: ${error}`);
+    }
+    await flushSentry();
+    process.exit(1);
   });

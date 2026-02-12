@@ -2,6 +2,14 @@
 
 Observability via Sentry: tracing, error context, and business metrics. All telemetry is opt-in via `WARDEN_SENTRY_DSN`. When unset, every Sentry call is a no-op.
 
+### Canonical references
+
+- [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (attribute names, span structure)
+- [OTel GenAI agent spans](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) (`invoke_agent` attributes)
+- [OTel GenAI client spans](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) (token usage, model, response attributes)
+- [Sentry AI Agents module](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/) (Sentry's source of truth for `gen_ai.*` span processing)
+- [Sentry JS AI agent instrumentation](https://docs.sentry.io/platforms/javascript/guides/node/tracing/instrumentation/ai-agents-module/) (practical instrumentation guide)
+
 ---
 
 ## Initialization
@@ -24,6 +32,8 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 | `httpIntegration` | Auto-instruments outgoing HTTP (covers all octokit REST/GraphQL calls) |
 
 The Anthropic integration records inputs and outputs (`recordInputs: true, recordOutputs: true`).
+
+**ncc bundling caveat:** `anthropicAIIntegration` and `httpIntegration` rely on `import-in-the-middle` ESM loader hooks, which ncc breaks. In the bundled GitHub Action, only manual `Sentry.startSpan()` traces work. The explicit integrations in `sentry.ts` are effectively dead code in the action context but harmless. They work normally in the unbundled CLI.
 
 ---
 
@@ -61,31 +71,35 @@ workflow.run "review pull_request"
 
 ---
 
-## gen AI Attributes (OTel Conventions)
+## gen AI Attributes
 
-The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes required for Sentry's AI Agents dashboard and compliant with OTel gen AI semantic conventions.
+The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes for Sentry's AI Agents dashboard. Attribute names follow OTel GenAI semantic conventions; see [gen-ai-agent-spans](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) and [gen-ai-spans](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) for the full specification.
 
 ### Request attributes (set at span creation)
 
-| Attribute | Source | OTel Standard |
-|-----------|--------|---------------|
-| `gen_ai.operation.name` | `'invoke_agent'` | Yes |
-| `gen_ai.system` | `'anthropic'` | Yes (Sentry compat) |
-| `gen_ai.provider.name` | `'anthropic'` | Yes (OTel standard) |
-| `gen_ai.request.model` | Model ID from options | Yes |
-| `gen_ai.request.max_turns` | `maxTurns` value | Extension |
+| Attribute | Source | Spec |
+|-----------|--------|------|
+| `gen_ai.operation.name` | `'invoke_agent'` | [OTel required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
+| `gen_ai.system` | `'anthropic'` | Legacy; kept for older Sentry SDK compat |
+| `gen_ai.provider.name` | `'anthropic'` | [OTel required](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/) (replaces `gen_ai.system`) |
+| `gen_ai.agent.name` | Model ID from options | [OTel SHOULD](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
+| `gen_ai.request.model` | Model ID from options | [OTel conditionally required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
+| `gen_ai.request.max_turns` | `maxTurns` value | Warden extension (not in spec) |
 
 ### Response attributes (set after SDK result)
 
-| Attribute | Source | OTel Standard |
-|-----------|--------|---------------|
-| `gen_ai.usage.input_tokens` | `resultMessage.usage.input_tokens` | Yes |
-| `gen_ai.usage.output_tokens` | `resultMessage.usage.output_tokens` | Yes |
-| `gen_ai.usage.input_tokens.cached` | `resultMessage.usage.cache_read_input_tokens` | Sentry extension |
-| `gen_ai.usage.input_tokens.cache_write` | `resultMessage.usage.cache_creation_input_tokens` | Sentry extension |
-| `gen_ai.usage.total_tokens` | Sum of all token fields | Yes |
-| `gen_ai.response.id` | `resultMessage.uuid` | Yes |
-| `gen_ai.response.model` | First key in `resultMessage.modelUsage` | Yes |
+| Attribute | Source | Spec |
+|-----------|--------|------|
+| `gen_ai.usage.input_tokens` | `input_tokens + cache_read + cache_write` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). **Total** input tokens, not just uncached. |
+| `gen_ai.usage.output_tokens` | `resultMessage.usage.output_tokens` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+| `gen_ai.usage.input_tokens.cached` | `resultMessage.usage.cache_read_input_tokens` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). Subset of `input_tokens`. |
+| `gen_ai.usage.input_tokens.cache_write` | `resultMessage.usage.cache_creation_input_tokens` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). Subset of `input_tokens`. |
+| `gen_ai.usage.total_tokens` | `input_tokens + output_tokens` (after totaling) | [OTel](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+| `gen_ai.cost.total_tokens` | `resultMessage.total_cost_usd` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). USD cost from SDK. |
+| `gen_ai.response.id` | `resultMessage.uuid` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+| `gen_ai.response.model` | First key in `resultMessage.modelUsage` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+
+**Token accounting:** The Anthropic API's `input_tokens` field counts only non-cached input tokens. `cache_read_input_tokens` and `cache_creation_input_tokens` are separate, non-overlapping counts. The OTel `gen_ai.usage.input_tokens` attribute represents the *total* input tokens, so we sum all three. Sentry then [subtracts the cached/reasoning counts from the totals](https://docs.sentry.io/platforms/javascript/guides/node/tracing/instrumentation/ai-agents-module/) to compute the raw portion. Setting `input_tokens` to only the non-cached value causes Sentry to compute negative costs.
 
 ### SDK-specific attributes
 
@@ -153,7 +167,7 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 
 Non-fatal errors (the workflow continues despite the failure) are still real errors. A GitHub API call that 500s is an error whether or not we can recover from it.
 
-`setFailed()` is an exit mechanism, not error reporting. It flushes pending Sentry events and terminates the process. It does NOT send its own Sentry event. Callers that need Sentry reporting must call `captureException` explicitly before `setFailed`. Expected failures (threshold exceeded, missing env vars, CLI not found) should NOT be reported to Sentry.
+`setFailed()` throws `ActionFailedError`, which propagates out of `Sentry.startSpan()` callbacks so spans end cleanly before the process exits. The top-level catch handler in `src/action/main.ts` distinguishes `ActionFailedError` (expected failure: threshold exceeded, missing env, CLI not found) from unexpected errors. Only unexpected errors call `captureException`. Both paths call `flushSentry()` then `process.exit(1)`.
 
 ### Operation tags
 
@@ -243,11 +257,12 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved.
 
 1. **No-op when disabled.** Every function checks `initialized` first. No env var = no overhead.
 2. **Never break the workflow.** All metric emission and span attribute setting is wrapped in try/catch. Telemetry failures are swallowed silently.
-3. **Follow OTel conventions.** Gen AI spans use `gen_ai.*` ops and standard attribute names so they surface in Sentry's AI Agents dashboard without custom configuration.
-4. **Set both `gen_ai.system` and `gen_ai.provider.name`.** Sentry uses `gen_ai.system`; OTel standard uses `gen_ai.provider.name`. Setting both ensures compatibility.
+3. **Follow OTel conventions.** Gen AI spans use `gen_ai.*` ops and standard attribute names so they surface in Sentry's AI Agents dashboard without custom configuration. When OTel and Sentry conventions diverge, follow [Sentry's AI Agents module spec](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/) as the source of truth for what Sentry actually processes.
+4. **Set both `gen_ai.system` and `gen_ai.provider.name`.** `gen_ai.provider.name` is the current OTel standard. `gen_ai.system` is kept for backward compatibility with older Sentry SDK versions that may key on it.
 5. **Auto-instrument where possible.** Direct Anthropic API calls and HTTP requests are handled by Sentry integrations. Manual spans are only for the Claude Code SDK subprocess and internal orchestration.
 6. **Attributes over events.** Prefer span attributes to separate events. Attributes are searchable in Sentry and don't create noise.
 7. **Breadcrumbs for retries.** Retry attempts are breadcrumbs (not spans) because they're supplementary context for the parent span, not independent operations.
+8. **Tokens are totals, subfields are subsets.** `gen_ai.usage.input_tokens` is the total count including cached. `.cached` and `.cache_write` are subsets that Sentry subtracts to derive the raw portion. Never set the top-level field to only the uncached count.
 
 ---
 
@@ -258,5 +273,7 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved.
 | `src/sentry.ts` | Init, integrations, metric emission functions |
 | `src/sdk/analyze.ts` | `executeQuery` (gen AI span), `analyzeFile` / `analyzeHunk` (workflow spans), extraction + retry + dedup metrics |
 | `src/action/fix-evaluation/index.ts` | `evaluateFixAttempts` / per-comment spans, fix eval metrics |
+| `src/action/workflow/base.ts` | `ActionFailedError` sentinel, `setFailed()` |
+| `src/action/main.ts` | Top-level catch handler, Sentry flush, `process.exit` |
 | `src/action/workflow/pr-workflow.ts` | Error context tags, stale resolution metrics |
 | `src/cli/output/tasks.ts` | Dedup metrics (CLI code path) |

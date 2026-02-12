@@ -113,7 +113,7 @@ async function initializeWorkflow(
     eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
   } catch (error) {
     Sentry.captureException(error, { tags: { operation: 'read_event_payload' } });
-    return await setFailed(`Failed to read event payload: ${error}`);
+    setFailed(`Failed to read event payload: ${error}`);
   }
 
   logGroup('Building event context');
@@ -126,7 +126,7 @@ async function initializeWorkflow(
     context = await buildEventContext(eventName, eventPayload, repoPath, octokit);
   } catch (error) {
     Sentry.captureException(error, { tags: { operation: 'build_event_context' } });
-    return await setFailed(`Failed to build event context: ${error}`);
+    setFailed(`Failed to build event context: ${error}`);
   }
 
   logGroup('Loading configuration');
@@ -523,7 +523,7 @@ async function finalizeWorkflow(
   }
 
   if (shouldFailAction) {
-    await setFailed(failureReasons.join('; '));
+    setFailed(failureReasons.join('; '));
   }
 
   logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
@@ -653,7 +653,7 @@ export async function runPRWorkflow(
       );
 
       const triggerErrors = collectTriggerErrors(results);
-      await handleTriggerErrors(triggerErrors, matchedTriggers.length);
+      handleTriggerErrors(triggerErrors, matchedTriggers.length);
 
       const canResolveStale = shouldResolveStaleComments(results);
       const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
