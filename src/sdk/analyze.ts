@@ -98,7 +98,8 @@ async function executeQuery(
   systemPrompt: string,
   userPrompt: string,
   repoPath: string,
-  options: SkillRunnerOptions
+  options: SkillRunnerOptions,
+  skillName: string
 ): Promise<QueryExecutionResult> {
   const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
   const modelId = model ?? 'unknown';
@@ -106,14 +107,13 @@ async function executeQuery(
   return Sentry.startSpan(
     {
       op: 'gen_ai.invoke_agent',
-      name: `invoke_agent ${modelId}`,
+      name: `invoke_agent ${skillName}`,
       attributes: {
         'gen_ai.operation.name': 'invoke_agent',
-        'gen_ai.system': 'anthropic',
         'gen_ai.provider.name': 'anthropic',
-        'gen_ai.agent.name': modelId,
+        'gen_ai.agent.name': skillName,
         'gen_ai.request.model': modelId,
-        'gen_ai.request.max_turns': maxTurns,
+        'warden.request.max_turns': maxTurns,
       },
     },
     async (span) => {
@@ -196,7 +196,7 @@ async function executeQuery(
 
         // Optional SDK metadata attributes
         const optionalAttrs: Record<string, string | number | undefined> = {
-          'sdk.session_id': resultMessage.session_id,
+          'gen_ai.conversation.id': resultMessage.session_id,
           'sdk.duration_ms': resultMessage.duration_ms,
           'sdk.duration_api_ms': resultMessage.duration_api_ms,
           'sdk.num_turns': resultMessage.num_turns,
@@ -273,7 +273,7 @@ async function analyzeHunk(
         }
 
         try {
-          const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options);
+          const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options, skill.name);
 
           // Check for authentication errors from auth_status messages
           // auth_status errors are always auth-related - throw immediately

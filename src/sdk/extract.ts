@@ -2,6 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { customAlphabet } from 'nanoid';
 import { FindingSchema } from '../types/index.js';
 import type { Finding, UsageStats } from '../types/index.js';
+import { Sentry } from '../sentry.js';
+import { HAIKU_MODEL, setGenAiResponseAttrs } from './haiku.js';
 import { apiUsageToStats } from './pricing.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
@@ -125,6 +127,9 @@ export function extractFindingsJson(rawText: string): ExtractFindingsResult {
 /** Max characters to send to LLM fallback (roughly ~8k tokens) */
 const LLM_FALLBACK_MAX_CHARS = 32000;
 
+/** Max tokens for LLM fallback responses */
+const LLM_FALLBACK_MAX_TOKENS = 4096;
+
 /** Timeout for LLM fallback API calls in milliseconds */
 const LLM_FALLBACK_TIMEOUT_MS = 30000;
 
@@ -161,7 +166,7 @@ export function truncateForLLMFallback(rawText: string, maxChars: number): strin
 
 /**
  * Extract findings from malformed output using LLM as a fallback.
- * Uses claude-haiku-4-5 for lightweight, fast extraction.
+ * Uses Haiku for lightweight, fast extraction.
  */
 export async function extractFindingsWithLLM(
   rawText: string,
@@ -187,47 +192,62 @@ export async function extractFindingsWithLLM(
   // Truncate input while preserving JSON boundaries
   const truncatedText = truncateForLLMFallback(rawText, LLM_FALLBACK_MAX_CHARS);
 
-  try {
-    const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS });
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: `Extract the findings JSON from this model output.
+  return Sentry.startSpan(
+    {
+      op: 'gen_ai.chat',
+      name: `chat ${HAIKU_MODEL}`,
+      attributes: {
+        'gen_ai.operation.name': 'chat',
+        'gen_ai.provider.name': 'anthropic',
+        'gen_ai.request.model': HAIKU_MODEL,
+        'gen_ai.request.max_tokens': LLM_FALLBACK_MAX_TOKENS,
+      },
+    },
+    async (span) => {
+      try {
+        const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS });
+        const response = await client.messages.create({
+          model: HAIKU_MODEL,
+          max_tokens: LLM_FALLBACK_MAX_TOKENS,
+          messages: [
+            {
+              role: 'user',
+              content: `Extract the findings JSON from this model output.
 Return ONLY valid JSON in format: {"findings": [...]}
 If no findings exist, return: {"findings": []}
 
 Model output:
 ${truncatedText}`,
-        },
-      ],
-    });
+            },
+          ],
+        });
 
-    const usage = apiUsageToStats('claude-haiku-4-5', response.usage);
+        const usage = apiUsageToStats(HAIKU_MODEL, response.usage);
+        setGenAiResponseAttrs(span, response.usage, response.stop_reason);
 
-    const content = response.content[0];
-    if (!content || content.type !== 'text') {
-      return {
-        success: false,
-        error: 'llm_unexpected_response',
-        preview: rawText.slice(0, 200),
-        usage,
-      };
-    }
+        const content = response.content[0];
+        if (!content || content.type !== 'text') {
+          return {
+            success: false,
+            error: 'llm_unexpected_response',
+            preview: rawText.slice(0, 200),
+            usage,
+          };
+        }
 
-    // Parse the LLM response as JSON
-    const result = extractFindingsJson(content.text);
-    return { ...result, usage };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      error: `llm_extraction_failed: ${errorMessage}`,
-      preview: rawText.slice(0, 200),
-    };
-  }
+        // Parse the LLM response as JSON
+        const result = extractFindingsJson(content.text);
+        return { ...result, usage };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          success: false,
+          error: `llm_extraction_failed: ${errorMessage}`,
+          preview: rawText.slice(0, 200),
+        };
+      }
+    },
+  );
 }
 
 /** Unambiguous uppercase alphanumeric alphabet (no O/0, I/1). */

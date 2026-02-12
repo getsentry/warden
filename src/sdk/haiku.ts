@@ -1,12 +1,29 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { Span } from '@sentry/node';
 import type { z } from 'zod';
 import type { UsageStats } from '../types/index.js';
+import { Sentry } from '../sentry.js';
 import { apiUsageToStats } from './pricing.js';
 import { aggregateUsage, emptyUsage } from './usage.js';
 
-const HAIKU_MODEL = 'claude-haiku-4-5';
+export const HAIKU_MODEL = 'claude-haiku-4-5';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_TOKENS = 4096;
+
+/**
+ * Set standard gen_ai response attributes on a Sentry span.
+ */
+export function setGenAiResponseAttrs(
+  span: Span,
+  usage: { input_tokens: number; output_tokens: number },
+  stopReason?: string | null
+): void {
+  span.setAttribute('gen_ai.usage.input_tokens', usage.input_tokens);
+  span.setAttribute('gen_ai.usage.output_tokens', usage.output_tokens);
+  if (stopReason) {
+    span.setAttribute('gen_ai.response.finish_reasons', [stopReason]);
+  }
+}
 
 /**
  * Strip markdown code fences from text.
@@ -103,51 +120,66 @@ function inferPrefill(schema: z.ZodType): string | undefined {
 export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuResult<T>> {
   const { apiKey, prompt, schema, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS } = options;
 
-  const client = new Anthropic({ apiKey, timeout });
-  const prefill = inferPrefill(schema);
+  return Sentry.startSpan(
+    {
+      op: 'gen_ai.chat',
+      name: `chat ${HAIKU_MODEL}`,
+      attributes: {
+        'gen_ai.operation.name': 'chat',
+        'gen_ai.provider.name': 'anthropic',
+        'gen_ai.request.model': HAIKU_MODEL,
+        'gen_ai.request.max_tokens': maxTokens,
+      },
+    },
+    async (span) => {
+      const client = new Anthropic({ apiKey, timeout });
+      const prefill = inferPrefill(schema);
 
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
-  if (prefill) {
-    messages.push({ role: 'assistant', content: prefill });
-  }
+      const messages: Anthropic.MessageParam[] = [
+        { role: 'user', content: prompt },
+      ];
+      if (prefill) {
+        messages.push({ role: 'assistant', content: prefill });
+      }
 
-  try {
-    const response = await client.messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: maxTokens,
-      messages,
-    });
+      try {
+        const response = await client.messages.create({
+          model: HAIKU_MODEL,
+          max_tokens: maxTokens,
+          messages,
+        });
 
-    const usage = apiUsageToStats(HAIKU_MODEL, response.usage);
+        const usage = apiUsageToStats(HAIKU_MODEL, response.usage);
+        setGenAiResponseAttrs(span, response.usage, response.stop_reason);
 
-    const content = response.content[0];
-    if (!content || content.type !== 'text') {
-      return { success: false, error: 'Empty response from model', usage };
-    }
+        const content = response.content[0];
+        if (!content || content.type !== 'text') {
+          return { success: false, error: 'Empty response from model', usage };
+        }
 
-    let fullText = content.text;
-    if (prefill) {
-      fullText = prefill + fullText;
-    }
-    const jsonStr = extractJson(fullText);
-    if (!jsonStr) {
-      return { success: false, error: 'No JSON found in response', usage };
-    }
+        let fullText = content.text;
+        if (prefill) {
+          fullText = prefill + fullText;
+        }
+        const jsonStr = extractJson(fullText);
+        if (!jsonStr) {
+          return { success: false, error: 'No JSON found in response', usage };
+        }
 
-    const parsed = JSON.parse(jsonStr);
-    const validated = schema.safeParse(parsed);
+        const parsed = JSON.parse(jsonStr);
+        const validated = schema.safeParse(parsed);
 
-    if (!validated.success) {
-      return { success: false, error: `Validation failed: ${validated.error.message}`, usage };
-    }
+        if (!validated.success) {
+          return { success: false, error: `Validation failed: ${validated.error.message}`, usage };
+        }
 
-    return { success: true, data: validated.data, usage };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { success: false, error: message, usage: emptyUsage() };
-  }
+        return { success: true, data: validated.data, usage };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { success: false, error: message, usage: emptyUsage() };
+      }
+    },
+  );
 }
 
 /**
@@ -181,85 +213,128 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
     timeout = DEFAULT_TIMEOUT_MS,
   } = options;
 
-  const client = new Anthropic({ apiKey, timeout });
+  return Sentry.startSpan(
+    {
+      op: 'gen_ai.chat',
+      name: `chat ${HAIKU_MODEL}`,
+      attributes: {
+        'gen_ai.operation.name': 'chat',
+        'gen_ai.provider.name': 'anthropic',
+        'gen_ai.request.model': HAIKU_MODEL,
+        'gen_ai.request.max_tokens': maxTokens,
+      },
+    },
+    async (span) => {
+      const client = new Anthropic({ apiKey, timeout });
 
-  // No prefill for tool-use loops: prefill biases the model to output JSON
-  // immediately instead of calling tools to gather information first.
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
+      // No prefill for tool-use loops: prefill biases the model to output JSON
+      // immediately instead of calling tools to gather information first.
+      const messages: Anthropic.MessageParam[] = [
+        { role: 'user', content: prompt },
+      ];
 
-  const usages: UsageStats[] = [];
+      const usages: UsageStats[] = [];
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
 
-  for (let iteration = 0; iteration < maxIterations; iteration++) {
-    let response: Anthropic.Message;
-    try {
-      response = await client.messages.create({
-        model: HAIKU_MODEL,
-        max_tokens: maxTokens,
-        messages,
-        tools,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { success: false, error: message, usage: usages.length > 0 ? aggregateUsage(usages) : emptyUsage() };
-    }
-
-    usages.push(apiUsageToStats(HAIKU_MODEL, response.usage));
-
-    // Handle tool use
-    if (response.stop_reason === 'tool_use') {
-      const toolUseBlocks = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-      );
-
-      if (toolUseBlocks.length === 0) {
-        return { success: false, error: 'Tool use indicated but no tool calls found', usage: aggregateUsage(usages) };
+      function setFinalSpanAttrs(stopReason?: string | null): void {
+        setGenAiResponseAttrs(span, { input_tokens: totalInputTokens, output_tokens: totalOutputTokens }, stopReason);
       }
 
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of toolUseBlocks) {
+      function currentUsage(): UsageStats {
+        return usages.length > 0 ? aggregateUsage(usages) : emptyUsage();
+      }
+
+      for (let iteration = 0; iteration < maxIterations; iteration++) {
+        let response: Anthropic.Message;
         try {
-          const result = await executeTool(block.name, block.input as Record<string, unknown>);
-          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+          response = await client.messages.create({
+            model: HAIKU_MODEL,
+            max_tokens: maxTokens,
+            messages,
+            tools,
+          });
         } catch (error) {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: errMsg, is_error: true });
+          const message = error instanceof Error ? error.message : String(error);
+          return { success: false, error: message, usage: currentUsage() };
         }
+
+        usages.push(apiUsageToStats(HAIKU_MODEL, response.usage));
+        totalInputTokens += response.usage.input_tokens;
+        totalOutputTokens += response.usage.output_tokens;
+
+        // Handle tool use
+        if (response.stop_reason === 'tool_use') {
+          const toolUseBlocks = response.content.filter(
+            (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+          );
+
+          if (toolUseBlocks.length === 0) {
+            return { success: false, error: 'Tool use indicated but no tool calls found', usage: aggregateUsage(usages) };
+          }
+
+          const toolResults: Anthropic.ToolResultBlockParam[] = [];
+          for (const block of toolUseBlocks) {
+            await Sentry.startSpan(
+              {
+                op: 'gen_ai.execute_tool',
+                name: `execute_tool ${block.name}`,
+                attributes: {
+                  'gen_ai.operation.name': 'execute_tool',
+                  'gen_ai.tool.name': block.name,
+                },
+              },
+              async () => {
+                try {
+                  const result = await executeTool(block.name, block.input as Record<string, unknown>);
+                  toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+                } catch (error) {
+                  const errMsg = error instanceof Error ? error.message : String(error);
+                  toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: errMsg, is_error: true });
+                }
+              },
+            );
+          }
+
+          messages.push({ role: 'assistant', content: response.content });
+          messages.push({ role: 'user', content: toolResults });
+          continue;
+        }
+
+        // Final response - set span attributes and extract JSON verdict
+        setFinalSpanAttrs(response.stop_reason);
+
+        if (response.stop_reason !== 'end_turn' && response.stop_reason !== 'max_tokens') {
+          return { success: false, error: `Unexpected stop reason: ${response.stop_reason}`, usage: aggregateUsage(usages) };
+        }
+
+        const textBlock = response.content.find(
+          (b): b is Anthropic.TextBlock => b.type === 'text'
+        );
+
+        if (!textBlock) {
+          return { success: false, error: 'No text in final response', usage: aggregateUsage(usages) };
+        }
+
+        const jsonStr = extractJson(textBlock.text);
+        if (!jsonStr) {
+          return { success: false, error: 'No JSON found in response', usage: aggregateUsage(usages) };
+        }
+
+        const parsed = JSON.parse(jsonStr);
+        const validated = schema.safeParse(parsed);
+
+        if (!validated.success) {
+          return { success: false, error: `Validation failed: ${validated.error.message}`, usage: aggregateUsage(usages) };
+        }
+
+        return { success: true, data: validated.data, usage: aggregateUsage(usages) };
       }
 
-      messages.push({ role: 'assistant', content: response.content });
-      messages.push({ role: 'user', content: toolResults });
-      continue;
-    }
+      // Max iterations exceeded - still record usage on span
+      setFinalSpanAttrs();
 
-    // Final response - extract JSON verdict
-    if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') {
-      const textBlock = response.content.find(
-        (b): b is Anthropic.TextBlock => b.type === 'text'
-      );
-
-      if (!textBlock) {
-        return { success: false, error: 'No text in final response', usage: aggregateUsage(usages) };
-      }
-
-      const jsonStr = extractJson(textBlock.text);
-      if (!jsonStr) {
-        return { success: false, error: 'No JSON found in response', usage: aggregateUsage(usages) };
-      }
-
-      const parsed = JSON.parse(jsonStr);
-      const validated = schema.safeParse(parsed);
-
-      if (!validated.success) {
-        return { success: false, error: `Validation failed: ${validated.error.message}`, usage: aggregateUsage(usages) };
-      }
-
-      return { success: true, data: validated.data, usage: aggregateUsage(usages) };
-    }
-
-    return { success: false, error: `Unexpected stop reason: ${response.stop_reason}`, usage: aggregateUsage(usages) };
-  }
-
-  return { success: false, error: 'Max tool iterations exceeded', usage: aggregateUsage(usages) };
+      return { success: false, error: 'Max tool iterations exceeded', usage: aggregateUsage(usages) };
+    },
+  );
 }
