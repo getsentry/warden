@@ -86,7 +86,7 @@ The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes required f
 | `gen_ai.usage.total_tokens` | Sum of all token fields | Yes |
 | `gen_ai.response.id` | `resultMessage.uuid` | Yes |
 | `gen_ai.response.model` | First key in `resultMessage.modelUsage` | Yes |
-| `gen_ai.cost.total_tokens` | `resultMessage.total_cost_usd` | Sentry extension |
+| `gen_ai.cost.total_usd` | `resultMessage.total_cost_usd` | Sentry extension |
 
 ### SDK-specific attributes
 

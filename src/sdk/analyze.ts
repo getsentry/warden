@@ -193,7 +193,7 @@ async function executeQuery(
           'sdk.duration_ms': resultMessage.duration_ms,
           'sdk.duration_api_ms': resultMessage.duration_api_ms,
           'sdk.num_turns': resultMessage.num_turns,
-          'gen_ai.cost.total_tokens': resultMessage.total_cost_usd,
+          'gen_ai.cost.total_usd': resultMessage.total_cost_usd,
         };
         for (const [key, value] of Object.entries(optionalAttrs)) {
           if (value !== undefined) {
