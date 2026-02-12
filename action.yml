@@ -33,7 +33,7 @@ inputs:
   request-changes:
     description: 'Whether to use REQUEST_CHANGES review event when findings exceed fail-on threshold'
     required: false
-    default: 'true'
+    default: 'false'
   fail-check:
     description: 'Whether to fail the check run when findings exceed fail-on threshold'
     required: false

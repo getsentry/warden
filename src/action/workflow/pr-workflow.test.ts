@@ -527,7 +527,7 @@ describe('runPRWorkflow', () => {
 
       await runPRWorkflow(
         mockOctokit,
-        createDefaultInputs({ failOn: 'high' }),
+        createDefaultInputs({ failOn: 'high', requestChanges: true }),
         'pull_request',
         EVENT_PAYLOAD_PATH,
         FIXTURES_DIR

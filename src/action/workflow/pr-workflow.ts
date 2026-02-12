@@ -476,7 +476,7 @@ async function finalizeWorkflow(
   // Requires: all triggers succeeded, current run would not request changes,
   // and at least one trigger has an active failOn (prevents accidental dismiss when config changes).
   const wouldRequestChanges = results.some(
-    (r) => r.failOn && r.failOn !== 'off' && (r.requestChanges ?? true) &&
+    (r) => r.failOn && r.failOn !== 'off' && (r.requestChanges ?? false) &&
       r.report && shouldFail(r.report, r.failOn)
   );
   const hasActiveFailOn = results.some((r) => r.failOn && r.failOn !== 'off');

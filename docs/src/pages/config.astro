@@ -128,7 +128,7 @@ actions = ["opened", "synchronize"]`}
     <dt>reportOnSuccess</dt>
     <dd>Post comment when no findings. Default: <code>false</code></dd>
     <dt>requestChanges</dt>
-    <dd>Use REQUEST_CHANGES review event when findings exceed <code>failOn</code>. Default: <code>true</code></dd>
+    <dd>Use REQUEST_CHANGES review event when findings exceed <code>failOn</code>. Default: <code>false</code></dd>
     <dt>failCheck</dt>
     <dd>Fail the check run when findings exceed <code>failOn</code>. Default: <code>false</code></dd>
   </dl>
@@ -165,7 +165,7 @@ maxFindings = 20`}
     <dt>reportOnSuccess</dt>
     <dd>Post comment when no findings. Default: <code>false</code></dd>
     <dt>requestChanges</dt>
-    <dd>Default REQUEST_CHANGES behavior. Default: <code>true</code></dd>
+    <dd>Default REQUEST_CHANGES behavior. Default: <code>false</code></dd>
     <dt>failCheck</dt>
     <dd>Default check failure behavior. Default: <code>false</code></dd>
     <dt>ignorePaths</dt>
@@ -181,7 +181,7 @@ model = "claude-sonnet-4-20250514"
 maxTurns = 30
 failOn = "high"
 reportOn = "medium"
-requestChanges = true
+requestChanges = false
 failCheck = false
 ignorePaths = ["**/vendor/**", "**/node_modules/**"]`}
       lang="toml"
@@ -432,7 +432,7 @@ jobs:
     <dt>max-findings</dt>
     <dd>Maximum findings to report. Default: <code>50</code></dd>
     <dt>request-changes</dt>
-    <dd>Whether to request changes on PR reviews. Default: <code>true</code></dd>
+    <dd>Whether to request changes on PR reviews. Default: <code>false</code></dd>
     <dt>fail-check</dt>
     <dd>Whether to fail the check run. Default: <code>false</code></dd>
     <dt>parallel</dt>

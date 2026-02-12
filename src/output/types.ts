@@ -32,7 +32,7 @@ export interface RenderOptions {
   reportOn?: SeverityThreshold;
   /** Fail threshold - determines REQUEST_CHANGES vs COMMENT for PR reviews */
   failOn?: SeverityThreshold;
-  /** Whether to use REQUEST_CHANGES when failOn threshold is met. Default: true */
+  /** Whether to use REQUEST_CHANGES when failOn threshold is met. Default: false */
   requestChanges?: boolean;
   /** URL to the GitHub Check run containing the full report (used when findings are filtered) */
   checkRunUrl?: string;

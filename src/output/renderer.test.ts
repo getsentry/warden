@@ -372,7 +372,7 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'critical' });
+      const result = renderSkillReport(report, { failOn: 'critical', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
     });
 
@@ -408,7 +408,7 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'high' });
+      const result = renderSkillReport(report, { failOn: 'high', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
     });
 
@@ -426,7 +426,7 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'high' });
+      const result = renderSkillReport(report, { failOn: 'high', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
     });
 
@@ -469,7 +469,7 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'high' });
+      const result = renderSkillReport(report, { failOn: 'high', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
     });
 
@@ -496,7 +496,7 @@ describe('renderSkillReport', () => {
 
       // reportOn=high filters out low finding from comments
       // failOn=critical causes REQUEST_CHANGES because of critical finding
-      const result = renderSkillReport(report, { failOn: 'critical', reportOn: 'high' });
+      const result = renderSkillReport(report, { failOn: 'critical', reportOn: 'high', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(1);
       expect(result.review!.comments[0]!.body).toContain('Critical Issue');
@@ -515,7 +515,7 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'critical' });
+      const result = renderSkillReport(report, { failOn: 'critical', requestChanges: true });
       expect(result.review).toBeDefined();
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(0);
@@ -541,7 +541,7 @@ describe('renderSkillReport', () => {
       // reportOn=critical filters out high finding from comments (no comments posted)
       // failOn=high should still cause REQUEST_CHANGES because high finding meets threshold
       // Per spec: "a finding can block the PR but be filtered from comments"
-      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'critical' });
+      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'critical', requestChanges: true });
       expect(result.review).toBeDefined();
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(0);
@@ -600,7 +600,7 @@ describe('renderSkillReport', () => {
 
       // Without allFindings, would use report.findings (only low) -> COMMENT
       // With allFindings (includes critical), should be REQUEST_CHANGES
-      const result = renderSkillReport(report, { failOn: 'high', allFindings });
+      const result = renderSkillReport(report, { failOn: 'high', allFindings, requestChanges: true });
       expect(result.review).toBeDefined();
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       // Comments only include the low finding (what's in report.findings)
@@ -644,7 +644,7 @@ describe('renderSkillReport', () => {
       expect(result.review!.event).toBe('REQUEST_CHANGES');
     });
 
-    it('defaults to REQUEST_CHANGES when requestChanges is undefined and threshold is met', () => {
+    it('defaults to COMMENT when requestChanges is undefined even if threshold is met', () => {
       const report: SkillReport = {
         ...baseReport,
         findings: [
@@ -659,7 +659,7 @@ describe('renderSkillReport', () => {
       };
 
       const result = renderSkillReport(report, { failOn: 'high' });
-      expect(result.review!.event).toBe('REQUEST_CHANGES');
+      expect(result.review!.event).toBe('COMMENT');
     });
 
     it('REQUEST_CHANGES when some findings are filtered by reportOn but others meet both thresholds', () => {
@@ -692,7 +692,7 @@ describe('renderSkillReport', () => {
 
       // reportOn=critical filters to only critical finding
       // failOn=high: critical and high findings both meet threshold -> REQUEST_CHANGES
-      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'critical' });
+      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'critical', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(1);
       expect(result.review!.comments[0]!.body).toContain('Critical Issue');

@@ -236,6 +236,7 @@ describe('postTriggerReview', () => {
       }),
       reportOn: 'info',
       failOn: 'high',
+      requestChanges: true,
     };
 
     const existingComment = createExistingComment({ isWarden: true });

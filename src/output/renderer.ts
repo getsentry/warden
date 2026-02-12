@@ -129,7 +129,7 @@ function determineReviewEvent(
   failOn?: SeverityThreshold,
   requestChanges?: boolean,
 ): GitHubReview['event'] {
-  if (requestChanges === false) return 'COMMENT';
+  if (!requestChanges) return 'COMMENT';
 
   const hasActiveThreshold = failOn && failOn !== 'off';
 

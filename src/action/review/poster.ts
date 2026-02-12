@@ -240,7 +240,7 @@ export async function postTriggerReview(
     }
 
     // Check if failOn threshold is met (even if all findings deduplicated, we still need REQUEST_CHANGES)
-    const useRequestChanges = result.requestChanges ?? true;
+    const useRequestChanges = result.requestChanges ?? false;
     const needsRequestChanges = useRequestChanges && result.failOn && shouldFail(result.report, result.failOn);
 
     // Only post if we have non-duplicate findings, reportOnSuccess, or REQUEST_CHANGES needed

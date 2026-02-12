@@ -154,7 +154,7 @@ export const DefaultsSchema = z.object({
   maxFindings: z.number().int().positive().optional(),
   /** Report even when there are no findings (default: false) */
   reportOnSuccess: z.boolean().optional(),
-  /** Use REQUEST_CHANGES review event when findings exceed failOn. Default: true */
+  /** Use REQUEST_CHANGES review event when findings exceed failOn. Default: false */
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn. Default: false */
   failCheck: z.boolean().optional(),
