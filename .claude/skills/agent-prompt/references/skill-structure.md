@@ -102,10 +102,8 @@ Avoid vague definitions:
 
 Skills are discovered in order (first match wins):
 
-1. `.warden/skills/{name}/SKILL.md` - Project-specific
-2. `.agents/skills/{name}/SKILL.md` - Shared agent skills
-3. `.claude/skills/{name}/SKILL.md` - Claude Code skills
-4. `skills/{name}/SKILL.md` - Built-in skills
+1. `.agents/skills/{name}/SKILL.md` - Primary (recommended)
+2. `.claude/skills/{name}/SKILL.md` - Backup (Claude Code convention)
 
 ## Examples
 

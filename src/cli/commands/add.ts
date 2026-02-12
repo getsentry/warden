@@ -394,7 +394,7 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
 
   if (skills.size === 0) {
     reporter.error('No skills found.');
-    reporter.tip('Add skills to .warden/skills/, .agents/skills/, or .claude/skills/');
+    reporter.tip('Add skills to .agents/skills/ or .claude/skills/');
     reporter.tip('Or use --remote to add remote skills: warden add --remote owner/repo --skill name');
     return 1;
   }

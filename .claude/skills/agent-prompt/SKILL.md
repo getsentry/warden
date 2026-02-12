@@ -23,7 +23,7 @@ The following documents contain detailed guidance. Read the relevant ones based 
 
 ## Quick Reference
 
-**Skill file location**: `skills/{name}/SKILL.md` or `.warden/skills/{name}/SKILL.md`
+**Skill file location**: `.agents/skills/{name}/SKILL.md`
 
 **Minimum skill structure**:
 ```markdown

@@ -28,22 +28,40 @@ const skillsCache = new Map<string, Map<string, LoadedSkill>>();
  * Conventional skill directories, checked in priority order.
  *
  * Skills are discovered from these directories in order:
- * 1. .warden/skills - Warden-specific skills (highest priority)
- * 2. .agents/skills - General agent skills (shared across tools)
- * 3. .claude/skills - Claude Code skills (for compatibility)
+ * 1. .agents/skills - Primary (recommended)
+ * 2. .claude/skills - Backup (matches Claude Code convention)
+ * 3. .warden/skills - Legacy
  *
  * Skills follow the agentskills.io specification:
  * - skill-name/SKILL.md (directory with SKILL.md inside - preferred)
  * - skill-name.md (flat markdown with SKILL.md frontmatter format)
  *
  * When a skill name exists in multiple directories, the first one found wins.
- * This allows project-specific skills in .warden/skills to override shared skills.
  */
 export const SKILL_DIRECTORIES = [
-  '.warden/skills',
   '.agents/skills',
   '.claude/skills',
+  '.warden/skills',
 ] as const;
+
+/**
+ * Conventional agent directories, checked in priority order.
+ *
+ * Agents are discovered from these directories in order:
+ * 1. .agents/agents - Primary (recommended)
+ * 2. .claude/agents - Backup (matches Claude Code convention)
+ * 3. .warden/agents - Legacy
+ *
+ * Agents use the same format as skills but with AGENT.md marker files.
+ */
+export const AGENT_DIRECTORIES = [
+  '.agents/agents',
+  '.claude/agents',
+  '.warden/agents',
+] as const;
+
+/** Marker filename for agent definitions */
+export const AGENT_MARKER_FILE = 'AGENT.md';
 
 /**
  * Check if a string looks like a path (contains path separators or starts with .)
@@ -87,7 +105,7 @@ export function clearSkillsCache(): void {
 function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) {
-    throw new SkillLoaderError('Invalid SKILL.md: missing YAML frontmatter');
+    throw new SkillLoaderError('Invalid markdown: missing YAML frontmatter');
   }
 
   const [, yamlContent, body] = match;
@@ -191,10 +209,10 @@ export async function loadSkillFromMarkdown(
   const { frontmatter, body } = parseMarkdownFrontmatter(content);
 
   if (!frontmatter['name'] || typeof frontmatter['name'] !== 'string') {
-    throw new SkillLoaderError(`Invalid SKILL.md: missing 'name' in frontmatter`);
+    throw new SkillLoaderError(`Invalid markdown: missing 'name' in frontmatter`);
   }
   if (!frontmatter['description'] || typeof frontmatter['description'] !== 'string') {
-    throw new SkillLoaderError(`Invalid SKILL.md: missing 'description' in frontmatter`);
+    throw new SkillLoaderError(`Invalid markdown: missing 'description' in frontmatter`);
   }
 
   const allowedTools = parseAllowedTools(frontmatter['allowed-tools'], options?.onWarning);
@@ -227,6 +245,8 @@ export async function loadSkillFromFile(filePath: string): Promise<SkillDefiniti
 export interface LoadSkillsOptions {
   /** Callback for reporting warnings (e.g., failed skill loading) */
   onWarning?: (message: string) => void;
+  /** Marker filename for directory-format entries. Default: 'SKILL.md' */
+  markerFile?: string;
 }
 
 /**
@@ -244,8 +264,11 @@ export async function loadSkillsFromDirectory(
   dirPath: string,
   options?: LoadSkillsOptions
 ): Promise<Map<string, LoadedSkill>> {
+  const markerFile = options?.markerFile ?? 'SKILL.md';
+  const cacheKey = `${dirPath}:${markerFile}`;
+
   // Check cache first
-  const cached = skillsCache.get(dirPath);
+  const cached = skillsCache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -256,30 +279,30 @@ export async function loadSkillsFromDirectory(
   try {
     entries = await readdir(dirPath);
   } catch {
-    skillsCache.set(dirPath, skills);
+    skillsCache.set(cacheKey, skills);
     return skills;
   }
 
   // Process entries following agentskills.io format priority:
-  // 1. Directories with SKILL.md (preferred)
-  // 2. Flat .md files with valid SKILL.md frontmatter
+  // 1. Directories with marker file (preferred)
+  // 2. Flat .md files with valid frontmatter
   for (const entry of entries) {
     const entryPath = join(dirPath, entry);
 
-    // Check for agentskills.io format: skill-name/SKILL.md (preferred)
-    const skillMdPath = join(entryPath, 'SKILL.md');
-    if (existsSync(skillMdPath)) {
+    // Check for agentskills.io format: entry-name/{markerFile} (preferred)
+    const markerPath = join(entryPath, markerFile);
+    if (existsSync(markerPath)) {
       try {
-        const skill = await loadSkillFromMarkdown(skillMdPath, { onWarning: options?.onWarning });
+        const skill = await loadSkillFromMarkdown(markerPath, { onWarning: options?.onWarning });
         skills.set(skill.name, { skill, entry });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        options?.onWarning?.(`Failed to load skill from ${skillMdPath}: ${message}`);
+        options?.onWarning?.(`Failed to load skill from ${markerPath}: ${message}`);
       }
       continue;
     }
 
-    // Check for flat .md files (with SKILL.md format frontmatter)
+    // Check for flat .md files (with frontmatter format)
     if (entry.endsWith('.md')) {
       try {
         const skill = await loadSkillFromMarkdown(entryPath, { onWarning: options?.onWarning });
@@ -295,7 +318,7 @@ export async function loadSkillsFromDirectory(
     }
   }
 
-  skillsCache.set(dirPath, skills);
+  skillsCache.set(cacheKey, skills);
   return skills;
 }
 
@@ -311,6 +334,36 @@ export interface DiscoveredSkill {
 }
 
 /**
+ * Discover all entries (skills or agents) from conventional directories.
+ * Scans directories in order; first occurrence of a name wins.
+ */
+async function discoverFromDirectories(
+  repoRoot: string,
+  directories: readonly string[],
+  options?: LoadSkillsOptions,
+): Promise<Map<string, DiscoveredSkill>> {
+  const result = new Map<string, DiscoveredSkill>();
+
+  for (const dir of directories) {
+    const dirPath = join(repoRoot, dir);
+    if (!existsSync(dirPath)) continue;
+
+    const loaded = await loadSkillsFromDirectory(dirPath, options);
+    for (const [name, entry] of loaded) {
+      if (!result.has(name)) {
+        result.set(name, {
+          skill: entry.skill,
+          directory: `./${dir}`,
+          path: join(dirPath, entry.entry),
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Discover all available skills from conventional directories.
  *
  * @param repoRoot - Repository root path for finding skills
@@ -321,31 +374,10 @@ export async function discoverAllSkills(
   repoRoot?: string,
   options?: LoadSkillsOptions
 ): Promise<Map<string, DiscoveredSkill>> {
-  const result = new Map<string, DiscoveredSkill>();
-
   if (!repoRoot) {
-    return result;
+    return new Map();
   }
-
-  // Scan conventional directories for skills
-  for (const dir of SKILL_DIRECTORIES) {
-    const dirPath = join(repoRoot, dir);
-    if (!existsSync(dirPath)) continue;
-
-    const skills = await loadSkillsFromDirectory(dirPath, options);
-    for (const [name, loaded] of skills) {
-      // First directory wins - don't overwrite existing skills
-      if (!result.has(name)) {
-        result.set(name, {
-          skill: loaded.skill,
-          directory: `./${dir}`,
-          path: join(dirPath, loaded.entry),
-        });
-      }
-    }
-  }
-
-  return result;
+  return discoverFromDirectories(repoRoot, SKILL_DIRECTORIES, options);
 }
 
 export interface ResolveSkillOptions {
@@ -354,6 +386,91 @@ export interface ResolveSkillOptions {
   /** Skip network operations - only use cache for remote skills */
   offline?: boolean;
 }
+
+/** Configuration for the shared resolve logic */
+interface ResolveConfig {
+  markerFile: string;
+  directories: readonly string[];
+  label: string;
+  remoteImport: string;
+}
+
+/**
+ * Resolve a skill or agent by name or path.
+ *
+ * Resolution order:
+ * 1. Remote repository (if remote option is set)
+ * 2. Direct path (if nameOrPath contains / or \ or starts with .)
+ *    - Directory: load marker file from it
+ *    - File: load the .md file directly
+ * 3. Conventional directories (if repoRoot provided)
+ */
+async function resolveEntry(
+  nameOrPath: string,
+  repoRoot: string | undefined,
+  options: ResolveSkillOptions | undefined,
+  config: ResolveConfig,
+): Promise<SkillDefinition> {
+  const { remote, offline } = options ?? {};
+
+  // 1. Remote repository resolution takes priority when specified
+  if (remote) {
+    // Dynamic import to avoid circular dependencies
+    const remoteModule = await import('./remote.js');
+    const resolver = remoteModule[config.remoteImport as keyof typeof remoteModule] as
+      (ref: string, name: string, opts: { offline?: boolean }) => Promise<SkillDefinition>;
+    return resolver(remote, nameOrPath, { offline });
+  }
+
+  // 2. Direct path resolution
+  if (isSkillPath(nameOrPath)) {
+    const resolvedPath = resolveSkillPath(nameOrPath, repoRoot);
+
+    const markerPath = join(resolvedPath, config.markerFile);
+    if (existsSync(markerPath)) {
+      return loadSkillFromMarkdown(markerPath);
+    }
+
+    if (existsSync(resolvedPath)) {
+      return loadSkillFromFile(resolvedPath);
+    }
+
+    throw new SkillLoaderError(`${config.label} not found at path: ${nameOrPath}`);
+  }
+
+  // 3. Check conventional directories
+  if (repoRoot) {
+    for (const dir of config.directories) {
+      const dirPath = join(repoRoot, dir);
+
+      const markerPath = join(dirPath, nameOrPath, config.markerFile);
+      if (existsSync(markerPath)) {
+        return loadSkillFromMarkdown(markerPath);
+      }
+
+      const mdPath = join(dirPath, `${nameOrPath}.md`);
+      if (existsSync(mdPath)) {
+        return loadSkillFromMarkdown(mdPath);
+      }
+    }
+  }
+
+  throw new SkillLoaderError(`${config.label} not found: ${nameOrPath}`);
+}
+
+const SKILL_RESOLVE_CONFIG: ResolveConfig = {
+  markerFile: 'SKILL.md',
+  directories: SKILL_DIRECTORIES,
+  label: 'Skill',
+  remoteImport: 'resolveRemoteSkill',
+};
+
+const AGENT_RESOLVE_CONFIG: ResolveConfig = {
+  markerFile: AGENT_MARKER_FILE,
+  directories: AGENT_DIRECTORIES,
+  label: 'Agent',
+  remoteImport: 'resolveRemoteAgent',
+};
 
 /**
  * Resolve a skill by name or path.
@@ -364,60 +481,68 @@ export interface ResolveSkillOptions {
  *    - Directory: load SKILL.md from it
  *    - File: load the .md file directly
  * 3. Conventional directories (if repoRoot provided)
- *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
  *    - .agents/skills/{name}/SKILL.md or .agents/skills/{name}.md
  *    - .claude/skills/{name}/SKILL.md or .claude/skills/{name}.md
+ *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
  */
 export async function resolveSkillAsync(
   nameOrPath: string,
   repoRoot?: string,
   options?: ResolveSkillOptions
 ): Promise<SkillDefinition> {
-  const { remote, offline } = options ?? {};
+  return resolveEntry(nameOrPath, repoRoot, options, SKILL_RESOLVE_CONFIG);
+}
 
-  // 1. Remote repository resolution takes priority when specified
-  if (remote) {
-    // Dynamic import to avoid circular dependencies
-    const { resolveRemoteSkill } = await import('./remote.js');
-    return resolveRemoteSkill(remote, nameOrPath, { offline });
+// =============================================================================
+// Agent Discovery (parallel to skills, using AGENT.md marker files)
+// =============================================================================
+
+/** An agent definition uses the same shape as a skill definition */
+export type AgentDefinition = SkillDefinition;
+
+/** A loaded agent with its source entry path */
+export type LoadedAgent = LoadedSkill;
+
+/** A discovered agent with source metadata */
+export type DiscoveredAgent = DiscoveredSkill;
+
+/**
+ * Discover all available agents from conventional directories.
+ *
+ * @param repoRoot - Repository root path for finding agents
+ * @param options - Options for loading (e.g., warning callback)
+ * @returns Map of agent name to discovered agent info
+ */
+export async function discoverAllAgents(
+  repoRoot?: string,
+  options?: LoadSkillsOptions
+): Promise<Map<string, DiscoveredAgent>> {
+  if (!repoRoot) {
+    return new Map();
   }
+  return discoverFromDirectories(repoRoot, AGENT_DIRECTORIES, {
+    ...options,
+    markerFile: AGENT_MARKER_FILE,
+  });
+}
 
-  // 2. Direct path resolution
-  if (isSkillPath(nameOrPath)) {
-    const resolvedPath = resolveSkillPath(nameOrPath, repoRoot);
-
-    // Check if it's a directory with SKILL.md
-    const skillMdPath = join(resolvedPath, 'SKILL.md');
-    if (existsSync(skillMdPath)) {
-      return loadSkillFromMarkdown(skillMdPath);
-    }
-
-    // Check if it's a file directly
-    if (existsSync(resolvedPath)) {
-      return loadSkillFromFile(resolvedPath);
-    }
-
-    throw new SkillLoaderError(`Skill not found at path: ${nameOrPath}`);
-  }
-
-  // 3. Check conventional skill directories
-  if (repoRoot) {
-    for (const dir of SKILL_DIRECTORIES) {
-      const dirPath = join(repoRoot, dir);
-
-      // Check for skill-name/SKILL.md (preferred agentskills.io format)
-      const skillMdPath = join(dirPath, nameOrPath, 'SKILL.md');
-      if (existsSync(skillMdPath)) {
-        return loadSkillFromMarkdown(skillMdPath);
-      }
-
-      // Check for skill-name.md (flat markdown file with SKILL.md format)
-      const mdPath = join(dirPath, `${nameOrPath}.md`);
-      if (existsSync(mdPath)) {
-        return loadSkillFromMarkdown(mdPath);
-      }
-    }
-  }
-
-  throw new SkillLoaderError(`Skill not found: ${nameOrPath}`);
+/**
+ * Resolve an agent by name or path.
+ *
+ * Resolution order:
+ * 1. Remote repository (if remote option is set)
+ * 2. Direct path (if nameOrPath contains / or \ or starts with .)
+ *    - Directory: load AGENT.md from it
+ *    - File: load the .md file directly
+ * 3. Conventional directories (if repoRoot provided)
+ *    - .agents/agents/{name}/AGENT.md or .agents/agents/{name}.md
+ *    - .claude/agents/{name}/AGENT.md or .claude/agents/{name}.md
+ *    - .warden/agents/{name}/AGENT.md or .warden/agents/{name}.md
+ */
+export async function resolveAgentAsync(
+  nameOrPath: string,
+  repoRoot?: string,
+  options?: ResolveSkillOptions
+): Promise<AgentDefinition> {
+  return resolveEntry(nameOrPath, repoRoot, options, AGENT_RESOLVE_CONFIG);
 }

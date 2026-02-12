@@ -1,17 +1,21 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, unlinkSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import {
   clearSkillsCache,
+  discoverAllAgents,
   loadSkillFromFile,
   loadSkillFromMarkdown,
   loadSkillsFromDirectory,
+  resolveAgentAsync,
   resolveSkillAsync,
   resolveSkillPath,
   SkillLoaderError,
   SKILL_DIRECTORIES,
+  AGENT_DIRECTORIES,
+  AGENT_MARKER_FILE,
 } from './loader.js';
 
 describe('loadSkillFromFile', () => {
@@ -115,10 +119,24 @@ describe('direct path resolution', () => {
 describe('SKILL_DIRECTORIES', () => {
   it('contains expected directories in order', () => {
     expect(SKILL_DIRECTORIES).toEqual([
-      '.warden/skills',
       '.agents/skills',
       '.claude/skills',
+      '.warden/skills',
     ]);
+  });
+});
+
+describe('AGENT_DIRECTORIES', () => {
+  it('contains expected directories in order', () => {
+    expect(AGENT_DIRECTORIES).toEqual([
+      '.agents/agents',
+      '.claude/agents',
+      '.warden/agents',
+    ]);
+  });
+
+  it('AGENT_MARKER_FILE is AGENT.md', () => {
+    expect(AGENT_MARKER_FILE).toBe('AGENT.md');
   });
 });
 
@@ -234,7 +252,6 @@ This is the prompt content.
 
     // Create a temp directory with a malformed skill
     const tempDir = join(import.meta.dirname, '.test-malformed-skills');
-    const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
     try {
       mkdirSync(tempDir, { recursive: true });
       // Create a .md file with frontmatter but missing required name field
@@ -263,13 +280,12 @@ Content here
     const onWarning = (message: string) => warnings.push(message);
 
     // Create a temp directory with a skill containing invalid tool names
-    const tempDir = join(import.meta.dirname, '.test-invalid-tools');
-    const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    const tempDir2 = join(import.meta.dirname, '.test-invalid-tools');
     try {
-      mkdirSync(tempDir, { recursive: true });
+      mkdirSync(tempDir2, { recursive: true });
       // Create a skill with a mix of valid and invalid tool names
       writeFileSync(
-        join(tempDir, 'test-skill.md'),
+        join(tempDir2, 'test-skill.md'),
         `---
 name: test-skill
 description: A test skill with invalid tools
@@ -280,7 +296,7 @@ Test prompt content.
       );
 
       clearSkillsCache();
-      const skills = await loadSkillsFromDirectory(tempDir, { onWarning });
+      const skills = await loadSkillsFromDirectory(tempDir2, { onWarning });
 
       // Skill should still load with only valid tools
       const skill = skills.get('test-skill');
@@ -294,7 +310,197 @@ Test prompt content.
       expect(warnings[0]).toContain('Valid tools:');
       expect(warnings[1]).toContain("Invalid tool name 'FakeTool'");
     } finally {
-      rmSync(tempDir, { recursive: true, force: true });
+      rmSync(tempDir2, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('loadSkillsFromDirectory with markerFile', () => {
+  it('uses AGENT.md as marker file when specified', async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), 'warden-agent-test-'));
+    try {
+      // Create a directory-format agent with AGENT.md
+      mkdirSync(join(agentDir, 'my-agent'), { recursive: true });
+      writeFileSync(
+        join(agentDir, 'my-agent', 'AGENT.md'),
+        `---
+name: my-agent
+description: A test agent
+---
+Agent prompt content.
+`
+      );
+
+      clearSkillsCache();
+      const agents = await loadSkillsFromDirectory(agentDir, { markerFile: 'AGENT.md' });
+
+      expect(agents.size).toBe(1);
+      const agent = agents.get('my-agent');
+      expect(agent).toBeDefined();
+      expect(agent!.skill.name).toBe('my-agent');
+      expect(agent!.skill.prompt).toBe('Agent prompt content.');
+    } finally {
+      rmSync(agentDir, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores SKILL.md when markerFile is AGENT.md', async () => {
+    const mixedDir = mkdtempSync(join(tmpdir(), 'warden-mixed-test-'));
+    try {
+      // Create a directory with SKILL.md (should be ignored)
+      mkdirSync(join(mixedDir, 'my-skill'), { recursive: true });
+      writeFileSync(
+        join(mixedDir, 'my-skill', 'SKILL.md'),
+        `---
+name: my-skill
+description: A skill not an agent
+---
+Skill prompt.
+`
+      );
+
+      // Create a directory with AGENT.md (should be found)
+      mkdirSync(join(mixedDir, 'my-agent'), { recursive: true });
+      writeFileSync(
+        join(mixedDir, 'my-agent', 'AGENT.md'),
+        `---
+name: my-agent
+description: An agent
+---
+Agent prompt.
+`
+      );
+
+      clearSkillsCache();
+      const agents = await loadSkillsFromDirectory(mixedDir, { markerFile: 'AGENT.md' });
+
+      expect(agents.size).toBe(1);
+      expect(agents.has('my-agent')).toBe(true);
+      expect(agents.has('my-skill')).toBe(false);
+    } finally {
+      rmSync(mixedDir, { recursive: true, force: true });
+    }
+  });
+
+  it('caches separately for different markerFiles', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'warden-cache-test-'));
+    try {
+      mkdirSync(join(cacheDir, 'entry'), { recursive: true });
+      writeFileSync(
+        join(cacheDir, 'entry', 'SKILL.md'),
+        `---
+name: a-skill
+description: Skill
+---
+Prompt.
+`
+      );
+      writeFileSync(
+        join(cacheDir, 'entry', 'AGENT.md'),
+        `---
+name: an-agent
+description: Agent
+---
+Prompt.
+`
+      );
+
+      clearSkillsCache();
+      const skills = await loadSkillsFromDirectory(cacheDir);
+      const agents = await loadSkillsFromDirectory(cacheDir, { markerFile: 'AGENT.md' });
+
+      expect(skills.has('a-skill')).toBe(true);
+      expect(agents.has('an-agent')).toBe(true);
+      // They should be different Map instances (different cache keys)
+      expect(skills).not.toBe(agents);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('discoverAllAgents', () => {
+  it('discovers agents from .agents/agents directory', async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), 'warden-discover-agents-'));
+    try {
+      mkdirSync(join(repoRoot, '.agents', 'agents', 'my-agent'), { recursive: true });
+      writeFileSync(
+        join(repoRoot, '.agents', 'agents', 'my-agent', 'AGENT.md'),
+        `---
+name: my-agent
+description: Test agent
+---
+Agent prompt.
+`
+      );
+
+      clearSkillsCache();
+      const agents = await discoverAllAgents(repoRoot);
+
+      expect(agents.size).toBe(1);
+      const agent = agents.get('my-agent');
+      expect(agent).toBeDefined();
+      expect(agent!.skill.name).toBe('my-agent');
+      expect(agent!.directory).toBe('./.agents/agents');
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('returns empty map when no repoRoot', async () => {
+    const agents = await discoverAllAgents();
+    expect(agents.size).toBe(0);
+  });
+});
+
+describe('resolveAgentAsync', () => {
+  it('resolves agent by name from conventional directories', async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), 'warden-resolve-agent-'));
+    try {
+      mkdirSync(join(repoRoot, '.agents', 'agents', 'test-agent'), { recursive: true });
+      writeFileSync(
+        join(repoRoot, '.agents', 'agents', 'test-agent', 'AGENT.md'),
+        `---
+name: test-agent
+description: A test agent
+---
+Agent instructions.
+`
+      );
+
+      clearSkillsCache();
+      const agent = await resolveAgentAsync('test-agent', repoRoot);
+
+      expect(agent.name).toBe('test-agent');
+      expect(agent.description).toBe('A test agent');
+      expect(agent.prompt).toBe('Agent instructions.');
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('throws for unknown agents', async () => {
+    await expect(resolveAgentAsync('nonexistent-agent')).rejects.toThrow(SkillLoaderError);
+    await expect(resolveAgentAsync('nonexistent-agent')).rejects.toThrow('Agent not found');
+  });
+
+  it('resolves agent from direct path', async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), 'warden-agent-path-'));
+    try {
+      writeFileSync(
+        join(agentDir, 'AGENT.md'),
+        `---
+name: path-agent
+description: Agent from path
+---
+Path agent prompt.
+`
+      );
+
+      const agent = await resolveAgentAsync(agentDir);
+      expect(agent.name).toBe('path-agent');
+    } finally {
+      rmSync(agentDir, { recursive: true, force: true });
     }
   });
 });

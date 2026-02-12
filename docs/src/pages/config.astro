@@ -282,7 +282,7 @@ createFixPR = true`}
 
   <Terminal showCopy={true}>
     <Code
-      code={`# By name (resolved from .warden/skills/, .agents/skills/, .claude/skills/)
+      code={`# By name (resolved from .agents/skills/ or .claude/skills/)
 [[skills]]
 name = "security-review"
 
@@ -321,12 +321,10 @@ remote = "getsentry/warden-skills@abc123def"`}
   <p>Warden discovers skills from these directories (first match wins):</p>
 
   <dl>
-    <dt>.warden/skills/</dt>
-    <dd>Warden-specific skills (highest priority)</dd>
     <dt>.agents/skills/</dt>
-    <dd>Shared agent skills</dd>
+    <dd>Primary skill directory (recommended)</dd>
     <dt>.claude/skills/</dt>
-    <dd>Claude Code skills</dd>
+    <dd>Backup (matches Claude Code convention)</dd>
   </dl>
 
   <h3>SKILL.md Format</h3>

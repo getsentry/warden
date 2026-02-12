@@ -109,7 +109,7 @@ output_schema: SkillReport  # references shared schema
 - `documentation-check` - Ensure public APIs are documented
 
 **Skills:**
-Users define skills in conventional directories: `.warden/skills/`, `.agents/skills/`, or `.claude/skills/`
+Users define skills in conventional directories: `.agents/skills/` or `.claude/skills/`
 
 ### 3a. Internal Meta-Skills (for development)
 
@@ -240,7 +240,7 @@ async function runSkill(skill: SkillConfig, context: EventContext): Promise<Skil
 **In Scope:**
 - GitHub Action trigger only (no webhook service yet)
 - `pull_request` events (opened, synchronize)
-- Skills from conventional directories (`.warden/skills/`, `.agents/skills/`, `.claude/skills/`)
+- Skills from conventional directories (`.agents/skills/` or `.claude/skills/`)
 - Internal meta-skill: `skill-writer` (to help design correct skills)
 - Three output types: inline comments, suggested changes, summary comment
 - In-repo `warden.yaml` configuration

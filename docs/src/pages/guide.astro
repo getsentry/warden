@@ -162,9 +162,8 @@ warden src/api/`}
 
   <Terminal showCopy={true}>
     <Code
-      code={`.warden/skills/skill-name/SKILL.md   # Warden-specific (highest priority)
-.agents/skills/skill-name/SKILL.md   # Shared agent skills
-.claude/skills/skill-name/SKILL.md   # Claude Code skills`}
+      code={`.agents/skills/skill-name/SKILL.md   # Primary (recommended)
+.claude/skills/skill-name/SKILL.md   # Backup (Claude Code convention)`}
       lang="text"
       theme="vitesse-black"
     />

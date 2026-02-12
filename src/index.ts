@@ -86,8 +86,11 @@ export type { SkillRunnerOptions, SkillRunnerCallbacks } from './sdk/runner.js';
 // -----------------------------------------------------------------------------
 export {
   resolveSkillAsync,
+  resolveAgentAsync,
   SkillLoaderError,
 } from './skills/index.js';
+
+export type { AgentDefinition } from './skills/index.js';
 
 // -----------------------------------------------------------------------------
 // Event Context

@@ -131,7 +131,7 @@ warden setup-app --org my-org  # For an organization`}
 
   <Terminal>
     <Code
-      code={`# By name (resolved from .warden/skills/, .agents/skills/, .claude/skills/)
+      code={`# By name (resolved from .agents/skills/ or .claude/skills/)
 warden --skill security-review
 
 # Relative path
@@ -151,7 +151,7 @@ warden --skill ~/my-skills/security`}
   <ol>
     <li>Remote repository (if <code>remote</code> is specified in trigger config)</li>
     <li>Direct path (if contains <code>/</code>, <code>\</code>, or starts with <code>.</code>)</li>
-    <li>Conventional directories: <code>.warden/skills/</code>, <code>.agents/skills/</code>, <code>.claude/skills/</code></li>
+    <li>Conventional directories: <code>.agents/skills/</code>, <code>.claude/skills/</code></li>
   </ol>
 
   <h2>Environment Variables</h2>

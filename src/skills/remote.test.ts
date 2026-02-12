@@ -13,7 +13,9 @@ import {
   getCacheTtlSeconds,
   shouldRefresh,
   discoverRemoteSkills,
+  discoverRemoteAgents,
   resolveRemoteSkill,
+  resolveRemoteAgent,
   type RemoteState,
 } from './remote.js';
 import { SkillLoaderError } from './loader.js';
@@ -507,17 +509,17 @@ describe('discoverRemoteSkills', () => {
       expect(skills[0]?.path).toBe(join(remotePath, 'my-skill'));
     });
 
-    it('.warden takes precedence when root and skills/ are absent', async () => {
+    it('.agents takes precedence when root and skills/ are absent', async () => {
       const remotePath = getRemotePath('test/repo');
       createFileTree(remotePath, {
-        '.warden/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .warden'),
         '.agents/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .agents'),
         '.claude/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .claude'),
+        '.warden/skills/my-skill/SKILL.md': skillMd('my-skill', 'From .warden'),
       });
 
       const skills = await discoverRemoteSkills('test/repo');
 
-      expect(skills[0]?.description).toBe('From .warden');
+      expect(skills[0]?.description).toBe('From .agents');
     });
   });
 
@@ -700,5 +702,151 @@ Prompt.
       .rejects.toThrow("Skill 'nonexistent' not found");
     await expect(resolveRemoteSkill('getsentry/skills', 'nonexistent', { offline: true }))
       .rejects.toThrow('Available skills: security-review');
+  });
+});
+
+/** Standard AGENT.md content for testing */
+function agentMd(name: string, description: string): string {
+  return `---
+name: ${name}
+description: ${description}
+---
+Prompt for ${name}.
+`;
+}
+
+describe('discoverRemoteAgents', () => {
+  let testDir: string;
+  const originalEnv = process.env['WARDEN_STATE_DIR'];
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `warden-remote-agent-discover-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    process.env['WARDEN_STATE_DIR'] = testDir;
+    mkdirSync(testDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env['WARDEN_STATE_DIR'];
+    } else {
+      process.env['WARDEN_STATE_DIR'] = originalEnv;
+    }
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('throws when remote is not cached', async () => {
+    await expect(discoverRemoteAgents('test/agents')).rejects.toThrow('Remote not cached');
+  });
+
+  it('discovers agents at root level', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      'agent-a/AGENT.md': agentMd('agent-a', 'Agent A'),
+      'agent-b/AGENT.md': agentMd('agent-b', 'Agent B'),
+    });
+
+    const agents = await discoverRemoteAgents('test/repo');
+
+    expect(agents.map((a) => a.name).sort()).toEqual(['agent-a', 'agent-b']);
+  });
+
+  it('discovers agents in .agents/agents directory', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      '.agents/agents/my-agent/AGENT.md': agentMd('my-agent', 'From .agents'),
+    });
+
+    const agents = await discoverRemoteAgents('test/repo');
+
+    expect(agents.length).toBe(1);
+    expect(agents[0]?.name).toBe('my-agent');
+  });
+
+  it('respects precedence: root > agents/ > .agents > .claude > .warden', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      'my-agent/AGENT.md': agentMd('my-agent', 'From root'),
+      'agents/my-agent/AGENT.md': agentMd('my-agent', 'From agents/'),
+      '.agents/agents/my-agent/AGENT.md': agentMd('my-agent', 'From .agents'),
+    });
+
+    const agents = await discoverRemoteAgents('test/repo');
+
+    expect(agents.length).toBe(1);
+    expect(agents[0]?.description).toBe('From root');
+  });
+
+  it('does not pick up SKILL.md files', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      'my-skill/SKILL.md': skillMd('my-skill', 'A skill not agent'),
+      'my-agent/AGENT.md': agentMd('my-agent', 'An agent'),
+    });
+
+    const agents = await discoverRemoteAgents('test/repo');
+
+    expect(agents.length).toBe(1);
+    expect(agents[0]?.name).toBe('my-agent');
+  });
+});
+
+describe('resolveRemoteAgent', () => {
+  const testDir2 = join(tmpdir(), `warden-remote-agent-resolve-${Date.now()}`);
+  const originalEnv = process.env['WARDEN_STATE_DIR'];
+
+  beforeEach(() => {
+    process.env['WARDEN_STATE_DIR'] = testDir2;
+    mkdirSync(testDir2, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env['WARDEN_STATE_DIR'];
+    } else {
+      process.env['WARDEN_STATE_DIR'] = originalEnv;
+    }
+    rmSync(testDir2, { recursive: true, force: true });
+  });
+
+  it('resolves agent by name', async () => {
+    const remotePath = getRemotePath('test/agents');
+    createFileTree(remotePath, {
+      'agents/my-agent/AGENT.md': agentMd('my-agent', 'My agent description'),
+    });
+
+    saveState({
+      remotes: {
+        'test/agents': {
+          sha: 'abc123',
+          fetchedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    const agent = await resolveRemoteAgent('test/agents', 'my-agent', { offline: true });
+
+    expect(agent.name).toBe('my-agent');
+    expect(agent.description).toBe('My agent description');
+  });
+
+  it('throws helpful error when agent not found', async () => {
+    const remotePath = getRemotePath('test/agents');
+    createFileTree(remotePath, {
+      'agents/existing-agent/AGENT.md': agentMd('existing-agent', 'Existing'),
+    });
+
+    saveState({
+      remotes: {
+        'test/agents': {
+          sha: 'abc123',
+          fetchedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    await expect(resolveRemoteAgent('test/agents', 'nonexistent', { offline: true }))
+      .rejects.toThrow("Agent 'nonexistent' not found");
+    await expect(resolveRemoteAgent('test/agents', 'nonexistent', { offline: true }))
+      .rejects.toThrow('Available agents: existing-agent');
   });
 });
