@@ -16,12 +16,16 @@ const DEFAULT_MAX_TOKENS = 4096;
 export function setGenAiResponseAttrs(
   span: Span,
   usage: { input_tokens: number; output_tokens: number },
-  stopReason?: string | null
+  stopReason?: string | null,
+  responseText?: string
 ): void {
   span.setAttribute('gen_ai.usage.input_tokens', usage.input_tokens);
   span.setAttribute('gen_ai.usage.output_tokens', usage.output_tokens);
   if (stopReason) {
     span.setAttribute('gen_ai.response.finish_reasons', [stopReason]);
+  }
+  if (responseText !== undefined) {
+    span.setAttribute('gen_ai.response.text', JSON.stringify([responseText]));
   }
 }
 
@@ -142,6 +146,8 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         messages.push({ role: 'assistant', content: prefill });
       }
 
+      span.setAttribute('gen_ai.request.messages', JSON.stringify(messages));
+
       try {
         const response = await client.messages.create({
           model: HAIKU_MODEL,
@@ -150,10 +156,10 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         });
 
         const usage = apiUsageToStats(HAIKU_MODEL, response.usage);
-        setGenAiResponseAttrs(span, response.usage, response.stop_reason);
 
         const content = response.content[0];
         if (!content || content.type !== 'text') {
+          setGenAiResponseAttrs(span, response.usage, response.stop_reason);
           return { success: false, error: 'Empty response from model', usage };
         }
 
@@ -161,6 +167,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         if (prefill) {
           fullText = prefill + fullText;
         }
+        setGenAiResponseAttrs(span, response.usage, response.stop_reason, fullText);
         const jsonStr = extractJson(fullText);
         if (!jsonStr) {
           return { success: false, error: 'No JSON found in response', usage };
@@ -233,12 +240,14 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         { role: 'user', content: prompt },
       ];
 
+      span.setAttribute('gen_ai.request.messages', JSON.stringify(messages));
+
       const usages: UsageStats[] = [];
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
 
-      function setFinalSpanAttrs(stopReason?: string | null): void {
-        setGenAiResponseAttrs(span, { input_tokens: totalInputTokens, output_tokens: totalOutputTokens }, stopReason);
+      function setFinalSpanAttrs(stopReason?: string | null, responseText?: string): void {
+        setGenAiResponseAttrs(span, { input_tokens: totalInputTokens, output_tokens: totalOutputTokens }, stopReason, responseText);
       }
 
       function currentUsage(): UsageStats {
@@ -301,10 +310,9 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
           continue;
         }
 
-        // Final response - set span attributes and extract JSON verdict
-        setFinalSpanAttrs(response.stop_reason);
-
+        // Final response - extract text and set span attributes
         if (response.stop_reason !== 'end_turn' && response.stop_reason !== 'max_tokens') {
+          setFinalSpanAttrs(response.stop_reason);
           return { success: false, error: `Unexpected stop reason: ${response.stop_reason}`, usage: aggregateUsage(usages) };
         }
 
@@ -313,8 +321,11 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         );
 
         if (!textBlock) {
+          setFinalSpanAttrs(response.stop_reason);
           return { success: false, error: 'No text in final response', usage: aggregateUsage(usages) };
         }
+
+        setFinalSpanAttrs(response.stop_reason, textBlock.text);
 
         const jsonStr = extractJson(textBlock.text);
         if (!jsonStr) {

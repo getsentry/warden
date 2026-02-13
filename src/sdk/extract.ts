@@ -206,27 +206,29 @@ export async function extractFindingsWithLLM(
     async (span) => {
       try {
         const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS });
-        const response = await client.messages.create({
-          model: HAIKU_MODEL,
-          max_tokens: LLM_FALLBACK_MAX_TOKENS,
-          messages: [
-            {
-              role: 'user',
-              content: `Extract the findings JSON from this model output.
+        const userContent = `Extract the findings JSON from this model output.
 Return ONLY valid JSON in format: {"findings": [...]}
 If no findings exist, return: {"findings": []}
 
 Model output:
-${truncatedText}`,
-            },
-          ],
+${truncatedText}`;
+        const messages: Anthropic.MessageParam[] = [
+          { role: 'user', content: userContent },
+        ];
+
+        span.setAttribute('gen_ai.request.messages', JSON.stringify(messages));
+
+        const response = await client.messages.create({
+          model: HAIKU_MODEL,
+          max_tokens: LLM_FALLBACK_MAX_TOKENS,
+          messages,
         });
 
         const usage = apiUsageToStats(HAIKU_MODEL, response.usage);
-        setGenAiResponseAttrs(span, response.usage, response.stop_reason);
 
         const content = response.content[0];
         if (!content || content.type !== 'text') {
+          setGenAiResponseAttrs(span, response.usage, response.stop_reason);
           return {
             success: false,
             error: 'llm_unexpected_response',
@@ -234,6 +236,8 @@ ${truncatedText}`,
             usage,
           };
         }
+
+        setGenAiResponseAttrs(span, response.usage, response.stop_reason, content.text);
 
         // Parse the LLM response as JSON
         const result = extractFindingsJson(content.text);

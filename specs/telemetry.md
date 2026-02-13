@@ -85,6 +85,7 @@ The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes for Sentry
 | `gen_ai.agent.name` | Model ID from options | [OTel SHOULD](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
 | `gen_ai.request.model` | Model ID from options | [OTel conditionally required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
 | `gen_ai.request.max_turns` | `maxTurns` value | Warden extension (not in spec) |
+| `gen_ai.request.messages` | Stringified `[{role, content}]` array | [Sentry AI Agents](https://docs.sentry.io/platforms/javascript/guides/node/ai-agent-monitoring/). Set on all `gen_ai.*` spans. |
 
 ### Response attributes (set after SDK result)
 
@@ -98,6 +99,7 @@ The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes for Sentry
 | `gen_ai.cost.total_tokens` | `resultMessage.total_cost_usd` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). USD cost from SDK. |
 | `gen_ai.response.id` | `resultMessage.uuid` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
 | `gen_ai.response.model` | First key in `resultMessage.modelUsage` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+| `gen_ai.response.text` | Stringified `["response text"]` array | [Sentry AI Agents](https://docs.sentry.io/platforms/javascript/guides/node/ai-agent-monitoring/). Set when response text is available. |
 
 **Token accounting:** The Anthropic API's `input_tokens` field counts only non-cached input tokens. `cache_read_input_tokens` and `cache_creation_input_tokens` are separate, non-overlapping counts. The OTel `gen_ai.usage.input_tokens` attribute represents the *total* input tokens, so we sum all three. Sentry then [subtracts the cached/reasoning counts from the totals](https://docs.sentry.io/platforms/javascript/guides/node/tracing/instrumentation/ai-agents-module/) to compute the raw portion. Setting `input_tokens` to only the non-cached value causes Sentry to compute negative costs.
 

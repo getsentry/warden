@@ -117,6 +117,11 @@ async function executeQuery(
       },
     },
     async (span) => {
+      span.setAttribute('gen_ai.request.messages', JSON.stringify([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]));
+
       // Capture stderr output for better error diagnostics
       const stderrChunks: string[] = [];
 
@@ -192,6 +197,10 @@ async function executeQuery(
           if (models[0]) {
             span.setAttribute('gen_ai.response.model', models[0]);
           }
+        }
+
+        if (resultMessage.subtype === 'success' && resultMessage.result) {
+          span.setAttribute('gen_ai.response.text', JSON.stringify([resultMessage.result]));
         }
 
         // Optional SDK metadata attributes
