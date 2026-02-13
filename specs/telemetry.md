@@ -49,8 +49,13 @@ workflow.run "review pull_request"
     skill.run "run {skill}"                    ← existing
       skill.analyze_file "analyze file {path}"
         skill.analyze_hunk "analyze hunk {path}:{range}"
-          gen_ai.invoke_agent "invoke_agent {model}"   ← Sentry AI dashboard
-            (auto: anthropic chat spans via integration)
+          gen_ai.invoke_agent "invoke_agent {skill}"   ← Sentry AI dashboard
+            gen_ai.chat "chat {skill} turn 1"          ← per-turn from SDK stream
+              gen_ai.execute_tool "Read"                ← tool use from SDK stream
+              gen_ai.execute_tool "Grep"
+            gen_ai.chat "chat {skill} turn 2"
+            gen_ai.chat "chat {skill} turn 3"
+              gen_ai.execute_tool "Read"
   workflow.review "post reviews"
   workflow.resolve "resolve stale comments"
     fix_eval.run "evaluate fix attempts"
@@ -63,7 +68,9 @@ workflow.run "review pull_request"
 | `op` | Scope | Notes |
 |------|-------|-------|
 | `gen_ai.invoke_agent` | Claude Code SDK subprocess | Required prefix for Sentry AI Agents dashboard |
-| `gen_ai.chat` | Direct Anthropic API calls | Auto-created by `anthropicAIIntegration` |
+| `gen_ai.chat` | Per-turn API call within SDK | Created from `SDKAssistantMessage` stream events; child of `invoke_agent` |
+| `gen_ai.execute_tool` | Tool execution within a turn | Created from `SDKAssistantMessage` tool_use blocks + `SDKToolProgressMessage`; child of `gen_ai.chat` |
+| `gen_ai.chat` (auto) | Direct Anthropic API calls | Auto-created by `anthropicAIIntegration` for non-SDK calls |
 | `skill.analyze_file` | Per-file orchestration | Internal workflow span |
 | `skill.analyze_hunk` | Per-hunk retry loop | Internal workflow span |
 | `fix_eval.run` | Fix evaluation batch | Internal workflow span |
@@ -110,9 +117,35 @@ The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes for Sentry
 | `sdk.duration_api_ms` | `resultMessage.duration_api_ms` |
 | `sdk.num_turns` | `resultMessage.num_turns` |
 
+### Per-turn `gen_ai.chat` attributes
+
+Created from `SDKAssistantMessage` events streamed by `query()`. Each span represents a completed API turn within the agent session. Buffered until the next `assistant` or `result` message so tool progress data is captured.
+
+| Attribute | Source | Notes |
+|-----------|--------|-------|
+| `gen_ai.operation.name` | `'chat'` | OTel operation name |
+| `gen_ai.provider.name` | `'anthropic'` | OTel provider |
+| `gen_ai.agent.name` | Skill name | Links turn to skill |
+| `gen_ai.response.model` | `message.message.model` | Actual model used for this turn |
+| `gen_ai.usage.input_tokens` | `input + cache_read + cache_write` | Total input tokens (same accounting as parent) |
+| `gen_ai.usage.output_tokens` | `message.message.usage.output_tokens` | Output tokens for this turn |
+| `gen_ai.usage.input_tokens.cached` | `message.message.usage.cache_read_input_tokens` | Cache read subset |
+| `gen_ai.usage.input_tokens.cache_write` | `message.message.usage.cache_creation_input_tokens` | Cache write subset |
+| `gen_ai.usage.total_tokens` | `input + output` | Total tokens for this turn |
+| `gen_ai.tool_use.count` | Count of `tool_use` content blocks | Number of tools invoked in this turn |
+
+### Per-tool `gen_ai.execute_tool` attributes
+
+Created from `tool_use` content blocks in `SDKAssistantMessage`, enriched with timing from `SDKToolProgressMessage`. Child spans of `gen_ai.chat`.
+
+| Attribute | Source | Notes |
+|-----------|--------|-------|
+| `gen_ai.tool.name` | `tool_use.name` | Tool name (e.g. `Read`, `Grep`) |
+| `tool.elapsed_seconds` | `SDKToolProgressMessage.elapsed_time_seconds` | Execution duration; only set when progress message received |
+
 ### Why manual instrumentation for the SDK
 
-The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic-ai/sdk` client call, so `anthropicAIIntegration` cannot auto-instrument it. The SDK does return rich telemetry in its result message, which we capture manually. Direct Anthropic API calls (haiku extraction, fix evaluation judge) *are* auto-instrumented by the integration.
+The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic-ai/sdk` client call, so `anthropicAIIntegration` cannot auto-instrument it. The SDK streams rich message types (`SDKAssistantMessage`, `SDKToolProgressMessage`) that provide per-turn token usage and tool execution data. We process these to create `gen_ai.chat` and `gen_ai.execute_tool` child spans. The aggregate result message provides session-level totals for the parent `gen_ai.invoke_agent` span. Direct Anthropic API calls (haiku extraction, fix evaluation judge) *are* auto-instrumented by the integration.
 
 ---
 

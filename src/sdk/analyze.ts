@@ -79,6 +79,16 @@ async function parseHunkOutput(
   };
 }
 
+/** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
+interface TurnData {
+  toolUses: { id: string; name: string }[];
+  inputTokens: number;
+  outputTokens: number;
+  cacheRead: number;
+  cacheWrite: number;
+  model: string;
+}
+
 /**
  * Result from executing an SDK query, including any captured errors.
  */
@@ -143,12 +153,87 @@ async function executeQuery(
       let resultMessage: SDKResultMessage | undefined;
       let authError: string | undefined;
 
+      // Per-turn tracing: buffer assistant messages and tool progress to create
+      // child spans (gen_ai.chat + gen_ai.execute_tool) under the invoke_agent span.
+      // We flush the previous turn when a new assistant message or result arrives,
+      // ensuring tool_progress events are captured before span creation.
+      let turnCount = 0;
+      let pendingTurn: TurnData | null = null;
+      const pendingToolProgress = new Map<string, number>();
+
+      /** Flush buffered turn data into gen_ai.chat and gen_ai.execute_tool child spans. */
+      function flushPendingTurn(): void {
+        if (!pendingTurn) return;
+        turnCount++;
+        const turn = pendingTurn;
+        const toolProgress = new Map(pendingToolProgress);
+        pendingTurn = null;
+        pendingToolProgress.clear();
+
+        try {
+          const totalInput = turn.inputTokens + turn.cacheRead + turn.cacheWrite;
+
+          Sentry.startSpan(
+            {
+              op: 'gen_ai.chat',
+              name: `chat ${skillName} turn ${turnCount}`,
+              attributes: {
+                'gen_ai.operation.name': 'chat',
+                'gen_ai.provider.name': 'anthropic',
+                'gen_ai.agent.name': skillName,
+                'gen_ai.response.model': turn.model,
+                'gen_ai.usage.input_tokens': totalInput,
+                'gen_ai.usage.output_tokens': turn.outputTokens,
+                'gen_ai.usage.input_tokens.cached': turn.cacheRead,
+                'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
+                'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
+                'gen_ai.tool_use.count': turn.toolUses.length,
+              },
+            },
+            () => {
+              for (const toolUse of turn.toolUses) {
+                const elapsed = toolProgress.get(toolUse.id);
+                Sentry.startSpan(
+                  {
+                    op: 'gen_ai.execute_tool',
+                    name: toolUse.name,
+                    attributes: {
+                      'gen_ai.tool.name': toolUse.name,
+                      ...(elapsed !== undefined && { 'tool.elapsed_seconds': elapsed }),
+                    },
+                  },
+                  () => { /* point-in-time span */ }
+                );
+              }
+            }
+          );
+        } catch {
+          // Telemetry should never break the workflow
+        }
+      }
+
       try {
         for await (const message of stream) {
-          if (message.type === 'result') {
+          if (message.type === 'assistant') {
+            flushPendingTurn();
+            const msg = message.message;
+            const toolUses = msg.content
+              .filter((block): block is typeof block & { type: 'tool_use' } => block.type === 'tool_use')
+              .map(({ id, name }) => ({ id, name }));
+            pendingTurn = {
+              toolUses,
+              inputTokens: msg.usage?.input_tokens ?? 0,
+              outputTokens: msg.usage?.output_tokens ?? 0,
+              cacheRead: msg.usage?.cache_read_input_tokens ?? 0,
+              cacheWrite: msg.usage?.cache_creation_input_tokens ?? 0,
+              model: msg.model,
+            };
+          } else if (message.type === 'tool_progress') {
+            pendingToolProgress.set(message.tool_use_id, message.elapsed_time_seconds);
+          } else if (message.type === 'result') {
+            flushPendingTurn();
             resultMessage = message;
           } else if (message.type === 'auth_status' && message.error) {
-            // Capture authentication errors from auth_status messages
             authError = message.error;
           }
         }
@@ -162,6 +247,9 @@ async function executeQuery(
           throw enhancedError;
         }
         throw error;
+      } finally {
+        // Flush any pending turn data for trace completeness
+        flushPendingTurn();
       }
 
       // Set response attributes from SDK result
@@ -189,9 +277,12 @@ async function executeQuery(
         }
         if (resultMessage.modelUsage) {
           const models = Object.keys(resultMessage.modelUsage);
-          if (models[0]) {
+          if (models.length === 1 && models[0]) {
+            // Single model: set per OTel spec (string, one model)
             span.setAttribute('gen_ai.response.model', models[0]);
           }
+          // Multiple models: don't set gen_ai.response.model on the parent.
+          // Per-turn gen_ai.chat child spans carry the correct model each.
         }
 
         // Optional SDK metadata attributes
