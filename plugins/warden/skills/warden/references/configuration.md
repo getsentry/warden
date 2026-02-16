@@ -21,7 +21,7 @@ actions = ["opened", "synchronize"]
 
 ## Skill Configuration
 
-Skills define what to analyze and when. Each skill requires a name and at least one trigger:
+Skills define what to analyze and when. Each skill requires a name. Triggers are optional — skills with no triggers run everywhere (PR, local, schedule). All skills run locally regardless of trigger type.
 
 ```toml
 [[skills]]
@@ -36,7 +36,7 @@ type = "pull_request"
 actions = ["opened", "synchronize"]
 ```
 
-**Trigger types:** `pull_request`, `local`, `schedule`
+**Trigger types:** `pull_request`, `local` (local-only), `schedule` (CI-only)
 
 **Actions (pull_request):** `opened`, `synchronize`, `reopened`, `closed`
 

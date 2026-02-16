@@ -69,8 +69,10 @@ fixBranchPrefix = "security-fix"       # Branch name prefix
 
 **Trigger types:**
 - `pull_request` - Triggers on PR events
-- `local` - Triggers on local CLI runs
-- `schedule` - Triggers on cron schedule (GitHub Action)
+- `local` - Local CLI only (will not run in CI)
+- `schedule` - Cron schedule (GitHub Action only)
+
+All skills run locally regardless of trigger type. Skills with no triggers run everywhere (wildcard). Use `type = "local"` for skills that should *only* run locally.
 
 **Actions (for pull_request):**
 - `opened`, `synchronize`, `reopened`, `closed`

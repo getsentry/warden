@@ -484,9 +484,19 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
 
   // Filter by skill if specified
-  const triggersToRun = options.skill
+  const filtered = options.skill
     ? matchedTriggers.filter((t) => t.skill === options.skill)
     : matchedTriggers;
+
+  // Deduplicate by skill name — prefer 'local' triggers (may have local-specific overrides)
+  const seen = new Map<string, typeof filtered[number]>();
+  for (const t of filtered) {
+    const existing = seen.get(t.skill);
+    if (!existing || (t.type === 'local' && existing.type !== 'local')) {
+      seen.set(t.skill, t);
+    }
+  }
+  const triggersToRun = [...seen.values()];
 
   if (triggersToRun.length === 0) {
     if (!options.json) {

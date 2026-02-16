@@ -155,8 +155,8 @@ export function filterContextByPaths(
  *
  * Trigger types:
  * - '*' (wildcard): matches all environments, skips event/action checks
- * - 'local': matches only when environment is 'local'
- * - 'pull_request': matches when environment is 'github' and event is pull_request
+ * - 'local': matches only when environment is 'local' (local-only skills)
+ * - 'pull_request': matches in 'github' (with event/action checks) and 'local' (path filters only)
  * - 'schedule': matches when event is schedule
  */
 export function matchTrigger(
@@ -179,13 +179,14 @@ export function matchTrigger(
 
   if (trigger.type === 'pull_request') {
     if (environment === 'local') {
-      return false;
-    }
-    if (context.eventType !== 'pull_request') {
-      return false;
-    }
-    if (!trigger.actions?.includes(context.action)) {
-      return false;
+      // Local mode runs all skills — skip event/action checks, fall through to path filters
+    } else {
+      if (context.eventType !== 'pull_request') {
+        return false;
+      }
+      if (!trigger.actions?.includes(context.action)) {
+        return false;
+      }
     }
   }
 

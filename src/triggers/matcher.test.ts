@@ -147,8 +147,8 @@ describe('matchTrigger', () => {
     expect(matchTrigger(baseTrigger, baseContext, 'github')).toBe(true);
   });
 
-  it('does not match PR trigger in local environment', () => {
-    expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(false);
+  it('matches PR trigger in local environment', () => {
+    expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(true);
   });
 
   it('does not match wrong action', () => {
@@ -232,8 +232,13 @@ describe('matchTrigger', () => {
       expect(matchTrigger(baseTrigger, baseContext, 'github')).toBe(true);
     });
 
-    it('pull_request trigger does not match in local environment', () => {
-      expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(false);
+    it('pull_request trigger matches in local environment', () => {
+      expect(matchTrigger(baseTrigger, baseContext, 'local')).toBe(true);
+    });
+
+    it('pull_request trigger still applies path filters in local environment', () => {
+      const trigger = { ...baseTrigger, filters: { paths: ['lib/**/*.ts'] } };
+      expect(matchTrigger(trigger, baseContext, 'local')).toBe(false);
     });
 
     it('wildcard trigger matches in any environment', () => {
