@@ -17,6 +17,3 @@ export const ICON_PENDING = '\u25CB'; // ○ WHITE CIRCLE
 
 /** X mark for error states */
 export const ICON_ERROR = '\u2717'; // ✗ BALLOT X
-
-/** Static running indicator for promoted skill headers */
-export const ICON_RUNNING = '\u2847'; // ⡇ BRAILLE (static, non-animated)

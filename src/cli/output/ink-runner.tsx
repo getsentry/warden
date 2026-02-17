@@ -36,18 +36,16 @@ import {
 import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
 import { runPool } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
-import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES, ICON_RUNNING } from './icons.js';
+import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
 
 type StaticItem =
   | { kind: 'file'; key: string; file: FileState }
-  | { kind: 'skill'; key: string; skill: SkillState }
-  | { kind: 'skill-header'; key: string; displayName: string };
+  | { kind: 'skill'; key: string; skill: SkillState };
 
 interface SkillRunnerProps {
   skills: SkillState[];
   completedItems: StaticItem[];
-  promotedHeaders: Set<string>;
   interrupted: boolean;
 }
 
@@ -148,17 +146,26 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
   );
 }
 
-function RunningSkill({ skill, showHeader }: { skill: SkillState; showHeader: boolean }): React.ReactElement {
+const MAX_VISIBLE_COMPLETED = 3;
+
+function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
+  const completedFiles = skill.files.filter((f) => f.status === 'done' || f.status === 'skipped');
   const activeFiles = skill.files.filter((f) => f.status === 'running');
+  const hiddenCount = Math.max(0, completedFiles.length - MAX_VISIBLE_COMPLETED);
+  const visibleCompleted = completedFiles.slice(-MAX_VISIBLE_COMPLETED);
 
   return (
     <Box flexDirection="column">
-      {showHeader && (
-        <Box>
-          <Spinner />
-          <Text> {skill.displayName}</Text>
+      <Box>
+        <Spinner />
+        <Text> {skill.displayName}</Text>
+        {hiddenCount > 0 && <Text dimColor>  {hiddenCount} completed</Text>}
+      </Box>
+      {visibleCompleted.map((file) => (
+        <Box key={file.filename} marginLeft={2}>
+          <FileProgress file={file} />
         </Box>
-      )}
+      ))}
       {activeFiles.map((file) => (
         <Box key={file.filename} marginLeft={2}>
           <FileProgress file={file} />
@@ -178,27 +185,27 @@ function RunningSkill({ skill, showHeader }: { skill: SkillState; showHeader: bo
  * We use a SINGLE Static component to avoid layout conflicts from multiple
  * absolutely-positioned Static containers.
  */
-function SkillRunner({ skills, completedItems, promotedHeaders, interrupted }: SkillRunnerProps): React.ReactElement {
+function SkillRunner({ skills, completedItems, interrupted }: SkillRunnerProps): React.ReactElement {
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
 
   return (
     <Box flexDirection="column">
       {/*
-       * Completed files and skills - each item has a stable reference and unique key.
-       * File items are pushed as they complete; skill items when the skill finishes.
+       * Completed skills with their files - pushed as a batch when a skill finishes.
+       * Each item has a stable reference and unique key.
        */}
       <Static items={completedItems}>
-        {(item) => {
-          if (item.kind === 'skill') return <CompletedSkill key={item.key} skill={item.skill} />;
-          if (item.kind === 'skill-header') return <Box key={item.key}><Text color="yellow">{ICON_RUNNING}</Text><Text> {item.displayName}</Text></Box>;
-          return <Box key={item.key} marginLeft={2}><FileProgress file={item.file} /></Box>;
-        }}
+        {(item) =>
+          item.kind === 'skill'
+            ? <CompletedSkill key={item.key} skill={item.skill} />
+            : <Box key={item.key} marginLeft={2}><FileProgress file={item.file} /></Box>
+        }
       </Static>
 
       {/* Dynamic content - updates in place */}
       {running.map((skill) => (
-        <RunningSkill key={skill.name} skill={skill} showHeader={!promotedHeaders.has(skill.name)} />
+        <RunningSkill key={skill.name} skill={skill} />
       ))}
       {pending.map((skill) => (
         <Text key={skill.name} dimColor>
@@ -250,8 +257,6 @@ export async function runSkillTasksWithInk(
   const skillStates: SkillState[] = [];
   const completedItems: StaticItem[] = [];
   const completedSkillNames = new Set<string>();
-  const completedFileKeys = new Set<string>();
-  const promotedHeaders = new Set<string>();
 
   // Print header before Ink starts - this avoids multiple Static components
   // which can cause layout conflicts due to absolute positioning
@@ -262,7 +267,7 @@ export async function runSkillTasksWithInk(
 
   // Create Ink instance
   const { rerender, unmount } = render(
-    <SkillRunner skills={skillStates} completedItems={completedItems} promotedHeaders={promotedHeaders} interrupted={false} />,
+    <SkillRunner skills={skillStates} completedItems={completedItems} interrupted={false} />,
     { stdout: process.stderr }
   );
 
@@ -278,7 +283,7 @@ export async function runSkillTasksWithInk(
     setImmediate(() => {
       updatePending = false;
       if (unmounted) return;
-      rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} promotedHeaders={promotedHeaders} interrupted={interrupted} />);
+      rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} interrupted={interrupted} />);
     });
   };
 
@@ -304,10 +309,15 @@ export async function runSkillTasksWithInk(
         const updated = { ...existing, ...updates };
         skillStates[idx] = updated;
 
-        // If skill just completed, add to completedItems (only once)
+        // When skill completes, push header + all files to Static as a batch
         if (updates.status === 'done' && !completedSkillNames.has(name)) {
           completedSkillNames.add(name);
           completedItems.push({ kind: 'skill', key: `skill:${name}`, skill: updated });
+          for (const file of updated.files) {
+            if (file.status === 'done' || file.status === 'skipped') {
+              completedItems.push({ kind: 'file', key: `${name}:${file.filename}`, file: { ...file } });
+            }
+          }
         }
 
         updateUI();
@@ -319,21 +329,6 @@ export async function runSkillTasksWithInk(
         const file = skill.files.find((f) => f.filename === filename);
         if (file) {
           Object.assign(file, updates);
-
-          // Move completed files to Static section
-          if ((file.status === 'done' || file.status === 'skipped')) {
-            const fileKey = `${skillName}:${filename}`;
-            if (!completedFileKeys.has(fileKey)) {
-              // Emit skill header before the first completed file
-              if (!promotedHeaders.has(skillName)) {
-                promotedHeaders.add(skillName);
-                completedItems.push({ kind: 'skill-header', key: `header:${skillName}`, displayName: skill.displayName });
-              }
-              completedFileKeys.add(fileKey);
-              completedItems.push({ kind: 'file', key: fileKey, file: { ...file } });
-            }
-          }
-
           updateUI();
         }
       }
