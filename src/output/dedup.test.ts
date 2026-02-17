@@ -282,6 +282,62 @@ describe('deduplicateFindings', () => {
     const result = await deduplicateFindings(findings, existingComments, {});
     expect(result.newFindings).toHaveLength(1);
   });
+
+  it('matches additional locations against Warden comments', async () => {
+    // Simulates winner-flip: finding primary is now at b.ts, but our old comment is at a.ts
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/b.ts', startLine: 20 },
+      additionalLocations: [{ path: 'src/db.ts', startLine: 42 }],
+    };
+
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: true,
+      },
+    ];
+
+    const result = await deduplicateFindings([finding], existingComments, { hashOnly: true });
+    expect(result.newFindings).toHaveLength(0);
+    expect(result.duplicateActions).toHaveLength(1);
+    expect(result.duplicateActions[0]!.type).toBe('update_warden');
+  });
+
+  it('does not match additional locations against external comments', async () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/b.ts', startLine: 20 },
+      additionalLocations: [{ path: 'src/db.ts', startLine: 42 }],
+    };
+
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: false,
+      },
+    ];
+
+    const result = await deduplicateFindings([finding], existingComments, { hashOnly: true });
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.duplicateActions).toHaveLength(0);
+  });
 });
 
 describe('parseWardenSkills', () => {
@@ -637,5 +693,33 @@ describe('consolidateBatchFindings', () => {
     const result = await consolidateBatchFindings([finding1, finding2]);
     expect(result.findings).toHaveLength(2);
     expect(result.removedCount).toBe(0);
+  });
+
+  it('preserves locations from losers via mergeGroup (hash dedup)', async () => {
+    // Two exact-duplicate findings at the same location: hash dedup should pick first
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+      additionalLocations: [{ path: 'src/api.ts', startLine: 100 }],
+    };
+
+    // Hash dedup removes exact duplicates before LLM phase
+    // Since they have the same hash+line, finding2 is dropped
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(1);
+    // Hash dedup just drops duplicates (doesn't merge locations)
+    // That's expected: mergeGroup is used for LLM-grouped findings
+    expect(result.findings[0]).toBe(finding1);
   });
 });

@@ -12,6 +12,7 @@ import {
   aggregateUsage,
   aggregateAuxiliaryUsage,
   deduplicateFindings,
+  mergeCrossLocationFindings,
   generateSummary,
   type AuxiliaryUsageEntry,
   type SkillRunnerOptions,
@@ -332,10 +333,20 @@ export async function runSkillTask(
         const uniqueFindings = deduplicateFindings(allFindings);
         emitDedupMetrics(allFindings.length, uniqueFindings.length);
 
+        // Merge findings that describe the same issue at different locations
+        const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
+          apiKey: runnerOptions.apiKey,
+          repoPath: context.repoPath,
+        });
+        const mergedFindings = mergeResult.findings;
+        if (mergeResult.usage) {
+          allAuxEntries.push({ agent: 'merge', usage: mergeResult.usage });
+        }
+
         const report: SkillReport = {
           skill: skill.name,
-          summary: generateSummary(skill.name, uniqueFindings),
-          findings: uniqueFindings,
+          summary: generateSummary(skill.name, mergedFindings),
+          findings: mergedFindings,
           usage: aggregateUsage(allUsage),
           durationMs: duration,
           files: preparedFiles.map((file, i) => {

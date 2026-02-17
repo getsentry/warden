@@ -1106,6 +1106,100 @@ describe('renderSkillReport', () => {
     });
   });
 
+  describe('additionalLocations', () => {
+    it('renders additional locations section in inline comment', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'high',
+            title: 'Missing null check',
+            description: 'Input not validated',
+            location: { path: 'src/a.ts', startLine: 10 },
+            additionalLocations: [
+              { path: 'src/b.ts', startLine: 20, endLine: 25 },
+              { path: 'src/c.ts', startLine: 5 },
+            ],
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report);
+      const body = result.review!.comments[0]!.body;
+
+      expect(body).toContain('Also found at 2 additional locations');
+      expect(body).toContain('`src/b.ts:20-25`');
+      expect(body).toContain('`src/c.ts:5`');
+      expect(body).toContain('<details>');
+    });
+
+    it('uses singular "location" for one additional location', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'medium',
+            title: 'Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+            additionalLocations: [{ path: 'src/b.ts', startLine: 10 }],
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report);
+      const body = result.review!.comments[0]!.body;
+
+      expect(body).toContain('1 additional location');
+      expect(body).not.toContain('locations');
+    });
+
+    it('shows +N more locations in summary item', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'medium',
+            title: 'Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+            additionalLocations: [
+              { path: 'src/b.ts', startLine: 10 },
+              { path: 'src/c.ts', startLine: 20 },
+            ],
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report);
+      expect(result.summaryComment).toContain('+2 more locations');
+    });
+
+    it('does not show additional locations section when none exist', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'medium',
+            title: 'Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report);
+      const body = result.review!.comments[0]!.body;
+
+      expect(body).not.toContain('Also found at');
+      expect(body).not.toContain('additional location');
+    });
+  });
+
   describe('mixed inline and locationless findings', () => {
     it('includes locationless findings in review body alongside inline comments', () => {
       const report: SkillReport = {

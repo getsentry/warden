@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import { customAlphabet } from 'nanoid';
-import { FindingSchema } from '../types/index.js';
-import type { Finding, UsageStats } from '../types/index.js';
+import { FindingSchema, compareFindingPriority } from '../types/index.js';
+import type { Finding, Location, UsageStats } from '../types/index.js';
 import { Sentry } from '../sentry.js';
-import { HAIKU_MODEL, setGenAiResponseAttrs } from './haiku.js';
+import { callHaiku, HAIKU_MODEL, setGenAiResponseAttrs } from './haiku.js';
 import { apiUsageToStats } from './pricing.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
@@ -309,4 +312,170 @@ export function deduplicateFindings(findings: Finding[]): Finding[] {
     seen.add(key);
     return true;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Cross-location merging
+// ---------------------------------------------------------------------------
+
+/**
+ * Transfer locations from loser findings to the winner.
+ * Each loser's primary location and any existing additionalLocations are
+ * appended to winner.additionalLocations. Mutates the winner in place.
+ *
+ * @param sortedGroup - Findings sorted by priority (winner first, losers after).
+ * @returns The winner finding with merged locations, or undefined if the group is empty.
+ */
+export function mergeGroupLocations(sortedGroup: Finding[]): Finding | undefined {
+  const winner = sortedGroup[0];
+  if (!winner) return undefined;
+
+  const losers = sortedGroup.slice(1);
+  if (losers.length === 0) return winner;
+
+  const extraLocations: Location[] = winner.additionalLocations
+    ? [...winner.additionalLocations]
+    : [];
+
+  for (const loser of losers) {
+    if (loser.location) {
+      extraLocations.push(loser.location);
+    }
+    if (loser.additionalLocations) {
+      extraLocations.push(...loser.additionalLocations);
+    }
+  }
+
+  if (extraLocations.length === 0) return winner;
+
+  // Deduplicate locations by path:startLine:endLine
+  const seen = new Set<string>();
+  const uniqueLocations = extraLocations.filter((loc) => {
+    const key = `${loc.path}:${loc.startLine}:${loc.endLine ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Return a shallow copy to avoid mutating the original finding
+  return { ...winner, additionalLocations: uniqueLocations };
+}
+
+/** Schema for LLM merge response: groups of finding indices sharing a root cause. */
+const MergeGroupsSchema = z.array(z.array(z.number().int()));
+
+/**
+ * Result from merging cross-location findings.
+ */
+export interface MergeResult {
+  findings: Finding[];
+  mergedCount: number;
+  usage?: UsageStats;
+}
+
+/**
+ * Read a code snippet from disk around a given line.
+ * Returns empty string on any I/O error.
+ */
+function readSnippet(repoPath: string, filePath: string, startLine: number, contextLines = 3): string {
+  try {
+    const fullPath = join(repoPath, filePath);
+    const content = readFileSync(fullPath, 'utf-8');
+    const lines = content.split('\n');
+    const start = Math.max(0, startLine - 1 - contextLines);
+    const end = Math.min(lines.length, startLine - 1 + contextLines + 1);
+    return lines.slice(start, end).join('\n');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Merge findings that describe the same issue across different code locations.
+ *
+ * Uses Haiku to identify groups of findings about the same root cause at
+ * different locations. For each group, the highest-priority finding becomes
+ * the primary; other locations move to `additionalLocations`.
+ *
+ * Skips entirely (no LLM call) when:
+ * - Fewer than 2 findings have locations
+ * - No API key is provided
+ */
+export async function mergeCrossLocationFindings(
+  findings: Finding[],
+  options?: { apiKey?: string; repoPath?: string }
+): Promise<MergeResult> {
+  const apiKey = options?.apiKey;
+  const repoPath = options?.repoPath ?? '.';
+
+  // Early exit: need at least 2 located findings to merge
+  const withLocations = findings.filter((f) => f.location);
+  if (withLocations.length < 2 || !apiKey) {
+    return { findings, mergedCount: 0 };
+  }
+
+  // Build context for each finding (all have locations per the filter above)
+  const findingDescriptions = withLocations.map((f, i) => {
+    const loc = f.location;
+    if (!loc) return ''; // Unreachable: filtered above, satisfies type narrowing
+    const range = loc.endLine ? `${loc.startLine}-${loc.endLine}` : `${loc.startLine}`;
+    const snippet = readSnippet(repoPath, loc.path, loc.startLine);
+    const codeBlock = snippet ? `\n   Code: ${snippet.split('\n').join('\n   ')}` : '';
+    return `${i + 1}. [${loc.path}:${range}] "${f.title}" - ${f.description}${codeBlock}`;
+  });
+
+  const prompt = `Identify which of these code review findings describe the SAME underlying issue appearing at different locations. Group them by shared root cause.
+
+Findings:
+${findingDescriptions.join('\n')}
+
+Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
+Singletons should not appear. Return [] if no findings describe the same issue.`;
+
+  const result = await callHaiku({
+    apiKey,
+    prompt,
+    schema: MergeGroupsSchema,
+    maxTokens: 512,
+  });
+
+  if (!result.success) {
+    return { findings, mergedCount: 0, usage: result.usage };
+  }
+
+  // Process groups: merge locations into winner
+  const absorbed = new Set<Finding>();
+  // Map from original finding to its merged replacement (with additionalLocations)
+  const replacements = new Map<Finding, Finding>();
+
+  for (const group of result.data) {
+    if (group.length < 2) continue;
+
+    const groupFindings = group
+      .map((idx) => withLocations[idx - 1])
+      .filter((f): f is Finding => f !== undefined && !absorbed.has(f));
+
+    if (groupFindings.length < 2) continue;
+
+    // Pick winner: highest severity → confidence → path → line
+    const sorted = [...groupFindings].sort(compareFindingPriority);
+    const winner = sorted[0];
+    const merged = mergeGroupLocations(sorted);
+    if (winner && merged && merged !== winner) {
+      replacements.set(winner, merged);
+    }
+
+    for (const loser of sorted.slice(1)) {
+      absorbed.add(loser);
+    }
+  }
+
+  if (absorbed.size === 0) {
+    return { findings, mergedCount: 0, usage: result.usage };
+  }
+
+  const merged = findings
+    .filter((f) => !absorbed.has(f))
+    .map((f) => replacements.get(f) ?? f);
+  return { findings: merged, mergedCount: absorbed.size, usage: result.usage };
 }

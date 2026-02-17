@@ -80,6 +80,16 @@ function formatFindingTTY(finding: Finding): string[] {
     // For 'line_not_found', we silently skip - the line may not exist in this version
   }
 
+  // Additional locations
+  if (finding.additionalLocations?.length) {
+    const count = finding.additionalLocations.length;
+    lines.push(`  ${chalk.dim(`+${count} more ${pluralize(count, 'location')}:`)}`);
+    for (const loc of finding.additionalLocations) {
+      const range = loc.endLine ? `${loc.startLine}-${loc.endLine}` : `${loc.startLine}`;
+      lines.push(`    ${chalk.dim(`${loc.path}:${range}`)}`);
+    }
+  }
+
   // Blank line, then description
   lines.push('');
   lines.push(`  ${chalk.dim(finding.description)}`);
@@ -125,6 +135,15 @@ function formatFindingCI(finding: Finding): string[] {
   // Confidence
   if (finding.confidence) {
     lines.push(`  confidence: ${finding.confidence}`);
+  }
+
+  // Additional locations
+  if (finding.additionalLocations?.length) {
+    const locs = finding.additionalLocations.map((loc) => {
+      const range = loc.endLine ? `${loc.startLine}-${loc.endLine}` : `${loc.startLine}`;
+      return `${loc.path}:${range}`;
+    });
+    lines.push(`  also at: ${locs.join(', ')}`);
   }
 
   // Description

@@ -189,6 +189,59 @@ describe('findingsToAnnotations', () => {
     expect(annotations.map((a) => a.title)).toEqual(['Critical', 'High']);
   });
 
+  it('generates annotations for additional locations', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'Missing null check',
+        description: 'Input not validated',
+        location: { path: 'src/a.ts', startLine: 10, endLine: 15 },
+        additionalLocations: [
+          { path: 'src/b.ts', startLine: 20 },
+          { path: 'src/c.ts', startLine: 30, endLine: 35 },
+        ],
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings);
+
+    expect(annotations).toHaveLength(3);
+    // Primary annotation
+    expect(annotations[0]).toEqual({
+      path: 'src/a.ts',
+      start_line: 10,
+      end_line: 15,
+      annotation_level: 'failure',
+      message: 'Input not validated',
+      title: 'Missing null check',
+    });
+    // Additional location annotations
+    expect(annotations[1]!.path).toBe('src/b.ts');
+    expect(annotations[1]!.title).toBe('[f1] Missing null check (additional location)');
+    expect(annotations[2]!.path).toBe('src/c.ts');
+    expect(annotations[2]!.start_line).toBe(30);
+    expect(annotations[2]!.end_line).toBe(35);
+  });
+
+  it('respects annotation limit with additional locations', () => {
+    // Create 45 findings, each with 2 additional locations = 135 total annotations
+    const findings: Finding[] = Array.from({ length: 45 }, (_, i) => ({
+      id: `f${i}`,
+      severity: 'info' as const,
+      title: `Finding ${i}`,
+      description: `Desc ${i}`,
+      location: { path: `file${i}.ts`, startLine: i + 1 },
+      additionalLocations: [
+        { path: `extra1-${i}.ts`, startLine: 1 },
+        { path: `extra2-${i}.ts`, startLine: 1 },
+      ],
+    }));
+
+    const annotations = findingsToAnnotations(findings);
+    expect(annotations.length).toBeLessThanOrEqual(50);
+  });
+
   it('returns all findings when reportOn is undefined', () => {
     const findings: Finding[] = [
       {

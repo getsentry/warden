@@ -7,7 +7,7 @@ import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthen
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
-import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings } from './extract.js';
+import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
@@ -863,8 +863,18 @@ export async function runSkill(
   const uniqueFindings = deduplicateFindings(allFindings);
   emitDedupMetrics(allFindings.length, uniqueFindings.length);
 
+  // Merge findings that describe the same issue at different locations
+  const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
+    apiKey: options.apiKey,
+    repoPath: context.repoPath,
+  });
+  const mergedFindings = mergeResult.findings;
+  if (mergeResult.usage) {
+    allAuxiliaryUsage.push({ agent: 'merge', usage: mergeResult.usage });
+  }
+
   // Generate summary
-  const summary = generateSummary(skill.name, uniqueFindings);
+  const summary = generateSummary(skill.name, mergedFindings);
 
   // Aggregate usage across all hunks
   const totalUsage = aggregateUsage(allUsage);
@@ -872,7 +882,7 @@ export async function runSkill(
   const report: SkillReport = {
     skill: skill.name,
     summary,
-    findings: uniqueFindings,
+    findings: mergedFindings,
     usage: totalUsage,
     durationMs: Date.now() - startTime,
     files: fileResults.map((fr) => ({

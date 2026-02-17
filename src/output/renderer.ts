@@ -82,6 +82,19 @@ function renderReview(
       body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
     }
 
+    // Additional locations section
+    if (finding.additionalLocations?.length) {
+      body += '\n\n<details><summary>Also found at ' +
+        `${finding.additionalLocations.length} additional ` +
+        pluralize(finding.additionalLocations.length, 'location') +
+        '</summary>\n\n';
+      for (const loc of finding.additionalLocations) {
+        const range = loc.endLine ? `${loc.startLine}-${loc.endLine}` : `${loc.startLine}`;
+        body += `- \`${loc.path}:${range}\`\n`;
+      }
+      body += '\n</details>';
+    }
+
     // Add attribution footnote with skill name, severity, and confidence
     const confidenceSuffix = finding.confidence ? `, ${finding.confidence} confidence` : '';
     body += `\n\n<sub>Identified by Warden via \`${report.skill}\` · ${finding.severity}${confidenceSuffix}</sub>`;
@@ -256,8 +269,11 @@ function formatLineRange(loc: { startLine: number; endLine?: number }): string {
 
 function renderFindingItem(finding: Finding): string {
   const location = finding.location ? ` (${formatLineRange(finding.location)})` : '';
+  const extra = finding.additionalLocations?.length
+    ? ` (+${finding.additionalLocations.length} more ${pluralize(finding.additionalLocations.length, 'location')})`
+    : '';
   const confidence = finding.confidence ? ` [${finding.confidence} confidence]` : '';
-  return `- ${SEVERITY_EMOJI[finding.severity]} \`${finding.id}\` **${escapeHtml(finding.title)}**${location}${confidence}: ${escapeHtml(finding.description)}`;
+  return `- ${SEVERITY_EMOJI[finding.severity]} \`${finding.id}\` **${escapeHtml(finding.title)}**${location}${extra}${confidence}: ${escapeHtml(finding.description)}`;
 }
 
 /** Render findings as markdown for inclusion in a review body. */

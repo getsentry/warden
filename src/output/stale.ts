@@ -34,7 +34,20 @@ function stripFindingIdPrefix(title: string): string {
 }
 
 /**
+ * Check if a single location matches a comment (same path, proximate line).
+ */
+function locationMatchesComment(
+  location: { path: string; startLine: number; endLine?: number },
+  comment: ExistingComment
+): boolean {
+  if (location.path !== comment.path) return false;
+  const line = location.endLine ?? location.startLine;
+  return Math.abs(line - comment.line) <= 5;
+}
+
+/**
  * Check if a finding matches a comment (same location and similar content).
+ * Checks both the primary location and any additional locations.
  */
 export function findingMatchesComment(finding: Finding, comment: ExistingComment): boolean {
   // Must have a location to match
@@ -42,15 +55,12 @@ export function findingMatchesComment(finding: Finding, comment: ExistingComment
     return false;
   }
 
-  // File path must match
-  if (finding.location.path !== comment.path) {
-    return false;
-  }
+  // Check if any location (primary or additional) matches the comment path+line
+  const locationMatches =
+    locationMatchesComment(finding.location, comment) ||
+    (finding.additionalLocations?.some((loc) => locationMatchesComment(loc, comment)) ?? false);
 
-  // Check line proximity - findings may shift a few lines
-  const findingLine = finding.location.endLine ?? finding.location.startLine;
-  const lineDiff = Math.abs(findingLine - comment.line);
-  if (lineDiff > 5) {
+  if (!locationMatches) {
     return false;
   }
 

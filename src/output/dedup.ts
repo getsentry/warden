@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
-import { SEVERITY_ORDER, CONFIDENCE_ORDER } from '../types/index.js';
+import { findingLine, compareFindingPriority } from '../types/index.js';
 import { callHaiku } from '../sdk/haiku.js';
+import { mergeGroupLocations } from '../sdk/extract.js';
 
 /**
  * Parsed marker data from a Warden comment.
@@ -586,36 +587,14 @@ const ConsolidationGroupsSchema = z.array(
 );
 
 /**
- * Get the effective line number for a finding (endLine if present, otherwise startLine).
+ * Pick the best finding from a group and merge additional locations from losers.
+ * Highest severity wins, then confidence, then position.
+ * Locations from losers are preserved in winner.additionalLocations.
  */
-function findingLine(f: Finding): number {
-  return f.location?.endLine ?? f.location?.startLine ?? 0;
-}
-
-/**
- * Compare two findings by severity (lower = more severe), then confidence, then position.
- * Returns negative if `a` should be preferred over `b`.
- */
-function compareFindingPriority(a: Finding, b: Finding): number {
-  const sevDiff = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
-  if (sevDiff !== 0) return sevDiff;
-
-  const confA = CONFIDENCE_ORDER[a.confidence ?? 'low'];
-  const confB = CONFIDENCE_ORDER[b.confidence ?? 'low'];
-  const confDiff = confA - confB;
-  if (confDiff !== 0) return confDiff;
-
-  return findingLine(a) - findingLine(b);
-}
-
-/**
- * Pick the best finding from a group (highest severity, then confidence, then position).
- */
-function pickWinner(group: Finding[]): Finding {
+function pickAndMergeWinner(group: Finding[]): Finding {
   const sorted = [...group].sort(compareFindingPriority);
-  // group is guaranteed to have at least 2 elements by callers
-  const winner = sorted[0];
-  if (!winner) throw new Error('pickWinner called with empty group');
+  const winner = mergeGroupLocations(sorted);
+  if (!winner) throw new Error('pickAndMergeWinner called with empty group');
   return winner;
 }
 
@@ -751,20 +730,28 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
 
   // Process LLM groups: for each group, keep the winner and drop the rest
   const droppedFindings = new Set<Finding>();
+  const replacements = new Map<Finding, Finding>();
 
   for (const group of result.data) {
     if (group.length < 2) continue;
 
-    // Convert 1-based indices to findings
+    // Convert 1-based indices to findings, skipping already-dropped ones
     const groupFindings = group
       .map((idx) => clusteredList[idx - 1])
-      .filter((f): f is Finding => f !== undefined);
+      .filter((f): f is Finding => f !== undefined && !droppedFindings.has(f));
 
     if (groupFindings.length < 2) continue;
 
-    const winner = pickWinner(groupFindings);
+    const sorted = [...groupFindings].sort(compareFindingPriority);
+    const original = sorted[0];
+    if (!original) continue;
+    const winner = pickAndMergeWinner(groupFindings);
+    // Track replacement since mergeGroupLocations returns a copy
+    if (winner !== original) {
+      replacements.set(original, winner);
+    }
     for (const f of groupFindings) {
-      if (f !== winner) {
+      if (f !== original) {
         droppedFindings.add(f);
       }
     }
@@ -774,7 +761,9 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
     return { findings: hashDeduped, removedCount: hashRemovedCount, usage: result.usage };
   }
 
-  const consolidated = hashDeduped.filter((f) => !droppedFindings.has(f));
+  const consolidated = hashDeduped
+    .filter((f) => !droppedFindings.has(f))
+    .map((f) => replacements.get(f) ?? f);
   const totalRemoved = hashRemovedCount + droppedFindings.size;
 
   console.log(`Consolidate: ${droppedFindings.size} findings merged by LLM (same root cause)`);
@@ -803,11 +792,15 @@ export async function deduplicateFindings(
     return { newFindings: findings, duplicateActions: [] };
   }
 
-  // Build a map of existing comments by location+hash for fast lookup
+  // Build maps of existing comments by location+hash for fast lookup
   const existingByKey = new Map<string, ExistingComment>();
+  const wardenByKey = new Map<string, ExistingComment>();
   for (const c of existingComments) {
     const key = `${c.path}:${c.line}:${c.contentHash}`;
     existingByKey.set(key, c);
+    if (c.isWarden) {
+      wardenByKey.set(key, c);
+    }
   }
 
   // First pass: find exact matches (same content at same location)
@@ -820,7 +813,23 @@ export async function deduplicateFindings(
     const path = finding.location?.path ?? '';
     const key = `${path}:${line}:${hash}`;
 
-    const matchingComment = existingByKey.get(key);
+    let matchingComment = existingByKey.get(key);
+
+    // If no primary location match, check additional locations against our own comments.
+    // This handles winner-flip scenarios where a merged finding's primary location changed
+    // between runs but an additional location matches a previous Warden comment.
+    if (!matchingComment && finding.additionalLocations) {
+      for (const loc of finding.additionalLocations) {
+        const addlLine = loc.endLine ?? loc.startLine;
+        const addlKey = `${loc.path}:${addlLine}:${hash}`;
+        const wardenMatch = wardenByKey.get(addlKey);
+        if (wardenMatch) {
+          matchingComment = wardenMatch;
+          break;
+        }
+      }
+    }
+
     if (matchingComment) {
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',

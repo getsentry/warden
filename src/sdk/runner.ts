@@ -37,10 +37,12 @@ export {
   extractFindingsWithLLM,
   truncateForLLMFallback,
   deduplicateFindings,
+  mergeGroupLocations,
+  mergeCrossLocationFindings,
   validateFindings,
   generateShortId,
 } from './extract.js';
-export type { ExtractFindingsResult } from './extract.js';
+export type { ExtractFindingsResult, MergeResult } from './extract.js';
 
 // Re-export file preparation
 export { prepareFiles } from './prepare.js';

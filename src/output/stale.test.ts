@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAnalyzedScope, isInAnalyzedScope, findStaleComments } from './stale.js';
+import { buildAnalyzedScope, isInAnalyzedScope, findStaleComments, findingMatchesComment } from './stale.js';
 import { generateContentHash } from './dedup.js';
 import type { ExistingComment } from './dedup.js';
 import type { Finding, FileChange } from '../types/index.js';
@@ -371,5 +371,76 @@ describe('findStaleComments', () => {
 
     const stale = findStaleComments(comments, findings, scope);
     expect(stale).toHaveLength(1);
+  });
+});
+
+describe('findingMatchesComment with additionalLocations', () => {
+  it('matches comment at an additional location', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/a.ts', startLine: 10 },
+      additionalLocations: [{ path: 'src/db.ts', startLine: 42 }],
+    };
+
+    const comment: ExistingComment = {
+      id: 1,
+      path: 'src/db.ts',
+      line: 42,
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+      threadId: 'thread-1',
+    };
+
+    expect(findingMatchesComment(finding, comment)).toBe(true);
+  });
+
+  it('does not match when additional location is in different file', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/a.ts', startLine: 10 },
+      additionalLocations: [{ path: 'src/c.ts', startLine: 42 }],
+    };
+
+    const comment: ExistingComment = {
+      id: 1,
+      path: 'src/db.ts',
+      line: 42,
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+      threadId: 'thread-1',
+    };
+
+    expect(findingMatchesComment(finding, comment)).toBe(false);
+  });
+
+  it('matches within proximity for additional location', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/a.ts', startLine: 10 },
+      additionalLocations: [{ path: 'src/db.ts', startLine: 40 }],
+    };
+
+    const comment: ExistingComment = {
+      id: 1,
+      path: 'src/db.ts',
+      line: 42,
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+      threadId: 'thread-1',
+    };
+
+    expect(findingMatchesComment(finding, comment)).toBe(true);
   });
 });

@@ -69,10 +69,37 @@ export const FindingSchema = z.object({
   title: z.string(),
   description: z.string(),
   location: LocationSchema.optional(),
+  additionalLocations: z.array(LocationSchema).optional(),
   suggestedFix: SuggestedFixSchema.optional(),
   elapsedMs: z.number().nonnegative().optional(),
 });
 export type Finding = z.infer<typeof FindingSchema>;
+
+/**
+ * Get the effective line number for a finding (endLine if present, otherwise startLine).
+ */
+export function findingLine(f: Finding): number {
+  return f.location?.endLine ?? f.location?.startLine ?? 0;
+}
+
+/**
+ * Compare two findings by priority for winner selection.
+ * Lower return value = higher priority (more severe, more confident, earlier path/line).
+ */
+export function compareFindingPriority(a: Finding, b: Finding): number {
+  const sevDiff = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+  if (sevDiff !== 0) return sevDiff;
+
+  const confA = CONFIDENCE_ORDER[a.confidence ?? 'low'];
+  const confB = CONFIDENCE_ORDER[b.confidence ?? 'low'];
+  const confDiff = confA - confB;
+  if (confDiff !== 0) return confDiff;
+
+  const pathCmp = (a.location?.path ?? '').localeCompare(b.location?.path ?? '');
+  if (pathCmp !== 0) return pathCmp;
+
+  return findingLine(a) - findingLine(b);
+}
 
 // Usage statistics from SDK
 export const UsageStatsSchema = z.object({

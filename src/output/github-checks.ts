@@ -118,14 +118,38 @@ export function findingsToAnnotations(findings: Finding[], reportOn?: SeverityTh
   // Limit to max annotations
   const limited = sorted.slice(0, MAX_ANNOTATIONS_PER_REQUEST);
 
-  return limited.map((finding) => ({
-    path: finding.location.path,
-    start_line: finding.location.startLine,
-    end_line: finding.location.endLine ?? finding.location.startLine,
-    annotation_level: severityToAnnotationLevel(finding.severity),
-    message: escapeHtml(finding.description),
-    title: escapeHtml(finding.title),
-  }));
+  const annotations: CheckAnnotation[] = [];
+
+  for (const finding of limited) {
+    if (annotations.length >= MAX_ANNOTATIONS_PER_REQUEST) break;
+
+    // Primary location annotation
+    annotations.push({
+      path: finding.location.path,
+      start_line: finding.location.startLine,
+      end_line: finding.location.endLine ?? finding.location.startLine,
+      annotation_level: severityToAnnotationLevel(finding.severity),
+      message: escapeHtml(finding.description),
+      title: escapeHtml(finding.title),
+    });
+
+    // Additional location annotations
+    if (finding.additionalLocations) {
+      for (const loc of finding.additionalLocations) {
+        if (annotations.length >= MAX_ANNOTATIONS_PER_REQUEST) break;
+        annotations.push({
+          path: loc.path,
+          start_line: loc.startLine,
+          end_line: loc.endLine ?? loc.startLine,
+          annotation_level: severityToAnnotationLevel(finding.severity),
+          message: escapeHtml(finding.description),
+          title: `[${finding.id}] ${escapeHtml(finding.title)} (additional location)`,
+        });
+      }
+    }
+  }
+
+  return annotations;
 }
 
 /**
@@ -329,6 +353,13 @@ function renderFindingsSections(findings: Finding[]): string[] {
       lines.push('<details>');
       lines.push(`<summary><strong>${escapeHtml(finding.title)}</strong>${location}</summary>`, '');
       lines.push(escapeHtml(finding.description), '');
+      if (finding.additionalLocations?.length) {
+        lines.push('Also found at:');
+        for (const loc of finding.additionalLocations) {
+          lines.push(`- ${formatLocation(loc)}`);
+        }
+        lines.push('');
+      }
       lines.push('</details>', '');
     }
   }

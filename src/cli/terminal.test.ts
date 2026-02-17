@@ -338,5 +338,72 @@ describe('renderTerminalReport', () => {
 
       expect(output).not.toContain('WARN:');
     });
+
+    it('renders additional locations in CI mode', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [
+          createFinding({
+            severity: 'high',
+            title: 'Missing null check',
+            location: { path: 'src/a.ts', startLine: 10 },
+            additionalLocations: [
+              { path: 'src/b.ts', startLine: 20 },
+              { path: 'src/c.ts', startLine: 30, endLine: 35 },
+            ],
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('also at: src/b.ts:20, src/c.ts:30-35');
+    });
+  });
+
+  describe('TTY additionalLocations', () => {
+    it('shows additional locations in TTY mode', () => {
+      const report = createReport({
+        findings: [
+          createFinding({
+            location: { path: 'src/a.ts', startLine: 10 },
+            additionalLocations: [
+              { path: 'src/b.ts', startLine: 20 },
+            ],
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], {
+        isTTY: true,
+        supportsColor: false,
+        columns: 80,
+      });
+
+      expect(output).toContain('+1 more location:');
+      expect(output).toContain('src/b.ts:20');
+    });
+
+    it('uses plural for multiple additional locations', () => {
+      const report = createReport({
+        findings: [
+          createFinding({
+            location: { path: 'src/a.ts', startLine: 10 },
+            additionalLocations: [
+              { path: 'src/b.ts', startLine: 20 },
+              { path: 'src/c.ts', startLine: 30 },
+            ],
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], {
+        isTTY: true,
+        supportsColor: false,
+        columns: 80,
+      });
+
+      expect(output).toContain('+2 more locations:');
+    });
   });
 });
