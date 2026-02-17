@@ -602,7 +602,7 @@ export async function analyzeFile(
         }
 
         attachElapsedTime(result.findings, callbacks?.skillStartTime);
-        callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings);
+        callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
 
         fileFindings.push(...result.findings);
         fileUsage.push(result.usage);
@@ -721,8 +721,8 @@ export async function runSkill(
       onHunkStart: (hunkNum, totalHunks, lineRange) => {
         callbacks?.onHunkStart?.(filename, hunkNum, totalHunks, lineRange);
       },
-      onHunkComplete: (hunkNum, findings) => {
-        callbacks?.onHunkComplete?.(filename, hunkNum, findings);
+      onHunkComplete: (hunkNum, findings, usage) => {
+        callbacks?.onHunkComplete?.(filename, hunkNum, findings, usage);
       },
       onLargePrompt: callbacks?.onLargePrompt
         ? (lineRange, chars, estTokens) => {

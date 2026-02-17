@@ -38,7 +38,7 @@ export interface SkillRunnerCallbacks {
   skillStartTime?: number;
   onFileStart?: (file: string, index: number, total: number) => void;
   onHunkStart?: (file: string, hunkNum: number, totalHunks: number, lineRange: string) => void;
-  onHunkComplete?: (file: string, hunkNum: number, findings: Finding[]) => void;
+  onHunkComplete?: (file: string, hunkNum: number, findings: Finding[], usage: UsageStats) => void;
   onFileComplete?: (file: string, index: number, total: number) => void;
   /** Called when a prompt exceeds the large prompt threshold */
   onLargePrompt?: (file: string, lineRange: string, chars: number, estimatedTokens: number) => void;
@@ -111,7 +111,7 @@ export interface PrepareFilesResult {
 export interface FileAnalysisCallbacks {
   skillStartTime?: number;
   onHunkStart?: (hunkNum: number, totalHunks: number, lineRange: string) => void;
-  onHunkComplete?: (hunkNum: number, findings: Finding[]) => void;
+  onHunkComplete?: (hunkNum: number, findings: Finding[], usage: UsageStats) => void;
   /** Called when a prompt exceeds the large prompt threshold */
   onLargePrompt?: (lineRange: string, chars: number, estimatedTokens: number) => void;
   /** Called with prompt size info in debug mode */

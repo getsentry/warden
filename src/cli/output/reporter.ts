@@ -54,7 +54,7 @@ export interface SkillRunnerCallbacks {
   skillStartTime?: number;
   onFileStart?: (file: string, index: number, total: number) => void;
   onHunkStart?: (file: string, hunkNum: number, total: number, lineRange: string) => void;
-  onHunkComplete?: (file: string, hunkNum: number, findings: Finding[]) => void;
+  onHunkComplete?: (file: string, hunkNum: number, findings: Finding[], usage: UsageStats) => void;
   onFileComplete?: (file: string, index: number, total: number) => void;
 }
 

@@ -244,11 +244,25 @@ export async function runSkillTask(
               });
               callbacks.onHunkStart?.(name, filename, hunkNum, totalHunks, lineRange);
             },
-            onHunkComplete: (_hunkNum, findings) => {
-              // Accumulate findings for this file
+            onHunkComplete: (_hunkNum, findings, usage) => {
+              // Accumulate findings and usage for this file
               const current = fileStates[index];
               if (current) {
                 current.findings.push(...findings);
+                if (current.usage) {
+                  current.usage.inputTokens += usage.inputTokens;
+                  current.usage.outputTokens += usage.outputTokens;
+                  current.usage.costUSD += usage.costUSD;
+                  if (usage.cacheReadInputTokens) {
+                    current.usage.cacheReadInputTokens = (current.usage.cacheReadInputTokens ?? 0) + usage.cacheReadInputTokens;
+                  }
+                  if (usage.cacheCreationInputTokens) {
+                    current.usage.cacheCreationInputTokens = (current.usage.cacheCreationInputTokens ?? 0) + usage.cacheCreationInputTokens;
+                  }
+                } else {
+                  current.usage = { ...usage };
+                }
+                callbacks.onFileUpdate(name, filename, { usage: current.usage });
               }
             },
             onLargePrompt: callbacks.onLargePrompt
