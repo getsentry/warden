@@ -370,7 +370,8 @@ describe('runScheduleWorkflow', () => {
     });
 
     it('uses custom issue title from schedule config', async () => {
-      mockRunSkill.mockResolvedValue(createSkillReport({ findings: [] }));
+      const report = createSkillReport({ findings: [] });
+      mockRunSkill.mockResolvedValue(report);
 
       await runScheduleWorkflow(
         mockOctokit,
@@ -382,7 +383,7 @@ describe('runScheduleWorkflow', () => {
         mockOctokit,
         'test-owner',
         'test-repo',
-        expect.any(Array),
+        [report],
         expect.objectContaining({
           title: 'Custom Issue Title',
         })

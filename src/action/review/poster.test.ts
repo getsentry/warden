@@ -170,7 +170,15 @@ describe('postTriggerReview', () => {
 
     expect(postResult.posted).toBe(true);
     expect(postResult.newComments).toHaveLength(1);
-    expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      pull_number: 1,
+      commit_id: 'abc123',
+      event: 'COMMENT',
+      body: 'Test review',
+      comments: [expect.objectContaining({ path: 'test.ts', line: 10, side: 'RIGHT', body: 'Test comment' })],
+    });
   });
 
   it('deduplicates findings against existing comments', async () => {
@@ -211,8 +219,15 @@ describe('postTriggerReview', () => {
 
     const postResult = await postTriggerReview(ctx, mockDeps);
 
-    expect(deduplicateFindings).toHaveBeenCalledWith([finding], [existingComment], expect.any(Object));
-    expect(processDuplicateActions).toHaveBeenCalled();
+    expect(deduplicateFindings).toHaveBeenCalledWith([finding], [existingComment], {
+      apiKey: 'test-key',
+      currentSkill: 'test-skill',
+    });
+    expect(processDuplicateActions).toHaveBeenCalledWith(
+      mockOctokit, 'test-owner', 'test-repo',
+      [{ type: 'react_external', finding, existingComment, matchType: 'hash' }],
+      'test-skill'
+    );
     // Since all findings were duplicates and failOn not triggered, nothing new to post
     expect(postResult.posted).toBe(false);
   });
@@ -267,11 +282,23 @@ describe('postTriggerReview', () => {
 
     const postResult = await postTriggerReview(ctx, mockDeps);
 
-    expect(deduplicateFindings).toHaveBeenCalled();
-    expect(processDuplicateActions).toHaveBeenCalled();
+    expect(deduplicateFindings).toHaveBeenCalledWith([finding], [existingComment], {
+      apiKey: 'test-key',
+      currentSkill: 'test-skill',
+    });
+    expect(processDuplicateActions).toHaveBeenCalledWith(
+      mockOctokit, 'test-owner', 'test-repo',
+      [{ type: 'update_warden', finding, existingComment, matchType: 'hash' }],
+      'test-skill'
+    );
     // Even though all findings were deduplicated, REQUEST_CHANGES should still be posted
     expect(postResult.posted).toBe(true);
-    expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'REQUEST_CHANGES',
+        comments: [],
+      })
+    );
   });
 
   it('handles API errors gracefully', async () => {

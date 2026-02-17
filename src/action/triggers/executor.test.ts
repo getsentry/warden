@@ -108,8 +108,19 @@ describe('executeTrigger', () => {
     expect(result.report).toBe(mockReport);
     expect(result.renderResult).toBe(mockRenderResult);
     expect(result.error).toBeUndefined();
-    expect(createSkillCheck).toHaveBeenCalled();
-    expect(updateSkillCheck).toHaveBeenCalled();
+    expect(createSkillCheck).toHaveBeenCalledWith(mockOctokit, 'test-skill', {
+      owner: 'test-owner',
+      repo: 'test-repo',
+      headSha: 'abc123',
+    });
+    expect(updateSkillCheck).toHaveBeenCalledWith(mockOctokit, 123, mockReport, {
+      owner: 'test-owner',
+      repo: 'test-repo',
+      headSha: 'abc123',
+      failOn: undefined,
+      reportOn: undefined,
+      failCheck: undefined,
+    });
   });
 
   it('executes a trigger successfully with no findings', async () => {
@@ -136,7 +147,10 @@ describe('executeTrigger', () => {
     expect(result.triggerName).toBe('test-trigger');
     expect(result.error).toBeDefined();
     expect(result.report).toBeUndefined();
-    expect(failSkillCheck).toHaveBeenCalled();
+    expect(failSkillCheck).toHaveBeenCalledWith(
+      mockOctokit, 123, expect.objectContaining({ message: 'Skill not found' }),
+      { owner: 'test-owner', repo: 'test-repo', headSha: 'abc123' }
+    );
   });
 
   it('handles skill execution failure', async () => {
@@ -149,7 +163,10 @@ describe('executeTrigger', () => {
     expect(result.triggerName).toBe('test-trigger');
     expect(result.error).toBeDefined();
     expect(result.report).toBeUndefined();
-    expect(failSkillCheck).toHaveBeenCalled();
+    expect(failSkillCheck).toHaveBeenCalledWith(
+      mockOctokit, 123, expect.objectContaining({ message: 'API error' }),
+      { owner: 'test-owner', repo: 'test-repo', headSha: 'abc123' }
+    );
   });
 
   it('continues if check creation fails', async () => {
