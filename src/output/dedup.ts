@@ -733,10 +733,12 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
   const replacements = new Map<Finding, Finding>();
 
   for (const group of result.data) {
-    if (group.length < 2) continue;
+    // Deduplicate indices to prevent the winner from being dropped
+    const uniqueIndices = [...new Set(group)];
+    if (uniqueIndices.length < 2) continue;
 
     // Convert 1-based indices to findings, skipping already-dropped ones
-    const groupFindings = group
+    const groupFindings = uniqueIndices
       .map((idx) => clusteredList[idx - 1])
       .filter((f): f is Finding => f !== undefined && !droppedFindings.has(f));
 
@@ -745,13 +747,16 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
     const sorted = [...groupFindings].sort(compareFindingPriority);
     const original = sorted[0];
     if (!original) continue;
+    // Use existing replacement as base to preserve locations from prior groups
+    const existing = replacements.get(original);
+    if (existing) {
+      groupFindings[groupFindings.indexOf(original)] = existing;
+    }
     const winner = pickAndMergeWinner(groupFindings);
     // Track replacement since mergeGroupLocations returns a copy
-    if (winner !== original) {
-      replacements.set(original, winner);
-    }
+    replacements.set(original, winner);
     for (const f of groupFindings) {
-      if (f !== original) {
+      if (f !== original && f !== replacements.get(original)) {
         droppedFindings.add(f);
       }
     }

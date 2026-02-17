@@ -384,7 +384,7 @@ export async function runSkillTask(
         callbacks.onSkillUpdate(name, {
           status: 'done',
           durationMs: duration,
-          findings: uniqueFindings,
+          findings: mergedFindings,
           usage: report.usage,
         });
         callbacks.onSkillComplete(name, report);

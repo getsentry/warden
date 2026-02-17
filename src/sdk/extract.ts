@@ -449,9 +449,11 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
   const replacements = new Map<Finding, Finding>();
 
   for (const group of result.data) {
-    if (group.length < 2) continue;
+    // Deduplicate indices to prevent the winner from being absorbed
+    const uniqueIndices = [...new Set(group)];
+    if (uniqueIndices.length < 2) continue;
 
-    const groupFindings = group
+    const groupFindings = uniqueIndices
       .map((idx) => withLocations[idx - 1])
       .filter((f): f is Finding => f !== undefined && !absorbed.has(f));
 
@@ -460,8 +462,13 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     // Pick winner: highest severity → confidence → path → line
     const sorted = [...groupFindings].sort(compareFindingPriority);
     const winner = sorted[0];
+    // Use existing replacement as base to preserve locations from prior groups
+    const existing = winner ? replacements.get(winner) : undefined;
+    if (existing) {
+      sorted[0] = existing;
+    }
     const merged = mergeGroupLocations(sorted);
-    if (winner && merged && merged !== winner) {
+    if (winner && merged) {
       replacements.set(winner, merged);
     }
 
