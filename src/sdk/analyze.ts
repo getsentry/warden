@@ -396,6 +396,9 @@ async function analyzeHunk(
       for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
         // Check for abort before each attempt
         if (abortController?.signal.aborted) {
+          if (callbacks?.onHunkFailed) {
+            callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted');
+          }
           return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
         }
 
@@ -409,7 +412,11 @@ async function analyzeHunk(
           }
 
           if (!resultMessage) {
-            console.error('SDK returned no result');
+            if (callbacks?.onHunkFailed) {
+              callbacks.onHunkFailed(callbacks.lineRange, 'SDK returned no result');
+            } else {
+              console.error('SDK returned no result');
+            }
             return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
           }
 
@@ -435,7 +442,11 @@ async function analyzeHunk(
             const errorSummary = errorMessages.length > 0
               ? errorMessages.join('; ')
               : `SDK error: ${resultMessage.subtype}`;
-            console.error(`SDK execution failed: ${errorSummary}`);
+            if (callbacks?.onHunkFailed) {
+              callbacks.onHunkFailed(callbacks.lineRange, `SDK execution failed: ${errorSummary}`);
+            } else {
+              console.error(`SDK execution failed: ${errorSummary}`);
+            }
             return {
               findings: [],
               usage: aggregateUsage(accumulatedUsage),
@@ -539,6 +550,9 @@ async function analyzeHunk(
             await sleep(delayMs, abortController?.signal);
           } catch {
             // Aborted during sleep
+            if (callbacks?.onHunkFailed) {
+              callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted during retry delay');
+            }
             return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
           }
         }
@@ -549,7 +563,11 @@ async function analyzeHunk(
 
       // Log the final error
       if (lastError) {
-        console.error(`All retry attempts failed: ${finalError}`);
+        if (callbacks?.onHunkFailed) {
+          callbacks.onHunkFailed(callbacks.lineRange, `All retry attempts failed: ${finalError}`);
+        } else {
+          console.error(`All retry attempts failed: ${finalError}`);
+        }
       }
 
       // Also notify via callback if verbose
@@ -633,6 +651,7 @@ export async function analyzeFile(
               onRetry: callbacks.onRetry,
               onExtractionFailure: callbacks.onExtractionFailure,
               onExtractionResult: callbacks.onExtractionResult,
+              onHunkFailed: callbacks.onHunkFailed,
             }
           : undefined;
 
@@ -791,6 +810,11 @@ export async function runSkill(
       onExtractionResult: callbacks?.onExtractionResult
         ? (lineRange, findingsCount, method) => {
             callbacks.onExtractionResult?.(filename, lineRange, findingsCount, method);
+          }
+        : undefined,
+      onHunkFailed: callbacks?.onHunkFailed
+        ? (lineRange, error) => {
+            callbacks.onHunkFailed?.(filename, lineRange, error);
           }
         : undefined,
     };

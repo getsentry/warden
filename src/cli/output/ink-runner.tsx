@@ -7,6 +7,8 @@
  *
  * UI updates are batched via setImmediate() to prevent rapid consecutive
  * rerender() calls from producing duplicate output lines.
+ *
+ * Reporter spec: specs/reporters.md
  */
 
 import React, { useState, useEffect } from 'react';
@@ -330,6 +332,29 @@ export async function runSkillTasksWithInk(
       ? (_skillName, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
           const location = `${filename}:${lineRange}`;
           process.stderr.write(`\x1b[2m[debug] Prompt for ${location}: system=${systemChars}, user=${userChars}, total=${totalChars} chars (~${estimatedTokens} tokens)\x1b[0m\n`);
+        }
+      : undefined,
+    onHunkFailed: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, error) => {
+          const location = `${filename}:${lineRange}`;
+          process.stderr.write(`\x1b[33m${figures.warning}\x1b[0m  Chunk failed: ${location} \x1b[2m\u2014 ${error}\x1b[0m\n`);
+        }
+      : undefined,
+    onExtractionFailure: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, error, preview) => {
+          const location = `${filename}:${lineRange}`;
+          process.stderr.write(`\x1b[33m${figures.warning}\x1b[0m  Extraction failed: ${location} \x1b[2m\u2014 ${error}\x1b[0m\n`);
+          if (verbosity >= Verbosity.Debug && preview) {
+            process.stderr.write(`\x1b[2m[debug]   Output preview: ${preview.slice(0, 200)}\x1b[0m\n`);
+          }
+        }
+      : undefined,
+    onRetry: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, attempt, maxRetries, error, delayMs) => {
+          const location = `${filename}:${lineRange}`;
+          const retryInfo = `attempt ${attempt}/${maxRetries}`;
+          const delay = delayMs > 0 ? `, retrying in ${Math.round(delayMs / 1000)}s` : '';
+          process.stderr.write(`\x1b[2m[debug] Retry ${location} (${retryInfo}${delay}): ${error}\x1b[0m\n`);
         }
       : undefined,
   };

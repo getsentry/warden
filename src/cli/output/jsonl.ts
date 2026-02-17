@@ -57,6 +57,7 @@ export interface JsonlFileRecord {
 
 /**
  * A single JSONL record representing one skill's report.
+ * See specs/reporters.md Section 3 "JSONL Specification" for schema.
  */
 export interface JsonlRecord {
   run: JsonlRunMetadata;
@@ -68,6 +69,8 @@ export interface JsonlRecord {
   usage?: UsageStats;
   auxiliaryUsage?: AuxiliaryUsageMap;
   files?: JsonlFileRecord[];
+  failedHunks?: number;
+  failedExtractions?: number;
 }
 
 /**
@@ -153,6 +156,8 @@ export function writeJsonlReport(
         durationMs: f.durationMs,
         usage: f.usage,
       })),
+      failedHunks: report.failedHunks || undefined,
+      failedExtractions: report.failedExtractions || undefined,
     };
     lines.push(JSON.stringify(record));
   }

@@ -61,6 +61,8 @@ export interface SkillRunnerCallbacks {
 /**
  * Main reporter class for CLI output.
  * Handles different verbosity levels and TTY/non-TTY modes.
+ *
+ * Reporter spec: specs/reporters.md
  */
 export class Reporter {
   readonly mode: OutputMode;
@@ -213,6 +215,9 @@ export class Reporter {
       if (totalFailedExtractions > 0) {
         this.log(chalk.yellow(`${figures.warning}  ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`));
       }
+      if ((totalFailedHunks > 0 || totalFailedExtractions > 0) && this.verbosity < Verbosity.Verbose) {
+        this.log(chalk.dim('  Use -v for failure details'));
+      }
       if (totalSkippedFiles > 0) {
         this.log(chalk.dim(`${totalSkippedFiles} ${pluralize(totalSkippedFiles, 'file')} skipped`));
       }
@@ -229,6 +234,9 @@ export class Reporter {
       }
       if (totalFailedExtractions > 0) {
         this.logPlain(`WARN: ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`);
+      }
+      if ((totalFailedHunks > 0 || totalFailedExtractions > 0) && this.verbosity < Verbosity.Verbose) {
+        this.logPlain('Use -v for failure details');
       }
       if (totalSkippedFiles > 0) {
         this.logPlain(`${totalSkippedFiles} ${pluralize(totalSkippedFiles, 'file')} skipped`);

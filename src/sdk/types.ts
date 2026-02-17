@@ -50,6 +50,8 @@ export interface SkillRunnerCallbacks {
   onExtractionFailure?: (file: string, lineRange: string, error: string, preview: string) => void;
   /** Called with extraction result details (debug mode) */
   onExtractionResult?: (file: string, lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
+  /** Called when hunk analysis fails (SDK error, API error, abort) */
+  onHunkFailed?: (file: string, lineRange: string, error: string) => void;
 }
 
 export interface SkillRunnerOptions {
@@ -122,6 +124,8 @@ export interface FileAnalysisCallbacks {
   onExtractionFailure?: (lineRange: string, error: string, preview: string) => void;
   /** Called with extraction result details (debug mode) */
   onExtractionResult?: (lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
+  /** Called when hunk analysis fails (SDK error, API error, abort) */
+  onHunkFailed?: (lineRange: string, error: string) => void;
 }
 
 /**
@@ -150,4 +154,6 @@ export interface HunkAnalysisCallbacks {
   onExtractionFailure?: (lineRange: string, error: string, preview: string) => void;
   /** Called with extraction result details (debug mode) */
   onExtractionResult?: (lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
+  /** Called when hunk analysis fails (SDK error, API error, abort) */
+  onHunkFailed?: (lineRange: string, error: string) => void;
 }

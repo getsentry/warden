@@ -490,4 +490,26 @@ describe('renderTerminalReport', () => {
       expect(output).toContain('+2 more locations:');
     });
   });
+
+  describe('failure hint in CI mode', () => {
+    const ciMode = { isTTY: false, supportsColor: false, columns: 80 };
+
+    it('shows -v hint when failedHunks > 0', () => {
+      const report = createReport({ failedHunks: 2 });
+      const output = renderTerminalReport([report], ciMode);
+      expect(output).toContain('Use -v for failure details');
+    });
+
+    it('shows -v hint when failedExtractions > 0', () => {
+      const report = createReport({ failedExtractions: 3 });
+      const output = renderTerminalReport([report], ciMode);
+      expect(output).toContain('Use -v for failure details');
+    });
+
+    it('does not show -v hint when no failures', () => {
+      const report = createReport();
+      const output = renderTerminalReport([report], ciMode);
+      expect(output).not.toContain('Use -v for failure details');
+    });
+  });
 });

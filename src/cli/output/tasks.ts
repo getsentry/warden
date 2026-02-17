@@ -1,6 +1,8 @@
 /**
  * Task execution for skills.
  * Callback-based state updates for CLI and Ink rendering.
+ *
+ * Reporter spec: specs/reporters.md
  */
 
 import type { SkillReport, SeverityThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
@@ -149,6 +151,12 @@ export interface SkillProgressCallbacks {
   onPromptSize?: (skillName: string, filename: string, lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
   /** Called with extraction result details (debug mode) */
   onExtractionResult?: (skillName: string, filename: string, lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
+  /** Called when hunk analysis fails (SDK error, API error, abort) */
+  onHunkFailed?: (skillName: string, filename: string, lineRange: string, error: string) => void;
+  /** Called when findings extraction fails (both regex and LLM fallback failed) */
+  onExtractionFailure?: (skillName: string, filename: string, lineRange: string, error: string, preview: string) => void;
+  /** Called when a retry attempt is made */
+  onRetry?: (skillName: string, filename: string, lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
 }
 
 /**
@@ -280,6 +288,21 @@ export async function runSkillTask(
             onExtractionResult: callbacks.onExtractionResult
               ? (lineRange, findingsCount, method) => {
                   callbacks.onExtractionResult?.(name, filename, lineRange, findingsCount, method);
+                }
+              : undefined,
+            onHunkFailed: callbacks.onHunkFailed
+              ? (lineRange, error) => {
+                  callbacks.onHunkFailed?.(name, filename, lineRange, error);
+                }
+              : undefined,
+            onExtractionFailure: callbacks.onExtractionFailure
+              ? (lineRange, error, preview) => {
+                  callbacks.onExtractionFailure?.(name, filename, lineRange, error, preview);
+                }
+              : undefined,
+            onRetry: callbacks.onRetry
+              ? (lineRange, attempt, maxRetries, error, delayMs) => {
+                  callbacks.onRetry?.(name, filename, lineRange, attempt, maxRetries, error, delayMs);
                 }
               : undefined,
           };
@@ -551,6 +574,47 @@ export function createDefaultCallbacks(
     onExtractionResult: verbosity >= Verbosity.Debug
       ? (_skillName, filename, lineRange, findingsCount, method) => {
           debugLog(mode, `Extracted ${findingsCount} ${pluralize(findingsCount, 'finding')} from ${filename}:${lineRange} via ${method}`);
+        }
+      : undefined,
+    // Verbose mode: show per-hunk analysis failures (spec: event #16 hunk_failed)
+    onHunkFailed: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, error) => {
+          const location = `${filename}:${lineRange}`;
+          if (mode.isTTY) {
+            console.error(`${chalk.yellow(figures.warning)}  Chunk failed: ${location} ${chalk.dim(`\u2014 ${error}`)}`);
+          } else {
+            logPlain(`WARN: Chunk failed: ${location} \u2014 ${error}`);
+          }
+        }
+      : undefined,
+    // Verbose mode: show per-hunk extraction failures (spec: event #17 extraction_failure)
+    onExtractionFailure: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, error, preview) => {
+          const location = `${filename}:${lineRange}`;
+          if (mode.isTTY) {
+            console.error(`${chalk.yellow(figures.warning)}  Extraction failed: ${location} ${chalk.dim(`\u2014 ${error}`)}`);
+            if (verbosity >= Verbosity.Debug && preview) {
+              debugLog(mode, `  Output preview: ${preview.slice(0, 200)}`);
+            }
+          } else {
+            logPlain(`WARN: Extraction failed: ${location} \u2014 ${error}`);
+            if (verbosity >= Verbosity.Debug && preview) {
+              logPlain(`DEBUG: Output preview: ${preview.slice(0, 200)}`);
+            }
+          }
+        }
+      : undefined,
+    // Verbose mode: show retry attempts (spec: event #18 retry)
+    onRetry: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, attempt, maxRetries, error, delayMs) => {
+          const location = `${filename}:${lineRange}`;
+          const retryInfo = `attempt ${attempt}/${maxRetries}`;
+          const delay = delayMs > 0 ? `, retrying in ${Math.round(delayMs / 1000)}s` : '';
+          if (mode.isTTY) {
+            debugLog(mode, `Retry ${location} (${retryInfo}${delay}): ${error}`);
+          } else {
+            logPlain(`WARN: Retry ${location} (${retryInfo}${delay}): ${error}`);
+          }
         }
       : undefined,
   };

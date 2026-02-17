@@ -208,6 +208,7 @@ function renderSkillBoxTTY(report: SkillReport, mode: OutputMode, options?: Rend
 
 /**
  * Render a skill report for CI (non-TTY) mode.
+ * See specs/reporters.md "Plain" findings report section.
  */
 function renderSkillCI(report: SkillReport): string[] {
   const lines: string[] = [];
@@ -224,6 +225,9 @@ function renderSkillCI(report: SkillReport): string[] {
   }
   if (report.failedExtractions) {
     lines.push(`  WARN: ${report.failedExtractions} finding ${pluralize(report.failedExtractions, 'extraction')} failed`);
+  }
+  if (report.failedHunks || report.failedExtractions) {
+    lines.push('  Use -v for failure details');
   }
 
   for (const [index, finding] of report.findings.entries()) {

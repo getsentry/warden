@@ -24,8 +24,8 @@ There are three reporters. Each one receives the same events and decides what to
 |-------|------|--------|
 | Quiet | `-q` | Final findings report only (stdout). No progress, no summary. |
 | Normal | (default) | Skill/file/hunk progress + findings report + summary |
-| Verbose | `-v` | + real-time per-finding lines during skill execution |
-| Debug | `-vv` | + token counts, prompt sizes, extraction methods, suggested fix descriptions |
+| Verbose | `-v` | + real-time per-finding lines during skill execution, per-hunk failure details, retry attempts |
+| Debug | `-vv` | + token counts, prompt sizes, extraction methods, suggested fix descriptions, extraction failure output previews |
 
 ---
 
@@ -279,6 +279,7 @@ When fixable findings exist and interactive mode is active (TTY, no `--fix`, no 
 ```
 security-review (4.2s) - 2 findings (1 high, 1 medium)
   WARN: 1 chunk failed to analyze
+  Use -v for failure details
   [high] src/api/auth.ts:42 - SQL injection risk in query builder (+0.8s)
   confidence: high
   User input is interpolated directly into a SQL query string without parameterization.
@@ -292,7 +293,7 @@ security-review (4.2s) - 2 findings (1 high, 1 medium)
   External API response is cast to an internal type without validation.
 ```
 
-Per-skill warnings (`failedHunks`, `failedExtractions`) are shown inline.
+Per-skill warnings (`failedHunks`, `failedExtractions`) are shown inline, followed by a "Use -v for failure details" hint when either count is non-zero.
 
 **JSONL:** Full structured records (see Section 3)
 
@@ -343,11 +344,68 @@ At `Debug` only.
 
 **JSONL:** --
 
+#### 16. `hunk_failed`
+
+Fields: `filename`, `lineRange`, `error`
+
+At `Verbose+`.
+
+**TTY:** `warning-icon  Chunk failed: {filename}:{lineRange} — {error}` (error dimmed)
+
+**Plain:**
+```
+[2026-02-08T14:30:45.500Z] warden: WARN: Chunk failed: src/api/auth.ts:L10-45 — SDK returned no result
+```
+
+**Ink (TTY):** Same as TTY but uses raw ANSI escapes (`\x1b[33m` for yellow, `\x1b[2m` for dim) via `process.stderr.write`.
+
+**JSONL:** --
+
+#### 17. `extraction_failure`
+
+Fields: `filename`, `lineRange`, `error`, `preview`
+
+At `Verbose+`. At `Debug`, also logs the first 200 chars of the raw output that failed to parse.
+
+**TTY:** `warning-icon  Extraction failed: {filename}:{lineRange} — {error}` (error dimmed)
+
+At `Debug`:
+```
+[debug]   Output preview: {first 200 chars of raw output}
+```
+
+**Plain:**
+```
+[2026-02-08T14:30:45.500Z] warden: WARN: Extraction failed: src/api/auth.ts:L10-45 — JSON parse error
+```
+
+At `Debug`:
+```
+[2026-02-08T14:30:45.500Z] warden: DEBUG: Output preview: {first 200 chars}
+```
+
+**JSONL:** --
+
+#### 18. `retry`
+
+Fields: `filename`, `lineRange`, `attempt`, `maxRetries`, `error`, `delayMs`
+
+At `Verbose+`.
+
+**TTY:** `[debug] Retry {filename}:{lineRange} (attempt N/M, retrying in Ns): {error}` (all dimmed)
+
+**Plain:**
+```
+[2026-02-08T14:30:45.600Z] warden: WARN: Retry src/api/auth.ts:L10-45 (attempt 1/3, retrying in 2s): API timeout
+```
+
+**JSONL:** --
+
 ---
 
 ### Summary
 
-#### 16. `analysis_complete`
+#### 19. `analysis_complete`
 
 Fields: `findingsCount`, `failedHunks?`, `failedExtractions?`, `skippedFiles?`, `usage?`, `totalDuration`
 
@@ -359,21 +417,25 @@ SUMMARY
 2 findings: . 1 high  . 1 medium
 ⚠  2 chunks failed to analyze
 ⚠  1 finding extraction failed
+  Use -v for failure details
 3 files skipped
 Analysis completed in 4.2s · 5.0k in / 800 out · $0.01
 ```
-(Counts colored by severity. Warnings in yellow. Usage line dimmed.)
+(Counts colored by severity. Warnings in yellow. Hint dimmed. Usage line dimmed.)
+
+The `-v` hint appears only when there are failures (`failedHunks > 0` or `failedExtractions > 0`) **and** verbosity is below `Verbose`. At `Verbose+`, per-hunk details are already shown via events 16-18 so the hint is suppressed.
 
 **Plain:**
 ```
 [2026-02-08T14:30:56.000Z] warden: Summary: 2 findings (1 high, 1 medium)
 [2026-02-08T14:30:56.000Z] warden: WARN: 2 chunks failed to analyze
 [2026-02-08T14:30:56.000Z] warden: WARN: 1 finding extraction failed
+[2026-02-08T14:30:56.000Z] warden: Use -v for failure details
 [2026-02-08T14:30:56.000Z] warden: 3 files skipped
 [2026-02-08T14:30:56.000Z] warden: Usage: 5.0k input, 800 output, $0.01
 [2026-02-08T14:30:56.000Z] warden: Total time: 4.2s
 ```
-Warnings and skipped files only shown when non-zero.
+Warnings and skipped files only shown when non-zero. The `-v` hint follows the same gating as TTY.
 
 **JSONL:** Summary record (the last line in the JSONL file)
 
@@ -461,6 +523,8 @@ Each line in a JSONL file is one of three record types, discriminated by the pre
 | `usage` | `UsageStats` | no | Token usage and cost |
 | `auxiliaryUsage` | `Record<string, UsageStats>` | no | Auxiliary LLM usage (extraction, dedup). Present only when auxiliary calls occurred. |
 | `files` | `FileRecord[]` | no | Per-file breakdown |
+| `failedHunks` | `number` | no | Number of chunks that failed to analyze. Present only when > 0. |
+| `failedExtractions` | `number` | no | Number of finding extractions that failed. Present only when > 0. |
 
 ### Summary Record
 
@@ -600,19 +664,22 @@ Matrix of every reporter event. Legend:
 | 11 | `finding` | [x] | [x] | [x] |
 | 12 | `finding_summary` | [x] | [x] | [x] |
 
-### Debug
+### Debug / Diagnostics
 
 | # | Event | TTY | Plain | JSONL |
 |---|-------|-----|-------|-------|
 | 13 | `large_prompt` | [x] | [x] | [-]^1 |
 | 14 | `prompt_size` | [x] | [x] | [-]^1 |
 | 15 | `extraction_result` | [x] | [x] | [-]^1 |
+| 16 | `hunk_failed` | [x] | [x] | [-]^1 |
+| 17 | `extraction_failure` | [x] | [x] | [-]^1 |
+| 18 | `retry` | [x] | [x] | [-]^1 |
 
 ### Summary
 
 | # | Event | TTY | Plain | JSONL |
 |---|-------|-----|-------|-------|
-| 16 | `analysis_complete` | [x] | [x] | [x] |
+| 19 | `analysis_complete` | [x] | [x] | [x] |
 
 ### Footnotes
 
@@ -625,15 +692,13 @@ Matrix of every reporter event. Legend:
 
 ### JSONL: Missing Diagnostic Fields
 
-`SkillReport` has three diagnostic fields that `writeJsonlReport()` silently drops:
+`SkillReport` has one diagnostic field that `writeJsonlReport()` silently drops:
 
 | Field | On `SkillReport` | In JSONL | Impact |
 |-------|-----------------|----------|--------|
 | `skippedFiles` | `SkippedFile[]` | not written | Operators can't see which files were skipped and why |
-| `failedHunks` | `number` | not written | No structured tracking of analysis failures |
-| `failedExtractions` | `number` | not written | No structured tracking of extraction errors |
 
-These are shown in TTY/Plain summary warnings but lost in the JSONL record. Since JSONL is the format for downstream tooling, these should be added to enable alerting on degraded runs.
+`failedHunks` and `failedExtractions` are now included in JSONL skill records (present only when > 0).
 
 ### JSONL: Missing Event Types
 

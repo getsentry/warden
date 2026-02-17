@@ -429,6 +429,118 @@ describe('createDefaultCallbacks', () => {
       expect(cb.onExtractionResult).toBeUndefined();
     });
   });
+
+  describe('onHunkFailed', () => {
+    it('is defined at Verbose verbosity', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+      expect(cb.onHunkFailed).toBeDefined();
+    });
+
+    it('is undefined at Normal verbosity', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+      expect(cb.onHunkFailed).toBeUndefined();
+    });
+
+    it('logs warning with location and error in log mode', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+
+      cb.onHunkFailed!('t', 'src/foo.ts', '10-20', 'SDK returned no result');
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toMatch(/WARN: Chunk failed: src\/foo\.ts:10-20/);
+      expect(msg).toContain('SDK returned no result');
+    });
+
+    it('logs warning in TTY mode', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, ttyMode(), Verbosity.Verbose);
+
+      cb.onHunkFailed!('t', 'src/bar.ts', '5-15', 'context length exceeded');
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toContain('Chunk failed: src/bar.ts:5-15');
+      expect(msg).toContain('context length exceeded');
+    });
+  });
+
+  describe('onExtractionFailure', () => {
+    it('is defined at Verbose verbosity', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+      expect(cb.onExtractionFailure).toBeDefined();
+    });
+
+    it('is undefined at Normal verbosity', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+      expect(cb.onExtractionFailure).toBeUndefined();
+    });
+
+    it('logs warning with location and error in log mode', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+
+      cb.onExtractionFailure!('t', 'src/cli/main.ts', '120-155', 'no_findings_json', '{"some raw output...');
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toMatch(/WARN: Extraction failed: src\/cli\/main\.ts:120-155/);
+      expect(msg).toContain('no_findings_json');
+    });
+
+    it('shows output preview at Debug verbosity in log mode', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Debug);
+
+      cb.onExtractionFailure!('t', 'src/foo.ts', '10-20', 'invalid_json', 'raw output preview here');
+
+      expect(errorSpy).toHaveBeenCalledTimes(2);
+      const previewMsg = errorSpy.mock.calls[1]![0] as string;
+      expect(previewMsg).toContain('DEBUG: Output preview: raw output preview here');
+    });
+
+    it('does not show preview at Verbose verbosity', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+
+      cb.onExtractionFailure!('t', 'src/foo.ts', '10-20', 'invalid_json', 'raw output preview here');
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('onRetry', () => {
+    it('is defined at Verbose verbosity', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+      expect(cb.onRetry).toBeDefined();
+    });
+
+    it('is undefined at Normal verbosity', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+      expect(cb.onRetry).toBeUndefined();
+    });
+
+    it('logs retry info in log mode', () => {
+      const tasks = [makeTask('t', 's')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
+
+      cb.onRetry!('t', 'src/api.ts', '30-50', 1, 3, 'rate_limit_error', 2000);
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toContain('Retry src/api.ts:30-50');
+      expect(msg).toContain('attempt 1/3');
+      expect(msg).toContain('retrying in 2s');
+      expect(msg).toContain('rate_limit_error');
+    });
+  });
 });
 
 describe('runSkillTasks', () => {
