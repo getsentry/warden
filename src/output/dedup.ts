@@ -747,6 +747,8 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
     const sorted = [...groupFindings].sort(compareFindingPriority);
     const original = sorted[0];
     if (!original) continue;
+    // Save original references before substitution for drop tracking
+    const originalRefs = [...groupFindings];
     // Substitute any existing replacements to preserve locations from prior groups.
     // This covers both winners and losers that accumulated locations earlier.
     for (let i = 0; i < groupFindings.length; i++) {
@@ -758,8 +760,10 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
     const winner = pickAndMergeWinner(groupFindings);
     // Track replacement since mergeGroupLocations returns a copy
     replacements.set(original, winner);
-    for (const f of groupFindings) {
-      if (f !== original && f !== replacements.get(original)) {
+    // Track original findings (not substituted replacements) so the final
+    // filter on original references correctly removes dropped items.
+    for (const f of originalRefs) {
+      if (f !== original) {
         droppedFindings.add(f);
       }
     }

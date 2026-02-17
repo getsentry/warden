@@ -478,8 +478,12 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
       replacements.set(winner, merged);
     }
 
-    for (const loser of sorted.slice(1)) {
-      absorbed.add(loser);
+    // Track original findings (not substituted replacements) so the final
+    // filter on original references correctly removes absorbed items.
+    for (const f of groupFindings) {
+      if (f !== winner) {
+        absorbed.add(f);
+      }
     }
   }
 
