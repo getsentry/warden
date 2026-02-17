@@ -348,8 +348,11 @@ export function mergeGroupLocations(sortedGroup: Finding[]): Finding | undefined
 
   if (extraLocations.length === 0) return winner;
 
-  // Deduplicate locations by path:startLine:endLine
+  // Deduplicate locations by path:startLine:endLine, seeding with winner's primary location
   const seen = new Set<string>();
+  if (winner.location) {
+    seen.add(`${winner.location.path}:${winner.location.startLine}:${winner.location.endLine ?? ''}`);
+  }
   const uniqueLocations = extraLocations.filter((loc) => {
     const key = `${loc.path}:${loc.startLine}:${loc.endLine ?? ''}`;
     if (seen.has(key)) return false;
