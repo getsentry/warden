@@ -27,7 +27,7 @@ import type { OutputMode } from './tty.js';
 import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
 import { timestamp } from './tty.js';
 import { formatDuration, formatCost, formatLocation, formatSeverityPlain, formatFindingCountsPlain, countBySeverity, pluralize } from './formatters.js';
-import { runPool } from '../../utils/index.js';
+import { runPool, Semaphore } from '../../utils/index.js';
 
 /**
  * Result from processing a single file within a skill task.
@@ -157,7 +157,8 @@ export interface SkillProgressCallbacks {
 export async function runSkillTask(
   options: SkillTaskOptions,
   fileConcurrency: number,
-  callbacks: SkillProgressCallbacks
+  callbacks: SkillProgressCallbacks,
+  semaphore?: Semaphore
 ): Promise<SkillTaskResult> {
   const { name, displayName = name, failOn, resolveSkill, context, runnerOptions = {} } = options;
 
@@ -321,11 +322,16 @@ export async function runSkillTask(
         const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
         const allResults = await runPool(preparedFiles, fileConcurrency,
           async (file, index) => {
-            // Rate-limit: delay items beyond the first concurrent wave
-            if (index >= fileConcurrency && batchDelayMs > 0) {
-              await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+            if (semaphore) await semaphore.acquire();
+            try {
+              // Rate-limit: delay items beyond the first concurrent wave
+              if (index >= fileConcurrency && batchDelayMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+              }
+              return await processFile(file, index);
+            } finally {
+              if (semaphore) semaphore.release();
             }
-            return processFile(file, index);
           },
           { shouldAbort }
         );
@@ -546,8 +552,10 @@ export async function runSkillTasks(
 ): Promise<SkillTaskResult[]> {
   const { mode, verbosity, concurrency } = options;
 
-  // File-level concurrency (within each skill)
-  const fileConcurrency = 5;
+  // Global semaphore gates file-level work across all skills.
+  // All skills launch immediately so the UI shows them as "running",
+  // but only `concurrency` files will be analysed at any time.
+  const semaphore = new Semaphore(concurrency);
 
   const effectiveCallbacks = callbacks ?? createDefaultCallbacks(tasks, mode, verbosity);
 
@@ -564,22 +572,11 @@ export async function runSkillTasks(
     }, { once: true });
   }
 
-  const results: SkillTaskResult[] = [];
-
-  if (concurrency <= 1) {
-    // Sequential execution
-    for (const task of tasks) {
-      if (task.runnerOptions?.abortController?.signal.aborted) break;
-      const result = await runSkillTask(task, fileConcurrency, effectiveCallbacks);
-      results.push(result);
-    }
-  } else {
-    // Parallel execution with sliding-window concurrency pool
-    results.push(...await runPool(tasks, concurrency,
-      (task) => runSkillTask(task, fileConcurrency, effectiveCallbacks),
-      { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
-    ));
-  }
+  // Launch all skills in parallel; the semaphore is the sole concurrency gate.
+  const results = await runPool(tasks, tasks.length,
+    (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, effectiveCallbacks, semaphore),
+    { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
+  );
 
   return results;
 }

@@ -4,6 +4,7 @@ import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
 import type { SkillReport, Finding } from '../../types/index.js';
 import type { SkillTaskOptions } from './tasks.js';
+import { Semaphore, runPool } from '../../utils/index.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -477,5 +478,37 @@ describe('runSkillTasks', () => {
 
     expect(results).toHaveLength(0);
     expect(resolveSkill).not.toHaveBeenCalled();
+  });
+});
+
+describe('Semaphore integration with runPool', () => {
+  it('limits concurrent file analyses across skills to the semaphore size', async () => {
+    // Track concurrent active file analyses
+    let active = 0;
+    let maxActive = 0;
+    const concurrencyLimit = 2;
+    const semaphore = new Semaphore(concurrencyLimit);
+
+    // Simulate 3 skills each with 3 files (9 total file analyses).
+    // runPool gets unlimited concurrency (like skills launching in parallel),
+    // but the semaphore gates how many run simultaneously.
+    const fileWork = Array.from({ length: 9 }, (_, i) => i);
+
+    const results = await runPool(fileWork, fileWork.length, async (item) => {
+      await semaphore.acquire();
+      try {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active--;
+        return item;
+      } finally {
+        semaphore.release();
+      }
+    });
+
+    expect(results).toHaveLength(9);
+    expect(maxActive).toBeLessThanOrEqual(concurrencyLimit);
+    expect(maxActive).toBe(concurrencyLimit);
   });
 });

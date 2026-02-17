@@ -17,7 +17,7 @@ import { fetchExistingComments } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
 import type { EventContext, SkillReport, Finding } from '../../types/index.js';
-import { processInBatches } from '../../utils/index.js';
+import { runPool, Semaphore } from '../../utils/index.js';
 import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
 import type { FixEvaluation } from '../fix-evaluation/index.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
@@ -241,8 +241,13 @@ async function executeAllTriggers(
   const concurrency = config.runner?.concurrency ?? inputs.parallel;
   const claudePath = await findClaudeCodeExecutable();
 
-  return processInBatches(
+  // Global semaphore gates file-level work across all triggers.
+  // All triggers launch immediately; the semaphore limits concurrent file analyses.
+  const semaphore = new Semaphore(concurrency);
+
+  return runPool(
     matchedTriggers,
+    matchedTriggers.length,
     (trigger) =>
       executeTrigger(trigger, {
         octokit,
@@ -255,8 +260,8 @@ async function executeAllTriggers(
         globalMaxFindings: inputs.maxFindings,
         globalRequestChanges: inputs.requestChanges,
         globalFailCheck: inputs.failCheck,
+        semaphore,
       }),
-    concurrency
   );
 }
 

@@ -22,7 +22,7 @@ import {
   type FileState,
 } from './tasks.js';
 import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
-import { runPool } from '../../utils/index.js';
+import { runPool, Semaphore } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
@@ -226,13 +226,12 @@ export async function runSkillTasksWithInk(
   const { verbosity, concurrency } = options;
 
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
-    // No tasks or quiet mode - run without UI
-    const results: SkillTaskResult[] = [];
-    for (const task of tasks) {
-      if (task.runnerOptions?.abortController?.signal.aborted) break;
-      const result = await runSkillTask(task, 5, noopCallbacks);
-      results.push(result);
-    }
+    // No tasks or quiet mode - run without UI using global semaphore
+    const semaphore = new Semaphore(concurrency);
+    const results = await runPool(tasks, tasks.length,
+      (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, noopCallbacks, semaphore),
+      { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
+    );
     return results;
   }
 
@@ -335,21 +334,14 @@ export async function runSkillTasksWithInk(
       : undefined,
   };
 
-  const fileConcurrency = 5;
-  const results: SkillTaskResult[] = [];
+  // Global semaphore gates file-level work across all skills.
+  const semaphore = new Semaphore(concurrency);
 
-  if (concurrency <= 1) {
-    for (const task of tasks) {
-      if (task.runnerOptions?.abortController?.signal.aborted) break;
-      const result = await runSkillTask(task, fileConcurrency, callbacks);
-      results.push(result);
-    }
-  } else {
-    results.push(...await runPool(tasks, concurrency,
-      (task) => runSkillTask(task, fileConcurrency, callbacks),
-      { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
-    ));
-  }
+  // Launch all skills in parallel; the semaphore is the sole concurrency gate.
+  const results = await runPool(tasks, tasks.length,
+    (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, callbacks, semaphore),
+    { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
+  );
 
   // Cleanup - set unmounted flag before unmount to prevent pending setImmediate
   // callbacks from calling rerender on the unmounted Ink instance

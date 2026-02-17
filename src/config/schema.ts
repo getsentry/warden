@@ -110,7 +110,7 @@ export type SkillConfig = z.infer<typeof SkillConfigSchema>;
 
 // Runner configuration
 export const RunnerConfigSchema = z.object({
-  /** Max concurrent trigger executions (default: 4) */
+  /** Max concurrent file analyses across all skills (default: 4) */
   concurrency: z.number().int().positive().optional(),
 });
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;

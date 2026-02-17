@@ -78,6 +78,7 @@ import { evaluateFixAttempts } from '../fix-evaluation/index.js';
 import { setFailed } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
+import { Semaphore } from '../../utils/index.js';
 
 // Type the mocks
 const mockRunSkillTask = vi.mocked(runSkillTask);
@@ -311,12 +312,14 @@ describe('runPRWorkflow', () => {
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
       expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
-      // runSkillTask(options, concurrency, callbacks)
-      expect(mockRunSkillTask).toHaveBeenCalledWith(
-        expect.objectContaining({ name: expect.any(String) }),
-        expect.any(Number),
-        expect.any(Object)
-      );
+      const [taskOptions, fileConcurrency, _callbacks, semaphore] = mockRunSkillTask.mock.calls[0]!;
+      expect(taskOptions).toEqual(expect.objectContaining({
+        name: 'test-skill',
+        displayName: 'test-skill',
+      }));
+      // When a semaphore is provided, fileConcurrency is unlimited (semaphore is the gate)
+      expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
+      expect(semaphore).toBeInstanceOf(Semaphore);
     });
 
     it('records trigger failure and updates check before failing', async () => {
@@ -467,23 +470,18 @@ describe('runPRWorkflow', () => {
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
-      // runSkillTask receives options with context embedded
-      expect(mockRunSkillTask).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            pullRequest: expect.objectContaining({
-              files: expect.arrayContaining([
-                expect.objectContaining({
-                  filename: 'src/custom.ts',
-                  status: 'added',
-                }),
-              ]),
-            }),
+      // runSkillTask receives options with context containing the custom files
+      const [taskOptions, fileConcurrency, _callbacks, semaphore] = mockRunSkillTask.mock.calls[0]!;
+      expect(taskOptions.context.pullRequest?.files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            filename: 'src/custom.ts',
+            status: 'added',
           }),
-        }),
-        expect.any(Number),
-        expect.any(Object)
+        ])
       );
+      expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
+      expect(semaphore).toBeInstanceOf(Semaphore);
     });
   });
 

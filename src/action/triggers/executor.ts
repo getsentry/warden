@@ -25,6 +25,7 @@ import {
 } from '../../output/github-checks.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
 import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
+import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 
 /** Log-mode output for CI: no TTY, no color. */
@@ -54,6 +55,8 @@ export interface TriggerExecutorDeps {
   globalRequestChanges?: boolean;
   /** Global fail-check from action inputs (trigger-specific takes precedence) */
   globalFailCheck?: boolean;
+  /** Global semaphore for limiting concurrent file analyses across triggers */
+  semaphore?: Semaphore;
 }
 
 /**
@@ -138,7 +141,8 @@ export async function executeTrigger(
         };
 
         const callbacks = createDefaultCallbacks([taskOptions], CI_OUTPUT_MODE, Verbosity.Normal);
-        const result = await runSkillTask(taskOptions, DEFAULT_FILE_CONCURRENCY, callbacks);
+        const fileConcurrency = deps.semaphore ? Number.MAX_SAFE_INTEGER : DEFAULT_FILE_CONCURRENCY;
+        const result = await runSkillTask(taskOptions, fileConcurrency, callbacks, deps.semaphore);
         const report = result.report;
 
         if (!report) {

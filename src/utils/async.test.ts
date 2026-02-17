@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runPool, processInBatches } from './async.js';
+import { runPool, processInBatches, Semaphore } from './async.js';
 
 describe('runPool', () => {
   it('processes all items and returns results in input order', async () => {
@@ -133,5 +133,85 @@ describe('processInBatches', () => {
     const results = await processInBatches(items, async (item) => item * 3, 2);
 
     expect(results).toEqual([3, 6, 9, 12, 15]);
+  });
+});
+
+describe('Semaphore', () => {
+  it('allows immediate acquisition when permits are available', async () => {
+    const sem = new Semaphore(2);
+    await sem.acquire();
+    await sem.acquire();
+    // Both acquired without blocking
+    sem.release();
+    sem.release();
+  });
+
+  it('blocks when no permits are available and unblocks on release', async () => {
+    const sem = new Semaphore(1);
+    await sem.acquire();
+
+    let acquired = false;
+    const pending = sem.acquire().then(() => { acquired = true; });
+
+    // Give the microtask queue a tick
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(acquired).toBe(false);
+
+    sem.release();
+    await pending;
+    expect(acquired).toBe(true);
+
+    sem.release();
+  });
+
+  it('wakes waiters in FIFO order', async () => {
+    const sem = new Semaphore(1);
+    await sem.acquire();
+
+    const order: number[] = [];
+
+    const p1 = sem.acquire().then(() => { order.push(1); });
+    const p2 = sem.acquire().then(() => { order.push(2); });
+    const p3 = sem.acquire().then(() => { order.push(3); });
+
+    sem.release(); // wakes waiter 1
+    await p1;
+    sem.release(); // wakes waiter 2
+    await p2;
+    sem.release(); // wakes waiter 3
+    await p3;
+
+    expect(order).toEqual([1, 2, 3]);
+
+    sem.release();
+  });
+
+  it('limits concurrent work to the permit count', async () => {
+    const sem = new Semaphore(3);
+    let active = 0;
+    let maxActive = 0;
+
+    const work = async () => {
+      await sem.acquire();
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active--;
+      sem.release();
+    };
+
+    await Promise.all(Array.from({ length: 10 }, () => work()));
+
+    expect(maxActive).toBe(3);
+  });
+
+  it('handles release without waiters (restores permits)', async () => {
+    const sem = new Semaphore(1);
+    await sem.acquire();
+    sem.release();
+
+    // Should be able to acquire again immediately
+    await sem.acquire();
+    sem.release();
   });
 });

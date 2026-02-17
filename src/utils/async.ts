@@ -1,4 +1,37 @@
 /**
+ * A counting semaphore for limiting concurrent access to a shared resource.
+ * Callers acquire a permit before starting work and release it when done.
+ * If no permits are available, acquire() blocks until one is released.
+ */
+export class Semaphore {
+  private permits: number;
+  private waiters: (() => void)[] = [];
+
+  constructor(permits: number) {
+    this.permits = permits;
+  }
+
+  async acquire(): Promise<void> {
+    if (this.permits > 0) {
+      this.permits--;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.waiters.push(resolve);
+    });
+  }
+
+  release(): void {
+    const next = this.waiters.shift();
+    if (next) {
+      next();
+    } else {
+      this.permits++;
+    }
+  }
+}
+
+/**
  * Run async work items with a sliding-window concurrency pool.
  * Spawns up to `concurrency` workers that each grab the next
  * queued item as soon as they finish, keeping all slots busy.
