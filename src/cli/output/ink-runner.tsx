@@ -246,7 +246,7 @@ export async function runSkillTasksWithInk(
   let interrupted = false;
 
   // Create Ink instance
-  const { rerender, unmount } = render(
+  const { rerender, unmount, clear } = render(
     <SkillRunner skills={skillStates} interrupted={false} />,
     { stdout: process.stderr }
   );
@@ -354,6 +354,7 @@ export async function runSkillTasksWithInk(
   // Cleanup - set unmounted flag before unmount to prevent pending setImmediate
   // callbacks from calling rerender on the unmounted Ink instance
   unmounted = true;
+  clear();
   unmount();
 
   printSkillSummary(skillStates);
