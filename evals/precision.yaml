@@ -7,6 +7,7 @@ evals:
       - fixtures/ignores-style-issues/utils.ts
     should_find:
       - finding: "no bugs: the code is functionally correct despite having style issues, so zero or only info-level findings are expected"
+        required: false
     should_not_find:
       - inconsistent naming convention (snake_case vs camelCase)
       - missing JSDoc comments

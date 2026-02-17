@@ -6,6 +6,6 @@ export default defineConfig({
     include: ['src/evals/**/*.integration.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     // Load .env, .env.local, .env.test for API keys
-    setupFiles: ['./src/examples/setup.ts'],
+    setupFiles: ['./src/evals/setup.ts'],
   },
 });

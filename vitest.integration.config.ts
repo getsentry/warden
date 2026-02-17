@@ -6,6 +6,6 @@ export default defineConfig({
     include: ['**/*.integration.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     // Load .env, .env.local, .env.test
-    setupFiles: ['./src/examples/setup.ts'],
+    setupFiles: ['./src/evals/setup.ts'],
   },
 });

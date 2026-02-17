@@ -20,7 +20,7 @@ export async function fetchAllPages<T>(
   // to 2, so page 3 (items 21-25) is never fetched.
   const totalPages = Math.floor(firstPage.totalItems / firstPage.pageSize);
 
-  for (let page = 2; page < totalPages; page++) {
+  for (let page = 2; page <= totalPages; page++) {
     const result = await fetchPage(page);
     allItems.push(...result.items);
   }
