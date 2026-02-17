@@ -56,19 +56,11 @@ function FileProgress({ file }: { file: FileState }): React.ReactElement {
 }
 
 function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
-  const [, tick] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => tick((t) => t + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const activeFiles = skill.files.filter((f) => f.status === 'running');
   const doneCount = skill.files.filter((f) => f.status === 'done' || f.status === 'skipped').length;
   const totalCount = skill.files.length;
   const findingCount = skill.files.reduce((sum, f) => sum + f.findings.length, 0);
   const cost = skill.files.reduce((sum, f) => sum + (f.usage?.costUSD ?? 0), 0);
-  const elapsed = skill.startTime ? Date.now() - skill.startTime : 0;
 
   return (
     <Box flexDirection="column">
@@ -78,7 +70,6 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
         {totalCount > 0 && <Text dimColor>  [{doneCount}/{totalCount} files]</Text>}
         {findingCount > 0 && <Text>  {findingCount} {findingCount === 1 ? 'finding' : 'findings'}</Text>}
         {cost > 0 && <Text dimColor>  {formatCost(cost)}</Text>}
-        {elapsed > 0 && <Text dimColor>  {formatDuration(elapsed)}</Text>}
       </Box>
       {activeFiles.map((file) => (
         <Box key={file.filename} marginLeft={2}>
