@@ -1,7 +1,7 @@
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
-import type { HunkWithContext } from '../diff/index.js';
+import { getHunkLineRange as getHunkNumericRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
@@ -77,6 +77,26 @@ async function parseHunkOutput(
     extractionPreview: fallback.preview,
     extractionUsage: fallback.usage,
   };
+}
+
+/**
+ * Filter findings whose startLine falls outside the hunk line range.
+ * Findings without a location are kept (general findings).
+ */
+export function filterOutOfRangeFindings(
+  findings: Finding[],
+  hunkRange: { start: number; end: number }
+): { filtered: Finding[]; dropped: Finding[] } {
+  const filtered: Finding[] = [];
+  const dropped: Finding[] = [];
+  for (const f of findings) {
+    if (!f.location || (f.location.startLine >= hunkRange.start && f.location.startLine <= hunkRange.end)) {
+      filtered.push(f);
+    } else {
+      dropped.push(f);
+    }
+  }
+  return { filtered, dropped };
 }
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
@@ -419,13 +439,30 @@ async function analyzeHunk(
 
           const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey);
 
+          // Filter findings outside hunk line range (defense-in-depth)
+          const hunkRange = getHunkNumericRange(hunkCtx.hunk);
+          const { filtered: filteredFindings, dropped } = filterOutOfRangeFindings(parseResult.findings, hunkRange);
+          if (dropped.length > 0) {
+            Sentry.addBreadcrumb({
+              category: 'finding.out_of_range',
+              message: `Dropped ${dropped.length} finding(s) outside hunk range ${hunkRange.start}-${hunkRange.end}`,
+              level: 'warning',
+              data: {
+                skill: skill.name,
+                filename: hunkCtx.filename,
+                hunkRange,
+                droppedLines: dropped.map((f) => f.location?.startLine),
+              },
+            });
+          }
+
           // Emit extraction metrics
-          emitExtractionMetrics(skill.name, parseResult.extractionMethod, parseResult.findings.length);
+          emitExtractionMetrics(skill.name, parseResult.extractionMethod, filteredFindings.length);
 
           // Notify about extraction result (debug mode)
           callbacks?.onExtractionResult?.(
             callbacks.lineRange,
-            parseResult.findings.length,
+            filteredFindings.length,
             parseResult.extractionMethod
           );
 
@@ -439,10 +476,10 @@ async function analyzeHunk(
           }
 
           span.setAttribute('hunk.failed', false);
-          span.setAttribute('finding.count', parseResult.findings.length);
+          span.setAttribute('finding.count', filteredFindings.length);
 
           return {
-            findings: parseResult.findings,
+            findings: filteredFindings,
             usage: aggregateUsage(accumulatedUsage),
             failed: false,
             extractionFailed: parseResult.extractionFailed,

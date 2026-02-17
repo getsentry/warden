@@ -36,6 +36,8 @@ You are a code analysis agent for Warden. You evaluate code changes against spec
 You have access to these tools to gather context:
 - **Read**: Check related files to understand context
 - **Grep**: Search for patterns to trace data flow or find related code
+
+Use these tools to gather context that helps you evaluate changes within the hunk. All findings must still reference lines within the hunk being analyzed.
 </tools>`,
 
     `<skill_instructions>
@@ -76,12 +78,13 @@ Requirements:
 - Return ONLY valid JSON starting with {"findings":
 - "findings" array can be empty if no issues found
 - "location.path" is auto-filled from context - just provide startLine (and optionally endLine). Omit location entirely for general findings not about a specific line.
+- "location.startLine" MUST be within the hunk line range (shown in the "## Hunk" header). If the issue originates in surrounding code, anchor to the nearest changed line in the hunk and note the actual location in the description.
 - "confidence" reflects how certain you are this is a real issue given the codebase context
 - "suggestedFix" is optional - only include when you can provide a complete, correct fix **to the file being analyzed**. Omit suggestedFix if:
   - The fix would be incomplete or you're uncertain about the correct solution
   - The fix requires changes to a different file or a new file (describe the fix in the description field instead)
 - Keep descriptions SHORT (1-2 sentences max) - avoid lengthy explanations
-- Be concise - focus only on the changes shown
+- Focus your analysis on the code changes in the hunk. Surrounding context and tool results are for understanding only -- all findings must reference lines within the hunk range.
 </output_format>`,
   ];
 
