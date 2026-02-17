@@ -465,10 +465,13 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     // Pick winner: highest severity → confidence → path → line
     const sorted = [...groupFindings].sort(compareFindingPriority);
     const winner = sorted[0];
-    // Use existing replacement as base to preserve locations from prior groups
-    const existing = winner ? replacements.get(winner) : undefined;
-    if (existing) {
-      sorted[0] = existing;
+    // Substitute any existing replacements to preserve locations from prior groups.
+    // This covers both winners and losers that accumulated locations earlier.
+    for (let i = 0; i < sorted.length; i++) {
+      const f = sorted[i];
+      if (!f) continue;
+      const existing = replacements.get(f);
+      if (existing) sorted[i] = existing;
     }
     const merged = mergeGroupLocations(sorted);
     if (winner && merged) {

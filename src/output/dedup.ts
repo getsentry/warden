@@ -747,10 +747,13 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
     const sorted = [...groupFindings].sort(compareFindingPriority);
     const original = sorted[0];
     if (!original) continue;
-    // Use existing replacement as base to preserve locations from prior groups
-    const existing = replacements.get(original);
-    if (existing) {
-      groupFindings[groupFindings.indexOf(original)] = existing;
+    // Substitute any existing replacements to preserve locations from prior groups.
+    // This covers both winners and losers that accumulated locations earlier.
+    for (let i = 0; i < groupFindings.length; i++) {
+      const f = groupFindings[i];
+      if (!f) continue;
+      const existing = replacements.get(f);
+      if (existing) groupFindings[i] = existing;
     }
     const winner = pickAndMergeWinner(groupFindings);
     // Track replacement since mergeGroupLocations returns a copy
