@@ -30,8 +30,14 @@ src/
 ├── cli/               # CLI entry and commands
 │   └── output/        # CLI output formatting
 ├── action/            # GitHub Action entry
+├── evals/             # Eval runner, judge, and types
 ├── utils/             # Shared utilities
 └── examples/          # Example configurations
+
+evals/                 # Eval specs, fixtures, and test skills (see evals/README.md)
+├── *.yaml             # YAML eval definitions
+├── skills/            # Test skills used as eval vehicles
+└── fixtures/          # Source code with known issues
 ```
 
 ## Key Conventions
@@ -85,6 +91,10 @@ Skills define **what to look for**, not how to respond to findings:
 - When Warden reports findings, fix the code. Don't modify skills to suppress results
 - Skills should only change to improve detection accuracy, not to reduce reported findings
 - Each skill owns its domain expertise; severity definitions are intentionally domain-agnostic
+
+## Evals
+
+End-to-end behavioral tests for the full pipeline. See [`evals/README.md`](evals/README.md) for the YAML spec, how to add evals, and how it all works. Run with `pnpm test:evals`.
 
 ## Voice
 

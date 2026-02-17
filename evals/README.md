@@ -144,8 +144,11 @@ If a new category needs a different test skill, add it to `evals/skills/`.
 
 1. **Discovery**: Scan `evals/` for `.yaml` files
 2. **Loading**: Parse YAML, validate with Zod, resolve paths
-3. **Context**: Build a synthetic `EventContext` treating fixture files as added
-4. **Execution**: Run the skill via `runSkill()` with the real SDK pipeline
-5. **Judgment**: An LLM judge (Sonnet) evaluates findings against assertions
-6. **Verdict**: Pass if all required `should_find` are met and no
+3. **Git repo**: Create a temp repo with fixture files committed on an `eval`
+   branch (empty `main` as base), so the agent has a real repo to explore
+4. **Context**: Build `EventContext` from real `git diff main...eval`
+5. **Execution**: Run the skill via `runSkill()` with the real SDK pipeline;
+   the agent operates in the temp repo with Read/Grep tools
+6. **Judgment**: An LLM judge (Sonnet) evaluates findings against assertions
+7. **Verdict**: Pass if all required `should_find` are met and no
    `should_not_find` are violated
