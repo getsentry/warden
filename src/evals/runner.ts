@@ -1,5 +1,5 @@
 import { basename, join, dirname } from 'node:path';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { buildLocalEventContext } from '../cli/context.js';
@@ -28,31 +28,49 @@ export interface RunEvalOptions {
  */
 function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): string {
   const tmpDir = mkdtempSync(join(tmpdir(), `warden-eval-${meta.name}-`));
-  const git = (args: string[]) => execGitNonInteractive(args, { cwd: tmpDir });
 
-  git(['init', '--initial-branch=main']);
-  git(['config', 'user.email', 'eval@warden.dev']);
-  git(['config', 'user.name', 'Warden Eval']);
-  git(['commit', '--allow-empty', '-m', 'initial commit']);
-  git(['checkout', '-b', 'eval']);
+  try {
+    const git = (args: string[]) => execGitNonInteractive(args, { cwd: tmpDir });
 
-  // Copy fixture files, preserving their parent directory name
-  for (const srcPath of meta.filePaths) {
-    const destDir = join(tmpDir, basename(dirname(srcPath)));
-    mkdirSync(destDir, { recursive: true });
-    copyFileSync(srcPath, join(destDir, basename(srcPath)));
+    git(['init', '--initial-branch=main']);
+    git(['config', 'user.email', 'eval@warden.dev']);
+    git(['config', 'user.name', 'Warden Eval']);
+    git(['commit', '--allow-empty', '-m', 'initial commit']);
+    git(['checkout', '-b', 'eval']);
+
+    // Copy fixture files, preserving their parent directory name
+    for (const srcPath of meta.filePaths) {
+      const destDir = join(tmpDir, basename(dirname(srcPath)));
+      mkdirSync(destDir, { recursive: true });
+      copyFileSync(srcPath, join(destDir, basename(srcPath)));
+    }
+
+    // Copy skill into repo. If it lives in a directory (skill-name/SKILL.md),
+    // copy the whole directory to preserve resource subdirs (scripts/, references/).
+    // For flat .md files, just copy the single file.
+    const skillSrcDir = dirname(meta.skillPath);
+    const skillMarker = join(skillSrcDir, 'SKILL.md');
+    const skillDestDir = join(tmpDir, '.warden', 'skills');
+    mkdirSync(skillDestDir, { recursive: true });
+
+    if (existsSync(skillMarker)) {
+      // Directory-format skill: copy entire directory to preserve resources
+      const skillDirName = basename(skillSrcDir);
+      cpSync(skillSrcDir, join(skillDestDir, skillDirName), { recursive: true });
+    } else {
+      copyFileSync(meta.skillPath, join(skillDestDir, basename(meta.skillPath)));
+    }
+
+    git(['add', '.']);
+    git(['commit', '-m', `add fixture: ${meta.name}`]);
+
+    log(`Repo ready: ${tmpDir} (${meta.filePaths.length} file(s))`);
+    return tmpDir;
+  } catch (error) {
+    // Clean up on partial failure so we don't leak temp directories
+    rmSync(tmpDir, { recursive: true, force: true });
+    throw error;
   }
-
-  // Copy skill into repo so the agent can read skill resources
-  const skillDir = join(tmpDir, '.warden', 'skills');
-  mkdirSync(skillDir, { recursive: true });
-  copyFileSync(meta.skillPath, join(skillDir, basename(meta.skillPath)));
-
-  git(['add', '.']);
-  git(['commit', '-m', `add fixture: ${meta.name}`]);
-
-  log(`Repo ready: ${tmpDir} (${meta.filePaths.length} file(s))`);
-  return tmpDir;
 }
 
 /**
@@ -95,7 +113,12 @@ export async function runEval(
     });
     log(`Context built: ${context.pullRequest?.files.length ?? 0} file(s) from git diff`);
 
-    const skillPath = join(repoDir, '.warden', 'skills', basename(meta.skillPath));
+    // Resolve skill from where setupEvalRepo placed it
+    const skillSrcDir = dirname(meta.skillPath);
+    const isDirectorySkill = existsSync(join(skillSrcDir, 'SKILL.md'));
+    const skillPath = isDirectorySkill
+      ? join(repoDir, '.warden', 'skills', basename(skillSrcDir))
+      : join(repoDir, '.warden', 'skills', basename(meta.skillPath));
     const skill = await resolveSkillAsync(skillPath);
     log(`Skill resolved: ${skill.name}`);
 
