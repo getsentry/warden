@@ -56,11 +56,19 @@ function FileProgress({ file }: { file: FileState }): React.ReactElement {
 }
 
 function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
+  const [, tick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => tick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const activeFiles = skill.files.filter((f) => f.status === 'running');
   const doneCount = skill.files.filter((f) => f.status === 'done' || f.status === 'skipped').length;
   const totalCount = skill.files.length;
-  const findingCount = skill.findings.length;
+  const findingCount = skill.files.reduce((sum, f) => sum + f.findings.length, 0);
   const cost = skill.files.reduce((sum, f) => sum + (f.usage?.costUSD ?? 0), 0);
+  const elapsed = skill.startTime ? Date.now() - skill.startTime : 0;
 
   return (
     <Box flexDirection="column">
@@ -70,6 +78,7 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
         {totalCount > 0 && <Text dimColor>  [{doneCount}/{totalCount} files]</Text>}
         {findingCount > 0 && <Text>  {findingCount} {findingCount === 1 ? 'finding' : 'findings'}</Text>}
         {cost > 0 && <Text dimColor>  {formatCost(cost)}</Text>}
+        {elapsed > 0 && <Text dimColor>  {formatDuration(elapsed)}</Text>}
       </Box>
       {activeFiles.map((file) => (
         <Box key={file.filename} marginLeft={2}>
@@ -80,12 +89,42 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
   );
 }
 
+function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
+  if (skill.status === 'skipped') {
+    return (
+      <Text>
+        <Text color="yellow">{ICON_SKIPPED}</Text> {skill.displayName} <Text dimColor>[skipped]</Text>
+      </Text>
+    );
+  }
+
+  if (skill.status === 'error') {
+    return (
+      <Text>
+        <Text color="red">{ICON_ERROR}</Text> {skill.displayName}
+        {skill.durationMs ? <Text dimColor> [{formatDuration(skill.durationMs)}]</Text> : null}
+      </Text>
+    );
+  }
+
+  return (
+    <Text>
+      <Text color="green">{ICON_CHECK}</Text> {skill.displayName}
+      {skill.durationMs ? <Text dimColor> [{formatDuration(skill.durationMs)}]</Text> : null}
+    </Text>
+  );
+}
+
 function SkillRunner({ skills, interrupted }: SkillRunnerProps): React.ReactElement {
+  const completed = skills.filter((s) => s.status === 'done' || s.status === 'skipped' || s.status === 'error');
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
 
   return (
     <Box flexDirection="column">
+      {completed.map((skill) => (
+        <CompletedSkill key={skill.name} skill={skill} />
+      ))}
       {running.map((skill) => (
         <RunningSkill key={skill.name} skill={skill} />
       ))}

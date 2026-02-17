@@ -123,7 +123,7 @@ CONFIG  6 triggers · 4 matched
 
 Fields: `name`, `displayName`, `fileCount`
 
-**TTY:** Spinner icon + skill name, progress bar begins
+**TTY:** Spinner icon + skill name + `[done/total files]` + finding count + running cost
 
 **Plain:**
 ```
@@ -136,7 +136,7 @@ Fields: `name`, `displayName`, `fileCount`
 
 Fields: `filename`, `durationMs`, `findings[]`, `usage?`
 
-**TTY:** Progress bar update: checkmark + filename + `[hunksDone/totalHunks]` + severity dots + duration + cost
+**TTY:** File disappears from dynamic area (only running files shown). Checkmark + filename + severity dots + duration + cost appear in the post-unmount summary.
 
 **Plain:**
 ```
@@ -163,11 +163,7 @@ Fields: `filename`, `hunkNum`, `totalHunks`, `lineRange`
 
 Fields: `name`, `durationMs`, `findingCount`, `usage?`
 
-**TTY:**
-```
-checkmark security-review [4.2s]
-```
-(Green checkmark, duration dimmed)
+**TTY:** Skill moves from spinner to checkmark in the dynamic area: `checkmark security-review [4.2s]` (green checkmark, duration dimmed). After all skills finish and Ink unmounts, the full per-skill + per-file breakdown prints to stderr.
 
 **Plain:**
 ```
@@ -566,7 +562,7 @@ Matrix of every reporter event. Legend:
 ### Footnotes
 
 1. JSONL captures skill results and summary as structured records. Transient progress events are not applicable.
-2. TTY uses file-level progress bars; individual hunk starts are not shown.
+2. TTY shows only running files in the dynamic Ink area; individual hunk starts are not shown. Completed file details appear in the post-unmount summary.
 
 ---
 
