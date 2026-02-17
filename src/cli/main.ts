@@ -163,7 +163,7 @@ async function outputResultsAndHandleFixes(
     console.log(renderJsonReport(filteredReports));
   } else {
     // Suppress fix diffs in report when interactive step-through will show them
-    console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough }));
+    console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
   }
 
   // Show interrupted banner before summary (read live to catch SIGINT during rendering)

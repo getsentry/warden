@@ -13,6 +13,7 @@ import {
   countBySeverity,
   pluralize,
 } from './output/index.js';
+import { Verbosity } from './output/verbosity.js';
 import { BoxRenderer } from './output/box.js';
 import type { OutputMode } from './output/tty.js';
 
@@ -49,6 +50,7 @@ function readFileLine(filePath: string, lineNumber: number): FileLineResult {
 
 interface RenderOptions {
   suppressFixDiffs?: boolean;
+  verbosity?: Verbosity;
 }
 
 /**
@@ -210,7 +212,7 @@ function renderSkillBoxTTY(report: SkillReport, mode: OutputMode, options?: Rend
  * Render a skill report for CI (non-TTY) mode.
  * See specs/reporters.md "Plain" findings report section.
  */
-function renderSkillCI(report: SkillReport): string[] {
+function renderSkillCI(report: SkillReport, verbosity: Verbosity = Verbosity.Normal): string[] {
   const lines: string[] = [];
   const counts = countBySeverity(report.findings);
   const durationStr = report.durationMs !== undefined ? ` (${formatDuration(report.durationMs)})` : '';
@@ -226,7 +228,7 @@ function renderSkillCI(report: SkillReport): string[] {
   if (report.failedExtractions) {
     lines.push(`  WARN: ${report.failedExtractions} finding ${pluralize(report.failedExtractions, 'extraction')} failed`);
   }
-  if (report.failedHunks || report.failedExtractions) {
+  if ((report.failedHunks || report.failedExtractions) && verbosity < Verbosity.Verbose) {
     lines.push('  Use -v for failure details');
   }
 
@@ -262,7 +264,7 @@ export function renderTerminalReport(reports: SkillReport[], mode?: OutputMode, 
   } else {
     // CI mode: plain text
     for (const report of reports) {
-      lines.push(...renderSkillCI(report));
+      lines.push(...renderSkillCI(report, options?.verbosity));
       lines.push('');
     }
   }

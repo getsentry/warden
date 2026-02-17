@@ -3,6 +3,7 @@ import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { renderTerminalReport } from './terminal.js';
+import { Verbosity } from './output/verbosity.js';
 import type { SkillReport, Finding } from '../types/index.js';
 
 describe('renderTerminalReport', () => {
@@ -509,6 +510,18 @@ describe('renderTerminalReport', () => {
     it('does not show -v hint when no failures', () => {
       const report = createReport();
       const output = renderTerminalReport([report], ciMode);
+      expect(output).not.toContain('Use -v for failure details');
+    });
+
+    it('does not show -v hint when verbosity is Verbose', () => {
+      const report = createReport({ failedHunks: 2 });
+      const output = renderTerminalReport([report], ciMode, { verbosity: Verbosity.Verbose });
+      expect(output).not.toContain('Use -v for failure details');
+    });
+
+    it('does not show -v hint when verbosity is Debug', () => {
+      const report = createReport({ failedExtractions: 3 });
+      const output = renderTerminalReport([report], ciMode, { verbosity: Verbosity.Debug });
       expect(output).not.toContain('Use -v for failure details');
     });
   });
