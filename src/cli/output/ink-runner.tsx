@@ -89,11 +89,15 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
     );
   }
 
+  const findingCount = skill.findings.length;
+  const cost = skill.usage?.costUSD;
+  const duration = skill.durationMs ? formatDuration(skill.durationMs) : undefined;
+
   if (skill.status === 'error') {
     return (
       <Text>
         <Text color="red">{ICON_ERROR}</Text> {skill.displayName}
-        {skill.durationMs ? <Text dimColor> [{formatDuration(skill.durationMs)}]</Text> : null}
+        {duration && <Text dimColor> [{duration}]</Text>}
       </Text>
     );
   }
@@ -101,7 +105,9 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
   return (
     <Text>
       <Text color="green">{ICON_CHECK}</Text> {skill.displayName}
-      {skill.durationMs ? <Text dimColor> [{formatDuration(skill.durationMs)}]</Text> : null}
+      {duration && <Text dimColor> [{duration}]</Text>}
+      {findingCount > 0 && <Text>  {findingCount} {findingCount === 1 ? 'finding' : 'findings'}</Text>}
+      {cost !== undefined && cost > 0 && <Text dimColor>  {formatCost(cost)}</Text>}
     </Text>
   );
 }
