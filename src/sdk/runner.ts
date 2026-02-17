@@ -38,6 +38,7 @@ export {
   truncateForLLMFallback,
   deduplicateFindings,
   mergeGroupLocations,
+  applyMergeGroups,
   mergeCrossLocationFindings,
   validateFindings,
   generateShortId,

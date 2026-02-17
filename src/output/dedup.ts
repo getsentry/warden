@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
-import { findingLine, compareFindingPriority } from '../types/index.js';
+import { findingLine } from '../types/index.js';
 import { callHaiku } from '../sdk/haiku.js';
-import { mergeGroupLocations } from '../sdk/extract.js';
+import { applyMergeGroups } from '../sdk/extract.js';
 
 /**
  * Parsed marker data from a Warden comment.
@@ -587,18 +587,6 @@ const ConsolidationGroupsSchema = z.array(
 );
 
 /**
- * Pick the best finding from a group and merge additional locations from losers.
- * Highest severity wins, then confidence, then position.
- * Locations from losers are preserved in winner.additionalLocations.
- */
-function pickAndMergeWinner(group: Finding[]): Finding {
-  const sorted = [...group].sort(compareFindingPriority);
-  const winner = mergeGroupLocations(sorted);
-  if (!winner) throw new Error('pickAndMergeWinner called with empty group');
-  return winner;
-}
-
-/**
  * Group findings by file path, then identify clusters where findings are within
  * PROXIMITY_THRESHOLD lines of each other. Returns only clusters with 2+ findings.
  */
@@ -728,57 +716,18 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
     return { findings: hashDeduped, removedCount: hashRemovedCount, usage: result.usage };
   }
 
-  // Process LLM groups: for each group, keep the winner and drop the rest
-  const droppedFindings = new Set<Finding>();
-  const replacements = new Map<Finding, Finding>();
+  const { absorbed, replacements } = applyMergeGroups(clusteredList, result.data);
 
-  for (const group of result.data) {
-    // Deduplicate indices to prevent the winner from being dropped
-    const uniqueIndices = [...new Set(group)];
-    if (uniqueIndices.length < 2) continue;
-
-    // Convert 1-based indices to findings, skipping already-dropped ones
-    const groupFindings = uniqueIndices
-      .map((idx) => clusteredList[idx - 1])
-      .filter((f): f is Finding => f !== undefined && !droppedFindings.has(f));
-
-    if (groupFindings.length < 2) continue;
-
-    const sorted = [...groupFindings].sort(compareFindingPriority);
-    const original = sorted[0];
-    if (!original) continue;
-    // Save original references before substitution for drop tracking
-    const originalRefs = [...groupFindings];
-    // Substitute any existing replacements to preserve locations from prior groups.
-    // This covers both winners and losers that accumulated locations earlier.
-    for (let i = 0; i < groupFindings.length; i++) {
-      const f = groupFindings[i];
-      if (!f) continue;
-      const existing = replacements.get(f);
-      if (existing) groupFindings[i] = existing;
-    }
-    const winner = pickAndMergeWinner(groupFindings);
-    // Track replacement since mergeGroupLocations returns a copy
-    replacements.set(original, winner);
-    // Track original findings (not substituted replacements) so the final
-    // filter on original references correctly removes dropped items.
-    for (const f of originalRefs) {
-      if (f !== original) {
-        droppedFindings.add(f);
-      }
-    }
-  }
-
-  if (droppedFindings.size === 0) {
+  if (absorbed.size === 0) {
     return { findings: hashDeduped, removedCount: hashRemovedCount, usage: result.usage };
   }
 
   const consolidated = hashDeduped
-    .filter((f) => !droppedFindings.has(f))
+    .filter((f) => !absorbed.has(f))
     .map((f) => replacements.get(f) ?? f);
-  const totalRemoved = hashRemovedCount + droppedFindings.size;
+  const totalRemoved = hashRemovedCount + absorbed.size;
 
-  console.log(`Consolidate: ${droppedFindings.size} findings merged by LLM (same root cause)`);
+  console.log(`Consolidate: ${absorbed.size} findings merged by LLM (same root cause)`);
 
   return { findings: consolidated, removedCount: totalRemoved, usage: result.usage };
 }

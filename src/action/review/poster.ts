@@ -173,11 +173,10 @@ export async function postTriggerReview(
   }
 
   try {
-    // Cross-location merging is already done by runSkillTask() before findings
-    // reach the poster. No need to merge again here.
+    // Cross-location merging already happened in runSkillTask().
+    // Consolidate findings within this batch (intra-batch dedup).
     let findingsToPost = filteredFindings;
 
-    // Consolidate findings within this batch (intra-batch dedup)
     if (findingsToPost.length > 1) {
       const consolidateResult = await consolidateBatchFindings(findingsToPost, {
         apiKey,

@@ -318,13 +318,17 @@ export function deduplicateFindings(findings: Finding[]): Finding[] {
 // Cross-location merging
 // ---------------------------------------------------------------------------
 
+function locationKey(loc: Location): string {
+  return `${loc.path}:${loc.startLine}:${loc.endLine ?? ''}`;
+}
+
 /**
- * Transfer locations from loser findings to the winner.
+ * Merge locations from loser findings into the winner.
  * Each loser's primary location and any existing additionalLocations are
- * appended to winner.additionalLocations. Mutates the winner in place.
+ * appended to winner.additionalLocations (deduplicated).
  *
  * @param sortedGroup - Findings sorted by priority (winner first, losers after).
- * @returns The winner finding with merged locations, or undefined if the group is empty.
+ * @returns A shallow copy of the winner with merged locations, or undefined if empty.
  */
 export function mergeGroupLocations(sortedGroup: Finding[]): Finding | undefined {
   const winner = sortedGroup[0];
@@ -348,20 +352,85 @@ export function mergeGroupLocations(sortedGroup: Finding[]): Finding | undefined
 
   if (extraLocations.length === 0) return winner;
 
-  // Deduplicate locations by path:startLine:endLine, seeding with winner's primary location
+  // Deduplicate by path:startLine:endLine, seeding with winner's primary location
   const seen = new Set<string>();
   if (winner.location) {
-    seen.add(`${winner.location.path}:${winner.location.startLine}:${winner.location.endLine ?? ''}`);
+    seen.add(locationKey(winner.location));
   }
   const uniqueLocations = extraLocations.filter((loc) => {
-    const key = `${loc.path}:${loc.startLine}:${loc.endLine ?? ''}`;
+    const key = locationKey(loc);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 
-  // Return a shallow copy to avoid mutating the original finding
   return { ...winner, additionalLocations: uniqueLocations };
+}
+
+/**
+ * Result of applying merge groups to a list of findings.
+ */
+interface ApplyGroupsResult {
+  /** Original findings that were absorbed into another finding's additionalLocations */
+  absorbed: Set<Finding>;
+  /** Map from original winner finding to its merged replacement (with additionalLocations) */
+  replacements: Map<Finding, Finding>;
+}
+
+/**
+ * Apply LLM-returned merge groups to a list of findings.
+ *
+ * For each group, the highest-priority finding becomes the winner, and all
+ * other findings' locations are folded into its additionalLocations.
+ * Handles overlapping groups by substituting prior replacements and tracking
+ * absorbed findings by their original identity.
+ *
+ * @param indexedFindings - The findings referenced by the 1-based group indices.
+ * @param groups - Arrays of 1-based indices grouping findings by shared root cause.
+ */
+export function applyMergeGroups(
+  indexedFindings: Finding[],
+  groups: number[][]
+): ApplyGroupsResult {
+  const absorbed = new Set<Finding>();
+  const replacements = new Map<Finding, Finding>();
+
+  for (const group of groups) {
+    const uniqueIndices = [...new Set(group)];
+    if (uniqueIndices.length < 2) continue;
+
+    const groupFindings = uniqueIndices
+      .map((idx) => indexedFindings[idx - 1])
+      .filter((f): f is Finding => f !== undefined && !absorbed.has(f));
+
+    if (groupFindings.length < 2) continue;
+
+    // Sort to determine winner, then substitute any prior replacements
+    // so that locations accumulated from earlier groups carry forward.
+    const sorted = [...groupFindings].sort(compareFindingPriority);
+    const winner = sorted[0];
+    if (!winner) continue;
+
+    for (let i = 0; i < sorted.length; i++) {
+      const f = sorted[i];
+      if (!f) continue;
+      const existing = replacements.get(f);
+      if (existing) sorted[i] = existing;
+    }
+
+    const merged = mergeGroupLocations(sorted);
+    if (merged) {
+      replacements.set(winner, merged);
+    }
+
+    for (const f of groupFindings) {
+      if (f !== winner) {
+        absorbed.add(f);
+      }
+    }
+  }
+
+  return { absorbed, replacements };
 }
 
 /** Schema for LLM merge response: groups of finding indices sharing a root cause. */
@@ -417,10 +486,10 @@ export async function mergeCrossLocationFindings(
     return { findings, mergedCount: 0 };
   }
 
-  // Build context for each finding (all have locations per the filter above)
+  // Build context for each finding
   const findingDescriptions = withLocations.map((f, i) => {
     const loc = f.location;
-    if (!loc) return ''; // Unreachable: filtered above, satisfies type narrowing
+    if (!loc) return '';
     const range = loc.endLine ? `${loc.startLine}-${loc.endLine}` : `${loc.startLine}`;
     const snippet = readSnippet(repoPath, loc.path, loc.startLine);
     const codeBlock = snippet ? `\n   Code: ${snippet.split('\n').join('\n   ')}` : '';
@@ -446,46 +515,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     return { findings, mergedCount: 0, usage: result.usage };
   }
 
-  // Process groups: merge locations into winner
-  const absorbed = new Set<Finding>();
-  // Map from original finding to its merged replacement (with additionalLocations)
-  const replacements = new Map<Finding, Finding>();
-
-  for (const group of result.data) {
-    // Deduplicate indices to prevent the winner from being absorbed
-    const uniqueIndices = [...new Set(group)];
-    if (uniqueIndices.length < 2) continue;
-
-    const groupFindings = uniqueIndices
-      .map((idx) => withLocations[idx - 1])
-      .filter((f): f is Finding => f !== undefined && !absorbed.has(f));
-
-    if (groupFindings.length < 2) continue;
-
-    // Pick winner: highest severity → confidence → path → line
-    const sorted = [...groupFindings].sort(compareFindingPriority);
-    const winner = sorted[0];
-    // Substitute any existing replacements to preserve locations from prior groups.
-    // This covers both winners and losers that accumulated locations earlier.
-    for (let i = 0; i < sorted.length; i++) {
-      const f = sorted[i];
-      if (!f) continue;
-      const existing = replacements.get(f);
-      if (existing) sorted[i] = existing;
-    }
-    const merged = mergeGroupLocations(sorted);
-    if (winner && merged) {
-      replacements.set(winner, merged);
-    }
-
-    // Track original findings (not substituted replacements) so the final
-    // filter on original references correctly removes absorbed items.
-    for (const f of groupFindings) {
-      if (f !== winner) {
-        absorbed.add(f);
-      }
-    }
-  }
+  const { absorbed, replacements } = applyMergeGroups(withLocations, result.data);
 
   if (absorbed.size === 0) {
     return { findings, mergedCount: 0, usage: result.usage };
