@@ -83,7 +83,7 @@ export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
     />
   </Terminal>
 
-  <p>Get an API key from <a href="https://console.anthropic.com/">console.anthropic.com</a>. CI/CD environments require an API key.</p>
+  <p>Get an API key from <a href="https://console.anthropic.com/">console.anthropic.com</a>. <code>ANTHROPIC_API_KEY</code> is also accepted as a fallback. CI/CD environments require an API key.</p>
 
   <h3>Review Uncommitted Changes</h3>
 
@@ -213,6 +213,8 @@ Focus on issues in the changed code. For each issue found, report:
   <p><code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Edit</code>, <code>Write</code>, <code>Bash</code>, <code>WebFetch</code>, <code>WebSearch</code></p>
 
   <p>Most review skills only need <code>Read</code>, <code>Grep</code>, and <code>Glob</code> for exploring context.</p>
+
+  <p><strong>Note:</strong> Warden restricts execution to read-only tools (<code>Read</code> and <code>Grep</code>) regardless of what the skill declares in <code>allowed-tools</code>. This is a safety measure to prevent skills from modifying your codebase during analysis.</p>
 
   <h3>What Makes a Good Skill</h3>
 
@@ -413,6 +415,8 @@ reportOn = "medium"      # Report findings at medium and above`}
     <li><strong><code>--fail-on &lt;level&gt;</code></strong>  - Override the failure threshold for CI</li>
     <li><strong><code>-vv</code></strong>  - Debug output with token counts and latencies</li>
   </ul>
+
+  <p>Warden also ships as an <a href={`${base}/skill`}>agent skill</a> so AI coding agents can run it on your behalf.</p>
 
   <p>See the <a href={`${base}/cli`}>CLI reference</a> for all options.</p>
 </Base>

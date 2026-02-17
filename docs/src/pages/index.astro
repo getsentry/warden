@@ -38,7 +38,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 <span class="cli-bold">Next steps:</span>
   1. Add a skill: <span class="cli-cyan">warden add &lt;skill-name&gt;</span>
-  2. Set <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> in .env.local
+  2. <span class="cli-cyan">export WARDEN_ANTHROPIC_API_KEY=sk-ant-...</span>
   3. Add <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> to repository secrets
      <span class="cli-dim">https://github.com/your-org/your-repo/settings/secrets/actions</span>
   4. Commit and open a PR to test</pre>
@@ -168,7 +168,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
         <strong>CLI Reference</strong>
         <p>Commands, options, and usage examples</p>
       </a>
-      <a href={`${base}/guide`} class="next-step-card">
+      <a href={`${base}/config`} class="next-step-card">
         <strong>Configure triggers</strong>
         <p>Control when skills run with <code>warden.toml</code></p>
       </a>

@@ -189,6 +189,8 @@ ignorePaths = ["**/vendor/**", "**/node_modules/**"]`}
     />
   </Terminal>
 
+  <p><strong>Model precedence:</strong> trigger &gt; skill &gt; defaults &gt; CLI flag (<code>-m</code>) &gt; env var (<code>WARDEN_MODEL</code>). Most specific wins.</p>
+
   <h2>Chunking</h2>
 
   <p>Control how files are split for analysis. By default, Warden analyzes each hunk separately.</p>
@@ -269,7 +271,7 @@ createFixPR = true`}
 
   <dl>
     <dt>WARDEN_ANTHROPIC_API_KEY</dt>
-    <dd>Anthropic API key (required)</dd>
+    <dd>Anthropic API key. Required for CI/CD. Locally, Warden can use your Claude Code subscription instead.</dd>
     <dt>WARDEN_MODEL</dt>
     <dd>Model override</dd>
     <dt>WARDEN_SKILL_CACHE_TTL</dt>
@@ -373,6 +375,8 @@ Review the code for security issues including:
   <h3>Available Tools</h3>
 
   <p><code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Edit</code>, <code>Write</code>, <code>Bash</code>, <code>WebFetch</code>, <code>WebSearch</code></p>
+
+  <p><strong>Note:</strong> Warden restricts execution to read-only tools (<code>Read</code> and <code>Grep</code>) regardless of what the skill declares. This ensures skills cannot modify your codebase during analysis.</p>
 
   <h2 id="workflow">Workflow</h2>
 

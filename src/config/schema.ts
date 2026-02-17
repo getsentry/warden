@@ -27,7 +27,6 @@ export const SkillDefinitionSchema = z.object({
   description: z.string(),
   prompt: z.string(),
   tools: ToolConfigSchema.optional(),
-  outputSchema: z.string().optional(),
   /** Directory where the skill was loaded from, for resolving resources (scripts/, references/, assets/) */
   rootDir: z.string().optional(),
 });
