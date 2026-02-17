@@ -1,0 +1,8 @@
+{
+    "scripts": {
+        "setup": "pnpm install",
+        "run": "pnpm cli",
+        "verify": "pnpm lint && pnpm build && pnpm test",
+        "archive": "rm -rf node_modules"
+    }
+}
