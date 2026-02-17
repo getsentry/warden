@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import figures from 'figures';
 import type { Finding, SkillReport } from '../types/index.js';
-import { pluralize, type Reporter } from './output/index.js';
+import { formatSeverityBadge, pluralize, type Reporter } from './output/index.js';
 import { ICON_CHECK } from './output/icons.js';
 import { Verbosity } from './output/verbosity.js';
 import { applyUnifiedDiff } from './diff-apply.js';
@@ -131,11 +131,14 @@ async function readSingleKey(): Promise<string> {
   });
 }
 
+type FixAction = 'y' | 'n' | 'a' | 's';
+
 /**
- * Prompt the user for a yes/no/quit response.
+ * Prompt the user for a fix action.
  * Accepts single keypress without requiring Enter.
+ * Keys: y (apply), n (skip), a (apply all remaining), s/q (skip all remaining).
  */
-async function promptYNQ(message: string): Promise<'y' | 'n' | 'q'> {
+async function promptFixAction(message: string): Promise<FixAction> {
   process.stderr.write(message);
 
   const key = await readSingleKey();
@@ -144,29 +147,21 @@ async function promptYNQ(message: string): Promise<'y' | 'n' | 'q'> {
   switch (key) {
     case 'y':
       return 'y';
+    case 'a':
+      return 'a';
+    case 's':
     case 'q':
-      return 'q';
+      return 's';
     default:
       return 'n';
   }
 }
 
 /**
- * Prompt the user for a yes/no response.
- * Accepts single keypress without requiring Enter.
- */
-async function promptYN(message: string): Promise<boolean> {
-  process.stderr.write(message);
-
-  const key = await readSingleKey();
-  process.stderr.write(key + '\n');
-
-  return key === 'y';
-}
-
-/**
  * Run the interactive fix flow.
- * Displays each fix with a colored diff and prompts the user.
+ * Steps through each finding, showing the diff and prompting for action.
+ * Findings are displayed in reading order (file-asc, line-asc) but applied
+ * in safe order (file-asc, line-desc) to avoid line number shifts.
  */
 export async function runInteractiveFixFlow(
   findings: Finding[],
@@ -177,35 +172,49 @@ export async function runInteractiveFixFlow(
   let skipped = 0;
   let failed = 0;
 
-  // Ask if user wants to apply fixes
+  // Display in reading order (file-asc, line-asc).
+  // Input `findings` is sorted file-asc, line-desc for safe application.
+  // Note: location is guaranteed non-null by collectFixableFindings
+  const displayOrder = [...findings].sort((a, b) => {
+    const aLoc = a.location;
+    const bLoc = b.location;
+    if (!aLoc || !bLoc) return 0;
+    const pathCmp = aLoc.path.localeCompare(bLoc.path);
+    if (pathCmp !== 0) return pathCmp;
+    return aLoc.startLine - bLoc.startLine;
+  });
+
+  // Collect user decisions, then apply in safe order
+  const accepted = new Set<Finding>();
+  let applyAll = false;
+  let skipAll = false;
+
   reporter.blank();
-  const shouldProceed = await promptYN(
-    chalk.bold(`${findings.length} ${pluralize(findings.length, 'fix', 'fixes')} available. Apply fixes? [y/N] `)
+  console.error(
+    chalk.bold(`${findings.length} ${pluralize(findings.length, 'fix', 'fixes')} available`)
   );
 
-  if (!shouldProceed) {
-    return {
-      applied: 0,
-      skipped: findings.length,
-      failed: 0,
-      results: findings.map((f) => ({ success: false, finding: f })),
-    };
-  }
-
-  reporter.blank();
-
-  for (let idx = 0; idx < findings.length; idx++) {
-    const finding = findings[idx];
+  for (let idx = 0; idx < displayOrder.length; idx++) {
+    const finding = displayOrder[idx];
     if (!finding) continue;
 
     const location = finding.location;
     const suggestedFix = finding.suggestedFix;
     if (!location || !suggestedFix?.diff) continue;
 
-    // Display fix info
-    console.error(chalk.bold(`Fix for: ${finding.title}`));
+    console.error('');
+
+    // Severity + counter + title
+    const badge = formatSeverityBadge(finding.severity);
+    console.error(`${badge} ${chalk.bold(`[${idx + 1}/${displayOrder.length}]`)} ${chalk.bold(finding.title)}`);
     console.error(chalk.dim(`  ${location.path}:${location.startLine}`));
 
+    // Description
+    if (finding.description) {
+      console.error(`  ${chalk.dim(finding.description)}`);
+    }
+
+    // Fix description
     if (suggestedFix.description) {
       console.error(`  ${suggestedFix.description}`);
     }
@@ -220,47 +229,68 @@ export async function runInteractiveFixFlow(
 
     console.error('');
 
-    // Prompt for this fix
-    const response = await promptYNQ('Apply this fix? [y/n/q] ');
-
-    if (response === 'q') {
-      // Quit - mark remaining as skipped
-      skipped++;
-      results.push({ success: false, finding });
-
-      // Skip remaining
-      for (let i = idx + 1; i < findings.length; i++) {
-        const remainingFinding = findings[i];
-        if (remainingFinding) {
-          skipped++;
-          results.push({ success: false, finding: remainingFinding });
-        }
-      }
-      break;
-    }
-
-    if (response === 'n') {
-      skipped++;
-      results.push({ success: false, finding });
-      console.error(chalk.yellow(`${figures.arrowRight} Skipped`));
-      console.error('');
+    if (applyAll) {
+      accepted.add(finding);
+      console.error(chalk.green(`${ICON_CHECK} Will apply`));
       continue;
     }
 
-    // Apply the fix
-    try {
-      applyUnifiedDiff(location.path, suggestedFix.diff);
-      applied++;
-      results.push({ success: true, finding });
-      console.error(chalk.green(`${ICON_CHECK} Applied fix for: ${finding.title}`));
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      failed++;
-      results.push({ success: false, finding, error });
-      console.error(chalk.red(`${figures.cross} Failed: ${error}`));
+    if (skipAll) {
+      skipped++;
+      results.push({ success: false, finding });
+      console.error(chalk.yellow(`${figures.arrowRight} Skipped`));
+      continue;
     }
 
+    // Prompt for action
+    const response = await promptFixAction('[y]es / [n]o / [a]pply all / [s]kip all  ');
+
+    switch (response) {
+      case 'y':
+        accepted.add(finding);
+        break;
+      case 'a':
+        applyAll = true;
+        accepted.add(finding);
+        console.error(chalk.dim('Applying all remaining fixes'));
+        break;
+      case 's':
+        skipAll = true;
+        skipped++;
+        results.push({ success: false, finding });
+        console.error(chalk.yellow(`${figures.arrowRight} Skipped`));
+        break;
+      case 'n':
+      default:
+        skipped++;
+        results.push({ success: false, finding });
+        console.error(chalk.yellow(`${figures.arrowRight} Skipped`));
+        break;
+    }
+  }
+
+  // Apply accepted fixes in safe order (file-asc, line-desc from original `findings`)
+  if (accepted.size > 0) {
     console.error('');
+    for (const finding of findings) {
+      if (!accepted.has(finding)) continue;
+
+      const location = finding.location;
+      const suggestedFix = finding.suggestedFix;
+      if (!location || !suggestedFix?.diff) continue;
+
+      try {
+        applyUnifiedDiff(location.path, suggestedFix.diff);
+        applied++;
+        results.push({ success: true, finding });
+        console.error(chalk.green(`${ICON_CHECK} Applied: ${finding.title}`));
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        failed++;
+        results.push({ success: false, finding, error });
+        console.error(chalk.red(`${figures.cross} Failed: ${finding.title}: ${error}`));
+      }
+    }
   }
 
   return {

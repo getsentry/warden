@@ -148,12 +148,22 @@ async function outputResultsAndHandleFixes(
   writeJsonlReport(runLogPath, reports, totalDuration);
   reporter.debug(`Run log: ${runLogPath}`);
 
+  // Collect fixable findings early so we know whether to suppress diffs in the report
+  const fixableFindings = collectFixableFindings(filteredReports);
+  const willStepThrough = fixableFindings.length > 0
+    && !interrupted.value
+    && !options.json
+    && !options.fix
+    && reporter.verbosity !== Verbosity.Quiet
+    && reporter.mode.isTTY;
+
   // Output results
   reporter.blank();
   if (options.json) {
     console.log(renderJsonReport(filteredReports));
   } else {
-    console.log(renderTerminalReport(filteredReports, reporter.mode));
+    // Suppress fix diffs in report when interactive step-through will show them
+    console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough }));
   }
 
   // Show interrupted banner before summary (read live to catch SIGINT during rendering)
@@ -166,13 +176,12 @@ async function outputResultsAndHandleFixes(
   reporter.blank();
   reporter.renderSummary(filteredReports, totalDuration);
 
-  // Handle fixes: --fix (automatic) always runs, interactive prompt is skipped on interrupt
-  const fixableFindings = collectFixableFindings(filteredReports);
+  // Handle fixes: --fix (automatic) always runs, interactive step-through in TTY mode
   if (fixableFindings.length > 0) {
     if (options.fix) {
       const fixSummary = applyAllFixes(fixableFindings);
       renderFixSummary(fixSummary, reporter);
-    } else if (!interrupted.value && !options.json && reporter.verbosity !== Verbosity.Quiet && reporter.mode.isTTY) {
+    } else if (willStepThrough) {
       const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
       renderFixSummary(fixSummary, reporter);
     }

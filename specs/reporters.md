@@ -273,6 +273,8 @@ After all skills complete, findings are rendered to stdout. This is separate fro
 
 Each finding shows: severity badge, title, location with elapsed time, source code line (read from disk), description, and suggested fix diff (colored: green for `+`, red for `-`, cyan for `@@`).
 
+When fixable findings exist and interactive mode is active (TTY, no `--fix`, no `--json`, not quiet, not interrupted), suggested fix diffs are **suppressed** from the report because they will be shown in the interactive fix step-through (see Section below). All other finding fields (severity, title, location, description) still render normally.
+
 **Plain:** Compact text per skill via `renderSkillCI()`:
 ```
 security-review (4.2s) - 2 findings (1 high, 1 medium)
@@ -374,6 +376,59 @@ Analysis completed in 4.2s · 5.0k in / 800 out · $0.01
 Warnings and skipped files only shown when non-zero.
 
 **JSONL:** Summary record (the last line in the JSONL file)
+
+### Interactive Fix Flow (TTY only)
+
+After the summary, if fixable findings exist in TTY mode (no `--fix`, no `--json`, not quiet, not interrupted), the user steps through each finding one at a time.
+
+Findings are displayed in reading order (file ascending, line ascending). Each finding shows:
+
+```
+. (high) [1/3] SQL injection risk in query builder
+  src/api/auth.ts:42
+  User input is interpolated directly into a SQL query...
+  Use parameterized queries instead
+
+  @@ -42,1 +42,1 @@
+  -  const query = buildQuery(userId);
+  +  const query = buildQuery(sanitize(userId));
+
+[y]es / [n]o / [a]pply all / [s]kip all
+```
+
+Severity badge, counter, title, location, description, fix description (if present), and colored diff.
+
+**Prompt keys** (single keypress, no Enter):
+
+| Key | Action |
+|-----|--------|
+| **y** | Accept this fix |
+| **n** | Skip this fix |
+| **a** | Accept this and all remaining fixes (stop prompting) |
+| **s** | Skip this and all remaining fixes (stop prompting) |
+| **q** | Same as **s** |
+
+Any other key defaults to **n**.
+
+After stepping through all findings, accepted fixes are applied in safe order (file ascending, line descending) to avoid line number shifts from earlier patches. Results are printed per fix:
+
+```
+✓ Applied: SQL injection risk in query builder
+✓ Applied: Missing null check
+✗ Failed: Unsafe cast: context mismatch at line 15
+```
+
+Then the fix summary renders (same as `--fix` mode):
+
+```
+FIXES
+2 applied  1 skipped  1 failed
+  ✗ Unsafe cast: context mismatch at line 15
+```
+
+**`--fix` flag:** Applies all fixes without prompting. No step-through.
+
+**Plain/JSONL:** No interactive fix flow. The full findings report includes diffs as normal.
 
 ---
 

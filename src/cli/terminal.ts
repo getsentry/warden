@@ -47,10 +47,14 @@ function readFileLine(filePath: string, lineNumber: number): FileLineResult {
   }
 }
 
+interface RenderOptions {
+  suppressFixDiffs?: boolean;
+}
+
 /**
  * Format a finding for TTY display.
  */
-function formatFindingTTY(finding: Finding): string[] {
+function formatFindingTTY(finding: Finding, options?: RenderOptions): string[] {
   const lines: string[] = [];
   const badge = formatSeverityBadge(finding.severity);
   const color = SEVERITY_COLORS[finding.severity];
@@ -94,8 +98,8 @@ function formatFindingTTY(finding: Finding): string[] {
   lines.push('');
   lines.push(`  ${chalk.dim(finding.description)}`);
 
-  // Suggested fix diff if available
-  if (finding.suggestedFix?.diff) {
+  // Suggested fix diff if available (suppress when step-through will show it)
+  if (finding.suggestedFix?.diff && !options?.suppressFixDiffs) {
     lines.push('');
     lines.push(chalk.dim('  Suggested fix:'));
     const diffLines = finding.suggestedFix.diff.split('\n').map((line) => {
@@ -164,7 +168,7 @@ function formatFindingCI(finding: Finding): string[] {
 /**
  * Render a skill report as a box (TTY mode).
  */
-function renderSkillBoxTTY(report: SkillReport, mode: OutputMode): string[] {
+function renderSkillBoxTTY(report: SkillReport, mode: OutputMode, options?: RenderOptions): string[] {
   const counts = countBySeverity(report.findings);
   const durationStr = report.durationMs !== undefined ? formatDuration(report.durationMs) : undefined;
 
@@ -188,7 +192,7 @@ function renderSkillBoxTTY(report: SkillReport, mode: OutputMode): string[] {
     for (const [index, finding] of report.findings.entries()) {
       box.divider();
       box.blank();
-      const findingLines = formatFindingTTY(finding);
+      const findingLines = formatFindingTTY(finding, options);
       box.content(findingLines);
       // Only add blank after finding if not the last one
       if (index < report.findings.length - 1) {
@@ -235,7 +239,7 @@ function renderSkillCI(report: SkillReport): string[] {
  * @param reports - The skill reports to render
  * @param mode - Output mode (TTY vs non-TTY)
  */
-export function renderTerminalReport(reports: SkillReport[], mode?: OutputMode): string {
+export function renderTerminalReport(reports: SkillReport[], mode?: OutputMode, options?: RenderOptions): string {
   const lines: string[] = [];
 
   // Default to TTY mode if not specified (for backwards compatibility)
@@ -248,7 +252,7 @@ export function renderTerminalReport(reports: SkillReport[], mode?: OutputMode):
   if (outputMode.isTTY) {
     // TTY mode: use boxes
     for (const report of reports) {
-      lines.push(...renderSkillBoxTTY(report, outputMode));
+      lines.push(...renderSkillBoxTTY(report, outputMode, options));
       lines.push('');
     }
   } else {

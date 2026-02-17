@@ -361,6 +361,90 @@ describe('renderTerminalReport', () => {
     });
   });
 
+  describe('suppressFixDiffs', () => {
+    const ttyMode = { isTTY: true, supportsColor: false, columns: 80 };
+
+    it('includes suggested fix diff by default', () => {
+      const report = createReport({
+        findings: [
+          createFinding({
+            location: { path: 'src/foo.ts', startLine: 10 },
+            suggestedFix: {
+              description: 'Use const',
+              diff: '@@ -10,1 +10,1 @@\n-let x = 1;\n+const x = 1;',
+            },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ttyMode);
+
+      expect(output).toContain('Suggested fix:');
+      expect(output).toContain('const x = 1;');
+    });
+
+    it('suppresses suggested fix diff when suppressFixDiffs is true', () => {
+      const report = createReport({
+        findings: [
+          createFinding({
+            location: { path: 'src/foo.ts', startLine: 10 },
+            suggestedFix: {
+              description: 'Use const',
+              diff: '@@ -10,1 +10,1 @@\n-let x = 1;\n+const x = 1;',
+            },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ttyMode, { suppressFixDiffs: true });
+
+      expect(output).not.toContain('Suggested fix:');
+      expect(output).not.toContain('const x = 1;');
+    });
+
+    it('still shows finding title and description when diffs suppressed', () => {
+      const report = createReport({
+        findings: [
+          createFinding({
+            title: 'Use const for immutable bindings',
+            description: 'This variable is never reassigned',
+            location: { path: 'src/foo.ts', startLine: 10 },
+            suggestedFix: {
+              description: 'Use const',
+              diff: '@@ -10,1 +10,1 @@\n-let x = 1;\n+const x = 1;',
+            },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ttyMode, { suppressFixDiffs: true });
+
+      expect(output).toContain('Use const for immutable bindings');
+      expect(output).toContain('This variable is never reassigned');
+    });
+
+    it('does not affect CI mode rendering', () => {
+      const ciMode = { isTTY: false, supportsColor: false, columns: 80 };
+      const report = createReport({
+        findings: [
+          createFinding({
+            location: { path: 'src/foo.ts', startLine: 10 },
+            suggestedFix: {
+              description: 'Use const',
+              diff: '@@ -10,1 +10,1 @@\n-let x = 1;\n+const x = 1;',
+            },
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], ciMode, { suppressFixDiffs: true });
+
+      // CI mode always shows diffs regardless of suppressFixDiffs
+      expect(output).toContain('Suggested fix:');
+      expect(output).toContain('const x = 1;');
+    });
+  });
+
   describe('TTY additionalLocations', () => {
     it('shows additional locations in TTY mode', () => {
       const report = createReport({
