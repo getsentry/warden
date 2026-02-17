@@ -1,7 +1,7 @@
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
-import { getHunkLineRange as getHunkNumericRange, type HunkWithContext } from '../diff/index.js';
+import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
@@ -89,11 +89,18 @@ export function filterOutOfRangeFindings(
 ): { filtered: Finding[]; dropped: Finding[] } {
   const filtered: Finding[] = [];
   const dropped: Finding[] = [];
-  for (const f of findings) {
-    if (!f.location || (f.location.startLine >= hunkRange.start && f.location.startLine <= hunkRange.end)) {
-      filtered.push(f);
+
+  function isWithinHunk(finding: Finding): boolean {
+    if (!finding.location) return true;
+    const { startLine } = finding.location;
+    return startLine >= hunkRange.start && startLine <= hunkRange.end;
+  }
+
+  for (const finding of findings) {
+    if (isWithinHunk(finding)) {
+      filtered.push(finding);
     } else {
-      dropped.push(f);
+      dropped.push(finding);
     }
   }
   return { filtered, dropped };
@@ -345,7 +352,7 @@ async function analyzeHunk(
   callbacks?: HunkAnalysisCallbacks,
   prContext?: PRPromptContext
 ): Promise<HunkAnalysisResult> {
-  const lineRange = callbacks?.lineRange ?? getHunkLineRange(hunkCtx);
+  const lineRange = callbacks?.lineRange ?? formatHunkLineRange(hunkCtx);
 
   return Sentry.startSpan(
     {
@@ -440,7 +447,7 @@ async function analyzeHunk(
           const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey);
 
           // Filter findings outside hunk line range (defense-in-depth)
-          const hunkRange = getHunkNumericRange(hunkCtx.hunk);
+          const hunkRange = getHunkLineRange(hunkCtx.hunk);
           const { filtered: filteredFindings, dropped } = filterOutOfRangeFindings(parseResult.findings, hunkRange);
           if (dropped.length > 0) {
             Sentry.addBreadcrumb({
@@ -565,9 +572,9 @@ async function analyzeHunk(
 }
 
 /**
- * Get line range string for a hunk.
+ * Format a hunk's line range as a display string (e.g. "10-20" or "10").
  */
-function getHunkLineRange(hunk: HunkWithContext): string {
+function formatHunkLineRange(hunk: HunkWithContext): string {
   const start = hunk.hunk.newStart;
   const end = start + hunk.hunk.newCount - 1;
   return start === end ? `${start}` : `${start}-${end}`;
@@ -615,7 +622,7 @@ export async function analyzeFile(
       for (const [hunkIndex, hunk] of file.hunks.entries()) {
         if (abortController?.signal.aborted) break;
 
-        const lineRange = getHunkLineRange(hunk);
+        const lineRange = formatHunkLineRange(hunk);
         callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
 
         const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
