@@ -181,7 +181,7 @@ async function outputResultsAndHandleFixes(
     if (options.fix) {
       const fixSummary = applyAllFixes(fixableFindings);
       renderFixSummary(fixSummary, reporter);
-    } else if (willStepThrough) {
+    } else if (willStepThrough && !interrupted.value) {
       const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
       renderFixSummary(fixSummary, reporter);
     }
