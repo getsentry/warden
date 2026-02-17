@@ -6,9 +6,12 @@
 export class Semaphore {
   private permits: number;
   private waiters: (() => void)[] = [];
+  /** The initial permit count this semaphore was created with. */
+  readonly initialPermits: number;
 
   constructor(permits: number) {
     this.permits = permits;
+    this.initialPermits = permits;
   }
 
   async acquire(): Promise<void> {

@@ -317,15 +317,30 @@ export async function runSkillTask(
           };
         };
 
+        // Return an empty result for files skipped due to abort
+        const processSkippedFile = (index: number): FileProcessResult => {
+          const localState = fileStates[index];
+          if (localState) localState.status = 'skipped';
+          const filename = preparedFiles[index]?.filename ?? 'unknown';
+          callbacks.onFileUpdate(name, filename, { status: 'skipped' });
+          return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0 };
+        };
+
         // Process files with sliding-window concurrency pool
         const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
         const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
+        // The effective concurrency for batch delay: when a semaphore gates work,
+        // use its permit count (the actual concurrency limit) rather than fileConcurrency.
+        const effectiveConcurrency = semaphore ? semaphore.initialPermits : fileConcurrency;
         const allResults = await runPool(preparedFiles, fileConcurrency,
           async (file, index) => {
             if (semaphore) await semaphore.acquire();
             try {
+              // Check abort after acquiring the semaphore -- the file may have
+              // been queued behind others and a SIGINT could have arrived while waiting.
+              if (shouldAbort()) return processSkippedFile(index);
               // Rate-limit: delay items beyond the first concurrent wave
-              if (index >= fileConcurrency && batchDelayMs > 0) {
+              if (index >= effectiveConcurrency && batchDelayMs > 0) {
                 await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
               }
               return await processFile(file, index);
