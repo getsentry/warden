@@ -1,0 +1,14 @@
+skill: skills/precision.md
+
+evals:
+  - name: ignores-style-issues
+    given: functionally correct code with style issues (mixed naming conventions, verbose conditionals, magic numbers)
+    files:
+      - fixtures/ignores-style-issues/utils.ts
+    should_find:
+      - finding: "no bugs: the code is functionally correct despite having style issues, so zero or only info-level findings are expected"
+    should_not_find:
+      - inconsistent naming convention (snake_case vs camelCase)
+      - missing JSDoc comments
+      - verbose conditional that could be simplified
+      - magic numbers in discount calculation

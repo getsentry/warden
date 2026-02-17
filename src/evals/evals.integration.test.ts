@@ -1,15 +1,9 @@
-/**
- * @deprecated This file is a backwards-compatible wrapper around the new eval system.
- * Run `pnpm test:evals` instead for the full LLM-as-a-judge evaluation pipeline.
- *
- * See evals/README.md for the new eval system.
- */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { discoverEvals } from '../evals/index.js';
-import { runEval } from '../evals/runner.js';
-import { formatEvalResult } from '../evals/types.js';
+import { discoverEvals } from './index.js';
+import { runEval } from './runner.js';
+import { formatEvalResult } from './types.js';
 
-describe('examples (legacy wrapper -> evals)', () => {
+describe('evals', () => {
   const apiKey = process.env['WARDEN_ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'];
 
   beforeAll(() => {
@@ -36,7 +30,19 @@ describe('examples (legacy wrapper -> evals)', () => {
           verbose: true,
         });
 
+        // Log the formatted result for visibility
         console.log('\n' + formatEvalResult(result));
+        console.log(`  Duration: ${result.durationMs}ms`);
+        console.log(`  Findings: ${result.report.findings.length}`);
+
+        // Log each finding for debugging
+        for (const finding of result.report.findings) {
+          const loc = finding.location
+            ? ` (${finding.location.path}:${finding.location.startLine})`
+            : '';
+          console.log(`    [${finding.severity}] ${finding.title}${loc}`);
+        }
+
         expect(result.passed, formatEvalResult(result)).toBe(true);
       },
     );

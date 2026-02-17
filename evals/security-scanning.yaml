@@ -1,0 +1,24 @@
+skill: skills/security-scanning.md
+
+evals:
+  - name: sql-injection
+    given: SQL query built via string interpolation with user-supplied search parameters
+    files:
+      - fixtures/sql-injection/api.ts
+    should_find:
+      - finding: "SQL injection: user input from params.name, params.email, and params.role is directly interpolated into SQL query without parameterization"
+        severity: critical
+    should_not_find:
+      - the getConnection helper implementation
+      - missing email format validation as the primary issue
+
+  - name: xss-reflected
+    given: HTML template that renders URL query parameter directly into page without escaping
+    files:
+      - fixtures/xss-reflected/server.ts
+    should_find:
+      - finding: "reflected XSS: the query parameter from the URL is interpolated into HTML via template literal without calling escapeHtml()"
+        severity: critical
+    should_not_find:
+      - hardcoded port number
+      - missing HTTPS as the primary issue

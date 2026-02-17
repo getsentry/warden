@@ -1,0 +1,56 @@
+skill: skills/bug-detection.md
+
+evals:
+  - name: null-property-access
+    given: code that accesses properties on an array .find() result without null checking
+    files:
+      - fixtures/null-property-access/handler.ts
+    should_find:
+      - finding: accessing .name and .profile.avatar on a potentially undefined user object from Array.find()
+        severity: high
+    should_not_find:
+      - style, formatting, or naming issues
+      - the lack of try/catch around the fetch call
+
+  - name: off-by-one
+    given: pagination logic that uses Math.floor instead of Math.ceil, skipping the last page
+    files:
+      - fixtures/off-by-one/paginator.ts
+    should_find:
+      - finding: off-by-one error in page count calculation that loses the last page when totalItems is not evenly divisible by pageSize
+        severity: medium
+    should_not_find:
+      - use of any[] type
+      - missing error handling
+
+  - name: missing-await
+    given: async cache lookup missing await, causing a Promise object to be used as a truthy value
+    files:
+      - fixtures/missing-await/cache.ts
+    should_find:
+      - finding: missing await on loadFromCache() call, so cached is always a truthy Promise and the function never actually fetches fresh data
+        severity: high
+    should_not_find:
+      - console.log statements
+      - missing return type annotations
+
+  - name: wrong-comparison
+    given: permission check using <= instead of >=, inverting the access control logic
+    files:
+      - fixtures/wrong-comparison/validator.ts
+    should_find:
+      - finding: comparison operator is <= instead of >=, granting access to lower-privilege users while denying higher-privilege users
+        severity: high
+    should_not_find:
+      - hardcoded role strings
+      - suggestion to use an enum for roles
+
+  - name: stale-closure
+    given: React useEffect with setInterval that captures count in a stale closure
+    files:
+      - fixtures/stale-closure/counter.tsx
+    should_find:
+      - finding: "stale closure: setInterval callback captures initial count value and never sees updates, so the counter always sets the same value"
+        severity: high
+    should_not_find:
+      - TypeScript type annotation issues
