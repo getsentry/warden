@@ -11,8 +11,8 @@
  *    before Ink starts to avoid needing a second Static.
  *
  * 2. **Stable item references**: Static tracks items by reference equality.
- *    Never wrap items in new objects (e.g., `{ type: 'skill', skill }`) on
- *    each render. Pass the original objects directly.
+ *    Each StaticItem is created once and pushed to the array; never recreate
+ *    wrapper objects on each render.
  *
  * 3. **Batched updates**: Rapid consecutive rerender() calls cause duplicate
  *    output. The updateUI() function batches updates using setImmediate().
@@ -36,12 +36,18 @@ import {
 import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
 import { runPool } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
-import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
+import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES, ICON_RUNNING } from './icons.js';
 import figures from 'figures';
+
+type StaticItem =
+  | { kind: 'file'; key: string; file: FileState }
+  | { kind: 'skill'; key: string; skill: SkillState }
+  | { kind: 'skill-header'; key: string; displayName: string };
 
 interface SkillRunnerProps {
   skills: SkillState[];
-  completedItems: SkillState[];
+  completedItems: StaticItem[];
+  promotedHeaders: Set<string>;
   interrupted: boolean;
 }
 
@@ -142,16 +148,18 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
   );
 }
 
-function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
-  const visibleFiles = skill.files.filter((f) => f.status !== 'pending');
+function RunningSkill({ skill, showHeader }: { skill: SkillState; showHeader: boolean }): React.ReactElement {
+  const activeFiles = skill.files.filter((f) => f.status === 'running');
 
   return (
     <Box flexDirection="column">
-      <Box>
-        <Spinner />
-        <Text> {skill.displayName}</Text>
-      </Box>
-      {visibleFiles.map((file) => (
+      {showHeader && (
+        <Box>
+          <Spinner />
+          <Text> {skill.displayName}</Text>
+        </Box>
+      )}
+      {activeFiles.map((file) => (
         <Box key={file.filename} marginLeft={2}>
           <FileProgress file={file} />
         </Box>
@@ -164,31 +172,33 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
  * Renders the skill execution UI.
  *
  * IMPORTANT: Ink's Static component tracks items by reference equality.
- * Items passed to Static must have stable references across renders.
- * Creating new wrapper objects causes Static to mishandle its internal
- * state, resulting in duplicate output lines.
+ * Each StaticItem is created once when a file/skill completes and pushed
+ * to the completedItems array. Never recreate these objects on render.
  *
  * We use a SINGLE Static component to avoid layout conflicts from multiple
  * absolutely-positioned Static containers.
  */
-function SkillRunner({ skills, completedItems, interrupted }: SkillRunnerProps): React.ReactElement {
+function SkillRunner({ skills, completedItems, promotedHeaders, interrupted }: SkillRunnerProps): React.ReactElement {
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
 
   return (
     <Box flexDirection="column">
       {/*
-       * Completed skills - passed directly to Static WITHOUT wrapper objects.
-       * completedItems elements have stable references (same objects from parent),
-       * so Ink can correctly track which items are new vs already rendered.
+       * Completed files and skills - each item has a stable reference and unique key.
+       * File items are pushed as they complete; skill items when the skill finishes.
        */}
       <Static items={completedItems}>
-        {(skill) => <CompletedSkill key={skill.name} skill={skill} />}
+        {(item) => {
+          if (item.kind === 'skill') return <CompletedSkill key={item.key} skill={item.skill} />;
+          if (item.kind === 'skill-header') return <Box key={item.key}><Text color="yellow">{ICON_RUNNING}</Text><Text> {item.displayName}</Text></Box>;
+          return <Box key={item.key} marginLeft={2}><FileProgress file={item.file} /></Box>;
+        }}
       </Static>
 
       {/* Dynamic content - updates in place */}
       {running.map((skill) => (
-        <RunningSkill key={skill.name} skill={skill} />
+        <RunningSkill key={skill.name} skill={skill} showHeader={!promotedHeaders.has(skill.name)} />
       ))}
       {pending.map((skill) => (
         <Text key={skill.name} dimColor>
@@ -238,8 +248,10 @@ export async function runSkillTasksWithInk(
 
   // Track skill states
   const skillStates: SkillState[] = [];
-  const completedItems: SkillState[] = [];
-  const completedNames = new Set<string>();
+  const completedItems: StaticItem[] = [];
+  const completedSkillNames = new Set<string>();
+  const completedFileKeys = new Set<string>();
+  const promotedHeaders = new Set<string>();
 
   // Print header before Ink starts - this avoids multiple Static components
   // which can cause layout conflicts due to absolute positioning
@@ -250,7 +262,7 @@ export async function runSkillTasksWithInk(
 
   // Create Ink instance
   const { rerender, unmount } = render(
-    <SkillRunner skills={skillStates} completedItems={completedItems} interrupted={false} />,
+    <SkillRunner skills={skillStates} completedItems={completedItems} promotedHeaders={promotedHeaders} interrupted={false} />,
     { stdout: process.stderr }
   );
 
@@ -266,7 +278,7 @@ export async function runSkillTasksWithInk(
     setImmediate(() => {
       updatePending = false;
       if (unmounted) return;
-      rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} interrupted={interrupted} />);
+      rerender(<SkillRunner skills={[...skillStates]} completedItems={[...completedItems]} promotedHeaders={promotedHeaders} interrupted={interrupted} />);
     });
   };
 
@@ -293,9 +305,9 @@ export async function runSkillTasksWithInk(
         skillStates[idx] = updated;
 
         // If skill just completed, add to completedItems (only once)
-        if (updates.status === 'done' && !completedNames.has(name)) {
-          completedNames.add(name);
-          completedItems.push(updated);
+        if (updates.status === 'done' && !completedSkillNames.has(name)) {
+          completedSkillNames.add(name);
+          completedItems.push({ kind: 'skill', key: `skill:${name}`, skill: updated });
         }
 
         updateUI();
@@ -307,6 +319,21 @@ export async function runSkillTasksWithInk(
         const file = skill.files.find((f) => f.filename === filename);
         if (file) {
           Object.assign(file, updates);
+
+          // Move completed files to Static section
+          if ((file.status === 'done' || file.status === 'skipped')) {
+            const fileKey = `${skillName}:${filename}`;
+            if (!completedFileKeys.has(fileKey)) {
+              // Emit skill header before the first completed file
+              if (!promotedHeaders.has(skillName)) {
+                promotedHeaders.add(skillName);
+                completedItems.push({ kind: 'skill-header', key: `header:${skillName}`, displayName: skill.displayName });
+              }
+              completedFileKeys.add(fileKey);
+              completedItems.push({ kind: 'file', key: fileKey, file: { ...file } });
+            }
+          }
+
           updateUI();
         }
       }
@@ -325,9 +352,9 @@ export async function runSkillTasksWithInk(
       };
       skillStates.push(state);
 
-      if (!completedNames.has(name)) {
-        completedNames.add(name);
-        completedItems.push(state);
+      if (!completedSkillNames.has(name)) {
+        completedSkillNames.add(name);
+        completedItems.push({ kind: 'skill', key: `skill:${name}`, skill: state });
       }
 
       updateUI();
@@ -353,9 +380,9 @@ export async function runSkillTasksWithInk(
         skillStates.push(state);
       }
 
-      if (!completedNames.has(name)) {
-        completedNames.add(name);
-        completedItems.push(state);
+      if (!completedSkillNames.has(name)) {
+        completedSkillNames.add(name);
+        completedItems.push({ kind: 'skill', key: `skill:${name}`, skill: state });
       }
 
       updateUI();
