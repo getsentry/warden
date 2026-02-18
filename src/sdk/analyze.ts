@@ -761,8 +761,11 @@ export async function runSkill(
   let totalFailedExtractions = 0;
 
   // Build PR context for inclusion in prompts (helps LLM understand the full scope of changes)
+  // For non-PR contexts (CLI file/diff mode), skip the "Other Files" list to avoid
+  // bloating every hunk prompt with thousands of filenames.
+  const isPullRequest = context.pullRequest.number !== 0;
   const prContext: PRPromptContext = {
-    changedFiles: context.pullRequest.files.map((f) => f.filename),
+    changedFiles: isPullRequest ? context.pullRequest.files.map((f) => f.filename) : [],
     title: context.pullRequest.title,
     body: context.pullRequest.body,
   };

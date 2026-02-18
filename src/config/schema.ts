@@ -141,6 +141,8 @@ export const ChunkingConfigSchema = z.object({
   filePatterns: z.array(FilePatternSchema).optional(),
   /** Coalescing options for merging nearby hunks */
   coalesce: CoalesceConfigSchema.optional(),
+  /** Max number of "other files" to list in hunk prompts for PR context. 0 disables the section entirely. Default: 50 */
+  maxContextFiles: z.number().int().nonnegative().default(50),
 });
 export type ChunkingConfig = z.infer<typeof ChunkingConfigSchema>;
 

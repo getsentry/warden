@@ -17,6 +17,8 @@ export interface PRPromptContext {
   title?: string;
   /** PR description/body - explains why and provides additional context */
   body?: string | null;
+  /** Max number of "other files" to list in the prompt. 0 disables the section. Default: 50. */
+  maxContextFiles?: number;
 }
 
 /**
@@ -132,11 +134,18 @@ export function buildHunkUserPrompt(
   }
 
   // Include list of other files being changed in the PR for context
+  const maxContextFiles = prContext?.maxContextFiles ?? 50;
   const otherFiles = prContext?.changedFiles.filter((f) => f !== hunkCtx.filename) ?? [];
-  if (otherFiles.length > 0) {
+  if (otherFiles.length > 0 && maxContextFiles > 0) {
+    const displayFiles = otherFiles.slice(0, maxContextFiles);
+    const remaining = otherFiles.length - displayFiles.length;
+    let fileList = displayFiles.map((f) => `- ${f}`).join('\n');
+    if (remaining > 0) {
+      fileList += `\n- ... and ${remaining} more`;
+    }
     sections.push(`## Other Files in This PR
 The following files are also being changed in this PR (may provide useful context):
-${otherFiles.map((f) => `- ${f}`).join('\n')}`);
+${fileList}`);
   }
 
   sections.push(formatHunkForAnalysis(hunkCtx));
