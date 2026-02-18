@@ -199,7 +199,7 @@ async function outputResultsAndHandleFixes(
     && !options.fix
     && reporter.verbosity !== Verbosity.Quiet
     && reporter.mode.isTTY
-    && !!process.stdin.isTTY;
+    && process.stdin.isTTY;
 
   // Output results
   reporter.blank();
