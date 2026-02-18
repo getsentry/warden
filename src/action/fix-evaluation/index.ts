@@ -84,7 +84,8 @@ export async function evaluateFixAttempts(
   comments: ExistingComment[],
   context: EvaluateFixAttemptsContext,
   currentFindings: Finding[],
-  apiKey: string
+  apiKey: string,
+  maxRetries?: number
 ): Promise<EvaluateFixAttemptsResult> {
   return Sentry.startSpan(
     {
@@ -194,7 +195,8 @@ export async function evaluateFixAttempts(
             const evalResult = await evaluateFix(
               { comment, changedFiles, codeBeforeFix, codeAfterFix, commitMessages },
               toolContext,
-              apiKey
+              apiKey,
+              maxRetries
             );
             const durationMs = performance.now() - startTime;
 

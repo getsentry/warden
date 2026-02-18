@@ -7,6 +7,7 @@ import { apiUsageToStats } from './pricing.js';
 import { aggregateUsage, emptyUsage } from './usage.js';
 
 export const HAIKU_MODEL = 'claude-haiku-4-5';
+export const DEFAULT_AUXILIARY_MAX_RETRIES = 5;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_TOKENS = 4096;
 
@@ -124,6 +125,7 @@ export interface CallHaikuOptions<T> {
   schema: z.ZodType<T>;
   maxTokens?: number;
   timeout?: number;
+  maxRetries?: number;
 }
 
 /**
@@ -142,7 +144,7 @@ function inferPrefill(schema: z.ZodType): string | undefined {
  * Auto-prefills based on Zod schema type, extracts JSON, validates with Zod.
  */
 export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuResult<T>> {
-  const { apiKey, prompt, schema, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS } = options;
+  const { apiKey, prompt, schema, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS, maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES } = options;
 
   return Sentry.startSpan(
     {
@@ -156,7 +158,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
       },
     },
     async (span) => {
-      const client = new Anthropic({ apiKey, timeout });
+      const client = new Anthropic({ apiKey, timeout, maxRetries });
       const prefill = inferPrefill(schema);
 
       const messages: Anthropic.MessageParam[] = [
@@ -221,6 +223,7 @@ export interface CallHaikuWithToolsOptions<T> {
   maxTokens?: number;
   maxIterations?: number;
   timeout?: number;
+  maxRetries?: number;
 }
 
 /**
@@ -238,6 +241,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
     maxTokens = DEFAULT_MAX_TOKENS,
     maxIterations = 5,
     timeout = DEFAULT_TIMEOUT_MS,
+    maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES,
   } = options;
 
   return Sentry.startSpan(
@@ -252,7 +256,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
       },
     },
     async (span) => {
-      const client = new Anthropic({ apiKey, timeout });
+      const client = new Anthropic({ apiKey, timeout, maxRetries });
 
       // No prefill for tool-use loops: prefill biases the model to output JSON
       // immediately instead of calling tools to gather information first.

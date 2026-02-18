@@ -47,7 +47,8 @@ interface ParseHunkOutputResult {
 async function parseHunkOutput(
   result: SDKResultMessage,
   filename: string,
-  apiKey?: string
+  apiKey?: string,
+  auxiliaryMaxRetries?: number
 ): Promise<ParseHunkOutputResult> {
   if (result.subtype !== 'success') {
     // SDK error - not an extraction failure, just no findings
@@ -62,7 +63,7 @@ async function parseHunkOutput(
   }
 
   // Tier 2: Try LLM fallback for malformed output
-  const fallback = await extractFindingsWithLLM(result.result, apiKey);
+  const fallback = await extractFindingsWithLLM(result.result, apiKey, auxiliaryMaxRetries);
 
   if (fallback.success) {
     return { findings: validateFindings(fallback.findings, filename), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
@@ -455,7 +456,7 @@ async function analyzeHunk(
             };
           }
 
-          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey);
+          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey, options.auxiliaryMaxRetries);
 
           // Filter findings outside hunk line range (defense-in-depth)
           const hunkRange = getHunkLineRange(hunkCtx.hunk);
@@ -895,6 +896,7 @@ export async function runSkill(
   const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
     apiKey: options.apiKey,
     repoPath: context.repoPath,
+    maxRetries: options.auxiliaryMaxRetries,
   });
   const mergedFindings = mergeResult.findings;
   if (mergeResult.usage) {

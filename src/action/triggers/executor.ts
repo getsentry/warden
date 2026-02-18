@@ -137,6 +137,7 @@ export async function executeTrigger(
             maxTurns: trigger.maxTurns,
             batchDelayMs: config.defaults?.batchDelayMs,
             pathToClaudeCodeExecutable: claudePath,
+            auxiliaryMaxRetries: config.defaults?.auxiliaryMaxRetries,
           },
         };
 

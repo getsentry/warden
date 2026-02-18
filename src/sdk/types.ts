@@ -79,6 +79,8 @@ export interface SkillRunnerOptions {
   verbose?: boolean;
   /** Max number of "other files" to list in hunk prompts for PR context (default: 50, 0 disables) */
   maxContextFiles?: number;
+  /** Max retries for auxiliary Haiku calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
+  auxiliaryMaxRetries?: number;
 }
 
 /**

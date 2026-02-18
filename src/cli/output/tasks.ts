@@ -399,6 +399,7 @@ export async function runSkillTask(
         const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
           apiKey: runnerOptions.apiKey,
           repoPath: context.repoPath,
+          maxRetries: runnerOptions.auxiliaryMaxRetries,
         });
         const mergedFindings = mergeResult.findings;
         if (mergeResult.usage) {

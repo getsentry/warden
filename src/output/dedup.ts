@@ -381,7 +381,8 @@ interface SemanticDuplicateResult {
 async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
-  apiKey: string
+  apiKey: string,
+  maxRetries?: number
 ): Promise<SemanticDuplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
     return { matches: new Map() };
@@ -421,6 +422,7 @@ Return [] if none are duplicates.`;
     prompt,
     schema: DuplicateMatchesSchema,
     maxTokens: 512,
+    maxRetries,
   });
 
   if (!result.success) {
@@ -450,6 +452,8 @@ export interface DeduplicateOptions {
   hashOnly?: boolean;
   /** Current skill name (for updating Warden comment attribution) */
   currentSkill?: string;
+  /** Max retries for auxiliary Haiku calls */
+  maxRetries?: number;
 }
 
 const ADD_REACTION_MUTATION = `
@@ -647,7 +651,7 @@ function findProximityClusters(findings: Finding[]): Finding[][] {
  */
 export async function consolidateBatchFindings(
   findings: Finding[],
-  options: { apiKey?: string; hashOnly?: boolean } = {}
+  options: { apiKey?: string; hashOnly?: boolean; maxRetries?: number } = {}
 ): Promise<ConsolidateResult> {
   if (findings.length <= 1) {
     return { findings, removedCount: 0 };
@@ -709,6 +713,7 @@ Return ONLY the JSON array. Return [] if no findings share a root cause.`;
     prompt,
     schema: ConsolidationGroupsSchema,
     maxTokens: 512,
+    maxRetries: options.maxRetries,
   });
 
   if (!result.success) {
@@ -813,7 +818,7 @@ export async function deduplicateFindings(
   }
 
   // Second pass: LLM semantic comparison for remaining findings
-  const semanticResult = await findSemanticDuplicates(hashDedupedFindings, existingComments, options.apiKey);
+  const semanticResult = await findSemanticDuplicates(hashDedupedFindings, existingComments, options.apiKey, options.maxRetries);
 
   if (semanticResult.matches.size > 0) {
     console.log(`Dedup: ${semanticResult.matches.size} findings identified as semantic duplicates by LLM`);

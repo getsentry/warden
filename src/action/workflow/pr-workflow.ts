@@ -272,7 +272,8 @@ async function postReviewsAndTrackFailures(
   octokit: Octokit,
   context: EventContext,
   results: TriggerResult[],
-  inputs: ActionInputs
+  inputs: ActionInputs,
+  auxiliaryMaxRetries?: number
 ): Promise<ReviewPhaseResult> {
   // Fetch existing comments for deduplication (only for PRs)
   // Keep original list separate for stale detection (modified list includes newly posted comments)
@@ -315,6 +316,7 @@ async function postReviewsAndTrackFailures(
           result,
           existingComments,
           apiKey: inputs.anthropicApiKey,
+          maxRetries: auxiliaryMaxRetries,
         },
         { octokit, context }
       );
@@ -346,7 +348,8 @@ async function evaluateFixesAndResolveStale(
   fetchedComments: ExistingComment[],
   allFindings: Finding[],
   canResolveStale: boolean,
-  anthropicApiKey: string
+  anthropicApiKey: string,
+  auxiliaryMaxRetries?: number
 ): Promise<{ allResolved: boolean }> {
   const wardenComments = fetchedComments.filter((c) => c.isWarden);
   const commentsResolvedByFixEval = new Set<number>();
@@ -377,7 +380,8 @@ async function evaluateFixesAndResolveStale(
           headSha: context.pullRequest.headSha,
         },
         allFindings,
-        anthropicApiKey
+        anthropicApiKey,
+        auxiliaryMaxRetries
       );
 
       // Log per-evaluation details
@@ -544,7 +548,8 @@ async function finalizeWorkflow(
 async function cleanupOrphanedComments(
   octokit: Octokit,
   context: EventContext,
-  anthropicApiKey: string
+  anthropicApiKey: string,
+  auxiliaryMaxRetries?: number
 ): Promise<void> {
   if (!context.pullRequest) {
     return;
@@ -571,7 +576,7 @@ async function cleanupOrphanedComments(
   logAction(`No triggers matched, but found ${wardenComments.length} existing Warden comments. Running cleanup.`);
 
   const { allResolved } = await evaluateFixesAndResolveStale(
-    octokit, context, existingComments, [], true, anthropicApiKey
+    octokit, context, existingComments, [], true, anthropicApiKey, auxiliaryMaxRetries
   );
 
   // Dismiss CHANGES_REQUESTED only if every unresolved comment was resolved
@@ -641,7 +646,7 @@ export async function runPRWorkflow(
       });
 
       if (matchedTriggers.length === 0) {
-        await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey);
+        await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey, config.defaults?.auxiliaryMaxRetries);
         setOutput('findings-count', 0);
         setOutput('critical-count', 0);
         setOutput('high-count', 0);
@@ -661,7 +666,7 @@ export async function runPRWorkflow(
 
       const reviewPhase = await Sentry.startSpan(
         { op: 'workflow.review', name: 'post reviews' },
-        () => postReviewsAndTrackFailures(octokit, context, results, inputs),
+        () => postReviewsAndTrackFailures(octokit, context, results, inputs, config.defaults?.auxiliaryMaxRetries),
       );
 
       const triggerErrors = collectTriggerErrors(results);
@@ -676,6 +681,7 @@ export async function runPRWorkflow(
           evaluateFixesAndResolveStale(
             octokit, context, reviewPhase.fetchedComments,
             allFindings, canResolveStale, inputs.anthropicApiKey,
+            config.defaults?.auxiliaryMaxRetries,
           ),
       );
 

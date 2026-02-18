@@ -171,6 +171,8 @@ export const DefaultsSchema = z.object({
   chunking: ChunkingConfigSchema.optional(),
   /** Delay in milliseconds between batch starts when processing files in parallel. Default: 0 */
   batchDelayMs: z.number().int().nonnegative().optional(),
+  /** Max retries for auxiliary Haiku calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
+  auxiliaryMaxRetries: z.number().int().positive().optional(),
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;
 

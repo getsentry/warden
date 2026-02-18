@@ -211,7 +211,8 @@ function createToolExecutor(ctx: FixJudgeContext): (name: string, input: Record<
 export async function evaluateFix(
   input: FixJudgeInput,
   context: FixJudgeContext,
-  apiKey: string
+  apiKey: string,
+  maxRetries?: number
 ): Promise<FixJudgeResult> {
   const fallback: FixJudgeResult = {
     verdict: { status: 'not_attempted', reasoning: 'Evaluation failed' },
@@ -229,6 +230,7 @@ export async function evaluateFix(
     tools: TOOL_DEFINITIONS,
     executeTool,
     maxIterations: 5,
+    maxRetries,
   });
 
   if (result.success) {

@@ -33,6 +33,7 @@ export interface ReviewPostingContext {
   result: TriggerResult;
   existingComments: ExistingComment[];
   apiKey: string;
+  maxRetries?: number;
 }
 
 /**
@@ -181,6 +182,7 @@ export async function postTriggerReview(
       const consolidateResult = await consolidateBatchFindings(findingsToPost, {
         apiKey,
         hashOnly: !apiKey,
+        maxRetries: ctx.maxRetries,
       });
       findingsToPost = consolidateResult.findings;
 
@@ -203,6 +205,7 @@ export async function postTriggerReview(
       dedupResult = await deduplicateFindings(findingsToPost, existingComments, {
         apiKey,
         currentSkill: result.report.skill,
+        maxRetries: ctx.maxRetries,
       });
       findingsToPost = dedupResult.newFindings;
 

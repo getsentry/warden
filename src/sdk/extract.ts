@@ -6,7 +6,7 @@ import { customAlphabet } from 'nanoid';
 import { FindingSchema, compareFindingPriority } from '../types/index.js';
 import type { Finding, Location, UsageStats } from '../types/index.js';
 import { Sentry } from '../sentry.js';
-import { callHaiku, HAIKU_MODEL, setGenAiResponseAttrs } from './haiku.js';
+import { callHaiku, DEFAULT_AUXILIARY_MAX_RETRIES, HAIKU_MODEL, setGenAiResponseAttrs } from './haiku.js';
 import { apiUsageToStats } from './pricing.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
@@ -173,7 +173,8 @@ export function truncateForLLMFallback(rawText: string, maxChars: number): strin
  */
 export async function extractFindingsWithLLM(
   rawText: string,
-  apiKey?: string
+  apiKey?: string,
+  maxRetries?: number
 ): Promise<ExtractFindingsResult> {
   if (!apiKey) {
     return {
@@ -208,7 +209,7 @@ export async function extractFindingsWithLLM(
     },
     async (span) => {
       try {
-        const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS });
+        const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS, maxRetries: maxRetries ?? DEFAULT_AUXILIARY_MAX_RETRIES });
         const userContent = `Extract the findings JSON from this model output.
 Return ONLY valid JSON in format: {"findings": [...]}
 If no findings exist, return: {"findings": []}
@@ -475,7 +476,7 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
  */
 export async function mergeCrossLocationFindings(
   findings: Finding[],
-  options?: { apiKey?: string; repoPath?: string }
+  options?: { apiKey?: string; repoPath?: string; maxRetries?: number }
 ): Promise<MergeResult> {
   const apiKey = options?.apiKey;
   const repoPath = options?.repoPath ?? '.';
@@ -509,6 +510,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     prompt,
     schema: MergeGroupsSchema,
     maxTokens: 512,
+    maxRetries: options?.maxRetries,
   });
 
   if (!result.success) {

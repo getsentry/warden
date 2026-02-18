@@ -603,7 +603,8 @@ describe('runPRWorkflow', () => {
           headSha: 'abc123def456',
         }),
         expect.any(Array),
-        'test-api-key'
+        'test-api-key',
+        undefined
       );
     });
 
@@ -654,7 +655,8 @@ describe('runPRWorkflow', () => {
           repo: 'test-repo',
         }),
         [],
-        'test-api-key'
+        'test-api-key',
+        undefined
       );
 
       // Should NOT run skill tasks (no triggers matched)
