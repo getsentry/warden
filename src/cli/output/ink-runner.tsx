@@ -417,6 +417,7 @@ export async function runSkillTasksWithInk(
   clear();
   unmount();
 
+  process.stderr.write(`${chalk.bold('SKILLS')}\n`);
   printSkillSummary(skillStates);
 
   return results;
