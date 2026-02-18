@@ -80,7 +80,7 @@ export async function cleanupLogs(opts: {
   if (expired.length === 0) return 0;
 
   if (mode === 'ask') {
-    if (!isTTY) return 0;
+    if (!isTTY || !process.stdin.isTTY) return 0;
 
     process.stderr.write(
       `Found ${expired.length} log ${expired.length === 1 ? 'file' : 'files'} older than ${retentionDays} days. Remove? [y/N] `
