@@ -41,7 +41,6 @@ export {
   writeJsonlReport,
   writeJsonlContent,
   renderJsonlString,
-  readJsonlLog,
   getRepoLogPath,
   generateRunId,
   type JsonlRecord,
