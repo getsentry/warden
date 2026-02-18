@@ -407,7 +407,7 @@ At `Verbose+`.
 
 #### 19. `analysis_complete`
 
-Fields: `findingsCount`, `failedHunks?`, `failedExtractions?`, `skippedFiles?`, `usage?`, `totalDuration`
+Fields: `findingsCount`, `failedHunks?`, `failedExtractions?`, `skippedFiles?`, `usage?`, `totalDuration`, `traceId?`
 
 This is a multi-line summary section, not a single event.
 
@@ -420,8 +420,9 @@ SUMMARY
   Use -v for failure details
 3 files skipped
 Analysis completed in 4.2s · 5.0k in / 800 out · $0.01
+Trace: abc123def456...
 ```
-(Counts colored by severity. Warnings in yellow. Hint dimmed. Usage line dimmed.)
+(Counts colored by severity. Warnings in yellow. Hint dimmed. Usage line dimmed. Trace ID dimmed, `Verbose+` only, only when Sentry is initialized.)
 
 The `-v` hint appears only when there are failures (`failedHunks > 0` or `failedExtractions > 0`) **and** verbosity is below `Verbose`. At `Verbose+`, per-hunk details are already shown via events 16-18 so the hint is suppressed.
 
@@ -434,8 +435,9 @@ The `-v` hint appears only when there are failures (`failedHunks > 0` or `failed
 [2026-02-08T14:30:56.000Z] warden: 3 files skipped
 [2026-02-08T14:30:56.000Z] warden: Usage: 5.0k input, 800 output, $0.01
 [2026-02-08T14:30:56.000Z] warden: Total time: 4.2s
+[2026-02-08T14:30:56.000Z] warden: Trace: abc123def456...
 ```
-Warnings and skipped files only shown when non-zero. The `-v` hint follows the same gating as TTY.
+Warnings and skipped files only shown when non-zero. The `-v` hint follows the same gating as TTY. Trace ID shown at `Verbose+` only, when Sentry is initialized.
 
 **JSONL:** Summary record (the last line in the JSONL file)
 
@@ -555,7 +557,7 @@ Each line in a JSONL file is one of three record types, discriminated by the pre
 
 ### Shared Types
 
-**RunMetadata**: `{ timestamp: string, durationMs: number, cwd: string }`
+**RunMetadata**: `{ timestamp: string, durationMs: number, cwd: string, traceId?: string }`
 
 **UsageStats**: `{ inputTokens: int, outputTokens: int, cacheReadInputTokens?: int, cacheCreationInputTokens?: int, costUSD: number }` -- `inputTokens` is the total input token count; `cacheReadInputTokens` and `cacheCreationInputTokens` are subsets of it.
 

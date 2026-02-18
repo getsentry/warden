@@ -43,6 +43,7 @@ export interface JsonlRunMetadata {
   timestamp: string;
   durationMs: number;
   cwd: string;
+  traceId?: string;
 }
 
 /**
@@ -125,7 +126,8 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 export function writeJsonlReport(
   outputPath: string,
   reports: SkillReport[],
-  durationMs: number
+  durationMs: number,
+  options?: { traceId?: string }
 ): void {
   const resolvedPath = resolve(process.cwd(), outputPath);
   const timestamp = new Date().toISOString();
@@ -135,6 +137,7 @@ export function writeJsonlReport(
     timestamp,
     durationMs,
     cwd,
+    traceId: options?.traceId,
   };
 
   const lines: string[] = [];

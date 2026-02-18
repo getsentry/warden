@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
-import { Sentry, logger, emitStaleResolutionMetric } from '../../sentry.js';
+import { Sentry, logger, emitStaleResolutionMetric, setGlobalAttributes, emitRunMetric } from '../../sentry.js';
 import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
@@ -631,7 +631,14 @@ export async function runPRWorkflow(
         });
       }
 
-      logger.info('Workflow initialized', { 'trigger.count': matchedTriggers.length });
+      setGlobalAttributes({ 'warden.repository': context.repository.fullName });
+      emitRunMetric();
+
+      const traceId = span.spanContext().traceId;
+      logger.info('Workflow initialized', {
+        'trigger.count': matchedTriggers.length,
+        'trace.id': traceId,
+      });
 
       if (matchedTriggers.length === 0) {
         await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey);

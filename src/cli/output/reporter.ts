@@ -185,7 +185,7 @@ export class Reporter {
   /**
    * Render the summary section.
    */
-  renderSummary(reports: SkillReport[], totalDuration: number): void {
+  renderSummary(reports: SkillReport[], totalDuration: number, options?: { traceId?: string }): void {
     const allFindings: Finding[] = [];
     let totalFailedHunks = 0;
     let totalFailedExtractions = 0;
@@ -227,6 +227,9 @@ export class Reporter {
       } else {
         this.log(chalk.dim(durationLine));
       }
+      if (options?.traceId && this.verbosity >= Verbosity.Verbose) {
+        this.log(chalk.dim(`Trace: ${options.traceId}`));
+      }
     } else {
       this.logPlain(`Summary: ${formatFindingCountsPlain(counts)}`);
       if (totalFailedHunks > 0) {
@@ -245,6 +248,9 @@ export class Reporter {
         this.logPlain(`Usage: ${formatUsagePlain(totalUsage)}`);
       }
       this.logPlain(`Total time: ${formatDuration(totalDuration)}`);
+      if (options?.traceId && this.verbosity >= Verbosity.Verbose) {
+        this.logPlain(`Trace: ${options.traceId}`);
+      }
     }
   }
 

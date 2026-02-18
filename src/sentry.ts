@@ -6,7 +6,6 @@ import { getVersion } from './utils/index.js';
 export type SentryContext = 'cli' | 'action';
 
 let initialized = false;
-let deploymentContext: SentryContext | undefined;
 
 export function initSentry(context: SentryContext): void {
   const dsn = process.env['WARDEN_SENTRY_DSN'];
@@ -26,13 +25,40 @@ export function initSentry(context: SentryContext): void {
     ],
   });
 
-  deploymentContext = context;
-  Sentry.setTag('deployment.context', context);
   Sentry.setTag('service.version', getVersion());
+  Sentry.getGlobalScope().setAttributes({
+    'warden.source': context === 'action' ? 'github-action' : 'cli',
+  });
 }
 
 export { Sentry };
 export const { logger } = Sentry;
+
+/**
+ * Set attributes on the global Sentry scope.
+ * These automatically apply to ALL metrics and spans.
+ */
+export function setGlobalAttributes(attrs: Record<string, string | number | boolean>): void {
+  if (!initialized) return;
+  try {
+    Sentry.getGlobalScope().setAttributes(attrs);
+  } catch {
+    // Never break the workflow
+  }
+}
+
+/**
+ * Get the trace ID from the active span, if available.
+ * Useful for correlating runs to Sentry traces in logs and output.
+ */
+export function getTraceId(): string | undefined {
+  if (!initialized) return undefined;
+  try {
+    return Sentry.getActiveSpan()?.spanContext().traceId;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Run a metrics callback only when Sentry is initialized.
@@ -47,20 +73,19 @@ function safeEmit(fn: () => void): void {
   }
 }
 
-export interface SkillMetricsContext {
-  /** Full repository name (e.g. "owner/repo") */
-  repository?: string;
+/**
+ * Emit a single run count. Call once per analysis workflow execution.
+ * Inherits warden.source and warden.repository from global scope.
+ */
+export function emitRunMetric(): void {
+  safeEmit(() => {
+    Sentry.metrics.count('workflow.runs', 1);
+  });
 }
 
-export function emitSkillMetrics(report: SkillReport, context?: SkillMetricsContext): void {
+export function emitSkillMetrics(report: SkillReport): void {
   safeEmit(() => {
     const attrs: Record<string, string> = { skill: report.skill };
-    if (context?.repository) {
-      attrs['repository'] = context.repository;
-    }
-    if (deploymentContext) {
-      attrs['source'] = deploymentContext;
-    }
 
     Sentry.metrics.distribution('skill.duration', report.durationMs ?? 0, {
       unit: 'millisecond',

@@ -23,6 +23,26 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 | `tracesSampleRate` | `1.0` (every transaction traced) |
 | `enableLogs` | `true` (structured Sentry logs) |
 
+### Global Attributes
+
+Set via `Sentry.getGlobalScope().setAttributes()`. These propagate automatically to all metrics and spans.
+
+| Attribute | Set when | Value |
+|-----------|----------|-------|
+| `warden.source` | `initSentry()` | `github-action` or `cli` |
+| `warden.repository` | After context built | `owner/repo` (e.g. `getsentry/sentry`) |
+
+### Trace ID
+
+The trace ID from the root span serves as the unique run identifier. It is surfaced in:
+
+- **CLI summary** (`-v`): Dimmed `Trace: {id}` line in the SUMMARY section at Verbose+ verbosity
+- **CLI debug output** (`-vv`): `reporter.debug()` at the start of the command span (safety net if run crashes before summary)
+- **Sentry structured logs**: `trace.id` field in the `Workflow initialized` log entry
+- **JSONL run metadata**: `traceId` field in `JsonlRunMetadata`
+
+Operators can use the trace ID to locate the corresponding Sentry trace for any Warden run.
+
 ### Integrations
 
 | Integration | Purpose |
@@ -229,16 +249,26 @@ Untagged `captureException` calls exist at top-level catch handlers in `src/cli/
 
 Emitted via `Sentry.metrics.*`. Each function is a no-op when Sentry is not initialized and wrapped in try/catch so metrics never break the workflow.
 
+All metrics inherit `warden.source` and `warden.repository` from the global scope (see **Global Attributes** above). Only per-metric attributes are listed below.
+
+### Run count (`emitRunMetric`)
+
+| Metric | Type | Per-metric attributes |
+|--------|------|-----------------------|
+| `workflow.runs` | count | -- (inherits globals) |
+
+Called once per analysis workflow execution (CLI run or GitHub Action workflow).
+
 ### Skill-level (`emitSkillMetrics`)
 
-| Metric | Type | Attributes |
-|--------|------|------------|
-| `skill.duration` | distribution (ms) | `skill`, `repository`, `source` |
-| `tokens.input` | distribution | `skill`, `repository`, `source` |
-| `tokens.output` | distribution | `skill`, `repository`, `source` |
-| `cost.usd` | distribution | `skill`, `repository`, `source` |
-| `findings.total` | count | `skill`, `repository`, `source` |
-| `findings` | count | `skill`, `repository`, `source`, `severity` |
+| Metric | Type | Per-metric attributes |
+|--------|------|-----------------------|
+| `skill.duration` | distribution (ms) | `skill` |
+| `tokens.input` | distribution | `skill` |
+| `tokens.output` | distribution | `skill` |
+| `cost.usd` | distribution | `skill` |
+| `findings.total` | count | `skill` |
+| `findings` | count | `skill`, `severity` |
 
 ### Extraction (`emitExtractionMetrics`)
 
@@ -305,7 +335,7 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved.
 
 | File | Role |
 |------|------|
-| `src/sentry.ts` | Init, integrations, metric emission functions |
+| `src/sentry.ts` | Init, integrations, global attributes, metric emission functions |
 | `src/sdk/analyze.ts` | `executeQuery` (gen AI span), `analyzeFile` / `analyzeHunk` (workflow spans), extraction + retry + dedup metrics |
 | `src/action/fix-evaluation/index.ts` | `evaluateFixAttempts` / per-comment spans, fix eval metrics |
 | `src/action/workflow/base.ts` | `ActionFailedError` sentinel, `setFailed()` |

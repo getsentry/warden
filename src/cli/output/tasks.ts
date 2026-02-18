@@ -432,9 +432,7 @@ export async function runSkillTask(
         }
 
         // Emit metrics and log completion
-        emitSkillMetrics(report, {
-          repository: context.repository.fullName,
-        });
+        emitSkillMetrics(report);
         logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
           'finding.count': report.findings.length,
           'duration_ms': report.durationMs,

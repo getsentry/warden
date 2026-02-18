@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
-import { Sentry, flushSentry } from '../sentry.js';
+import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
 import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync } from '../skills/loader.js';
@@ -138,14 +138,15 @@ async function outputResultsAndHandleFixes(
   const { reports, filteredReports, hasFailure, failureReasons } = processed;
 
   // Write JSONL output if requested (uses unfiltered reports for complete data)
+  const traceId = getTraceId();
   if (options.output) {
-    writeJsonlReport(options.output, reports, totalDuration);
+    writeJsonlReport(options.output, reports, totalDuration, { traceId });
     reporter.success(`Wrote JSONL output to ${options.output}`);
   }
 
   // Always write automatic run log for debugging
   const runLogPath = getRunLogPath(repoPath);
-  writeJsonlReport(runLogPath, reports, totalDuration);
+  writeJsonlReport(runLogPath, reports, totalDuration, { traceId });
   reporter.debug(`Run log: ${runLogPath}`);
 
   // Collect fixable findings early so we know whether to suppress diffs in the report
@@ -174,7 +175,7 @@ async function outputResultsAndHandleFixes(
 
   // Show summary (uses filtered reports for display)
   reporter.blank();
-  reporter.renderSummary(filteredReports, totalDuration);
+  reporter.renderSummary(filteredReports, totalDuration, { traceId });
 
   // Handle fixes: --fix (automatic) always runs, interactive step-through in TTY mode
   if (fixableFindings.length > 0) {
@@ -266,6 +267,10 @@ async function runSkills(
   } else {
     skillsToRun = [];
   }
+
+  // Set global telemetry context and emit run metric
+  setGlobalAttributes({ 'warden.repository': context.repository.fullName });
+  emitRunMetric();
 
   // Handle case where no skills to run
   if (skillsToRun.length === 0) {
@@ -488,6 +493,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   reporter.contextFiles(pullRequest.files);
 
+  // Set global telemetry context and emit run metric
+  setGlobalAttributes({ 'warden.repository': context.repository.fullName });
+  emitRunMetric();
+
   // Resolve skills into triggers and match
   const resolvedTriggers = resolveSkillConfigs(config, options.model);
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
@@ -695,6 +704,11 @@ export async function main(): Promise<void> {
     { op: 'cli.command', name: `run ${command}` },
     async (span) => {
       span.setAttribute('cli.command', command);
+
+      const traceId = getTraceId();
+      if (traceId) {
+        reporter.debug(`Trace ID: ${traceId}`);
+      }
 
       switch (command) {
         case 'init':
