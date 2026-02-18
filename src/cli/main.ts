@@ -20,9 +20,7 @@ import {
   runSkillTasks,
   runSkillTasksWithInk,
   pluralize,
-  writeJsonlReport,
   writeJsonlContent,
-  readJsonlLog,
   renderJsonlString,
   getRepoLogPath,
   generateRunId,
@@ -96,17 +94,20 @@ function resolveConfigPath(options: CLIOptions, repoPath: string): string {
 
 /**
  * Write a minimal JSONL log (summary-only, 0 findings) for early-exit paths.
- * Returns the log file path.
+ * Returns the rendered content and the log file path. The content is always
+ * available even if the file write fails, so callers can use it for --json
+ * output without reading back from disk.
  */
-function writeEmptyRunLog(repoPath: string, options?: { traceId?: string }): string {
+function writeEmptyRunLog(repoPath: string, options?: { traceId?: string }): { logPath: string; content: string } {
   const runId = generateRunId();
   const logPath = getRepoLogPath(repoPath, runId);
+  const content = renderJsonlString([], 0, { runId, traceId: options?.traceId });
   try {
-    writeJsonlReport(logPath, [], 0, { runId, traceId: options?.traceId });
+    writeJsonlContent(logPath, content);
   } catch (err) {
     console.warn(`Warning: Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
   }
-  return logPath;
+  return { logPath, content };
 }
 
 /**
@@ -321,8 +322,8 @@ async function runSkills(
   if (skillsToRun.length === 0) {
     const effectiveRepo = repoPath ?? cwd;
     if (options.json) {
-      const logPath = writeEmptyRunLog(effectiveRepo, { traceId: getTraceId() });
-      process.stdout.write(readJsonlLog(logPath));
+      const { content } = writeEmptyRunLog(effectiveRepo, { traceId: getTraceId() });
+      process.stdout.write(content);
     } else {
       writeEmptyRunLog(effectiveRepo, { traceId: getTraceId() });
       reporter.warning('No triggers matched for the changed files');
@@ -394,8 +395,8 @@ async function runFileMode(filePatterns: string[], options: CLIOptions, reporter
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const logPath = writeEmptyRunLog(cwd, { traceId: getTraceId() });
-      process.stdout.write(readJsonlLog(logPath));
+      const { content } = writeEmptyRunLog(cwd, { traceId: getTraceId() });
+      process.stdout.write(content);
     } else {
       writeEmptyRunLog(cwd, { traceId: getTraceId() });
       reporter.blank();
@@ -478,8 +479,8 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
-      process.stdout.write(readJsonlLog(logPath));
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(content);
     } else {
       writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       reporter.renderEmptyState('No changes found');
@@ -536,8 +537,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
-      process.stdout.write(readJsonlLog(logPath));
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(content);
     } else {
       writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       const tip = !hasUncommittedChanges(repoPath)
@@ -576,8 +577,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   if (triggersToRun.length === 0) {
     if (options.json) {
-      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
-      process.stdout.write(readJsonlLog(logPath));
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(content);
     } else {
       writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       reporter.blank();
@@ -678,8 +679,8 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
-      process.stdout.write(readJsonlLog(logPath));
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(content);
     } else {
       writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       const tip = 'Specify a git ref to analyze committed changes: warden main --skill <name>';
