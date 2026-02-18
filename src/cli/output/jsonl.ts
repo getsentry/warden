@@ -220,6 +220,15 @@ export function writeJsonlReport(
 }
 
 /**
+ * Write pre-rendered JSONL content to a file path.
+ */
+export function writeJsonlContent(outputPath: string, content: string): void {
+  const resolvedPath = resolve(process.cwd(), outputPath);
+  mkdirSync(dirname(resolvedPath), { recursive: true });
+  writeFileSync(resolvedPath, content);
+}
+
+/**
  * Read a JSONL log file and return its contents.
  */
 export function readJsonlLog(logPath: string): string {

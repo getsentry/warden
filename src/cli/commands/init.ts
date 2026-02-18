@@ -158,6 +158,10 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
       reporter.created('.gitignore entry for .warden/logs/');
       filesCreated++;
     }
+  } else {
+    writeFileSync(gitignorePath, '.warden/logs/\n', 'utf-8');
+    reporter.created('.gitignore with .warden/logs/');
+    filesCreated++;
   }
 
   if (filesCreated === 0) {

@@ -21,6 +21,7 @@ import {
   runSkillTasksWithInk,
   pluralize,
   writeJsonlReport,
+  writeJsonlContent,
   readJsonlLog,
   renderJsonlString,
   getRepoLogPath,
@@ -162,13 +163,14 @@ async function outputResultsAndHandleFixes(
   const traceId = getTraceId();
   const runId = generateRunId();
 
+  // Render JSONL content once so repo log and --output have identical timestamps
+  const jsonlContent = renderJsonlString(reports, totalDuration, { runId, traceId });
+
   // Always write repo-local JSONL log (non-fatal — don't lose analysis output)
   const logPath = getRepoLogPath(repoPath, runId);
-  let logWritten = false;
   try {
-    writeJsonlReport(logPath, reports, totalDuration, { runId, traceId });
+    writeJsonlContent(logPath, jsonlContent);
     reporter.debug(`Run log: ${logPath}`);
-    logWritten = true;
   } catch (err) {
     reporter.warning(`Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -176,7 +178,7 @@ async function outputResultsAndHandleFixes(
   // Write additional copy to --output path if specified
   if (options.output) {
     try {
-      writeJsonlReport(options.output, reports, totalDuration, { runId, traceId });
+      writeJsonlContent(options.output, jsonlContent);
       reporter.success(`Wrote JSONL output to ${options.output}`);
     } catch (err) {
       reporter.warning(`Failed to write output file: ${err instanceof Error ? err.message : String(err)}`);
@@ -196,13 +198,8 @@ async function outputResultsAndHandleFixes(
   // Output results
   reporter.blank();
   if (options.json) {
-    // --json: cat the JSONL log file to stdout (unfiltered, matches log file)
-    if (logWritten) {
-      process.stdout.write(readJsonlLog(logPath));
-    } else {
-      // Fallback: render JSONL directly to stdout since the repo log failed
-      process.stdout.write(renderJsonlString(reports, totalDuration, { runId, traceId }));
-    }
+    // --json: output pre-rendered JSONL (identical to log file contents)
+    process.stdout.write(jsonlContent);
   } else {
     // Suppress fix diffs in report when interactive step-through will show them
     console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
