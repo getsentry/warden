@@ -244,7 +244,19 @@ export async function runSkillTasksWithInk(
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
     // No tasks or quiet mode - run without UI using global semaphore
     const semaphore = new Semaphore(concurrency);
-    return runComposedSkillTasks(tasks, noopCallbacks, semaphore);
+    const composedTasks = composeTasksWithFailFast(tasks, failFastController);
+    // Wrap noopCallbacks to detect findings and trigger fail-fast
+    const callbacks: SkillProgressCallbacks = failFastController
+      ? {
+          ...noopCallbacks,
+          onFileUpdate: (_skillName, _filename, updates) => {
+            if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
+              failFastController.abort();
+            }
+          },
+        }
+      : noopCallbacks;
+    return runComposedSkillTasks(composedTasks, callbacks, semaphore);
   }
 
   // Track skill states
