@@ -39,6 +39,8 @@ export const CLIOptionsSchema = z.object({
   remote: z.string().optional(),
   /** Skip network operations - only use cached remote skills */
   offline: z.boolean().default(false),
+  /** Stop after first finding */
+  failFast: z.boolean().default(false),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -91,6 +93,7 @@ Options:
                        (off, critical, high, medium, low, info)
   --fix                Automatically apply all suggested fixes
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
+  -x, --fail-fast      Stop after first finding
   --git                Force ambiguous targets to be treated as git refs
   --quiet              Errors and final summary only
   -v, --verbose        Show real-time findings and hunk details
@@ -269,6 +272,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       list: { type: 'boolean', short: 'l', default: false },
       remote: { type: 'string' },
       offline: { type: 'boolean', default: false },
+      'fail-fast': { type: 'boolean', short: 'x', default: false },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
       log: { type: 'boolean', default: false },
@@ -403,6 +407,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     git: values.git,
     log: values.log,
     offline: values.offline,
+    failFast: values['fail-fast'],
     help: values.help,
     quiet: values.quiet,
     verbose: verboseCount,

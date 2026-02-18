@@ -131,6 +131,7 @@ export interface RunTasksOptions {
   mode: OutputMode;
   verbosity: Verbosity;
   concurrency: number;
+  failFast?: boolean;
 }
 
 /**
@@ -637,6 +638,56 @@ export function createDefaultCallbacks(
 }
 
 /**
+ * Create an AbortController that fires when either of two controllers abort.
+ */
+export function composeAbortControllers(a?: AbortController, b?: AbortController): AbortController {
+  const composed = new AbortController();
+
+  for (const ctrl of [a, b]) {
+    if (ctrl?.signal.aborted) {
+      composed.abort();
+      return composed;
+    }
+    ctrl?.signal.addEventListener('abort', () => composed.abort(), { once: true });
+  }
+
+  return composed;
+}
+
+/**
+ * Overlay a fail-fast abort controller onto each task's runner options.
+ * Returns the original tasks unchanged when no controller is provided.
+ */
+export function composeTasksWithFailFast(
+  tasks: SkillTaskOptions[],
+  failFastController?: AbortController
+): SkillTaskOptions[] {
+  if (!failFastController) return tasks;
+
+  return tasks.map((task) => ({
+    ...task,
+    runnerOptions: {
+      ...task.runnerOptions,
+      abortController: composeAbortControllers(task.runnerOptions?.abortController, failFastController),
+    },
+  }));
+}
+
+/**
+ * Launch all skill tasks in parallel using a shared semaphore for concurrency.
+ */
+export async function runComposedSkillTasks(
+  tasks: SkillTaskOptions[],
+  callbacks: SkillProgressCallbacks,
+  semaphore: Semaphore
+): Promise<SkillTaskResult[]> {
+  return runPool(tasks, tasks.length,
+    (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, callbacks, semaphore),
+    { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
+  );
+}
+
+/**
  * Run multiple skill tasks with optional concurrency.
  * Uses callbacks to report progress for Ink rendering.
  */
@@ -645,7 +696,7 @@ export async function runSkillTasks(
   options: RunTasksOptions,
   callbacks?: SkillProgressCallbacks
 ): Promise<SkillTaskResult[]> {
-  const { mode, verbosity, concurrency } = options;
+  const { mode, verbosity, concurrency, failFast } = options;
 
   // Global semaphore gates file-level work across all skills.
   // All skills launch immediately so the UI shows them as "running",
@@ -653,6 +704,22 @@ export async function runSkillTasks(
   const semaphore = new Semaphore(concurrency);
 
   const effectiveCallbacks = callbacks ?? createDefaultCallbacks(tasks, mode, verbosity);
+
+  // Fail-fast: create a separate abort controller that fires when a finding is detected.
+  const failFastController = failFast ? new AbortController() : undefined;
+
+  // Wrap onFileUpdate to detect findings and trigger fail-fast
+  const wrappedCallbacks: SkillProgressCallbacks = failFastController
+    ? {
+        ...effectiveCallbacks,
+        onFileUpdate: (skillName, filename, updates) => {
+          effectiveCallbacks.onFileUpdate(skillName, filename, updates);
+          if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
+            failFastController.abort();
+          }
+        },
+      }
+    : effectiveCallbacks;
 
   // Output SKILLS header (TTY only - in log mode, "Running..." lines are sufficient)
   if (verbosity !== Verbosity.Quiet && tasks.length > 0 && mode.isTTY) {
@@ -663,15 +730,23 @@ export async function runSkillTasks(
   const abortSignal = tasks[0]?.runnerOptions?.abortController?.signal;
   if (abortSignal && !abortSignal.aborted && !mode.isTTY && verbosity !== Verbosity.Quiet) {
     abortSignal.addEventListener('abort', () => {
-      logPlain('Interrupted, finishing up... (press Ctrl+C again to force exit)');
+      // Only show interrupt message for user SIGINT, not fail-fast
+      if (!failFastController?.signal.aborted) {
+        logPlain('Interrupted, finishing up... (press Ctrl+C again to force exit)');
+      }
     }, { once: true });
   }
 
-  // Launch all skills in parallel; the semaphore is the sole concurrency gate.
-  const results = await runPool(tasks, tasks.length,
-    (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, effectiveCallbacks, semaphore),
-    { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
-  );
+  // Show fail-fast message when triggered (non-TTY only)
+  if (failFastController && !mode.isTTY && verbosity !== Verbosity.Quiet) {
+    failFastController.signal.addEventListener('abort', () => {
+      logPlain('Stopping \u2014 finding detected (--fail-fast)');
+    }, { once: true });
+  }
 
-  return results;
+  // Compose per-task abort controllers: fire on either SIGINT or fail-fast
+  const composedTasks = composeTasksWithFailFast(tasks, failFastController);
+
+  // Launch all skills in parallel; the semaphore is the sole concurrency gate.
+  return runComposedSkillTasks(composedTasks, wrappedCallbacks, semaphore);
 }

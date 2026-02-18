@@ -27,6 +27,7 @@ function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     list: false,
     git: false,
     offline: false,
+    failFast: false,
     ...overrides,
   };
 }

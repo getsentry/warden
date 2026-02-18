@@ -15,7 +15,8 @@ import React, { useState, useEffect } from 'react';
 import { render, Box, Text, Static } from 'ink';
 import chalk from 'chalk';
 import {
-  runSkillTask,
+  composeTasksWithFailFast,
+  runComposedSkillTasks,
   type SkillTaskOptions,
   type SkillTaskResult,
   type RunTasksOptions,
@@ -24,7 +25,7 @@ import {
   type FileState,
 } from './tasks.js';
 import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot, pluralize } from './formatters.js';
-import { runPool, Semaphore } from '../../utils/index.js';
+import { Semaphore } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
@@ -33,6 +34,7 @@ interface SkillRunnerProps {
   skills: SkillState[];
   warnings: string[];
   interrupted: boolean;
+  failFastTriggered: boolean;
 }
 
 function Spinner(): React.ReactElement {
@@ -115,7 +117,7 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
   );
 }
 
-function SkillRunner({ skills, warnings, interrupted }: SkillRunnerProps): React.ReactElement {
+function SkillRunner({ skills, warnings, interrupted, failFastTriggered }: SkillRunnerProps): React.ReactElement {
   const completed = skills.filter((s) => s.status === 'done' || s.status === 'skipped' || s.status === 'error');
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
@@ -138,7 +140,12 @@ function SkillRunner({ skills, warnings, interrupted }: SkillRunnerProps): React
           {ICON_PENDING} {skill.displayName}
         </Text>
       ))}
-      {interrupted && (
+      {failFastTriggered && (
+        <Text color="yellow" dimColor>
+          {figures.warning} Stopping {'\u2014'} finding detected (--fail-fast)
+        </Text>
+      )}
+      {interrupted && !failFastTriggered && (
         <Text color="yellow" dimColor>
           {figures.warning} Interrupted, finishing up... (press Ctrl+C again to force exit)
         </Text>
@@ -232,16 +239,12 @@ export async function runSkillTasksWithInk(
   tasks: SkillTaskOptions[],
   options: RunTasksOptions
 ): Promise<SkillTaskResult[]> {
-  const { verbosity, concurrency } = options;
+  const { verbosity, concurrency, failFast } = options;
 
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
     // No tasks or quiet mode - run without UI using global semaphore
     const semaphore = new Semaphore(concurrency);
-    const results = await runPool(tasks, tasks.length,
-      (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, noopCallbacks, semaphore),
-      { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
-    );
-    return results;
+    return runComposedSkillTasks(tasks, noopCallbacks, semaphore);
   }
 
   // Track skill states
@@ -254,12 +257,16 @@ export async function runSkillTasksWithInk(
   // Print header before Ink starts
   process.stderr.write('\x1b[1mSKILLS\x1b[0m\n');
 
+  // Fail-fast: create a separate abort controller that fires when a finding is detected.
+  const failFastController = failFast ? new AbortController() : undefined;
+
   // Track interrupt state for rendering in the Ink component
   let interrupted = false;
+  let failFastTriggered = false;
 
   // Create Ink instance
   const { rerender, unmount, clear } = render(
-    <SkillRunner skills={skillStates} warnings={[]} interrupted={false} />,
+    <SkillRunner skills={skillStates} warnings={[]} interrupted={false} failFastTriggered={false} />,
     { stdout: process.stderr }
   );
 
@@ -275,7 +282,7 @@ export async function runSkillTasksWithInk(
     setImmediate(() => {
       updatePending = false;
       if (unmounted) return;
-      rerender(<SkillRunner skills={[...skillStates]} warnings={[...warnings]} interrupted={interrupted} />);
+      rerender(<SkillRunner skills={[...skillStates]} warnings={[...warnings]} interrupted={interrupted} failFastTriggered={failFastTriggered} />);
     });
   };
 
@@ -283,7 +290,18 @@ export async function runSkillTasksWithInk(
   const abortSignal = tasks[0]?.runnerOptions?.abortController?.signal;
   if (abortSignal && !abortSignal.aborted) {
     abortSignal.addEventListener('abort', () => {
-      interrupted = true;
+      // Only show interrupt message for user SIGINT, not fail-fast
+      if (!failFastController?.signal.aborted) {
+        interrupted = true;
+        updateUI();
+      }
+    }, { once: true });
+  }
+
+  // Show fail-fast message when triggered
+  if (failFastController) {
+    failFastController.signal.addEventListener('abort', () => {
+      failFastTriggered = true;
       updateUI();
     }, { once: true });
   }
@@ -309,6 +327,10 @@ export async function runSkillTasksWithInk(
         if (file) {
           Object.assign(file, updates);
           updateUI();
+          // Fail-fast: abort when a file completes with findings
+          if (failFastController && updates.status === 'done' && updates.findings && updates.findings.length > 0) {
+            failFastController.abort();
+          }
         }
       }
     },
@@ -375,11 +397,11 @@ export async function runSkillTasksWithInk(
   // Global semaphore gates file-level work across all skills.
   const semaphore = new Semaphore(concurrency);
 
+  // Compose per-task abort controllers: fire on either SIGINT or fail-fast
+  const composedTasks = composeTasksWithFailFast(tasks, failFastController);
+
   // Launch all skills in parallel; the semaphore is the sole concurrency gate.
-  const results = await runPool(tasks, tasks.length,
-    (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, callbacks, semaphore),
-    { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
-  );
+  const results = await runComposedSkillTasks(composedTasks, callbacks, semaphore);
 
   // Flush any pending setImmediate from updateUI so last-tick warnings are
   // rendered before we tear down. setImmediate is FIFO, so our callback runs

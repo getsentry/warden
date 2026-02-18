@@ -48,6 +48,13 @@ export const abortController = new AbortController();
 export const interrupted = { value: false };
 
 /**
+ * Detect whether fail-fast caused the abort (not a user interrupt).
+ */
+function wasFailFastAborted(options: CLIOptions): boolean {
+  return options.failFast && !interrupted.value && abortController.signal.aborted;
+}
+
+/**
  * Load environment variables from .env files in the given directory.
  * Loads .env first, then .env.local for local overrides.
  */
@@ -133,7 +140,8 @@ async function outputResultsAndHandleFixes(
   options: CLIOptions,
   reporter: Reporter,
   repoPath: string,
-  totalDuration: number
+  totalDuration: number,
+  failFastAborted?: boolean
 ): Promise<number> {
   const { reports, filteredReports, hasFailure, failureReasons } = processed;
 
@@ -167,10 +175,13 @@ async function outputResultsAndHandleFixes(
     console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
   }
 
-  // Show interrupted banner before summary (read live to catch SIGINT during rendering)
-  if (interrupted.value) {
+  // Show interrupted / fail-fast banner before summary
+  if (failFastAborted) {
     reporter.blank();
-    reporter.warning('Interrupted — showing partial results');
+    reporter.warning('Stopped after first finding (--fail-fast)');
+  } else if (interrupted.value) {
+    reporter.blank();
+    reporter.warning('Interrupted \u2014 showing partial results');
   }
 
   // Show summary (uses filtered reports for display)
@@ -311,6 +322,7 @@ async function runSkills(
     mode: reporter.mode,
     verbosity: reporter.verbosity,
     concurrency,
+    failFast: options.failFast,
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
@@ -319,7 +331,7 @@ async function runSkills(
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, wasFailFastAborted(options));
 }
 
 /**
@@ -569,6 +581,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     mode: reporter.mode,
     verbosity: reporter.verbosity,
     concurrency,
+    failFast: options.failFast,
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
@@ -577,7 +590,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, wasFailFastAborted(options));
 }
 
 /**
