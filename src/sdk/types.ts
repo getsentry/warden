@@ -77,6 +77,8 @@ export interface SkillRunnerOptions {
   retry?: RetryConfig;
   /** Enable verbose logging for retry attempts */
   verbose?: boolean;
+  /** Max number of "other files" to list in hunk prompts for PR context (default: 50, 0 disables) */
+  maxContextFiles?: number;
 }
 
 /**

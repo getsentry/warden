@@ -292,6 +292,7 @@ async function runSkills(
     abortController,
     maxTurns: config?.defaults?.maxTurns,
     batchDelayMs: config?.defaults?.batchDelayMs,
+    maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
   };
   const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters }) => ({
     name: skill,
@@ -558,6 +559,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       model: trigger.model,
       abortController,
       maxTurns: trigger.maxTurns,
+      maxContextFiles: config.defaults?.chunking?.maxContextFiles,
     },
   }));
 

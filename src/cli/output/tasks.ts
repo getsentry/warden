@@ -235,6 +235,7 @@ export async function runSkillTask(
               changedFiles: isPullRequest ? context.pullRequest.files.map((f) => f.filename) : [],
               title: context.pullRequest.title,
               body: context.pullRequest.body,
+              maxContextFiles: runnerOptions.maxContextFiles,
             }
           : undefined;
 
