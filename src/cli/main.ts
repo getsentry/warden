@@ -198,7 +198,8 @@ async function outputResultsAndHandleFixes(
     && !options.json
     && !options.fix
     && reporter.verbosity !== Verbosity.Quiet
-    && reporter.mode.isTTY;
+    && reporter.mode.isTTY
+    && !!process.stdin.isTTY;
 
   // Output results
   reporter.blank();
