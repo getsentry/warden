@@ -1,6 +1,9 @@
 /.dex/*
 !/.dex/config.toml
 
+# AI tooling
+.serena/
+
 # Dependencies
 node_modules/
 
