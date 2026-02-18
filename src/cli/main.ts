@@ -101,7 +101,11 @@ function resolveConfigPath(options: CLIOptions, repoPath: string): string {
 function writeEmptyRunLog(repoPath: string, options?: { traceId?: string }): string {
   const runId = generateRunId();
   const logPath = getRepoLogPath(repoPath, runId);
-  writeJsonlReport(logPath, [], 0, { runId, traceId: options?.traceId });
+  try {
+    writeJsonlReport(logPath, [], 0, { runId, traceId: options?.traceId });
+  } catch (err) {
+    console.warn(`Warning: Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
+  }
   return logPath;
 }
 
