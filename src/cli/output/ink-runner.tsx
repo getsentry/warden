@@ -380,8 +380,10 @@ export async function runSkillTasksWithInk(
     { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
   );
 
-  // Cleanup - set unmounted flag before unmount to prevent pending setImmediate
-  // callbacks from calling rerender on the unmounted Ink instance
+  // Flush any pending setImmediate from updateUI so last-tick warnings are
+  // rendered before we tear down. setImmediate is FIFO, so our callback runs
+  // after the queued rerender.
+  await new Promise((resolve) => setImmediate(resolve));
   unmounted = true;
   clear();
   unmount();
