@@ -1,0 +1,547 @@
+# Warden
+
+> Agents that review your code. Locally or on every PR.
+
+Warden watches over your code by running **skills** against your changes. Skills are prompts that define what to look for: security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.
+
+Skills follow the [agentskills.io](https://agentskills.io) specification. They're markdown files with a prompt that tells the AI what to look for. You can use community skills, write your own, or combine both.
+
+- Docs: https://warden.sentry.dev
+- GitHub: https://github.com/getsentry/warden
+- npm: https://www.npmjs.com/package/@sentry/warden
+
+## How It Works
+
+Every time you run Warden, it:
+
+1. Identifies what changed (files, hunks, or entire directories)
+2. Matches changes against configured triggers
+3. Runs the appropriate skills against matching code
+4. Reports findings with severity, location, and optional fixes
+
+Warden works in two contexts:
+
+- **Locally** - Review changes before you push, get instant feedback
+- **In CI** - Automatically review pull requests, post findings as comments
+
+## Quick Start
+
+### Install
+
+```bash
+# npm
+npm install -g @sentry/warden
+
+# pnpm
+pnpm add -g @sentry/warden
+
+# bun
+bun add -g @sentry/warden
+```
+
+### Initialize
+
+```bash
+warden init
+```
+
+Creates `warden.toml` (configuration) and `.github/workflows/warden.yml` (GitHub Actions workflow).
+
+### Add a Skill
+
+```bash
+warden add vercel-react-best-practices --remote vercel-labs/agent-skills
+```
+
+### Run Locally
+
+```bash
+warden
+```
+
+### Authentication
+
+Warden uses your Claude Code subscription if you're logged in. Otherwise, set an API key:
+
+```bash
+# Option 1: Claude Code subscription (if logged in)
+claude login
+
+# Option 2: API key
+export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Get an API key from https://console.anthropic.com/. `ANTHROPIC_API_KEY` is also accepted as a fallback. CI/CD environments require an API key.
+
+## CLI Commands
+
+### warden
+
+```
+warden [target] [options]
+```
+
+Run code analysis on the specified target. If no target is given, analyzes uncommitted changes.
+
+```bash
+warden                     # Analyze uncommitted changes (default)
+warden src/auth.ts         # Analyze specific file
+warden src/api/            # Analyze a directory
+warden HEAD~3..HEAD        # Analyze changes in a git range
+warden main..HEAD          # Analyze all commits not on main
+```
+
+### warden init
+
+```
+warden init [options]
+```
+
+Initialize Warden in your project. Creates a configuration file and GitHub workflow.
+
+- `-f, --force` - Overwrite existing files
+
+### warden add
+
+```
+warden add [skill-name] [options]
+```
+
+Add a skill trigger to your configuration.
+
+- `skill-name` - Name of the skill to add (optional, interactive if omitted)
+- `--remote <owner/repo[@sha]>` - Install skill from a GitHub repository
+- `--list` - List available skills
+
+```bash
+warden add                     # Interactive mode
+warden add security-review     # Add local skill
+warden add --list              # List available skills
+warden add --remote getsentry/warden-skills --skill security-review
+warden add --remote getsentry/warden-skills@abc123 --skill api-review  # Pinned to commit
+```
+
+### warden sync
+
+```
+warden sync [remote]
+```
+
+Update cached remote skills. Refreshes unpinned skills to their latest versions.
+
+- `remote` - Specific remote to sync (e.g., `owner/repo`). If omitted, syncs all.
+
+### warden setup-app
+
+```
+warden setup-app [options]
+```
+
+Create a GitHub App for Warden. Gives you a custom bot identity instead of the generic "github-actions" user.
+
+- `--org <name>` - Create the app for an organization
+- `--port <number>` - Local server port (default: 3000)
+- `--timeout <sec>` - Callback timeout in seconds (default: 300)
+- `--name <string>` - Custom app name (default: Warden)
+- `--no-open` - Print URL instead of opening browser
+
+### Global Options
+
+- `--skill <name-or-path>` - Run a specific skill by name or path
+- `--fix` - Automatically apply suggested fixes
+- `--json` - Output results as JSON
+- `--fail-on <level>` - Exit with error code if findings meet severity: `critical`, `high`, `medium`, `low`
+- `--config <path>` - Path to config file (default: `warden.toml`)
+- `--verbose` - Show detailed output
+- `-m, --model <model>` - Model to use (fallback when not set in config)
+- `-o, --output <path>` - Write full run output to a JSONL file
+- `--report-on <severity>` - Only show findings at or above this severity
+- `--parallel <n>` - Max concurrent trigger/skill executions (default: 4)
+- `--quiet` - Errors and final summary only
+- `-vv` - Show debug info (token counts, latencies)
+- `--color / --no-color` - Override color detection
+- `--git` - Treat ambiguous targets as git refs instead of file paths
+- `--log` - Non-TTY output with timestamps
+- `--debug` - Debug-level output (implies verbose)
+- `--offline` - Use cached remote skills only, skip network fetches
+- `--fail-fast` - Stop after first finding
+
+## Configuration
+
+Warden is configured via `warden.toml` in your repository root.
+
+```toml
+version = 1
+
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+```
+
+### Skills
+
+Skills define what Warden analyzes and when.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Skill name or path |
+| `paths` | Files to include (glob patterns) |
+| `ignorePaths` | Files to exclude (glob patterns) |
+| `failOn` | Minimum severity to fail: `critical`, `high`, `medium`, `low`, `info`, `off` |
+| `reportOn` | Minimum severity to report |
+| `remote` | GitHub repository for remote skills: `owner/repo` or `owner/repo@sha` |
+| `model` | Model override |
+| `maxTurns` | Max agentic turns per hunk |
+
+### Triggers
+
+Triggers define when a skill runs. Each skill can have one or more triggers. Triggers can override any output setting.
+
+| Field | Description |
+|-------|-------------|
+| `type` | `pull_request`, `local`, `schedule` |
+| `actions` | Event actions for `pull_request` type |
+| `failOn` | Override failure threshold |
+| `reportOn` | Override reporting threshold |
+| `maxFindings` | Override max findings |
+| `reportOnSuccess` | Override report-on-success behavior |
+| `requestChanges` | Override REQUEST_CHANGES behavior |
+| `failCheck` | Override check failure behavior |
+| `model` | Override model |
+| `maxTurns` | Override max agentic turns |
+
+Pull request actions: `opened`, `synchronize`, `reopened`, `closed`.
+
+### Filters
+
+Control which files are analyzed using glob patterns at the skill level.
+
+```toml
+[[skills]]
+name = "api-review"
+paths = ["src/api/**/*.ts"]
+ignorePaths = ["**/*.test.ts"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+```
+
+### Output
+
+Control how findings are reported. Set at the skill level or in defaults.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `failOn` | - | Minimum severity to fail |
+| `reportOn` | - | Minimum severity to report |
+| `maxFindings` | - | Maximum findings to report |
+| `reportOnSuccess` | `false` | Post comment when no findings |
+| `requestChanges` | `false` | Use REQUEST_CHANGES review event |
+| `failCheck` | `false` | Fail the check run |
+
+### Defaults
+
+Default settings inherited by all skills. Individual skills can override any setting.
+
+```toml
+[defaults]
+model = "claude-sonnet-4-20250514"
+maxTurns = 30
+failOn = "high"
+reportOn = "medium"
+requestChanges = false
+failCheck = false
+ignorePaths = ["**/vendor/**", "**/node_modules/**"]
+```
+
+Model precedence: trigger > skill > defaults > CLI flag (`-m`) > env var (`WARDEN_MODEL`). Most specific wins.
+
+### Chunking
+
+Control how files are split for analysis.
+
+File pattern modes:
+
+- `per-hunk` - Analyze each diff hunk separately (default)
+- `whole-file` - Analyze entire file as one chunk
+- `skip` - Skip the file entirely
+
+Coalescing (merge nearby hunks for better context):
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `true` | Enable hunk coalescing |
+| `maxGapLines` | `30` | Max lines between hunks to merge |
+| `maxChunkSize` | `8000` | Target max chunk size in characters |
+
+```toml
+[defaults.chunking]
+
+[[defaults.chunking.filePatterns]]
+pattern = "**/pnpm-lock.yaml"
+mode = "skip"
+
+[[defaults.chunking.filePatterns]]
+pattern = "**/migrations/*.sql"
+mode = "whole-file"
+
+[defaults.chunking.coalesce]
+enabled = true
+maxGapLines = 50
+maxChunkSize = 10000
+```
+
+### Schedule Triggers
+
+Run on a cron schedule instead of PR events. Requires `paths` to specify which files to scan.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `issueTitle` | `"Warden: {name}"` | Title for the tracking issue |
+| `createFixPR` | `false` | Create PR with fixes when available |
+| `fixBranchPrefix` | `warden-fix` | Branch prefix for fix PRs |
+
+```toml
+[[skills]]
+name = "security-review"
+paths = ["src/**/*.ts"]
+
+[[skills.triggers]]
+type = "schedule"
+createFixPR = true
+```
+
+### Skill References
+
+Skills can be referenced in multiple ways:
+
+```toml
+# By name (resolved from .agents/skills/ or .claude/skills/)
+[[skills]]
+name = "security-review"
+
+# By relative path
+[[skills]]
+name = "./custom-skills/my-review"
+
+# Remote skill (unpinned - checks for updates every 24h)
+[[skills]]
+name = "security-review"
+remote = "getsentry/warden-skills"
+
+# Remote skill (pinned to commit - cached permanently)
+[[skills]]
+name = "security-review"
+remote = "getsentry/warden-skills@abc123def"
+```
+
+Resolution order:
+
+1. Remote repository (if `remote` field is specified)
+2. Direct path (if skill contains `/`, `\`, or starts with `.`)
+3. Conventional directories: `.agents/skills/`, `.claude/skills/`
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key. Required for CI/CD. Locally, use Claude Code subscription via `claude login`. |
+| `ANTHROPIC_API_KEY` | Fallback if `WARDEN_ANTHROPIC_API_KEY` is not set |
+| `WARDEN_MODEL` | Model override |
+| `WARDEN_SKILL_CACHE_TTL` | Cache duration for unpinned remote skills. Default: 24h |
+
+## Creating Skills
+
+Skills are markdown files that tell Warden what to look for. They follow the [agentskills.io](https://agentskills.io) specification.
+
+### Directory Structure
+
+```
+.agents/skills/skill-name/SKILL.md   # Primary (recommended)
+.claude/skills/skill-name/SKILL.md   # Backup (Claude Code convention)
+```
+
+### SKILL.md Format
+
+A skill has YAML frontmatter for metadata and markdown for the prompt:
+
+```markdown
+---
+name: security-review
+description: Review code for security vulnerabilities
+allowed-tools: Read Grep Glob
+---
+
+Review the code for security issues including:
+- SQL injection and parameter binding
+- XSS vulnerabilities in user input handling
+- Hardcoded secrets or credentials
+- Insecure cryptographic practices
+- Path traversal vulnerabilities
+
+Focus on issues in the changed code. For each issue found, report:
+- The specific vulnerability type
+- Why it's a problem
+- How to fix it
+```
+
+### Frontmatter Fields
+
+| Field | Description |
+|-------|-------------|
+| `name` | Skill identifier (must match directory name) |
+| `description` | Brief description of what the skill does |
+| `allowed-tools` | Space-separated list of tools the skill can use |
+
+### Available Tools
+
+`Read`, `Grep`, `Glob`, `Edit`, `Write`, `Bash`, `WebFetch`, `WebSearch`
+
+Most review skills only need `Read`, `Grep`, and `Glob` for exploring context.
+
+**Note:** Warden restricts execution to read-only tools (`Read` and `Grep`) regardless of what the skill declares in `allowed-tools`. This ensures skills cannot modify your codebase during analysis.
+
+### What Makes a Good Skill
+
+- **Specific scope** - One skill, one concern. "Security review" not "code quality"
+- **Clear criteria** - What counts as an issue? What severity?
+- **Actionable output** - Findings should include how to fix
+- **Examples** - Show what good and bad code looks like
+
+## Pull Request Reviews
+
+Warden runs automatically on pull requests via GitHub Actions, posting findings as review comments.
+
+### Organization Setup
+
+Add these as organization or repository secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `WARDEN_ANTHROPIC_API_KEY` | Your Anthropic API key |
+| `WARDEN_MODEL` *(optional)* | Override the default model |
+| `WARDEN_SENTRY_DSN` *(optional)* | Sentry DSN for telemetry |
+
+### Repository Setup
+
+```bash
+npx warden init
+```
+
+Creates `warden.toml` and `.github/workflows/warden.yml`.
+
+### What Happens on a PR
+
+1. PR is opened or updated
+2. GitHub Actions runs the Warden workflow
+3. Warden analyzes changed files against configured triggers
+4. Findings are posted as inline review comments
+5. If `requestChanges` is enabled, the review requests changes when findings exceed `failOn`
+6. If `failCheck` is enabled, the check run fails when findings exceed `failOn`
+
+### GitHub Actions Workflow
+
+```yaml
+name: Warden
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: getsentry/warden@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### Action Inputs
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `github-token` | `GITHUB_TOKEN` | GitHub token for posting comments |
+| `anthropic-api-key` | - | Anthropic API key (falls back to `WARDEN_ANTHROPIC_API_KEY`) |
+| `config-path` | `warden.toml` | Path to config file |
+| `fail-on` | - | Minimum severity to fail the check |
+| `report-on` | - | Minimum severity to post comments |
+| `max-findings` | `50` | Maximum findings to report |
+| `request-changes` | `false` | Whether to request changes on PR reviews |
+| `fail-check` | `false` | Whether to fail the check run |
+| `parallel` | `5` | Maximum concurrent trigger executions |
+
+## GitHub App (Optional)
+
+Create a GitHub App for branded comments that appear from "Warden" with a custom avatar instead of "github-actions".
+
+```bash
+warden setup-app --org your-org
+```
+
+Add these organization secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `WARDEN_APP_ID` | App ID from the setup command output |
+| `WARDEN_PRIVATE_KEY` | Private key (full PEM contents) |
+
+Then update your workflow to use the app token:
+
+```yaml
+- uses: actions/create-github-app-token@v1
+  id: app-token
+  with:
+    app-id: ${{ secrets.WARDEN_APP_ID }}
+    private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
+
+- uses: getsentry/warden@v0
+  with:
+    github-token: ${{ steps.app-token.outputs.token }}
+```
+
+## Agent Skill
+
+Warden ships with an [agentskills.io](https://agentskills.io) skill that lets AI coding agents run Warden on your behalf.
+
+### Install
+
+```bash
+# skills installer (Claude Code, OpenCode, Codex, Cursor)
+npx skills add getsentry/warden
+
+# Claude Code marketplace
+claude plugin marketplace add getsentry/warden
+claude plugin install warden@warden
+```
+
+### What It Does
+
+The `/warden` skill teaches agents how to:
+
+- Run Warden against uncommitted changes before committing
+- Interpret findings and fix the code
+- Configure skills in `warden.toml`
+- Create custom skills
+
+### Usage
+
+In any agent that supports the spec:
+
+```
+> Use /warden before committing
+```
+
+The agent runs `warden`, reads the output, fixes what it finds, and commits clean code.
