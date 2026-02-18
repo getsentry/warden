@@ -160,6 +160,7 @@ async function outputResultsAndHandleFixes(
   const fixableFindings = collectFixableFindings(filteredReports);
   const willStepThrough = fixableFindings.length > 0
     && !interrupted.value
+    && !failFastAborted
     && !options.json
     && !options.fix
     && reporter.verbosity !== Verbosity.Quiet
