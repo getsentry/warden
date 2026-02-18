@@ -22,7 +22,6 @@ import {
   pluralize,
   writeJsonlReport,
   readJsonlLog,
-  renderJsonlReport,
   getRepoLogPath,
   generateRunId,
   type SkillTaskOptions,
@@ -188,8 +187,8 @@ async function outputResultsAndHandleFixes(
   // Output results
   reporter.blank();
   if (options.json) {
-    // --json: write filtered JSONL to stdout (respects --report-on)
-    process.stdout.write(renderJsonlReport(filteredReports, totalDuration, { runId, traceId }));
+    // --json: cat the JSONL log file to stdout (unfiltered, matches log file)
+    process.stdout.write(readJsonlLog(logPath));
   } else {
     // Suppress fix diffs in report when interactive step-through will show them
     console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
