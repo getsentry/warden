@@ -1,10 +1,79 @@
-# Comment Lifecycle
+# GitHub Comments
 
-How Warden manages PR comments throughout their lifecycle: posting, deduplication, attribution, and resolution.
+How Warden formats and manages PR comments: format conventions, deduplication, attribution, and resolution.
 
-## User Stories
+## Comment Format
 
-### Avoiding Comment Noise
+### Inline PR Comment
+
+```
+**Title stating what is broken or wrong**
+
+2-4 sentence description. Root cause first, user-visible consequence last.
+
+<details><summary>Also found at N additional locations</summary>
+
+- `path/to/file.ts:10-15`
+- `path/to/other.ts:42`
+
+</details>
+
+<sub>Identified by Warden [skill-name] · FINDING-ID</sub>
+<!-- warden:v1:path:line:hash -->
+```
+
+- Title: bold, no emoji, no ID, no confidence, no severity
+- Severity is communicated via GitHub check annotation level (failure/warning/notice)
+- Footer: skill name in brackets, finding ID after separator
+- Additional locations in collapsible details block
+
+### Summary Comment Finding Item
+
+```
+- `FINDING-ID` **Title** (L10) · severity: Description
+```
+
+### Summary Severity Table
+
+```
+| Severity | Count |
+|----------|-------|
+| Critical | 2 |
+| High | 5 |
+```
+
+Capitalize severity labels, no emoji.
+
+### Review Body (Locationless Findings)
+
+```
+**Title**
+
+Description
+
+<sub>Identified by Warden [skill-name]</sub>
+```
+
+### Attribution Formats
+
+Current format:
+```
+<sub>Identified by Warden [skill1], [skill2] · FINDING-ID</sub>
+```
+
+Legacy formats (still parsed for backward compat):
+```
+<sub>Identified by Warden via `skill1`, `skill2` · severity, confidence</sub>
+<sub>warden: skill1, skill2</sub>
+```
+
+---
+
+## Comment Lifecycle
+
+### User Stories
+
+#### Avoiding Comment Noise
 
 **As a developer**, I don't want to see the same issue flagged multiple times when:
 - Warden already posted about it on a previous push
@@ -13,7 +82,7 @@ How Warden manages PR comments throughout their lifecycle: posting, deduplicatio
 
 **Expected behavior**: One comment per issue, regardless of how many times or ways it was detected.
 
-### Knowing Who Found What
+#### Knowing Who Found What
 
 **As a developer**, I want to know which skills or reviewers identified an issue so I can:
 - Understand different perspectives on the same problem
@@ -22,7 +91,7 @@ How Warden manages PR comments throughout their lifecycle: posting, deduplicatio
 
 **Expected behavior**: Comments show attribution for all skills that detected the issue.
 
-### Cleaning Up Fixed Issues
+#### Cleaning Up Fixed Issues
 
 **As a developer**, when I fix an issue that Warden flagged, I want the comment resolved automatically so:
 - My PR doesn't have stale feedback
@@ -31,7 +100,7 @@ How Warden manages PR comments throughout their lifecycle: posting, deduplicatio
 
 **Expected behavior**: Fixed issues are marked resolved; unfixed issues remain visible.
 
-### Clearing Review Block After Fixes
+#### Clearing Review Block After Fixes
 
 **As a developer**, when I address all blocking issues Warden found, I want:
 - The "changes requested" status cleared
@@ -68,8 +137,8 @@ When Warden detects an issue it already posted about:
 
 **Attribution update example**:
 ```
-Before: <sub>warden: security-review</sub>
-After:  <sub>warden: security-review, code-quality</sub>
+Before: <sub>Identified by Warden [security-review] · ABC-123</sub>
+After:  <sub>Identified by Warden [security-review], [code-quality] · ABC-123</sub>
 ```
 
 ### Same Finding from Others
@@ -186,7 +255,7 @@ Run 2: code-quality also detects it
 
 Result:
 - One comment at db.ts:42
-- Attribution: "warden: security-review, code-quality"
+- Attribution: "Identified by Warden [security-review], [code-quality] · SQL-001"
 ```
 
 ### Human Found It First

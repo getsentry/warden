@@ -112,7 +112,8 @@ export function parseMarker(body: string): WardenMarker | null {
 
 /**
  * Parse title and description from a Warden comment body.
- * Expected format: **:emoji: Title**\n\nDescription
+ * Expected format: **:emoji: Title**\n\nDescription or **Title**\n\nDescription
+ * Strips legacy [ID] prefix from titles for backward compat.
  */
 export function parseWardenComment(body: string): { title: string; description: string } | null {
   // Match the title pattern: **:emoji: Title** or **Title**
@@ -122,7 +123,8 @@ export function parseWardenComment(body: string): { title: string; description: 
     return null;
   }
 
-  const title = titleMatch[1].trim();
+  // Strip legacy [ID] prefix (e.g., "[2K5-29B] Title" → "Title")
+  const title = titleMatch[1].replace(/^\[[A-Z0-9-]+\]\s*/, '').trim();
 
   // Get the description - everything after the title until the first ---
   const titleEnd = body.indexOf('**', body.indexOf('**') + 2) + 2;
@@ -136,31 +138,42 @@ export function parseWardenComment(body: string): { title: string; description: 
 
 /**
  * Check if a comment body is a Warden-generated comment.
- * Supports both old format (<sub>warden: skill</sub>) and new format (<sub>Identified by Warden via `skill`</sub>).
+ * Supports old format (<sub>warden: skill</sub>), via format (<sub>Identified by Warden via `skill`</sub>),
+ * and new bracket format (<sub>Identified by Warden [skill]</sub>).
  */
 export function isWardenComment(body: string): boolean {
-  return body.includes('<sub>warden:') || body.includes('<sub>Identified by Warden via') || body.includes('<!-- warden:v1:');
+  return (
+    body.includes('<sub>warden:') ||
+    body.includes('<sub>Identified by Warden via') ||
+    body.includes('<sub>Identified by Warden [') ||
+    body.includes('<!-- warden:v1:')
+  );
 }
 
 /**
  * Parse skill names from a Warden comment's attribution line.
- * Supports both old format: "<sub>warden: skill1, skill2</sub>"
- * And new format: "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
+ * Supports three formats:
+ * - Old: "<sub>warden: skill1, skill2</sub>"
+ * - Via: "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
+ * - Bracket: "<sub>Identified by Warden [skill1], [skill2] · id</sub>"
  */
 export function parseWardenSkills(body: string): string[] {
-  // Try new format first: <sub>Identified by Warden via `skill1`, `skill2` · severity</sub>
-  // Extract the portion between "via " and " ·" (or end of sub tag)
-  const newFormatMatch = body.match(/<sub>Identified by Warden via ([^·<]+)/);
-  if (newFormatMatch?.[1]) {
-    // Extract all backtick-quoted skill names
-    const skillMatches = newFormatMatch[1].matchAll(/`([^`]+)`/g);
-    const skills: string[] = [];
-    for (const m of skillMatches) {
-      if (m[1]) skills.push(m[1]);
-    }
-    if (skills.length > 0) {
-      return skills;
-    }
+  // Try bracket format: <sub>Identified by Warden [skill1], [skill2] · id</sub>
+  const bracketMatch = body.match(/<sub>Identified by Warden ((?:\[[^\]]+\](?:, )?)+)/);
+  if (bracketMatch?.[1]) {
+    const skills = [...bracketMatch[1].matchAll(/\[([^\]]+)\]/g)]
+      .map((m) => m[1])
+      .filter((s): s is string => s !== undefined);
+    if (skills.length > 0) return skills;
+  }
+
+  // Try via format: <sub>Identified by Warden via `skill1`, `skill2` · severity</sub>
+  const viaMatch = body.match(/<sub>Identified by Warden via ([^·<]+)/);
+  if (viaMatch?.[1]) {
+    const skills = [...viaMatch[1].matchAll(/`([^`]+)`/g)]
+      .map((m) => m[1])
+      .filter((s): s is string => s !== undefined);
+    if (skills.length > 0) return skills;
   }
 
   // Fall back to old format: <sub>warden: skill1, skill2</sub>
@@ -177,8 +190,10 @@ export function parseWardenSkills(body: string): string[] {
 /**
  * Update a Warden comment body to add a new skill to the attribution.
  * Old format: Changes "<sub>warden: skill1</sub>" to "<sub>warden: skill1, skill2</sub>"
- * New format: Changes "<sub>Identified by Warden via `skill1` · severity</sub>"
+ * Via format: Changes "<sub>Identified by Warden via `skill1` · severity</sub>"
  *             to "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
+ * Bracket format: Changes "<sub>Identified by Warden [skill1] · id</sub>"
+ *                 to "<sub>Identified by Warden [skill1], [skill2] · id</sub>"
  * Returns null if skill is already listed or if no attribution tag exists.
  */
 export function updateWardenCommentBody(body: string, newSkill: string): string | null {
@@ -194,9 +209,21 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
     return null;
   }
 
-  // Check if it's the new format
-  const newFormatMatch = body.match(/<sub>Identified by Warden via `[^`]+`/);
-  if (newFormatMatch) {
+  // Check if it's the bracket format: <sub>Identified by Warden [skill] · id</sub>
+  const bracketFormatMatch = body.match(/<sub>Identified by Warden \[[^\]]+\]/);
+  if (bracketFormatMatch) {
+    const existingSkillsFormatted = existingSkills.map((s) => `[${s}]`).join(', ');
+    const subTagMatch = body.match(/<sub>Identified by Warden ((?:\[[^\]]+\](?:, )?)+)(.*?)<\/sub>/);
+    const suffix = subTagMatch?.[2] || '';
+    return body.replace(
+      /<sub>Identified by Warden [^<]+<\/sub>/,
+      () => `<sub>Identified by Warden ${existingSkillsFormatted}, [${newSkill}]${suffix}</sub>`
+    );
+  }
+
+  // Check if it's the via format
+  const viaFormatMatch = body.match(/<sub>Identified by Warden via `[^`]+`/);
+  if (viaFormatMatch) {
     const existingSkillsFormatted = existingSkills.map((s) => `\`${s}\``).join(', ');
     // Extract the suffix (metadata) starting from the · separator, not from the skill list
     const subTagMatch = body.match(/<sub>Identified by Warden via ([^<]+)<\/sub>/);

@@ -69,10 +69,10 @@ describe('renderSkillReport', () => {
     const result = renderSkillReport(report);
 
     expect(result.review).toBeDefined();
-    expect(result.review!.comments[0]!.body).toContain('<sub>Identified by Warden via `code-review` · medium</sub>');
+    expect(result.review!.comments[0]!.body).toContain('<sub>Identified by Warden [code-review] · f1</sub>');
   });
 
-  it('includes confidence in attribution footnote when present', () => {
+  it('does not include confidence in attribution footnote', () => {
     const report: SkillReport = {
       ...baseReport,
       skill: 'security-review',
@@ -95,8 +95,9 @@ describe('renderSkillReport', () => {
 
     expect(result.review).toBeDefined();
     expect(result.review!.comments[0]!.body).toContain(
-      '<sub>Identified by Warden via `security-review` · high, high confidence</sub>'
+      '<sub>Identified by Warden [security-review] · f1</sub>'
     );
+    expect(result.review!.comments[0]!.body).not.toContain('confidence');
   });
 
   it('includes deduplication marker in comments', () => {
@@ -735,7 +736,7 @@ describe('renderSkillReport', () => {
     expect(result.review!.comments).toHaveLength(0);
     expect(result.review!.body).toContain('General Issue');
     expect(result.review!.body).toContain('Applies to whole project');
-    expect(result.review!.body).toContain('Identified by Warden via `security-review`');
+    expect(result.review!.body).toContain('Identified by Warden [security-review]');
     expect(result.summaryComment).toContain('General Issue');
     expect(result.summaryComment).toContain('General');
   });
@@ -1274,10 +1275,10 @@ describe('renderFindingsBody', () => {
 
     const body = renderFindingsBody(findings, 'security-review');
 
-    expect(body).toContain(':warning: **[f1] SQL Injection**');
+    expect(body).toContain('**SQL Injection**');
     expect(body).toContain('(`src/db.ts:42`)');
     expect(body).toContain('User input in query');
-    expect(body).toContain('<sub>Identified by Warden via `security-review`</sub>');
+    expect(body).toContain('<sub>Identified by Warden [security-review]</sub>');
   });
 
   it('renders findings without location', () => {
@@ -1292,12 +1293,12 @@ describe('renderFindingsBody', () => {
 
     const body = renderFindingsBody(findings, 'code-review');
 
-    expect(body).toContain(':orange_circle: **[f1] General Issue**');
+    expect(body).toContain('**General Issue**');
     expect(body).not.toContain('(`');
     expect(body).toContain('Applies broadly');
   });
 
-  it('includes confidence when present', () => {
+  it('does not include confidence in body', () => {
     const findings = [
       {
         id: 'f1',
@@ -1310,7 +1311,8 @@ describe('renderFindingsBody', () => {
 
     const body = renderFindingsBody(findings, 'test-skill');
 
-    expect(body).toContain('(high confidence)');
+    expect(body).not.toContain('confidence');
+    expect(body).toContain('**Critical Bug**');
   });
 
   it('renders multiple findings', () => {

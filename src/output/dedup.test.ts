@@ -105,6 +105,35 @@ No input validation on user data.
     });
   });
 
+  it('strips legacy [ID] prefix from title', () => {
+    const body = `**:warning: [2K5-29B] wasFailFastAborted checks wrong controller**
+
+The function checks abortController.signal.aborted.
+
+---
+<sub>warden: notseer</sub>`;
+
+    const parsed = parseWardenComment(body);
+    expect(parsed).toEqual({
+      title: 'wasFailFastAborted checks wrong controller',
+      description: 'The function checks abortController.signal.aborted.',
+    });
+  });
+
+  it('parses new format comment without emoji or ID prefix', () => {
+    const body = `**wasFailFastAborted never detects fail-fast abort**
+
+The function checks the wrong signal.
+
+<sub>Identified by Warden [notseer] · 2K5-29B</sub>`;
+
+    const parsed = parseWardenComment(body);
+    expect(parsed).toEqual({
+      title: 'wasFailFastAborted never detects fail-fast abort',
+      description: 'The function checks the wrong signal.\n\n<sub>Identified by Warden [notseer] · 2K5-29B</sub>',
+    });
+  });
+
   it('returns null for non-Warden comment', () => {
     const body = 'This is a regular comment without the expected format.';
     expect(parseWardenComment(body)).toBeNull();
@@ -122,8 +151,13 @@ describe('isWardenComment', () => {
     expect(isWardenComment(body)).toBe(true);
   });
 
-  it('returns true for new format attribution', () => {
+  it('returns true for via format attribution', () => {
     const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill\` · high</sub>`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
+  it('returns true for bracket format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [skill] · ABC-123</sub>`;
     expect(isWardenComment(body)).toBe(true);
   });
 
@@ -380,6 +414,21 @@ describe('parseWardenSkills', () => {
     const body = `<sub>Identified by Warden via \`skill1\`,  \`skill2\`,\`skill3\` · medium</sub>`;
     expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
   });
+
+  it('parses single skill from bracket format', () => {
+    const body = `<sub>Identified by Warden [notseer] · ABC-123</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from bracket format', () => {
+    const body = `<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('parses bracket format with three skills', () => {
+    const body = `<sub>Identified by Warden [skill1], [skill2], [skill3] · XYZ-789</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
 });
 
 describe('updateWardenCommentBody', () => {
@@ -428,6 +477,30 @@ describe('updateWardenCommentBody', () => {
     expect(result).toContain('<sub>Identified by Warden via `skill1`, `skill2`, `skill3` · high</sub>');
     // Ensure no duplication - skill2 should appear exactly once
     expect(result!.match(/`skill2`/g)).toHaveLength(1);
+  });
+
+  it('adds new skill to bracket format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [skill1] · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>');
+  });
+
+  it('returns null if skill already listed in bracket format', () => {
+    const body = `<sub>Identified by Warden [skill1] · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('preserves finding ID in bracket format', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [notseer] · 2K5-29B</sub>`;
+    const result = updateWardenCommentBody(body, 'security-review');
+    expect(result).toContain('<sub>Identified by Warden [notseer], [security-review] · 2K5-29B</sub>');
+  });
+
+  it('adds skill to bracket format with multiple existing skills', () => {
+    const body = `<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill3');
+    expect(result).toContain('<sub>Identified by Warden [skill1], [skill2], [skill3] · ABC-123</sub>');
   });
 });
 

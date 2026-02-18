@@ -61,8 +61,8 @@ Full schema:
       "id": "unique-identifier",
       "severity": "critical|high|medium|low|info",
       "confidence": "high|medium|low",
-      "title": "Short descriptive title",
-      "description": "Detailed explanation of the issue",
+      "title": "Assertive, impact-focused title stating what is broken or wrong (e.g. 'wasFailFastAborted never detects fail-fast abort')",
+      "description": "2-4 concise sentences. Start with the root cause, end with the user-visible consequence.",
       "location": {
         "path": "path/to/file.ts",
         "startLine": 10,
@@ -85,7 +85,7 @@ Requirements:
 - "suggestedFix" is optional - only include when you can provide a complete, correct fix **to the file being analyzed**. Omit suggestedFix if:
   - The fix would be incomplete or you're uncertain about the correct solution
   - The fix requires changes to a different file or a new file (describe the fix in the description field instead)
-- Keep descriptions SHORT (1-2 sentences max) - avoid lengthy explanations
+- Keep descriptions concise (2-4 sentences). Start with the root cause, end with the user-visible consequence.
 - Focus your analysis on the code changes in the hunk. Surrounding context and tool results are for understanding only -- all findings must reference lines within the hunk range.
 </output_format>`,
   ];

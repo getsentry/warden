@@ -1,17 +1,9 @@
 import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
 import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
-import { formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
+import { capitalize, formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
 import { generateContentHash, generateMarker } from './dedup.js';
 import { escapeHtml } from '../utils/index.js';
-
-const SEVERITY_EMOJI: Record<Severity, string> = {
-  critical: ':rotating_light:',
-  high: ':warning:',
-  medium: ':orange_circle:',
-  low: ':large_blue_circle:',
-  info: ':information_source:',
-};
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
   const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, failOn, requestChanges, checkRunUrl, totalFindings, allFindings } = options;
@@ -75,8 +67,7 @@ function renderReview(
     if (!location) {
       throw new Error('Unexpected: finding without location in filtered list');
     }
-    const confidenceNote = finding.confidence ? ` (${finding.confidence} confidence)` : '';
-    let body = `**${SEVERITY_EMOJI[finding.severity]} [${finding.id}] ${escapeHtml(finding.title)}**${confidenceNote}\n\n${escapeHtml(finding.description)}`;
+    let body = `**${escapeHtml(finding.title)}**\n\n${escapeHtml(finding.description)}`;
 
     if (includeSuggestions && finding.suggestedFix) {
       body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
@@ -95,9 +86,8 @@ function renderReview(
       body += '\n</details>';
     }
 
-    // Add attribution footnote with skill name, severity, and confidence
-    const confidenceSuffix = finding.confidence ? `, ${finding.confidence} confidence` : '';
-    body += `\n\n<sub>Identified by Warden via \`${report.skill}\` · ${finding.severity}${confidenceSuffix}</sub>`;
+    // Add attribution footnote with skill name and finding ID
+    body += `\n\n<sub>Identified by Warden [${report.skill}] · ${finding.id}</sub>`;
 
     // Add deduplication marker
     const contentHash = generateContentHash(finding.title, finding.description);
@@ -190,58 +180,47 @@ function renderSummaryComment(
 
   if (findings.length === 0) {
     lines.push('No findings to report.');
-    // Add link to full report if there are hidden findings
-    if (hiddenCount && hiddenCount > 0 && checkRunUrl) {
-      lines.push('');
-      lines.push(renderHiddenFindingsLink(hiddenCount, checkRunUrl));
-    }
-    // Add stats footer even when there are no findings
-    const statsLine = formatStatsCompact(report.durationMs, report.usage, report.auxiliaryUsage);
-    if (statsLine) {
-      lines.push('', '---', `<sub>${statsLine}</sub>`);
-    }
-    return lines.join('\n');
-  }
-
-  const counts = countBySeverity(findings);
-  lines.push('### Summary');
-  lines.push('');
-  lines.push(
-    `| Severity | Count |
+  } else {
+    const counts = countBySeverity(findings);
+    lines.push('### Summary');
+    lines.push('');
+    lines.push(
+      `| Severity | Count |
 |----------|-------|
 ${Object.entries(counts)
   .filter(([, count]) => count > 0)
   .sort(([a], [b]) => SEVERITY_ORDER[a as Severity] - SEVERITY_ORDER[b as Severity])
-  .map(([severity, count]) => `| ${SEVERITY_EMOJI[severity as Severity]} ${severity} | ${count} |`)
+  .map(([severity, count]) => `| ${capitalize(severity)} | ${count} |`)
   .join('\n')}`
-  );
-  lines.push('');
+    );
+    lines.push('');
 
-  lines.push('### Findings');
-  lines.push('');
+    lines.push('### Findings');
+    lines.push('');
 
-  if (groupByFile) {
-    const byFile = groupFindingsByFile(findings);
-    for (const [file, fileFindings] of Object.entries(byFile)) {
-      lines.push(`#### \`${file}\``);
-      lines.push('');
-      for (const finding of fileFindings) {
+    if (groupByFile) {
+      const byFile = groupFindingsByFile(findings);
+      for (const [file, fileFindings] of Object.entries(byFile)) {
+        lines.push(`#### \`${file}\``);
+        lines.push('');
+        for (const finding of fileFindings) {
+          lines.push(renderFindingItem(finding));
+        }
+        lines.push('');
+      }
+
+      const noLocation = findings.filter((f) => !f.location);
+      if (noLocation.length > 0) {
+        lines.push('#### General');
+        lines.push('');
+        for (const finding of noLocation) {
+          lines.push(renderFindingItem(finding));
+        }
+      }
+    } else {
+      for (const finding of findings) {
         lines.push(renderFindingItem(finding));
       }
-      lines.push('');
-    }
-
-    const noLocation = findings.filter((f) => !f.location);
-    if (noLocation.length > 0) {
-      lines.push('#### General');
-      lines.push('');
-      for (const finding of noLocation) {
-        lines.push(renderFindingItem(finding));
-      }
-    }
-  } else {
-    for (const finding of findings) {
-      lines.push(renderFindingItem(finding));
     }
   }
 
@@ -261,7 +240,7 @@ ${Object.entries(counts)
 }
 
 function formatLineRange(loc: { startLine: number; endLine?: number }): string {
-  if (loc.endLine) {
+  if (loc.endLine && loc.endLine !== loc.startLine) {
     return `L${loc.startLine}-${loc.endLine}`;
   }
   return `L${loc.startLine}`;
@@ -272,25 +251,22 @@ function renderFindingItem(finding: Finding): string {
   const extra = finding.additionalLocations?.length
     ? ` (+${finding.additionalLocations.length} more ${pluralize(finding.additionalLocations.length, 'location')})`
     : '';
-  const confidence = finding.confidence ? ` [${finding.confidence} confidence]` : '';
-  return `- ${SEVERITY_EMOJI[finding.severity]} \`${finding.id}\` **${escapeHtml(finding.title)}**${location}${extra}${confidence}: ${escapeHtml(finding.description)}`;
+  return `- \`${finding.id}\` **${escapeHtml(finding.title)}**${location}${extra} · ${finding.severity}: ${escapeHtml(finding.description)}`;
 }
 
 /** Render findings as markdown for inclusion in a review body. */
 export function renderFindingsBody(findings: Finding[], skill: string): string {
   const lines: string[] = [];
   for (const finding of findings) {
-    const emoji = SEVERITY_EMOJI[finding.severity];
     const location = finding.location
       ? ` (\`${finding.location.path}:${finding.location.startLine}\`)`
       : '';
-    const confidence = finding.confidence ? ` (${finding.confidence} confidence)` : '';
-    lines.push(`${emoji} **[${finding.id}] ${escapeHtml(finding.title)}**${location}${confidence}`);
+    lines.push(`**${escapeHtml(finding.title)}**${location}`);
     lines.push('');
     lines.push(escapeHtml(finding.description));
     lines.push('');
   }
-  lines.push(`<sub>Identified by Warden via \`${skill}\`</sub>`);
+  lines.push(`<sub>Identified by Warden [${skill}]</sub>`);
   return lines.join('\n');
 }
 

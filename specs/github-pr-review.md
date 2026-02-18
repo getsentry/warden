@@ -53,7 +53,7 @@ Dismissal clears Warden's "changes requested" status so the PR can be merged wit
 - `failOn` must be configured (dismissal is meaningless without a threshold)
 - Must use a GitHub App token (PAT/GITHUB_TOKEN cannot reliably identify previous reviews)
 
-See [Comment Lifecycle](comment-lifecycle.md) for details on how Warden tracks its previous review state.
+See [GitHub Comments](github-comments.md) for details on how Warden tracks its previous review state.
 
 ### Comment Filtering
 
@@ -86,11 +86,11 @@ When `reportOn` is more restrictive than `failOn`:
 ### Inline Comment Format
 
 Each inline comment includes:
-1. Severity emoji and title (bold)
-2. Confidence level (if provided)
-3. Description
-4. Suggested fix (if available, as GitHub suggestion block)
-5. Attribution footnote (`warden: <skill-name>`)
+1. Title (bold, no emoji or ID)
+2. Description
+3. Suggested fix (if available, as GitHub suggestion block)
+4. Additional locations (collapsible, if any)
+5. Attribution footnote (`Identified by Warden [skill-name] · finding-id`)
 6. Hidden deduplication marker
 
 ### Multi-line Findings

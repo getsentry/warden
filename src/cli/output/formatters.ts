@@ -3,6 +3,14 @@ import figures from 'figures';
 import type { Severity, Finding, FileChange, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 
 /**
+ * Capitalize the first letter of a string.
+ * @example capitalize('critical') // 'Critical'
+ */
+export function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
  * Pluralize a word based on count.
  * @example pluralize(1, 'file') // 'file'
  * @example pluralize(2, 'file') // 'files'
