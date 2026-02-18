@@ -98,14 +98,24 @@ function resolveConfigPath(options: CLIOptions, repoPath: string): string {
  * available even if the file write fails, so callers can use it for --json
  * output without reading back from disk.
  */
-function writeEmptyRunLog(repoPath: string, options?: { traceId?: string }): { logPath: string; content: string } {
+function writeEmptyRunLog(
+  repoPath: string,
+  opts?: { traceId?: string; outputPath?: string },
+): { logPath: string; content: string } {
   const runId = generateRunId();
   const logPath = getRepoLogPath(repoPath, runId);
-  const content = renderJsonlString([], 0, { runId, traceId: options?.traceId });
+  const content = renderJsonlString([], 0, { runId, traceId: opts?.traceId });
   try {
     writeJsonlContent(logPath, content);
   } catch (err) {
     console.warn(`Warning: Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (opts?.outputPath) {
+    try {
+      writeJsonlContent(opts.outputPath, content);
+    } catch (err) {
+      console.warn(`Warning: Failed to write output file: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
   return { logPath, content };
 }
@@ -323,10 +333,10 @@ async function runSkills(
   if (skillsToRun.length === 0) {
     const effectiveRepo = repoPath ?? cwd;
     if (options.json) {
-      const { content } = writeEmptyRunLog(effectiveRepo, { traceId: getTraceId() });
+      const { content } = writeEmptyRunLog(effectiveRepo, { traceId: getTraceId(), outputPath: options.output });
       process.stdout.write(content);
     } else {
-      writeEmptyRunLog(effectiveRepo, { traceId: getTraceId() });
+      writeEmptyRunLog(effectiveRepo, { traceId: getTraceId(), outputPath: options.output });
       reporter.warning('No triggers matched for the changed files');
       reporter.tip('Specify a skill explicitly: warden <target> --skill <name>');
     }
@@ -396,10 +406,10 @@ async function runFileMode(filePatterns: string[], options: CLIOptions, reporter
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const { content } = writeEmptyRunLog(cwd, { traceId: getTraceId() });
+      const { content } = writeEmptyRunLog(cwd, { traceId: getTraceId(), outputPath: options.output });
       process.stdout.write(content);
     } else {
-      writeEmptyRunLog(cwd, { traceId: getTraceId() });
+      writeEmptyRunLog(cwd, { traceId: getTraceId(), outputPath: options.output });
       reporter.blank();
       reporter.warning('No files matched the given patterns');
     }
@@ -480,10 +490,10 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       process.stdout.write(content);
     } else {
-      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       reporter.renderEmptyState('No changes found');
       reporter.blank();
     }
@@ -538,10 +548,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       process.stdout.write(content);
     } else {
-      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       const tip = !hasUncommittedChanges(repoPath)
         ? 'Specify a git ref: warden HEAD~3 --skill <name>'
         : undefined;
@@ -578,10 +588,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   if (triggersToRun.length === 0) {
     if (options.json) {
-      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       process.stdout.write(content);
     } else {
-      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       reporter.blank();
       if (options.skill) {
         reporter.warning(`No triggers matched for skill: ${options.skill}`);
@@ -680,10 +690,10 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 
   if (pullRequest.files.length === 0) {
     if (options.json) {
-      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       process.stdout.write(content);
     } else {
-      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
       const tip = 'Specify a git ref to analyze committed changes: warden main --skill <name>';
       reporter.renderEmptyState('No uncommitted changes found', tip);
       reporter.blank();
