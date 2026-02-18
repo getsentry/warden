@@ -131,7 +131,8 @@ export interface RunTasksOptions {
   mode: OutputMode;
   verbosity: Verbosity;
   concurrency: number;
-  failFast?: boolean;
+  /** Controller that fires when fail-fast detects a finding. Created by caller. */
+  failFastController?: AbortController;
 }
 
 /**
@@ -696,7 +697,7 @@ export async function runSkillTasks(
   options: RunTasksOptions,
   callbacks?: SkillProgressCallbacks
 ): Promise<SkillTaskResult[]> {
-  const { mode, verbosity, concurrency, failFast } = options;
+  const { mode, verbosity, concurrency, failFastController } = options;
 
   // Global semaphore gates file-level work across all skills.
   // All skills launch immediately so the UI shows them as "running",
@@ -704,9 +705,6 @@ export async function runSkillTasks(
   const semaphore = new Semaphore(concurrency);
 
   const effectiveCallbacks = callbacks ?? createDefaultCallbacks(tasks, mode, verbosity);
-
-  // Fail-fast: create a separate abort controller that fires when a finding is detected.
-  const failFastController = failFast ? new AbortController() : undefined;
 
   // Wrap onFileUpdate to detect findings and trigger fail-fast
   const wrappedCallbacks: SkillProgressCallbacks = failFastController

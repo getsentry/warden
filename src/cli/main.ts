@@ -48,11 +48,10 @@ export const abortController = new AbortController();
 export const interrupted = { value: false };
 
 /**
- * Detect whether fail-fast caused the abort (not a user interrupt).
+ * Fail-fast abort controller. Created once and shared across run modes.
+ * Signals when the first finding is detected (if --fail-fast is active).
  */
-function wasFailFastAborted(options: CLIOptions): boolean {
-  return options.failFast && !interrupted.value && abortController.signal.aborted;
-}
+let failFastController: AbortController | undefined;
 
 /**
  * Load environment variables from .env files in the given directory.
@@ -318,11 +317,12 @@ async function runSkills(
 
   // Run skills with Ink UI (TTY) or simple console output (non-TTY)
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
+  failFastController = options.failFast ? new AbortController() : undefined;
   const taskOptions = {
     mode: reporter.mode,
     verbosity: reporter.verbosity,
     concurrency,
-    failFast: options.failFast,
+    failFastController,
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
@@ -331,7 +331,7 @@ async function runSkills(
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, wasFailFastAborted(options));
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted);
 }
 
 /**
@@ -577,11 +577,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Run triggers with Ink UI (TTY) or simple console output (non-TTY)
   const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
+  failFastController = options.failFast ? new AbortController() : undefined;
   const taskOptions = {
     mode: reporter.mode,
     verbosity: reporter.verbosity,
     concurrency,
-    failFast: options.failFast,
+    failFastController,
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
@@ -590,7 +591,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, wasFailFastAborted(options));
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted);
 }
 
 /**

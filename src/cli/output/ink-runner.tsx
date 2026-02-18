@@ -239,7 +239,7 @@ export async function runSkillTasksWithInk(
   tasks: SkillTaskOptions[],
   options: RunTasksOptions
 ): Promise<SkillTaskResult[]> {
-  const { verbosity, concurrency, failFast } = options;
+  const { verbosity, concurrency, failFastController } = options;
 
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
     // No tasks or quiet mode - run without UI using global semaphore
@@ -253,12 +253,6 @@ export async function runSkillTasksWithInk(
   // Warnings are rendered via Ink's Static component so they appear above the
   // dynamic spinner area without corrupting it.
   const warnings: string[] = [];
-
-  // Print header before Ink starts
-  process.stderr.write('\x1b[1mSKILLS\x1b[0m\n');
-
-  // Fail-fast: create a separate abort controller that fires when a finding is detected.
-  const failFastController = failFast ? new AbortController() : undefined;
 
   // Track interrupt state for rendering in the Ink component
   let interrupted = false;
