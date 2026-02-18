@@ -23,7 +23,7 @@ import {
   type SkillState,
   type FileState,
 } from './tasks.js';
-import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot } from './formatters.js';
+import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot, pluralize } from './formatters.js';
 import { runPool, Semaphore } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
@@ -194,9 +194,6 @@ function printFileSummary(file: FileState): void {
     if (file.durationMs !== undefined) line += chalk.dim(`  ${formatDuration(file.durationMs)}`);
     if (file.usage !== undefined) line += chalk.dim(`  ${formatCost(file.usage.costUSD)}`);
     process.stderr.write(`${line}\n`);
-  } else if (file.status === 'skipped') {
-    const filename = truncate(file.filename, 50);
-    process.stderr.write(`  ${chalk.yellow(ICON_SKIPPED)} ${filename} ${chalk.dim('[skipped]')}\n`);
   }
 }
 
@@ -219,6 +216,10 @@ function printSkillSummary(skillStates: SkillState[]): void {
     if (skill.status === 'done' || skill.status === 'error') {
       for (const file of skill.files) {
         printFileSummary(file);
+      }
+      const skippedCount = skill.files.filter((f) => f.status === 'skipped').length;
+      if (skippedCount > 0) {
+        process.stderr.write(`  ${chalk.dim(`${skippedCount} ${pluralize(skippedCount, 'file')} skipped`)}\n`);
       }
     }
   }

@@ -262,6 +262,31 @@ describe('createDefaultCallbacks', () => {
       cb.onSkillComplete('t', makeReport());
       expect(errorSpy).not.toHaveBeenCalled();
     });
+
+    it('shows collapsed skipped file count in log mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'a.ts', { status: 'skipped' });
+      cb.onFileUpdate('my-trigger', 'b.ts', { status: 'skipped' });
+      cb.onFileUpdate('my-trigger', 'c.ts', { status: 'skipped' });
+      cb.onSkillComplete('my-trigger', makeReport());
+
+      const msgs = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string);
+      const skippedLine = msgs.find((m: string) => m.includes('files skipped'));
+      expect(skippedLine).toBeDefined();
+      expect(skippedLine).toContain('3 files skipped');
+    });
+
+    it('omits skipped count when no files were skipped in log mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onSkillComplete('my-trigger', makeReport());
+
+      const msgs = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string);
+      expect(msgs.some((m: string) => m.includes('skipped'))).toBe(false);
+    });
   });
 
   describe('onFileUpdate', () => {
@@ -333,15 +358,14 @@ describe('createDefaultCallbacks', () => {
       expect(errorSpy).not.toHaveBeenCalled();
     });
 
-    it('logs skipped message in log mode', () => {
+    it('tracks skipped files silently in log mode', () => {
       const tasks = [makeTask('my-trigger', 'code-scanner')];
       const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
 
       cb.onFileUpdate('my-trigger', 'src/api/auth.ts', { status: 'skipped' });
 
-      expect(errorSpy).toHaveBeenCalledTimes(1);
-      const msg = errorSpy.mock.calls[0]![0] as string;
-      expect(msg).toContain('code-scanner > src/api/auth.ts skipped');
+      // onFileUpdate itself is silent; count appears in onSkillComplete
+      expect(errorSpy).not.toHaveBeenCalled();
     });
 
     it('is silent for skipped status in TTY mode', () => {
@@ -386,6 +410,19 @@ describe('createDefaultCallbacks', () => {
       expect(errorSpy).toHaveBeenCalledTimes(1);
       const msg = errorSpy.mock.calls[0]![0] as string;
       expect(msg).toMatch(/\[.*\] warden: ERROR: code-scanner - Skill not found/);
+    });
+
+    it('shows collapsed skipped file count on error in log mode', () => {
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onFileUpdate('my-trigger', 'a.ts', { status: 'skipped' });
+      cb.onFileUpdate('my-trigger', 'b.ts', { status: 'skipped' });
+      cb.onSkillError('my-trigger', 'Abort');
+
+      expect(errorSpy).toHaveBeenCalledTimes(2);
+      const skippedMsg = errorSpy.mock.calls[1]![0] as string;
+      expect(skippedMsg).toContain('2 files skipped');
     });
   });
 

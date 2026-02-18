@@ -476,6 +476,9 @@ export function createDefaultCallbacks(
     return tasks.find((t) => t.name === name)?.displayName ?? name;
   }
 
+  /** Track per-skill skipped file counts for collapsed summary in non-TTY mode. */
+  const skippedCounts = new Map<string, number>();
+
   return {
     onSkillStart: (skill) => {
       if (verbosity === Verbosity.Quiet) return;
@@ -486,11 +489,11 @@ export function createDefaultCallbacks(
     },
     onSkillUpdate: () => { /* no-op for default callbacks */ },
     onFileUpdate: (_skillName, filename, updates) => {
-      if (verbosity === Verbosity.Quiet || mode.isTTY) return;
       if (updates.status === 'skipped') {
-        logPlain(`  ${displayNameFor(_skillName)} > ${filename} skipped`);
+        skippedCounts.set(_skillName, (skippedCounts.get(_skillName) ?? 0) + 1);
         return;
       }
+      if (verbosity === Verbosity.Quiet || mode.isTTY) return;
       if (updates.status !== 'done') return;
       const duration = updates.durationMs !== undefined ? formatDuration(updates.durationMs) : '?';
       const cost = updates.usage ? ` ${formatCost(updates.usage.costUSD)}` : '';
@@ -536,6 +539,11 @@ export function createDefaultCallbacks(
             }
           }
         }
+
+        const skipped = skippedCounts.get(name) ?? 0;
+        if (skipped > 0) {
+          logPlain(`  ${skipped} ${pluralize(skipped, 'file')} skipped`);
+        }
       }
     },
     onSkillSkipped: (name) => {
@@ -554,6 +562,10 @@ export function createDefaultCallbacks(
         console.error(`${chalk.red('\u2717')} ${displayName} - ${chalk.red(error)}`);
       } else {
         logPlain(`ERROR: ${displayName} - ${error}`);
+        const skipped = skippedCounts.get(name) ?? 0;
+        if (skipped > 0) {
+          logPlain(`  ${skipped} ${pluralize(skipped, 'file')} skipped`);
+        }
       }
     },
     // Warn about large prompts (always shown unless quiet)

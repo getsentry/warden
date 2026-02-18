@@ -285,17 +285,17 @@
             "required": ["filename", "reason"],
             "additionalProperties": false
           },
-          "description": "Files skipped due to chunking patterns. NOT YET WRITTEN by writeJsonlReport()."
+          "description": "Files skipped due to chunking patterns. Omitted when none were skipped."
         },
         "failedHunks": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of hunks that failed to analyze (SDK/API errors). NOT YET WRITTEN by writeJsonlReport()."
+          "description": "Number of hunks that failed to analyze (SDK/API errors). Omitted when zero."
         },
         "failedExtractions": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of hunks where findings extraction failed (parse errors). NOT YET WRITTEN by writeJsonlReport()."
+          "description": "Number of hunks where findings extraction failed (parse errors). Omitted when zero."
         }
       },
       "required": ["run", "skill", "summary", "findings"],
@@ -326,6 +326,11 @@
         "usage": {
           "$ref": "#/$defs/UsageStats",
           "description": "Aggregate token usage across all skills."
+        },
+        "totalSkippedFiles": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total files skipped due to chunking patterns across all skills. Omitted when zero."
         },
         "auxiliaryUsage": {
           "type": "object",

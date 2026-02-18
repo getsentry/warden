@@ -203,6 +203,90 @@ describe('writeJsonlReport', () => {
     expect(record.files).toBeUndefined();
   });
 
+  it('includes skippedFiles in per-skill record when present', () => {
+    const outputPath = join(testDir, 'skipped.jsonl');
+    const reports: SkillReport[] = [
+      {
+        skill: 'security-review',
+        summary: 'Done',
+        findings: [],
+        skippedFiles: [
+          { filename: 'dist/bundle.js', reason: 'builtin' },
+          { filename: 'logo.png', reason: 'pattern', pattern: '*.png' },
+        ],
+      },
+    ];
+
+    writeJsonlReport(outputPath, reports, 1000);
+
+    const content = readFileSync(outputPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const record = JSON.parse(lines[0]!) as JsonlRecord;
+    expect(record.skippedFiles).toBeDefined();
+    expect(record.skippedFiles!.length).toBe(2);
+    expect(record.skippedFiles![0]!.filename).toBe('dist/bundle.js');
+    expect(record.skippedFiles![0]!.reason).toBe('builtin');
+  });
+
+  it('omits skippedFiles when none present', () => {
+    const outputPath = join(testDir, 'noskipped.jsonl');
+    const reports: SkillReport[] = [
+      { skill: 'review', summary: 'Done', findings: [] },
+    ];
+
+    writeJsonlReport(outputPath, reports, 500);
+
+    const content = readFileSync(outputPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const record = JSON.parse(lines[0]!) as JsonlRecord;
+    expect(record.skippedFiles).toBeUndefined();
+  });
+
+  it('includes totalSkippedFiles in summary when files were skipped', () => {
+    const outputPath = join(testDir, 'skipsummary.jsonl');
+    const reports: SkillReport[] = [
+      {
+        skill: 'skill-1',
+        summary: 'Done',
+        findings: [],
+        skippedFiles: [
+          { filename: 'a.min.js', reason: 'builtin' },
+        ],
+      },
+      {
+        skill: 'skill-2',
+        summary: 'Done',
+        findings: [],
+        skippedFiles: [
+          { filename: 'b.min.js', reason: 'builtin' },
+          { filename: 'c.png', reason: 'pattern', pattern: '*.png' },
+        ],
+      },
+    ];
+
+    writeJsonlReport(outputPath, reports, 1000);
+
+    const content = readFileSync(outputPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const summary = JSON.parse(lines[2]!);
+    expect(summary.totalSkippedFiles).toBe(3);
+  });
+
+  it('omits totalSkippedFiles from summary when none skipped', () => {
+    const outputPath = join(testDir, 'noskipsummary.jsonl');
+    const reports: SkillReport[] = [
+      { skill: 'review', summary: 'Done', findings: [] },
+    ];
+
+    writeJsonlReport(outputPath, reports, 500);
+
+    const content = readFileSync(outputPath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const summary = JSON.parse(lines[1]!);
+    expect(summary.type).toBe('summary');
+    expect(summary.totalSkippedFiles).toBeUndefined();
+  });
+
   it('aggregates auxiliary usage in summary', () => {
     const outputPath = join(testDir, 'aux.jsonl');
     const reports: SkillReport[] = [

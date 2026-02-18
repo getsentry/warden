@@ -1,8 +1,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { z } from 'zod';
+import {
+  UsageStatsSchema,
+  FindingSchema,
+  SkippedFileSchema,
+  AuxiliaryUsageMapSchema,
+  SeveritySchema,
+} from '../../types/index.js';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
-import type { FixStatus } from '../../action/fix-evaluation/types.js';
+import { FixStatusSchema } from '../../action/fix-evaluation/types.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { countBySeverity } from './formatters.js';
 
@@ -37,70 +45,88 @@ export function getRunLogPath(cwd: string, timestamp: Date = new Date()): string
 }
 
 /**
- * Metadata for a JSONL run record.
+ * JSONL record schemas for Warden's structured run output.
+ *
+ * Formal JSON Schema: specs/jsonl-schema.json
+ * Example payloads:   specs/jsonl-examples.jsonl
+ * Reporter spec:      specs/reporters.md Section 3 "JSONL Specification"
  */
-export interface JsonlRunMetadata {
-  timestamp: string;
-  durationMs: number;
-  cwd: string;
-  traceId?: string;
-}
 
-/**
- * Per-file record within a JSONL skill record.
- */
-export interface JsonlFileRecord {
-  filename: string;
-  findings: number;
-  durationMs?: number;
-  usage?: UsageStats;
-}
+/** Metadata common to every JSONL record. */
+export const JsonlRunMetadataSchema = z.object({
+  timestamp: z.string().datetime(),
+  durationMs: z.number().nonnegative(),
+  cwd: z.string(),
+  traceId: z.string().optional(),
+});
+export type JsonlRunMetadata = z.infer<typeof JsonlRunMetadataSchema>;
 
-/**
- * A single JSONL record representing one skill's report.
- * See specs/reporters.md Section 3 "JSONL Specification" for schema.
- */
-export interface JsonlRecord {
-  run: JsonlRunMetadata;
-  skill: string;
-  summary: string;
-  findings: SkillReport['findings'];
-  metadata?: Record<string, unknown>;
-  durationMs?: number;
-  usage?: UsageStats;
-  auxiliaryUsage?: AuxiliaryUsageMap;
-  files?: JsonlFileRecord[];
-  failedHunks?: number;
-  failedExtractions?: number;
-}
+/** Per-file breakdown within a skill record. */
+export const JsonlFileRecordSchema = z.object({
+  filename: z.string(),
+  findings: z.number().int().nonnegative(),
+  durationMs: z.number().nonnegative().optional(),
+  usage: UsageStatsSchema.optional(),
+});
+export type JsonlFileRecord = z.infer<typeof JsonlFileRecordSchema>;
 
-/**
- * Per-evaluation detail for JSONL fix evaluation records.
- */
-export interface JsonlFixEvalDetail {
-  path: string;
-  line: number;
-  findingId?: string;
-  verdict: FixStatus | 're_detected';
-  reasoning?: string;
-  durationMs: number;
-  usage: UsageStats;
-}
+/** One skill's analysis results. */
+export const JsonlRecordSchema = z.object({
+  run: JsonlRunMetadataSchema,
+  skill: z.string(),
+  summary: z.string(),
+  findings: z.array(FindingSchema),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  durationMs: z.number().nonnegative().optional(),
+  usage: UsageStatsSchema.optional(),
+  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+  files: z.array(JsonlFileRecordSchema).optional(),
+  skippedFiles: z.array(SkippedFileSchema).optional(),
+  failedHunks: z.number().int().nonnegative().optional(),
+  failedExtractions: z.number().int().nonnegative().optional(),
+});
+export type JsonlRecord = z.infer<typeof JsonlRecordSchema>;
 
-/**
- * JSONL record for fix evaluation results.
- */
-export interface JsonlFixEvaluationRecord {
-  run: JsonlRunMetadata;
-  type: 'fix-evaluation';
-  evaluated: number;
-  resolved: number;
-  needsAttention: number;
-  skipped: number;
-  failedEvaluations: number;
-  usage?: UsageStats;
-  evaluations?: JsonlFixEvalDetail[];
-}
+/** Severity breakdown in the summary record. */
+const BySeveritySchema = z.record(SeveritySchema, z.number().int().nonnegative());
+
+/** Aggregate summary across all skills (always the last JSONL line). */
+export const JsonlSummaryRecordSchema = z.object({
+  run: JsonlRunMetadataSchema,
+  type: z.literal('summary'),
+  totalFindings: z.number().int().nonnegative(),
+  bySeverity: BySeveritySchema,
+  usage: UsageStatsSchema.optional(),
+  totalSkippedFiles: z.number().int().nonnegative().optional(),
+  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+});
+export type JsonlSummaryRecord = z.infer<typeof JsonlSummaryRecordSchema>;
+
+/** Per-evaluation detail for fix evaluation records. */
+export const JsonlFixEvalDetailSchema = z.object({
+  path: z.string(),
+  line: z.number().int().positive(),
+  findingId: z.string().optional(),
+  verdict: z.union([FixStatusSchema, z.literal('re_detected')]),
+  reasoning: z.string().optional(),
+  durationMs: z.number().nonnegative(),
+  usage: UsageStatsSchema,
+});
+export type JsonlFixEvalDetail = z.infer<typeof JsonlFixEvalDetailSchema>;
+
+/** Fix evaluation results record. */
+export const JsonlFixEvaluationRecordSchema = z.object({
+  run: JsonlRunMetadataSchema,
+  type: z.literal('fix-evaluation'),
+  evaluated: z.number().int().nonnegative(),
+  resolved: z.number().int().nonnegative(),
+  needsAttention: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  failedEvaluations: z.number().int().nonnegative(),
+  usage: UsageStatsSchema.optional(),
+  evaluations: z.array(JsonlFixEvalDetailSchema).optional(),
+});
+export type JsonlFixEvaluationRecord = z.infer<typeof JsonlFixEvaluationRecordSchema>;
 
 /**
  * Aggregate usage stats from reports.
@@ -159,6 +185,7 @@ export function writeJsonlReport(
         durationMs: f.durationMs,
         usage: f.usage,
       })),
+      skippedFiles: report.skippedFiles?.length ? report.skippedFiles : undefined,
       failedHunks: report.failedHunks || undefined,
       failedExtractions: report.failedExtractions || undefined,
     };
@@ -167,20 +194,20 @@ export function writeJsonlReport(
 
   // Write a summary line at the end
   const allFindings = reports.flatMap((r) => r.findings);
+  const totalSkippedFiles = reports.reduce((n, r) => n + (r.skippedFiles?.length ?? 0), 0);
   const totalAuxiliaryUsage = reports.reduce<AuxiliaryUsageMap | undefined>(
     (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
     undefined
   );
-  const summaryRecord: Record<string, unknown> = {
+  const summaryRecord: JsonlSummaryRecord = {
     run: runMetadata,
     type: 'summary',
     totalFindings: allFindings.length,
     bySeverity: countBySeverity(allFindings),
     usage: aggregateUsage(reports),
+    totalSkippedFiles: totalSkippedFiles > 0 ? totalSkippedFiles : undefined,
+    auxiliaryUsage: totalAuxiliaryUsage,
   };
-  if (totalAuxiliaryUsage) {
-    summaryRecord['auxiliaryUsage'] = totalAuxiliaryUsage;
-  }
   lines.push(JSON.stringify(summaryRecord));
 
   // Ensure parent directory exists

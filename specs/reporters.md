@@ -694,13 +694,7 @@ Matrix of every reporter event. Legend:
 
 ### JSONL: Missing Diagnostic Fields
 
-`SkillReport` has one diagnostic field that `writeJsonlReport()` silently drops:
-
-| Field | On `SkillReport` | In JSONL | Impact |
-|-------|-----------------|----------|--------|
-| `skippedFiles` | `SkippedFile[]` | not written | Operators can't see which files were skipped and why |
-
-`failedHunks` and `failedExtractions` are now included in JSONL skill records (present only when > 0).
+All diagnostic fields from `SkillReport` are now included in JSONL skill records (present only when non-empty/non-zero): `skippedFiles`, `failedHunks`, `failedExtractions`. The summary record includes `totalSkippedFiles` when any files were skipped.
 
 ### JSONL: Missing Event Types
 
