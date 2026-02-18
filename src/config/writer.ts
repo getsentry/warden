@@ -87,9 +87,6 @@ export function generateSkillToml(skill: SkillConfig): string {
       if (trigger.schedule) {
         lines.push('');
         lines.push('[skills.triggers.schedule]');
-        if (trigger.schedule.issueTitle) {
-          lines.push(`issueTitle = "${trigger.schedule.issueTitle}"`);
-        }
         if (trigger.schedule.createFixPR !== undefined) {
           lines.push(`createFixPR = ${trigger.schedule.createFixPR}`);
         }

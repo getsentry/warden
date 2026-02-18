@@ -7,12 +7,13 @@
 import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
-import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
-import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
+import { createFixPR } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
+import { loadSuppressions } from '../../suppressions/loader.js';
+import { NotificationDispatcher, buildProviders } from '../../notifications/index.js';
 import type { SkillReport } from '../../types/index.js';
 import type { ActionInputs } from '../inputs.js';
 import {
@@ -69,6 +70,13 @@ export async function runScheduleWorkflow(
   }
 
   const defaultBranch = await getDefaultBranchFromAPI(octokit, owner, repo);
+
+  // Load suppressions and build notification providers
+  const suppressions = loadSuppressions(repoPath);
+  const providers = config.notifications
+    ? buildProviders({ configs: config.notifications, octokit, apiKey: inputs.anthropicApiKey })
+    : [];
+  const dispatcher = new NotificationDispatcher(providers, suppressions);
 
   logGroup('Processing schedule triggers');
   for (const trigger of scheduleTriggers) {
@@ -127,24 +135,21 @@ export async function runScheduleWorkflow(
       allReports.push(report);
       totalFindings += report.findings.length;
 
-      // Create/update issue with findings
-      const scheduleConfig: Partial<ScheduleConfig> = resolved.schedule ?? {};
-      const issueTitle = scheduleConfig.issueTitle ?? `Warden: ${resolved.name}`;
-
-      const issueResult = await createOrUpdateIssue(octokit, owner, repo, [report], {
-        title: issueTitle,
-        commitSha: headSha,
-      });
-
-      if (issueResult) {
-        console.log(`${issueResult.created ? 'Created' : 'Updated'} issue #${issueResult.issueNumber}`);
-        console.log(`Issue URL: ${issueResult.issueUrl}`);
+      // Dispatch notifications for findings
+      if (providers.length > 0) {
+        await dispatcher.dispatch({
+          findings: report.findings,
+          reports: [report],
+          repository: { owner, name: repo },
+          commitSha: headSha,
+          skillName: resolved.name,
+        });
       }
 
       // Create fix PR if enabled and there are fixable findings
-      if (scheduleConfig.createFixPR) {
+      if (resolved.schedule?.createFixPR) {
         const fixResult = await createFixPR(octokit, owner, repo, report.findings, {
-          branchPrefix: scheduleConfig.fixBranchPrefix ?? 'warden-fix',
+          branchPrefix: resolved.schedule.fixBranchPrefix ?? 'warden-fix',
           baseBranch: defaultBranch,
           baseSha: headSha,
           repoPath,

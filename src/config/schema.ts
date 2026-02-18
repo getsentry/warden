@@ -34,14 +34,33 @@ export type SkillDefinition = z.infer<typeof SkillDefinitionSchema>;
 
 // Schedule-specific configuration
 export const ScheduleConfigSchema = z.object({
-  /** Title for the tracking issue (default: "Warden: {skillName}") */
-  issueTitle: z.string().optional(),
   /** Create PR with fixes when suggestedFix is available */
   createFixPR: z.boolean().default(false),
   /** Branch prefix for fix PRs (default: "warden-fix") */
   fixBranchPrefix: z.string().default('warden-fix'),
 });
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
+
+// Notification provider configurations
+export const GitHubIssuesNotificationSchema = z.object({
+  type: z.literal('github-issues'),
+  /** Labels to apply to created issues (default: ["warden"]) */
+  labels: z.array(z.string()).default(['warden']),
+});
+export type GitHubIssuesNotificationConfig = z.infer<typeof GitHubIssuesNotificationSchema>;
+
+export const SlackNotificationSchema = z.object({
+  type: z.literal('slack'),
+  /** Slack incoming webhook URL. Supports $ENV_VAR expansion. */
+  webhookUrl: z.string().min(1),
+});
+export type SlackNotificationConfig = z.infer<typeof SlackNotificationSchema>;
+
+export const NotificationConfigSchema = z.discriminatedUnion('type', [
+  GitHubIssuesNotificationSchema,
+  SlackNotificationSchema,
+]);
+export type NotificationConfig = z.infer<typeof NotificationConfigSchema>;
 
 // Trigger type: where the trigger runs
 export const TriggerTypeSchema = z.enum(['pull_request', 'local', 'schedule']);
@@ -183,6 +202,8 @@ export const WardenConfigSchema = z
     defaults: DefaultsSchema.optional(),
     skills: z.array(SkillConfigSchema).default([]),
     runner: RunnerConfigSchema.optional(),
+    /** Notification providers for scheduled trigger findings */
+    notifications: z.array(NotificationConfigSchema).optional(),
   })
   .superRefine((config, ctx) => {
     const names = config.skills.map((s) => s.name);

@@ -8,4 +8,4 @@ paths = ["src/**/*.ts"]
 type = "schedule"
 
 [skills.triggers.schedule]
-issueTitle = "Custom Issue Title"
+createFixPR = false

@@ -52,10 +52,22 @@ vi.mock('../../event/schedule-context.js', () => ({
   buildScheduleEventContext: vi.fn(),
 }));
 
-// Mock GitHub issue/PR creation
+// Mock GitHub PR creation (createOrUpdateIssue removed; notifications handle issues now)
 vi.mock('../../output/github-issues.js', () => ({
-  createOrUpdateIssue: vi.fn(),
   createFixPR: vi.fn(),
+}));
+
+// Mock suppressions loader
+vi.mock('../../suppressions/loader.js', () => ({
+  loadSuppressions: vi.fn(() => []),
+}));
+
+// Mock notification system
+vi.mock('../../notifications/index.js', () => ({
+  NotificationDispatcher: vi.fn().mockImplementation(() => ({
+    dispatch: vi.fn(() => Promise.resolve({ suppressed: 0, results: [] })),
+  })),
+  buildProviders: vi.fn(() => []),
 }));
 
 // Mock skill loader — filesystem reads; keep clearSkillsCache real
@@ -76,7 +88,7 @@ vi.mock('../../skills/loader.js', async () => {
 // Import after mocks
 import { runSkill } from '../../sdk/runner.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
-import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
+import { createFixPR } from '../../output/github-issues.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { setFailed } from './base.js';
 import { runScheduleWorkflow } from './schedule.js';
@@ -85,7 +97,6 @@ import { clearSkillsCache } from '../../skills/loader.js';
 // Type the mocks
 const mockRunSkill = vi.mocked(runSkill);
 const mockBuildContext = vi.mocked(buildScheduleEventContext);
-const mockCreateOrUpdateIssue = vi.mocked(createOrUpdateIssue);
 const mockCreateFixPR = vi.mocked(createFixPR);
 const mockResolveSkillAsync = vi.mocked(resolveSkillAsync);
 const mockSetFailed = vi.mocked(setFailed);
@@ -195,11 +206,6 @@ describe('runScheduleWorkflow', () => {
     // Default mock: context with files, no findings
     mockBuildContext.mockResolvedValue(createScheduleContext());
     mockRunSkill.mockResolvedValue(createSkillReport());
-    mockCreateOrUpdateIssue.mockResolvedValue({
-      issueNumber: 1,
-      issueUrl: 'https://github.com/test-owner/test-repo/issues/1',
-      created: true,
-    });
     mockResolveSkillAsync.mockResolvedValue({
       name: 'test-skill',
       description: 'Test skill',
@@ -227,7 +233,6 @@ describe('runScheduleWorkflow', () => {
       await runScheduleWorkflow(mockOctokit, createDefaultInputs(), PR_ONLY_FIXTURES);
 
       expect(mockRunSkill).not.toHaveBeenCalled();
-      expect(mockCreateOrUpdateIssue).not.toHaveBeenCalled();
     });
 
     it('fails when GITHUB_REPOSITORY is not set', async () => {
@@ -270,7 +275,7 @@ describe('runScheduleWorkflow', () => {
   // ---------------------------------------------------------------------------
 
   describe('happy path', () => {
-    it('runs skill and creates issue when findings exist', async () => {
+    it('runs skill when findings exist', async () => {
       const finding = createFinding({ severity: 'high' });
       const report = createSkillReport({ findings: [finding] });
       mockRunSkill.mockResolvedValue(report);
@@ -278,25 +283,14 @@ describe('runScheduleWorkflow', () => {
       await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_FIXTURES);
 
       expect(mockRunSkill).toHaveBeenCalledTimes(1);
-      expect(mockCreateOrUpdateIssue).toHaveBeenCalledWith(
-        mockOctokit,
-        'test-owner',
-        'test-repo',
-        [report],
-        expect.objectContaining({
-          title: 'Warden: test-skill',
-          commitSha: 'abc123',
-        })
-      );
     });
 
-    it('creates issue even when no findings', async () => {
+    it('runs skill even when no findings', async () => {
       mockRunSkill.mockResolvedValue(createSkillReport({ findings: [] }));
 
       await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_FIXTURES);
 
       expect(mockRunSkill).toHaveBeenCalledTimes(1);
-      expect(mockCreateOrUpdateIssue).toHaveBeenCalledTimes(1);
     });
 
     it('skips skill run when no files match trigger', async () => {
@@ -319,15 +313,14 @@ describe('runScheduleWorkflow', () => {
       await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_FIXTURES);
 
       expect(mockRunSkill).not.toHaveBeenCalled();
-      expect(mockCreateOrUpdateIssue).not.toHaveBeenCalled();
     });
   });
 
   // ---------------------------------------------------------------------------
-  // Issue & PR Creation
+  // Fix PR Creation
   // ---------------------------------------------------------------------------
 
-  describe('issue and PR creation', () => {
+  describe('fix PR creation', () => {
     it('creates fix PR when schedule.createFixPR is enabled', async () => {
       const finding = createFinding({
         suggestedFix: { description: 'Fix it', diff: '--- a\n+++ b\n' },
@@ -369,9 +362,9 @@ describe('runScheduleWorkflow', () => {
       expect(mockCreateFixPR).not.toHaveBeenCalled();
     });
 
-    it('uses custom issue title from schedule config', async () => {
-      const report = createSkillReport({ findings: [] });
-      mockRunSkill.mockResolvedValue(report);
+    it('does not create fix PR for schedule-title fixture', async () => {
+      const finding = createFinding();
+      mockRunSkill.mockResolvedValue(createSkillReport({ findings: [finding] }));
 
       await runScheduleWorkflow(
         mockOctokit,
@@ -379,15 +372,7 @@ describe('runScheduleWorkflow', () => {
         SCHEDULE_TITLE_FIXTURES
       );
 
-      expect(mockCreateOrUpdateIssue).toHaveBeenCalledWith(
-        mockOctokit,
-        'test-owner',
-        'test-repo',
-        [report],
-        expect.objectContaining({
-          title: 'Custom Issue Title',
-        })
-      );
+      expect(mockCreateFixPR).not.toHaveBeenCalled();
     });
   });
 

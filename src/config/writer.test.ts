@@ -212,7 +212,6 @@ describe('generateSkillToml', () => {
         {
           type: 'schedule',
           schedule: {
-            issueTitle: 'Weekly Security Scan',
             createFixPR: true,
             fixBranchPrefix: 'security-fix',
           },
@@ -223,7 +222,6 @@ describe('generateSkillToml', () => {
     const result = generateSkillToml(skill);
 
     expect(result).toContain('[skills.triggers.schedule]');
-    expect(result).toContain('issueTitle = "Weekly Security Scan"');
     expect(result).toContain('createFixPR = true');
     expect(result).toContain('fixBranchPrefix = "security-fix"');
   });
