@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { SeveritySchema } from '../types/index.js';
 import type { SkillReport, UsageStats } from '../types/index.js';
 
+/** Default model for eval skill execution and judging. */
+export const DEFAULT_EVAL_MODEL = 'claude-sonnet-4-6';
+
 /**
  * A "should find" assertion in BDD style.
  */
@@ -52,7 +55,7 @@ export const EvalFileSchema = z.object({
   /** Skill to run, relative to evals/ directory */
   skill: z.string(),
   /** Default model for all evals in this file */
-  model: z.string().default('claude-sonnet-4-5-20250514'),
+  model: z.string().default(DEFAULT_EVAL_MODEL),
   /** List of eval scenarios */
   evals: z.array(EvalScenarioSchema).min(1),
 });

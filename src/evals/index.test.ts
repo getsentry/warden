@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { discoverEvalFiles, loadEvalFile, resolveEvalMetas, discoverEvals } from './index.js';
-import { EvalFileSchema, EvalScenarioSchema } from './types.js';
+import { DEFAULT_EVAL_MODEL, EvalFileSchema, EvalScenarioSchema } from './types.js';
 
 const evalsDir = join(import.meta.dirname, '..', '..', 'evals');
 
@@ -151,7 +151,7 @@ describe('EvalFileSchema', () => {
     const result = EvalFileSchema.safeParse(valid);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.model).toBe('claude-sonnet-4-5-20250514');
+      expect(result.data.model).toBe(DEFAULT_EVAL_MODEL);
     }
   });
 

@@ -87,7 +87,7 @@ evals/
 | Field | Required | Description |
 |-------|----------|-------------|
 | `skill` | Yes | Path to test skill, relative to `evals/` |
-| `model` | No | Default model for all evals (default: `claude-sonnet-4-5-20250514`) |
+| `model` | No | Default model for all evals (default: `claude-sonnet-4-6`) |
 | `evals` | Yes | List of eval scenarios (at least one) |
 
 ### Per-eval fields
@@ -117,7 +117,7 @@ pnpm test:evals -- --grep "bug-detection"
 pnpm test:evals -- --grep "null-property-access"
 ```
 
-Evals make real API calls. They run skills on `claude-sonnet-4-5-20250514` by
+Evals make real API calls. They run skills on `claude-sonnet-4-6` by
 default.
 
 ## Adding a New Eval

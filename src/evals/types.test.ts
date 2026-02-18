@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evalPassed, formatEvalResult } from './types.js';
+import { DEFAULT_EVAL_MODEL, evalPassed, formatEvalResult } from './types.js';
 import type { EvalMeta, JudgeResponse, EvalResult } from './types.js';
 
 function makeMeta(overrides: Partial<EvalMeta> = {}): EvalMeta {
@@ -9,7 +9,7 @@ function makeMeta(overrides: Partial<EvalMeta> = {}): EvalMeta {
     given: 'code with a known bug',
     skillPath: '/path/to/skills/bug-detection.md',
     filePaths: ['/path/to/fixtures/test/file.ts'],
-    model: 'claude-sonnet-4-5-20250514',
+    model: DEFAULT_EVAL_MODEL,
     should_find: [{ finding: 'the bug', required: true }],
     should_not_find: [],
     ...overrides,

@@ -4,10 +4,10 @@ import { apiUsageToStats } from '../sdk/pricing.js';
 import { emptyUsage } from '../sdk/usage.js';
 import { extractJson } from '../sdk/haiku.js';
 import type { EvalMeta, JudgeResponse } from './types.js';
-import { JudgeResponseSchema } from './types.js';
+import { DEFAULT_EVAL_MODEL, JudgeResponseSchema } from './types.js';
 import type { UsageStats } from '../types/index.js';
 
-const JUDGE_MODEL = 'claude-sonnet-4-5-20250514';
+const JUDGE_MODEL = DEFAULT_EVAL_MODEL;
 const JUDGE_MAX_TOKENS = 4096;
 const JUDGE_TIMEOUT_MS = 60_000;
 
@@ -105,7 +105,6 @@ export async function runJudge(
 
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: prompt },
-    { role: 'assistant', content: '{' },
   ];
 
   let response: Anthropic.Message;
@@ -146,9 +145,7 @@ export async function runJudge(
     };
   }
 
-  // Prepend the prefill character
-  const fullText = '{' + textBlock.text;
-  const jsonStr = extractJson(fullText);
+  const jsonStr = extractJson(textBlock.text);
 
   if (!jsonStr) {
     return {
