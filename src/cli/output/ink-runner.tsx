@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { render, Box, Text } from 'ink';
+import { render, Box, Text, Static } from 'ink';
 import chalk from 'chalk';
 import {
   runSkillTask,
@@ -31,6 +31,7 @@ import figures from 'figures';
 
 interface SkillRunnerProps {
   skills: SkillState[];
+  warnings: string[];
   interrupted: boolean;
 }
 
@@ -114,13 +115,18 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
   );
 }
 
-function SkillRunner({ skills, interrupted }: SkillRunnerProps): React.ReactElement {
+function SkillRunner({ skills, warnings, interrupted }: SkillRunnerProps): React.ReactElement {
   const completed = skills.filter((s) => s.status === 'done' || s.status === 'skipped' || s.status === 'error');
   const running = skills.filter((s) => s.status === 'running');
   const pending = skills.filter((s) => s.status === 'pending');
 
   return (
     <Box flexDirection="column">
+      <Static items={warnings}>
+        {(warning, index) => (
+          <Text key={index}>{warning}</Text>
+        )}
+      </Static>
       {completed.map((skill) => (
         <CompletedSkill key={skill.name} skill={skill} />
       ))}
@@ -240,6 +246,10 @@ export async function runSkillTasksWithInk(
   // Track skill states
   const skillStates: SkillState[] = [];
 
+  // Warnings are rendered via Ink's Static component so they appear above the
+  // dynamic spinner area without corrupting it.
+  const warnings: string[] = [];
+
   // Print header before Ink starts
   process.stderr.write('\x1b[1mSKILLS\x1b[0m\n');
 
@@ -248,7 +258,7 @@ export async function runSkillTasksWithInk(
 
   // Create Ink instance
   const { rerender, unmount, clear } = render(
-    <SkillRunner skills={skillStates} interrupted={false} />,
+    <SkillRunner skills={skillStates} warnings={[]} interrupted={false} />,
     { stdout: process.stderr }
   );
 
@@ -264,7 +274,7 @@ export async function runSkillTasksWithInk(
     setImmediate(() => {
       updatePending = false;
       if (unmounted) return;
-      rerender(<SkillRunner skills={[...skillStates]} interrupted={interrupted} />);
+      rerender(<SkillRunner skills={[...skillStates]} warnings={[...warnings]} interrupted={interrupted} />);
     });
   };
 
@@ -320,33 +330,34 @@ export async function runSkillTasksWithInk(
 
       updateUI();
     },
-    // CAUTION: Direct stderr writes while Ink is running can cause display glitches.
-    // These callbacks are rare (large prompts, debug mode) so the tradeoff is acceptable.
-    // If these cause issues, consider queueing messages and printing after unmount().
     onLargePrompt: (_skillName, filename, lineRange, chars, estimatedTokens) => {
       const location = `${filename}:${lineRange}`;
       const size = `${Math.round(chars / 1000)}k chars (~${Math.round(estimatedTokens / 1000)}k tokens)`;
-      process.stderr.write(`\x1b[33m${figures.warning}\x1b[0m  Large prompt for ${location}: ${size}\n`);
+      warnings.push(`${chalk.yellow(figures.warning)}  Large prompt for ${location}: ${size}`);
+      updateUI();
     },
     onPromptSize: verbosity >= Verbosity.Debug
       ? (_skillName, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
           const location = `${filename}:${lineRange}`;
-          process.stderr.write(`\x1b[2m[debug] Prompt for ${location}: system=${systemChars}, user=${userChars}, total=${totalChars} chars (~${estimatedTokens} tokens)\x1b[0m\n`);
+          warnings.push(chalk.dim(`[debug] Prompt for ${location}: system=${systemChars}, user=${userChars}, total=${totalChars} chars (~${estimatedTokens} tokens)`));
+          updateUI();
         }
       : undefined,
     onHunkFailed: verbosity >= Verbosity.Verbose
       ? (_skillName, filename, lineRange, error) => {
           const location = `${filename}:${lineRange}`;
-          process.stderr.write(`\x1b[33m${figures.warning}\x1b[0m  Chunk failed: ${location} \x1b[2m\u2014 ${error}\x1b[0m\n`);
+          warnings.push(`${chalk.yellow(figures.warning)}  Chunk failed: ${location} ${chalk.dim(`\u2014 ${error}`)}`);
+          updateUI();
         }
       : undefined,
     onExtractionFailure: verbosity >= Verbosity.Verbose
       ? (_skillName, filename, lineRange, error, preview) => {
           const location = `${filename}:${lineRange}`;
-          process.stderr.write(`\x1b[33m${figures.warning}\x1b[0m  Extraction failed: ${location} \x1b[2m\u2014 ${error}\x1b[0m\n`);
+          warnings.push(`${chalk.yellow(figures.warning)}  Extraction failed: ${location} ${chalk.dim(`\u2014 ${error}`)}`);
           if (verbosity >= Verbosity.Debug && preview) {
-            process.stderr.write(`\x1b[2m[debug]   Output preview: ${preview.slice(0, 200)}\x1b[0m\n`);
+            warnings.push(chalk.dim(`[debug]   Output preview: ${preview.slice(0, 200)}`));
           }
+          updateUI();
         }
       : undefined,
     onRetry: verbosity >= Verbosity.Verbose
@@ -354,7 +365,8 @@ export async function runSkillTasksWithInk(
           const location = `${filename}:${lineRange}`;
           const retryInfo = `attempt ${attempt}/${maxRetries}`;
           const delay = delayMs > 0 ? `, retrying in ${Math.round(delayMs / 1000)}s` : '';
-          process.stderr.write(`\x1b[2m[debug] Retry ${location} (${retryInfo}${delay}): ${error}\x1b[0m\n`);
+          warnings.push(chalk.dim(`[debug] Retry ${location} (${retryInfo}${delay}): ${error}`));
+          updateUI();
         }
       : undefined,
   };
