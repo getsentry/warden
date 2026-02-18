@@ -103,8 +103,9 @@ function writeEmptyRunLog(
   opts?: { traceId?: string; outputPath?: string },
 ): { logPath: string; content: string } {
   const runId = generateRunId();
-  const logPath = getRepoLogPath(repoPath, runId);
-  const content = renderJsonlString([], 0, { runId, traceId: opts?.traceId });
+  const timestamp = new Date();
+  const logPath = getRepoLogPath(repoPath, runId, timestamp);
+  const content = renderJsonlString([], 0, { runId, traceId: opts?.traceId, timestamp });
   try {
     writeJsonlContent(logPath, content);
   } catch (err) {
@@ -177,12 +178,13 @@ async function outputResultsAndHandleFixes(
 
   const traceId = getTraceId();
   const runId = generateRunId();
+  const timestamp = new Date();
 
   // Render JSONL content once so repo log and --output have identical timestamps
-  const jsonlContent = renderJsonlString(reports, totalDuration, { runId, traceId });
+  const jsonlContent = renderJsonlString(reports, totalDuration, { runId, traceId, timestamp });
 
   // Always write repo-local JSONL log (non-fatal — don't lose analysis output)
-  const logPath = getRepoLogPath(repoPath, runId);
+  const logPath = getRepoLogPath(repoPath, runId, timestamp);
   try {
     writeJsonlContent(logPath, jsonlContent);
     reporter.debug(`Run log: ${logPath}`);

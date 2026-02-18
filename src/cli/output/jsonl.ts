@@ -146,9 +146,9 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 export function renderJsonlString(
   reports: SkillReport[],
   durationMs: number,
-  options?: { runId?: string; traceId?: string }
+  options?: { runId?: string; traceId?: string; timestamp?: Date }
 ): string {
-  const timestamp = new Date().toISOString();
+  const timestamp = (options?.timestamp ?? new Date()).toISOString();
   const cwd = process.cwd();
 
   const runMetadata: JsonlRunMetadata = {
