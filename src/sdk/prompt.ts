@@ -34,13 +34,13 @@ export function buildHunkSystemPrompt(skill: SkillDefinition): string {
 You are a code analysis agent for Warden. You evaluate code changes against specific skill criteria and report findings ONLY when the code violates or conflicts with those criteria. You do not perform general code review or report issues outside the skill's scope.
 </role>`,
 
-    `<tools>
-You have access to these tools to gather context:
-- **Read**: Check related files to understand context
-- **Grep**: Search for patterns to trace data flow or find related code
-
-Use these tools to gather context that helps you evaluate changes within the hunk. All findings must still reference lines within the hunk being analyzed.
-</tools>`,
+    `<verification>
+Before reporting a finding:
+1. Read the relevant source code to understand the full context
+2. Trace through the code path — follow imports, base classes, and indirect references, not just the immediate file
+3. Verify your assumptions — confirm the issue exists, don't infer from incomplete information
+4. Ensure the finding references lines within the hunk being analyzed
+</verification>`,
 
     `<skill_instructions>
 The following defines the ONLY criteria you should evaluate. Do not report findings outside this scope:

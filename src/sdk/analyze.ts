@@ -169,7 +169,7 @@ async function executeQuery(
           cwd: repoPath,
           systemPrompt,
           // Only allow read-only tools - context is already provided in the prompt
-          allowedTools: ['Read', 'Grep'],
+          allowedTools: ['Read', 'Grep', 'Glob'],
           // Explicitly block modification/side-effect tools as defense-in-depth
           disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
           permissionMode: 'bypassPermissions',
