@@ -9,6 +9,7 @@ import { formatSeverityBadge, pluralize, type Reporter } from './output/index.js
 import { ICON_CHECK } from './output/icons.js';
 import { Verbosity } from './output/verbosity.js';
 import { applyUnifiedDiff } from './diff-apply.js';
+import { readSingleKey } from './input.js';
 
 // Re-export for backward compatibility
 export { applyUnifiedDiff } from './diff-apply.js';
@@ -100,34 +101,6 @@ function formatDiffForDisplay(diff: string): string[] {
       return chalk.cyan(line);
     }
     return line;
-  });
-}
-
-/**
- * Read a single keypress from stdin in raw mode.
- */
-async function readSingleKey(): Promise<string> {
-  return new Promise((resolve) => {
-    const stdin = process.stdin;
-    const wasRaw = stdin.isRaw;
-
-    stdin.setRawMode(true);
-    stdin.resume();
-
-    stdin.once('data', (data) => {
-      stdin.setRawMode(wasRaw);
-      stdin.pause();
-
-      const key = data.toString();
-
-      // Handle Ctrl+C
-      if (key === '\x03') {
-        process.stderr.write('\n');
-        process.exit(130);
-      }
-
-      resolve(key.toLowerCase());
-    });
   });
 }
 

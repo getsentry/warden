@@ -798,18 +798,23 @@ export async function main(): Promise<void> {
 
   // Run log cleanup after all output is complete (covers all exit paths)
   try {
-    const repoRoot = getRepoRoot(cwd);
-    const cfgPath = resolve(repoRoot, 'warden.toml');
+    let logsRoot: string;
+    try {
+      logsRoot = getRepoRoot(cwd);
+    } catch {
+      logsRoot = cwd;
+    }
+    const cfgPath = resolve(logsRoot, 'warden.toml');
     const logsConfig = existsSync(cfgPath) ? loadWardenConfig(dirname(cfgPath)).logs : undefined;
     await cleanupLogs({
-      logsDir: join(repoRoot, '.warden', 'logs'),
+      logsDir: join(logsRoot, '.warden', 'logs'),
       retentionDays: logsConfig?.retentionDays ?? 30,
       mode: logsConfig?.cleanup ?? 'ask',
       isTTY: reporter.mode.isTTY,
       reporter,
     });
   } catch {
-    // Not in a git repo or config load failed — skip cleanup
+    // Config load or cleanup failed — skip silently
   }
 
   await flushSentry();
