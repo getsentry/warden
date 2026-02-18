@@ -176,6 +176,19 @@ export const DefaultsSchema = z.object({
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;
 
+// Log cleanup mode
+export const LogCleanupModeSchema = z.enum(['ask', 'auto', 'never']);
+export type LogCleanupMode = z.infer<typeof LogCleanupModeSchema>;
+
+// Logs configuration
+export const LogsConfigSchema = z.object({
+  /** How to handle expired log files: 'ask' (default, prompt in TTY), 'auto' (silently delete), 'never' (keep all) */
+  cleanup: LogCleanupModeSchema.default('ask'),
+  /** Number of days to retain log files before considering them expired. Default: 30 */
+  retentionDays: z.number().int().positive().default(30),
+});
+export type LogsConfig = z.infer<typeof LogsConfigSchema>;
+
 // Main warden.toml configuration
 export const WardenConfigSchema = z
   .object({
@@ -183,6 +196,7 @@ export const WardenConfigSchema = z
     defaults: DefaultsSchema.optional(),
     skills: z.array(SkillConfigSchema).default([]),
     runner: RunnerConfigSchema.optional(),
+    logs: LogsConfigSchema.optional(),
   })
   .superRefine((config, ctx) => {
     const names = config.skills.map((s) => s.name);

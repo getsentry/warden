@@ -39,8 +39,10 @@ export { runSkillTasksWithInk } from './ink-runner.js';
 export { BoxRenderer, type BoxOptions } from './box.js';
 export {
   writeJsonlReport,
-  getRunLogsDir,
-  getRunLogPath,
+  readJsonlLog,
+  getRepoLogPath,
+  generateRunId,
+  shortRunId,
   type JsonlRecord,
   type JsonlRunMetadata,
 } from './jsonl.js';

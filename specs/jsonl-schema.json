@@ -26,9 +26,17 @@
         "cwd": {
           "type": "string",
           "description": "Working directory where warden was invoked."
+        },
+        "runId": {
+          "type": "string",
+          "description": "Unique identifier for this run (UUID)."
+        },
+        "traceId": {
+          "type": "string",
+          "description": "Sentry trace ID for correlating with observability data. Omitted when Sentry is not initialized."
         }
       },
-      "required": ["timestamp", "durationMs", "cwd"],
+      "required": ["timestamp", "durationMs", "cwd", "runId"],
       "additionalProperties": false
     },
 

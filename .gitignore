@@ -30,6 +30,9 @@ pnpm-debug.log*
 # Test coverage
 coverage/
 
+# Warden logs
+.warden/logs/
+
 # Temporary files
 *.tmp
 *.temp

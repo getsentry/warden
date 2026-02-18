@@ -11,7 +11,7 @@ import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
-import { renderTerminalReport, renderJsonReport, filterReportsBySeverity } from './terminal.js';
+import { renderTerminalReport, filterReportsBySeverity } from './terminal.js';
 import {
   Reporter,
   detectOutputMode,
@@ -21,9 +21,13 @@ import {
   runSkillTasksWithInk,
   pluralize,
   writeJsonlReport,
-  getRunLogPath,
+  readJsonlLog,
+  getRepoLogPath,
+  generateRunId,
   type SkillTaskOptions,
 } from './output/index.js';
+import { cleanupLogs } from './log-cleanup.js';
+import type { LogsConfig } from '../config/schema.js';
 import {
   collectFixableFindings,
   applyAllFixes,
@@ -90,6 +94,17 @@ function resolveConfigPath(options: CLIOptions, repoPath: string): string {
 }
 
 /**
+ * Write a minimal JSONL log (summary-only, 0 findings) for early-exit paths.
+ * Returns the log file path.
+ */
+function writeEmptyRunLog(repoPath: string, options?: { traceId?: string }): string {
+  const runId = generateRunId();
+  const logPath = getRepoLogPath(repoPath, runId);
+  writeJsonlReport(logPath, [], 0, { runId, traceId: options?.traceId });
+  return logPath;
+}
+
+/**
  * Result of processing skill task results.
  */
 interface SkillToRun {
@@ -140,21 +155,24 @@ async function outputResultsAndHandleFixes(
   reporter: Reporter,
   repoPath: string,
   totalDuration: number,
-  failFastAborted?: boolean
+  failFastAborted?: boolean,
+  logsConfig?: LogsConfig
 ): Promise<number> {
   const { reports, filteredReports, hasFailure, failureReasons } = processed;
 
-  // Write JSONL output if requested (uses unfiltered reports for complete data)
   const traceId = getTraceId();
+  const runId = generateRunId();
+
+  // Always write repo-local JSONL log
+  const logPath = getRepoLogPath(repoPath, runId);
+  writeJsonlReport(logPath, reports, totalDuration, { runId, traceId });
+  reporter.debug(`Run log: ${logPath}`);
+
+  // Write additional copy to --output path if specified
   if (options.output) {
-    writeJsonlReport(options.output, reports, totalDuration, { traceId });
+    writeJsonlReport(options.output, reports, totalDuration, { runId, traceId });
     reporter.success(`Wrote JSONL output to ${options.output}`);
   }
-
-  // Always write automatic run log for debugging
-  const runLogPath = getRunLogPath(repoPath);
-  writeJsonlReport(runLogPath, reports, totalDuration, { traceId });
-  reporter.debug(`Run log: ${runLogPath}`);
 
   // Collect fixable findings early so we know whether to suppress diffs in the report
   const fixableFindings = collectFixableFindings(filteredReports);
@@ -169,7 +187,8 @@ async function outputResultsAndHandleFixes(
   // Output results
   reporter.blank();
   if (options.json) {
-    console.log(renderJsonReport(filteredReports));
+    // --json: cat the JSONL log file to stdout
+    process.stdout.write(readJsonlLog(logPath));
   } else {
     // Suppress fix diffs in report when interactive step-through will show them
     console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
@@ -198,6 +217,18 @@ async function outputResultsAndHandleFixes(
       renderFixSummary(fixSummary, reporter);
     }
   }
+
+  // Run log cleanup after all output is complete
+  const logsDir = join(repoPath, '.warden', 'logs');
+  const cleanup = logsConfig?.cleanup ?? 'ask';
+  const retentionDays = logsConfig?.retentionDays ?? 30;
+  await cleanupLogs({
+    logsDir,
+    retentionDays,
+    mode: cleanup,
+    isTTY: reporter.mode.isTTY,
+    reporter,
+  });
 
   // Interrupted takes precedence for exit code
   if (interrupted.value) {
@@ -285,9 +316,12 @@ async function runSkills(
 
   // Handle case where no skills to run
   if (skillsToRun.length === 0) {
+    const effectiveRepo = repoPath ?? cwd;
     if (options.json) {
-      console.log(renderJsonReport([]));
+      const logPath = writeEmptyRunLog(effectiveRepo, { traceId: getTraceId() });
+      process.stdout.write(readJsonlLog(logPath));
     } else {
+      writeEmptyRunLog(effectiveRepo, { traceId: getTraceId() });
       reporter.warning('No triggers matched for the changed files');
       reporter.tip('Specify a skill explicitly: warden <target> --skill <name>');
     }
@@ -356,11 +390,13 @@ async function runFileMode(filePatterns: string[], options: CLIOptions, reporter
   }
 
   if (pullRequest.files.length === 0) {
-    if (!options.json) {
+    if (options.json) {
+      const logPath = writeEmptyRunLog(cwd, { traceId: getTraceId() });
+      process.stdout.write(readJsonlLog(logPath));
+    } else {
+      writeEmptyRunLog(cwd, { traceId: getTraceId() });
       reporter.blank();
       reporter.warning('No files matched the given patterns');
-    } else {
-      console.log(renderJsonReport([]));
     }
     return 0;
   }
@@ -438,11 +474,13 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
   }
 
   if (pullRequest.files.length === 0) {
-    if (!options.json) {
+    if (options.json) {
+      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(readJsonlLog(logPath));
+    } else {
+      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       reporter.renderEmptyState('No changes found');
       reporter.blank();
-    } else {
-      console.log(renderJsonReport([]));
     }
     return 0;
   }
@@ -494,14 +532,16 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   if (pullRequest.files.length === 0) {
-    if (!options.json) {
+    if (options.json) {
+      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(readJsonlLog(logPath));
+    } else {
+      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       const tip = !hasUncommittedChanges(repoPath)
         ? 'Specify a git ref: warden HEAD~3 --skill <name>'
         : undefined;
       reporter.renderEmptyState('No changes found', tip);
       reporter.blank();
-    } else {
-      console.log(renderJsonReport([]));
     }
     return 0;
   }
@@ -532,15 +572,17 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const triggersToRun = [...seen.values()];
 
   if (triggersToRun.length === 0) {
-    if (!options.json) {
+    if (options.json) {
+      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(readJsonlLog(logPath));
+    } else {
+      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       reporter.blank();
       if (options.skill) {
         reporter.warning(`No triggers matched for skill: ${options.skill}`);
       } else {
         reporter.warning('No triggers matched for the changed files');
       }
-    } else {
-      console.log(renderJsonReport([]));
     }
     return 0;
   }
@@ -594,7 +636,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted, config.logs);
 }
 
 /**
@@ -632,12 +674,14 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
   }
 
   if (pullRequest.files.length === 0) {
-    if (!options.json) {
+    if (options.json) {
+      const logPath = writeEmptyRunLog(repoPath, { traceId: getTraceId() });
+      process.stdout.write(readJsonlLog(logPath));
+    } else {
+      writeEmptyRunLog(repoPath, { traceId: getTraceId() });
       const tip = 'Specify a git ref to analyze committed changes: warden main --skill <name>';
       reporter.renderEmptyState('No uncommitted changes found', tip);
       reporter.blank();
-    } else {
-      console.log(renderJsonReport([]));
     }
     return 0;
   }

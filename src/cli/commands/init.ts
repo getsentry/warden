@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import { getRepoRoot, getGitHubRepoUrl } from '../git.js';
@@ -142,6 +142,18 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     writeFileSync(workflowPath, content, 'utf-8');
     reporter.created(relative(cwd, workflowPath));
     filesCreated++;
+  }
+
+  // Ensure .warden/logs/ is in .gitignore
+  const gitignorePath = join(repoRoot, '.gitignore');
+  if (existsSync(gitignorePath)) {
+    const gitignoreContent = readFileSync(gitignorePath, 'utf-8');
+    if (!gitignoreContent.includes('.warden/logs/')) {
+      const newline = gitignoreContent.endsWith('\n') ? '' : '\n';
+      writeFileSync(gitignorePath, gitignoreContent + newline + '.warden/logs/\n', 'utf-8');
+      reporter.created('.gitignore entry for .warden/logs/');
+      filesCreated++;
+    }
   }
 
   if (filesCreated === 0) {

@@ -739,3 +739,89 @@ describe('defaults.ignorePaths config', () => {
     expect(result.data?.defaults?.ignorePaths).toEqual(['dist/**', 'node_modules/**']);
   });
 });
+
+describe('logs config', () => {
+  it('accepts logs section with cleanup and retentionDays', () => {
+    const config = {
+      version: 1,
+      skills: [],
+      logs: { cleanup: 'auto', retentionDays: 7 },
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.logs?.cleanup).toBe('auto');
+    expect(result.data?.logs?.retentionDays).toBe(7);
+  });
+
+  it('defaults cleanup to "ask" and retentionDays to 30', () => {
+    const config = {
+      version: 1,
+      skills: [],
+      logs: {},
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.logs?.cleanup).toBe('ask');
+    expect(result.data?.logs?.retentionDays).toBe(30);
+  });
+
+  it('accepts all cleanup modes', () => {
+    for (const mode of ['ask', 'auto', 'never']) {
+      const config = {
+        version: 1,
+        skills: [],
+        logs: { cleanup: mode },
+      };
+
+      const result = WardenConfigSchema.safeParse(config);
+      expect(result.success).toBe(true);
+      expect(result.data?.logs?.cleanup).toBe(mode);
+    }
+  });
+
+  it('rejects invalid cleanup mode', () => {
+    const config = {
+      version: 1,
+      skills: [],
+      logs: { cleanup: 'sometimes' },
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-positive retentionDays', () => {
+    const config = {
+      version: 1,
+      skills: [],
+      logs: { retentionDays: 0 },
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-integer retentionDays', () => {
+    const config = {
+      version: 1,
+      skills: [],
+      logs: { retentionDays: 3.5 },
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('config is valid without logs section', () => {
+    const config = {
+      version: 1,
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.logs).toBeUndefined();
+  });
+});
