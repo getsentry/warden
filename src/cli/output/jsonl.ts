@@ -139,17 +139,15 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 }
 
 /**
- * Write skill reports to a JSONL file.
+ * Render skill reports as a JSONL string.
  * Each line contains one skill report with run metadata.
  * A final summary line is appended at the end.
  */
-export function writeJsonlReport(
-  outputPath: string,
+export function renderJsonlString(
   reports: SkillReport[],
   durationMs: number,
   options?: { runId?: string; traceId?: string }
-): void {
-  const resolvedPath = resolve(process.cwd(), outputPath);
+): string {
   const timestamp = new Date().toISOString();
   const cwd = process.cwd();
 
@@ -163,7 +161,6 @@ export function writeJsonlReport(
 
   const lines: string[] = [];
 
-  // Write one line per skill report
   for (const report of reports) {
     const record: JsonlRecord = {
       run: runMetadata,
@@ -187,7 +184,6 @@ export function writeJsonlReport(
     lines.push(JSON.stringify(record));
   }
 
-  // Write a summary line at the end
   const allFindings = reports.flatMap((r) => r.findings);
   const totalSkippedFiles = reports.reduce((n, r) => n + (r.skippedFiles?.length ?? 0), 0);
   const totalAuxiliaryUsage = reports.reduce<AuxiliaryUsageMap | undefined>(
@@ -205,10 +201,22 @@ export function writeJsonlReport(
   };
   lines.push(JSON.stringify(summaryRecord));
 
-  // Ensure parent directory exists
-  mkdirSync(dirname(resolvedPath), { recursive: true });
+  return lines.join('\n') + '\n';
+}
 
-  writeFileSync(resolvedPath, lines.join('\n') + '\n');
+/**
+ * Write skill reports to a JSONL file.
+ */
+export function writeJsonlReport(
+  outputPath: string,
+  reports: SkillReport[],
+  durationMs: number,
+  options?: { runId?: string; traceId?: string }
+): void {
+  const resolvedPath = resolve(process.cwd(), outputPath);
+  const content = renderJsonlString(reports, durationMs, options);
+  mkdirSync(dirname(resolvedPath), { recursive: true });
+  writeFileSync(resolvedPath, content);
 }
 
 /**

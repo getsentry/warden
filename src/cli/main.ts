@@ -22,12 +22,12 @@ import {
   pluralize,
   writeJsonlReport,
   readJsonlLog,
+  renderJsonlString,
   getRepoLogPath,
   generateRunId,
   type SkillTaskOptions,
 } from './output/index.js';
 import { cleanupLogs } from './log-cleanup.js';
-import type { LogsConfig } from '../config/schema.js';
 import {
   collectFixableFindings,
   applyAllFixes,
@@ -156,22 +156,31 @@ async function outputResultsAndHandleFixes(
   repoPath: string,
   totalDuration: number,
   failFastAborted?: boolean,
-  logsConfig?: LogsConfig
 ): Promise<number> {
   const { reports, filteredReports, hasFailure, failureReasons } = processed;
 
   const traceId = getTraceId();
   const runId = generateRunId();
 
-  // Always write repo-local JSONL log
+  // Always write repo-local JSONL log (non-fatal — don't lose analysis output)
   const logPath = getRepoLogPath(repoPath, runId);
-  writeJsonlReport(logPath, reports, totalDuration, { runId, traceId });
-  reporter.debug(`Run log: ${logPath}`);
+  let logWritten = false;
+  try {
+    writeJsonlReport(logPath, reports, totalDuration, { runId, traceId });
+    reporter.debug(`Run log: ${logPath}`);
+    logWritten = true;
+  } catch (err) {
+    reporter.warning(`Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // Write additional copy to --output path if specified
   if (options.output) {
-    writeJsonlReport(options.output, reports, totalDuration, { runId, traceId });
-    reporter.success(`Wrote JSONL output to ${options.output}`);
+    try {
+      writeJsonlReport(options.output, reports, totalDuration, { runId, traceId });
+      reporter.success(`Wrote JSONL output to ${options.output}`);
+    } catch (err) {
+      reporter.warning(`Failed to write output file: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   // Collect fixable findings early so we know whether to suppress diffs in the report
@@ -188,7 +197,12 @@ async function outputResultsAndHandleFixes(
   reporter.blank();
   if (options.json) {
     // --json: cat the JSONL log file to stdout (unfiltered, matches log file)
-    process.stdout.write(readJsonlLog(logPath));
+    if (logWritten) {
+      process.stdout.write(readJsonlLog(logPath));
+    } else {
+      // Fallback: render JSONL directly to stdout since the repo log failed
+      process.stdout.write(renderJsonlString(reports, totalDuration, { runId, traceId }));
+    }
   } else {
     // Suppress fix diffs in report when interactive step-through will show them
     console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
@@ -217,18 +231,6 @@ async function outputResultsAndHandleFixes(
       renderFixSummary(fixSummary, reporter);
     }
   }
-
-  // Run log cleanup after all output is complete
-  const logsDir = join(repoPath, '.warden', 'logs');
-  const cleanup = logsConfig?.cleanup ?? 'ask';
-  const retentionDays = logsConfig?.retentionDays ?? 30;
-  await cleanupLogs({
-    logsDir,
-    retentionDays,
-    mode: cleanup,
-    isTTY: reporter.mode.isTTY,
-    reporter,
-  });
 
   // Interrupted takes precedence for exit code
   if (interrupted.value) {
@@ -367,7 +369,7 @@ async function runSkills(
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted, config?.logs);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted);
 }
 
 /**
@@ -636,7 +638,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted, config.logs);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted);
 }
 
 /**
@@ -791,6 +793,22 @@ export async function main(): Promise<void> {
       }
     },
   );
+
+  // Run log cleanup after all output is complete (covers all exit paths)
+  try {
+    const repoRoot = getRepoRoot(cwd);
+    const cfgPath = resolve(repoRoot, 'warden.toml');
+    const logsConfig = existsSync(cfgPath) ? loadWardenConfig(dirname(cfgPath)).logs : undefined;
+    await cleanupLogs({
+      logsDir: join(repoRoot, '.warden', 'logs'),
+      retentionDays: logsConfig?.retentionDays ?? 30,
+      mode: logsConfig?.cleanup ?? 'ask',
+      isTTY: reporter.mode.isTTY,
+      reporter,
+    });
+  } catch {
+    // Not in a git repo or config load failed — skip cleanup
+  }
 
   await flushSentry();
   process.exit(exitCode);
