@@ -641,7 +641,7 @@ export function createDefaultCallbacks(
 /**
  * Create an AbortController that fires when either of two controllers abort.
  */
-export function composeAbortControllers(a?: AbortController, b?: AbortController): AbortController {
+function composeAbortControllers(a?: AbortController, b?: AbortController): AbortController {
   const composed = new AbortController();
 
   for (const ctrl of [a, b]) {

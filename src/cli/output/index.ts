@@ -26,7 +26,6 @@ export {
   runSkillTask,
   runSkillTasks,
   createDefaultCallbacks,
-  composeAbortControllers,
   composeTasksWithFailFast,
   runComposedSkillTasks,
   type SkillTaskResult,
