@@ -227,31 +227,33 @@ Focus on issues in the changed code. For each issue found, report:
 
   <h2 id="adding-skills">Adding Skills</h2>
 
-  <p>Warden can discover and install community skills.</p>
+  <p>Warden can fetch and install skills from remote GitHub repositories.</p>
 
-  <h3>Interactive Mode</h3>
+  <h3>Add a Remote Skill</h3>
 
   <Terminal showCopy={true}>
     <Code
-      code={`warden add`}
+      code={`warden add vercel-react-best-practices --remote vercel-labs/agent-skills`}
       lang="bash"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <p>Browse available skills and select which to add.</p>
+  <p>This fetches the skill and adds it with a trigger to <code>warden.toml</code>.</p>
 
-  <h3>List Available Skills</h3>
+  <h3>Browse Remote Skills</h3>
 
   <Terminal showCopy={true}>
     <Code
-      code={`warden add --list`}
+      code={`warden add --remote vercel-labs/agent-skills --list`}
       lang="bash"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <h3>Add a Specific Skill</h3>
+  <h3>Add a Local Skill</h3>
+
+  <p>If you've written your own skills in <code>.agents/skills/</code>, add them by name:</p>
 
   <Terminal showCopy={true}>
     <Code
@@ -260,8 +262,6 @@ Focus on issues in the changed code. For each issue found, report:
       theme="vitesse-black"
     />
   </Terminal>
-
-  <p>This adds the skill and creates a trigger in <code>warden.toml</code>.</p>
 
   <h2 id="pull-request-reviews">Pull Request Reviews</h2>
 
