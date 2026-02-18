@@ -233,12 +233,12 @@ Emitted via `Sentry.metrics.*`. Each function is a no-op when Sentry is not init
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `skill.duration` | distribution (ms) | `skill` |
-| `tokens.input` | distribution | `skill` |
-| `tokens.output` | distribution | `skill` |
-| `cost.usd` | distribution | `skill` |
-| `findings.total` | count | `skill` |
-| `findings` | count | `skill`, `severity` |
+| `skill.duration` | distribution (ms) | `skill`, `repository`, `source` |
+| `tokens.input` | distribution | `skill`, `repository`, `source` |
+| `tokens.output` | distribution | `skill`, `repository`, `source` |
+| `cost.usd` | distribution | `skill`, `repository`, `source` |
+| `findings.total` | count | `skill`, `repository`, `source` |
+| `findings` | count | `skill`, `repository`, `source`, `severity` |
 
 ### Extraction (`emitExtractionMetrics`)
 

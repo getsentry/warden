@@ -6,6 +6,7 @@ import { getVersion } from './utils/index.js';
 export type SentryContext = 'cli' | 'action';
 
 let initialized = false;
+let deploymentContext: SentryContext | undefined;
 
 export function initSentry(context: SentryContext): void {
   const dsn = process.env['WARDEN_SENTRY_DSN'];
@@ -25,6 +26,7 @@ export function initSentry(context: SentryContext): void {
     ],
   });
 
+  deploymentContext = context;
   Sentry.setTag('deployment.context', context);
   Sentry.setTag('service.version', getVersion());
 }
@@ -45,9 +47,20 @@ function safeEmit(fn: () => void): void {
   }
 }
 
-export function emitSkillMetrics(report: SkillReport): void {
+export interface SkillMetricsContext {
+  /** Full repository name (e.g. "owner/repo") */
+  repository?: string;
+}
+
+export function emitSkillMetrics(report: SkillReport, context?: SkillMetricsContext): void {
   safeEmit(() => {
-    const attrs = { skill: report.skill };
+    const attrs: Record<string, string> = { skill: report.skill };
+    if (context?.repository) {
+      attrs['repository'] = context.repository;
+    }
+    if (deploymentContext) {
+      attrs['source'] = deploymentContext;
+    }
 
     Sentry.metrics.distribution('skill.duration', report.durationMs ?? 0, {
       unit: 'millisecond',
