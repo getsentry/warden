@@ -8,6 +8,7 @@
     "preview": "astro preview"
   },
   "dependencies": {
+    "@sentry/warden": "workspace:*",
     "@astrojs/mdx": "^4.0.0",
     "astro": "^5.0.0",
     "geist": "^1.5.1",

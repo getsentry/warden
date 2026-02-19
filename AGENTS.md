@@ -16,8 +16,13 @@ Example: `Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>`
 
 ## Architecture
 
+This is a pnpm workspace monorepo. Shared build tools (eslint, lint-staged, simple-git-hooks, typescript, vitest) live in the root `package.json`.
+
 ```
-src/
+packages/
+├── docs/              # Astro docs site (dex-docs), deployed via Vercel
+
+src/                   # @sentry/warden core (root package)
 ├── index.ts           # Library entry point
 ├── types/             # Zod schemas and types
 ├── config/            # Config loading (warden.toml)
