@@ -324,7 +324,7 @@ async function runAddRemote(
     return 0;
   }
 
-  // Append skill to warden.toml
+  // Append skill to warden.toml — preserve the user's original URL form
   const skillConfig = createRemoteSkillConfig(skillName, remote);
   try {
     appendSkill(configPath, skillConfig);
