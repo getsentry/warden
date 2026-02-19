@@ -12,6 +12,10 @@ action.yml
 **/*.test.*
 vitest*.config.ts
 
+# Environment and secrets (.npmignore overrides .gitignore)
+.env
+.env.*
+
 # Development/CI files
 .github/
 .agents/
@@ -23,6 +27,17 @@ tsconfig.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
 
+# Evals and dev scripts
+evals/
+scripts/
+
+# Plugin/agent config (not needed by npm consumers)
+plugins/
+.claude-plugin/
+.mcp.json
+agents.toml
+conductor.json
+
 # Release tooling
 .craft.yml
 bin/
@@ -32,6 +47,7 @@ AGENTS.md
 CLAUDE.md
 CONTRIBUTING.md
 SPEC.md
+docs/
 packages/
 assets/
 specs/
