@@ -134,7 +134,7 @@ Controls what goes into the npm tarball. Key exclusions:
 - `src/` (source files, consumers use compiled `dist/`)
 - `**/*.test.*` (test files)
 - `.github/`, `.craft.yml`, `bin/` (CI/release tooling)
-- `docs/`, `specs/`, `CLAUDE.md`, `AGENTS.md` (documentation)
+- `packages/`, `specs/`, `CLAUDE.md`, `AGENTS.md` (workspace packages, documentation)
 
 ## Files Involved
 

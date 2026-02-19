@@ -21,6 +21,7 @@ vitest*.config.ts
 *.config.js
 tsconfig.json
 pnpm-lock.yaml
+pnpm-workspace.yaml
 
 # Release tooling
 .craft.yml
@@ -31,7 +32,7 @@ AGENTS.md
 CLAUDE.md
 CONTRIBUTING.md
 SPEC.md
-docs/
+packages/
 assets/
 specs/
 
