@@ -1,6 +1,6 @@
 import type { Octokit } from '@octokit/rest';
-import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
-import type { Severity, SeverityThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
+import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
+import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
 import { formatDuration, formatCost, formatTokens, totalAuxiliaryCost, formatAuxiliarySuffix } from '../cli/output/formatters.js';
 import { escapeHtml } from '../utils/index.js';
 
@@ -37,6 +37,8 @@ export interface UpdateSkillCheckOptions extends CheckOptions {
   failOn?: SeverityThreshold;
   /** Only include findings at or above this severity level in annotations */
   reportOn?: SeverityThreshold;
+  /** Only include findings at or above this confidence level in annotations */
+  minConfidence?: ConfidenceThreshold;
   /** Whether to fail the check run when findings exceed failOn. Default: false */
   failCheck?: boolean;
 }
@@ -101,9 +103,9 @@ export function severityToAnnotationLevel(
  * Returns at most MAX_ANNOTATIONS_PER_REQUEST annotations.
  * If reportOn is specified, only include findings at or above that severity.
  */
-export function findingsToAnnotations(findings: Finding[], reportOn?: SeverityThreshold): CheckAnnotation[] {
-  // Filter by reportOn threshold if specified
-  const filtered = filterFindingsBySeverity(findings, reportOn);
+export function findingsToAnnotations(findings: Finding[], reportOn?: SeverityThreshold, minConfidence?: ConfidenceThreshold): CheckAnnotation[] {
+  // Filter by reportOn threshold and confidence if specified
+  const filtered = filterFindings(findings, reportOn, minConfidence);
 
   // Filter to findings with location using type predicate
   const withLocation = filtered.filter(
@@ -216,8 +218,8 @@ export async function updateSkillCheck(
 ): Promise<void> {
   // Conclusion is based on all findings (failOn behavior)
   const conclusion = determineConclusion(report.findings, options.failOn, options.failCheck);
-  // Annotations are filtered by reportOn threshold
-  const annotations = findingsToAnnotations(report.findings, options.reportOn);
+  // Annotations are filtered by reportOn threshold and confidence
+  const annotations = findingsToAnnotations(report.findings, options.reportOn, options.minConfidence);
 
   const summary = buildSkillSummary(report);
 

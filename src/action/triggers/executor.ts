@@ -10,7 +10,7 @@ import { Sentry } from '../../sentry.js';
 import { ActionFailedError } from '../workflow/base.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
-import type { EventContext, SkillReport, SeverityThreshold } from '../../types/index.js';
+import type { EventContext, SkillReport, SeverityThreshold, ConfidenceThreshold } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
 import type { OutputMode } from '../../cli/output/tty.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -68,6 +68,7 @@ export interface TriggerResult {
   renderResult?: RenderResult;
   failOn?: SeverityThreshold;
   reportOn?: SeverityThreshold;
+  minConfidence?: ConfidenceThreshold;
   reportOnSuccess?: boolean;
   requestChanges?: boolean;
   failCheck?: boolean;
@@ -119,6 +120,7 @@ export async function executeTrigger(
 
       const failOn = trigger.failOn ?? deps.globalFailOn;
       const reportOn = trigger.reportOn ?? deps.globalReportOn;
+      const minConfidence = trigger.minConfidence ?? 'medium';
       const requestChanges = trigger.requestChanges ?? deps.globalRequestChanges;
       const failCheck = trigger.failCheck ?? deps.globalFailCheck;
 
@@ -161,6 +163,7 @@ export async function executeTrigger(
               headSha: context.pullRequest.headSha,
               failOn,
               reportOn,
+              minConfidence,
               failCheck,
             });
           } catch (error) {
@@ -174,6 +177,7 @@ export async function executeTrigger(
             ? renderSkillReport(report, {
                 maxFindings,
                 reportOn,
+                minConfidence,
                 failOn,
                 requestChanges,
                 checkRunUrl: skillCheckUrl,
@@ -188,6 +192,7 @@ export async function executeTrigger(
           renderResult,
           failOn,
           reportOn,
+          minConfidence,
           reportOnSuccess: trigger.reportOnSuccess,
           requestChanges,
           failCheck,

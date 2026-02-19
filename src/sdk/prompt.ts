@@ -40,6 +40,7 @@ Before reporting a finding:
 2. Trace through the code path — follow imports, base classes, and indirect references, not just the immediate file
 3. Verify your assumptions — confirm the issue exists, don't infer from incomplete information
 4. Ensure the finding references lines within the hunk being analyzed
+5. Document your verification in the 'verification' field of each finding
 </verification>`,
 
     `<skill_instructions>
@@ -68,6 +69,7 @@ Full schema:
         "startLine": 10,
         "endLine": 15
       },
+      "verification": "Required. What you checked before reporting: files read, code paths traced, assumptions validated. Reference specific files/functions.",
       "suggestedFix": {
         "description": "How to fix this issue",
         "diff": "unified diff format"

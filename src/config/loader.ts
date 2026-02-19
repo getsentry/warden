@@ -8,7 +8,7 @@ import {
   type ScheduleConfig,
   type TriggerType,
 } from './schema.js';
-import type { SeverityThreshold } from '../types/index.js';
+import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
 export class ConfigLoadError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -96,6 +96,8 @@ export interface ResolvedTrigger {
   model?: string;
   /** Max agentic turns (merged: trigger > skill > defaults) */
   maxTurns?: number;
+  /** Minimum confidence for findings (merged: trigger > skill > defaults) */
+  minConfidence?: ConfidenceThreshold;
   /** Schedule-specific configuration */
   schedule?: ScheduleConfig;
 }
@@ -164,6 +166,7 @@ export function resolveSkillConfigs(
         failCheck: skill.failCheck ?? defaults?.failCheck,
         model: baseModel,
         maxTurns: skill.maxTurns ?? defaults?.maxTurns,
+        minConfidence: skill.minConfidence ?? defaults?.minConfidence,
       });
     } else {
       for (const trigger of skill.triggers) {
@@ -183,6 +186,7 @@ export function resolveSkillConfigs(
           failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? skill.maxTurns ?? defaults?.maxTurns,
+          minConfidence: trigger.minConfidence ?? skill.minConfidence ?? defaults?.minConfidence,
           schedule: trigger.schedule,
         });
       }

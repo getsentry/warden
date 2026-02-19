@@ -76,6 +76,16 @@ describe('parseCliArgs', () => {
     expect(result.options.failOn).toBe('high');
   });
 
+  it('parses --min-confidence option', () => {
+    const result = parseCliArgs(['--min-confidence', 'high']);
+    expect(result.options.minConfidence).toBe('high');
+  });
+
+  it('parses --min-confidence off', () => {
+    const result = parseCliArgs(['--min-confidence', 'off']);
+    expect(result.options.minConfidence).toBe('off');
+  });
+
   it('parses help command', () => {
     const result = parseCliArgs(['help']);
     expect(result.command).toBe('help');

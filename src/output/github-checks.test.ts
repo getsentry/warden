@@ -189,6 +189,40 @@ describe('findingsToAnnotations', () => {
     expect(annotations.map((a) => a.title)).toEqual(['Critical', 'High']);
   });
 
+  it('filters by minConfidence threshold', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'High Confidence',
+        description: 'High confidence issue',
+        confidence: 'high',
+        location: { path: 'a.ts', startLine: 1 },
+      },
+      {
+        id: 'f2',
+        severity: 'high',
+        title: 'Low Confidence',
+        description: 'Low confidence issue',
+        confidence: 'low',
+        location: { path: 'b.ts', startLine: 2 },
+      },
+      {
+        id: 'f3',
+        severity: 'high',
+        title: 'No Confidence',
+        description: 'No confidence set',
+        location: { path: 'c.ts', startLine: 3 },
+      },
+    ];
+
+    // minConfidence='medium' should exclude low confidence but keep no-confidence
+    const annotations = findingsToAnnotations(findings, undefined, 'medium');
+
+    expect(annotations).toHaveLength(2);
+    expect(annotations.map((a) => a.title)).toEqual(['High Confidence', 'No Confidence']);
+  });
+
   it('generates annotations for additional locations', () => {
     const findings: Finding[] = [
       {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import chalk from 'chalk';
-import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
-import { filterFindingsBySeverity } from '../types/index.js';
+import type { SkillReport, Finding, Severity, SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
+import { filterFindings } from '../types/index.js';
 import {
   formatSeverityBadge,
   formatSeverityPlain,
@@ -100,6 +100,11 @@ function formatFindingTTY(finding: Finding, options?: RenderOptions): string[] {
   lines.push('');
   lines.push(`  ${chalk.dim(finding.description)}`);
 
+  // Verification (what the agent checked)
+  if (finding.verification) {
+    lines.push(`  ${chalk.dim.italic(finding.verification)}`);
+  }
+
   // Suggested fix diff if available (suppress when step-through will show it)
   if (finding.suggestedFix?.diff && !options?.suppressFixDiffs) {
     lines.push('');
@@ -141,6 +146,11 @@ function formatFindingCI(finding: Finding): string[] {
   // Confidence
   if (finding.confidence) {
     lines.push(`  confidence: ${finding.confidence}`);
+  }
+
+  // Verification
+  if (finding.verification) {
+    lines.push(`  verification: ${finding.verification}`);
   }
 
   // Additional locations
@@ -273,15 +283,16 @@ export function renderTerminalReport(reports: SkillReport[], mode?: OutputMode, 
 }
 
 /**
- * Filter reports to only include findings at or above the given severity threshold.
+ * Filter reports to only include findings at or above the given severity threshold
+ * and confidence threshold.
  * Returns new report objects with filtered findings; does not mutate the originals.
  * If reportOn is 'off', returns reports with empty findings.
  */
-export function filterReportsBySeverity(reports: SkillReport[], reportOn?: SeverityThreshold): SkillReport[] {
-  if (!reportOn) return reports;
+export function filterReports(reports: SkillReport[], reportOn?: SeverityThreshold, minConfidence?: ConfidenceThreshold): SkillReport[] {
+  if (!reportOn && !minConfidence) return reports;
   return reports.map((report) => ({
     ...report,
-    findings: filterFindingsBySeverity(report.findings, reportOn),
+    findings: filterFindings(report.findings, reportOn, minConfidence),
   }));
 }
 

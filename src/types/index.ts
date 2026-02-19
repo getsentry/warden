@@ -22,6 +22,10 @@ export const CONFIDENCE_ORDER: Record<Confidence, number> = {
 export const SeverityThresholdSchema = z.enum(['off', 'critical', 'high', 'medium', 'low', 'info']);
 export type SeverityThreshold = z.infer<typeof SeverityThresholdSchema>;
 
+// Confidence threshold for config options (includes 'off' to disable filtering)
+export const ConfidenceThresholdSchema = z.enum(['off', 'high', 'medium', 'low']);
+export type ConfidenceThreshold = z.infer<typeof ConfidenceThresholdSchema>;
+
 /**
  * Severity order for comparison (lower = more severe).
  * Single source of truth for severity ordering across the codebase.
@@ -46,6 +50,33 @@ export function filterFindingsBySeverity(findings: Finding[], threshold?: Severi
   return findings.filter((f) => SEVERITY_ORDER[f.severity] <= thresholdOrder);
 }
 
+/**
+ * Filter findings to only include those at or above the given confidence threshold.
+ * If no threshold is provided or threshold is 'off', returns all findings unchanged.
+ * Findings without a confidence field are always included (backwards compat).
+ */
+export function filterFindingsByConfidence(findings: Finding[], threshold?: ConfidenceThreshold): Finding[] {
+  if (!threshold || threshold === 'off') return findings;
+  const thresholdOrder = CONFIDENCE_ORDER[threshold];
+  return findings.filter((f) => {
+    if (!f.confidence) return true;
+    return CONFIDENCE_ORDER[f.confidence] <= thresholdOrder;
+  });
+}
+
+/**
+ * Filter findings by both severity and confidence thresholds.
+ * Applies severity filtering first, then confidence filtering.
+ * Either threshold can be omitted to skip that filter.
+ */
+export function filterFindings(
+  findings: Finding[],
+  reportOn?: SeverityThreshold,
+  minConfidence?: ConfidenceThreshold
+): Finding[] {
+  return filterFindingsByConfidence(filterFindingsBySeverity(findings, reportOn), minConfidence);
+}
+
 // Location within a file
 export const LocationSchema = z.object({
   path: z.string(),
@@ -68,6 +99,7 @@ export const FindingSchema = z.object({
   confidence: ConfidenceSchema.optional(),
   title: z.string(),
   description: z.string(),
+  verification: z.string().optional(),
   location: LocationSchema.optional(),
   additionalLocations: z.array(LocationSchema).optional(),
   suggestedFix: SuggestedFixSchema.optional(),

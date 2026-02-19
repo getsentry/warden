@@ -12,6 +12,11 @@ export {
   // Severity
   SeveritySchema,
   SEVERITY_ORDER,
+  // Confidence
+  ConfidenceThresholdSchema,
+  CONFIDENCE_ORDER,
+  filterFindingsByConfidence,
+  filterFindings,
   // Location
   LocationSchema,
   // Suggested Fix
@@ -35,6 +40,7 @@ export {
 
 export type {
   Severity,
+  ConfidenceThreshold,
   Location,
   SuggestedFix,
   Finding,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SeverityThresholdSchema } from '../types/index.js';
+import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
 
 // Tool names that can be allowed/denied
 export const ToolNameSchema = z.enum([
@@ -64,6 +64,8 @@ export const SkillTriggerSchema = z.object({
   failCheck: z.boolean().optional(),
   model: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
+  /** Minimum confidence level for findings. Findings below this are filtered from output. */
+  minConfidence: ConfidenceThresholdSchema.optional(),
   /** Schedule-specific configuration. Only used when type is 'schedule'. */
   schedule: ScheduleConfigSchema.optional(),
 }).refine(
@@ -103,6 +105,8 @@ export const SkillConfigSchema = z.object({
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
   maxTurns: z.number().int().positive().optional(),
+  /** Minimum confidence level for findings. Findings below this are filtered from output. */
+  minConfidence: ConfidenceThresholdSchema.optional(),
   /** Triggers defining when/where this skill runs. Omit to run everywhere (wildcard). */
   triggers: z.array(SkillTriggerSchema).optional(),
 });
@@ -163,6 +167,8 @@ export const DefaultsSchema = z.object({
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
   maxTurns: z.number().int().positive().optional(),
+  /** Minimum confidence level for findings. Findings below this are filtered from output. Default: medium */
+  minConfidence: ConfidenceThresholdSchema.optional(),
   /** Path patterns to exclude from all skills */
   ignorePaths: z.array(z.string()).optional(),
   /** Default branch for the repository (e.g., 'main', 'master', 'develop'). Auto-detected if not specified. */

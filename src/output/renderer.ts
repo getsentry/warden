@@ -1,4 +1,4 @@
-import { SEVERITY_ORDER, filterFindingsBySeverity } from '../types/index.js';
+import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
 import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
 import { capitalize, formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
@@ -6,10 +6,10 @@ import { generateContentHash, generateMarker } from './dedup.js';
 import { escapeHtml } from '../utils/index.js';
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, failOn, requestChanges, checkRunUrl, totalFindings, allFindings } = options;
+  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, minConfidence, failOn, requestChanges, checkRunUrl, totalFindings, allFindings } = options;
 
-  // Filter by reportOn threshold first, then apply maxFindings limit
-  const filteredFindings = filterFindingsBySeverity(report.findings, reportOn);
+  // Filter by reportOn threshold and confidence, then apply maxFindings limit
+  const filteredFindings = filterFindings(report.findings, reportOn, minConfidence);
   const findings = maxFindings ? filteredFindings.slice(0, maxFindings) : filteredFindings;
   const sortedFindings = [...findings].sort(
     (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
@@ -20,7 +20,8 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
   const hiddenCount = total - sortedFindings.length;
 
   // Use allFindings for failOn evaluation if provided (e.g., when report.findings was modified for dedup)
-  const findingsForFailOn = allFindings ?? report.findings;
+  // Apply confidence filtering to failOn evaluation too
+  const findingsForFailOn = filterFindings(allFindings ?? report.findings, undefined, minConfidence);
   const review = renderReview(sortedFindings, report, includeSuggestions, failOn, findingsForFailOn, requestChanges);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile, checkRunUrl, hiddenCount);
 
@@ -68,6 +69,10 @@ function renderReview(
       throw new Error('Unexpected: finding without location in filtered list');
     }
     let body = `**${escapeHtml(finding.title)}**\n\n${escapeHtml(finding.description)}`;
+
+    if (finding.verification) {
+      body += `\n\n<details><summary>Verification</summary>\n\n${escapeHtml(finding.verification)}\n\n</details>`;
+    }
 
     if (includeSuggestions && finding.suggestedFix) {
       body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;

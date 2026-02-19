@@ -1,4 +1,4 @@
-import type { SeverityThreshold, Finding } from '../types/index.js';
+import type { SeverityThreshold, ConfidenceThreshold, Finding } from '../types/index.js';
 
 /** GitHub PR review states that Warden tracks */
 export type ReviewState = 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED';
@@ -30,6 +30,8 @@ export interface RenderOptions {
   extraLabels?: string[];
   /** Only include findings at or above this severity level in rendered output. Use 'off' to disable reporting. */
   reportOn?: SeverityThreshold;
+  /** Only include findings at or above this confidence level. Use 'off' to disable filtering. */
+  minConfidence?: ConfidenceThreshold;
   /** Fail threshold - determines REQUEST_CHANGES vs COMMENT for PR reviews */
   failOn?: SeverityThreshold;
   /** Whether to use REQUEST_CHANGES when failOn threshold is met. Default: false */

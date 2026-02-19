@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
+import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import type { SkillDefinition } from '../config/schema.js';
 import type { HunkWithContext } from '../diff/index.js';
 
@@ -26,6 +26,24 @@ function makeHunk(filename = 'src/app.ts'): HunkWithContext {
     language: 'typescript',
   };
 }
+
+describe('buildHunkSystemPrompt', () => {
+  it('includes verification step in instructions', () => {
+    const result = buildHunkSystemPrompt(skill);
+    expect(result).toContain("Document your verification in the 'verification' field");
+  });
+
+  it('includes verification field in output schema', () => {
+    const result = buildHunkSystemPrompt(skill);
+    expect(result).toContain('"verification"');
+    expect(result).toContain('Required. What you checked before reporting');
+  });
+
+  it('includes skill prompt in instructions', () => {
+    const result = buildHunkSystemPrompt(skill);
+    expect(result).toContain('Check for issues.');
+  });
+});
 
 describe('buildHunkUserPrompt', () => {
   describe('Other Files section', () => {

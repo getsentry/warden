@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
-import { SeverityThresholdSchema } from '../types/index.js';
-import type { SeverityThreshold } from '../types/index.js';
+import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
+import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 import { getVersion } from '../utils/index.js';
 
 export const CLIOptionsSchema = z.object({
@@ -15,6 +15,8 @@ export const CLIOptionsSchema = z.object({
   failOn: SeverityThresholdSchema.optional(),
   /** Only show findings at or above this severity in output */
   reportOn: SeverityThresholdSchema.optional(),
+  /** Only show findings at or above this confidence in output */
+  minConfidence: ConfidenceThresholdSchema.optional(),
   help: z.boolean().default(false),
   /** Max concurrent trigger/skill executions (default: 4) */
   parallel: z.number().int().positive().optional(),
@@ -91,6 +93,8 @@ Options:
                        (off, critical, high, medium, low, info)
   --report-on <sev>    Only show findings >= severity in output
                        (off, critical, high, medium, low, info)
+  --min-confidence <c> Only show findings >= confidence in output
+                       (off, high, medium, low) Default: medium
   --fix                Automatically apply all suggested fixes
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
   -x, --fail-fast      Stop after first finding
@@ -267,6 +271,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       output: { type: 'string', short: 'o' },
       'fail-on': { type: 'string' },
       'report-on': { type: 'string' },
+      'min-confidence': { type: 'string' },
       fix: { type: 'boolean', default: false },
       force: { type: 'boolean', short: 'f', default: false },
       list: { type: 'boolean', short: 'l', default: false },
@@ -401,6 +406,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     output: values.output,
     failOn: values['fail-on'] as SeverityThreshold | undefined,
     reportOn: values['report-on'] as SeverityThreshold | undefined,
+    minConfidence: values['min-confidence'] as ConfidenceThreshold | undefined,
     fix: values.fix,
     force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,

@@ -376,6 +376,77 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.model).toBe('claude-haiku-3-5-20241022');
     });
   });
+
+  describe('minConfidence merge', () => {
+    it('uses defaults.minConfidence when no skill or trigger override', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: { minConfidence: 'high' },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.minConfidence).toBe('high');
+    });
+
+    it('skill-level minConfidence overrides defaults', () => {
+      const skill: SkillConfig = {
+        name: 'test-skill',
+        minConfidence: 'low',
+        triggers: [
+          { type: 'pull_request', actions: ['opened'] },
+        ],
+      };
+
+      const config: WardenConfig = {
+        version: 1,
+        skills: [skill],
+        defaults: { minConfidence: 'high' },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.minConfidence).toBe('low');
+    });
+
+    it('trigger-level minConfidence overrides skill and defaults', () => {
+      const skill: SkillConfig = {
+        name: 'test-skill',
+        minConfidence: 'high',
+        triggers: [
+          {
+            type: 'pull_request',
+            actions: ['opened'],
+            minConfidence: 'low',
+          },
+        ],
+      };
+
+      const config: WardenConfig = {
+        version: 1,
+        skills: [skill],
+        defaults: { minConfidence: 'medium' },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.minConfidence).toBe('low');
+    });
+
+    it('wildcard entry inherits minConfidence from skill and defaults', () => {
+      const config: WardenConfig = {
+        version: 1,
+        skills: [{ name: 'test-skill', minConfidence: 'high' }],
+        defaults: { minConfidence: 'medium' },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.type).toBe('*');
+      expect(resolved?.minConfidence).toBe('high');
+    });
+
+    it('minConfidence is undefined when not configured', () => {
+      const [resolved] = resolveSkillConfigs(baseConfig);
+      expect(resolved?.minConfidence).toBeUndefined();
+    });
+  });
 });
 
 describe('maxTurns config', () => {

@@ -257,6 +257,7 @@ export async function postTriggerReview(
               {
                 maxFindings: result.maxFindings,
                 reportOn: result.reportOn,
+                minConfidence: result.minConfidence,
                 failOn: result.failOn,
                 requestChanges: result.requestChanges,
                 checkRunUrl: result.checkRunUrl,

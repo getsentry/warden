@@ -119,6 +119,7 @@ describe('executeTrigger', () => {
       headSha: 'abc123',
       failOn: undefined,
       reportOn: undefined,
+      minConfidence: 'medium',
       failCheck: undefined,
     });
   });

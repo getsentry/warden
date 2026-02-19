@@ -6,12 +6,13 @@ import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
-import type { SkillReport } from '../types/index.js';
+import type { SkillReport, ConfidenceThreshold } from '../types/index.js';
+import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
-import { renderTerminalReport, filterReportsBySeverity } from './terminal.js';
+import { renderTerminalReport, filterReports } from './terminal.js';
 import {
   Reporter,
   detectOutputMode,
@@ -142,7 +143,8 @@ interface ProcessedResults {
  */
 function processTaskResults(
   results: Awaited<ReturnType<typeof runSkillTasks>>,
-  reportOn: CLIOptions['reportOn']
+  reportOn: CLIOptions['reportOn'],
+  minConfidence?: ConfidenceThreshold
 ): ProcessedResults {
   const reports: SkillReport[] = [];
   let hasFailure = false;
@@ -151,15 +153,18 @@ function processTaskResults(
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
-      if (result.failOn && shouldFail(result.report, result.failOn)) {
+      // Apply confidence filtering before failOn evaluation so low-confidence findings
+      // don't cause exit code 1
+      const reportForFail = { ...result.report, findings: filterFindings(result.report.findings, undefined, minConfidence) };
+      if (result.failOn && shouldFail(reportForFail, result.failOn)) {
         hasFailure = true;
-        const count = countFindingsAtOrAbove(result.report, result.failOn);
+        const count = countFindingsAtOrAbove(reportForFail, result.failOn);
         failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
       }
     }
   }
 
-  const filteredReports = filterReportsBySeverity(reports, reportOn);
+  const filteredReports = filterReports(reports, reportOn, minConfidence);
   return { reports, filteredReports, hasFailure, failureReasons };
 }
 
@@ -383,7 +388,8 @@ async function runSkills(
 
   // Process results and output
   const totalDuration = Date.now() - startTime;
-  const processed = processTaskResults(results, options.reportOn);
+  const effectiveMinConfidence = options.minConfidence ?? config?.defaults?.minConfidence ?? 'medium';
+  const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
   return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted);
 }
 
@@ -652,7 +658,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Process results and output
   const totalDuration = Date.now() - startTime;
-  const processed = processTaskResults(results, options.reportOn);
+  const effectiveMinConfidence = options.minConfidence ?? config.defaults?.minConfidence ?? 'medium';
+  const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
   return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted);
 }
 
