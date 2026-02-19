@@ -115,16 +115,11 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
     }
   }
 
-  // Preserve clone URL when the input is a full URL (SSH or HTTPS).
-  // For owner/repo shorthand, cloneUrl stays undefined and fetchRemote falls back to HTTPS.
-  let cloneUrl: string | undefined;
+  // Normalize GitHub URLs to owner/repo format.
+  // When the input is a full URL, preserve it as cloneUrl for fetchRemote.
   const normalized = normalizeGitHubUrl(inputRef);
-  if (normalized) {
-    // Input was a full URL - preserve it (without any SHA suffix we already stripped)
-    cloneUrl = inputRef;
-  }
-
-  // Normalize GitHub URLs to owner/repo format
+  // Upgrade http:// to https:// to prevent cloning over plain HTTP
+  const cloneUrl = normalized ? inputRef.replace(/^http:\/\//i, 'https://') : undefined;
   const repoPath = normalized ?? inputRef;
 
   const slashIndex = repoPath.indexOf('/');
@@ -369,24 +364,22 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
     }
 
     try {
-      // Clone with minimal depth for unpinned refs
       // Note: '--' separates flags from positional args to prevent flag injection
-      if (isPinned && parsed.sha) {
-        // For pinned refs, we need full history to checkout the specific SHA
-        // Use a shallow clone then deepen if needed
+      const { sha } = parsed;
+      if (sha) {
+        // For pinned refs, shallow clone then checkout the specific SHA
         execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
 
         try {
-          // Try to checkout the pinned SHA
-          // Note: 'checkout' without '--' treats arg as ref; with '--' it's a file path
-          execGit(['fetch', '--depth=1', 'origin', '--', parsed.sha], { cwd: remotePath });
-          execGit(['checkout', parsed.sha], { cwd: remotePath });
+          // Try to fetch the pinned SHA directly
+          execGit(['fetch', '--depth=1', 'origin', '--', sha], { cwd: remotePath });
+          execGit(['checkout', sha], { cwd: remotePath });
         } catch {
-          // If SHA not found, do a full fetch and retry
+          // If SHA not found in shallow history, do a full fetch and retry
           execGit(['fetch', '--unshallow'], { cwd: remotePath });
-          execGit(['checkout', parsed.sha], { cwd: remotePath });
+          execGit(['checkout', sha], { cwd: remotePath });
         }
-      } else if (!isPinned) {
+      } else {
         // For unpinned refs, shallow clone of default branch
         execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
       }

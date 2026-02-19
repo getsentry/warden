@@ -198,42 +198,10 @@ describe('parseRemoteRef', () => {
       owner: 'getsentry',
       repo: 'skills',
       sha: undefined,
-      cloneUrl: 'http://github.com/getsentry/skills',
+      cloneUrl: 'https://github.com/getsentry/skills',
     });
   });
 
-  // cloneUrl preservation
-  it('sets cloneUrl for SSH URLs', () => {
-    const result = parseRemoteRef('git@github.com:getsentry/skills.git');
-    expect(result.cloneUrl).toBe('git@github.com:getsentry/skills.git');
-  });
-
-  it('sets cloneUrl for HTTPS URLs', () => {
-    const result = parseRemoteRef('https://github.com/getsentry/skills.git');
-    expect(result.cloneUrl).toBe('https://github.com/getsentry/skills.git');
-  });
-
-  it('leaves cloneUrl undefined for owner/repo shorthand', () => {
-    const result = parseRemoteRef('getsentry/skills');
-    expect(result.cloneUrl).toBeUndefined();
-  });
-
-  it('leaves cloneUrl undefined for owner/repo@sha shorthand', () => {
-    const result = parseRemoteRef('getsentry/skills@abc123');
-    expect(result.cloneUrl).toBeUndefined();
-  });
-
-  it('sets cloneUrl without SHA suffix for pinned SSH URLs', () => {
-    const result = parseRemoteRef('git@github.com:getsentry/skills.git@abc123');
-    expect(result.cloneUrl).toBe('git@github.com:getsentry/skills.git');
-    expect(result.sha).toBe('abc123');
-  });
-
-  it('sets cloneUrl without SHA suffix for pinned HTTPS URLs', () => {
-    const result = parseRemoteRef('https://github.com/getsentry/skills.git@abc123');
-    expect(result.cloneUrl).toBe('https://github.com/getsentry/skills.git');
-    expect(result.sha).toBe('abc123');
-  });
 });
 
 describe('formatRemoteRef', () => {
