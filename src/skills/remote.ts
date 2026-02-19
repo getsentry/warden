@@ -13,6 +13,7 @@ const DEFAULT_TTL_SECONDS = 86400;
 const RemoteEntrySchema = z.object({
   sha: z.string(),
   fetchedAt: z.string().datetime(),
+  cloneUrl: z.string().optional(),
 });
 
 /** Schema for the entire state.json file */
@@ -350,8 +351,8 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
     return stateEntry.sha;
   }
 
-  // Use the original clone URL if provided, otherwise default to HTTPS
-  const repoUrl = parsed.cloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`;
+  // Use the original clone URL if provided, fall back to stored URL from state, then HTTPS
+  const repoUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`;
 
   // Clone or update
   if (!isCached) {
@@ -409,10 +410,12 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
   // Get the current HEAD SHA
   const sha = execGit(['rev-parse', 'HEAD'], { cwd: remotePath });
 
-  // Update state with normalized key
+  // Update state with normalized key — preserve cloneUrl for future re-clones
+  const cloneUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl;
   state.remotes[stateKey] = {
     sha,
     fetchedAt: new Date().toISOString(),
+    ...(cloneUrl ? { cloneUrl } : {}),
   };
   saveState(state);
 
