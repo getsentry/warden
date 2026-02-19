@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import {
   fetchRemote,
+  formatRemoteRef,
   listCachedRemotes,
   parseRemoteRef,
 } from '../../skills/remote.js';
@@ -21,10 +22,12 @@ export async function runSync(options: CLIOptions, reporter: Reporter): Promise<
     return 0;
   }
 
-  // If a specific remote is provided, only sync that one
+  // If a specific remote is provided, only sync that one.
+  // Normalize to owner/repo so URL-form inputs match normalized state keys.
   const targetRepo = options.remote;
-  const remotesToSync = targetRepo
-    ? cachedRemotes.filter(({ ref }) => ref === targetRepo || ref.startsWith(`${targetRepo}@`))
+  const normalizedTarget = targetRepo ? formatRemoteRef(parseRemoteRef(targetRepo)) : undefined;
+  const remotesToSync = normalizedTarget
+    ? cachedRemotes.filter(({ ref }) => ref === normalizedTarget || ref.startsWith(`${normalizedTarget}@`))
     : cachedRemotes;
 
   if (targetRepo && remotesToSync.length === 0) {
