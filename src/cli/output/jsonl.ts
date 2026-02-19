@@ -8,9 +8,9 @@ import {
   SkippedFileSchema,
   AuxiliaryUsageMapSchema,
   SeveritySchema,
+  FixStatusSchema,
 } from '../../types/index.js';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
-import { FixStatusSchema } from '../../action/fix-evaluation/types.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { countBySeverity } from './formatters.js';
 

@@ -227,6 +227,10 @@ export const EventContextSchema = z.object({
 });
 export type EventContext = z.infer<typeof EventContextSchema>;
 
+// Fix evaluation status
+export const FixStatusSchema = z.enum(['not_attempted', 'attempted_failed', 'resolved']);
+export type FixStatus = z.infer<typeof FixStatusSchema>;
+
 // Retry configuration for SDK calls
 export const RetryConfigSchema = z.object({
   /** Maximum number of retry attempts (default: 3) */

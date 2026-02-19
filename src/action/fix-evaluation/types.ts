@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import type { UsageStats } from '../../types/index.js';
+import { FixStatusSchema } from '../../types/index.js';
+import type { FixStatus, UsageStats } from '../../types/index.js';
 import type { ExistingComment } from '../../output/dedup.js';
 
-export const FixStatusSchema = z.enum(['not_attempted', 'attempted_failed', 'resolved']);
-export type FixStatus = z.infer<typeof FixStatusSchema>;
+export { FixStatusSchema };
+export type { FixStatus };
 
 export const FixJudgeVerdictSchema = z.object({
   status: FixStatusSchema,
