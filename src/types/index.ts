@@ -239,3 +239,7 @@ export const RetryConfigSchema = z.object({
   maxDelayMs: z.number().int().positive().default(30000),
 });
 export type RetryConfig = z.infer<typeof RetryConfigSchema>;
+
+// Fix evaluation status
+export const FixStatusSchema = z.enum(['not_attempted', 'attempted_failed', 'resolved']);
+export type FixStatus = z.infer<typeof FixStatusSchema>;
