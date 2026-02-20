@@ -5,3 +5,35 @@ agents = ["cursor", "codex", "claude"]
 
 [trust]
 allow_all = true
+
+[[skills]]
+name = "skill-creator"
+source = "getsentry/skills"
+
+[[skills]]
+name = "commit"
+source = "getsentry/skills"
+
+[[skills]]
+name = "create-pr"
+source = "getsentry/skills"
+
+[[skills]]
+name = "iterate-pr"
+source = "getsentry/skills"
+
+[[skills]]
+name = "agents-md"
+source = "getsentry/skills"
+
+[[skills]]
+name = "claude-settings-audit"
+source = "getsentry/skills"
+
+[[skills]]
+name = "brand-guidelines"
+source = "getsentry/skills"
+
+[[skills]]
+name = "code-simplifier"
+source = "getsentry/skills"

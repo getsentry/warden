@@ -67,7 +67,7 @@ export { SkillReport, runSkill } from "./types/index.js";
 
 ## Testing
 
-**Always reference `/testing-guidelines` when writing tests.** Key principles:
+Use `/testing-guidelines` when writing tests. Key principles:
 
 - Mock external services, use sanitized real-world fixtures
 - Prefer integration tests over unit tests
@@ -88,6 +88,25 @@ pnpm lint && pnpm build && pnpm test
 ## Task Management
 
 Use `/dex` to break down complex work, track progress across sessions, and coordinate multi-step implementations.
+
+## Skills
+
+### Workflow
+- `/commit` — **Always** use for commits. Never commit directly
+- `/create-pr` — **Always** use for PRs. Never create PRs directly
+- `/iterate-pr` — Fix CI failures and review feedback until checks pass
+
+### Code Quality
+- `/warden` — Run Warden analysis before committing. See `.agents/skills/warden/SKILL.md`
+- `/notseer` — High-precision bug detection. See `.agents/skills/notseer/SKILL.md`
+- `/code-simplifier` — Simplify and refine code
+- `/architecture-review` — Staff-level codebase health review. See `.agents/skills/architecture-review/SKILL.md`
+
+### Authoring
+- `/testing-guidelines` — Required when writing tests. See `.agents/skills/testing-guidelines/SKILL.md`
+- `/agent-prompt` — Reference for writing skills and prompts. See `.agents/skills/agent-prompt/SKILL.md`
+- `/skill-creator` — **Always** use when creating or updating skills
+- `/brand-guidelines` — Sentry voice and copy guidelines
 
 ## Skills Policy
 
