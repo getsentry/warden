@@ -63,13 +63,3 @@ export type {
   FileAnalysisResult,
 } from './types.js';
 
-// Re-export session storage utilities
-export {
-  snapshotSessionFiles,
-  moveNewSessions,
-  ensureSessionsDir,
-  resolveSessionsDir,
-  getClaudeProjectDir,
-  DEFAULT_SESSIONS_DIR,
-} from './session.js';
-export type { SessionStorageOptions } from './session.js';
