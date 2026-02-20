@@ -140,10 +140,7 @@ export async function executeTrigger(
             batchDelayMs: config.defaults?.batchDelayMs,
             pathToClaudeCodeExecutable: claudePath,
             auxiliaryMaxRetries: config.defaults?.auxiliaryMaxRetries,
-            session: {
-              enabled: config.sessions?.enabled ?? true,
-              directory: config.sessions?.directory,
-            },
+            session: { enabled: false },
           },
         };
 
