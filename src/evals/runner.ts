@@ -130,6 +130,7 @@ export async function runEval(
       model,
       verbose: options.verbose,
       parallel: false,
+      session: { enabled: false },
     });
 
     log(`Skill complete: ${report.findings.length} finding(s)`);
