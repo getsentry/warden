@@ -149,7 +149,7 @@ def generate_summary_md(
         # Build patches lookup
         pr_lookup: dict[str, str] = {}
         for p in patches:
-            if p.get("status") == "created":
+            if p.get("status") == "created" and p.get("findingId"):
                 pr_lookup[p["findingId"]] = p.get("prUrl", "")
 
         for f in verified:
@@ -195,9 +195,9 @@ def generate_report_json(
     prs_failed = sum(1 for p in patches if p.get("status") == "error")
 
     # Count verify errors (findings in all but not in verified or rejected)
-    verified_ids = {f["findingId"] for f in verified}
-    rejected_ids = {f["findingId"] for f in rejected}
-    all_ids = {f["findingId"] for f in all_findings}
+    verified_ids = {f["findingId"] for f in verified if "findingId" in f}
+    rejected_ids = {f["findingId"] for f in rejected if "findingId" in f}
+    all_ids = {f["findingId"] for f in all_findings if "findingId" in f}
     verify_errors = len(all_ids - verified_ids - rejected_ids)
 
     return {

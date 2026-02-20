@@ -184,8 +184,16 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
 
   let skillsAdded = 0;
   if (skills.size > 0) {
+    // Read existing config to check for already-registered skills
+    const existingToml = readFileSync(wardenTomlPath, 'utf-8');
+
     reporter.blank();
     for (const [name] of skills) {
+      // Skip skills already present in the config to avoid duplicates
+      if (existingToml.includes(`name = "${name}"`)) {
+        reporter.skipped(`Skill '${name}'`, 'already in config');
+        continue;
+      }
       try {
         appendSkill(wardenTomlPath, {
           name,

@@ -22,6 +22,7 @@ import argparse
 import json
 import subprocess
 import sys
+from urllib.parse import quote
 
 
 def run_cmd(args: list[str], timeout: int = 30) -> str | None:
@@ -79,8 +80,9 @@ def email_to_github_username(email: str) -> str | None:
         return local
 
     # gh api with --jq returns raw text, not JSON, so use run_cmd
+    encoded_email = quote(email, safe="")
     output = run_cmd([
-        "gh", "api", f"search/users?q={email}+in:email",
+        "gh", "api", f"search/users?q={encoded_email}+in:email",
         "--jq", ".items[0].login",
     ])
     return output if output else None
