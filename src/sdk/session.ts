@@ -124,24 +124,3 @@ export function resolveSessionsDir(repoPath: string, directory?: string): string
   return path.isAbsolute(dir) ? dir : path.join(repoPath, dir);
 }
 
-/**
- * List all session files in the given directory.
- * Returns an array of session file paths sorted by modification time (newest first).
- */
-export function listSessions(dir: string): string[] {
-  if (!fs.existsSync(dir)) {
-    return [];
-  }
-
-  const files = fs.readdirSync(dir)
-    .filter(f => f.endsWith('.jsonl'))
-    .map(f => path.join(dir, f));
-
-  // Sort by modification time, newest first
-  return files.sort((a, b) => {
-    let mtimeA = 0, mtimeB = 0;
-    try { mtimeA = fs.statSync(a).mtime.getTime(); } catch { /* treat as oldest */ }
-    try { mtimeB = fs.statSync(b).mtime.getTime(); } catch { /* treat as oldest */ }
-    return mtimeB - mtimeA;
-  });
-}

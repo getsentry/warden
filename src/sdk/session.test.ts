@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   snapshotSessionFiles,
   moveNewSessions,
   ensureSessionsDir,
-  listSessions,
   getClaudeProjectDir,
   resolveSessionsDir,
   DEFAULT_SESSIONS_DIR,
@@ -105,27 +104,4 @@ describe('session storage', () => {
     });
   });
 
-  describe('listSessions', () => {
-    it('returns empty array for non-existent directory', () => {
-      const result = listSessions(join(tempDir, 'does-not-exist'));
-      expect(result).toEqual([]);
-    });
-
-    it('returns only JSONL files sorted by modification time', async () => {
-      const dir = join(tempDir, 'sessions');
-      mkdirSync(dir);
-
-      // Create files with different modification times
-      writeFileSync(join(dir, 'old.jsonl'), '{}');
-      await new Promise((r) => setTimeout(r, 10));
-      writeFileSync(join(dir, 'new.jsonl'), '{}');
-      writeFileSync(join(dir, 'not-jsonl.txt'), 'text');
-
-      const result = listSessions(dir);
-
-      expect(result).toHaveLength(2);
-      expect(result[0]).toContain('new.jsonl');
-      expect(result[1]).toContain('old.jsonl');
-    });
-  });
 });

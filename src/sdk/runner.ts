@@ -68,7 +68,6 @@ export {
   snapshotSessionFiles,
   moveNewSessions,
   ensureSessionsDir,
-  listSessions,
   resolveSessionsDir,
   getClaudeProjectDir,
   DEFAULT_SESSIONS_DIR,
