@@ -33,7 +33,7 @@ describe('resolveSkillConfigs', () => {
       ...baseConfig,
       defaults: {
         failOn: 'high',
-        reportOn: 'critical',
+        reportOn: 'low',
         maxFindings: 10,
         model: 'claude-sonnet-4-20250514',
       },
@@ -42,7 +42,7 @@ describe('resolveSkillConfigs', () => {
     const [resolved] = resolveSkillConfigs(config);
 
     expect(resolved?.failOn).toBe('high');
-    expect(resolved?.reportOn).toBe('critical');
+    expect(resolved?.reportOn).toBe('low');
     expect(resolved?.maxFindings).toBe(10);
     expect(resolved?.model).toBe('claude-sonnet-4-20250514');
   });
@@ -51,7 +51,7 @@ describe('resolveSkillConfigs', () => {
     const skill: SkillConfig = {
       name: 'test-skill',
       paths: ['lib/**'],
-      failOn: 'critical',
+      failOn: 'medium',
       reportOn: 'high',
       model: 'claude-opus-4-20250514',
       triggers: [
@@ -64,7 +64,7 @@ describe('resolveSkillConfigs', () => {
       skills: [skill],
       defaults: {
         failOn: 'high',
-        reportOn: 'critical',
+        reportOn: 'low',
         maxFindings: 10,
         model: 'claude-sonnet-4-20250514',
       },
@@ -74,7 +74,7 @@ describe('resolveSkillConfigs', () => {
 
     // Skill overrides
     expect(resolved?.filters.paths).toEqual(['lib/**']);
-    expect(resolved?.failOn).toBe('critical');
+    expect(resolved?.failOn).toBe('medium');
     expect(resolved?.reportOn).toBe('high');
     expect(resolved?.model).toBe('claude-opus-4-20250514');
 
@@ -92,7 +92,7 @@ describe('resolveSkillConfigs', () => {
         {
           type: 'pull_request',
           actions: ['opened'],
-          failOn: 'critical',
+          failOn: 'low',
           model: 'claude-opus-4-20250514',
         },
       ],
@@ -102,8 +102,8 @@ describe('resolveSkillConfigs', () => {
       version: 1,
       skills: [skill],
       defaults: {
-        failOn: 'low',
-        reportOn: 'info',
+        failOn: 'medium',
+        reportOn: 'low',
         maxFindings: 10,
       },
     };
@@ -111,7 +111,7 @@ describe('resolveSkillConfigs', () => {
     const [resolved] = resolveSkillConfigs(config);
 
     // Trigger overrides
-    expect(resolved?.failOn).toBe('critical');
+    expect(resolved?.failOn).toBe('low');
     expect(resolved?.model).toBe('claude-opus-4-20250514');
 
     // Skill overrides defaults

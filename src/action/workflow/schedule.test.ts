@@ -477,15 +477,15 @@ describe('runScheduleWorkflow', () => {
 
   describe('outputs', () => {
     it('aggregates severity counts across multiple triggers', async () => {
-      const criticalFinding = createFinding({
+      const finding1 = createFinding({
         id: 'f1',
-        severity: 'critical',
-        title: 'Critical bug',
+        severity: 'high',
+        title: 'Security bug',
       });
-      const highFinding = createFinding({
+      const finding2 = createFinding({
         id: 'f2',
         severity: 'high',
-        title: 'High bug',
+        title: 'Logic bug',
       });
 
       // Alternate skill resolution for multi fixtures
@@ -505,14 +505,14 @@ describe('runScheduleWorkflow', () => {
         .mockResolvedValueOnce(
           createSkillReport({
             skill: 'test-skill-a',
-            findings: [criticalFinding],
-            summary: 'Found critical issue',
+            findings: [finding1],
+            summary: 'Found security issue',
           })
         )
         .mockResolvedValueOnce(
           createSkillReport({
             skill: 'test-skill-b',
-            findings: [highFinding],
+            findings: [finding2],
             summary: 'Found high issue',
           })
         );

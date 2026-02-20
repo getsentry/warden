@@ -24,33 +24,38 @@ export function pluralize(count: number, singular: string, plural?: string): str
 
 /**
  * Format a duration in milliseconds to a human-readable string.
+ * Under 1s: "50ms". Under 60s: "3.2s". Over 60s: "5m 3s".
  */
 export function formatDuration(ms: number): string {
   if (ms < 1000) {
     return `${Math.round(ms)}ms`;
   }
-  return `${(ms / 1000).toFixed(1)}s`;
+  const totalSeconds = ms / 1000;
+  if (totalSeconds < 60) {
+    return `${totalSeconds.toFixed(1)}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.round(totalSeconds % 60);
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+  return `${minutes}m ${seconds}s`;
 }
 
 /**
- * Format an elapsed time for display (e.g., "+0.8s").
+ * Format an elapsed time for display (e.g., "+0.8s", "+2m 3s").
  */
 export function formatElapsed(ms: number): string {
-  if (ms < 1000) {
-    return `+${Math.round(ms)}ms`;
-  }
-  return `+${(ms / 1000).toFixed(1)}s`;
+  return `+${formatDuration(ms)}`;
 }
 
 /**
  * Severity configuration for display.
  */
 const SEVERITY_CONFIG: Record<Severity, { color: typeof chalk.red; symbol: string }> = {
-  critical: { color: chalk.red, symbol: figures.bullet },
-  high: { color: chalk.redBright, symbol: figures.bullet },
+  high: { color: chalk.red, symbol: figures.bullet },
   medium: { color: chalk.yellow, symbol: figures.bullet },
   low: { color: chalk.green, symbol: figures.bullet },
-  info: { color: chalk.blue, symbol: figures.bullet },
 };
 
 /**
@@ -133,11 +138,9 @@ export function formatFindingCounts(counts: Record<Severity, number>): string {
   }
 
   const parts: string[] = [];
-  if (counts.critical > 0) parts.push(`${formatSeverityDot('critical')} ${counts.critical} critical`);
   if (counts.high > 0) parts.push(`${formatSeverityDot('high')} ${counts.high} high`);
   if (counts.medium > 0) parts.push(`${formatSeverityDot('medium')} ${counts.medium} medium`);
   if (counts.low > 0) parts.push(`${formatSeverityDot('low')} ${counts.low} low`);
-  if (counts.info > 0) parts.push(`${formatSeverityDot('info')} ${counts.info} info`);
 
   return `${total} finding${total === 1 ? '' : 's'}: ${parts.join('  ')}`;
 }
@@ -153,11 +156,9 @@ export function formatFindingCountsPlain(counts: Record<Severity, number>): stri
   }
 
   const parts: string[] = [];
-  if (counts.critical > 0) parts.push(`${counts.critical} critical`);
   if (counts.high > 0) parts.push(`${counts.high} high`);
   if (counts.medium > 0) parts.push(`${counts.medium} medium`);
   if (counts.low > 0) parts.push(`${counts.low} low`);
-  if (counts.info > 0) parts.push(`${counts.info} info`);
 
   return `${total} finding${total === 1 ? '' : 's'} (${parts.join(', ')})`;
 }
@@ -213,11 +214,9 @@ export function padRight(str: string, width: number): string {
  */
 export function countBySeverity(findings: Finding[]): Record<Severity, number> {
   const counts: Record<Severity, number> = {
-    critical: 0,
     high: 0,
     medium: 0,
     low: 0,
-    info: 0,
   };
 
   for (const finding of findings) {

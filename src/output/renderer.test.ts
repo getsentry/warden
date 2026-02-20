@@ -24,7 +24,7 @@ describe('renderSkillReport', () => {
       findings: [
         {
           id: 'sql-injection-1',
-          severity: 'critical',
+          severity: 'high',
           title: 'SQL Injection',
           description: 'User input passed directly to query',
           location: {
@@ -262,7 +262,7 @@ describe('renderSkillReport', () => {
         },
         {
           id: 'f3',
-          severity: 'info',
+          severity: 'low',
           title: 'Issue C',
           description: 'Details',
           location: { path: 'src/a.ts', startLine: 30 },
@@ -289,7 +289,7 @@ describe('renderSkillReport', () => {
         },
         {
           id: 'f2',
-          severity: 'critical',
+          severity: 'high',
           title: 'Critical Issue',
           description: 'Details',
           location: { path: 'src/a.ts', startLine: 20 },
@@ -304,21 +304,21 @@ describe('renderSkillReport', () => {
   });
 
   it('uses COMMENT event when failOn is not specified', () => {
-    const criticalReport: SkillReport = {
+    const highReport: SkillReport = {
       ...baseReport,
       findings: [
         {
           id: 'f1',
-          severity: 'critical',
-          title: 'Critical',
+          severity: 'high',
+          title: 'High Severity',
           description: 'Details',
           location: { path: 'src/a.ts', startLine: 1 },
         },
       ],
     };
 
-    // Without failOn, even critical findings use COMMENT
-    const result = renderSkillReport(criticalReport);
+    // Without failOn, even high findings use COMMENT
+    const result = renderSkillReport(highReport);
     expect(result.review!.event).toBe('COMMENT');
   });
 
@@ -329,7 +329,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
@@ -347,7 +347,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
@@ -359,25 +359,7 @@ describe('renderSkillReport', () => {
       expect(result.review!.event).toBe('COMMENT');
     });
 
-    it('uses REQUEST_CHANGES when failOn is critical and finding is critical', () => {
-      const report: SkillReport = {
-        ...baseReport,
-        findings: [
-          {
-            id: 'f1',
-            severity: 'critical',
-            title: 'Critical Issue',
-            description: 'Details',
-            location: { path: 'src/a.ts', startLine: 1 },
-          },
-        ],
-      };
-
-      const result = renderSkillReport(report, { failOn: 'critical', requestChanges: true });
-      expect(result.review!.event).toBe('REQUEST_CHANGES');
-    });
-
-    it('uses COMMENT when failOn is critical but finding is only high', () => {
+    it('uses REQUEST_CHANGES when failOn is medium and finding is high (more severe)', () => {
       const report: SkillReport = {
         ...baseReport,
         findings: [
@@ -391,7 +373,25 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'critical' });
+      const result = renderSkillReport(report, { failOn: 'medium', requestChanges: true });
+      expect(result.review!.event).toBe('REQUEST_CHANGES');
+    });
+
+    it('uses COMMENT when failOn is medium but finding is only low', () => {
+      const report: SkillReport = {
+        ...baseReport,
+        findings: [
+          {
+            id: 'f1',
+            severity: 'low',
+            title: 'Low Issue',
+            description: 'Details',
+            location: { path: 'src/a.ts', startLine: 1 },
+          },
+        ],
+      };
+
+      const result = renderSkillReport(report, { failOn: 'medium' });
       expect(result.review!.event).toBe('COMMENT');
     });
 
@@ -413,21 +413,21 @@ describe('renderSkillReport', () => {
       expect(result.review!.event).toBe('REQUEST_CHANGES');
     });
 
-    it('uses REQUEST_CHANGES when failOn is high and finding is critical (more severe)', () => {
+    it('uses REQUEST_CHANGES when failOn is low and finding is low (exact match)', () => {
       const report: SkillReport = {
         ...baseReport,
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
-            title: 'Critical Issue',
+            severity: 'low',
+            title: 'Low Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
           },
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'high', requestChanges: true });
+      const result = renderSkillReport(report, { failOn: 'low', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
     });
 
@@ -480,7 +480,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
@@ -496,8 +496,8 @@ describe('renderSkillReport', () => {
       };
 
       // reportOn=high filters out low finding from comments
-      // failOn=critical causes REQUEST_CHANGES because of critical finding
-      const result = renderSkillReport(report, { failOn: 'critical', reportOn: 'high', requestChanges: true });
+      // failOn=medium causes REQUEST_CHANGES because high finding exceeds medium threshold
+      const result = renderSkillReport(report, { failOn: 'medium', reportOn: 'high', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(1);
       expect(result.review!.comments[0]!.body).toContain('Critical Issue');
@@ -509,14 +509,14 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical General Issue',
             description: 'No specific location',
           },
         ],
       };
 
-      const result = renderSkillReport(report, { failOn: 'critical', requestChanges: true });
+      const result = renderSkillReport(report, { failOn: 'high', requestChanges: true });
       expect(result.review).toBeDefined();
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(0);
@@ -531,18 +531,18 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'high',
-            title: 'High Issue',
+            severity: 'medium',
+            title: 'Medium Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
           },
         ],
       };
 
-      // reportOn=critical filters out high finding from comments (no comments posted)
-      // failOn=high should still cause REQUEST_CHANGES because high finding meets threshold
+      // reportOn=high filters out medium finding from comments (no comments posted)
+      // failOn=medium should still cause REQUEST_CHANGES because medium finding meets threshold
       // Per spec: "a finding can block the PR but be filtered from comments"
-      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'critical', requestChanges: true });
+      const result = renderSkillReport(report, { failOn: 'medium', reportOn: 'high', requestChanges: true });
       expect(result.review).toBeDefined();
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(0);
@@ -565,16 +565,16 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      // reportOn=critical filters out medium finding (no comments)
+      // reportOn=high filters out medium finding (no comments)
       // failOn=high: medium doesn't meet threshold, so no REQUEST_CHANGES needed
       // Result: no review posted (nothing useful to show)
-      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'critical' });
+      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'high' });
       expect(result.review).toBeUndefined();
     });
 
     it('REQUEST_CHANGES uses allFindings when report.findings is modified (deduplication)', () => {
       // Simulate deduplication scenario: report.findings has been reduced
-      // but allFindings contains the original set including a critical finding
+      // but allFindings contains the original set including a high finding
       const report: SkillReport = {
         ...baseReport,
         findings: [
@@ -591,8 +591,8 @@ describe('renderSkillReport', () => {
       const allFindings = [
         {
           id: 'f1',
-          severity: 'critical' as const,
-          title: 'Critical Issue (deduplicated)',
+          severity: 'high' as const,
+          title: 'High Issue (deduplicated)',
           description: 'Details',
           location: { path: 'src/a.ts', startLine: 1 },
         },
@@ -600,7 +600,7 @@ describe('renderSkillReport', () => {
       ];
 
       // Without allFindings, would use report.findings (only low) -> COMMENT
-      // With allFindings (includes critical), should be REQUEST_CHANGES
+      // With allFindings (includes high), should be REQUEST_CHANGES
       const result = renderSkillReport(report, { failOn: 'high', allFindings, requestChanges: true });
       expect(result.review).toBeDefined();
       expect(result.review!.event).toBe('REQUEST_CHANGES');
@@ -615,7 +615,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
@@ -633,7 +633,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
@@ -651,7 +651,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
@@ -669,34 +669,34 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
-            title: 'Critical Issue',
+            severity: 'high',
+            title: 'High Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 1 },
           },
           {
             id: 'f2',
-            severity: 'high',
-            title: 'High Issue',
+            severity: 'medium',
+            title: 'Medium Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 10 },
           },
           {
             id: 'f3',
-            severity: 'medium',
-            title: 'Medium Issue',
+            severity: 'low',
+            title: 'Low Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 20 },
           },
         ],
       };
 
-      // reportOn=critical filters to only critical finding
-      // failOn=high: critical and high findings both meet threshold -> REQUEST_CHANGES
-      const result = renderSkillReport(report, { failOn: 'high', reportOn: 'critical', requestChanges: true });
+      // reportOn=high filters to only high finding
+      // failOn=medium: high and medium findings both meet threshold -> REQUEST_CHANGES
+      const result = renderSkillReport(report, { failOn: 'medium', reportOn: 'high', requestChanges: true });
       expect(result.review!.event).toBe('REQUEST_CHANGES');
       expect(result.review!.comments).toHaveLength(1);
-      expect(result.review!.comments[0]!.body).toContain('Critical Issue');
+      expect(result.review!.comments[0]!.body).toContain('High Issue');
     });
   });
 
@@ -705,7 +705,7 @@ describe('renderSkillReport', () => {
       ...baseReport,
       findings: Array.from({ length: 10 }, (_, i) => ({
         id: `f${i}`,
-        severity: 'info' as const,
+        severity: 'low' as const,
         title: `Finding ${i}`,
         description: 'Details',
         location: { path: 'src/a.ts', startLine: i + 1 },
@@ -748,7 +748,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Critical details',
             location: { path: 'src/a.ts', startLine: 10 },
@@ -777,7 +777,7 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      // reportOn='high' should only include critical and high
+      // reportOn='high' should only include high severity findings
       const result = renderSkillReport(report, { reportOn: 'high' });
 
       expect(result.review).toBeDefined();
@@ -794,14 +794,14 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 10 },
           },
           {
             id: 'f2',
-            severity: 'info',
+            severity: 'low',
             title: 'Info Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 20 },
@@ -827,7 +827,7 @@ describe('renderSkillReport', () => {
           },
           {
             id: 'f2',
-            severity: 'info',
+            severity: 'low',
             title: 'Info Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 20 },
@@ -847,7 +847,7 @@ describe('renderSkillReport', () => {
         findings: [
           {
             id: 'f1',
-            severity: 'critical',
+            severity: 'high',
             title: 'Critical Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 10 },
@@ -869,7 +869,7 @@ describe('renderSkillReport', () => {
         ],
       };
 
-      // With reportOn='high' and maxFindings=2, should only show critical (1 finding)
+      // With reportOn='high' and maxFindings=2, should only show the high finding (1 finding)
       // because low findings are filtered out first
       const result = renderSkillReport(report, { reportOn: 'high', maxFindings: 2 });
 
@@ -987,7 +987,7 @@ describe('renderSkillReport', () => {
           },
           {
             id: 'f3',
-            severity: 'info',
+            severity: 'low',
             title: 'Info Issue',
             description: 'Details',
             location: { path: 'src/a.ts', startLine: 30 },
@@ -1302,9 +1302,9 @@ describe('renderFindingsBody', () => {
     const findings = [
       {
         id: 'f1',
-        severity: 'critical' as const,
+        severity: 'high' as const,
         confidence: 'high' as const,
-        title: 'Critical Bug',
+        title: 'High Severity Bug',
         description: 'Details',
       },
     ];
@@ -1312,7 +1312,7 @@ describe('renderFindingsBody', () => {
     const body = renderFindingsBody(findings, 'test-skill');
 
     expect(body).not.toContain('confidence');
-    expect(body).toContain('**Critical Bug**');
+    expect(body).toContain('**High Severity Bug**');
   });
 
   it('renders multiple findings', () => {

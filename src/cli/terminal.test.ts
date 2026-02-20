@@ -214,7 +214,7 @@ describe('renderTerminalReport', () => {
 
       const output = renderTerminalReport([report], ciMode);
 
-      expect(output).toContain('test-skill (285.6s) - 1 finding (1 high)');
+      expect(output).toContain('test-skill (4m 46s) - 1 finding (1 high)');
       expect(output).not.toContain('===');
       expect(output).not.toContain('---');
     });

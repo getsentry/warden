@@ -7,7 +7,6 @@ import {
   FindingSchema,
   SkippedFileSchema,
   AuxiliaryUsageMapSchema,
-  SeveritySchema,
   FixStatusSchema,
 } from '../../types/index.js';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
@@ -52,6 +51,8 @@ export const JsonlRunMetadataSchema = z.object({
   cwd: z.string(),
   runId: z.string(),
   traceId: z.string().optional(),
+  model: z.string().optional(),
+  headSha: z.string().optional(),
 });
 export type JsonlRunMetadata = z.infer<typeof JsonlRunMetadataSchema>;
 
@@ -81,8 +82,23 @@ export const JsonlRecordSchema = z.object({
 });
 export type JsonlRecord = z.infer<typeof JsonlRecordSchema>;
 
-/** Severity breakdown in the summary record. */
-const BySeveritySchema = z.record(SeveritySchema, z.number().int().nonnegative());
+/**
+ * Severity breakdown in the summary record.
+ * Uses a transform to normalize legacy keys ('critical' → 'high', 'info' → 'low')
+ * so old JSONL logs parse correctly. Accepts any string keys to handle old 5-level logs.
+ */
+const BySeveritySchema = z.record(z.string(), z.number().int().nonnegative()).transform(
+  (obj) => {
+    const result: Record<string, number> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const normalized = key === 'critical' ? 'high' : key === 'info' ? 'low' : key;
+      if (normalized === 'high' || normalized === 'medium' || normalized === 'low') {
+        result[normalized] = (result[normalized] ?? 0) + value;
+      }
+    }
+    return result as Record<'high' | 'medium' | 'low', number>;
+  },
+);
 
 /** Aggregate summary across all skills (always the last JSONL line). */
 export const JsonlSummaryRecordSchema = z.object({
@@ -146,7 +162,7 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 export function renderJsonlString(
   reports: SkillReport[],
   durationMs: number,
-  options?: { runId?: string; traceId?: string; timestamp?: Date }
+  options?: { runId?: string; traceId?: string; timestamp?: Date; model?: string; headSha?: string }
 ): string {
   const timestamp = (options?.timestamp ?? new Date()).toISOString();
   const cwd = process.cwd();
@@ -157,6 +173,8 @@ export function renderJsonlString(
     cwd,
     runId: options?.runId ?? generateRunId(),
     traceId: options?.traceId,
+    model: options?.model,
+    headSha: options?.headSha,
   };
 
   const lines: string[] = [];
@@ -325,6 +343,8 @@ export function parseSummaryFromLastLine(filePath: string): JsonlSummaryRecord |
 export interface LogFileMetadata {
   summary: JsonlSummaryRecord;
   skills: string[];
+  model?: string;
+  totalFiles: number;
 }
 
 /**
@@ -339,6 +359,8 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
 
     let summary: JsonlSummaryRecord | undefined;
     const skills: string[] = [];
+    let model: string | undefined;
+    const uniqueFiles = new Set<string>();
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -350,6 +372,18 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
           if (!skills.includes(parsed.skill)) {
             skills.push(parsed.skill);
           }
+          // Extract model from first record's run metadata
+          if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
+            model = parsed.run.model;
+          }
+          // Count unique filenames across skill records' files arrays
+          if (Array.isArray(parsed.files)) {
+            for (const f of parsed.files) {
+              if (f && typeof f.filename === 'string') {
+                uniqueFiles.add(f.filename);
+              }
+            }
+          }
         }
       } catch {
         // Skip unparseable lines
@@ -357,7 +391,7 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
     }
 
     if (!summary) return undefined;
-    return { summary, skills };
+    return { summary, skills, model, totalFiles: uniqueFiles.size };
   } catch {
     return undefined;
   }

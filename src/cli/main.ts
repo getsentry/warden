@@ -11,7 +11,7 @@ import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
-import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
+import { getRepoRoot, getHeadSha, refExists, hasUncommittedChanges } from './git.js';
 import { renderTerminalReport, filterReports } from './terminal.js';
 import {
   Reporter,
@@ -108,7 +108,13 @@ function writeEmptyRunLog(
   const runId = generateRunId();
   const timestamp = new Date();
   const logPath = getRepoLogPath(repoPath, runId, timestamp);
-  const content = renderJsonlString([], 0, { runId, traceId: opts?.traceId, timestamp });
+  let headSha: string | undefined;
+  try {
+    headSha = getHeadSha(repoPath);
+  } catch {
+    // Not in a git repo or HEAD is unborn
+  }
+  const content = renderJsonlString([], 0, { runId, traceId: opts?.traceId, timestamp, headSha });
   try {
     writeJsonlContent(logPath, content);
   } catch (err) {
@@ -182,6 +188,7 @@ async function outputResultsAndHandleFixes(
   repoPath: string,
   totalDuration: number,
   failFastAborted?: boolean,
+  resolvedModel?: string,
 ): Promise<number> {
   const { reports, filteredReports, hasFailure, failureReasons } = processed;
 
@@ -189,8 +196,16 @@ async function outputResultsAndHandleFixes(
   const runId = generateRunId();
   const timestamp = new Date();
 
+  // Capture HEAD SHA safely (non-fatal if not in a git repo)
+  let headSha: string | undefined;
+  try {
+    headSha = getHeadSha(repoPath);
+  } catch {
+    // Not in a git repo or HEAD is unborn
+  }
+
   // Render JSONL content once so repo log and --output have identical timestamps
-  const jsonlContent = renderJsonlString(reports, totalDuration, { runId, traceId, timestamp });
+  const jsonlContent = renderJsonlString(reports, totalDuration, { runId, traceId, timestamp, model: resolvedModel, headSha });
 
   // Always write repo-local JSONL log (non-fatal — don't lose analysis output)
   const logPath = getRepoLogPath(repoPath, runId, timestamp);
@@ -401,7 +416,7 @@ async function runSkills(
   const totalDuration = Date.now() - startTime;
   const effectiveMinConfidence = options.minConfidence ?? config?.defaults?.minConfidence ?? 'medium';
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted, model);
 }
 
 /**
@@ -673,7 +688,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted);
+  const configModel = triggersToRun[0]?.model ?? config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'];
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted, configModel);
 }
 
 /**

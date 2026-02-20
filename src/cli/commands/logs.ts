@@ -108,18 +108,16 @@ function formatRelativeTime(date: Date): string {
 }
 
 const SEVERITY_COLORS: Record<Severity, (s: string) => string> = {
-  critical: chalk.red,
-  high: chalk.redBright,
+  high: chalk.red,
   medium: chalk.yellow,
   low: chalk.green,
-  info: chalk.blue,
 };
 
 /**
  * Format a severity breakdown as colored counts.
  */
 function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>): string {
-  const severities: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+  const severities: Severity[] = ['high', 'medium', 'low'];
   const parts = severities.map((sev) => {
     const count = bySeverity[sev] ?? 0;
     return count > 0 ? SEVERITY_COLORS[sev](String(count)) : chalk.dim('0');
@@ -172,6 +170,8 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
       file: entry,
       runId: meta?.summary.run.runId,
       timestamp: meta?.summary.run.timestamp,
+      model: meta?.model,
+      files: meta?.totalFiles,
       findings: meta?.summary.totalFindings,
       bySeverity: meta?.summary.bySeverity,
       durationMs: meta?.summary.run.durationMs,
@@ -187,6 +187,8 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
   interface Row {
     runId: string;
     date: string;
+    model: string;
+    files: string;
     findings: string;
     time: string;
     cost: string;
@@ -198,7 +200,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
   // Aggregate totals across all runs
   const totals = {
     findings: 0,
-    bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } as Record<Severity, number>,
+    bySeverity: { high: 0, medium: 0, low: 0 } as Record<Severity, number>,
     costUSD: 0,
     durationMs: 0,
     skills: new Set<string>(),
@@ -209,6 +211,8 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
       rows.push({
         runId: entry.slice(0, 8),
         date: '',
+        model: '-',
+        files: '',
         findings: chalk.dim('parse error'),
         time: '',
         cost: '',
@@ -233,6 +237,8 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     rows.push({
       runId: shortRunId(summary.run.runId),
       date: formatRelativeTime(new Date(summary.run.timestamp)),
+      model: meta.model ?? '-',
+      files: meta.totalFiles > 0 ? String(meta.totalFiles) : '',
       findings: formatSeverityBreakdown(summary.bySeverity),
       time: formatDuration(summary.run.durationMs),
       cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
@@ -241,13 +247,24 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
   }
 
   // Calculate column widths
-  const headers = { runId: 'RUN', date: 'DATE', findings: 'FINDINGS', time: 'TIME', cost: 'COST', skills: 'SKILLS' };
+  const headers = {
+    runId: 'RUN',
+    date: 'DATE',
+    files: 'FILES',
+    findings: 'FINDINGS',
+    time: 'TIME',
+    cost: 'COST',
+    model: 'MODEL',
+    skills: 'SKILLS',
+  };
   const widths = {
     runId: Math.max(headers.runId.length, ...rows.map((r) => visualWidth(r.runId))),
     date: Math.max(headers.date.length, ...rows.map((r) => visualWidth(r.date))),
+    files: Math.max(headers.files.length, ...rows.map((r) => visualWidth(r.files))),
     findings: Math.max(headers.findings.length, ...rows.map((r) => visualWidth(r.findings))),
     time: Math.max(headers.time.length, ...rows.map((r) => visualWidth(r.time))),
     cost: Math.max(headers.cost.length, ...rows.map((r) => visualWidth(r.cost))),
+    model: Math.max(headers.model.length, ...rows.map((r) => visualWidth(r.model))),
     skills: Math.max(headers.skills.length, ...rows.map((r) => visualWidth(r.skills))),
   };
 
@@ -255,9 +272,11 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
   const headerLine =
     `  ${padToWidth(headers.runId, widths.runId)}  ` +
     `${padToWidth(headers.date, widths.date)}  ` +
+    `${rightAlign(headers.files, widths.files)}  ` +
     `${padToWidth(headers.findings, widths.findings)}  ` +
     `${rightAlign(headers.time, widths.time)}  ` +
     `${rightAlign(headers.cost, widths.cost)}  ` +
+    `${padToWidth(headers.model, widths.model)}  ` +
     `${headers.skills}`;
   reporter.text(chalk.dim(headerLine));
 
@@ -266,9 +285,11 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     const line =
       `  ${padToWidth(chalk.bold(row.runId), widths.runId)}  ` +
       `${padToWidth(chalk.dim(row.date), widths.date)}  ` +
+      `${rightAlign(chalk.dim(row.files), widths.files)}  ` +
       `${padToWidth(row.findings, widths.findings)}  ` +
       `${rightAlign(chalk.dim(row.time), widths.time)}  ` +
       `${rightAlign(chalk.dim(row.cost), widths.cost)}  ` +
+      `${padToWidth(chalk.dim(row.model), widths.model)}  ` +
       `${chalk.dim(row.skills)}`;
     reporter.text(line);
   }
@@ -376,6 +397,7 @@ export async function runLogsShow(
       runId: lastRunMetadata.runId,
       traceId: lastRunMetadata.traceId,
       timestamp: new Date(lastRunMetadata.timestamp),
+      model: lastRunMetadata.model,
     } : undefined);
     process.stdout.write(jsonlContent);
   } else {

@@ -27,8 +27,8 @@ Skills define what to analyze and when. Each skill requires a name. Triggers are
 [[skills]]
 name = "security-review"
 paths = ["src/auth/**", "src/payments/**"]
-failOn = "critical"
-reportOn = "high"
+failOn = "high"
+reportOn = "medium"
 maxFindings = 20
 
 [[skills.triggers]]
@@ -49,7 +49,7 @@ name = "security-review"
 model = "claude-opus-4-20250514"
 maxTurns = 100
 paths = ["src/auth/**", "src/payments/**"]
-failOn = "critical"
+failOn = "high"
 
 [[skills.triggers]]
 type = "pull_request"

@@ -87,11 +87,9 @@ Used in `--fail-on` and `--report-on`:
 
 | Level | Meaning |
 |-------|---------|
-| `critical` | Must fix before merge |
-| `high` | Should fix before merge |
+| `high` | Must fix before merge |
 | `medium` | Worth reviewing |
 | `low` | Minor improvement |
-| `info` | Informational only |
 | `off` | Disable the threshold |
 
 ## Exit Codes

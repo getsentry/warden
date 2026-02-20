@@ -19,10 +19,18 @@ describe('formatDuration', () => {
     expect(formatDuration(999)).toBe('999ms');
   });
 
-  it('formats seconds', () => {
+  it('formats seconds with decimal under 60s', () => {
     expect(formatDuration(1000)).toBe('1.0s');
     expect(formatDuration(1500)).toBe('1.5s');
     expect(formatDuration(12345)).toBe('12.3s');
+    expect(formatDuration(59499)).toBe('59.5s');
+  });
+
+  it('formats minutes and seconds over 60s', () => {
+    expect(formatDuration(60000)).toBe('1m');
+    expect(formatDuration(63000)).toBe('1m 3s');
+    expect(formatDuration(303000)).toBe('5m 3s');
+    expect(formatDuration(120000)).toBe('2m');
   });
 
   it('rounds milliseconds', () => {
@@ -51,45 +59,37 @@ describe('formatLocation', () => {
 describe('formatFindingCountsPlain', () => {
   it('formats zero findings', () => {
     const counts: Record<Severity, number> = {
-      critical: 0,
       high: 0,
       medium: 0,
       low: 0,
-      info: 0,
     };
     expect(formatFindingCountsPlain(counts)).toBe('No findings');
   });
 
   it('formats single finding', () => {
     const counts: Record<Severity, number> = {
-      critical: 0,
       high: 1,
       medium: 0,
       low: 0,
-      info: 0,
     };
     expect(formatFindingCountsPlain(counts)).toBe('1 finding (1 high)');
   });
 
   it('formats multiple findings', () => {
     const counts: Record<Severity, number> = {
-      critical: 1,
       high: 2,
       medium: 3,
-      low: 0,
-      info: 1,
+      low: 1,
     };
-    expect(formatFindingCountsPlain(counts)).toBe('7 findings (1 critical, 2 high, 3 medium, 1 info)');
+    expect(formatFindingCountsPlain(counts)).toBe('6 findings (2 high, 3 medium, 1 low)');
   });
 });
 
 describe('formatSeverityBadge', () => {
   it('includes severity text for each level', () => {
-    expect(formatSeverityBadge('critical')).toContain('critical');
     expect(formatSeverityBadge('high')).toContain('high');
     expect(formatSeverityBadge('medium')).toContain('medium');
     expect(formatSeverityBadge('low')).toContain('low');
-    expect(formatSeverityBadge('info')).toContain('info');
   });
 });
 

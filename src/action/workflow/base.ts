@@ -161,7 +161,6 @@ export function collectTriggerErrors(results: TriggerResult[]): string[] {
 
 export interface WorkflowOutputs {
   findingsCount: number;
-  criticalCount: number;
   highCount: number;
   summary: string;
 }
@@ -172,7 +171,6 @@ export interface WorkflowOutputs {
 export function computeWorkflowOutputs(reports: SkillReport[]): WorkflowOutputs {
   return {
     findingsCount: reports.reduce((sum, r) => sum + r.findings.length, 0),
-    criticalCount: countSeverity(reports, 'critical'),
     highCount: countSeverity(reports, 'high'),
     summary: reports.map((r) => r.summary).join('\n'),
   };
@@ -183,7 +181,6 @@ export function computeWorkflowOutputs(reports: SkillReport[]): WorkflowOutputs 
  */
 export function setWorkflowOutputs(outputs: WorkflowOutputs): void {
   setOutput('findings-count', outputs.findingsCount);
-  setOutput('critical-count', outputs.criticalCount);
   setOutput('high-count', outputs.highCount);
   setOutput('summary', outputs.summary);
 }

@@ -154,7 +154,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
     };
 
     vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
@@ -198,7 +198,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
     };
 
     const existingComment = createExistingComment({ isWarden: false });
@@ -249,7 +249,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
       failOn: 'high',
       requestChanges: true,
     };
@@ -318,7 +318,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
     };
 
     vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('API rate limit'));
@@ -353,7 +353,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
     };
 
     vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
@@ -396,7 +396,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
     };
 
     vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('Resource not accessible by integration'));
@@ -435,7 +435,7 @@ describe('postTriggerReview', () => {
           ],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
     };
 
     // Mock consolidation removing the duplicate
@@ -492,7 +492,7 @@ describe('postTriggerReview', () => {
           comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
         },
       }),
-      reportOn: 'info',
+      reportOn: 'low',
     };
 
     vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());

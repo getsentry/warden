@@ -652,7 +652,6 @@ export async function runPRWorkflow(
       if (matchedTriggers.length === 0) {
         await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey, config.defaults?.auxiliaryMaxRetries);
         setOutput('findings-count', 0);
-        setOutput('critical-count', 0);
         setOutput('high-count', 0);
         setOutput('summary', 'No triggers matched');
         return;

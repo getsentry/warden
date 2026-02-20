@@ -377,12 +377,12 @@ describe('writeJsonlReport', () => {
         skill: 'review',
         summary: 'Issues found',
         findings: [
-          { id: '1', severity: 'critical', title: 'A', description: 'A' },
+          { id: '1', severity: 'high', title: 'A', description: 'A' },
           { id: '2', severity: 'high', title: 'B', description: 'B' },
-          { id: '3', severity: 'high', title: 'C', description: 'C' },
+          { id: '3', severity: 'medium', title: 'C', description: 'C' },
           { id: '4', severity: 'medium', title: 'D', description: 'D' },
           { id: '5', severity: 'low', title: 'E', description: 'E' },
-          { id: '6', severity: 'info', title: 'F', description: 'F' },
+          { id: '6', severity: 'low', title: 'F', description: 'F' },
         ],
       },
     ];
@@ -394,11 +394,9 @@ describe('writeJsonlReport', () => {
     const summary = JSON.parse(lines[1]!);
 
     expect(summary.totalFindings).toBe(6);
-    expect(summary.bySeverity.critical).toBe(1);
     expect(summary.bySeverity.high).toBe(2);
-    expect(summary.bySeverity.medium).toBe(1);
-    expect(summary.bySeverity.low).toBe(1);
-    expect(summary.bySeverity.info).toBe(1);
+    expect(summary.bySeverity.medium).toBe(2);
+    expect(summary.bySeverity.low).toBe(2);
   });
 });
 
@@ -559,7 +557,7 @@ describe('parseJsonlReports', () => {
   it('reconstructs SkillReport from JSONL content', () => {
     // Sample JSONL content that matches what would be written by renderJsonlString
     const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"test-123"},"skill":"security-review","summary":"Found 2 issues","findings":[{"id":"sec-001","severity":"high","title":"SQL Injection","description":"User input passed directly to query"},{"id":"sec-002","severity":"medium","title":"XSS Risk","description":"Unescaped output"}],"durationMs":1234,"usage":{"inputTokens":1000,"outputTokens":500,"costUSD":0.01}}
-{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"test-123"},"type":"summary","totalFindings":2,"bySeverity":{"critical":0,"high":1,"medium":1,"low":0,"info":0},"usage":{"inputTokens":1000,"outputTokens":500,"costUSD":0.01}}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"test-123"},"type":"summary","totalFindings":2,"bySeverity":{"high":1,"medium":1,"low":0},"usage":{"inputTokens":1000,"outputTokens":500,"costUSD":0.01}}
 `;
 
     const result = parseJsonlReports(jsonlContent);
@@ -577,7 +575,7 @@ describe('parseJsonlReports', () => {
   it('handles multiple skill records', () => {
     const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":3000,"cwd":"/test","runId":"multi-123"},"skill":"skill-1","summary":"Done","findings":[],"durationMs":1000}
 {"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":3000,"cwd":"/test","runId":"multi-123"},"skill":"skill-2","summary":"Issues found","findings":[{"id":"a","severity":"low","title":"A","description":"A"}],"durationMs":2000}
-{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":3000,"cwd":"/test","runId":"multi-123"},"type":"summary","totalFindings":1,"bySeverity":{"critical":0,"high":0,"medium":0,"low":1,"info":0}}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":3000,"cwd":"/test","runId":"multi-123"},"type":"summary","totalFindings":1,"bySeverity":{"high":0,"medium":0,"low":1}}
 `;
 
     const result = parseJsonlReports(jsonlContent);
@@ -590,7 +588,7 @@ describe('parseJsonlReports', () => {
   });
 
   it('handles empty logs (summary only)', () => {
-    const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":100,"cwd":"/test","runId":"empty-123"},"type":"summary","totalFindings":0,"bySeverity":{"critical":0,"high":0,"medium":0,"low":0,"info":0}}
+    const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":100,"cwd":"/test","runId":"empty-123"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}
 `;
 
     const result = parseJsonlReports(jsonlContent);
@@ -604,7 +602,7 @@ describe('parseJsonlReports', () => {
     const jsonlContent = `invalid json here
 {"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"partial-123"},"skill":"valid-skill","summary":"OK","findings":[]}
 another bad line
-{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"partial-123"},"type":"summary","totalFindings":0,"bySeverity":{"critical":0,"high":0,"medium":0,"low":0,"info":0}}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"partial-123"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}
 `;
 
     const result = parseJsonlReports(jsonlContent);
@@ -615,7 +613,7 @@ another bad line
 
   it('reconstructs files array from JSONL', () => {
     const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"files-123"},"skill":"review","summary":"Done","findings":[],"files":[{"filename":"src/api.ts","findings":1,"durationMs":1200},{"filename":"src/utils.ts","findings":0,"durationMs":800}]}
-{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"files-123"},"type":"summary","totalFindings":1,"bySeverity":{"critical":0,"high":1,"medium":0,"low":0,"info":0}}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"files-123"},"type":"summary","totalFindings":1,"bySeverity":{"high":1,"medium":0,"low":0}}
 `;
 
     const result = parseJsonlReports(jsonlContent);
@@ -629,7 +627,7 @@ another bad line
 
   it('handles skippedFiles in reports', () => {
     const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"skip-123"},"skill":"review","summary":"Done","findings":[],"skippedFiles":[{"filename":"dist/bundle.js","reason":"builtin"}]}
-{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"skip-123"},"type":"summary","totalFindings":0,"bySeverity":{"critical":0,"high":0,"medium":0,"low":0,"info":0},"totalSkippedFiles":1}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"skip-123"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0},"totalSkippedFiles":1}
 `;
 
     const result = parseJsonlReports(jsonlContent);

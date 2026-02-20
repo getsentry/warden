@@ -172,8 +172,8 @@ describe('createDefaultCallbacks', () => {
       const tasks = [makeTask('my-trigger', 'code-scanner')];
       const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
       const findings: Finding[] = [
-        makeFinding({ severity: 'critical', title: 'SQL injection', location: { path: 'src/api.ts', startLine: 45 } }),
-        makeFinding({ id: 'TEST-002', severity: 'high', title: 'Missing error handling', location: { path: 'src/utils.ts', startLine: 20 } }),
+        makeFinding({ severity: 'high', title: 'SQL injection', location: { path: 'src/api.ts', startLine: 45 } }),
+        makeFinding({ id: 'TEST-002', severity: 'medium', title: 'Missing error handling', location: { path: 'src/utils.ts', startLine: 20 } }),
       ];
       const report = makeReport({ findings, durationMs: 1200 });
 
@@ -185,16 +185,16 @@ describe('createDefaultCallbacks', () => {
       const completionMsg = errorSpy.mock.calls[0]![0] as string;
       expect(completionMsg).toMatch(/warden: code-scanner completed in 1\.2s/);
       expect(completionMsg).toContain('2 findings');
-      expect(completionMsg).toContain('1 critical');
       expect(completionMsg).toContain('1 high');
+      expect(completionMsg).toContain('1 medium');
     });
 
     it('shows per-finding lines at Verbose verbosity in log mode', () => {
       const tasks = [makeTask('my-trigger', 'code-scanner')];
       const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
       const findings: Finding[] = [
-        makeFinding({ severity: 'critical', title: 'SQL injection', location: { path: 'src/api.ts', startLine: 45 } }),
-        makeFinding({ id: 'TEST-002', severity: 'high', title: 'Missing error handling', location: { path: 'src/utils.ts', startLine: 20 } }),
+        makeFinding({ severity: 'high', title: 'SQL injection', location: { path: 'src/api.ts', startLine: 45 } }),
+        makeFinding({ id: 'TEST-002', severity: 'medium', title: 'Missing error handling', location: { path: 'src/utils.ts', startLine: 20 } }),
       ];
       const report = makeReport({ findings, durationMs: 1200 });
 
@@ -207,12 +207,12 @@ describe('createDefaultCallbacks', () => {
       expect(completionMsg).toMatch(/warden: code-scanner completed in 1\.2s/);
 
       const finding1 = errorSpy.mock.calls[1]![0] as string;
-      expect(finding1).toContain('[critical]');
+      expect(finding1).toContain('[high]');
       expect(finding1).toContain('src/api.ts:45');
       expect(finding1).toContain('SQL injection');
 
       const finding2 = errorSpy.mock.calls[2]![0] as string;
-      expect(finding2).toContain('[high]');
+      expect(finding2).toContain('[medium]');
       expect(finding2).toContain('src/utils.ts:20');
     });
 

@@ -202,7 +202,7 @@ describe('executeTrigger', () => {
 
     const depsWithGlobalFailOn = {
       ...mockDeps,
-      globalFailOn: 'critical' as const,
+      globalFailOn: 'medium' as const,
     };
 
     const result = await executeTrigger(triggerWithFailOn, depsWithGlobalFailOn);
@@ -219,12 +219,12 @@ describe('executeTrigger', () => {
 
     const depsWithGlobalFailOn = {
       ...mockDeps,
-      globalFailOn: 'critical' as const,
+      globalFailOn: 'medium' as const,
     };
 
     const result = await executeTrigger(mockTrigger, depsWithGlobalFailOn);
 
-    expect(result.failOn).toBe('critical');
+    expect(result.failOn).toBe('medium');
   });
 
   it('passes requestChanges and failCheck through from trigger', async () => {

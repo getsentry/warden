@@ -47,9 +47,6 @@ outputs:
   findings-count:
     description: 'Total number of findings'
     value: ${{ steps.warden.outputs.findings-count }}
-  critical-count:
-    description: 'Number of critical severity findings'
-    value: ${{ steps.warden.outputs.critical-count }}
   high-count:
     description: 'Number of high severity findings'
     value: ${{ steps.warden.outputs.high-count }}

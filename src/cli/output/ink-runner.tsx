@@ -184,7 +184,7 @@ const noopCallbacks: SkillProgressCallbacks = {
 };
 
 /** Severity levels in display order. */
-const SEVERITY_LEVELS = ['critical', 'high', 'medium', 'low', 'info'] as const;
+const SEVERITY_LEVELS = ['high', 'medium', 'low'] as const;
 
 /** Print the per-file line within a skill summary. */
 function printFileSummary(file: FileState): void {

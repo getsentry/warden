@@ -80,19 +80,17 @@ const MAX_ANNOTATIONS_PER_REQUEST = 50;
 
 /**
  * Map severity levels to GitHub annotation levels.
- * critical/high -> failure, medium -> warning, low/info -> notice
+ * high -> failure, medium -> warning, low -> notice
  */
 export function severityToAnnotationLevel(
   severity: Severity
 ): CheckAnnotation['annotation_level'] {
   switch (severity) {
-    case 'critical':
     case 'high':
       return 'failure';
     case 'medium':
       return 'warning';
     case 'low':
-    case 'info':
       return 'notice';
   }
 }
@@ -344,7 +342,7 @@ function renderFindingsSections(findings: Finding[]): string[] {
     findingsBySeverity.set(finding.severity, existing);
   }
 
-  const severityOrder: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+  const severityOrder: Severity[] = ['high', 'medium', 'low'];
   for (const severity of severityOrder) {
     const group = findingsBySeverity.get(severity);
     if (!group?.length) continue;
@@ -483,11 +481,9 @@ export function aggregateSeverityCounts(
   reports: SkillReport[]
 ): Record<Severity, number> {
   const counts: Record<Severity, number> = {
-    critical: 0,
     high: 0,
     medium: 0,
     low: 0,
-    info: 0,
   };
 
   for (const report of reports) {

@@ -48,7 +48,6 @@ export async function runScheduleWorkflow(
   if (scheduleTriggers.length === 0) {
     console.log('No schedule triggers configured');
     setOutput('findings-count', 0);
-    setOutput('critical-count', 0);
     setOutput('high-count', 0);
     setOutput('summary', 'No schedule triggers configured');
     return;
@@ -183,11 +182,9 @@ export async function runScheduleWorkflow(
   handleTriggerErrors(triggerErrors, scheduleTriggers.length);
 
   // Set outputs
-  const criticalCount = countSeverity(allReports, 'critical');
   const highCount = countSeverity(allReports, 'high');
 
   setOutput('findings-count', totalFindings);
-  setOutput('critical-count', criticalCount);
   setOutput('high-count', highCount);
   setOutput('summary', allReports.map((r) => r.summary).join('\n') || 'Scheduled analysis complete');
 

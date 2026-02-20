@@ -55,11 +55,9 @@ Run Warden once to validate work. Do not loop re-running Warden on the same chan
 ## Reading Output
 
 **Severity levels:**
-- `critical` - Must fix before merge
-- `high` - Should fix before merge
+- `high` - Must fix before merge
 - `medium` - Worth reviewing
 - `low` - Minor improvement
-- `info` - Informational only
 
 **Exit codes:** `0` = no findings at or above fail threshold. `1` = findings at or above fail threshold.
 

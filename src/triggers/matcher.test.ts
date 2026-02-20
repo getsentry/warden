@@ -20,7 +20,7 @@ function makeReport(severities: string[]): SkillReport {
     summary: 'Test report',
     findings: severities.map((s, i) => ({
       id: `finding-${i}`,
-      severity: s as 'critical' | 'high' | 'medium' | 'low' | 'info',
+      severity: s as 'high' | 'medium' | 'low',
       title: `Finding ${i}`,
       description: 'Test finding',
     })),
@@ -339,25 +339,23 @@ describe('filterContextByPaths', () => {
 describe('shouldFail', () => {
   it('returns true when findings meet threshold', () => {
     expect(shouldFail(makeReport(['high']), 'high')).toBe(true);
-    expect(shouldFail(makeReport(['critical']), 'high')).toBe(true);
+    expect(shouldFail(makeReport(['high']), 'medium')).toBe(true);
     expect(shouldFail(makeReport(['medium']), 'medium')).toBe(true);
   });
 
   it('returns false when findings below threshold', () => {
     expect(shouldFail(makeReport(['low']), 'high')).toBe(false);
-    expect(shouldFail(makeReport(['info']), 'medium')).toBe(false);
-    expect(shouldFail(makeReport([]), 'info')).toBe(false);
+    expect(shouldFail(makeReport(['low']), 'medium')).toBe(false);
+    expect(shouldFail(makeReport([]), 'low')).toBe(false);
   });
 });
 
 describe('countFindingsAtOrAbove', () => {
   it('counts findings at or above threshold', () => {
-    const report = makeReport(['critical', 'high', 'medium', 'low', 'info']);
-    expect(countFindingsAtOrAbove(report, 'critical')).toBe(1);
-    expect(countFindingsAtOrAbove(report, 'high')).toBe(2);
-    expect(countFindingsAtOrAbove(report, 'medium')).toBe(3);
-    expect(countFindingsAtOrAbove(report, 'low')).toBe(4);
-    expect(countFindingsAtOrAbove(report, 'info')).toBe(5);
+    const report = makeReport(['high', 'medium', 'low']);
+    expect(countFindingsAtOrAbove(report, 'high')).toBe(1);
+    expect(countFindingsAtOrAbove(report, 'medium')).toBe(2);
+    expect(countFindingsAtOrAbove(report, 'low')).toBe(3);
   });
 });
 
@@ -390,9 +388,7 @@ describe('countSeverity', () => {
 
 describe('SEVERITY_ORDER', () => {
   it('has correct ordering (lower = more severe)', () => {
-    expect(SEVERITY_ORDER.critical).toBeLessThan(SEVERITY_ORDER.high);
     expect(SEVERITY_ORDER.high).toBeLessThan(SEVERITY_ORDER.medium);
     expect(SEVERITY_ORDER.medium).toBeLessThan(SEVERITY_ORDER.low);
-    expect(SEVERITY_ORDER.low).toBeLessThan(SEVERITY_ORDER.info);
   });
 });

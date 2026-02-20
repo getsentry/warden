@@ -19,11 +19,9 @@ import { BoxRenderer } from './output/box.js';
 import type { OutputMode } from './output/tty.js';
 
 const SEVERITY_COLORS: Record<Severity, typeof chalk.red> = {
-  critical: chalk.red.bold,
   high: chalk.red,
   medium: chalk.yellow,
   low: chalk.green,
-  info: chalk.blue,
 };
 
 type FileLineResult =

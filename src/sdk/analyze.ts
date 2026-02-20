@@ -706,11 +706,9 @@ export function generateSummary(skillName: string, findings: Finding[]): string 
   }
 
   const parts: string[] = [];
-  if (counts['critical']) parts.push(`${counts['critical']} critical`);
   if (counts['high']) parts.push(`${counts['high']} high`);
   if (counts['medium']) parts.push(`${counts['medium']} medium`);
   if (counts['low']) parts.push(`${counts['low']} low`);
-  if (counts['info']) parts.push(`${counts['info']} info`);
 
   return `${skillName}: Found ${findings.length} issue${findings.length === 1 ? '' : 's'} (${parts.join(', ')})`;
 }

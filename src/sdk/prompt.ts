@@ -60,7 +60,7 @@ Full schema:
   "findings": [
     {
       "id": "unique-identifier",
-      "severity": "critical|high|medium|low|info",
+      "severity": "high|medium|low",
       "confidence": "high|medium|low",
       "title": "Assertive, impact-focused title stating what is broken or wrong (e.g. 'wasFailFastAborted never detects fail-fast abort')",
       "description": "2-4 concise sentences. Start with the root cause, end with the user-visible consequence.",

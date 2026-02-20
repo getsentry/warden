@@ -144,7 +144,7 @@ describe('generateSkillToml', () => {
           type: 'pull_request',
           actions: ['opened'],
           model: 'claude-opus-4-20250514',
-          failOn: 'critical',
+          failOn: 'high',
           reportOn: 'high',
           maxFindings: 5,
         },
@@ -156,7 +156,7 @@ describe('generateSkillToml', () => {
     // Trigger-level overrides should appear after the [[skills.triggers]] header
     const triggerSection = result.split('[[skills.triggers]]')[1]!;
     expect(triggerSection).toContain('model = "claude-opus-4-20250514"');
-    expect(triggerSection).toContain('failOn = "critical"');
+    expect(triggerSection).toContain('failOn = "high"');
     expect(triggerSection).toContain('reportOn = "high"');
     expect(triggerSection).toContain('maxFindings = 5');
   });

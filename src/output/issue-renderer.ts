@@ -52,7 +52,7 @@ export function renderIssueBody(
   lines.push('| Severity | Count |');
   lines.push('|----------|-------|');
 
-  for (const severity of ['critical', 'high', 'medium', 'low', 'info'] as Severity[]) {
+  for (const severity of ['high', 'medium', 'low'] as Severity[]) {
     if (counts[severity] > 0) {
       lines.push(`| ${capitalize(severity)} | ${counts[severity]} |`);
     }

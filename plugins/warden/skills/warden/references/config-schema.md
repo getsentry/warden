@@ -48,8 +48,8 @@ ignorePaths = ["**/*.test.ts"] # Exclude matching files
 # Optional overrides (inherit from defaults if not set)
 model = "claude-opus-4-20250514"
 maxTurns = 100
-failOn = "critical"
-reportOn = "high"
+failOn = "high"
+reportOn = "medium"
 maxFindings = 20
 reportOnSuccess = true
 
@@ -80,11 +80,9 @@ All skills run locally regardless of trigger type. Skills with no triggers run e
 ## Severity Values
 
 Used in `failOn` and `reportOn`:
-- `critical` - Most severe
-- `high`
-- `medium`
-- `low`
-- `info` - Least severe
+- `high` - Must fix before merge
+- `medium` - Worth reviewing
+- `low` - Minor improvement
 - `off` - Disable threshold
 
 ## Built-in Skip Patterns

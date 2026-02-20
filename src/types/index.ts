@@ -1,7 +1,18 @@
 import { z } from 'zod';
 
+/**
+ * Normalize legacy severity values to the 3-level scale.
+ * Maps 'critical' → 'high' and 'info' → 'low' for backwards compatibility
+ * with old JSONL logs and LLM responses.
+ */
+export function normalizeSeverity(val: unknown): unknown {
+  if (val === 'critical') return 'high';
+  if (val === 'info') return 'low';
+  return val;
+}
+
 // Severity levels for findings
-export const SeveritySchema = z.enum(['critical', 'high', 'medium', 'low', 'info']);
+export const SeveritySchema = z.preprocess(normalizeSeverity, z.enum(['high', 'medium', 'low']));
 export type Severity = z.infer<typeof SeveritySchema>;
 
 // Confidence levels for findings
@@ -19,7 +30,7 @@ export const CONFIDENCE_ORDER: Record<Confidence, number> = {
 };
 
 // Severity threshold for config options (includes 'off' to disable)
-export const SeverityThresholdSchema = z.enum(['off', 'critical', 'high', 'medium', 'low', 'info']);
+export const SeverityThresholdSchema = z.preprocess(normalizeSeverity, z.enum(['off', 'high', 'medium', 'low']));
 export type SeverityThreshold = z.infer<typeof SeverityThresholdSchema>;
 
 // Confidence threshold for config options (includes 'off' to disable filtering)
@@ -31,11 +42,9 @@ export type ConfidenceThreshold = z.infer<typeof ConfidenceThresholdSchema>;
  * Single source of truth for severity ordering across the codebase.
  */
 export const SEVERITY_ORDER: Record<Severity, number> = {
-  critical: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  info: 4,
+  high: 0,
+  medium: 1,
+  low: 2,
 };
 
 /**
