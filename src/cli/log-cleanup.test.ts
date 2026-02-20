@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { findExpiredLogs, cleanupLogs } from './log-cleanup.js';
+import { findExpiredArtifacts, cleanupArtifacts } from './log-cleanup.js';
 import { Reporter } from './output/reporter.js';
 import { detectOutputMode } from './output/tty.js';
 import { Verbosity } from './output/verbosity.js';
@@ -20,7 +20,7 @@ function createLogFile(dir: string, name: string, daysOld: number): string {
   return filePath;
 }
 
-describe('findExpiredLogs', () => {
+describe('findExpiredArtifacts', () => {
   let testDir: string;
 
   beforeEach(() => {
@@ -35,13 +35,13 @@ describe('findExpiredLogs', () => {
   });
 
   it('returns empty array when directory does not exist', () => {
-    const result = findExpiredLogs('/nonexistent/path', 30);
+    const result = findExpiredArtifacts('/nonexistent/path', 30);
     expect(result).toEqual([]);
   });
 
   it('returns empty array when no files are expired', () => {
     createLogFile(testDir, 'recent.jsonl', 1);
-    const result = findExpiredLogs(testDir, 30);
+    const result = findExpiredArtifacts(testDir, 30);
     expect(result).toEqual([]);
   });
 
@@ -49,7 +49,7 @@ describe('findExpiredLogs', () => {
     createLogFile(testDir, 'old.jsonl', 45);
     createLogFile(testDir, 'recent.jsonl', 1);
 
-    const result = findExpiredLogs(testDir, 30);
+    const result = findExpiredArtifacts(testDir, 30);
     expect(result).toHaveLength(1);
     expect(result[0]).toContain('old.jsonl');
   });
@@ -60,7 +60,7 @@ describe('findExpiredLogs', () => {
     const mtime = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
     utimesSync(nonJsonl, mtime, mtime);
 
-    const result = findExpiredLogs(testDir, 30);
+    const result = findExpiredArtifacts(testDir, 30);
     expect(result).toEqual([]);
   });
 
@@ -68,13 +68,13 @@ describe('findExpiredLogs', () => {
     createLogFile(testDir, 'a.jsonl', 10);
     createLogFile(testDir, 'b.jsonl', 3);
 
-    expect(findExpiredLogs(testDir, 7)).toHaveLength(1);
-    expect(findExpiredLogs(testDir, 2)).toHaveLength(2);
-    expect(findExpiredLogs(testDir, 15)).toHaveLength(0);
+    expect(findExpiredArtifacts(testDir, 7)).toHaveLength(1);
+    expect(findExpiredArtifacts(testDir, 2)).toHaveLength(2);
+    expect(findExpiredArtifacts(testDir, 15)).toHaveLength(0);
   });
 });
 
-describe('cleanupLogs', () => {
+describe('cleanupArtifacts', () => {
   let testDir: string;
 
   beforeEach(() => {
@@ -91,8 +91,8 @@ describe('cleanupLogs', () => {
   it('does nothing in "never" mode', async () => {
     createLogFile(testDir, 'old.jsonl', 45);
 
-    const deleted = await cleanupLogs({
-      logsDir: testDir,
+    const deleted = await cleanupArtifacts({
+      dir: testDir,
       retentionDays: 30,
       mode: 'never',
       isTTY: false,
@@ -107,8 +107,8 @@ describe('cleanupLogs', () => {
     createLogFile(testDir, 'old.jsonl', 45);
     createLogFile(testDir, 'recent.jsonl', 1);
 
-    const deleted = await cleanupLogs({
-      logsDir: testDir,
+    const deleted = await cleanupArtifacts({
+      dir: testDir,
       retentionDays: 30,
       mode: 'auto',
       isTTY: false,
@@ -123,8 +123,8 @@ describe('cleanupLogs', () => {
   it('does nothing in "ask" mode when not TTY', async () => {
     createLogFile(testDir, 'old.jsonl', 45);
 
-    const deleted = await cleanupLogs({
-      logsDir: testDir,
+    const deleted = await cleanupArtifacts({
+      dir: testDir,
       retentionDays: 30,
       mode: 'ask',
       isTTY: false,
@@ -138,8 +138,8 @@ describe('cleanupLogs', () => {
   it('returns 0 when no expired files exist', async () => {
     createLogFile(testDir, 'recent.jsonl', 1);
 
-    const deleted = await cleanupLogs({
-      logsDir: testDir,
+    const deleted = await cleanupArtifacts({
+      dir: testDir,
       retentionDays: 30,
       mode: 'auto',
       isTTY: false,
@@ -149,9 +149,9 @@ describe('cleanupLogs', () => {
     expect(deleted).toBe(0);
   });
 
-  it('returns 0 when logsDir does not exist', async () => {
-    const deleted = await cleanupLogs({
-      logsDir: '/nonexistent/path',
+  it('returns 0 when dir does not exist', async () => {
+    const deleted = await cleanupArtifacts({
+      dir: '/nonexistent/path',
       retentionDays: 30,
       mode: 'auto',
       isTTY: false,

@@ -102,6 +102,36 @@ export function listSessions(dir: string): string[] {
 }
 
 /**
+ * Find session files older than the given retention period.
+ */
+export function findExpiredSessions(dir: string, retentionDays: number): string[] {
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+
+  const expired: string[] = [];
+  for (const entry of entries) {
+    if (!entry.endsWith('.jsonl')) continue;
+    const fullPath = path.join(dir, entry);
+    try {
+      const stat = fs.statSync(fullPath);
+      if (stat.mtimeMs < cutoff) {
+        expired.push(fullPath);
+      }
+    } catch {
+      // Skip files we can't stat
+    }
+  }
+
+  return expired;
+}
+
+/**
  * Delete old sessions, keeping only the most recent N sessions.
  * Returns the number of deleted sessions.
  */

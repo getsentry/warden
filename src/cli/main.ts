@@ -27,7 +27,7 @@ import {
   generateRunId,
   type SkillTaskOptions,
 } from './output/index.js';
-import { cleanupLogs } from './log-cleanup.js';
+import { cleanupArtifacts } from './log-cleanup.js';
 import {
   collectFixableFindings,
   applyAllFixes,
@@ -821,20 +821,28 @@ export async function main(): Promise<void> {
     },
   );
 
-  // Run log cleanup after all output is complete (covers all exit paths)
+  // Run log and session cleanup after all output is complete (covers all exit paths)
   try {
-    let logsRoot: string;
+    let cleanupRoot: string;
     try {
-      logsRoot = getRepoRoot(cwd);
+      cleanupRoot = getRepoRoot(cwd);
     } catch {
-      logsRoot = cwd;
+      cleanupRoot = cwd;
     }
-    const cfgPath = resolve(logsRoot, 'warden.toml');
-    const logsConfig = existsSync(cfgPath) ? loadWardenConfig(dirname(cfgPath)).logs : undefined;
-    await cleanupLogs({
-      logsDir: join(logsRoot, '.warden', 'logs'),
-      retentionDays: logsConfig?.retentionDays ?? 30,
-      mode: logsConfig?.cleanup ?? 'ask',
+    const cfgPath = resolve(cleanupRoot, 'warden.toml');
+    const cfg = existsSync(cfgPath) ? loadWardenConfig(dirname(cfgPath)) : undefined;
+    await cleanupArtifacts({
+      dir: join(cleanupRoot, '.warden', 'logs'),
+      retentionDays: cfg?.logs?.retentionDays ?? 30,
+      mode: cfg?.logs?.cleanup ?? 'ask',
+      isTTY: reporter.mode.isTTY,
+      reporter,
+    });
+    // Session cleanup mirrors log cleanup
+    await cleanupArtifacts({
+      dir: join(cleanupRoot, cfg?.sessions?.directory ?? '.warden/sessions'),
+      retentionDays: cfg?.sessions?.retentionDays ?? 7,
+      mode: cfg?.sessions?.cleanup ?? 'auto',
       isTTY: reporter.mode.isTTY,
       reporter,
     });

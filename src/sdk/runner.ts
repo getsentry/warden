@@ -69,6 +69,7 @@ export {
   ensureSessionsDir,
   listSessions,
   pruneOldSessions,
+  findExpiredSessions,
   getClaudeProjectDir,
   DEFAULT_SESSIONS_DIR,
 } from './session.js';

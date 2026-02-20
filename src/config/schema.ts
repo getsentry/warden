@@ -201,6 +201,10 @@ export const SessionsConfigSchema = z.object({
   enabled: z.boolean().default(true),
   /** Directory to store sessions relative to the repo root (default: .warden/sessions) */
   directory: z.string().optional(),
+  /** How to handle expired session files: 'auto' (default, silently delete), 'ask' (prompt in TTY), 'never' (keep all) */
+  cleanup: LogCleanupModeSchema.default('auto'),
+  /** Number of days to retain session files before considering them expired. Default: 7 */
+  retentionDays: z.number().int().positive().default(7),
 });
 export type SessionsConfig = z.infer<typeof SessionsConfigSchema>;
 
