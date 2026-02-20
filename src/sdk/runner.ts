@@ -65,13 +65,11 @@ export type {
 
 // Re-export session storage utilities
 export {
-  moveSession,
   snapshotSessionFiles,
   moveNewSessions,
   ensureSessionsDir,
   listSessions,
-  pruneOldSessions,
-  findExpiredSessions,
+  resolveSessionsDir,
   getClaudeProjectDir,
   DEFAULT_SESSIONS_DIR,
 } from './session.js';

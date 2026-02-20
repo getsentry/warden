@@ -42,37 +42,6 @@ export function ensureSessionsDir(dir: string): void {
 }
 
 /**
- * Move a Claude SDK session file from its internal storage location to .warden/sessions/.
- *
- * The SDK stores sessions at: ~/.claude/projects/<project-hash>/<uuid>.jsonl
- * After execution, this moves that file to: <targetDir>/<timestamp>-<uuid>.jsonl
- *
- * Returns the path to the moved file, or undefined if the session file was not found.
- */
-export function moveSession(
-  uuid: string,
-  repoPath: string,
-  targetDir: string
-): string | undefined {
-  const projectDir = getClaudeProjectDir(repoPath);
-  const sourceFile = path.join(projectDir, `${uuid}.jsonl`);
-
-  if (!fs.existsSync(sourceFile)) {
-    return undefined;
-  }
-
-  ensureSessionsDir(targetDir);
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const targetFile = path.join(targetDir, `${timestamp}-${uuid}.jsonl`);
-
-  // Use copy+delete instead of rename to handle cross-device moves (EXDEV)
-  fs.copyFileSync(sourceFile, targetFile);
-  fs.unlinkSync(sourceFile);
-  return targetFile;
-}
-
-/**
  * Snapshot the set of .jsonl files in Claude's project directory for a given repo.
  * Call before executeQuery, then use moveNewSessions after to capture any new files.
  */
@@ -89,6 +58,7 @@ export function snapshotSessionFiles(repoPath: string): Set<string> {
 
 /**
  * Move any new session files that appeared since the snapshot.
+ * Safe to call concurrently -- skips files already moved by another caller.
  * Returns paths of moved files.
  */
 export function moveNewSessions(
@@ -113,14 +83,18 @@ export function moveNewSessions(
 
   for (const file of newFiles) {
     const sourceFile = path.join(projectDir, file);
+    // Guard against race: another concurrent hunk may have already moved this file
+    if (!fs.existsSync(sourceFile)) continue;
+
     const uuid = file.replace('.jsonl', '');
     const targetFile = path.join(targetDir, `${timestamp}-${uuid}.jsonl`);
     try {
+      // Use copy+delete instead of rename to handle cross-device moves (EXDEV)
       fs.copyFileSync(sourceFile, targetFile);
       fs.unlinkSync(sourceFile);
       moved.push(targetFile);
     } catch {
-      // Non-fatal
+      // Non-fatal: file may have been moved by a concurrent hunk
     }
   }
 
@@ -162,49 +136,4 @@ export function listSessions(dir: string): string[] {
     }
     return statB.mtime.getTime() - statA.mtime.getTime();
   });
-}
-
-/**
- * Find session files older than the given retention period.
- */
-export function findExpiredSessions(dir: string, retentionDays: number): string[] {
-  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(dir);
-  } catch {
-    return [];
-  }
-
-  const expired: string[] = [];
-  for (const entry of entries) {
-    if (!entry.endsWith('.jsonl')) continue;
-    const fullPath = path.join(dir, entry);
-    try {
-      const stat = fs.statSync(fullPath);
-      if (stat.mtimeMs < cutoff) {
-        expired.push(fullPath);
-      }
-    } catch {
-      // Skip files we can't stat
-    }
-  }
-
-  return expired;
-}
-
-/**
- * Delete old sessions, keeping only the most recent N sessions.
- * Returns the number of deleted sessions.
- */
-export function pruneOldSessions(dir: string, keepCount: number): number {
-  const sessions = listSessions(dir);
-  const toDelete = sessions.slice(keepCount);
-
-  for (const filepath of toDelete) {
-    fs.unlinkSync(filepath);
-  }
-
-  return toDelete.length;
 }

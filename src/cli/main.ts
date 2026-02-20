@@ -28,6 +28,7 @@ import {
   type SkillTaskOptions,
 } from './output/index.js';
 import { cleanupArtifacts } from './log-cleanup.js';
+import { resolveSessionsDir } from '../sdk/session.js';
 import {
   collectFixableFindings,
   applyAllFixes,
@@ -840,7 +841,7 @@ export async function main(): Promise<void> {
     });
     // Session cleanup mirrors log cleanup
     await cleanupArtifacts({
-      dir: join(cleanupRoot, cfg?.sessions?.directory ?? '.warden/sessions'),
+      dir: resolveSessionsDir(cleanupRoot, cfg?.sessions?.directory),
       retentionDays: cfg?.sessions?.retentionDays ?? 7,
       mode: cfg?.sessions?.cleanup ?? 'auto',
       isTTY: reporter.mode.isTTY,
