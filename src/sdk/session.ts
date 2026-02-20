@@ -95,8 +95,16 @@ export function listSessions(dir: string): string[] {
 
   // Sort by modification time, newest first
   return files.sort((a, b) => {
-    const statA = fs.statSync(a);
-    const statB = fs.statSync(b);
+    let statA, statB;
+    try {
+      statA = fs.statSync(a);
+      statB = fs.statSync(b);
+    } catch {
+      // If we can't stat, treat as oldest (will be filtered out)
+      if (!statA) return 1;
+      if (!statB) return -1;
+      return 0;
+    }
     return statB.mtime.getTime() - statA.mtime.getTime();
   });
 }

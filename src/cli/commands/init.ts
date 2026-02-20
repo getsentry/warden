@@ -148,7 +148,10 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   const gitignorePath = join(repoRoot, '.gitignore');
   if (existsSync(gitignorePath)) {
     const gitignoreContent = readFileSync(gitignorePath, 'utf-8');
-    const hasWardenEntry = gitignoreContent.split('\n').some((line) => line.trim() === '.warden/' || line.trim() === '.warden');
+    const hasWardenEntry = gitignoreContent.split('\n').some((line) => {
+      const trimmed = line.trim();
+      return trimmed === '.warden/' || trimmed === '.warden';
+    });
     if (!hasWardenEntry) {
       const newline = gitignoreContent.endsWith('\n') ? '' : '\n';
       writeFileSync(gitignorePath, gitignoreContent + newline + '.warden/\n', 'utf-8');
