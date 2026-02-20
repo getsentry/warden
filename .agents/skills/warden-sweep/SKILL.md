@@ -7,7 +7,7 @@ description: Full-repository code sweep. Scans every file with warden, verifies 
 
 Full-repository code sweep: scan every file, verify findings with deep tracing, create draft PRs for validated issues.
 
-**Requires**: `warden`, `claude`, `gh`, `git`, `jq`, `uv`
+**Requires**: `warden`, `gh`, `git`, `jq`, `uv`
 
 **Important**: Run all scripts from the repository root using `${CLAUDE_SKILL_ROOT}`. Output goes to `.warden/sweeps/<run-id>/`.
 
@@ -56,7 +56,7 @@ mkdir -p "${SWEEP_DIR}/findings" "${SWEEP_DIR}/security" "${SWEEP_DIR}/data/veri
 Check dependencies:
 
 ```bash
-for cmd in warden claude gh git jq python3; do
+for cmd in warden gh git jq python3; do
   command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
 done
 ```
@@ -141,29 +141,27 @@ Update manifest: set `phases.scan` to `"complete"`.
 
 ### Phase 2: Verify
 
-Deep-trace each finding with `claude` CLI to qualify or disqualify.
+Deep-trace each finding using Task subagents to qualify or disqualify.
 
 **For each finding in `data/all-findings.jsonl`:**
 
 Check if `data/verify/<finding-id>.json` already exists (incrementality). If it does, skip.
 
-Invoke claude for verification:
+Launch a Task subagent (`subagent_type: "general-purpose"`) for each finding. Process findings sequentially (one at a time) to keep output organized.
 
-```bash
-claude -p \
-  --allowedTools Read,Grep,Glob \
-  --max-turns 10 \
-  --output-format json \
-  <<PROMPT
-You are verifying a code analysis finding. Determine if this is a TRUE issue or a FALSE POSITIVE.
+**Task prompt for each finding:**
+
+```
+Verify a code analysis finding. Determine if this is a TRUE issue or a FALSE POSITIVE.
+Do NOT write or edit any files. Research only.
 
 ## Finding
-- **Title**: ${TITLE}
-- **Severity**: ${SEVERITY} | **Confidence**: ${CONFIDENCE}
-- **Skill**: ${SKILL}
-- **Location**: ${FILE_PATH}:${START_LINE}-${END_LINE}
-- **Description**: ${DESCRIPTION}
-- **Verification hint**: ${VERIFICATION}
+- Title: ${TITLE}
+- Severity: ${SEVERITY} | Confidence: ${CONFIDENCE}
+- Skill: ${SKILL}
+- Location: ${FILE_PATH}:${START_LINE}-${END_LINE}
+- Description: ${DESCRIPTION}
+- Verification hint: ${VERIFICATION}
 
 ## Instructions
 1. Read the file at the reported location. Examine at least 50 lines of surrounding context.
@@ -171,7 +169,7 @@ You are verifying a code analysis finding. Determine if this is a TRUE issue or 
 3. Check if the issue is mitigated elsewhere (guards, validation, try/catch upstream).
 4. Check if the issue is actually reachable in practice.
 
-Respond with ONLY this JSON (no markdown fences):
+Return your verdict as JSON:
 {
   "findingId": "${FINDING_ID}",
   "verdict": "verified" or "rejected",
@@ -179,12 +177,11 @@ Respond with ONLY this JSON (no markdown fences):
   "reasoning": "2-3 sentence explanation",
   "traceNotes": "What code paths you examined"
 }
-PROMPT
 ```
 
 **Process results:**
 
-- Parse the JSON response from claude's output
+Parse the JSON from the subagent response and:
 - Write result to `data/verify/<finding-id>.json`
 - Append to `data/verified.jsonl` or `data/rejected.jsonl`
 - For verified findings, generate `findings/<finding-id>.md`:
@@ -210,8 +207,6 @@ ${FIX_DIFF}
 ```
 ```
 
-**Rate limiting**: Process one finding at a time. Wait 2 seconds between invocations. On API errors, retry up to 2 times with exponential backoff (2s, 4s).
-
 Update manifest: set `phases.verify` to `"complete"`.
 
 ---
@@ -236,27 +231,23 @@ Each finding branches from the current HEAD to avoid merge conflicts between PRs
 
 **Step 2: Generate fix**
 
-```bash
-claude -p \
-  --cwd "${WORKTREE}" \
-  --allowedTools Read,Write,Edit,Bash,Grep,Glob \
-  --max-turns 30 \
-  --output-format json \
-  <<PROMPT
-You are fixing a verified code issue and adding test coverage. You are working in a git worktree.
+Launch a Task subagent (`subagent_type: "general-purpose"`) to apply the fix in the worktree:
+
+```
+Fix a verified code issue and add test coverage. You are working in a git worktree at: ${WORKTREE}
 
 ## Finding
-- **Title**: ${TITLE}
-- **File**: ${FILE_PATH}:${START_LINE}
-- **Description**: ${DESCRIPTION}
-- **Verification**: ${REASONING}
-- **Suggested Fix**: ${FIX_DESCRIPTION}
-\`\`\`diff
+- Title: ${TITLE}
+- File: ${FILE_PATH}:${START_LINE}
+- Description: ${DESCRIPTION}
+- Verification: ${REASONING}
+- Suggested Fix: ${FIX_DESCRIPTION}
+```diff
 ${FIX_DIFF}
-\`\`\`
+```
 
 ## Instructions
-1. Read the file at the reported location.
+1. Read the file at the reported location (use the worktree path: ${WORKTREE}/${FILE_PATH}).
 2. Apply the suggested fix. If the diff doesn't apply cleanly, adapt it while preserving intent.
 3. Write or update tests that verify the fix:
    - Follow existing test patterns (co-located files, same framework)
@@ -272,14 +263,7 @@ Severity: ${SEVERITY}
 
 Co-Authored-By: Warden <noreply@getsentry.com>
 
-Respond with ONLY this JSON (no markdown fences):
-{
-  "applied": true or false,
-  "filesChanged": ["..."],
-  "testFiles": ["..."],
-  "notes": "..."
-}
-PROMPT
+Report what you changed: files modified, test files added/updated, any notes.
 ```
 
 **Step 3: Find reviewers**
