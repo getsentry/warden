@@ -131,6 +131,8 @@ describe('runLogsList', () => {
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed.length).toBe(1);
     expect(parsed[0].file).toBe('ccc33333-2026-02-18T10-00-00-000Z.jsonl');
+    expect(parsed[0].skills).toEqual(['review']);
+    expect(parsed[0].bySeverity).toBeDefined();
 
     stdoutSpy.mockRestore();
   });

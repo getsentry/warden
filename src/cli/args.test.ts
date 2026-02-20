@@ -411,9 +411,10 @@ describe('parseCliArgs', () => {
     expect(result.options.json).toBe(true);
   });
 
-  it('exits with error for logs without subcommand', () => {
-    parseCliArgs(['logs']);
-    expect(process.exit).toHaveBeenCalledWith(1);
+  it('defaults to list when no subcommand given', () => {
+    const result = parseCliArgs(['logs']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('list');
   });
 });
 

@@ -317,3 +317,48 @@ export function parseSummaryFromLastLine(filePath: string): JsonlSummaryRecord |
     return undefined;
   }
 }
+
+/**
+ * Lightweight metadata extracted from a JSONL log file.
+ * Includes the summary record plus skill names from the skill records.
+ */
+export interface LogFileMetadata {
+  summary: JsonlSummaryRecord;
+  skills: string[];
+}
+
+/**
+ * Parse a JSONL log file for its summary and skill names.
+ * Reads all lines but only fully parses the summary; extracts skill names
+ * from non-summary lines with minimal parsing.
+ */
+export function parseLogMetadata(filePath: string): LogFileMetadata | undefined {
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split('\n');
+
+    let summary: JsonlSummaryRecord | undefined;
+    const skills: string[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line);
+        if (parsed.type === 'summary') {
+          summary = JsonlSummaryRecordSchema.parse(parsed);
+        } else if (parsed.skill && typeof parsed.skill === 'string') {
+          if (!skills.includes(parsed.skill)) {
+            skills.push(parsed.skill);
+          }
+        }
+      } catch {
+        // Skip unparseable lines
+      }
+    }
+
+    if (!summary) return undefined;
+    return { summary, skills };
+  } catch {
+    return undefined;
+  }
+}

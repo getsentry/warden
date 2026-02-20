@@ -83,7 +83,7 @@ Commands:
   add [skill]          Add a skill trigger to warden.toml
   sync [remote]        Update cached remote skills to latest
   setup-app            Create a GitHub App for Warden via manifest flow
-  logs list            List saved run logs
+  logs [list]          List saved run logs (default)
   logs show <files...> Show results from JSONL log files
   logs gc              Remove expired log files
   (default)            Run analysis on targets or using warden.toml triggers
@@ -416,12 +416,11 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
     let files: string[] = [];
 
-    if (subcommandArg !== 'list' && subcommandArg !== 'show' && subcommandArg !== 'gc') {
-      console.error('Usage: warden logs <list|show|gc>');
-      process.exit(1);
-    }
-
-    const subcommand: LogsSubcommand = subcommandArg;
+    // Default to 'list' when no subcommand provided
+    const subcommand: LogsSubcommand =
+      subcommandArg === 'list' || subcommandArg === 'show' || subcommandArg === 'gc'
+        ? subcommandArg
+        : 'list';
 
     if (subcommand === 'show') {
       files = subArgs.slice(1);

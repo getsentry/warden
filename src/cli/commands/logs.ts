@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import chalk from 'chalk';
 import { loadWardenConfig } from '../../config/loader.js';
-import type { SkillReport } from '../../types/index.js';
+import type { Severity, SkillReport } from '../../types/index.js';
 import type { CLIOptions, LogsOptions } from '../args.js';
 import { getRepoRoot } from '../git.js';
 import { findExpiredArtifacts } from '../log-cleanup.js';
@@ -10,11 +11,14 @@ import type { Reporter } from '../output/reporter.js';
 import {
   pluralize,
   formatDuration,
+  formatCost,
+  formatSeverityDot,
   shortRunId,
   parseJsonlReports,
-  parseSummaryFromLastLine,
+  parseLogMetadata,
   renderJsonlString,
   type JsonlRunMetadata,
+  type LogFileMetadata,
 } from '../output/index.js';
 
 /**
@@ -54,6 +58,21 @@ function resolveFileArg(arg: string, logDir: string): string[] {
 }
 
 /**
+ * Format a severity breakdown as colored dots with counts.
+ */
+function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>): string {
+  const parts: string[] = [];
+  const severities: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
+  for (const sev of severities) {
+    const count = bySeverity[sev] ?? 0;
+    if (count > 0) {
+      parts.push(`${formatSeverityDot(sev)} ${count}`);
+    }
+  }
+  return parts.length > 0 ? parts.join('  ') : '';
+}
+
+/**
  * List all JSONL log files in .warden/logs/.
  */
 export async function runLogsList(options: CLIOptions, reporter: Reporter): Promise<number> {
@@ -81,55 +100,91 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     return 0;
   }
 
-  if (options.json) {
-    const results: {
-      file: string;
-      runId?: string;
-      timestamp?: string;
-      findings?: number;
-      durationMs?: number;
-    }[] = [];
+  // Parse all logs for metadata
+  const logData: { entry: string; meta: LogFileMetadata | undefined }[] = [];
+  for (const entry of entries) {
+    const filePath = join(logDir, entry);
+    logData.push({ entry, meta: parseLogMetadata(filePath) });
+  }
 
-    for (const entry of entries) {
-      const filePath = join(logDir, entry);
-      const summary = parseSummaryFromLastLine(filePath);
-      results.push({
-        file: entry,
-        runId: summary?.run.runId,
-        timestamp: summary?.run.timestamp,
-        findings: summary?.totalFindings,
-        durationMs: summary?.run.durationMs,
-      });
-    }
+  if (options.json) {
+    const results = logData.map(({ entry, meta }) => ({
+      file: entry,
+      runId: meta?.summary.run.runId,
+      timestamp: meta?.summary.run.timestamp,
+      findings: meta?.summary.totalFindings,
+      bySeverity: meta?.summary.bySeverity,
+      durationMs: meta?.summary.run.durationMs,
+      costUSD: meta?.summary.usage?.costUSD,
+      skills: meta?.skills,
+    }));
 
     process.stdout.write(JSON.stringify(results, null, 2) + '\n');
     return 0;
   }
 
-  // Table output
-  reporter.bold('LOG FILES');
-  reporter.blank();
+  // Aggregate totals across all runs
+  const totals = {
+    findings: 0,
+    bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } as Record<Severity, number>,
+    costUSD: 0,
+    durationMs: 0,
+    skills: new Set<string>(),
+  };
 
-  for (const entry of entries) {
-    const filePath = join(logDir, entry);
-    const summary = parseSummaryFromLastLine(filePath);
-
-    if (summary) {
-      const runId = shortRunId(summary.run.runId);
-      const date = summary.run.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z');
-      const findings = summary.totalFindings;
-      const duration = formatDuration(summary.run.durationMs);
-
-      reporter.text(
-        `  ${runId}  ${date}  ${findings} ${pluralize(findings, 'finding')}  ${duration}`
-      );
-    } else {
-      reporter.text(`  ${entry}  (unable to parse)`);
+  for (const { meta } of logData) {
+    if (!meta) continue;
+    const { summary, skills } = meta;
+    totals.findings += summary.totalFindings;
+    totals.durationMs += summary.run.durationMs;
+    if (summary.usage) {
+      totals.costUSD += summary.usage.costUSD;
+    }
+    for (const [sev, count] of Object.entries(summary.bySeverity)) {
+      totals.bySeverity[sev as Severity] += count;
+    }
+    for (const skill of skills) {
+      totals.skills.add(skill);
     }
   }
 
+  // Per-run table
+  for (const { entry, meta } of logData) {
+    if (!meta) {
+      reporter.text(`  ${entry}  ${chalk.dim('(unable to parse)')}`);
+      continue;
+    }
+
+    const { summary, skills } = meta;
+    const runId = chalk.bold(shortRunId(summary.run.runId));
+    const date = chalk.dim(summary.run.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z'));
+    const duration = chalk.dim(formatDuration(summary.run.durationMs));
+    const skillList = chalk.dim(skills.join(', '));
+
+    const findingCount = summary.totalFindings;
+    const sevBreakdown = formatSeverityBreakdown(summary.bySeverity);
+    const findingStr = findingCount === 0
+      ? chalk.dim('0 findings')
+      : `${findingCount} ${pluralize(findingCount, 'finding')}`;
+
+    const costStr = summary.usage ? chalk.dim(formatCost(summary.usage.costUSD)) : '';
+
+    reporter.text(
+      `  ${runId}  ${date}  ${findingStr}${sevBreakdown ? `  ${sevBreakdown}` : ''}  ${duration}${costStr ? `  ${costStr}` : ''}`
+    );
+    reporter.text(`         ${skillList}`);
+  }
+
+  // Summary footer
   reporter.blank();
-  reporter.dim(`${entries.length} ${pluralize(entries.length, 'log file')}`);
+  const totalSev = formatSeverityBreakdown(totals.bySeverity);
+  reporter.text(
+    `${entries.length} ${pluralize(entries.length, 'run')}  ·  ` +
+    `${totals.findings} ${pluralize(totals.findings, 'finding')}${totalSev ? `  ${totalSev}` : ''}  ·  ` +
+    `${formatDuration(totals.durationMs)}  ·  ` +
+    `${formatCost(totals.costUSD)}  ·  ` +
+    `${totals.skills.size} ${pluralize(totals.skills.size, 'skill')}`
+  );
 
   return 0;
 }

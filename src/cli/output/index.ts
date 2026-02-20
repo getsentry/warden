@@ -47,9 +47,11 @@ export {
   shortRunId,
   parseJsonlReports,
   parseSummaryFromLastLine,
+  parseLogMetadata,
   type JsonlRecord,
   type JsonlRunMetadata,
   type JsonlSummaryRecord,
   type ParsedJsonlLog,
+  type LogFileMetadata,
 } from './jsonl.js';
 export { ICON_CHECK, ICON_SKIPPED, SPINNER_FRAMES } from './icons.js';
