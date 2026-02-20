@@ -359,12 +359,6 @@ export async function runSkillTask(
           return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0 };
         };
 
-        // Snapshot session files before any SDK calls so we can capture new ones after
-        const sessionsDir = runnerOptions.session?.enabled
-          ? resolveSessionsDir(context.repoPath, runnerOptions.session.directory)
-          : undefined;
-        const sessionSnapshot = sessionsDir ? snapshotSessionFiles(context.repoPath) : undefined;
-
         // Process files with sliding-window concurrency pool
         const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
         const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
@@ -394,18 +388,6 @@ export async function runSkillTask(
         for (const fileState of fileStates) {
           if (fileState.status === 'pending') {
             callbacks.onFileUpdate(name, fileState.filename, { status: 'skipped' });
-          }
-        }
-
-        // Move new session files now that all SDK processes have exited and flushed
-        if (sessionsDir && sessionSnapshot) {
-          try {
-            moveNewSessions(context.repoPath, sessionSnapshot, sessionsDir, displayName);
-          } catch (err) {
-            logger.warn('Failed to move session files', {
-              error: err instanceof Error ? err.message : String(err),
-              skill: displayName,
-            });
           }
         }
 
@@ -705,10 +687,34 @@ export async function runComposedSkillTasks(
   callbacks: SkillProgressCallbacks,
   semaphore: Semaphore
 ): Promise<SkillTaskResult[]> {
-  return runPool(tasks, tasks.length,
+  // Snapshot session files once before all skills run, then move after all
+  // complete. This avoids a race where concurrent skills each snapshot the
+  // same directory and the first to finish grabs all new files.
+  const firstTask = tasks[0];
+  const runnerOptions = firstTask?.runnerOptions ?? {};
+  const repoPath = firstTask?.context.repoPath;
+  const sessionsDir = repoPath && runnerOptions.session?.enabled
+    ? resolveSessionsDir(repoPath, runnerOptions.session.directory)
+    : undefined;
+  const sessionSnapshot = sessionsDir && repoPath ? snapshotSessionFiles(repoPath) : undefined;
+
+  const results = await runPool(tasks, tasks.length,
     (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, callbacks, semaphore),
     { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
   );
+
+  // Move all new session files after every skill has finished
+  if (sessionsDir && sessionSnapshot && repoPath) {
+    try {
+      moveNewSessions(repoPath, sessionSnapshot, sessionsDir);
+    } catch (err) {
+      logger.warn('Failed to move session files', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return results;
 }
 
 /**
