@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -9,6 +9,7 @@ import {
   shortRunId,
   readJsonlLog,
   parseJsonlReports,
+  parseSummaryFromLastLine,
   renderJsonlString,
   type JsonlRecord,
 } from './jsonl.js';
@@ -670,5 +671,66 @@ another bad line
     expect(result.reports[0]!.usage?.inputTokens).toBe(500);
     expect(result.reports[0]!.files?.length).toBe(1);
     expect(result.reports[0]!.files![0]!.findingCount).toBe(1);
+  });
+});
+
+describe('parseSummaryFromLastLine', () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `warden-test-summary-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true });
+    }
+  });
+
+  it('parses summary from a valid JSONL file', () => {
+    const outputPath = join(testDir, 'valid.jsonl');
+    const reports: SkillReport[] = [
+      {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [
+          { id: 'test-1', severity: 'high', title: 'Test', description: 'Test' },
+        ],
+        durationMs: 1234,
+      },
+    ];
+    writeJsonlReport(outputPath, reports, 2000, { runId: 'summary-test-id' });
+
+    const summary = parseSummaryFromLastLine(outputPath);
+
+    expect(summary).toBeDefined();
+    expect(summary!.type).toBe('summary');
+    expect(summary!.totalFindings).toBe(1);
+    expect(summary!.bySeverity.high).toBe(1);
+    expect(summary!.run.runId).toBe('summary-test-id');
+    expect(summary!.run.durationMs).toBe(2000);
+  });
+
+  it('returns undefined for non-existent file', () => {
+    const result = parseSummaryFromLastLine(join(testDir, 'nonexistent.jsonl'));
+    expect(result).toBeUndefined();
+  });
+
+  it('returns undefined for empty file', () => {
+    const emptyPath = join(testDir, 'empty.jsonl');
+    writeFileSync(emptyPath, '');
+
+    const result = parseSummaryFromLastLine(emptyPath);
+    expect(result).toBeUndefined();
+  });
+
+  it('returns undefined when last line is not a summary', () => {
+    const noSummaryPath = join(testDir, 'nosummary.jsonl');
+    const content = '{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"test-123"},"skill":"review","summary":"Done","findings":[]}\n';
+    writeFileSync(noSummaryPath, content);
+
+    const result = parseSummaryFromLastLine(noSummaryPath);
+    expect(result).toBeUndefined();
   });
 });

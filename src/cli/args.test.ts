@@ -345,53 +345,75 @@ describe('parseCliArgs', () => {
     expect(result.options.remote).toBe('getsentry/skills');
   });
 
-  it('parses replay command', () => {
-    const result = parseCliArgs(['replay']);
-    expect(result.command).toBe('replay');
-    expect(result.replayOptions).toBeDefined();
-    expect(result.replayOptions!.files).toEqual([]);
+  it('parses logs list command', () => {
+    const result = parseCliArgs(['logs', 'list']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions).toBeDefined();
+    expect(result.logsOptions!.subcommand).toBe('list');
+    expect(result.logsOptions!.files).toEqual([]);
   });
 
-  it('parses replay command with single file', () => {
-    const result = parseCliArgs(['replay', 'run.jsonl']);
-    expect(result.command).toBe('replay');
-    expect(result.replayOptions!.files).toEqual(['run.jsonl']);
+  it('parses logs show command with single file', () => {
+    const result = parseCliArgs(['logs', 'show', 'run.jsonl']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('show');
+    expect(result.logsOptions!.files).toEqual(['run.jsonl']);
   });
 
-  it('parses replay command with multiple files', () => {
-    const result = parseCliArgs(['replay', 'run1.jsonl', 'run2.jsonl', 'run3.jsonl']);
-    expect(result.command).toBe('replay');
-    expect(result.replayOptions!.files).toEqual(['run1.jsonl', 'run2.jsonl', 'run3.jsonl']);
+  it('parses logs show command with multiple files', () => {
+    const result = parseCliArgs(['logs', 'show', 'run1.jsonl', 'run2.jsonl', 'run3.jsonl']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('show');
+    expect(result.logsOptions!.files).toEqual(['run1.jsonl', 'run2.jsonl', 'run3.jsonl']);
   });
 
-  it('parses replay command with --json flag', () => {
-    const result = parseCliArgs(['replay', 'run.jsonl', '--json']);
-    expect(result.command).toBe('replay');
+  it('parses logs gc command', () => {
+    const result = parseCliArgs(['logs', 'gc']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('gc');
+    expect(result.logsOptions!.files).toEqual([]);
+  });
+
+  it('parses logs show command with --json flag', () => {
+    const result = parseCliArgs(['logs', 'show', 'run.jsonl', '--json']);
+    expect(result.command).toBe('logs');
     expect(result.options.json).toBe(true);
   });
 
-  it('parses replay command with --report-on option', () => {
-    const result = parseCliArgs(['replay', 'run.jsonl', '--report-on', 'high']);
-    expect(result.command).toBe('replay');
+  it('parses logs show command with --report-on option', () => {
+    const result = parseCliArgs(['logs', 'show', 'run.jsonl', '--report-on', 'high']);
+    expect(result.command).toBe('logs');
     expect(result.options.reportOn).toBe('high');
   });
 
-  it('parses replay command with --min-confidence option', () => {
-    const result = parseCliArgs(['replay', 'run.jsonl', '--min-confidence', 'high']);
-    expect(result.command).toBe('replay');
+  it('parses logs show command with --min-confidence option', () => {
+    const result = parseCliArgs(['logs', 'show', 'run.jsonl', '--min-confidence', 'high']);
+    expect(result.command).toBe('logs');
     expect(result.options.minConfidence).toBe('high');
   });
 
-  it('parses replay command with verbosity flags', () => {
-    const result = parseCliArgs(['replay', 'run.jsonl', '-v']);
-    expect(result.command).toBe('replay');
+  it('parses logs show command with verbosity flags', () => {
+    const result = parseCliArgs(['logs', 'show', 'run.jsonl', '-v']);
+    expect(result.command).toBe('logs');
     expect(result.options.verbose).toBe(1);
   });
 
-  it('parses replay command with --quiet flag', () => {
-    const result = parseCliArgs(['replay', 'run.jsonl', '--quiet']);
-    expect(result.command).toBe('replay');
+  it('parses logs show command with --quiet flag', () => {
+    const result = parseCliArgs(['logs', 'show', 'run.jsonl', '--quiet']);
+    expect(result.command).toBe('logs');
     expect(result.options.quiet).toBe(true);
+  });
+
+  it('parses logs list command with --json flag', () => {
+    const result = parseCliArgs(['logs', 'list', '--json']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('list');
+    expect(result.options.json).toBe(true);
+  });
+
+  it('exits with error for logs without subcommand', () => {
+    parseCliArgs(['logs']);
+    expect(process.exit).toHaveBeenCalledWith(1);
   });
 });
 

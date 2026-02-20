@@ -297,3 +297,23 @@ export function parseJsonlReports(content: string): ParsedJsonlLog {
 
   return { reports, runMetadata, totalDurationMs };
 }
+
+/**
+ * Read only the last non-empty line of a JSONL file and parse it as a summary record.
+ * Returns undefined if the file doesn't exist, is empty, or the last line isn't a valid summary.
+ */
+export function parseSummaryFromLastLine(filePath: string): JsonlSummaryRecord | undefined {
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const lastLine = lines[lines.length - 1];
+    if (!lastLine) return undefined;
+
+    const parsed = JSON.parse(lastLine);
+    if (parsed.type !== 'summary') return undefined;
+
+    return JsonlSummaryRecordSchema.parse(parsed);
+  } catch {
+    return undefined;
+  }
+}

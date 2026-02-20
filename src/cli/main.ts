@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
@@ -9,7 +9,7 @@ import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove 
 import type { SkillReport, ConfidenceThreshold } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
-import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions, type ReplayOptions } from './args.js';
+import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, refExists, hasUncommittedChanges } from './git.js';
 import { renderTerminalReport, filterReports } from './terminal.js';
@@ -25,8 +25,6 @@ import {
   renderJsonlString,
   getRepoLogPath,
   generateRunId,
-  parseJsonlReports,
-  type JsonlRunMetadata,
   type SkillTaskOptions,
 } from './output/index.js';
 import { cleanupArtifacts } from './log-cleanup.js';
@@ -41,6 +39,7 @@ import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
 import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
+import { runLogs } from './commands/logs.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -729,84 +728,6 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
   return runSkills(context, options, reporter);
 }
 
-/**
- * Run in replay mode: render results from JSONL log files.
- */
-async function runReplay(replayOptions: ReplayOptions, options: CLIOptions, reporter: Reporter): Promise<number> {
-  const { files } = replayOptions;
-
-  if (files.length === 0) {
-    reporter.error('No log files specified');
-    reporter.tip('Usage: warden replay <file.jsonl> [file2.jsonl ...]');
-    return 1;
-  }
-
-  // Validate all files exist before processing
-  const missingFiles: string[] = [];
-  for (const file of files) {
-    if (!existsSync(file)) {
-      missingFiles.push(file);
-    }
-  }
-
-  if (missingFiles.length > 0) {
-    reporter.error(`Log ${pluralize(missingFiles.length, 'file')} not found: ${missingFiles.join(', ')}`);
-    return 1;
-  }
-
-  // Parse and merge reports from all files
-  const allReports: SkillReport[] = [];
-  let totalDurationMs = 0;
-  let lastRunMetadata: JsonlRunMetadata | undefined;
-
-  for (const file of files) {
-    try {
-      const content = readFileSync(file, 'utf-8');
-      const parsed = parseJsonlReports(content);
-      allReports.push(...parsed.reports);
-      totalDurationMs = Math.max(totalDurationMs, parsed.totalDurationMs);
-
-      if (parsed.runMetadata) {
-        lastRunMetadata = parsed.runMetadata;
-        reporter.debug(`Loaded ${parsed.reports.length} ${pluralize(parsed.reports.length, 'skill')} from ${file}`);
-        reporter.debug(`  Run ID: ${parsed.runMetadata.runId}`);
-        reporter.debug(`  Timestamp: ${parsed.runMetadata.timestamp}`);
-      }
-    } catch (err) {
-      reporter.error(`Failed to parse ${file}: ${err instanceof Error ? err.message : String(err)}`);
-      return 1;
-    }
-  }
-
-  if (allReports.length === 0) {
-    reporter.warning('No skill reports found in log files');
-    return 0;
-  }
-
-  // Apply filtering
-  const filteredReports = filterReports(allReports, options.reportOn, options.minConfidence ?? 'medium');
-
-  // Output results
-  reporter.blank();
-  if (options.json) {
-    // Re-render as JSONL for piping, preserving original run metadata
-    const jsonlContent = renderJsonlString(filteredReports, totalDurationMs, lastRunMetadata ? {
-      runId: lastRunMetadata.runId,
-      traceId: lastRunMetadata.traceId,
-      timestamp: new Date(lastRunMetadata.timestamp),
-    } : undefined);
-    process.stdout.write(jsonlContent);
-  } else {
-    console.log(renderTerminalReport(filteredReports, reporter.mode, { verbosity: reporter.verbosity }));
-  }
-
-  // Show summary
-  reporter.blank();
-  reporter.renderSummary(filteredReports, totalDurationMs);
-
-  return 0;
-}
-
 async function runCommand(options: CLIOptions, reporter: Reporter): Promise<number> {
   const targets = options.targets ?? [];
 
@@ -848,7 +769,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
 }
 
 export async function main(): Promise<void> {
-  const { command, options, setupAppOptions, replayOptions } = parseCliArgs();
+  const { command, options, setupAppOptions, logsOptions } = parseCliArgs();
 
   if (command === 'help') {
     showHelp();
@@ -902,12 +823,12 @@ export async function main(): Promise<void> {
           return runSetupApp(setupAppOptions, reporter);
         case 'sync':
           return runSync(options, reporter);
-        case 'replay':
-          if (!replayOptions) {
-            reporter.error('Missing replay options');
+        case 'logs':
+          if (!logsOptions) {
+            reporter.error('Missing logs options');
             process.exit(1);
           }
-          return runReplay(replayOptions, options, reporter);
+          return runLogs(logsOptions, options, reporter);
         default:
           return runCommand(options, reporter);
       }
