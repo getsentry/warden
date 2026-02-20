@@ -416,6 +416,20 @@ describe('parseCliArgs', () => {
     expect(result.command).toBe('logs');
     expect(result.logsOptions!.subcommand).toBe('list');
   });
+
+  it('infers show when arg looks like a file path', () => {
+    const result = parseCliArgs(['logs', 'run.jsonl']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('show');
+    expect(result.logsOptions!.files).toEqual(['run.jsonl']);
+  });
+
+  it('infers show when arg contains a slash', () => {
+    const result = parseCliArgs(['logs', '.warden/logs/abc123.jsonl']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('show');
+    expect(result.logsOptions!.files).toEqual(['.warden/logs/abc123.jsonl']);
+  });
 });
 
 describe('CLIOptionsSchema', () => {

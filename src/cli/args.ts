@@ -416,13 +416,19 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
     let files: string[] = [];
 
-    // Default to 'list' when no subcommand provided
-    const subcommand: LogsSubcommand =
-      subcommandArg === 'list' || subcommandArg === 'show' || subcommandArg === 'gc'
-        ? subcommandArg
-        : 'list';
+    // Determine subcommand: explicit keyword, or infer 'show' if arg looks like a file/run ID
+    let subcommand: LogsSubcommand;
+    if (subcommandArg === 'list' || subcommandArg === 'show' || subcommandArg === 'gc') {
+      subcommand = subcommandArg;
+    } else if (subcommandArg && (subcommandArg.includes('.') || subcommandArg.includes('/'))) {
+      // Arg looks like a file path — infer 'show' and include it in files
+      subcommand = 'show';
+      files = subArgs;
+    } else {
+      subcommand = 'list';
+    }
 
-    if (subcommand === 'show') {
+    if (subcommand === 'show' && files.length === 0) {
       files = subArgs.slice(1);
     }
 

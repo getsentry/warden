@@ -406,6 +406,7 @@ export async function runLogsShow(
       traceId: lastRunMetadata.traceId,
       timestamp: new Date(lastRunMetadata.timestamp),
       model: lastRunMetadata.model,
+      headSha: lastRunMetadata.headSha,
     } : undefined);
     process.stdout.write(jsonlContent);
   } else {

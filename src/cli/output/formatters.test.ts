@@ -36,6 +36,13 @@ describe('formatDuration', () => {
   it('rounds milliseconds', () => {
     expect(formatDuration(50.6)).toBe('51ms');
   });
+
+  it('handles seconds rounding up to 60', () => {
+    // 119.5s → 1m 59.5s → rounds to 1m 60s → should carry over to 2m
+    expect(formatDuration(119500)).toBe('2m');
+    // 179.7s → 2m 59.7s → rounds to 3m
+    expect(formatDuration(179700)).toBe('3m');
+  });
 });
 
 describe('formatLocation', () => {
