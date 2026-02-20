@@ -92,7 +92,7 @@ function renderReview(
     }
 
     // Add attribution footnote with skill name and finding ID
-    body += `\n\n<sub>Identified by Warden [${report.skill}] · ${finding.id}</sub>`;
+    body += `\n\nIdentified by Warden \`${report.skill}\` · \`${finding.id}\``;
 
     // Add deduplication marker
     const contentHash = generateContentHash(finding.title, finding.description);
@@ -271,7 +271,7 @@ export function renderFindingsBody(findings: Finding[], skill: string): string {
     lines.push(escapeHtml(finding.description));
     lines.push('');
   }
-  lines.push(`<sub>Identified by Warden [${skill}]</sub>`);
+  lines.push(`Identified by Warden \`${skill}\``);
   return lines.join('\n');
 }
 

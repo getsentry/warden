@@ -90,7 +90,7 @@ Each inline comment includes:
 2. Description
 3. Suggested fix (if available, as GitHub suggestion block)
 4. Additional locations (collapsible, if any)
-5. Attribution footnote (`Identified by Warden [skill-name] · finding-id`)
+5. Attribution footnote (`Identified by Warden \`skill-name\` · \`finding-id\``)
 6. Hidden deduplication marker
 
 ### Multi-line Findings

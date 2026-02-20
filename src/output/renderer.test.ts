@@ -69,7 +69,7 @@ describe('renderSkillReport', () => {
     const result = renderSkillReport(report);
 
     expect(result.review).toBeDefined();
-    expect(result.review!.comments[0]!.body).toContain('<sub>Identified by Warden [code-review] · f1</sub>');
+    expect(result.review!.comments[0]!.body).toContain('Identified by Warden `code-review` · `f1`');
   });
 
   it('does not include confidence in attribution footnote', () => {
@@ -95,7 +95,7 @@ describe('renderSkillReport', () => {
 
     expect(result.review).toBeDefined();
     expect(result.review!.comments[0]!.body).toContain(
-      '<sub>Identified by Warden [security-review] · f1</sub>'
+      'Identified by Warden `security-review` · `f1`'
     );
     expect(result.review!.comments[0]!.body).not.toContain('confidence');
   });
@@ -736,7 +736,7 @@ describe('renderSkillReport', () => {
     expect(result.review!.comments).toHaveLength(0);
     expect(result.review!.body).toContain('General Issue');
     expect(result.review!.body).toContain('Applies to whole project');
-    expect(result.review!.body).toContain('Identified by Warden [security-review]');
+    expect(result.review!.body).toContain('Identified by Warden `security-review`');
     expect(result.summaryComment).toContain('General Issue');
     expect(result.summaryComment).toContain('General');
   });
@@ -1278,7 +1278,7 @@ describe('renderFindingsBody', () => {
     expect(body).toContain('**SQL Injection**');
     expect(body).toContain('(`src/db.ts:42`)');
     expect(body).toContain('User input in query');
-    expect(body).toContain('<sub>Identified by Warden [security-review]</sub>');
+    expect(body).toContain('Identified by Warden `security-review`');
   });
 
   it('renders findings without location', () => {

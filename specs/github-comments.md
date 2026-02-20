@@ -18,13 +18,13 @@ How Warden formats and manages PR comments: format conventions, deduplication, a
 
 </details>
 
-<sub>Identified by Warden [skill-name] · FINDING-ID</sub>
+Identified by Warden `skill-name` · `FINDING-ID`
 <!-- warden:v1:path:line:hash -->
 ```
 
 - Title: bold, no emoji, no ID, no confidence, no severity
 - Severity is communicated via GitHub check annotation level (failure/warning/notice)
-- Footer: skill name in brackets, finding ID after separator
+- Footer: skill name and finding ID in backticks
 - Additional locations in collapsible details block
 
 ### Summary Comment Finding Item
@@ -51,18 +51,19 @@ Capitalize severity labels, no emoji.
 
 Description
 
-<sub>Identified by Warden [skill-name]</sub>
+Identified by Warden `skill-name`
 ```
 
 ### Attribution Formats
 
 Current format:
 ```
-<sub>Identified by Warden [skill1], [skill2] · FINDING-ID</sub>
+Identified by Warden `skill1`, `skill2` · `FINDING-ID`
 ```
 
 Legacy formats (still parsed for backward compat):
 ```
+<sub>Identified by Warden [skill1], [skill2] · FINDING-ID</sub>
 <sub>Identified by Warden via `skill1`, `skill2` · severity, confidence</sub>
 <sub>warden: skill1, skill2</sub>
 ```
@@ -137,8 +138,8 @@ When Warden detects an issue it already posted about:
 
 **Attribution update example**:
 ```
-Before: <sub>Identified by Warden [security-review] · ABC-123</sub>
-After:  <sub>Identified by Warden [security-review], [code-quality] · ABC-123</sub>
+Before: Identified by Warden `security-review` · `ABC-123`
+After:  Identified by Warden `security-review`, `code-quality` · `ABC-123`
 ```
 
 ### Same Finding from Others
@@ -255,7 +256,7 @@ Run 2: code-quality also detects it
 
 Result:
 - One comment at db.ts:42
-- Attribution: "Identified by Warden [security-review], [code-quality] · SQL-001"
+- Attribution: "Identified by Warden `security-review`, `code-quality` · `SQL-001`"
 ```
 
 ### Human Found It First

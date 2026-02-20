@@ -161,6 +161,11 @@ describe('isWardenComment', () => {
     expect(isWardenComment(body)).toBe(true);
   });
 
+  it('returns true for current backtick format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`skill\` · ABC-123`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
   it('returns false for regular comment', () => {
     const body = 'This is a regular comment.';
     expect(isWardenComment(body)).toBe(false);
@@ -429,6 +434,21 @@ describe('parseWardenSkills', () => {
     const body = `<sub>Identified by Warden [skill1], [skill2], [skill3] · XYZ-789</sub>`;
     expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
   });
+
+  it('parses single skill from current backtick format', () => {
+    const body = `Identified by Warden \`notseer\` · ABC-123`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from current backtick format', () => {
+    const body = `Identified by Warden \`skill1\`, \`skill2\` · ABC-123`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('parses current backtick format with three skills', () => {
+    const body = `Identified by Warden \`skill1\`, \`skill2\`, \`skill3\` · XYZ-789`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
 });
 
 describe('updateWardenCommentBody', () => {
@@ -501,6 +521,30 @@ describe('updateWardenCommentBody', () => {
     const body = `<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>`;
     const result = updateWardenCommentBody(body, 'skill3');
     expect(result).toContain('<sub>Identified by Warden [skill1], [skill2], [skill3] · ABC-123</sub>');
+  });
+
+  it('adds new skill to current backtick format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`skill1\` · ABC-123`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('Identified by Warden `skill1`, `skill2` · ABC-123');
+  });
+
+  it('returns null if skill already listed in current backtick format', () => {
+    const body = `Identified by Warden \`skill1\` · ABC-123`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('preserves finding ID in current backtick format', () => {
+    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`notseer\` · 2K5-29B`;
+    const result = updateWardenCommentBody(body, 'security-review');
+    expect(result).toContain('Identified by Warden `notseer`, `security-review` · 2K5-29B');
+  });
+
+  it('adds skill to current backtick format with multiple existing skills', () => {
+    const body = `Identified by Warden \`skill1\`, \`skill2\` · ABC-123`;
+    const result = updateWardenCommentBody(body, 'skill3');
+    expect(result).toContain('Identified by Warden `skill1`, `skill2`, `skill3` · ABC-123');
   });
 });
 

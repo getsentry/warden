@@ -138,11 +138,13 @@ export function parseWardenComment(body: string): { title: string; description: 
 
 /**
  * Check if a comment body is a Warden-generated comment.
- * Supports old format (<sub>warden: skill</sub>), via format (<sub>Identified by Warden via `skill`</sub>),
- * and new bracket format (<sub>Identified by Warden [skill]</sub>).
+ * Supports current format (Identified by Warden `skill`), and legacy formats:
+ * bracket (<sub>Identified by Warden [skill]</sub>), via (<sub>Identified by Warden via `skill`</sub>),
+ * old (<sub>warden: skill</sub>).
  */
 export function isWardenComment(body: string): boolean {
   return (
+    body.includes('Identified by Warden `') ||
     body.includes('<sub>warden:') ||
     body.includes('<sub>Identified by Warden via') ||
     body.includes('<sub>Identified by Warden [') ||
@@ -152,13 +154,23 @@ export function isWardenComment(body: string): boolean {
 
 /**
  * Parse skill names from a Warden comment's attribution line.
- * Supports three formats:
- * - Old: "<sub>warden: skill1, skill2</sub>"
- * - Via: "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
- * - Bracket: "<sub>Identified by Warden [skill1], [skill2] · id</sub>"
+ * Supports four formats:
+ * - Current: "Identified by Warden `skill1`, `skill2` · id"
+ * - Legacy bracket: "<sub>Identified by Warden [skill1], [skill2] · id</sub>"
+ * - Legacy via: "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
+ * - Legacy old: "<sub>warden: skill1, skill2</sub>"
  */
 export function parseWardenSkills(body: string): string[] {
-  // Try bracket format: <sub>Identified by Warden [skill1], [skill2] · id</sub>
+  // Try current backtick format (no "via"): Identified by Warden `skill1`, `skill2` · id
+  const backtickMatch = body.match(/Identified by Warden ((?:`[^`]+`(?:, )?)+)/);
+  if (backtickMatch?.[1]) {
+    const skills = [...backtickMatch[1].matchAll(/`([^`]+)`/g)]
+      .map((m) => m[1])
+      .filter((s): s is string => s !== undefined);
+    if (skills.length > 0) return skills;
+  }
+
+  // Try legacy bracket format: <sub>Identified by Warden [skill1], [skill2] · id</sub>
   const bracketMatch = body.match(/<sub>Identified by Warden ((?:\[[^\]]+\](?:, )?)+)/);
   if (bracketMatch?.[1]) {
     const skills = [...bracketMatch[1].matchAll(/\[([^\]]+)\]/g)]
@@ -167,7 +179,7 @@ export function parseWardenSkills(body: string): string[] {
     if (skills.length > 0) return skills;
   }
 
-  // Try via format: <sub>Identified by Warden via `skill1`, `skill2` · severity</sub>
+  // Try legacy via format: <sub>Identified by Warden via `skill1`, `skill2` · severity</sub>
   const viaMatch = body.match(/<sub>Identified by Warden via ([^·<]+)/);
   if (viaMatch?.[1]) {
     const skills = [...viaMatch[1].matchAll(/`([^`]+)`/g)]
@@ -176,7 +188,7 @@ export function parseWardenSkills(body: string): string[] {
     if (skills.length > 0) return skills;
   }
 
-  // Fall back to old format: <sub>warden: skill1, skill2</sub>
+  // Fall back to legacy old format: <sub>warden: skill1, skill2</sub>
   const oldMatch = body.match(/<sub>warden:\s*([^<]+)<\/sub>/);
   if (!oldMatch?.[1]) {
     return [];
@@ -189,11 +201,13 @@ export function parseWardenSkills(body: string): string[] {
 
 /**
  * Update a Warden comment body to add a new skill to the attribution.
- * Old format: Changes "<sub>warden: skill1</sub>" to "<sub>warden: skill1, skill2</sub>"
- * Via format: Changes "<sub>Identified by Warden via `skill1` · severity</sub>"
- *             to "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
- * Bracket format: Changes "<sub>Identified by Warden [skill1] · id</sub>"
+ * Current format: Changes "Identified by Warden `skill1` · id"
+ *                 to "Identified by Warden `skill1`, `skill2` · id"
+ * Legacy bracket: Changes "<sub>Identified by Warden [skill1] · id</sub>"
  *                 to "<sub>Identified by Warden [skill1], [skill2] · id</sub>"
+ * Legacy via: Changes "<sub>Identified by Warden via `skill1` · severity</sub>"
+ *             to "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
+ * Legacy old: Changes "<sub>warden: skill1</sub>" to "<sub>warden: skill1, skill2</sub>"
  * Returns null if skill is already listed or if no attribution tag exists.
  */
 export function updateWardenCommentBody(body: string, newSkill: string): string | null {
@@ -209,7 +223,19 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
     return null;
   }
 
-  // Check if it's the bracket format: <sub>Identified by Warden [skill] · id</sub>
+  // Check if it's the current backtick format (no <sub>, no "via"): Identified by Warden `skill` · id
+  const backtickFormatMatch = body.match(/Identified by Warden `[^`]+`/) && !body.includes('<sub>Identified by Warden');
+  if (backtickFormatMatch) {
+    const existingSkillsFormatted = existingSkills.map((s) => `\`${s}\``).join(', ');
+    const lineMatch = body.match(/Identified by Warden ((?:`[^`]+`(?:, )?)+)(.*)/);
+    const suffix = lineMatch?.[2] || '';
+    return body.replace(
+      /Identified by Warden (?:`[^`]+`(?:, )?)+.*/,
+      () => `Identified by Warden ${existingSkillsFormatted}, \`${newSkill}\`${suffix}`
+    );
+  }
+
+  // Check if it's the legacy bracket format: <sub>Identified by Warden [skill] · id</sub>
   const bracketFormatMatch = body.match(/<sub>Identified by Warden \[[^\]]+\]/);
   if (bracketFormatMatch) {
     const existingSkillsFormatted = existingSkills.map((s) => `[${s}]`).join(', ');
@@ -221,7 +247,7 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
     );
   }
 
-  // Check if it's the via format
+  // Check if it's the legacy via format
   const viaFormatMatch = body.match(/<sub>Identified by Warden via `[^`]+`/);
   if (viaFormatMatch) {
     const existingSkillsFormatted = existingSkills.map((s) => `\`${s}\``).join(', ');
@@ -236,7 +262,7 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
     );
   }
 
-  // Old format: <sub>warden: skill1, skill2</sub>
+  // Legacy old format: <sub>warden: skill1, skill2</sub>
   const allSkills = [...existingSkills, newSkill].join(', ');
   // Use a replacer function to avoid special $ character interpretation in skill names
   return body.replace(/<sub>warden:\s*[^<]+<\/sub>/, () => `<sub>warden: ${allSkills}</sub>`);
