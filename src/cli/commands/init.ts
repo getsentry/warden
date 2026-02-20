@@ -5,6 +5,8 @@ import { getRepoRoot, getGitHubRepoUrl } from '../git.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
 import { getMajorVersion } from '../../utils/index.js';
+import { appendSkill } from '../../config/index.js';
+import { discoverAllSkills } from '../../skills/loader.js';
 
 /**
  * Template for warden.toml configuration file.
@@ -175,10 +177,37 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     return 0;
   }
 
+  // Auto-install all discovered local skills
+  const skills = await discoverAllSkills(repoRoot, {
+    onWarning: (message) => reporter.warning(message),
+  });
+
+  let skillsAdded = 0;
+  if (skills.size > 0) {
+    reporter.blank();
+    for (const [name] of skills) {
+      try {
+        appendSkill(wardenTomlPath, {
+          name,
+          triggers: [{ type: 'pull_request', actions: ['opened', 'synchronize', 'reopened'] }],
+        });
+        reporter.success(`Added skill '${name}'`);
+        skillsAdded++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reporter.warning(`Failed to add skill '${name}': ${message}`);
+      }
+    }
+  }
+
   // Print next steps
   reporter.blank();
   reporter.bold('Next steps:');
-  reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
+  if (skillsAdded === 0) {
+    reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
+  } else {
+    reporter.text(`  1. Review skills in ${chalk.cyan('warden.toml')} and customize paths/filters`);
+  }
   reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
   reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to organization or repository secrets`);
 
