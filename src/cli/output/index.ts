@@ -8,6 +8,8 @@ export {
   formatSeverityBadge,
   formatSeverityDot,
   formatSeverityPlain,
+  formatConfidenceBadge,
+  formatConfidencePlain,
   formatFindingCounts,
   formatFindingCountsPlain,
   formatProgress,

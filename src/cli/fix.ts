@@ -5,7 +5,7 @@
 import chalk from 'chalk';
 import figures from 'figures';
 import type { Finding, SkillReport } from '../types/index.js';
-import { formatSeverityBadge, pluralize, type Reporter } from './output/index.js';
+import { formatSeverityBadge, formatConfidenceBadge, pluralize, type Reporter } from './output/index.js';
 import { ICON_CHECK } from './output/icons.js';
 import { Verbosity } from './output/verbosity.js';
 import { applyUnifiedDiff } from './diff-apply.js';
@@ -177,9 +177,11 @@ export async function runInteractiveFixFlow(
 
     console.error('');
 
-    // Severity + counter + title
+    // Severity + confidence + counter + title
     const badge = formatSeverityBadge(finding.severity);
-    console.error(`${badge} ${chalk.bold(`[${idx + 1}/${displayOrder.length}]`)} ${chalk.bold(finding.title)}`);
+    const confidenceBadge = formatConfidenceBadge(finding.confidence);
+    const badges = confidenceBadge ? `${badge} ${confidenceBadge}` : badge;
+    console.error(`${badges} ${chalk.bold(`[${idx + 1}/${displayOrder.length}]`)} ${chalk.bold(finding.title)}`);
     console.error(chalk.dim(`  ${location.path}:${location.startLine}`));
 
     // Description

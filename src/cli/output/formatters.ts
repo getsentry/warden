@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import figures from 'figures';
-import type { Severity, Finding, FileChange, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
+import type { Severity, Confidence, Finding, FileChange, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 
 /**
  * Capitalize the first letter of a string.
@@ -74,6 +74,34 @@ export function formatSeverityBadge(severity: Severity): string {
  */
 export function formatSeverityPlain(severity: Severity): string {
   return `[${severity}]`;
+}
+
+/**
+ * Confidence configuration for display.
+ */
+const CONFIDENCE_CONFIG: Record<Confidence, { color: typeof chalk.dim }> = {
+  high: { color: chalk.green },
+  medium: { color: chalk.yellow },
+  low: { color: chalk.red },
+};
+
+/**
+ * Format a confidence badge for terminal output.
+ * Returns empty string if confidence is undefined.
+ */
+export function formatConfidenceBadge(confidence: Confidence | undefined): string {
+  if (!confidence) return '';
+  const config = CONFIDENCE_CONFIG[confidence];
+  return config.color(`[${confidence} confidence]`);
+}
+
+/**
+ * Format a confidence level for plain text (CI mode).
+ * Returns empty string if confidence is undefined.
+ */
+export function formatConfidencePlain(confidence: Confidence | undefined): string {
+  if (!confidence) return '';
+  return `[${confidence} confidence]`;
 }
 
 /**

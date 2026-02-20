@@ -145,6 +145,41 @@ describe('renderTerminalReport', () => {
       expect(output).toContain('Test Finding');
       expect(output).toContain('This is a test finding');
     });
+
+    it('renders confidence badge in TTY mode when present', () => {
+      const report = createReport({
+        findings: [
+          createFinding({
+            confidence: 'high',
+            title: 'Finding with confidence',
+          }),
+        ],
+      });
+
+      const output = renderTerminalReport([report], {
+        isTTY: true,
+        supportsColor: false,
+        columns: 80,
+      });
+
+      expect(output).toContain('high confidence');
+      expect(output).toContain('Finding with confidence');
+    });
+
+    it('does not show confidence badge when not present', () => {
+      const report = createReport({
+        findings: [createFinding({ title: 'Finding without trust level' })],
+      });
+
+      const output = renderTerminalReport([report], {
+        isTTY: true,
+        supportsColor: false,
+        columns: 80,
+      });
+
+      expect(output).toContain('Finding without trust level');
+      expect(output).not.toContain('confidence');
+    });
   });
 
   describe('CI (non-TTY) rendering', () => {

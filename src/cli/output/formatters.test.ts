@@ -9,6 +9,8 @@ import {
   padRight,
   formatStatsCompact,
   formatSeverityBadge,
+  formatConfidenceBadge,
+  formatConfidencePlain,
 } from './formatters.js';
 import type { Severity, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 
@@ -89,6 +91,30 @@ describe('formatSeverityBadge', () => {
     expect(formatSeverityBadge('medium')).toContain('medium');
     expect(formatSeverityBadge('low')).toContain('low');
     expect(formatSeverityBadge('info')).toContain('info');
+  });
+});
+
+describe('formatConfidenceBadge', () => {
+  it('includes confidence text for each level', () => {
+    expect(formatConfidenceBadge('high')).toContain('high confidence');
+    expect(formatConfidenceBadge('medium')).toContain('medium confidence');
+    expect(formatConfidenceBadge('low')).toContain('low confidence');
+  });
+
+  it('returns empty string for undefined confidence', () => {
+    expect(formatConfidenceBadge(undefined)).toBe('');
+  });
+});
+
+describe('formatConfidencePlain', () => {
+  it('formats confidence in brackets', () => {
+    expect(formatConfidencePlain('high')).toBe('[high confidence]');
+    expect(formatConfidencePlain('medium')).toBe('[medium confidence]');
+    expect(formatConfidencePlain('low')).toBe('[low confidence]');
+  });
+
+  it('returns empty string for undefined confidence', () => {
+    expect(formatConfidencePlain(undefined)).toBe('');
   });
 });
 
