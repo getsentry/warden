@@ -7,7 +7,7 @@ export const DEFAULT_SESSIONS_DIR = '.warden/sessions';
 
 /** Options for session storage */
 export interface SessionStorageOptions {
-  /** Enable session storage (default: false) */
+  /** Enable session storage (default: true) */
   enabled?: boolean;
   /** Directory to store sessions (default: .warden/sessions) */
   directory?: string;
@@ -66,7 +66,9 @@ export function moveSession(
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const targetFile = path.join(targetDir, `${timestamp}-${uuid}.jsonl`);
 
-  fs.renameSync(sourceFile, targetFile);
+  // Use copy+delete instead of rename to handle cross-device moves (EXDEV)
+  fs.copyFileSync(sourceFile, targetFile);
+  fs.unlinkSync(sourceFile);
   return targetFile;
 }
 

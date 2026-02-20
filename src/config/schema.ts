@@ -197,8 +197,8 @@ export type LogsConfig = z.infer<typeof LogsConfigSchema>;
 
 // Sessions configuration
 export const SessionsConfigSchema = z.object({
-  /** Enable session storage (default: false). Sessions are moved from Claude SDK's internal storage to .warden/sessions/ after each run. */
-  enabled: z.boolean().default(false),
+  /** Enable session storage (default: true). Sessions are moved from Claude SDK's internal storage to .warden/sessions/ after each run. */
+  enabled: z.boolean().default(true),
   /** Directory to store sessions relative to the repo root (default: .warden/sessions) */
   directory: z.string().optional(),
 });

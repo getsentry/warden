@@ -144,20 +144,20 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     filesCreated++;
   }
 
-  // Ensure .warden/logs/ is in .gitignore
+  // Ensure .warden/ is in .gitignore
   const gitignorePath = join(repoRoot, '.gitignore');
   if (existsSync(gitignorePath)) {
     const gitignoreContent = readFileSync(gitignorePath, 'utf-8');
-    const hasEntry = gitignoreContent.split('\n').some((line) => line.trim() === '.warden/logs/');
-    if (!hasEntry) {
+    const hasWardenEntry = gitignoreContent.split('\n').some((line) => line.trim() === '.warden/' || line.trim() === '.warden');
+    if (!hasWardenEntry) {
       const newline = gitignoreContent.endsWith('\n') ? '' : '\n';
-      writeFileSync(gitignorePath, gitignoreContent + newline + '.warden/logs/\n', 'utf-8');
-      reporter.created('.gitignore entry for .warden/logs/');
+      writeFileSync(gitignorePath, gitignoreContent + newline + '.warden/\n', 'utf-8');
+      reporter.created('.gitignore entry for .warden/');
       filesCreated++;
     }
   } else {
-    writeFileSync(gitignorePath, '.warden/logs/\n', 'utf-8');
-    reporter.created('.gitignore with .warden/logs/');
+    writeFileSync(gitignorePath, '.warden/\n', 'utf-8');
+    reporter.created('.gitignore with .warden/');
     filesCreated++;
   }
 
