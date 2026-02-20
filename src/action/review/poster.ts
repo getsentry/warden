@@ -244,8 +244,10 @@ export async function postTriggerReview(
     }
 
     // Check if failOn threshold is met (even if all findings deduplicated, we still need REQUEST_CHANGES)
+    // Filter by confidence first so low-confidence findings don't trigger REQUEST_CHANGES
     const useRequestChanges = result.requestChanges ?? false;
-    const needsRequestChanges = useRequestChanges && result.failOn && shouldFail(result.report, result.failOn);
+    const reportForFail = { ...result.report, findings: filterFindings(result.report.findings, undefined, result.minConfidence) };
+    const needsRequestChanges = useRequestChanges && result.failOn && shouldFail(reportForFail, result.failOn);
 
     // Only post if we have non-duplicate findings, reportOnSuccess, or REQUEST_CHANGES needed
     if (findingsToPost.length > 0 || reportOnSuccess || needsRequestChanges) {

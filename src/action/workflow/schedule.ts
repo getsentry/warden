@@ -13,6 +13,7 @@ import { runSkill } from '../../sdk/runner.js';
 import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
+import { filterFindings } from '../../types/index.js';
 import type { SkillReport } from '../../types/index.js';
 import type { ActionInputs } from '../inputs.js';
 import {
@@ -158,11 +159,13 @@ export async function runScheduleWorkflow(
       }
 
       // Check failure condition
+      // Filter by confidence first so low-confidence findings don't cause failure
       const failOn = resolved.failOn ?? inputs.failOn;
       const failCheck = resolved.failCheck ?? inputs.failCheck ?? false;
-      if (failCheck && failOn && shouldFail(report, failOn)) {
+      const reportForFail = { ...report, findings: filterFindings(report.findings, undefined, resolved.minConfidence) };
+      if (failCheck && failOn && shouldFail(reportForFail, failOn)) {
         shouldFailAction = true;
-        const count = countFindingsAtOrAbove(report, failOn);
+        const count = countFindingsAtOrAbove(reportForFail, failOn);
         failureReasons.push(`${resolved.name}: Found ${count} ${failOn}+ severity issues`);
       }
 

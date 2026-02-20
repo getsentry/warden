@@ -216,8 +216,9 @@ export async function updateSkillCheck(
   report: SkillReport,
   options: UpdateSkillCheckOptions
 ): Promise<void> {
-  // Conclusion is based on all findings (failOn behavior)
-  const conclusion = determineConclusion(report.findings, options.failOn, options.failCheck);
+  // Conclusion is based on confidence-filtered findings (consistent with CLI path)
+  const filteredForConclusion = filterFindings(report.findings, undefined, options.minConfidence);
+  const conclusion = determineConclusion(filteredForConclusion, options.failOn, options.failCheck);
   // Annotations are filtered by reportOn threshold and confidence
   const annotations = findingsToAnnotations(report.findings, options.reportOn, options.minConfidence);
 

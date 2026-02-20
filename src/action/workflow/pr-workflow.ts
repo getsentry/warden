@@ -16,6 +16,7 @@ import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers
 import { fetchExistingComments } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
+import { filterFindings } from '../../types/index.js';
 import type { EventContext, SkillReport, Finding } from '../../types/index.js';
 import { runPool, Semaphore } from '../../utils/index.js';
 import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
@@ -325,10 +326,12 @@ async function postReviewsAndTrackFailures(
       existingComments.push(...postResult.newComments);
 
       // Check if we should fail based on this trigger's config
+      // Filter by confidence first so low-confidence findings don't cause failure
       const failCheck = result.failCheck ?? false;
-      if (failCheck && result.failOn && shouldFail(result.report, result.failOn)) {
+      const reportForFail = { ...result.report, findings: filterFindings(result.report.findings, undefined, result.minConfidence) };
+      if (failCheck && result.failOn && shouldFail(reportForFail, result.failOn)) {
         shouldFailAction = true;
-        const count = countFindingsAtOrAbove(result.report, result.failOn);
+        const count = countFindingsAtOrAbove(reportForFail, result.failOn);
         failureReasons.push(`${result.triggerName}: Found ${count} ${result.failOn}+ severity issues`);
       }
     }
@@ -484,10 +487,11 @@ async function finalizeWorkflow(
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, current run would not request changes,
   // and at least one trigger has an active failOn (prevents accidental dismiss when config changes).
-  const wouldRequestChanges = results.some(
-    (r) => r.failOn && r.failOn !== 'off' && (r.requestChanges ?? false) &&
-      r.report && shouldFail(r.report, r.failOn)
-  );
+  const wouldRequestChanges = results.some((r) => {
+    if (!r.failOn || r.failOn === 'off' || !(r.requestChanges ?? false) || !r.report) return false;
+    const filtered = { ...r.report, findings: filterFindings(r.report.findings, undefined, r.minConfidence) };
+    return shouldFail(filtered, r.failOn);
+  });
   const hasActiveFailOn = results.some((r) => r.failOn && r.failOn !== 'off');
   if (
     context.pullRequest &&
