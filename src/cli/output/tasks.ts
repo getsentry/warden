@@ -5,7 +5,7 @@
  * Reporter spec: specs/reporters.md
  */
 
-import type { SkillReport, SeverityThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, emitDedupMetrics, logger } from '../../sentry.js';
 import {
@@ -106,6 +106,7 @@ export interface SkillTaskResult {
   name: string;
   report?: SkillReport;
   failOn?: SeverityThreshold;
+  minConfidence?: ConfidenceThreshold;
   error?: unknown;
 }
 
@@ -116,6 +117,7 @@ export interface SkillTaskOptions {
   name: string;
   displayName?: string;
   failOn?: SeverityThreshold;
+  minConfidence?: ConfidenceThreshold;
   /** Resolve the skill definition (may be async for loading) */
   resolveSkill: () => Promise<SkillDefinition>;
   /** The event context with files to analyze */
@@ -170,7 +172,7 @@ export async function runSkillTask(
   callbacks: SkillProgressCallbacks,
   semaphore?: Semaphore
 ): Promise<SkillTaskResult> {
-  const { name, displayName = name, failOn, resolveSkill, context, runnerOptions = {} } = options;
+  const { name, displayName = name, failOn, minConfidence, resolveSkill, context, runnerOptions = {} } = options;
 
   return Sentry.startSpan(
     { op: 'skill.run', name: `run ${displayName}` },
@@ -206,6 +208,7 @@ export async function runSkillTask(
               skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
             },
             failOn,
+            minConfidence,
           };
         }
 
@@ -454,11 +457,11 @@ export async function runSkillTask(
         });
         callbacks.onSkillComplete(name, report);
 
-        return { name, report, failOn };
+        return { name, report, failOn, minConfidence };
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         callbacks.onSkillError(name, errorMessage);
-        return { name, error: err, failOn };
+        return { name, error: err, failOn, minConfidence };
       }
     },
   );

@@ -7,7 +7,7 @@
 
 import type { Octokit } from '@octokit/rest';
 import type { EventContext, Finding } from '../../types/index.js';
-import { filterFindingsBySeverity } from '../../types/index.js';
+import { filterFindings } from '../../types/index.js';
 import { shouldFail } from '../../triggers/matcher.js';
 import type { RenderResult } from '../../output/types.js';
 import { renderSkillReport, renderFindingsBody } from '../../output/renderer.js';
@@ -164,8 +164,8 @@ export async function postTriggerReview(
     return { posted: false, newComments, shouldFail: false };
   }
 
-  // Filter findings by reportOn threshold
-  const filteredFindings = filterFindingsBySeverity(result.report.findings, result.reportOn);
+  // Filter findings by reportOn threshold and confidence
+  const filteredFindings = filterFindings(result.report.findings, result.reportOn, result.minConfidence);
   const reportOnSuccess = result.reportOnSuccess ?? false;
 
   // Skip if nothing to post

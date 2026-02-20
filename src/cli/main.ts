@@ -154,8 +154,10 @@ function processTaskResults(
     if (result.report) {
       reports.push(result.report);
       // Apply confidence filtering before failOn evaluation so low-confidence findings
-      // don't cause exit code 1
-      const reportForFail = { ...result.report, findings: filterFindings(result.report.findings, undefined, minConfidence) };
+      // don't cause exit code 1. Per-result minConfidence (from trigger config) takes
+      // precedence over the global default.
+      const effectiveConfidence = result.minConfidence ?? minConfidence;
+      const reportForFail = { ...result.report, findings: filterFindings(result.report.findings, undefined, effectiveConfidence) };
       if (result.failOn && shouldFail(reportForFail, result.failOn)) {
         hasFailure = true;
         const count = countFindingsAtOrAbove(reportForFail, result.failOn);
@@ -624,10 +626,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // Build trigger tasks
+  const effectiveMinConfidence = options.minConfidence ?? config.defaults?.minConfidence ?? 'medium';
   const tasks: SkillTaskOptions[] = triggersToRun.map((trigger) => ({
     name: trigger.name,
     displayName: trigger.skill,
     failOn: trigger.failOn ?? options.failOn,
+    minConfidence: trigger.minConfidence ?? effectiveMinConfidence,
     resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, {
       remote: trigger.remote,
       offline: options.offline,
@@ -658,7 +662,6 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Process results and output
   const totalDuration = Date.now() - startTime;
-  const effectiveMinConfidence = options.minConfidence ?? config.defaults?.minConfidence ?? 'medium';
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
   return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted);
 }
