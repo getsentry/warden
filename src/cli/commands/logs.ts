@@ -57,8 +57,35 @@ function resolveFileArg(arg: string, logDir: string): string[] {
   }
 }
 
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+/**
+ * Get the visual width of a string (ignoring ANSI escape codes).
+ */
+function visualWidth(str: string): number {
+  return str.replace(ANSI_RE, '').length;
+}
+
+/**
+ * Pad a string to a visual width, accounting for ANSI codes.
+ */
+function padToWidth(str: string, width: number): string {
+  const pad = width - visualWidth(str);
+  return pad > 0 ? str + ' '.repeat(pad) : str;
+}
+
+/**
+ * Right-align a string to a visual width, accounting for ANSI codes.
+ */
+function rightAlign(str: string, width: number): string {
+  const pad = width - visualWidth(str);
+  return pad > 0 ? ' '.repeat(pad) + str : str;
+}
+
 /**
  * Format a severity breakdown as colored dots with counts.
+ * Returns both the formatted string and its visual width.
  */
 function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>): string {
   const parts: string[] = [];
@@ -66,10 +93,10 @@ function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>):
   for (const sev of severities) {
     const count = bySeverity[sev] ?? 0;
     if (count > 0) {
-      parts.push(`${formatSeverityDot(sev)} ${count}`);
+      parts.push(`${formatSeverityDot(sev)}${count}`);
     }
   }
-  return parts.length > 0 ? parts.join('  ') : '';
+  return parts.join(' ');
 }
 
 /**
@@ -123,6 +150,18 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     return 0;
   }
 
+  // Build row data so we can calculate column widths
+  interface Row {
+    runId: string;
+    date: string;
+    findings: string;
+    time: string;
+    cost: string;
+    skills: string;
+  }
+
+  const rows: Row[] = [];
+
   // Aggregate totals across all runs
   const totals = {
     findings: 0,
@@ -132,8 +171,19 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     skills: new Set<string>(),
   };
 
-  for (const { meta } of logData) {
-    if (!meta) continue;
+  for (const { entry, meta } of logData) {
+    if (!meta) {
+      rows.push({
+        runId: entry.slice(0, 8),
+        date: '',
+        findings: chalk.dim('parse error'),
+        time: '',
+        cost: '',
+        skills: '',
+      });
+      continue;
+    }
+
     const { summary, skills } = meta;
     totals.findings += summary.totalFindings;
     totals.durationMs += summary.run.durationMs;
@@ -146,44 +196,69 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     for (const skill of skills) {
       totals.skills.add(skill);
     }
-  }
-
-  // Per-run table
-  for (const { entry, meta } of logData) {
-    if (!meta) {
-      reporter.text(`  ${entry}  ${chalk.dim('(unable to parse)')}`);
-      continue;
-    }
-
-    const { summary, skills } = meta;
-    const runId = chalk.bold(shortRunId(summary.run.runId));
-    const date = chalk.dim(summary.run.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z'));
-    const duration = chalk.dim(formatDuration(summary.run.durationMs));
-    const skillList = chalk.dim(skills.join(', '));
 
     const findingCount = summary.totalFindings;
-    const sevBreakdown = formatSeverityBreakdown(summary.bySeverity);
-    const findingStr = findingCount === 0
-      ? chalk.dim('0 findings')
-      : `${findingCount} ${pluralize(findingCount, 'finding')}`;
+    const findingsStr = findingCount === 0
+      ? chalk.dim('—')
+      : formatSeverityBreakdown(summary.bySeverity);
 
-    const costStr = summary.usage ? chalk.dim(formatCost(summary.usage.costUSD)) : '';
+    rows.push({
+      runId: shortRunId(summary.run.runId),
+      date: summary.run.timestamp.replace('T', ' ').replace(/\.\d+Z$/, ''),
+      findings: findingsStr,
+      time: formatDuration(summary.run.durationMs),
+      cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
+      skills: skills.join(', '),
+    });
+  }
 
-    reporter.text(
-      `  ${runId}  ${date}  ${findingStr}${sevBreakdown ? `  ${sevBreakdown}` : ''}  ${duration}${costStr ? `  ${costStr}` : ''}`
-    );
-    reporter.text(`         ${skillList}`);
+  // Calculate column widths
+  const headers = { runId: 'RUN', date: 'DATE', findings: 'FINDINGS', time: 'TIME', cost: 'COST', skills: 'SKILLS' };
+  const widths = {
+    runId: Math.max(headers.runId.length, ...rows.map((r) => visualWidth(r.runId))),
+    date: Math.max(headers.date.length, ...rows.map((r) => visualWidth(r.date))),
+    findings: Math.max(headers.findings.length, ...rows.map((r) => visualWidth(r.findings))),
+    time: Math.max(headers.time.length, ...rows.map((r) => visualWidth(r.time))),
+    cost: Math.max(headers.cost.length, ...rows.map((r) => visualWidth(r.cost))),
+    skills: Math.max(headers.skills.length, ...rows.map((r) => visualWidth(r.skills))),
+  };
+
+  // Header row
+  const headerLine =
+    `  ${padToWidth(headers.runId, widths.runId)}  ` +
+    `${padToWidth(headers.date, widths.date)}  ` +
+    `${padToWidth(headers.findings, widths.findings)}  ` +
+    `${rightAlign(headers.time, widths.time)}  ` +
+    `${rightAlign(headers.cost, widths.cost)}  ` +
+    `${headers.skills}`;
+  reporter.text(chalk.dim(headerLine));
+
+  // Data rows
+  for (const row of rows) {
+    const line =
+      `  ${padToWidth(chalk.bold(row.runId), widths.runId)}  ` +
+      `${padToWidth(chalk.dim(row.date), widths.date)}  ` +
+      `${padToWidth(row.findings, widths.findings)}  ` +
+      `${rightAlign(chalk.dim(row.time), widths.time)}  ` +
+      `${rightAlign(chalk.dim(row.cost), widths.cost)}  ` +
+      `${chalk.dim(row.skills)}`;
+    reporter.text(line);
   }
 
   // Summary footer
   reporter.blank();
   const totalSev = formatSeverityBreakdown(totals.bySeverity);
   reporter.text(
-    `${entries.length} ${pluralize(entries.length, 'run')}  ·  ` +
-    `${totals.findings} ${pluralize(totals.findings, 'finding')}${totalSev ? `  ${totalSev}` : ''}  ·  ` +
-    `${formatDuration(totals.durationMs)}  ·  ` +
-    `${formatCost(totals.costUSD)}  ·  ` +
-    `${totals.skills.size} ${pluralize(totals.skills.size, 'skill')}`
+    chalk.dim(
+      `${entries.length} ${pluralize(entries.length, 'run')}  ·  ` +
+      `${totals.findings} ${pluralize(totals.findings, 'finding')}`
+    ) +
+    (totalSev ? `  ${totalSev}` : '') +
+    chalk.dim(
+      `  ·  ${formatDuration(totals.durationMs)}` +
+      `  ·  ${formatCost(totals.costUSD)}` +
+      `  ·  ${totals.skills.size} ${pluralize(totals.skills.size, 'skill')}`
+    )
   );
 
   return 0;
