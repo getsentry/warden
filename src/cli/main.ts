@@ -363,7 +363,7 @@ async function runSkills(
     batchDelayMs: config?.defaults?.batchDelayMs,
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
     auxiliaryMaxRetries: config?.defaults?.auxiliaryMaxRetries,
-    session: config?.sessions,
+    session: config?.sessions ?? { enabled: true },
   };
   const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters }) => ({
     name: skill,
@@ -645,7 +645,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       maxTurns: trigger.maxTurns,
       maxContextFiles: config.defaults?.chunking?.maxContextFiles,
       auxiliaryMaxRetries: config.defaults?.auxiliaryMaxRetries,
-      session: config.sessions,
+      session: config.sessions ?? { enabled: true },
     },
   }));
 
