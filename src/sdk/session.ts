@@ -124,16 +124,9 @@ export function listSessions(dir: string): string[] {
 
   // Sort by modification time, newest first
   return files.sort((a, b) => {
-    let statA, statB;
-    try {
-      statA = fs.statSync(a);
-      statB = fs.statSync(b);
-    } catch {
-      // If we can't stat, treat as oldest (will be filtered out)
-      if (!statA) return 1;
-      if (!statB) return -1;
-      return 0;
-    }
-    return statB.mtime.getTime() - statA.mtime.getTime();
+    let mtimeA = 0, mtimeB = 0;
+    try { mtimeA = fs.statSync(a).mtime.getTime(); } catch { /* treat as oldest */ }
+    try { mtimeB = fs.statSync(b).mtime.getTime(); } catch { /* treat as oldest */ }
+    return mtimeB - mtimeA;
   });
 }
