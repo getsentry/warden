@@ -171,19 +171,14 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     filesCreated++;
   }
 
-  if (filesCreated === 0) {
-    reporter.blank();
-    reporter.tip('All configuration files already exist. Use --force to overwrite.');
-    return 0;
-  }
-
-  // Auto-install all discovered local skills
+  // Auto-install all discovered local skills (runs even if config files already exist,
+  // so newly added skills get registered on re-run)
   const skills = await discoverAllSkills(repoRoot, {
     onWarning: (message) => reporter.warning(message),
   });
 
   let skillsAdded = 0;
-  if (skills.size > 0) {
+  if (skills.size > 0 && existsSync(wardenTomlPath)) {
     // Read existing config to check for already-registered skills
     const existingToml = readFileSync(wardenTomlPath, 'utf-8');
 
@@ -206,6 +201,12 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
         reporter.warning(`Failed to add skill '${name}': ${message}`);
       }
     }
+  }
+
+  if (filesCreated === 0 && skillsAdded === 0) {
+    reporter.blank();
+    reporter.tip('All configuration files already exist. Use --force to overwrite.');
+    return 0;
   }
 
   // Print next steps
