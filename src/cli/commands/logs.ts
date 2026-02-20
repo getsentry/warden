@@ -102,7 +102,7 @@ function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>):
       parts.push(SEVERITY_COLORS[sev](String(count)));
     }
   }
-  return parts.join(' ');
+  return parts.join(chalk.dim(' / '));
 }
 
 /**
