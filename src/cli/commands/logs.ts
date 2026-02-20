@@ -12,7 +12,6 @@ import {
   pluralize,
   formatDuration,
   formatCost,
-  formatSeverityDot,
   shortRunId,
   parseJsonlReports,
   parseLogMetadata,
@@ -83,9 +82,16 @@ function rightAlign(str: string, width: number): string {
   return pad > 0 ? ' '.repeat(pad) + str : str;
 }
 
+const SEVERITY_COLORS: Record<Severity, (s: string) => string> = {
+  critical: chalk.red,
+  high: chalk.redBright,
+  medium: chalk.yellow,
+  low: chalk.green,
+  info: chalk.blue,
+};
+
 /**
- * Format a severity breakdown as colored dots with counts.
- * Returns both the formatted string and its visual width.
+ * Format a severity breakdown as colored counts.
  */
 function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>): string {
   const parts: string[] = [];
@@ -93,7 +99,7 @@ function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>):
   for (const sev of severities) {
     const count = bySeverity[sev] ?? 0;
     if (count > 0) {
-      parts.push(`${formatSeverityDot(sev)}${count}`);
+      parts.push(SEVERITY_COLORS[sev](String(count)));
     }
   }
   return parts.join(' ');
