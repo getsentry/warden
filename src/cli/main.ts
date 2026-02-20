@@ -4,6 +4,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
 import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillRunnerOptions } from '../sdk/runner.js';
+import { DEFAULT_MODEL } from '../sdk/types.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport, ConfidenceThreshold } from '../types/index.js';
@@ -377,7 +378,7 @@ async function runSkills(
 
   // Build skill tasks
   // Model precedence: defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
-  const model = config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'];
+  const model = config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? DEFAULT_MODEL;
   const runnerOptions: SkillRunnerOptions = {
     apiKey,
     model,
@@ -688,7 +689,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  const configModel = triggersToRun[0]?.model ?? config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'];
+  const configModel = triggersToRun[0]?.model ?? config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? DEFAULT_MODEL;
   return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted, configModel);
 }
 

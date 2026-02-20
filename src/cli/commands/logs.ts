@@ -171,6 +171,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
       runId: meta?.summary.run.runId,
       timestamp: meta?.summary.run.timestamp,
       model: meta?.model,
+      headSha: meta?.headSha,
       files: meta?.totalFiles,
       findings: meta?.summary.totalFindings,
       bySeverity: meta?.summary.bySeverity,
@@ -187,11 +188,12 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
   interface Row {
     runId: string;
     date: string;
-    model: string;
     files: string;
     findings: string;
     time: string;
     cost: string;
+    sha: string;
+    model: string;
     skills: string;
   }
 
@@ -211,11 +213,12 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
       rows.push({
         runId: entry.slice(0, 8),
         date: '',
-        model: '-',
         files: '',
         findings: chalk.dim('parse error'),
         time: '',
         cost: '',
+        sha: '',
+        model: '-',
         skills: '',
       });
       continue;
@@ -237,11 +240,12 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     rows.push({
       runId: shortRunId(summary.run.runId),
       date: formatRelativeTime(new Date(summary.run.timestamp)),
-      model: meta.model ?? '-',
       files: meta.totalFiles > 0 ? String(meta.totalFiles) : '',
       findings: formatSeverityBreakdown(summary.bySeverity),
       time: formatDuration(summary.run.durationMs),
       cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
+      sha: meta.headSha ? meta.headSha.slice(0, 7) : '',
+      model: meta.model ?? '-',
       skills: skills.join(', '),
     });
   }
@@ -254,6 +258,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     findings: 'FINDINGS',
     time: 'TIME',
     cost: 'COST',
+    sha: 'SHA',
     model: 'MODEL',
     skills: 'SKILLS',
   };
@@ -264,6 +269,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     findings: Math.max(headers.findings.length, ...rows.map((r) => visualWidth(r.findings))),
     time: Math.max(headers.time.length, ...rows.map((r) => visualWidth(r.time))),
     cost: Math.max(headers.cost.length, ...rows.map((r) => visualWidth(r.cost))),
+    sha: Math.max(headers.sha.length, ...rows.map((r) => visualWidth(r.sha))),
     model: Math.max(headers.model.length, ...rows.map((r) => visualWidth(r.model))),
     skills: Math.max(headers.skills.length, ...rows.map((r) => visualWidth(r.skills))),
   };
@@ -276,6 +282,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     `${padToWidth(headers.findings, widths.findings)}  ` +
     `${rightAlign(headers.time, widths.time)}  ` +
     `${rightAlign(headers.cost, widths.cost)}  ` +
+    `${padToWidth(headers.sha, widths.sha)}  ` +
     `${padToWidth(headers.model, widths.model)}  ` +
     `${headers.skills}`;
   reporter.text(chalk.dim(headerLine));
@@ -289,6 +296,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
       `${padToWidth(row.findings, widths.findings)}  ` +
       `${rightAlign(chalk.dim(row.time), widths.time)}  ` +
       `${rightAlign(chalk.dim(row.cost), widths.cost)}  ` +
+      `${padToWidth(chalk.dim(row.sha), widths.sha)}  ` +
       `${padToWidth(chalk.dim(row.model), widths.model)}  ` +
       `${chalk.dim(row.skills)}`;
     reporter.text(line);

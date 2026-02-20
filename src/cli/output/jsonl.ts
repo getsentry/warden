@@ -344,6 +344,7 @@ export interface LogFileMetadata {
   summary: JsonlSummaryRecord;
   skills: string[];
   model?: string;
+  headSha?: string;
   totalFiles: number;
 }
 
@@ -360,6 +361,7 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
     let summary: JsonlSummaryRecord | undefined;
     const skills: string[] = [];
     let model: string | undefined;
+    let headSha: string | undefined;
     const uniqueFiles = new Set<string>();
 
     for (const line of lines) {
@@ -372,9 +374,12 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
           if (!skills.includes(parsed.skill)) {
             skills.push(parsed.skill);
           }
-          // Extract model from first record's run metadata
+          // Extract model and headSha from first record's run metadata
           if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
             model = parsed.run.model;
+          }
+          if (!headSha && parsed.run?.headSha && typeof parsed.run.headSha === 'string') {
+            headSha = parsed.run.headSha;
           }
           // Count unique filenames across skill records' files arrays
           if (Array.isArray(parsed.files)) {
@@ -391,7 +396,7 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
     }
 
     if (!summary) return undefined;
-    return { summary, skills, model, totalFiles: uniqueFiles.size };
+    return { summary, skills, model, headSha, totalFiles: uniqueFiles.size };
   } catch {
     return undefined;
   }
