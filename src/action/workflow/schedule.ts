@@ -162,7 +162,7 @@ export async function runScheduleWorkflow(
       // Filter by confidence first so low-confidence findings don't cause failure
       const failOn = resolved.failOn ?? inputs.failOn;
       const failCheck = resolved.failCheck ?? inputs.failCheck ?? false;
-      const reportForFail = { ...report, findings: filterFindings(report.findings, undefined, resolved.minConfidence) };
+      const reportForFail = { ...report, findings: filterFindings(report.findings, undefined, resolved.minConfidence ?? 'medium') };
       if (failCheck && failOn && shouldFail(reportForFail, failOn)) {
         shouldFailAction = true;
         const count = countFindingsAtOrAbove(reportForFail, failOn);

@@ -224,9 +224,10 @@ export async function updateSkillCheck(
 
   const summary = buildSkillSummary(report);
 
-  const title = report.findings.length === 0
+  const filteredCount = filteredForConclusion.length;
+  const title = filteredCount === 0
     ? 'No issues'
-    : `${report.findings.length} issue${report.findings.length === 1 ? '' : 's'}`;
+    : `${filteredCount} issue${filteredCount === 1 ? '' : 's'}`;
 
   await octokit.checks.update({
     owner: options.owner,
