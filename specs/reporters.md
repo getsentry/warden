@@ -256,6 +256,8 @@ After all skills complete, findings are rendered to stdout. This is separate fro
 │                                                           │
 │   User input is interpolated directly into a SQL query... │
 │                                                           │
+│   [high confidence]                                       │
+│                                                           │
 │   Suggested fix:                                          │
 │   - const query = buildQuery(userId);                     │
 │   + const query = buildQuery(sanitize(userId));           │
@@ -268,10 +270,12 @@ After all skills complete, findings are rendered to stdout. This is separate fro
 │                                                           │
 │   External API response is cast without validation.       │
 │                                                           │
+│   [medium confidence]                                     │
+│                                                           │
 └───────────────────────────────────────────────────────────┘
 ```
 
-Each finding shows: severity badge, title, location with elapsed time, source code line (read from disk), description, and suggested fix diff (colored: green for `+`, red for `-`, cyan for `@@`).
+Each finding shows: severity badge, title, location with elapsed time, source code line (read from disk), description, confidence badge (when present), and suggested fix diff (colored: green for `+`, red for `-`, cyan for `@@`). The confidence badge appears after the description, separated by a blank line. It is colored by level: green for high, yellow for medium, red for low. When confidence is not provided, the badge and its blank line are omitted.
 
 When fixable findings exist and interactive mode is active (TTY, no `--fix`, no `--json`, not quiet, not interrupted), suggested fix diffs are **suppressed** from the report because they will be shown in the interactive fix step-through (see Section below). All other finding fields (severity, title, location, description) still render normally.
 
@@ -453,6 +457,8 @@ Findings are displayed in reading order (file ascending, line ascending). Each f
   User input is interpolated directly into a SQL query...
   Use parameterized queries instead
 
+  [high confidence]
+
   @@ -42,1 +42,1 @@
   -  const query = buildQuery(userId);
   +  const query = buildQuery(sanitize(userId));
@@ -460,7 +466,7 @@ Findings are displayed in reading order (file ascending, line ascending). Each f
 [y]es / [n]o / [a]pply all / [s]kip all
 ```
 
-Severity badge, counter, title, location, description, fix description (if present), and colored diff.
+Severity badge, counter, title, location, description, fix description (if present), confidence badge (when present), and colored diff.
 
 **Prompt keys** (single keypress, no Enter):
 
@@ -608,6 +614,8 @@ All reporters use shared formatters from `src/cli/output/formatters.ts`.
 | `formatFindingCountsPlain(counts)` | `Record<Severity, number>` | Plain text | `2 findings (1 high, 1 medium)` |
 | `formatSeverityBadge(severity)` | `Severity` | Colored dot + text | `. (high)` |
 | `formatSeverityPlain(severity)` | `Severity` | Bracketed | `[high]` |
+| `formatConfidenceBadge(confidence?)` | `Confidence \| undefined` | Colored bracketed (empty if undefined) | `[high confidence]` |
+| `formatConfidencePlain(confidence?)` | `Confidence \| undefined` | Plain bracketed (empty if undefined) | `[high confidence]` |
 | `countBySeverity(findings)` | `Finding[]` | `Record<Severity, number>` | `{ critical: 0, high: 1, ... }` |
 | `pluralize(count, singular, plural?)` | `number, string` | Pluralized word | `file` / `files` |
 

@@ -177,11 +177,9 @@ export async function runInteractiveFixFlow(
 
     console.error('');
 
-    // Severity + confidence + counter + title
+    // Severity + counter + title
     const badge = formatSeverityBadge(finding.severity);
-    const confidenceBadge = formatConfidenceBadge(finding.confidence);
-    const badges = confidenceBadge ? `${badge} ${confidenceBadge}` : badge;
-    console.error(`${badges} ${chalk.bold(`[${idx + 1}/${displayOrder.length}]`)} ${chalk.bold(finding.title)}`);
+    console.error(`${badge} ${chalk.bold(`[${idx + 1}/${displayOrder.length}]`)} ${chalk.bold(finding.title)}`);
     console.error(chalk.dim(`  ${location.path}:${location.startLine}`));
 
     // Description
@@ -192,6 +190,12 @@ export async function runInteractiveFixFlow(
     // Fix description
     if (suggestedFix.description) {
       console.error(`  ${suggestedFix.description}`);
+    }
+
+    // Confidence
+    if (finding.confidence) {
+      console.error('');
+      console.error(`  ${formatConfidenceBadge(finding.confidence)}`);
     }
 
     console.error('');
