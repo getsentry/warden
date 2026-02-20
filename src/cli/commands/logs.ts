@@ -82,6 +82,31 @@ function rightAlign(str: string, width: number): string {
   return pad > 0 ? ' '.repeat(pad) + str : str;
 }
 
+/**
+ * Format a date as a human-friendly relative or short absolute string.
+ */
+function formatRelativeTime(date: Date): string {
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHr / 24);
+
+  if (diffSec < 60) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  // Older than a week: show short date
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const currentYear = new Date().getFullYear();
+  return year === currentYear ? `${month} ${day}` : `${month} ${day}, ${year}`;
+}
+
 const SEVERITY_COLORS: Record<Severity, (s: string) => string> = {
   critical: chalk.red,
   high: chalk.redBright,
@@ -130,12 +155,17 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     return 0;
   }
 
-  // Parse all logs for metadata
+  // Parse all logs for metadata and sort by timestamp (newest first)
   const logData: { entry: string; meta: LogFileMetadata | undefined }[] = [];
   for (const entry of entries) {
     const filePath = join(logDir, entry);
     logData.push({ entry, meta: parseLogMetadata(filePath) });
   }
+  logData.sort((a, b) => {
+    const tsA = a.meta?.summary.run.timestamp ?? '';
+    const tsB = b.meta?.summary.run.timestamp ?? '';
+    return tsB.localeCompare(tsA);
+  });
 
   if (options.json) {
     const results = logData.map(({ entry, meta }) => ({
@@ -202,7 +232,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
 
     rows.push({
       runId: shortRunId(summary.run.runId),
-      date: summary.run.timestamp.replace('T', ' ').replace(/\.\d+Z$/, ''),
+      date: formatRelativeTime(new Date(summary.run.timestamp)),
       findings: formatSeverityBreakdown(summary.bySeverity),
       time: formatDuration(summary.run.durationMs),
       cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
