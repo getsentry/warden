@@ -94,14 +94,11 @@ const SEVERITY_COLORS: Record<Severity, (s: string) => string> = {
  * Format a severity breakdown as colored counts.
  */
 function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>): string {
-  const parts: string[] = [];
   const severities: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
-  for (const sev of severities) {
+  const parts = severities.map((sev) => {
     const count = bySeverity[sev] ?? 0;
-    if (count > 0) {
-      parts.push(SEVERITY_COLORS[sev](String(count)));
-    }
-  }
+    return count > 0 ? SEVERITY_COLORS[sev](String(count)) : chalk.dim('0');
+  });
   return parts.join(chalk.dim(' / '));
 }
 
@@ -203,15 +200,10 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
       totals.skills.add(skill);
     }
 
-    const findingCount = summary.totalFindings;
-    const findingsStr = findingCount === 0
-      ? chalk.dim('—')
-      : formatSeverityBreakdown(summary.bySeverity);
-
     rows.push({
       runId: shortRunId(summary.run.runId),
       date: summary.run.timestamp.replace('T', ' ').replace(/\.\d+Z$/, ''),
-      findings: findingsStr,
+      findings: formatSeverityBreakdown(summary.bySeverity),
       time: formatDuration(summary.run.durationMs),
       cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
       skills: skills.join(', '),
@@ -253,13 +245,12 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
 
   // Summary footer
   reporter.blank();
-  const totalSev = formatSeverityBreakdown(totals.bySeverity);
   reporter.text(
     chalk.dim(
       `${entries.length} ${pluralize(entries.length, 'run')}  ·  ` +
-      `${totals.findings} ${pluralize(totals.findings, 'finding')}`
+      `${totals.findings} ${pluralize(totals.findings, 'finding')}  `
     ) +
-    (totalSev ? `  ${totalSev}` : '') +
+    formatSeverityBreakdown(totals.bySeverity) +
     chalk.dim(
       `  ·  ${formatDuration(totals.durationMs)}` +
       `  ·  ${formatCost(totals.costUSD)}` +
