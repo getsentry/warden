@@ -41,6 +41,7 @@ export { BoxRenderer, type BoxOptions } from './box.js';
 export {
   writeJsonlReport,
   writeJsonlContent,
+  MODEL_DEFAULT_SENTINEL,
   renderJsonlString,
   getRepoLogPath,
   generateRunId,

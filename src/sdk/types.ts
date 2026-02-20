@@ -3,9 +3,6 @@ import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig } from '../config/schema.js';
 import type { SessionStorageOptions } from './session.js';
 
-/** Default model used by the Claude Code SDK when none is specified. */
-export const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
-
 /** A single auxiliary usage entry, keyed by agent name (e.g. 'extraction', 'dedup'). */
 export interface AuxiliaryUsageEntry {
   agent: string;

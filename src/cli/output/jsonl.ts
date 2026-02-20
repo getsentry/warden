@@ -14,6 +14,11 @@ import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { countBySeverity } from './formatters.js';
 
 /**
+ * Sentinel value recorded in JSONL metadata when no model is explicitly configured.
+ */
+export const MODEL_DEFAULT_SENTINEL = '(default)';
+
+/**
  * Generate a unique run ID for this execution.
  */
 export function generateRunId(): string {
