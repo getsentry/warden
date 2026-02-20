@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import chalk from 'chalk';
 import { loadWardenConfig } from '../../config/loader.js';
-import type { Severity, SkillReport } from '../../types/index.js';
+import type { ConfidenceThreshold, Severity, SkillReport } from '../../types/index.js';
 import type { CLIOptions, LogsOptions } from '../args.js';
 import { getRepoRoot } from '../git.js';
 import { findExpiredArtifacts } from '../log-cleanup.js';
@@ -376,7 +376,7 @@ export async function runLogsShow(
       const content = readFileSync(file, 'utf-8');
       const parsed = parseJsonlReports(content);
       allReports.push(...parsed.reports);
-      totalDurationMs = Math.max(totalDurationMs, parsed.totalDurationMs);
+      totalDurationMs += parsed.totalDurationMs;
 
       if (parsed.runMetadata) {
         lastRunMetadata = parsed.runMetadata;
@@ -395,8 +395,22 @@ export async function runLogsShow(
     return 0;
   }
 
+  // Load config for minConfidence default (matches main run flow)
+  let configMinConfidence: ConfidenceThreshold | undefined;
+  if (resolved) {
+    try {
+      const configPath = resolve(resolved.repoPath, 'warden.toml');
+      if (existsSync(configPath)) {
+        const config = loadWardenConfig(dirname(configPath));
+        configMinConfidence = config.defaults?.minConfidence;
+      }
+    } catch {
+      // Use default
+    }
+  }
+
   // Apply filtering
-  const filteredReports = filterReports(allReports, options.reportOn, options.minConfidence ?? 'medium');
+  const filteredReports = filterReports(allReports, options.reportOn, options.minConfidence ?? configMinConfidence ?? 'medium');
 
   // Output results
   reporter.blank();

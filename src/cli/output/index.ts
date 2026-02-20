@@ -47,7 +47,6 @@ export {
   generateRunId,
   shortRunId,
   parseJsonlReports,
-  parseSummaryFromLastLine,
   parseLogMetadata,
   type JsonlRecord,
   type JsonlRunMetadata,
