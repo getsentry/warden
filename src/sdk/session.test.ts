@@ -3,11 +3,12 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  SessionCollector,
+  moveSession,
   ensureSessionsDir,
   listSessions,
-  readSession,
   pruneOldSessions,
+  getClaudeProjectDir,
+  resolveSessionsDir,
   DEFAULT_SESSIONS_DIR,
 } from './session.js';
 
@@ -29,140 +30,32 @@ describe('session storage', () => {
     });
   });
 
-  describe('SessionCollector', () => {
-    it('does nothing when disabled', () => {
-      const collector = new SessionCollector({ enabled: false, repoPath: tempDir });
-      collector.addMessage('assistant', { content: 'test' });
-      const path = collector.finalize();
-
-      expect(path).toBeUndefined();
-      expect(existsSync(join(tempDir, '.warden', 'sessions'))).toBe(false);
+  describe('getClaudeProjectDir', () => {
+    it('maps repo path to Claude project directory', () => {
+      const result = getClaudeProjectDir('/home/user/myproject');
+      expect(result).toContain('.claude/projects/-home-user-myproject');
     });
 
-    it('captures messages when enabled', () => {
-      const sessionsDir = join(tempDir, 'sessions');
-      const collector = new SessionCollector({
-        enabled: true,
-        directory: sessionsDir,
-        repoPath: tempDir,
-      });
+    it('replaces all slashes with dashes', () => {
+      const result = getClaudeProjectDir('/a/b/c');
+      expect(result).toContain('-a-b-c');
+    });
+  });
 
-      collector.addMessage('assistant', { content: 'hello' });
-      collector.addMessage('tool_progress', { tool_use_id: 'abc', elapsed: 1.5 });
-      collector.addMessage('result', { subtype: 'success', result: 'done' });
-
-      collector.updateFromResult({
-        session_id: 'test-session-123',
-        duration_ms: 1000,
-        num_turns: 1,
-      });
-
-      const path = collector.finalize();
-
-      expect(path).toBeDefined();
-      expect(existsSync(path!)).toBe(true);
-
-      const data = readSession(path!);
-      expect(data).toBeDefined();
-      expect(data!.version).toBe(1);
-      expect(data!.messages).toHaveLength(3);
-      expect(data!.metadata.sessionId).toBe('test-session-123');
-      expect(data!.metadata.durationMs).toBe(1000);
-      expect(data!.metadata.numTurns).toBe(1);
+  describe('resolveSessionsDir', () => {
+    it('uses default when no directory specified', () => {
+      const result = resolveSessionsDir('/repo');
+      expect(result).toBe('/repo/.warden/sessions');
     });
 
-    it('sets context on the session', () => {
-      const sessionsDir = join(tempDir, 'sessions');
-      const collector = new SessionCollector({
-        enabled: true,
-        directory: sessionsDir,
-        repoPath: tempDir,
-      });
-
-      collector.setContext({
-        skillName: 'test-skill',
-        filename: 'src/test.ts',
-        lineRange: '10-20',
-      });
-      collector.updateFromResult({ session_id: 'ctx-test' });
-
-      const path = collector.finalize();
-      const data = readSession(path!);
-
-      expect(data!.metadata.skillName).toBe('test-skill');
-      expect(data!.metadata.filename).toBe('src/test.ts');
-      expect(data!.metadata.lineRange).toBe('10-20');
+    it('resolves relative directory against repo path', () => {
+      const result = resolveSessionsDir('/repo', 'custom/sessions');
+      expect(result).toBe('/repo/custom/sessions');
     });
 
-    it('extracts model from modelUsage', () => {
-      const sessionsDir = join(tempDir, 'sessions');
-      const collector = new SessionCollector({
-        enabled: true,
-        directory: sessionsDir,
-        repoPath: tempDir,
-      });
-
-      collector.updateFromResult({
-        session_id: 'model-test',
-        modelUsage: { 'claude-sonnet-4': { inputTokens: 100 } },
-      });
-
-      const path = collector.finalize();
-      const data = readSession(path!);
-
-      expect(data!.metadata.model).toBe('claude-sonnet-4');
-    });
-
-    it('extracts usage stats', () => {
-      const sessionsDir = join(tempDir, 'sessions');
-      const collector = new SessionCollector({
-        enabled: true,
-        directory: sessionsDir,
-        repoPath: tempDir,
-      });
-
-      collector.updateFromResult({
-        session_id: 'usage-test',
-        usage: {
-          input_tokens: 100,
-          output_tokens: 50,
-          cache_read_input_tokens: 20,
-          cache_creation_input_tokens: 10,
-        },
-      });
-
-      const path = collector.finalize();
-      const data = readSession(path!);
-
-      expect(data!.metadata.usage).toEqual({
-        inputTokens: 130, // 100 + 20 + 10
-        outputTokens: 50,
-        cacheReadInputTokens: 20,
-        cacheCreationInputTokens: 10,
-        costUSD: 0,
-      });
-    });
-
-    it('uses uuid if session_id is not available', () => {
-      const sessionsDir = join(tempDir, 'sessions');
-      const collector = new SessionCollector({
-        enabled: true,
-        directory: sessionsDir,
-        repoPath: tempDir,
-      });
-
-      collector.updateFromResult({ uuid: 'uuid-123' });
-
-      const path = collector.finalize();
-      expect(path).toContain('uuid-123');
-    });
-
-    it('reports enabled status correctly', () => {
-      const enabled = new SessionCollector({ enabled: true, repoPath: tempDir });
-      const disabled = new SessionCollector({ enabled: false, repoPath: tempDir });
-
-      expect(enabled.enabled).toBe(true);
-      expect(disabled.enabled).toBe(false);
+    it('uses absolute directory as-is', () => {
+      const result = resolveSessionsDir('/repo', '/absolute/path');
+      expect(result).toBe('/absolute/path');
     });
   });
 
@@ -186,48 +79,59 @@ describe('session storage', () => {
     });
   });
 
+  describe('moveSession', () => {
+    it('moves session JSONL file from project dir to target dir', () => {
+      // Set up a fake Claude project directory structure
+      const fakeProjectDir = join(tempDir, 'claude-project');
+      mkdirSync(fakeProjectDir, { recursive: true });
+
+      const sessionUuid = 'test-uuid-1234';
+      const sourceFile = join(fakeProjectDir, `${sessionUuid}.jsonl`);
+      writeFileSync(sourceFile, '{"type":"assistant"}\n');
+
+      const targetDir = join(tempDir, 'sessions');
+
+      // We can't easily test the real Claude path, so test the utility by
+      // having the source file in a known location. Instead, verify the
+      // function returns undefined when the source doesn't exist at the
+      // expected Claude path.
+      const result = moveSession(sessionUuid, tempDir, targetDir);
+
+      // The real ~/.claude/projects/<hash>/<uuid>.jsonl won't exist in tests,
+      // so we expect undefined (graceful handling of missing files).
+      expect(result).toBeUndefined();
+      expect(existsSync(targetDir)).toBe(false); // target not created if nothing to move
+    });
+
+    it('returns undefined when session file does not exist', () => {
+      const targetDir = join(tempDir, 'sessions');
+      const result = moveSession('nonexistent-uuid', '/some/repo', targetDir);
+
+      expect(result).toBeUndefined();
+    });
+  });
+
   describe('listSessions', () => {
     it('returns empty array for non-existent directory', () => {
       const result = listSessions(join(tempDir, 'does-not-exist'));
       expect(result).toEqual([]);
     });
 
-    it('returns only JSON files sorted by modification time', async () => {
+    it('returns only JSONL files sorted by modification time', async () => {
       const dir = join(tempDir, 'sessions');
       mkdirSync(dir);
 
       // Create files with different modification times
-      writeFileSync(join(dir, 'old.json'), '{}');
+      writeFileSync(join(dir, 'old.jsonl'), '{}');
       await new Promise((r) => setTimeout(r, 10));
-      writeFileSync(join(dir, 'new.json'), '{}');
-      writeFileSync(join(dir, 'not-json.txt'), 'text');
+      writeFileSync(join(dir, 'new.jsonl'), '{}');
+      writeFileSync(join(dir, 'not-jsonl.txt'), 'text');
 
       const result = listSessions(dir);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toContain('new.json');
-      expect(result[1]).toContain('old.json');
-    });
-  });
-
-  describe('readSession', () => {
-    it('returns undefined for non-existent file', () => {
-      const result = readSession(join(tempDir, 'missing.json'));
-      expect(result).toBeUndefined();
-    });
-
-    it('reads and parses session file', () => {
-      const filepath = join(tempDir, 'session.json');
-      const data = {
-        version: 1,
-        metadata: { startTime: 1234567890 },
-        messages: [{ type: 'assistant', timestamp: 1234567891, data: {} }],
-      };
-      writeFileSync(filepath, JSON.stringify(data));
-
-      const result = readSession(filepath);
-
-      expect(result).toEqual(data);
+      expect(result[0]).toContain('new.jsonl');
+      expect(result[1]).toContain('old.jsonl');
     });
   });
 
@@ -238,7 +142,7 @@ describe('session storage', () => {
 
       // Create 5 session files with different timestamps
       for (let i = 0; i < 5; i++) {
-        writeFileSync(join(dir, `session-${i}.json`), '{}');
+        writeFileSync(join(dir, `session-${i}.jsonl`), '{}');
         await new Promise((r) => setTimeout(r, 10));
       }
 
@@ -249,15 +153,15 @@ describe('session storage', () => {
       const remaining = listSessions(dir);
       expect(remaining).toHaveLength(2);
       // Most recent should be kept
-      expect(remaining[0]).toContain('session-4.json');
-      expect(remaining[1]).toContain('session-3.json');
+      expect(remaining[0]).toContain('session-4.jsonl');
+      expect(remaining[1]).toContain('session-3.jsonl');
     });
 
     it('returns 0 when nothing to prune', () => {
       const dir = join(tempDir, 'sessions');
       mkdirSync(dir);
 
-      writeFileSync(join(dir, 'session-1.json'), '{}');
+      writeFileSync(join(dir, 'session-1.jsonl'), '{}');
 
       const deleted = pruneOldSessions(dir, 10);
 

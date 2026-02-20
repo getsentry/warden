@@ -8,7 +8,7 @@ import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
-import { SessionCollector } from './session.js';
+import { moveSession, resolveSessionsDir } from './session.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
@@ -127,8 +127,6 @@ interface QueryExecutionResult {
   authError?: string;
   /** Captured stderr output from Claude Code process */
   stderr?: string;
-  /** Path to the session file if session storage was enabled */
-  sessionPath?: string;
 }
 
 /**
@@ -140,8 +138,7 @@ async function executeQuery(
   userPrompt: string,
   repoPath: string,
   options: SkillRunnerOptions,
-  skillName: string,
-  sessionCollector?: SessionCollector
+  skillName: string
 ): Promise<QueryExecutionResult> {
   const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
   const modelId = model ?? 'unknown';
@@ -265,32 +262,13 @@ async function executeQuery(
               cacheWrite: msg.usage?.cache_creation_input_tokens ?? 0,
               model: msg.model,
             };
-            // Capture assistant message for session storage
-            sessionCollector?.addMessage('assistant', {
-              content: msg.content,
-              model: msg.model,
-              usage: msg.usage,
-            });
           } else if (message.type === 'tool_progress') {
             pendingToolProgress.set(message.tool_use_id, message.elapsed_time_seconds);
-            // Capture tool progress for session storage
-            sessionCollector?.addMessage('tool_progress', {
-              tool_use_id: message.tool_use_id,
-              elapsed_time_seconds: message.elapsed_time_seconds,
-            });
           } else if (message.type === 'result') {
             flushPendingTurn();
             resultMessage = message;
-            // Capture result for session storage
-            sessionCollector?.addMessage('result', {
-              subtype: message.subtype,
-              result: message.subtype === 'success' ? message.result : undefined,
-              is_error: message.is_error,
-            });
           } else if (message.type === 'auth_status' && message.error) {
             authError = message.error;
-            // Capture auth error for session storage
-            sessionCollector?.addMessage('auth_status', { error: message.error });
           }
         }
       } catch (error) {
@@ -357,16 +335,10 @@ async function executeQuery(
             span.setAttribute(key, value);
           }
         }
-
-        // Update session collector with result metadata
-        sessionCollector?.updateFromResult(resultMessage);
       }
 
-      // Finalize session storage
-      const sessionPath = sessionCollector?.finalize();
-
       const stderr = stderrChunks.join('').trim() || undefined;
-      return { result: resultMessage, authError, stderr, sessionPath };
+      return { result: resultMessage, authError, stderr };
     },
   );
 }
@@ -419,19 +391,10 @@ async function analyzeHunk(
         ...retry,
       };
 
-      // Create session collector if session storage is enabled
-      const sessionCollector = options.session?.enabled
-        ? new SessionCollector({
-            enabled: true,
-            directory: options.session.directory,
-            repoPath,
-          })
+      // Resolve session directory once (used post-query to move session files)
+      const sessionsDir = options.session?.enabled
+        ? resolveSessionsDir(repoPath, options.session.directory)
         : undefined;
-      sessionCollector?.setContext({
-        skillName: skill.name,
-        filename: hunkCtx.filename,
-        lineRange,
-      });
 
       let lastError: unknown;
       // Track accumulated usage across retry attempts for accurate cost reporting
@@ -447,7 +410,7 @@ async function analyzeHunk(
         }
 
         try {
-          const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options, skill.name, sessionCollector);
+          const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options, skill.name);
 
           // Check for authentication errors from auth_status messages
           // auth_status errors are always auth-related - throw immediately
@@ -467,6 +430,15 @@ async function analyzeHunk(
           // Extract usage from the result, regardless of success/error status
           const usage = extractUsage(resultMessage);
           accumulatedUsage.push(usage);
+
+          // Move session file from SDK's internal storage to .warden/sessions/
+          if (sessionsDir && resultMessage.uuid) {
+            try {
+              moveSession(resultMessage.uuid, repoPath, sessionsDir);
+            } catch {
+              // Session storage errors are non-fatal; never break the workflow
+            }
+          }
 
           // Check if the SDK returned an error result (e.g., max turns, budget exceeded)
           const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
