@@ -236,25 +236,6 @@ export function readJsonlLog(logPath: string): string {
 }
 
 /**
- * Parse the summary record from a JSONL log.
- * Returns undefined if no summary record is found.
- */
-export function parseSummaryRecord(content: string): JsonlSummaryRecord | undefined {
-  const lines = content.trim().split('\n').filter((line) => line.trim());
-  for (const line of lines) {
-    try {
-      const parsed = JSON.parse(line);
-      if (parsed.type === 'summary') {
-        return JsonlSummaryRecordSchema.parse(parsed);
-      }
-    } catch {
-      // Skip invalid lines
-    }
-  }
-  return undefined;
-}
-
-/**
  * Parse JSONL content and reconstruct SkillReport objects.
  * Returns an object with the reports array, run metadata from the summary,
  * and total duration.
