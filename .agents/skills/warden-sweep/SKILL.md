@@ -1,7 +1,6 @@
 ---
 name: warden-sweep
 description: Full-repository code sweep. Scans every file with warden, verifies findings via deep tracing, creates draft PRs for validated issues. Use when asked to "sweep the repo", "scan everything", "find all bugs", "full codebase review", "batch code analysis", or run warden across the entire repository.
-disable-model-invocation: true
 ---
 
 # Warden Sweep
