@@ -8,7 +8,7 @@ import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
-import { moveSession, resolveSessionsDir } from './session.js';
+import { snapshotSessionFiles, moveNewSessions, resolveSessionsDir } from './session.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
@@ -409,6 +409,9 @@ async function analyzeHunk(
           return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
         }
 
+        // Snapshot session files before SDK call so we can capture new ones after
+        const sessionSnapshot = sessionsDir ? snapshotSessionFiles(repoPath) : undefined;
+
         try {
           const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options, skill.name);
 
@@ -430,15 +433,6 @@ async function analyzeHunk(
           // Extract usage from the result, regardless of success/error status
           const usage = extractUsage(resultMessage);
           accumulatedUsage.push(usage);
-
-          // Move session file from SDK's internal storage to .warden/sessions/
-          if (sessionsDir && resultMessage.uuid) {
-            try {
-              moveSession(resultMessage.uuid, repoPath, sessionsDir);
-            } catch {
-              // Session storage errors are non-fatal; never break the workflow
-            }
-          }
 
           // Check if the SDK returned an error result (e.g., max turns, budget exceeded)
           const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
@@ -570,6 +564,15 @@ async function analyzeHunk(
               callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted during retry delay');
             }
             return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+          }
+        } finally {
+          // Move any new session files regardless of success/failure/abort
+          if (sessionsDir && sessionSnapshot) {
+            try {
+              moveNewSessions(repoPath, sessionSnapshot, sessionsDir);
+            } catch {
+              // Non-fatal
+            }
           }
         }
       }

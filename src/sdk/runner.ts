@@ -66,6 +66,8 @@ export type {
 // Re-export session storage utilities
 export {
   moveSession,
+  snapshotSessionFiles,
+  moveNewSessions,
   ensureSessionsDir,
   listSessions,
   pruneOldSessions,

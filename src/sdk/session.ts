@@ -73,6 +73,61 @@ export function moveSession(
 }
 
 /**
+ * Snapshot the set of .jsonl files in Claude's project directory for a given repo.
+ * Call before executeQuery, then use moveNewSessions after to capture any new files.
+ */
+export function snapshotSessionFiles(repoPath: string): Set<string> {
+  const projectDir = getClaudeProjectDir(repoPath);
+  try {
+    return new Set(
+      fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'))
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Move any new session files that appeared since the snapshot.
+ * Returns paths of moved files.
+ */
+export function moveNewSessions(
+  repoPath: string,
+  before: Set<string>,
+  targetDir: string
+): string[] {
+  const projectDir = getClaudeProjectDir(repoPath);
+  let current: string[];
+  try {
+    current = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
+  } catch {
+    return [];
+  }
+
+  const newFiles = current.filter(f => !before.has(f));
+  if (newFiles.length === 0) return [];
+
+  ensureSessionsDir(targetDir);
+  const moved: string[] = [];
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+  for (const file of newFiles) {
+    const sourceFile = path.join(projectDir, file);
+    const uuid = file.replace('.jsonl', '');
+    const targetFile = path.join(targetDir, `${timestamp}-${uuid}.jsonl`);
+    try {
+      fs.copyFileSync(sourceFile, targetFile);
+      fs.unlinkSync(sourceFile);
+      moved.push(targetFile);
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  return moved;
+}
+
+/**
  * Resolve the absolute sessions directory from options and repo path.
  */
 export function resolveSessionsDir(repoPath: string, directory?: string): string {
