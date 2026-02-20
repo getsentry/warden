@@ -62,3 +62,19 @@ export type {
   FileAnalysisCallbacks,
   FileAnalysisResult,
 } from './types.js';
+
+// Re-export session storage utilities
+export {
+  SessionCollector,
+  ensureSessionsDir,
+  listSessions,
+  readSession,
+  pruneOldSessions,
+  DEFAULT_SESSIONS_DIR,
+} from './session.js';
+export type {
+  SessionMessage,
+  SessionMetadata,
+  SessionData,
+  SessionStorageOptions,
+} from './session.js';

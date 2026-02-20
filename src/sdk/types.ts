@@ -1,6 +1,7 @@
 import type { Finding, UsageStats, SkippedFile, RetryConfig } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig } from '../config/schema.js';
+import type { SessionStorageOptions } from './session.js';
 
 /** A single auxiliary usage entry, keyed by agent name (e.g. 'extraction', 'dedup'). */
 export interface AuxiliaryUsageEntry {
@@ -81,6 +82,8 @@ export interface SkillRunnerOptions {
   maxContextFiles?: number;
   /** Max retries for auxiliary Haiku calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
   auxiliaryMaxRetries?: number;
+  /** Session storage options for capturing SDK conversations */
+  session?: SessionStorageOptions;
 }
 
 /**
