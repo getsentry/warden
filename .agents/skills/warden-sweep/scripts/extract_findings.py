@@ -115,6 +115,8 @@ def collect_log_paths(source: str, scan_index: str | None = None) -> list[str]:
     if scan_index and os.path.exists(scan_index):
         # Read log paths from scan-index.jsonl
         seen = set()
+        total_entries = 0
+        missing = 0
         with open(scan_index) as f:
             for line in f:
                 line = line.strip()
@@ -126,11 +128,29 @@ def collect_log_paths(source: str, scan_index: str | None = None) -> list[str]:
                     continue
                 if entry.get("status") != "complete":
                     continue
+                total_entries += 1
                 log_path = entry.get("logPath", "")
-                if log_path and log_path not in seen and os.path.exists(log_path):
+                if log_path and log_path not in seen:
                     seen.add(log_path)
-                    paths.append(log_path)
-        return paths
+                    if os.path.exists(log_path):
+                        paths.append(log_path)
+                    else:
+                        missing += 1
+        if missing > 0:
+            print(
+                f"Warning: {missing} log path(s) from scan-index not found on disk",
+                file=sys.stderr,
+            )
+        # Only use scan-index results if we actually found logs;
+        # fall through to source directory otherwise
+        if paths:
+            return paths
+        if total_entries > 0:
+            print(
+                "Warning: scan-index had entries but no valid log paths; "
+                "falling back to source directory",
+                file=sys.stderr,
+            )
 
     source_path = Path(source)
     if source_path.is_file():
