@@ -193,8 +193,10 @@ async function outputResultsAndHandleFixes(
 
   // Always write repo-local JSONL log (non-fatal — don't lose analysis output)
   const logPath = getRepoLogPath(repoPath, runId, timestamp);
+  let logWritten = false;
   try {
     writeJsonlContent(logPath, jsonlContent);
+    logWritten = true;
   } catch (err) {
     reporter.warning(`Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -243,8 +245,8 @@ async function outputResultsAndHandleFixes(
   reporter.blank();
   reporter.renderSummary(filteredReports, totalDuration, { traceId });
 
-  // Show log file path after summary
-  if (!options.json) {
+  // Show log file path after summary (only if write succeeded)
+  if (!options.json && logWritten) {
     reporter.dim(`Log: ${logPath}`);
   }
 
