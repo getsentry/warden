@@ -26,6 +26,7 @@ import {
   getRepoLogPath,
   generateRunId,
   parseJsonlReports,
+  type JsonlRunMetadata,
   type SkillTaskOptions,
 } from './output/index.js';
 import { cleanupArtifacts } from './log-cleanup.js';
@@ -756,15 +757,17 @@ async function runReplay(replayOptions: ReplayOptions, options: CLIOptions, repo
   // Parse and merge reports from all files
   const allReports: SkillReport[] = [];
   let totalDurationMs = 0;
+  let lastRunMetadata: JsonlRunMetadata | undefined;
 
   for (const file of files) {
     try {
       const content = readFileSync(file, 'utf-8');
       const parsed = parseJsonlReports(content);
       allReports.push(...parsed.reports);
-      totalDurationMs += parsed.totalDurationMs;
+      totalDurationMs = Math.max(totalDurationMs, parsed.totalDurationMs);
 
       if (parsed.runMetadata) {
+        lastRunMetadata = parsed.runMetadata;
         reporter.debug(`Loaded ${parsed.reports.length} ${pluralize(parsed.reports.length, 'skill')} from ${file}`);
         reporter.debug(`  Run ID: ${parsed.runMetadata.runId}`);
         reporter.debug(`  Timestamp: ${parsed.runMetadata.timestamp}`);
@@ -786,8 +789,12 @@ async function runReplay(replayOptions: ReplayOptions, options: CLIOptions, repo
   // Output results
   reporter.blank();
   if (options.json) {
-    // Re-render as JSONL for piping
-    const jsonlContent = renderJsonlString(filteredReports, totalDurationMs);
+    // Re-render as JSONL for piping, preserving original run metadata
+    const jsonlContent = renderJsonlString(filteredReports, totalDurationMs, lastRunMetadata ? {
+      runId: lastRunMetadata.runId,
+      traceId: lastRunMetadata.traceId,
+      timestamp: new Date(lastRunMetadata.timestamp),
+    } : undefined);
     process.stdout.write(jsonlContent);
   } else {
     console.log(renderTerminalReport(filteredReports, reporter.mode, { verbosity: reporter.verbosity }));
