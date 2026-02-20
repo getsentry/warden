@@ -344,6 +344,55 @@ describe('parseCliArgs', () => {
     expect(result.command).toBe('sync');
     expect(result.options.remote).toBe('getsentry/skills');
   });
+
+  it('parses replay command', () => {
+    const result = parseCliArgs(['replay']);
+    expect(result.command).toBe('replay');
+    expect(result.replayOptions).toBeDefined();
+    expect(result.replayOptions!.files).toEqual([]);
+  });
+
+  it('parses replay command with single file', () => {
+    const result = parseCliArgs(['replay', 'run.jsonl']);
+    expect(result.command).toBe('replay');
+    expect(result.replayOptions!.files).toEqual(['run.jsonl']);
+  });
+
+  it('parses replay command with multiple files', () => {
+    const result = parseCliArgs(['replay', 'run1.jsonl', 'run2.jsonl', 'run3.jsonl']);
+    expect(result.command).toBe('replay');
+    expect(result.replayOptions!.files).toEqual(['run1.jsonl', 'run2.jsonl', 'run3.jsonl']);
+  });
+
+  it('parses replay command with --json flag', () => {
+    const result = parseCliArgs(['replay', 'run.jsonl', '--json']);
+    expect(result.command).toBe('replay');
+    expect(result.options.json).toBe(true);
+  });
+
+  it('parses replay command with --report-on option', () => {
+    const result = parseCliArgs(['replay', 'run.jsonl', '--report-on', 'high']);
+    expect(result.command).toBe('replay');
+    expect(result.options.reportOn).toBe('high');
+  });
+
+  it('parses replay command with --min-confidence option', () => {
+    const result = parseCliArgs(['replay', 'run.jsonl', '--min-confidence', 'high']);
+    expect(result.command).toBe('replay');
+    expect(result.options.minConfidence).toBe('high');
+  });
+
+  it('parses replay command with verbosity flags', () => {
+    const result = parseCliArgs(['replay', 'run.jsonl', '-v']);
+    expect(result.command).toBe('replay');
+    expect(result.options.verbose).toBe(1);
+  });
+
+  it('parses replay command with --quiet flag', () => {
+    const result = parseCliArgs(['replay', 'run.jsonl', '--quiet']);
+    expect(result.command).toBe('replay');
+    expect(result.options.quiet).toBe(true);
+  });
 });
 
 describe('CLIOptionsSchema', () => {

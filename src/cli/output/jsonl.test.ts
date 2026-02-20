@@ -8,6 +8,8 @@ import {
   generateRunId,
   shortRunId,
   readJsonlLog,
+  parseJsonlReports,
+  renderJsonlString,
   type JsonlRecord,
 } from './jsonl.js';
 import type { SkillReport } from '../../types/index.js';
@@ -549,5 +551,124 @@ describe('repo-local logging integration', () => {
     expect(content2.run.durationMs).toBe(200);
     expect(content1.run.runId).toBe(runId1);
     expect(content2.run.runId).toBe(runId2);
+  });
+});
+
+describe('parseJsonlReports', () => {
+  it('reconstructs SkillReport from JSONL content', () => {
+    // Sample JSONL content that matches what would be written by renderJsonlString
+    const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"test-123"},"skill":"security-review","summary":"Found 2 issues","findings":[{"id":"sec-001","severity":"high","title":"SQL Injection","description":"User input passed directly to query"},{"id":"sec-002","severity":"medium","title":"XSS Risk","description":"Unescaped output"}],"durationMs":1234,"usage":{"inputTokens":1000,"outputTokens":500,"costUSD":0.01}}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"test-123"},"type":"summary","totalFindings":2,"bySeverity":{"critical":0,"high":1,"medium":1,"low":0,"info":0},"usage":{"inputTokens":1000,"outputTokens":500,"costUSD":0.01}}
+`;
+
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports.length).toBe(1);
+    expect(result.reports[0]!.skill).toBe('security-review');
+    expect(result.reports[0]!.findings.length).toBe(2);
+    expect(result.reports[0]!.findings[0]!.id).toBe('sec-001');
+    expect(result.reports[0]!.durationMs).toBe(1234);
+    expect(result.reports[0]!.usage?.inputTokens).toBe(1000);
+    expect(result.totalDurationMs).toBe(2000);
+    expect(result.runMetadata?.runId).toBe('test-123');
+  });
+
+  it('handles multiple skill records', () => {
+    const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":3000,"cwd":"/test","runId":"multi-123"},"skill":"skill-1","summary":"Done","findings":[],"durationMs":1000}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":3000,"cwd":"/test","runId":"multi-123"},"skill":"skill-2","summary":"Issues found","findings":[{"id":"a","severity":"low","title":"A","description":"A"}],"durationMs":2000}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":3000,"cwd":"/test","runId":"multi-123"},"type":"summary","totalFindings":1,"bySeverity":{"critical":0,"high":0,"medium":0,"low":1,"info":0}}
+`;
+
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports.length).toBe(2);
+    expect(result.reports[0]!.skill).toBe('skill-1');
+    expect(result.reports[1]!.skill).toBe('skill-2');
+    expect(result.reports[1]!.findings.length).toBe(1);
+    expect(result.totalDurationMs).toBe(3000);
+  });
+
+  it('handles empty logs (summary only)', () => {
+    const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":100,"cwd":"/test","runId":"empty-123"},"type":"summary","totalFindings":0,"bySeverity":{"critical":0,"high":0,"medium":0,"low":0,"info":0}}
+`;
+
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports.length).toBe(0);
+    expect(result.totalDurationMs).toBe(100);
+    expect(result.runMetadata?.runId).toBe('empty-123');
+  });
+
+  it('skips invalid lines gracefully', () => {
+    const jsonlContent = `invalid json here
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"partial-123"},"skill":"valid-skill","summary":"OK","findings":[]}
+another bad line
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"partial-123"},"type":"summary","totalFindings":0,"bySeverity":{"critical":0,"high":0,"medium":0,"low":0,"info":0}}
+`;
+
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports.length).toBe(1);
+    expect(result.reports[0]!.skill).toBe('valid-skill');
+  });
+
+  it('reconstructs files array from JSONL', () => {
+    const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"files-123"},"skill":"review","summary":"Done","findings":[],"files":[{"filename":"src/api.ts","findings":1,"durationMs":1200},{"filename":"src/utils.ts","findings":0,"durationMs":800}]}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"files-123"},"type":"summary","totalFindings":1,"bySeverity":{"critical":0,"high":1,"medium":0,"low":0,"info":0}}
+`;
+
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports[0]!.files).toBeDefined();
+    expect(result.reports[0]!.files!.length).toBe(2);
+    expect(result.reports[0]!.files![0]!.filename).toBe('src/api.ts');
+    expect(result.reports[0]!.files![0]!.findingCount).toBe(1);
+    expect(result.reports[0]!.files![1]!.filename).toBe('src/utils.ts');
+  });
+
+  it('handles skippedFiles in reports', () => {
+    const jsonlContent = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"skip-123"},"skill":"review","summary":"Done","findings":[],"skippedFiles":[{"filename":"dist/bundle.js","reason":"builtin"}]}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"skip-123"},"type":"summary","totalFindings":0,"bySeverity":{"critical":0,"high":0,"medium":0,"low":0,"info":0},"totalSkippedFiles":1}
+`;
+
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports[0]!.skippedFiles).toBeDefined();
+    expect(result.reports[0]!.skippedFiles!.length).toBe(1);
+    expect(result.reports[0]!.skippedFiles![0]!.filename).toBe('dist/bundle.js');
+    expect(result.reports[0]!.skippedFiles![0]!.reason).toBe('builtin');
+  });
+
+  it('round-trips through write and parse', () => {
+    const original: SkillReport[] = [
+      {
+        skill: 'test-skill',
+        summary: 'Found issues',
+        findings: [
+          { id: 'test-1', severity: 'high', title: 'Test Finding', description: 'Test description' },
+        ],
+        durationMs: 1500,
+        usage: { inputTokens: 500, outputTokens: 250, costUSD: 0.005 },
+        files: [
+          { filename: 'src/test.ts', findingCount: 1, durationMs: 1500 },
+        ],
+      },
+    ];
+
+    // Write to JSONL string
+    const jsonlContent = renderJsonlString(original, 2000, { runId: 'round-trip-123' });
+
+    // Parse back
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports.length).toBe(1);
+    expect(result.reports[0]!.skill).toBe('test-skill');
+    expect(result.reports[0]!.summary).toBe('Found issues');
+    expect(result.reports[0]!.findings.length).toBe(1);
+    expect(result.reports[0]!.findings[0]!.id).toBe('test-1');
+    expect(result.reports[0]!.durationMs).toBe(1500);
+    expect(result.reports[0]!.usage?.inputTokens).toBe(500);
+    expect(result.reports[0]!.files?.length).toBe(1);
+    expect(result.reports[0]!.files![0]!.findingCount).toBe(1);
   });
 });

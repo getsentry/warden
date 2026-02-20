@@ -44,7 +44,9 @@ export {
   renderJsonlString,
   getRepoLogPath,
   generateRunId,
+  parseJsonlReports,
   type JsonlRecord,
   type JsonlRunMetadata,
+  type ParsedJsonlLog,
 } from './jsonl.js';
 export { ICON_CHECK, ICON_SKIPPED, SPINNER_FRAMES } from './icons.js';

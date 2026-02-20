@@ -234,3 +234,85 @@ export function writeJsonlContent(outputPath: string, content: string): void {
 export function readJsonlLog(logPath: string): string {
   return readFileSync(logPath, 'utf-8');
 }
+
+/**
+ * Parse the summary record from a JSONL log.
+ * Returns undefined if no summary record is found.
+ */
+export function parseSummaryRecord(content: string): JsonlSummaryRecord | undefined {
+  const lines = content.trim().split('\n').filter((line) => line.trim());
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed.type === 'summary') {
+        return JsonlSummaryRecordSchema.parse(parsed);
+      }
+    } catch {
+      // Skip invalid lines
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Parse JSONL content and reconstruct SkillReport objects.
+ * Returns an object with the reports array, run metadata from the summary,
+ * and total duration.
+ */
+export interface ParsedJsonlLog {
+  reports: SkillReport[];
+  runMetadata?: JsonlRunMetadata;
+  totalDurationMs: number;
+}
+
+export function parseJsonlReports(content: string): ParsedJsonlLog {
+  const lines = content.trim().split('\n').filter((line) => line.trim());
+  const reports: SkillReport[] = [];
+  let runMetadata: JsonlRunMetadata | undefined;
+  let totalDurationMs = 0;
+
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+
+      // Skip summary record (but capture metadata from it)
+      if (parsed.type === 'summary') {
+        const summary = JsonlSummaryRecordSchema.parse(parsed);
+        runMetadata = summary.run;
+        totalDurationMs = summary.run.durationMs;
+        continue;
+      }
+
+      // Parse skill record and convert to SkillReport
+      const record = JsonlRecordSchema.parse(parsed);
+      reports.push({
+        skill: record.skill,
+        summary: record.summary,
+        findings: record.findings,
+        metadata: record.metadata,
+        durationMs: record.durationMs,
+        usage: record.usage,
+        auxiliaryUsage: record.auxiliaryUsage,
+        skippedFiles: record.skippedFiles,
+        failedHunks: record.failedHunks,
+        failedExtractions: record.failedExtractions,
+        files: record.files?.map((f) => ({
+          filename: f.filename,
+          findingCount: f.findings,
+          durationMs: f.durationMs,
+          usage: f.usage,
+        })),
+      });
+
+      // Capture run metadata from first record if no summary yet
+      if (!runMetadata) {
+        runMetadata = record.run;
+        totalDurationMs = record.run.durationMs;
+      }
+    } catch {
+      // Skip invalid lines
+    }
+  }
+
+  return { reports, runMetadata, totalDurationMs };
+}

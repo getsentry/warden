@@ -55,10 +55,15 @@ export interface SetupAppOptions {
   open: boolean;
 }
 
+export interface ReplayOptions {
+  files: string[];
+}
+
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'replay';
   options: CLIOptions;
   setupAppOptions?: SetupAppOptions;
+  replayOptions?: ReplayOptions;
 }
 
 export function showVersion(): void {
@@ -75,6 +80,7 @@ Commands:
   add [skill]          Add a skill trigger to warden.toml
   sync [remote]        Update cached remote skills to latest
   setup-app            Create a GitHub App for Warden via manifest flow
+  replay <files...>    Replay results from JSONL log files
   (default)            Run analysis on targets or using warden.toml triggers
 
 Targets:
@@ -313,7 +319,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
   }
 
   // Filter out known commands from positionals
-  const commands = ['run', 'help', 'init', 'add', 'version', 'setup-app', 'sync'];
+  const commands = ['run', 'help', 'init', 'add', 'version', 'setup-app', 'sync', 'replay'];
   const targets = positionals.filter((p) => !commands.includes(p));
 
   // Handle explicit help command
@@ -393,6 +399,30 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         timeout: values.timeout ? parseInt(values.timeout as string, 10) : 300,
         name: values.name as string | undefined,
         open: !values['no-open'],
+      },
+    };
+  }
+
+  // Handle replay command
+  if (positionals.includes('replay')) {
+    // All positionals after 'replay' are log files
+    const replayIndex = positionals.indexOf('replay');
+    const logFiles = positionals.slice(replayIndex + 1);
+
+    return {
+      command: 'replay',
+      options: CLIOptionsSchema.parse({
+        json: values.json,
+        reportOn: values['report-on'] as SeverityThreshold | undefined,
+        minConfidence: values['min-confidence'] as ConfidenceThreshold | undefined,
+        quiet: values.quiet,
+        verbose: verboseCount,
+        debug: values.debug,
+        log: values.log,
+        color: resolveColorOption(values),
+      }),
+      replayOptions: {
+        files: logFiles,
       },
     };
   }
