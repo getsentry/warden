@@ -2,7 +2,7 @@ import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
-import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics } from '../sentry.js';
+import { Sentry, logger, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
@@ -391,11 +391,6 @@ async function analyzeHunk(
         ...retry,
       };
 
-      // Resolve session directory once (used post-query to move session files)
-      const sessionsDir = options.session?.enabled
-        ? resolveSessionsDir(repoPath, options.session.directory)
-        : undefined;
-
       let lastError: unknown;
       // Track accumulated usage across retry attempts for accurate cost reporting
       const accumulatedUsage: UsageStats[] = [];
@@ -408,9 +403,6 @@ async function analyzeHunk(
           }
           return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
         }
-
-        // Snapshot session files before SDK call so we can capture new ones after
-        const sessionSnapshot = sessionsDir ? snapshotSessionFiles(repoPath) : undefined;
 
         try {
           const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options, skill.name);
@@ -564,15 +556,6 @@ async function analyzeHunk(
               callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted during retry delay');
             }
             return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
-          }
-        } finally {
-          // Move any new session files regardless of success/failure/abort
-          if (sessionsDir && sessionSnapshot) {
-            try {
-              moveNewSessions(repoPath, sessionSnapshot, sessionsDir);
-            } catch {
-              // Non-fatal
-            }
           }
         }
       }
@@ -860,6 +843,14 @@ export async function runSkill(
   // Collect results in input order (Promise.all preserves order)
   const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
 
+  // Snapshot session files before any SDK calls so we can capture new ones after all analysis completes.
+  // This is done at the runSkill level (not per-hunk) to ensure all SDK processes have fully exited
+  // and flushed their session data before we copy files.
+  const sessionsDir = options.session?.enabled
+    ? resolveSessionsDir(context.repoPath, options.session.directory)
+    : undefined;
+  const sessionSnapshot = sessionsDir ? snapshotSessionFiles(context.repoPath) : undefined;
+
   // Process files - parallel or sequential based on options
   if (parallel) {
     // Process files with sliding-window concurrency pool
@@ -894,6 +885,18 @@ export async function runSkill(
     totalFailedExtractions += fr.result.failedExtractions;
     if (fr.result.auxiliaryUsage) {
       allAuxiliaryUsage.push(...fr.result.auxiliaryUsage);
+    }
+  }
+
+  // Move any new session files now that all SDK processes have exited
+  if (sessionsDir && sessionSnapshot) {
+    try {
+      moveNewSessions(context.repoPath, sessionSnapshot, sessionsDir, skill.name);
+    } catch (err) {
+      logger.warn('Failed to move session files', {
+        error: err instanceof Error ? err.message : String(err),
+        skill: skill.name,
+      });
     }
   }
 

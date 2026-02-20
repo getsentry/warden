@@ -30,11 +30,11 @@ export function shortRunId(runId: string): string {
 
 /**
  * Get the repo-local log file path.
- * Returns: {repoRoot}/.warden/logs/{ISO-datetime}-{runId8}.jsonl
+ * Returns: {repoRoot}/.warden/logs/{runId8}-{ISO-datetime}.jsonl
  */
 export function getRepoLogPath(repoRoot: string, runId: string, timestamp: Date = new Date()): string {
-  const ts = timestamp.toISOString().replace(/:/g, '-');
-  return join(repoRoot, '.warden', 'logs', `${ts}-${shortRunId(runId)}.jsonl`);
+  const ts = timestamp.toISOString().replace(/[:.]/g, '-');
+  return join(repoRoot, '.warden', 'logs', `${shortRunId(runId)}-${ts}.jsonl`);
 }
 
 /**

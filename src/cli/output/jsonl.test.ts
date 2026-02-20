@@ -428,13 +428,13 @@ describe('getRepoLogPath', () => {
   it('returns path under .warden/logs/', () => {
     const timestamp = new Date('2026-02-18T14:32:15.123Z');
     const result = getRepoLogPath('/path/to/repo', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', timestamp);
-    expect(result).toBe('/path/to/repo/.warden/logs/2026-02-18T14-32-15.123Z-a1b2c3d4.jsonl');
+    expect(result).toBe('/path/to/repo/.warden/logs/a1b2c3d4-2026-02-18T14-32-15-123Z.jsonl');
   });
 
-  it('replaces colons in timestamp with hyphens', () => {
+  it('replaces colons and dots in timestamp with hyphens', () => {
     const timestamp = new Date('2026-02-18T10:05:30.000Z');
     const result = getRepoLogPath('/repo', 'abcdef12-3456-7890-abcd-ef1234567890', timestamp);
-    expect(result).toMatch(/2026-02-18T10-05-30\.000Z-abcdef12\.jsonl$/);
+    expect(result).toMatch(/abcdef12-2026-02-18T10-05-30-000Z\.jsonl$/);
   });
 
   it('uses different runId for different paths', () => {

@@ -43,7 +43,7 @@ export function ensureSessionsDir(dir: string): void {
 
 /**
  * Snapshot the set of .jsonl files in Claude's project directory for a given repo.
- * Call before executeQuery, then use moveNewSessions after to capture any new files.
+ * Call before analysis, then use moveNewSessions after to capture any new files.
  */
 export function snapshotSessionFiles(repoPath: string): Set<string> {
   const projectDir = getClaudeProjectDir(repoPath);
@@ -58,13 +58,17 @@ export function snapshotSessionFiles(repoPath: string): Set<string> {
 
 /**
  * Move any new session files that appeared since the snapshot.
+ * Files are named <prefix>-<uuid>.jsonl where prefix identifies the warden run
+ * (e.g. "notseer-a049e7f7") and uuid is the Claude session ID.
+ *
  * Safe to call concurrently -- skips files already moved by another caller.
  * Returns paths of moved files.
  */
 export function moveNewSessions(
   repoPath: string,
   before: Set<string>,
-  targetDir: string
+  targetDir: string,
+  prefix?: string
 ): string[] {
   const projectDir = getClaudeProjectDir(repoPath);
   let current: string[];
@@ -79,15 +83,26 @@ export function moveNewSessions(
 
   ensureSessionsDir(targetDir);
   const moved: string[] = [];
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
   for (const file of newFiles) {
     const sourceFile = path.join(projectDir, file);
     // Guard against race: another concurrent hunk may have already moved this file
     if (!fs.existsSync(sourceFile)) continue;
 
+    // Skip empty files (SDK may not have flushed yet)
+    try {
+      const stat = fs.statSync(sourceFile);
+      if (stat.size === 0) continue;
+    } catch {
+      continue;
+    }
+
     const uuid = file.replace('.jsonl', '');
-    const targetFile = path.join(targetDir, `${timestamp}-${uuid}.jsonl`);
+    // Short UUID: first 8 chars of the session ID
+    const shortUuid = uuid.split('-')[0] || uuid.slice(0, 8);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const targetName = prefix ? `${prefix}-${shortUuid}-${ts}.jsonl` : `${shortUuid}-${ts}.jsonl`;
+    const targetFile = path.join(targetDir, targetName);
     try {
       // Use copy+delete instead of rename to handle cross-device moves (EXDEV)
       fs.copyFileSync(sourceFile, targetFile);

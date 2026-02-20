@@ -22,6 +22,7 @@ import {
   type PreparedFile,
   type PRPromptContext,
 } from '../../sdk/runner.js';
+import { snapshotSessionFiles, moveNewSessions, resolveSessionsDir } from '../../sdk/session.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import { Verbosity } from './verbosity.js';
@@ -358,6 +359,12 @@ export async function runSkillTask(
           return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0 };
         };
 
+        // Snapshot session files before any SDK calls so we can capture new ones after
+        const sessionsDir = runnerOptions.session?.enabled
+          ? resolveSessionsDir(context.repoPath, runnerOptions.session.directory)
+          : undefined;
+        const sessionSnapshot = sessionsDir ? snapshotSessionFiles(context.repoPath) : undefined;
+
         // Process files with sliding-window concurrency pool
         const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
         const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
@@ -387,6 +394,18 @@ export async function runSkillTask(
         for (const fileState of fileStates) {
           if (fileState.status === 'pending') {
             callbacks.onFileUpdate(name, fileState.filename, { status: 'skipped' });
+          }
+        }
+
+        // Move new session files now that all SDK processes have exited and flushed
+        if (sessionsDir && sessionSnapshot) {
+          try {
+            moveNewSessions(context.repoPath, sessionSnapshot, sessionsDir, displayName);
+          } catch (err) {
+            logger.warn('Failed to move session files', {
+              error: err instanceof Error ? err.message : String(err),
+              skill: displayName,
+            });
           }
         }
 

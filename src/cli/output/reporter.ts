@@ -405,6 +405,21 @@ export class Reporter {
   }
 
   /**
+   * Log dim/subtle text (visible at normal verbosity, hidden in quiet mode).
+   */
+  dim(message: string): void {
+    if (this.verbosity === Verbosity.Quiet) {
+      return;
+    }
+
+    if (this.mode.isTTY) {
+      this.log(chalk.dim(message));
+    } else {
+      this.logPlain(message);
+    }
+  }
+
+  /**
    * Log plain text (no prefix).
    */
   text(message: string): void {

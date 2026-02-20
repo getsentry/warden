@@ -195,7 +195,6 @@ async function outputResultsAndHandleFixes(
   const logPath = getRepoLogPath(repoPath, runId, timestamp);
   try {
     writeJsonlContent(logPath, jsonlContent);
-    reporter.debug(`Run log: ${logPath}`);
   } catch (err) {
     reporter.warning(`Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -243,6 +242,11 @@ async function outputResultsAndHandleFixes(
   // Show summary (uses filtered reports for display)
   reporter.blank();
   reporter.renderSummary(filteredReports, totalDuration, { traceId });
+
+  // Show log file path after summary
+  if (!options.json) {
+    reporter.dim(`Log: ${logPath}`);
+  }
 
   // Handle fixes: --fix (automatic) always runs, interactive step-through in TTY mode
   if (fixableFindings.length > 0) {
