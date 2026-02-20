@@ -10,7 +10,6 @@ import {
   formatStatsCompact,
   formatSeverityBadge,
   formatConfidenceBadge,
-  formatConfidencePlain,
 } from './formatters.js';
 import type { Severity, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 
@@ -106,17 +105,6 @@ describe('formatConfidenceBadge', () => {
   });
 });
 
-describe('formatConfidencePlain', () => {
-  it('formats confidence in brackets', () => {
-    expect(formatConfidencePlain('high')).toBe('[high confidence]');
-    expect(formatConfidencePlain('medium')).toBe('[medium confidence]');
-    expect(formatConfidencePlain('low')).toBe('[low confidence]');
-  });
-
-  it('returns empty string for undefined confidence', () => {
-    expect(formatConfidencePlain(undefined)).toBe('');
-  });
-});
 
 describe('formatProgress', () => {
   it('formats progress indicator', () => {

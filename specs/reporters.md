@@ -615,7 +615,6 @@ All reporters use shared formatters from `src/cli/output/formatters.ts`.
 | `formatSeverityBadge(severity)` | `Severity` | Colored dot + text | `. (high)` |
 | `formatSeverityPlain(severity)` | `Severity` | Bracketed | `[high]` |
 | `formatConfidenceBadge(confidence?)` | `Confidence \| undefined` | Colored bracketed (empty if undefined) | `[high confidence]` |
-| `formatConfidencePlain(confidence?)` | `Confidence \| undefined` | Plain bracketed (empty if undefined) | `[high confidence]` |
 | `countBySeverity(findings)` | `Finding[]` | `Record<Severity, number>` | `{ critical: 0, high: 1, ... }` |
 | `pluralize(count, singular, plural?)` | `number, string` | Pluralized word | `file` / `files` |
 

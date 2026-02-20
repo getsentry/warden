@@ -9,7 +9,6 @@ export {
   formatSeverityDot,
   formatSeverityPlain,
   formatConfidenceBadge,
-  formatConfidencePlain,
   formatFindingCounts,
   formatFindingCountsPlain,
   formatProgress,

@@ -95,14 +95,6 @@ export function formatConfidenceBadge(confidence: Confidence | undefined): strin
   return config.color(`[${confidence} confidence]`);
 }
 
-/**
- * Format a confidence level for plain text (CI mode).
- * Returns empty string if confidence is undefined.
- */
-export function formatConfidencePlain(confidence: Confidence | undefined): string {
-  if (!confidence) return '';
-  return `[${confidence} confidence]`;
-}
 
 /**
  * Format a file location string.
