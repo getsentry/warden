@@ -135,8 +135,6 @@ def load_ignore_paths() -> list[str]:
     """Load ignorePaths from warden.toml defaults if present."""
     try:
         # Try to parse warden.toml for defaults.ignorePaths
-        import importlib
-        # Use a simple approach: read the file and look for ignorePaths
         toml_path = "warden.toml"
         if not os.path.exists(toml_path):
             return []
