@@ -64,7 +64,6 @@ def severity_badge(severity: str) -> str:
 
 
 def generate_summary_md(
-    sweep_dir: str,
     manifest: dict[str, Any],
     scan_index: list[dict[str, Any]],
     all_findings: list[dict[str, Any]],
@@ -255,7 +254,7 @@ def main():
 
     # Generate summary.md
     summary_md = generate_summary_md(
-        sweep_dir, manifest, scan_index,
+        manifest, scan_index,
         all_findings, verified, rejected, patches, security_index,
     )
     summary_path = os.path.join(sweep_dir, "summary.md")
