@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
 import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
-import type { SkillRunnerOptions } from '../sdk/runner.js';
+import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport, ConfidenceThreshold } from '../types/index.js';
@@ -310,6 +310,14 @@ async function runSkills(
   const apiKey = getAnthropicApiKey();
   if (!apiKey) {
     reporter.debug('No API key found. Using Claude Code subscription auth.');
+  }
+
+  // Pre-flight: verify auth will work before starting analysis
+  try {
+    verifyAuth({ apiKey });
+  } catch (error: unknown) {
+    reporter.error((error as WardenAuthenticationError).message);
+    return 1;
   }
 
   // Try to find repo root for config loading
@@ -651,6 +659,14 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const apiKey = getAnthropicApiKey();
   if (!apiKey) {
     reporter.debug('No API key found. Using Claude Code subscription auth.');
+  }
+
+  // Pre-flight: verify auth will work before starting analysis
+  try {
+    verifyAuth({ apiKey });
+  } catch (error: unknown) {
+    reporter.error((error as WardenAuthenticationError).message);
+    return 1;
   }
 
   // Build trigger tasks

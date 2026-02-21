@@ -38,6 +38,22 @@ const AUTH_ERROR_GUIDANCE = `
 
 https://console.anthropic.com/ for API keys`;
 
+/** IPC/subprocess failure error codes (EPIPE, ECONNRESET, etc.) */
+const IPC_ERROR_CODES = ['EPIPE', 'ECONNRESET', 'ECONNREFUSED', 'ENOTCONN'];
+
+/**
+ * Check if an error is an IPC/subprocess failure.
+ * These occur when the Claude Code subprocess can't communicate (e.g., sandbox restrictions).
+ */
+export function isSubprocessError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  // Check error.code property (Node.js ErrnoException) first
+  const errorCode = (error as NodeJS.ErrnoException).code;
+  if (errorCode && IPC_ERROR_CODES.includes(errorCode)) return true;
+  // Fallback: check message for wrapped errors with stderr appended
+  return IPC_ERROR_CODES.some((code) => error.message.includes(code));
+}
+
 export class WardenAuthenticationError extends Error {
   constructor(sdkError?: string) {
     const message = sdkError

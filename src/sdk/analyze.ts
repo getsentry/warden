@@ -3,7 +3,7 @@ import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, logger, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics } from '../sentry.js';
-import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage } from './errors.js';
+import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
@@ -515,6 +515,16 @@ async function analyzeHunk(
           // Re-throw authentication errors (they shouldn't be retried)
           if (error instanceof WardenAuthenticationError) {
             throw error;
+          }
+
+          // Subprocess IPC failures (EPIPE, ECONNRESET, etc.) indicate the Claude CLI
+          // can't communicate — surface as an auth error with actionable guidance
+          if (isSubprocessError(error)) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            throw new WardenAuthenticationError(
+              `Claude Code subprocess failed (${errorMessage}).\n` +
+              `This usually means the claude CLI cannot run in this environment.`
+            );
           }
 
           // Authentication errors should surface immediately with helpful guidance
