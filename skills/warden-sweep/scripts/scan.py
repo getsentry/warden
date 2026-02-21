@@ -153,7 +153,9 @@ def load_ignore_paths() -> list[str]:
                 combined = "".join(value_parts)
                 if combined.count("[") <= combined.count("]"):
                     try:
-                        return json.loads(combined)
+                        # Strip trailing comma before final bracket (TOML allows it, JSON doesn't)
+                        cleaned = combined.rstrip("]").rstrip(",") + "]"
+                        return json.loads(cleaned)
                     except json.JSONDecodeError:
                         return []
                 continue
@@ -447,8 +449,8 @@ def main() -> None:
     # Determine sweep dir and run ID
     if args.sweep_dir:
         sweep_dir = args.sweep_dir
-        # Extract run ID from path
-        run_id = os.path.basename(sweep_dir)
+        # Extract run ID from path (normalize to handle trailing slashes)
+        run_id = os.path.basename(os.path.normpath(sweep_dir))
     else:
         run_id = generate_run_id()
         sweep_dir = os.path.join(".warden", "sweeps", run_id)
