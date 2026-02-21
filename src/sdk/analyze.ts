@@ -741,6 +741,7 @@ export async function runSkill(
       findings: [],
       usage: emptyUsage(),
       durationMs: Date.now() - startTime,
+      model: options.model,
     };
     if (skippedFiles.length > 0) {
       report.skippedFiles = skippedFiles;
@@ -934,6 +935,7 @@ export async function runSkill(
     findings: mergedFindings,
     usage: totalUsage,
     durationMs: Date.now() - startTime,
+    model: options.model,
     files: fileResults.map((fr) => ({
       filename: fr.filename,
       findingCount: fr.result.findings.length,

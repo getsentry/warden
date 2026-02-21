@@ -692,8 +692,9 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  const configModel = triggersToRun[0]?.model ?? config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted, configModel);
+  // Run-level model is the default (ignoring per-trigger overrides); per-skill models are on each report.
+  const defaultModel = config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted, defaultModel);
 }
 
 /**

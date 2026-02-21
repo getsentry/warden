@@ -418,6 +418,7 @@ export async function runSkillTask(
           findings: mergedFindings,
           usage: aggregateUsage(allUsage),
           durationMs: duration,
+          model: runnerOptions?.model,
           files: preparedFiles.map((file, i) => {
             const r = allResults[i];
             return {
