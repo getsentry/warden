@@ -9,9 +9,10 @@ import {
   shortRunId,
   readJsonlLog,
   parseJsonlReports,
-  parseSummaryFromLastLine,
+  JsonlSummaryRecordSchema,
   renderJsonlString,
   type JsonlRecord,
+  type JsonlSummaryRecord,
 } from './jsonl.js';
 import type { SkillReport } from '../../types/index.js';
 
@@ -671,6 +672,21 @@ another bad line
     expect(result.reports[0]!.files![0]!.findingCount).toBe(1);
   });
 });
+
+/** Test-only helper: parse summary from last line of a JSONL file. */
+function parseSummaryFromLastLine(filePath: string): JsonlSummaryRecord | undefined {
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const lastLine = lines[lines.length - 1];
+    if (!lastLine) return undefined;
+    const parsed = JSON.parse(lastLine);
+    if (parsed.type !== 'summary') return undefined;
+    return JsonlSummaryRecordSchema.parse(parsed);
+  } catch {
+    return undefined;
+  }
+}
 
 describe('parseSummaryFromLastLine', () => {
   let testDir: string;
