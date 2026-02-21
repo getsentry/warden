@@ -124,17 +124,15 @@ function resolveBundledSkillsDir(): string | null {
 /**
  * Install bundled skills into .agents/skills/.
  * Skips skills that already exist unless force is true.
- * Returns the set of all bundled skill names (regardless of whether they were installed or skipped).
  */
 function installBundledSkills(
   repoRoot: string,
   force: boolean,
   reporter: Reporter,
-): { installed: number; names: Set<string> } {
-  const names = new Set<string>();
+): number {
   const bundledDir = resolveBundledSkillsDir();
   if (!bundledDir) {
-    return { installed: 0, names };
+    return 0;
   }
 
   const targetDir = join(repoRoot, '.agents', 'skills');
@@ -147,7 +145,6 @@ function installBundledSkills(
     if (!entry.isDirectory()) continue;
 
     const skillName = entry.name;
-    names.add(skillName);
 
     const src = join(bundledDir, skillName);
     const dest = join(targetDir, skillName);
@@ -176,25 +173,34 @@ function installBundledSkills(
     installed++;
   }
 
-  return { installed, names };
+  return installed;
 }
 
 /**
  * Ensure .claude/skills symlink points to ../.agents/skills if .claude/ exists.
  */
-function ensureClaudeSymlink(repoRoot: string, reporter: Reporter): boolean {
+function ensureClaudeSymlink(repoRoot: string, force: boolean, reporter: Reporter): boolean {
   const claudeDir = join(repoRoot, '.claude');
   if (!existsSync(claudeDir)) return false;
 
   const skillsLink = join(claudeDir, 'skills');
 
   // Check if it already exists (file, dir, or symlink — including broken symlinks)
+  let linkExists = false;
   try {
     lstatSync(skillsLink);
+    linkExists = true;
+  } catch {
+    // Doesn't exist
+  }
+
+  if (linkExists && !force) {
     reporter.skipped('.claude/skills', 'already exists');
     return false;
-  } catch {
-    // Doesn't exist — create it
+  }
+
+  if (linkExists) {
+    rmSync(skillsLink, { recursive: true, force: true });
   }
 
   symlinkSync('../.agents/skills', skillsLink);
@@ -276,11 +282,10 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   }
 
   // Install bundled skills into .agents/skills/
-  const { installed: skillsInstalled } = installBundledSkills(repoRoot, options.force, reporter);
-  filesCreated += skillsInstalled;
+  filesCreated += installBundledSkills(repoRoot, options.force, reporter);
 
   // Symlink .claude/skills -> ../.agents/skills if .claude/ directory exists
-  if (ensureClaudeSymlink(repoRoot, reporter)) {
+  if (ensureClaudeSymlink(repoRoot, options.force, reporter)) {
     filesCreated++;
   }
 
