@@ -1,10 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { verifyAuth } from './auth.js';
 import { WardenAuthenticationError } from './errors.js';
+import { ExecError } from '../utils/exec.js';
 
-vi.mock('../utils/exec.js', () => ({
-  execFileNonInteractive: vi.fn(),
-}));
+vi.mock('../utils/exec.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...(actual as Record<string, unknown>),
+    execFileNonInteractive: vi.fn(),
+  };
+});
 
 import { execFileNonInteractive } from '../utils/exec.js';
 
@@ -24,18 +29,14 @@ describe('verifyAuth', () => {
 
   it('throws WardenAuthenticationError when claude binary is missing', () => {
     mockExec.mockImplementation(() => {
-      const err = new Error('spawn claude ENOENT') as NodeJS.ErrnoException;
-      err.code = 'ENOENT';
-      throw err;
+      throw new ExecError('claude --version', null, 'spawn claude ENOENT', null);
     });
     expect(() => verifyAuth({ apiKey: undefined })).toThrow(WardenAuthenticationError);
   });
 
   it('includes actionable guidance in error message for missing binary', () => {
     mockExec.mockImplementation(() => {
-      const err = new Error('spawn claude ENOENT') as NodeJS.ErrnoException;
-      err.code = 'ENOENT';
-      throw err;
+      throw new ExecError('claude --version', null, 'spawn claude ENOENT', null);
     });
     try {
       verifyAuth({ apiKey: undefined });
@@ -49,9 +50,7 @@ describe('verifyAuth', () => {
 
   it('reports distinct error when binary exists but fails to execute', () => {
     mockExec.mockImplementation(() => {
-      const err = new Error('spawn claude EACCES') as NodeJS.ErrnoException;
-      err.code = 'EACCES';
-      throw err;
+      throw new ExecError('claude --version', 1, 'Permission denied', null);
     });
     try {
       verifyAuth({ apiKey: undefined });
@@ -59,7 +58,7 @@ describe('verifyAuth', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(WardenAuthenticationError);
       expect((error as Error).message).toContain('failed to execute');
-      expect((error as Error).message).toContain('EACCES');
+      expect((error as Error).message).toContain('Permission denied');
     }
   });
 });

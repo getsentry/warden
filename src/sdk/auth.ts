@@ -1,4 +1,4 @@
-import { execFileNonInteractive } from '../utils/exec.js';
+import { ExecError, execFileNonInteractive } from '../utils/exec.js';
 import { WardenAuthenticationError } from './errors.js';
 
 /**
@@ -20,15 +20,22 @@ export function verifyAuth({ apiKey }: { apiKey?: string }): void {
   try {
     execFileNonInteractive('claude', ['--version'], { timeout: 5000 });
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
+    // execFileNonInteractive wraps spawn failures in ExecError.
+    // The original error message (e.g., "spawn claude ENOENT") is in ExecError.stderr.
+    const isNotFound =
+      error instanceof ExecError
+        ? error.stderr.includes('ENOENT')
+        : (error as NodeJS.ErrnoException).code === 'ENOENT';
+    if (isNotFound) {
       throw new WardenAuthenticationError(
         'Claude Code CLI not found on PATH.\n' +
         'Either install Claude Code (https://claude.ai/install.sh) or set an API key.'
       );
     }
+    const detail =
+      error instanceof ExecError ? error.stderr : (error as Error).message;
     throw new WardenAuthenticationError(
-      `Claude Code CLI found but failed to execute (${code ?? 'unknown'}).\n` +
+      `Claude Code CLI found but failed to execute: ${detail}\n` +
       'Check that the claude binary has correct permissions and can run in this environment.'
     );
   }
