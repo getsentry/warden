@@ -282,6 +282,7 @@ def scan_file(
                 "warden", file_path,
                 "--json", "--log",
                 "--min-confidence", "off",
+                "--fail-on", "off",
                 "--quiet",
                 "--output", log_file,
             ],
