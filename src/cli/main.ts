@@ -378,10 +378,13 @@ async function runSkills(
 
   // Build skill tasks
   // Model precedence: defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
-  const model = config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
+  // sdkModel is undefined when no model is explicitly configured (lets SDK use its default).
+  // logModel records what was used for JSONL logs (sentinel when no explicit model).
+  const sdkModel = config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'];
+  const logModel = sdkModel ?? MODEL_DEFAULT_SENTINEL;
   const runnerOptions: SkillRunnerOptions = {
     apiKey,
-    model,
+    model: sdkModel,
     abortController,
     maxTurns: config?.defaults?.maxTurns,
     batchDelayMs: config?.defaults?.batchDelayMs,
@@ -417,7 +420,7 @@ async function runSkills(
   const totalDuration = Date.now() - startTime;
   const effectiveMinConfidence = options.minConfidence ?? config?.defaults?.minConfidence ?? 'medium';
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted, model);
+  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted, logModel);
 }
 
 /**
