@@ -23,7 +23,7 @@ Read the relevant reference when the task requires deeper detail:
 warden
 
 # Run a specific skill
-warden --skill find-bugs
+warden --skill <skill-name>
 
 # Analyze specific files
 warden src/auth.ts src/database.ts

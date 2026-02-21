@@ -107,21 +107,21 @@ warden init
 
 # Interactive skill selection
 warden add
-warden add security-review
+warden add <skill-name>
 warden add --list
 
 # Remote skills
-warden add --remote getsentry/skills --skill security-review
-warden add --remote https://github.com/getsentry/skills --skill security-review
-warden add --remote getsentry/skills@abc123 --skill security-review
+warden add --remote <org>/<repo> --skill <skill-name>
+warden add --remote https://github.com/<org>/<repo> --skill <skill-name>
+warden add --remote <org>/<repo>@<ref> --skill <skill-name>
 
 # Run analysis
 warden                                  # Skills from warden.toml
 warden src/auth.ts                      # Specific file
-warden src/auth.ts --skill security-review
+warden src/auth.ts --skill <skill-name>
 warden "src/**/*.ts"                    # Glob pattern
 warden HEAD~3                           # Git changes
-warden HEAD~3 --skill security-review
+warden HEAD~3 --skill <skill-name>
 warden main..HEAD                       # Branch diff
 
 # Output control

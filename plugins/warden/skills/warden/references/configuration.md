@@ -4,6 +4,8 @@ See [config-schema.md](config-schema.md) for the complete schema reference.
 
 ## Minimal Example
 
+The `name` field references a skill you've created (via `warden add`) or defined in `.agents/skills/<name>/SKILL.md`. Use that same name everywhere — in config, CLI flags, and triggers.
+
 ```toml
 version = 1
 
@@ -11,7 +13,7 @@ version = 1
 model = "claude-sonnet-4-20250514"
 
 [[skills]]
-name = "find-bugs"
+name = "my-skill"           # matches .agents/skills/my-skill/SKILL.md
 paths = ["src/**/*.ts"]
 
 [[skills.triggers]]
@@ -25,7 +27,7 @@ Skills define what to analyze and when. Each skill requires a name. Triggers are
 
 ```toml
 [[skills]]
-name = "security-review"
+name = "my-skill"
 paths = ["src/auth/**", "src/payments/**"]
 failOn = "high"
 reportOn = "medium"
@@ -42,10 +44,10 @@ actions = ["opened", "synchronize"]
 
 ## Common Patterns
 
-**Strict security on critical files:**
+**Strict checks on critical files:**
 ```toml
 [[skills]]
-name = "security-review"
+name = "my-skill"
 model = "claude-opus-4-20250514"
 maxTurns = 100
 paths = ["src/auth/**", "src/payments/**"]
@@ -59,7 +61,7 @@ actions = ["opened", "synchronize"]
 **Skip test files:**
 ```toml
 [[skills]]
-name = "find-bugs"
+name = "my-skill"
 paths = ["src/**/*.ts"]
 ignorePaths = ["**/*.test.ts", "**/*.spec.ts"]
 ```

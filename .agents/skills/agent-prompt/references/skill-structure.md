@@ -107,7 +107,4 @@ Skills are discovered in order (first match wins):
 
 ## Examples
 
-See existing skills for reference:
-- `skills/security-review/SKILL.md` - Comprehensive checklist approach
-- `skills/find-bugs/SKILL.md` - Confidence-focused with exclusions
-- `skills/code-simplifier/SKILL.md` - Balanced "do/don't" guidance
+See existing skills in `.agents/skills/` for reference patterns.

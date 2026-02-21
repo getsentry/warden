@@ -49,19 +49,19 @@ Skills can be fetched from GitHub repositories:
 
 ```bash
 # Add a remote skill
-warden add --remote getsentry/skills --skill security-review
+warden add --remote <org>/<repo> --skill <skill-name>
 
 # Add with version pinning (recommended for reproducibility)
-warden add --remote getsentry/skills@abc123 --skill security-review
+warden add --remote <org>/<repo>@<ref> --skill <skill-name>
 
 # List skills in a remote repo
-warden add --remote getsentry/skills --list
+warden add --remote <org>/<repo> --list
 
 # Update all unpinned remote skills
 warden sync
 
 # Update specific repo
-warden sync getsentry/skills
+warden sync <org>/<repo>
 
 # Run with cached skills only (no network)
 warden --offline
@@ -71,8 +71,8 @@ warden --offline
 
 ```toml
 [[skills]]
-name = "security-review"
-remote = "getsentry/skills@abc123"
+name = "my-skill"
+remote = "<org>/<repo>@<ref>"
 
 [[skills.triggers]]
 type = "pull_request"
