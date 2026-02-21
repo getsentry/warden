@@ -416,12 +416,12 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
     let files: string[] = [];
 
-    // Determine subcommand: explicit keyword, or infer 'show' if arg looks like a file/run ID
+    // Determine subcommand: explicit keyword, or infer 'show' if arg is not a known subcommand
     let subcommand: LogsSubcommand;
     if (subcommandArg === 'list' || subcommandArg === 'show' || subcommandArg === 'gc') {
       subcommand = subcommandArg;
-    } else if (subcommandArg && (subcommandArg.includes('.') || subcommandArg.includes('/'))) {
-      // Arg looks like a file path — infer 'show' and include it in files
+    } else if (subcommandArg) {
+      // Non-keyword arg (file path, run ID, etc.) — infer 'show'
       subcommand = 'show';
       files = subArgs;
     } else {

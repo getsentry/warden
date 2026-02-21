@@ -168,10 +168,10 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 export function renderJsonlString(
   reports: SkillReport[],
   durationMs: number,
-  options?: { runId?: string; traceId?: string; timestamp?: Date; model?: string; headSha?: string }
+  options?: { runId?: string; traceId?: string; timestamp?: Date; model?: string; headSha?: string; cwd?: string }
 ): string {
   const timestamp = (options?.timestamp ?? new Date()).toISOString();
-  const cwd = process.cwd();
+  const cwd = options?.cwd ?? process.cwd();
 
   const runMetadata: JsonlRunMetadata = {
     timestamp,

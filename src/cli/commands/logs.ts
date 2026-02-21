@@ -421,6 +421,7 @@ export async function runLogsShow(
       timestamp: new Date(lastRunMetadata.timestamp),
       model: lastRunMetadata.model,
       headSha: lastRunMetadata.headSha,
+      cwd: lastRunMetadata.cwd,
     } : undefined);
     process.stdout.write(jsonlContent);
   } else {

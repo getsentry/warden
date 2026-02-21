@@ -430,6 +430,13 @@ describe('parseCliArgs', () => {
     expect(result.logsOptions!.subcommand).toBe('show');
     expect(result.logsOptions!.files).toEqual(['.warden/logs/abc123.jsonl']);
   });
+
+  it('infers show when arg is a bare run ID', () => {
+    const result = parseCliArgs(['logs', 'deadbeef']);
+    expect(result.command).toBe('logs');
+    expect(result.logsOptions!.subcommand).toBe('show');
+    expect(result.logsOptions!.files).toEqual(['deadbeef']);
+  });
 });
 
 describe('CLIOptionsSchema', () => {
