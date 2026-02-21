@@ -43,6 +43,13 @@ describe('formatDuration', () => {
     // 179.7s → 2m 59.7s → rounds to 3m
     expect(formatDuration(179700)).toBe('3m');
   });
+
+  it('handles toFixed rounding 59.95 to 60.0 near the 60s boundary', () => {
+    // 59.95s → toFixed(1) gives "60.0" — should display as "1m" not "60.0s"
+    expect(formatDuration(59950)).toBe('1m');
+    // 59.94s → toFixed(1) gives "59.9" — should stay in seconds format
+    expect(formatDuration(59940)).toBe('59.9s');
+  });
 });
 
 describe('formatLocation', () => {

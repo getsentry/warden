@@ -32,7 +32,11 @@ export function formatDuration(ms: number): string {
   }
   const totalSeconds = ms / 1000;
   if (totalSeconds < 60) {
-    return `${totalSeconds.toFixed(1)}s`;
+    const formatted = totalSeconds.toFixed(1);
+    // toFixed(1) can round 59.95 to "60.0" — fall through to minutes format
+    if (formatted !== '60.0') {
+      return `${formatted}s`;
+    }
   }
   let minutes = Math.floor(totalSeconds / 60);
   let seconds = Math.round(totalSeconds % 60);
