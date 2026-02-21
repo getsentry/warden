@@ -300,7 +300,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
 
     reporter.blank();
     for (const name of analysisSkills) {
-      if (existingToml.includes(`name = "${name}"`)) {
+      if (new RegExp(`^name\\s*=\\s*"${name}"`, 'm').test(existingToml)) {
         reporter.skipped(`Skill '${name}'`, 'already in config');
         continue;
       }
