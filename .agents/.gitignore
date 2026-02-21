@@ -9,3 +9,7 @@
 /skills/iterate-pr/
 /skills/react-best-practices/
 /skills/skill-creator/
+
+# Bundled skills (installed by warden init, canonical source in skills/)
+/skills/warden
+/skills/warden-sweep

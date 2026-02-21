@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, existsSync, readFileSync, readlinkSync, lstatSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
@@ -115,6 +115,102 @@ describe('init command', () => {
       const workflowContent = readFileSync(join(tempDir, '.github', 'workflows', 'warden.yml'), 'utf-8');
       expect(workflowContent).toContain('name: Warden');
       expect(workflowContent).not.toBe('existing workflow');
+    });
+  });
+
+  describe('bundled skill installation', () => {
+    it('installs warden and warden-sweep skills to .agents/skills/', async () => {
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'warden', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SKILL.md'))).toBe(true);
+    });
+
+    it('copies warden skill references', async () => {
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      const refsDir = join(tempDir, '.agents', 'skills', 'warden', 'references');
+      expect(existsSync(join(refsDir, 'cli-reference.md'))).toBe(true);
+      expect(existsSync(join(refsDir, 'configuration.md'))).toBe(true);
+    });
+
+    it('copies warden-sweep scripts', async () => {
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      const scriptsDir = join(tempDir, '.agents', 'skills', 'warden-sweep', 'scripts');
+      expect(existsSync(join(scriptsDir, 'extract_findings.py'))).toBe(true);
+      expect(existsSync(join(scriptsDir, 'generate_report.py'))).toBe(true);
+      expect(existsSync(join(scriptsDir, 'find_reviewers.py'))).toBe(true);
+    });
+
+    it('skips bundled skills that already exist without --force', async () => {
+      // Pre-create the skill directory with custom content
+      const skillDir = join(tempDir, '.agents', 'skills', 'warden');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, 'SKILL.md'), 'custom content');
+
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      // Custom content should be preserved
+      expect(readFileSync(join(skillDir, 'SKILL.md'), 'utf-8')).toBe('custom content');
+    });
+
+    it('overwrites bundled skills with --force', async () => {
+      // Pre-create the skill directory with custom content
+      const skillDir = join(tempDir, '.agents', 'skills', 'warden');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, 'SKILL.md'), 'custom content');
+
+      const reporter = createMockReporter();
+      await runInit(createOptions({ force: true }), reporter);
+
+      // Should be replaced with bundled content
+      const content = readFileSync(join(skillDir, 'SKILL.md'), 'utf-8');
+      expect(content).not.toBe('custom content');
+      expect(content).toContain('name: warden');
+    });
+
+    it('does not register bundled skills in warden.toml', async () => {
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      const toml = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
+      expect(toml).not.toContain('name = "warden"');
+      expect(toml).not.toContain('name = "warden-sweep"');
+    });
+  });
+
+  describe('claude symlink', () => {
+    it('creates .claude/skills symlink when .claude/ directory exists', async () => {
+      mkdirSync(join(tempDir, '.claude'), { recursive: true });
+
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      const skillsLink = join(tempDir, '.claude', 'skills');
+      expect(lstatSync(skillsLink).isSymbolicLink()).toBe(true);
+      expect(readlinkSync(skillsLink)).toBe('../.agents/skills');
+    });
+
+    it('does not create symlink when .claude/ does not exist', async () => {
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      expect(existsSync(join(tempDir, '.claude', 'skills'))).toBe(false);
+    });
+
+    it('skips symlink if .claude/skills already exists', async () => {
+      mkdirSync(join(tempDir, '.claude', 'skills'), { recursive: true });
+
+      const reporter = createMockReporter();
+      await runInit(createOptions(), reporter);
+
+      // Should still be a directory, not replaced with a symlink
+      expect(lstatSync(join(tempDir, '.claude', 'skills')).isDirectory()).toBe(true);
     });
   });
 
