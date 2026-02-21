@@ -102,7 +102,7 @@ def build_file_index(
             "title": pr.get("title", ""),
             "url": pr.get("url", ""),
         }
-        files = pr.get("files", [])
+        files = pr.get("files") or []
         for file_entry in files:
             # gh returns files as objects with "path" key
             if isinstance(file_entry, dict):

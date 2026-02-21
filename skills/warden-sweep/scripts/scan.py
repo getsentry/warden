@@ -61,7 +61,7 @@ def generate_run_id() -> str:
 def check_dependencies() -> list[str]:
     """Check that required commands are available. Return list of missing."""
     missing = []
-    for cmd in ["warden", "gh", "git", "jq"]:
+    for cmd in ["warden", "gh", "git"]:
         try:
             subprocess.run(
                 ["which", cmd],
@@ -290,26 +290,44 @@ def scan_file(
             timeout=timeout,
         )
 
+        # Check for warden failure
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() if result.stderr else "non-zero exit"
+            return {
+                "file": file_path,
+                "status": "error",
+                "error": f"warden failed: {error_msg}",
+                "exitCode": result.returncode,
+            }
+
+        # Check that log file was created
+        if not os.path.exists(log_file):
+            return {
+                "file": file_path,
+                "status": "error",
+                "error": "log file not created",
+                "exitCode": result.returncode,
+            }
+
         # Count findings from the log file
         finding_count = 0
         skills: set[str] = set()
-        if os.path.exists(log_file):
-            with open(log_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
+        with open(log_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    if record.get("type") == "summary":
                         continue
-                    try:
-                        record = json.loads(line)
-                        if record.get("type") == "summary":
-                            continue
-                        skill = record.get("skill", "")
-                        if skill:
-                            skills.add(skill)
-                        findings = record.get("findings", [])
-                        finding_count += len(findings)
-                    except json.JSONDecodeError:
-                        continue
+                    skill = record.get("skill", "")
+                    if skill:
+                        skills.add(skill)
+                    findings = record.get("findings", [])
+                    finding_count += len(findings)
+                except json.JSONDecodeError:
+                    continue
 
         return {
             "file": file_path,
