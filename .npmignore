@@ -29,7 +29,7 @@ pnpm-workspace.yaml
 
 # Evals and dev scripts
 evals/
-scripts/
+/scripts/
 
 # Plugin/agent config (not needed by npm consumers)
 plugins/
