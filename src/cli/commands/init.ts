@@ -16,8 +16,6 @@ import { getRepoRoot, getGitHubRepoUrl } from '../git.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
 import { getMajorVersion } from '../../utils/index.js';
-import { appendSkill } from '../../config/index.js';
-import { discoverAllSkills } from '../../skills/loader.js';
 
 /**
  * Template for warden.toml configuration file.
@@ -278,8 +276,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   }
 
   // Install bundled skills into .agents/skills/
-  const { installed: skillsInstalled, names: bundledSkillNames } =
-    installBundledSkills(repoRoot, options.force, reporter);
+  const { installed: skillsInstalled } = installBundledSkills(repoRoot, options.force, reporter);
   filesCreated += skillsInstalled;
 
   // Symlink .claude/skills -> ../.agents/skills if .claude/ directory exists
@@ -287,39 +284,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     filesCreated++;
   }
 
-  // Auto-register non-bundled analysis skills found in the repo
-  const skills = await discoverAllSkills(repoRoot, {
-    onWarning: (message) => reporter.warning(message),
-  });
-
-  let skillsAdded = 0;
-  const analysisSkills = [...skills.keys()].filter((name) => !bundledSkillNames.has(name));
-
-  if (analysisSkills.length > 0 && existsSync(wardenTomlPath)) {
-    const existingToml = readFileSync(wardenTomlPath, 'utf-8');
-
-    reporter.blank();
-    for (const name of analysisSkills) {
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      if (new RegExp(`^name\\s*=\\s*"${escaped}"`, 'm').test(existingToml)) {
-        reporter.skipped(`Skill '${name}'`, 'already in config');
-        continue;
-      }
-      try {
-        appendSkill(wardenTomlPath, {
-          name,
-          triggers: [{ type: 'pull_request', actions: ['opened', 'synchronize', 'reopened'] }],
-        });
-        reporter.success(`Added skill '${name}'`);
-        skillsAdded++;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        reporter.warning(`Failed to add skill '${name}': ${message}`);
-      }
-    }
-  }
-
-  if (filesCreated === 0 && skillsAdded === 0) {
+  if (filesCreated === 0) {
     reporter.blank();
     reporter.tip('All configuration files already exist. Use --force to overwrite.');
     return 0;
@@ -328,11 +293,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   // Print next steps
   reporter.blank();
   reporter.bold('Next steps:');
-  if (skillsAdded === 0) {
-    reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
-  } else {
-    reporter.text(`  1. Review skills in ${chalk.cyan('warden.toml')} and customize paths/filters`);
-  }
+  reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
   reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
   reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to organization or repository secrets`);
 
