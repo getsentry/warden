@@ -12,10 +12,49 @@ import {
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
+import figures from 'figures';
 import { getRepoRoot, getGitHubRepoUrl } from '../git.js';
+import { readSingleKey } from '../input.js';
+import { ICON_CHECK, ICON_SKIPPED } from '../output/icons.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
 import { getMajorVersion } from '../../utils/index.js';
+
+/**
+ * Render a section heading in the init output.
+ */
+function renderSection(
+  reporter: Reporter,
+  title: string,
+  filepath: string,
+  description: string,
+): void {
+  if (reporter.mode.isTTY) {
+    reporter.text(chalk.bold(title) + chalk.dim(`  ${filepath}`));
+    reporter.text(`  ${chalk.dim(description)}`);
+  } else {
+    reporter.text(`${title}: ${filepath}`);
+    reporter.text(`  ${description}`);
+  }
+}
+
+function renderCreated(reporter: Reporter, detail?: string): void {
+  if (reporter.mode.isTTY) {
+    const suffix = detail ? ` ${chalk.dim(detail)}` : '';
+    reporter.text(`  ${chalk.green(ICON_CHECK)} Created${suffix}`);
+  } else {
+    const suffix = detail ? ` ${detail}` : '';
+    reporter.text(`  Created${suffix}`);
+  }
+}
+
+function renderSkipped(reporter: Reporter, reason: string): void {
+  if (reporter.mode.isTTY) {
+    reporter.text(`  ${chalk.yellow(ICON_SKIPPED)} Skipped ${chalk.dim(`(${reason})`)}`);
+  } else {
+    reporter.text(`  Skipped (${reason})`);
+  }
+}
 
 /**
  * Template for warden.toml configuration file.
@@ -159,7 +198,6 @@ function installBundledSkills(
     }
 
     if (destExists && !force) {
-      reporter.skipped(`.agents/skills/${skillName}`, 'already installed');
       continue;
     }
 
@@ -169,11 +207,39 @@ function installBundledSkills(
     }
 
     cpSync(src, dest, { recursive: true });
-    reporter.created(`.agents/skills/${skillName}`);
+    reporter.text(`  ${chalk.dim(`.agents/skills/${skillName}`)}`);
     installed++;
   }
 
   return installed;
+}
+
+/**
+ * List bundled skill names that would be installed.
+ */
+function listBundledSkillNames(): string[] {
+  const bundledDir = resolveBundledSkillsDir();
+  if (!bundledDir) return [];
+  return readdirSync(bundledDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+}
+
+/**
+ * Check if any bundled skills are already installed.
+ */
+function allSkillsInstalled(repoRoot: string): boolean {
+  const names = listBundledSkillNames();
+  if (names.length === 0) return true;
+  const targetDir = join(repoRoot, '.agents', 'skills');
+  return names.every((name) => {
+    try {
+      lstatSync(join(targetDir, name));
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -195,7 +261,6 @@ function ensureClaudeSymlink(repoRoot: string, force: boolean, reporter: Reporte
   }
 
   if (linkExists && !force) {
-    reporter.skipped('.claude/skills', 'already exists');
     return false;
   }
 
@@ -204,7 +269,7 @@ function ensureClaudeSymlink(repoRoot: string, force: boolean, reporter: Reporte
   }
 
   symlinkSync('../.agents/skills', skillsLink);
-  reporter.created('.claude/skills -> ../.agents/skills');
+  reporter.text(`  ${chalk.dim('.claude/skills -> ../.agents/skills')}`);
   return true;
 }
 
@@ -228,35 +293,70 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
 
   let filesCreated = 0;
 
-  // Create warden.toml
+  // --- CONFIG section ---
   const wardenTomlPath = join(repoRoot, 'warden.toml');
+  renderSection(reporter, 'CONFIG', relative(cwd, wardenTomlPath), 'Severity thresholds and skill settings');
   if (existing.hasWardenToml && !options.force) {
-    reporter.skipped(relative(cwd, wardenTomlPath), 'already exists');
+    renderSkipped(reporter, 'already exists');
   } else {
-    const content = generateWardenToml();
-    writeFileSync(wardenTomlPath, content, 'utf-8');
-    reporter.created(relative(cwd, wardenTomlPath));
+    writeFileSync(wardenTomlPath, generateWardenToml(), 'utf-8');
+    renderCreated(reporter);
     filesCreated++;
   }
+  reporter.blank();
 
-  // Create .github/workflows directory if needed
+  // --- WORKFLOW section ---
   const workflowDir = join(repoRoot, '.github', 'workflows');
   if (!existsSync(workflowDir)) {
     mkdirSync(workflowDir, { recursive: true });
   }
-
-  // Create workflow file
   const workflowPath = join(workflowDir, 'warden.yml');
+  renderSection(reporter, 'WORKFLOW', relative(cwd, workflowPath), 'Runs Warden on pull requests via GitHub Actions');
   if (existing.hasWorkflow && !options.force) {
-    reporter.skipped(relative(cwd, workflowPath), 'already exists');
+    renderSkipped(reporter, 'already exists');
   } else {
-    const content = generateWorkflowYaml();
-    writeFileSync(workflowPath, content, 'utf-8');
-    reporter.created(relative(cwd, workflowPath));
+    writeFileSync(workflowPath, generateWorkflowYaml(), 'utf-8');
+    renderCreated(reporter);
     filesCreated++;
   }
+  reporter.blank();
 
-  // Ensure .warden/ is in .gitignore (migrating old .warden/logs/ entries)
+  // --- SKILLS section ---
+  const skillNames = listBundledSkillNames();
+  const skillPath = join(repoRoot, '.agents', 'skills');
+  renderSection(
+    reporter,
+    'SKILLS',
+    relative(cwd, skillPath),
+    `Bundled skills for AI agents (${skillNames.join(', ')})`,
+  );
+  if (allSkillsInstalled(repoRoot) && !options.force) {
+    renderSkipped(reporter, 'already installed');
+  } else if (options.force) {
+    const count = installBundledSkills(repoRoot, true, reporter);
+    ensureClaudeSymlink(repoRoot, true, reporter);
+    renderCreated(reporter);
+    filesCreated += count;
+  } else if (reporter.mode.isTTY && process.stdin.isTTY) {
+    process.stderr.write(`  ${chalk.cyan(figures.arrowRight)} Install? ${chalk.dim('[Y/n]')} `);
+    const key = await readSingleKey();
+    process.stderr.write(key === '\r' || key === '\n' ? 'y' : key);
+    process.stderr.write('\n');
+
+    if (key !== 'n') {
+      const count = installBundledSkills(repoRoot, false, reporter);
+      ensureClaudeSymlink(repoRoot, false, reporter);
+      renderCreated(reporter);
+      filesCreated += count;
+    } else {
+      renderSkipped(reporter, 'declined');
+    }
+  } else {
+    renderSkipped(reporter, 'non-interactive');
+  }
+  reporter.blank();
+
+  // Ensure .warden/ is in .gitignore (silent housekeeping)
   const gitignorePath = join(repoRoot, '.gitignore');
   if (existsSync(gitignorePath)) {
     const gitignoreContent = readFileSync(gitignorePath, 'utf-8');
@@ -272,31 +372,19 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
       const cleanedContent = cleaned.join('\n');
       const newline = cleanedContent.endsWith('\n') ? '' : '\n';
       writeFileSync(gitignorePath, cleanedContent + newline + '.warden/\n', 'utf-8');
-      reporter.created('.gitignore entry for .warden/');
       filesCreated++;
     }
   } else {
     writeFileSync(gitignorePath, '.warden/\n', 'utf-8');
-    reporter.created('.gitignore with .warden/');
-    filesCreated++;
-  }
-
-  // Install bundled skills into .agents/skills/
-  filesCreated += installBundledSkills(repoRoot, options.force, reporter);
-
-  // Symlink .claude/skills -> ../.agents/skills if .claude/ directory exists
-  if (ensureClaudeSymlink(repoRoot, options.force, reporter)) {
     filesCreated++;
   }
 
   if (filesCreated === 0) {
-    reporter.blank();
     reporter.tip('All configuration files already exist. Use --force to overwrite.');
     return 0;
   }
 
   // Print next steps
-  reporter.blank();
   reporter.bold('Next steps:');
   reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
   reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
