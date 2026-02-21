@@ -355,6 +355,13 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
         const parsed = JSON.parse(line);
         if (parsed.type === 'summary') {
           summary = JsonlSummaryRecordSchema.parse(parsed);
+          // Fall back to summary's run metadata for model/headSha (empty runs have no skill records)
+          if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
+            model = parsed.run.model;
+          }
+          if (!headSha && parsed.run?.headSha && typeof parsed.run.headSha === 'string') {
+            headSha = parsed.run.headSha;
+          }
         } else if (parsed.skill && typeof parsed.skill === 'string') {
           if (!skills.includes(parsed.skill)) {
             skills.push(parsed.skill);
