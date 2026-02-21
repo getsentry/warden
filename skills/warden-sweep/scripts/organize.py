@@ -151,6 +151,7 @@ def label_security_prs(
             result = subprocess.run(
                 ["gh", "pr", "edit", pr_url, "--add-label", "security"],
                 capture_output=True,
+                text=True,
                 timeout=15,
             )
             if result.returncode == 0:

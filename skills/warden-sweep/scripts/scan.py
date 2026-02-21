@@ -62,12 +62,6 @@ def check_dependencies() -> list[str]:
     """Check that required commands are available. Return list of missing."""
     missing = []
     for cmd in ["warden", "gh", "git", "jq"]:
-        result = subprocess.run(
-            ["command", "-v", cmd],
-            shell=True,
-            capture_output=True,
-        )
-        # shell=True with "command -v" doesn't work; use which instead
         try:
             subprocess.run(
                 ["which", cmd],
@@ -152,8 +146,19 @@ def load_ignore_paths() -> list[str]:
 
         # Simple TOML parsing for ignorePaths in [defaults] section
         in_defaults = False
+        collecting_value = False
+        value_lines: list[str] = []
         for line in content.splitlines():
             stripped = line.strip()
+            if collecting_value:
+                value_lines.append(stripped)
+                combined = " ".join(value_lines)
+                if combined.count("[") <= combined.count("]"):
+                    try:
+                        return json.loads(combined)
+                    except json.JSONDecodeError:
+                        return []
+                continue
             if stripped == "[defaults]":
                 in_defaults = True
                 continue
@@ -161,13 +166,14 @@ def load_ignore_paths() -> list[str]:
                 in_defaults = False
                 continue
             if in_defaults and stripped.startswith("ignorePaths"):
-                # Extract the array value
                 _, _, value = stripped.partition("=")
                 value = value.strip()
                 try:
                     return json.loads(value)
                 except json.JSONDecodeError:
-                    return []
+                    # May be a multi-line array, accumulate lines
+                    value_lines = [value]
+                    collecting_value = True
         return []
     except Exception:
         return []
@@ -517,9 +523,11 @@ def main() -> None:
     # Load findings for output
     findings, by_severity = load_findings_compact(sweep_dir)
 
-    # Collect errors for output
+    # Collect errors for output, deduplicating by file (last entry wins)
+    # so that resumed scans don't include stale errors for files that later succeeded
     errors: list[dict[str, Any]] = []
     if os.path.exists(scan_index_path):
+        last_status: dict[str, dict[str, Any]] = {}
         with open(scan_index_path) as f:
             for line in f:
                 line = line.strip()
@@ -527,14 +535,17 @@ def main() -> None:
                     continue
                 try:
                     entry = json.loads(line)
-                    if entry.get("status") == "error":
-                        errors.append({
-                            "file": entry.get("file", ""),
-                            "error": entry.get("error", "unknown"),
-                            "exitCode": entry.get("exitCode", -1),
-                        })
+                    file_path_key = entry.get("file", "")
+                    last_status[file_path_key] = entry
                 except json.JSONDecodeError:
                     continue
+        for entry in last_status.values():
+            if entry.get("status") == "error":
+                errors.append({
+                    "file": entry.get("file", ""),
+                    "error": entry.get("error", "unknown"),
+                    "exitCode": entry.get("exitCode", -1),
+                })
 
     # Update manifest
     update_manifest_phase(sweep_dir, "scan", "complete")
