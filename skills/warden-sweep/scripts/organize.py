@@ -274,10 +274,7 @@ def main() -> None:
         file=sys.stderr,
     )
 
-    # Step 2: Copy security finding reports
-    copy_security_findings(sweep_dir, security_findings)
-
-    # Step 3: Label security PRs
+    # Step 2: Label security PRs
     security_prs_labeled = 0
     if security_findings:
         print("Creating security label...", file=sys.stderr)
@@ -285,9 +282,12 @@ def main() -> None:
         print("Labeling security PRs...", file=sys.stderr)
         security_prs_labeled = label_security_prs(sweep_dir, security_findings)
 
-    # Step 4: Update finding reports with PR links
+    # Step 3: Update finding reports with PR links
     print("Updating finding reports with PR links...", file=sys.stderr)
     update_findings_with_pr_links(sweep_dir)
+
+    # Step 4: Copy security finding reports (after PR links are added)
+    copy_security_findings(sweep_dir, security_findings)
 
     # Step 5: Generate summary and report
     print("Generating summary and report...", file=sys.stderr)

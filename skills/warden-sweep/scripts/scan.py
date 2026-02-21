@@ -145,12 +145,12 @@ def load_ignore_paths() -> list[str]:
         # Simple TOML parsing for ignorePaths in [defaults] section
         in_defaults = False
         collecting_value = False
-        value_lines: list[str] = []
+        value_parts: list[str] = []
         for line in content.splitlines():
             stripped = line.strip()
             if collecting_value:
-                value_lines.append(stripped)
-                combined = " ".join(value_lines)
+                value_parts.append(stripped)
+                combined = "".join(value_parts)
                 if combined.count("[") <= combined.count("]"):
                     try:
                         return json.loads(combined)
@@ -166,11 +166,12 @@ def load_ignore_paths() -> list[str]:
             if in_defaults and stripped.startswith("ignorePaths"):
                 _, _, value = stripped.partition("=")
                 value = value.strip()
+                if not value:
+                    continue
                 try:
                     return json.loads(value)
                 except json.JSONDecodeError:
-                    # May be a multi-line array, accumulate lines
-                    value_lines = [value]
+                    value_parts = [value]
                     collecting_value = True
         return []
     except Exception:
@@ -348,7 +349,7 @@ def run_extract_findings(sweep_dir: str, script_dir: str) -> None:
     output = os.path.join(sweep_dir, "data", "all-findings.jsonl")
 
     try:
-        subprocess.run(
+        result = subprocess.run(
             [
                 sys.executable, extract_script,
                 logs_dir,
@@ -359,6 +360,11 @@ def run_extract_findings(sweep_dir: str, script_dir: str) -> None:
             text=True,
             timeout=120,
         )
+        if result.returncode != 0:
+            print(
+                f"Warning: extract_findings.py failed: {result.stderr}",
+                file=sys.stderr,
+            )
     except Exception as e:
         print(f"Warning: extract_findings.py failed: {e}", file=sys.stderr)
 
