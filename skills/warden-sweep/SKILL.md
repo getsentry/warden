@@ -13,9 +13,34 @@ Full-repository code sweep: scan every file, verify findings with deep tracing, 
 
 ## Bundled Scripts
 
+### `scripts/scan.py`
+
+Runs setup and scan in one call: generates run ID, creates sweep dir, checks deps, creates `warden` label, enumerates files, runs warden per file, extracts findings.
+
+```bash
+uv run ${CLAUDE_SKILL_ROOT}/scripts/scan.py [file ...]
+  --sweep-dir DIR     # Resume into existing sweep dir
+```
+
+### `scripts/index_prs.py`
+
+Fetches open warden-labeled PRs, builds file-to-PR dedup index, caches diffs for overlapping PRs.
+
+```bash
+uv run ${CLAUDE_SKILL_ROOT}/scripts/index_prs.py <sweep-dir>
+```
+
+### `scripts/organize.py`
+
+Tags security findings, labels security PRs, updates finding reports with PR links, generates summary report, finalizes manifest.
+
+```bash
+uv run ${CLAUDE_SKILL_ROOT}/scripts/organize.py <sweep-dir>
+```
+
 ### `scripts/extract_findings.py`
 
-Parses warden JSONL log files and extracts normalized findings.
+Parses warden JSONL log files and extracts normalized findings. Called automatically by `scan.py`.
 
 ```bash
 uv run ${CLAUDE_SKILL_ROOT}/scripts/extract_findings.py <log-path-or-directory> -o <output.jsonl>
@@ -23,7 +48,7 @@ uv run ${CLAUDE_SKILL_ROOT}/scripts/extract_findings.py <log-path-or-directory> 
 
 ### `scripts/generate_report.py`
 
-Builds `summary.md` and `report.json` from sweep data.
+Builds `summary.md` and `report.json` from sweep data. Called automatically by `organize.py`.
 
 ```bash
 uv run ${CLAUDE_SKILL_ROOT}/scripts/generate_report.py <sweep-dir>
@@ -41,105 +66,44 @@ Returns JSON: `{"reviewers": ["user1", "user2"]}`
 
 ---
 
-## Workflow
+## Phase 1: Scan
 
-### Phase 0: Setup
-
-Generate a run ID and create the output directory:
+**Run** (1 tool call):
 
 ```bash
-RUN_ID="$(date +%s | sha256sum | head -c8)"
-SWEEP_DIR=".warden/sweeps/${RUN_ID}"
-mkdir -p "${SWEEP_DIR}/findings" "${SWEEP_DIR}/security" "${SWEEP_DIR}/data/verify"
+uv run ${CLAUDE_SKILL_ROOT}/scripts/scan.py
 ```
 
-Check dependencies:
+To resume a partial scan:
 
 ```bash
-for cmd in warden gh git jq python3; do
-  command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
-done
+uv run ${CLAUDE_SKILL_ROOT}/scripts/scan.py --sweep-dir .warden/sweeps/<run-id>
 ```
 
-Write initial manifest:
+Parse the JSON stdout. Save `runId` and `sweepDir` for subsequent phases.
 
-```bash
-cat > "${SWEEP_DIR}/data/manifest.json" <<MANIFEST
-{
-  "runId": "${RUN_ID}",
-  "startedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "repo": "$(git remote get-url origin 2>/dev/null || basename $(pwd))",
-  "phases": {
-    "scan": "pending",
-    "verify": "pending",
-    "patch": "pending",
-    "organize": "pending"
-  }
-}
-MANIFEST
+**Report** to user:
+
 ```
+## Scan Complete
+
+Scanned **{filesScanned}** files, **{filesErrored}** errors.
+
+### Findings ({totalFindings} total)
+
+| # | Severity | Skill | File | Title |
+|---|----------|-------|------|-------|
+| 1 | **HIGH** | security-review | `src/db/query.ts:42` | SQL injection in query builder |
+...
+```
+
+Render every finding from the `findings` array. Bold severity for high and above.
+
+**On failure**: If exit code 1, show the error JSON and stop. If exit code 2, show the partial results and note which files errored.
 
 ---
 
-### Phase 1: Scan
-
-Scan every tracked file with warden.
-
-**Step 1: Enumerate files**
-
-```bash
-git ls-files | grep -E '\.(ts|tsx|js|jsx|py|go|rs|java|rb|php|c|cpp|h|hpp|cs|swift|kt|scala|sh|bash|zsh)$' > /tmp/sweep-files.txt
-```
-
-Filter out paths matching `ignorePaths` from `warden.toml` if present.
-
-**Step 2: Scan each file**
-
-For each file in the list, run warden:
-
-```bash
-warden "$file" --json --log --min-confidence off --quiet 2>/dev/null
-```
-
-- `--json` outputs JSONL to stdout
-- `--log` forces non-TTY mode (writes log to `.warden/logs/`)
-- `--min-confidence off` captures all findings; filtering happens in verify
-- `--quiet` suppresses progress output
-
-Capture the JSONL stdout and the log path from stderr/filesystem.
-
-**Step 3: Track progress**
-
-After each file, append to `data/scan-index.jsonl`:
-
-```json
-{"file": "src/foo.ts", "logPath": ".warden/logs/...", "skills": ["notseer"], "findingCount": 3, "status": "complete", "exitCode": 0}
-```
-
-On error:
-```json
-{"file": "src/bar.ts", "status": "error", "error": "timeout", "exitCode": 1}
-```
-
-**Step 4: Extract findings**
-
-After scanning completes, run:
-
-```bash
-uv run ${CLAUDE_SKILL_ROOT}/scripts/extract_findings.py .warden/logs/ \
-  --scan-index "${SWEEP_DIR}/data/scan-index.jsonl" \
-  -o "${SWEEP_DIR}/data/all-findings.jsonl"
-```
-
-This reads each warden JSONL log referenced in scan-index, extracts individual findings, assigns stable IDs (`<skill>-<sha8(title+path+line)>`), and writes one finding per line.
-
-**Incrementality**: On resume, read `data/scan-index.jsonl` to get completed files. Skip files already indexed with `status: "complete"`.
-
-Update manifest: set `phases.scan` to `"complete"`.
-
----
-
-### Phase 2: Verify
+## Phase 2: Verify
 
 Deep-trace each finding using Task subagents to qualify or disqualify.
 
@@ -209,15 +173,51 @@ ${FIX_DIFF}
 
 Update manifest: set `phases.verify` to `"complete"`.
 
+**Report** to user after all verifications:
+
+```
+## Verification Complete
+
+**{verified}** verified, **{rejected}** rejected.
+
+### Verified Findings
+
+| # | Severity | Confidence | File | Title | Reasoning |
+|---|----------|------------|------|-------|-----------|
+| 1 | **HIGH** | high | `src/db/query.ts:42` | SQL injection in query builder | User input flows directly into... |
+...
+
+### Rejected ({rejected_count})
+
+- `{findingId}` {file}: {reasoning}
+...
+```
+
 ---
 
-### Phase 3: Patch
+## Phase 3: Patch
 
 For each verified finding, create a worktree, fix the code, and open a draft PR.
+
+**Step 0: Index existing PRs** (1 tool call):
+
+```bash
+uv run ${CLAUDE_SKILL_ROOT}/scripts/index_prs.py ${SWEEP_DIR}
+```
+
+Parse the JSON stdout. Use `fileIndex` for dedup checks.
 
 **For each finding in `data/verified.jsonl`:**
 
 Check if finding ID already exists in `data/patches.jsonl` (incrementality). If it does, skip.
+
+**Dedup check**: Use the file index from `index_prs.py` output to determine if an existing open PR already addresses the same issue.
+
+1. **File match**: Look up the finding's file path in the `fileIndex`. If no PR touches that file, no conflict; proceed to Step 1.
+2. **Chunk overlap**: If a PR does touch the same file, read its cached diff from `data/pr-diffs/<number>.diff` and check whether the PR's changed hunks overlap with the finding's line range (startLine-endLine). Overlapping or adjacent hunks (within ~10 lines) indicate the same code region.
+3. **Same concern**: If the hunks overlap, compare the PR title and the finding title/description. Are they fixing the same kind of defect? A PR fixing an off-by-one error and a finding about a null check in the same function are different issues; both should proceed.
+
+Skip the finding only when there is both chunk overlap AND the PR addresses the same concern. Record it in `data/patches.jsonl` with `"status": "existing"` and `"prUrl"` pointing to the matching PR, then continue to the next finding.
 
 **Step 1: Create worktree**
 
@@ -277,12 +277,17 @@ uv run ${CLAUDE_SKILL_ROOT}/scripts/find_reviewers.py "${FILE_PATH}"
 ```bash
 cd "${WORKTREE}"
 git push -u origin "${BRANCH}"
+```
 
+Create the PR with a 1-2 sentence "What" summary based on the finding and fix, followed by the finding description and verification reasoning:
+
+```bash
 REVIEWERS=""
 # If find_reviewers.py returned reviewers, build the flags
 # e.g., REVIEWERS="--reviewer user1 --reviewer user2"
 
 gh pr create --draft \
+  --label "warden" \
   --title "fix: ${TITLE}" \
   --body "$(cat <<'EOF'
 ${FIX_WHAT_DESCRIPTION}
@@ -306,7 +311,7 @@ Save the PR URL.
 
 Append to `data/patches.jsonl`:
 ```json
-{"findingId": "...", "prUrl": "https://...", "branch": "...", "reviewers": ["user1", "user2"], "filesChanged": ["..."], "status": "created"}
+{"findingId": "...", "prUrl": "https://...", "branch": "...", "reviewers": ["user1", "user2"], "filesChanged": ["..."], "status": "created|existing|error"}
 ```
 
 Remove the worktree:
@@ -319,96 +324,60 @@ git worktree remove "${WORKTREE}" --force
 
 Update manifest: set `phases.patch` to `"complete"`.
 
----
+**Report** to user after all patches:
 
-### Phase 4: Organize
-
-Tag security findings, generate reports, and finalize the sweep.
-
-**Step 1: Identify security findings**
-
-Security-related skills (match by skill name):
-- `security-review`
-- `owasp-review`
-- `security-audit`
-- Any skill name containing `security`
-
-Read `data/verified.jsonl`. For each finding whose `skill` matches a security skill, write to `security/index.jsonl`:
-
-```json
-{"findingId": "...", "skill": "security-review", "severity": "high", "file": "...", "title": "..."}
 ```
+## PRs Created
 
-**Step 2: Copy security finding reports**
+**{created}** created, **{skipped}** skipped (existing), **{failed}** failed.
 
-For each entry in `security/index.jsonl`, copy `findings/<id>.md` to `security/<id>.md`.
-
-**Step 3: Label security PRs**
-
-For each security finding that has a PR in `data/patches.jsonl`:
-
-```bash
-gh pr edit "${PR_URL}" --add-label "security"
+| # | Finding | PR | Status |
+|---|---------|-----|--------|
+| 1 | `security-review-a1b2c3d4` SQL injection in query builder | #142 | created |
+| 2 | `code-review-e5f6g7h8` Null pointer in handler | - | existing (#138) |
+...
 ```
-
-If the label doesn't exist, create it first:
-```bash
-gh label create security --color D93F0B --description "Security-related changes" 2>/dev/null || true
-```
-
-**Step 4: Update finding reports with PR links**
-
-For each entry in `data/patches.jsonl` with status `"created"`, append to the corresponding `findings/<id>.md`:
-
-```markdown
-
-## Pull Request
-**PR**: ${PR_URL}
-**Branch**: ${BRANCH}
-**Reviewers**: ${REVIEWERS}
-```
-
-**Step 5: Generate summary and report**
-
-```bash
-uv run ${CLAUDE_SKILL_ROOT}/scripts/generate_report.py "${SWEEP_DIR}"
-```
-
-This produces:
-- `summary.md` in the sweep directory root
-- `data/report.json` with machine-readable results
-
-Update manifest: set `phases.organize` to `"complete"` and add `completedAt` timestamp.
 
 ---
 
-## Running the Sweep
+## Phase 4: Organize
 
-Execute each phase in order. The skill is designed for sequential execution with pause/resume support.
-
-```bash
-# Full sweep
-# Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4
-
-# Or resume from where you left off (same RUN_ID)
-# Check manifest.json to see which phases are complete
-```
-
-After completion, browse results:
+**Run** (1 tool call):
 
 ```bash
-# Quick overview
-cat .warden/sweeps/${RUN_ID}/summary.md
-
-# All verified findings
-ls .warden/sweeps/${RUN_ID}/findings/
-
-# Security-specific
-ls .warden/sweeps/${RUN_ID}/security/
-
-# Machine-readable
-cat .warden/sweeps/${RUN_ID}/data/report.json
+uv run ${CLAUDE_SKILL_ROOT}/scripts/organize.py ${SWEEP_DIR}
 ```
+
+Parse the JSON stdout.
+
+**Report** to user:
+
+```
+## Sweep Complete
+
+| Metric | Count |
+|--------|-------|
+| Files scanned | {filesScanned} |
+| Findings verified | {verified} |
+| PRs created | {prsCreated} |
+| Security findings | {securityFindings} |
+
+Full report: `{summaryPath}`
+```
+
+**On failure**: Show the error and note which steps completed.
+
+---
+
+## Resuming a Sweep
+
+Each phase is incremental. To resume from where you left off:
+
+1. Check `data/manifest.json` to see which phases are complete
+2. For scan: pass `--sweep-dir` to `scan.py`
+3. For verify: existing `data/verify/<id>.json` files are skipped
+4. For patch: existing entries in `data/patches.jsonl` are skipped
+5. For organize: safe to re-run (idempotent)
 
 ## Output Directory Structure
 
@@ -427,7 +396,12 @@ cat .warden/sweeps/${RUN_ID}/data/report.json
     verified.jsonl                  # Findings that passed verification
     rejected.jsonl                  # Findings that failed verification
     patches.jsonl                   # Finding -> PR URL -> reviewers
+    existing-prs.json               # Cached open warden PRs
     report.json                     # Machine-readable summary
     verify/                         # Individual verification results
       <finding-id>.json
+    logs/                           # Warden JSONL logs per file
+      <hash>.jsonl
+    pr-diffs/                       # Cached PR diffs for dedup
+      <number>.diff
 ```

@@ -132,7 +132,7 @@ def collect_log_paths(source: str, scan_index: str | None = None) -> list[str]:
                 log_path = entry.get("logPath", "")
                 if log_path and log_path not in seen:
                     seen.add(log_path)
-                    if os.path.exists(log_path):
+                    if os.path.isfile(log_path):
                         paths.append(log_path)
                     else:
                         missing += 1
