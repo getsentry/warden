@@ -292,6 +292,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   const existing = checkExistingFiles(repoRoot);
 
   let filesCreated = 0;
+  let skillsSkipped = false;
 
   // --- CONFIG section ---
   const wardenTomlPath = join(repoRoot, 'warden.toml');
@@ -350,9 +351,11 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
       renderCreated(reporter);
       filesCreated += count;
     } else {
+      skillsSkipped = true;
       renderSkipped(reporter, 'declined');
     }
   } else {
+    skillsSkipped = true;
     renderSkipped(reporter, 'non-interactive');
   }
   reporter.blank();
@@ -380,8 +383,12 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     filesCreated++;
   }
 
-  if (filesCreated === 0) {
+  if (filesCreated === 0 && !skillsSkipped) {
     reporter.tip('All configuration files already exist. Use --force to overwrite.');
+    return 0;
+  }
+
+  if (filesCreated === 0) {
     return 0;
   }
 
