@@ -585,9 +585,6 @@ def main() -> None:
                     "exitCode": entry.get("exitCode", -1),
                 })
 
-    # Update manifest
-    update_manifest_phase(sweep_dir, "scan", "complete")
-
     # Output JSON summary
     output = {
         "runId": run_id,
@@ -603,11 +600,15 @@ def main() -> None:
 
     print(json.dumps(output, indent=2))
 
-    # Exit code: 2 if partial errors, 0 if clean
-    if errored > 0 and errored < total:
-        sys.exit(2)
-    elif errored == total:
+    # Only mark scan complete if not all files errored
+    if errored == total and total > 0:
+        update_manifest_phase(sweep_dir, "scan", "error")
         sys.exit(1)
+
+    update_manifest_phase(sweep_dir, "scan", "complete")
+
+    if errored > 0:
+        sys.exit(2)
 
 
 if __name__ == "__main__":
