@@ -25,6 +25,7 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -54,8 +55,7 @@ def run_cmd(
 
 def generate_run_id() -> str:
     """Generate a short random run ID."""
-    now = datetime.now(timezone.utc).isoformat()
-    return hashlib.sha256(now.encode()).hexdigest()[:8]
+    return secrets.token_hex(4)
 
 
 def check_dependencies() -> list[str]:
@@ -131,6 +131,19 @@ def write_manifest(sweep_dir: str, run_id: str) -> None:
         f.write("\n")
 
 
+def _toml_array_to_json(value: str) -> str:
+    """Convert a TOML array string to JSON-compatible format.
+
+    Handles TOML single-quoted strings and trailing commas.
+    """
+    import re
+    # Replace single-quoted strings with double-quoted (TOML literal strings)
+    value = re.sub(r"'([^']*)'", r'"\1"', value)
+    # Strip trailing comma before closing bracket
+    value = re.sub(r",\s*]", "]", value)
+    return value
+
+
 def load_ignore_paths() -> list[str]:
     """Load ignorePaths from warden.toml defaults if present."""
     try:
@@ -156,9 +169,7 @@ def load_ignore_paths() -> list[str]:
                 combined = "".join(value_parts)
                 if combined.count("[") <= combined.count("]"):
                     try:
-                        # Strip trailing comma before final bracket (TOML allows it, JSON doesn't)
-                        cleaned = combined.rstrip("]").rstrip(",") + "]"
-                        return json.loads(cleaned)
+                        return json.loads(_toml_array_to_json(combined))
                     except json.JSONDecodeError:
                         return []
                 continue
@@ -174,7 +185,7 @@ def load_ignore_paths() -> list[str]:
                 if not value:
                     continue
                 try:
-                    return json.loads(value)
+                    return json.loads(_toml_array_to_json(value))
                 except json.JSONDecodeError:
                     value_parts = [value]
                     collecting_value = True
