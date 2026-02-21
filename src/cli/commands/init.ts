@@ -331,6 +331,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     `Bundled skills for AI agents (${skillNames.join(', ')})`,
   );
   if (allSkillsInstalled(repoRoot) && !options.force) {
+    ensureClaudeSymlink(repoRoot, false, reporter);
     renderSkipped(reporter, 'already installed');
   } else if (options.force) {
     const count = installBundledSkills(repoRoot, true, reporter);
@@ -343,7 +344,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     process.stderr.write(key === '\r' || key === '\n' ? 'y' : key);
     process.stderr.write('\n');
 
-    if (key !== 'n') {
+    if (key.toLowerCase() !== 'n') {
       const count = installBundledSkills(repoRoot, false, reporter);
       ensureClaudeSymlink(repoRoot, false, reporter);
       renderCreated(reporter);
