@@ -214,7 +214,7 @@ describe('init command', () => {
       expect(existsSync(join(tempDir, '.claude', 'skills'))).toBe(false);
     });
 
-    it('skips symlink if .claude/skills already exists without --force', async () => {
+    it('replaces existing .claude/skills directory with symlink using --force', async () => {
       mkdirSync(join(tempDir, '.claude', 'skills'), { recursive: true });
 
       const reporter = createMockReporter();
