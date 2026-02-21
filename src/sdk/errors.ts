@@ -50,8 +50,12 @@ export function isSubprocessError(error: unknown): boolean {
   // Check error.code property (Node.js ErrnoException) first
   const errorCode = (error as NodeJS.ErrnoException).code;
   if (errorCode && IPC_ERROR_CODES.includes(errorCode)) return true;
-  // Fallback: check message for wrapped errors with stderr appended
-  return IPC_ERROR_CODES.some((code) => error.message.includes(code));
+  // Fallback: check the original error message only, not appended stderr content.
+  // executeQuery appends "\nClaude Code stderr: ..." which could contain IPC codes
+  // from debug output, causing false positives.
+  const stderrIdx = error.message.indexOf('\nClaude Code stderr:');
+  const message = stderrIdx >= 0 ? error.message.slice(0, stderrIdx) : error.message;
+  return IPC_ERROR_CODES.some((code) => message.includes(code));
 }
 
 export class WardenAuthenticationError extends Error {

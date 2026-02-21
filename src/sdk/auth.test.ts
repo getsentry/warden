@@ -24,14 +24,18 @@ describe('verifyAuth', () => {
 
   it('throws WardenAuthenticationError when claude binary is missing', () => {
     mockExec.mockImplementation(() => {
-      throw new Error('spawn claude ENOENT');
+      const err = new Error('spawn claude ENOENT') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
+      throw err;
     });
     expect(() => verifyAuth({ apiKey: undefined })).toThrow(WardenAuthenticationError);
   });
 
-  it('includes actionable guidance in error message', () => {
+  it('includes actionable guidance in error message for missing binary', () => {
     mockExec.mockImplementation(() => {
-      throw new Error('spawn claude ENOENT');
+      const err = new Error('spawn claude ENOENT') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
+      throw err;
     });
     try {
       verifyAuth({ apiKey: undefined });
@@ -40,6 +44,22 @@ describe('verifyAuth', () => {
       expect(error).toBeInstanceOf(WardenAuthenticationError);
       expect((error as Error).message).toContain('Claude Code CLI not found');
       expect((error as Error).message).toContain('WARDEN_ANTHROPIC_API_KEY');
+    }
+  });
+
+  it('reports distinct error when binary exists but fails to execute', () => {
+    mockExec.mockImplementation(() => {
+      const err = new Error('spawn claude EACCES') as NodeJS.ErrnoException;
+      err.code = 'EACCES';
+      throw err;
+    });
+    try {
+      verifyAuth({ apiKey: undefined });
+      expect.fail('should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(WardenAuthenticationError);
+      expect((error as Error).message).toContain('failed to execute');
+      expect((error as Error).message).toContain('EACCES');
     }
   });
 });

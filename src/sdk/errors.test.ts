@@ -45,6 +45,18 @@ describe('isSubprocessError', () => {
     expect(isSubprocessError(42)).toBe(false);
   });
 
+  it('does not false-positive on IPC codes in appended stderr', () => {
+    // executeQuery appends stderr to error messages — the message check should
+    // only look at the original error, not the stderr content
+    expect(
+      isSubprocessError(
+        new Error(
+          'some unrelated error\nClaude Code stderr: retry after ECONNRESET from upstream'
+        )
+      )
+    ).toBe(false);
+  });
+
   it('returns false for unrelated errors', () => {
     expect(isSubprocessError(new Error('timeout'))).toBe(false);
     expect(isSubprocessError(new Error('rate limit exceeded'))).toBe(false);

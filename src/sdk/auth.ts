@@ -19,10 +19,17 @@ export function verifyAuth({ apiKey }: { apiKey?: string }): void {
 
   try {
     execFileNonInteractive('claude', ['--version'], { timeout: 5000 });
-  } catch {
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      throw new WardenAuthenticationError(
+        'Claude Code CLI not found on PATH.\n' +
+        'Either install Claude Code (https://claude.ai/install.sh) or set an API key.'
+      );
+    }
     throw new WardenAuthenticationError(
-      'Claude Code CLI not found on PATH.\n' +
-      'Either install Claude Code (https://claude.ai/install.sh) or set an API key.'
+      `Claude Code CLI found but failed to execute (${code ?? 'unknown'}).\n` +
+      'Check that the claude binary has correct permissions and can run in this environment.'
     );
   }
 }
