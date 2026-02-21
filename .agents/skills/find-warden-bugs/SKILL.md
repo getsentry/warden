@@ -1,6 +1,6 @@
 ---
 name: find-warden-bugs
-description: Warden-specific bug detection from historical patterns. Targets the architectural seams where bugs have repeatedly occurred: SDK IPC, dual report paths, config threading, concurrent execution, and output rendering.
+description: "Warden-specific bug detection from historical patterns. Targets the architectural seams where bugs have repeatedly occurred: SDK IPC, dual report paths, config threading, concurrent execution, and output rendering."
 allowed-tools: Read Grep Glob
 ---
 
@@ -46,7 +46,7 @@ Claude SDK responses have a specific shape that has bitten Warden repeatedly. Co
 - Accessing `response.content[0]` without checking array length or block type
 - Accessing `msg.usage.input_tokens` without null check on usage
 - Type predicates like `isTextBlock()` that silently filter unknown content types instead of flagging them
-- Assuming `result.result` is always a string when `subtype === 'success'`
+- Accessing a field that remains optional (`T | undefined`) after discriminated union narrowing, assuming the subtype guarantees it
 - Accessing `cache_read_input_tokens` or `cache_creation_input_tokens` without handling `null` (API returns `number | null`)
 - Parsing `SDKResultMessage` fields without checking `is_error` or `subtype`
 - Catching SDK errors and losing the original error type (e.g., catching `Error` when `APIError` subtypes matter for retry logic)
@@ -107,6 +107,7 @@ Config flows through a 3-level merge chain: schema defaults → `resolveSkillCon
 - Zod `.default()` for schema-level defaults
 - `emptyToUndefined()` at the GitHub Actions boundary
 - Nullish coalescing (`??`) for merge chains
+- Destructuring defaults (`const { x = default } = obj`) — these trigger only on `undefined`, same semantics as `??`
 
 **Not a bug:**
 - Zod schema defaults applying when field is omitted from TOML (that is correct behavior)
@@ -189,6 +190,7 @@ Warden scopes analysis to changed hunks in a diff. Findings must fall within hun
 **Not a bug:**
 - Findings spanning multiple lines that start within the hunk but extend beyond it
 - Context files from outside the diff (intentional for cross-file analysis)
+- Path separator concerns in code that only executes on a known platform (e.g., CI runners, containers, server-side Node.js)
 
 ---
 
@@ -203,16 +205,17 @@ Warden has multiple early-exit conditions: no files to analyze, auth failure, al
 - `process.exit()` inside an OpenTelemetry span callback (prevents span flush/export)
 - Auth error thrown before log file cleanup
 - Early return from skill discovery skipping the "no skills found" user message
-- `setFailed()` in GitHub Action code not followed by `return` (execution continues)
+- Functions that signal failure but return normally (not typed `never`) used without `return` afterward
 - Error paths that skip calling `onSkillComplete` or `onSkillError` callbacks
 - `finally` blocks that assume setup completed (accessing uninitialized variables)
 
 **Safe patterns:**
 - Structured try/finally for cleanup operations
 - Exit code computed at end of main function, single `process.exit()` call
-- `setFailed()` as the last statement in a catch block or followed by `return`
+- Failure-signaling calls as the last statement in a catch block or followed by `return`
 
 **Not a bug:**
+- Calls to functions typed as `never` without `return` afterward (the type system guarantees they throw; explicit `return` is dead code)
 - Early exit when there are genuinely no files to process (as long as output obligations are met)
 - Skipping cleanup when the process is about to exit anyway (OS reclaims resources)
 
