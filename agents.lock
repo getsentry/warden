@@ -50,6 +50,13 @@ resolved_path = ".agents/skills/iterate-pr"
 commit = "187c0022b3b676f72227a04f1cfc8921a58a5020"
 integrity = "sha256-55fOUUxjX6vntLGA11BPgVyKGtqFvb7lu9Q+hOUUBGo="
 
+[skills.react-best-practices]
+source = "vercel-labs/agent-skills"
+resolved_url = "https://github.com/vercel-labs/agent-skills.git"
+resolved_path = "skills/react-best-practices"
+commit = "e23951b8cad2f4b1e7e176c5731127c1263fe86f"
+integrity = "sha256-4TWtylD35iYEPY5QwFiuF7Zcd1TPYqehTyUT8CBdaNw="
+
 [skills.skill-creator]
 source = "getsentry/skills"
 resolved_url = "https://github.com/getsentry/skills.git"

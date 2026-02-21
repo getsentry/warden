@@ -37,3 +37,7 @@ source = "getsentry/skills"
 [[skills]]
 name = "code-simplifier"
 source = "getsentry/skills"
+
+[[skills]]
+name = "react-best-practices"
+source = "vercel-labs/agent-skills"
