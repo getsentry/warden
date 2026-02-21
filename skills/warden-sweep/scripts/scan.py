@@ -149,6 +149,9 @@ def load_ignore_paths() -> list[str]:
         for line in content.splitlines():
             stripped = line.strip()
             if collecting_value:
+                # Skip TOML comment lines inside multiline arrays
+                if stripped.startswith("#"):
+                    continue
                 value_parts.append(stripped)
                 combined = "".join(value_parts)
                 if combined.count("[") <= combined.count("]"):
@@ -206,10 +209,20 @@ def should_ignore(path: str, ignore_patterns: list[str]) -> bool:
                     if fnmatch("/".join(parts[i:]), rest):
                         return True
             elif glob_parts[-1].startswith("*"):
-                # e.g., dist/** matches dist/anything
+                # e.g., dist/** matches dist/anything, src/**/*.py matches src/x/y.py
                 prefix = pattern.split("**")[0].rstrip("/")
                 if path.startswith(prefix + "/") or path == prefix:
-                    return True
+                    suffix = pattern.split("**")[-1]
+                    if not suffix or suffix == "/":
+                        # Pure prefix pattern like dist/** - any subpath matches
+                        return True
+                    # Has suffix like **/*.py - check with fnmatch on the remaining path
+                    remaining = path[len(prefix) :].lstrip("/")
+                    suffix_pattern = suffix.lstrip("/")
+                    if fnmatch(remaining, suffix_pattern) or fnmatch(
+                        remaining.split("/")[-1], suffix_pattern
+                    ):
+                        return True
     return False
 
 
