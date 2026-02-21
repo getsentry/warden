@@ -99,9 +99,9 @@ Use `/dex` to break down complex work, track progress across sessions, and coord
 ### Code Quality
 - `/warden` — Run Warden analysis before committing. See `.agents/skills/warden/SKILL.md`
 - `/warden-sweep` — Full-repo code sweep: scan, verify, patch, draft PRs. See `.agents/skills/warden-sweep/SKILL.md`
-- `/notseer` — High-precision bug detection. See `.agents/skills/notseer/SKILL.md`
 - `/code-simplifier` — Simplify and refine code
 - `/architecture-review` — Staff-level codebase health review. See `.agents/skills/architecture-review/SKILL.md`
+- `/find-warden-bugs` — Warden-specific bug detection from historical patterns. See `.agents/skills/find-warden-bugs/SKILL.md`
 
 ### Authoring
 - `/testing-guidelines` — Required when writing tests. See `.agents/skills/testing-guidelines/SKILL.md`

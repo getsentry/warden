@@ -9,7 +9,7 @@ reportOn = "medium"
 ignorePaths = ["dist/**"]
 
 [[skills]]
-name = "notseer"
+name = "find-warden-bugs"
 paths = ["src/**/*.ts"]
 ignorePaths = ["src/**/*.test.ts"]
 
