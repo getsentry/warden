@@ -165,14 +165,33 @@ def label_security_prs(
     return labeled
 
 
+def _has_sweep_complete_comment(issue_url: str) -> bool:
+    """Check if the tracking issue already has a 'Sweep Complete' comment."""
+    try:
+        result = subprocess.run(
+            ["gh", "issue", "view", issue_url, "--json", "comments", "--jq",
+             '.comments[].body | select(startswith("## Sweep Complete"))'],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return result.returncode == 0 and result.stdout.strip() != ""
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
 def update_tracking_issue(sweep_dir: str) -> None:
-    """Post a comment on the tracking issue with final PR results."""
+    """Post a comment on the tracking issue with final PR results. Idempotent."""
     manifest = read_json(os.path.join(sweep_dir, "data", "manifest.json"))
     if not manifest:
         return
 
     issue_url = manifest.get("issueUrl")
     if not issue_url:
+        return
+
+    if _has_sweep_complete_comment(issue_url):
+        print("Tracking issue already has completion comment, skipping.", file=sys.stderr)
         return
 
     patches = read_jsonl(os.path.join(sweep_dir, "data", "patches.jsonl"))
