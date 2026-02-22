@@ -543,7 +543,6 @@ def main() -> None:
         )
 
     # Scan remaining files
-    errored = 0
     scanned = already_done
 
     for i, file_path in enumerate(remaining, start=1):
@@ -556,7 +555,6 @@ def main() -> None:
 
         scanned += 1
         if entry["status"] == "error":
-            errored += 1
             print(
                 f"[{scanned}/{total}] {file_path} (ERROR: {entry.get('error', 'unknown')})",
                 file=sys.stderr,
