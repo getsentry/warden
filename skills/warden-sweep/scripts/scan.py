@@ -60,17 +60,8 @@ def generate_run_id() -> str:
 
 def check_dependencies() -> list[str]:
     """Check that required commands are available. Return list of missing."""
-    missing = []
-    for cmd in ["warden", "gh", "git"]:
-        try:
-            subprocess.run(
-                ["which", cmd],
-                capture_output=True,
-                timeout=5,
-            ).check_returncode()
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            missing.append(cmd)
-    return missing
+    import shutil
+    return [cmd for cmd in ["warden", "gh", "git"] if shutil.which(cmd) is None]
 
 
 def create_sweep_dir(sweep_dir: str) -> None:
@@ -131,12 +122,30 @@ def write_manifest(sweep_dir: str, run_id: str) -> None:
         f.write("\n")
 
 
+def _strip_toml_inline_comment(line: str) -> str:
+    """Strip inline TOML comments (# outside of quoted strings)."""
+    in_quote = False
+    quote_char = ""
+    for i, ch in enumerate(line):
+        if in_quote:
+            if ch == quote_char:
+                in_quote = False
+        elif ch in ('"', "'"):
+            in_quote = True
+            quote_char = ch
+        elif ch == "#":
+            return line[:i].rstrip()
+    return line
+
+
 def _toml_array_to_json(value: str) -> str:
     """Convert a TOML array string to JSON-compatible format.
 
-    Handles TOML single-quoted strings and trailing commas.
+    Handles TOML single-quoted strings, inline comments, and trailing commas.
     """
     import re
+    # Strip inline comments per line
+    value = "\n".join(_strip_toml_inline_comment(line) for line in value.split("\n"))
     # Replace single-quoted strings with double-quoted (TOML literal strings)
     value = re.sub(r"'([^']*)'", r'"\1"', value)
     # Strip trailing comma before closing bracket
