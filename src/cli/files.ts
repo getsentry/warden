@@ -96,7 +96,7 @@ async function loadGitignoreRules(gitRoot: string, cwd: string): Promise<Ignore>
     cwd: gitRoot,
     absolute: true,
     dot: true,
-    ignore: ['**/.git/**'],
+    ignore: ['**/.git/**', '**/node_modules/**'],
   });
 
   // Also check from cwd up to git root for any .gitignore files
