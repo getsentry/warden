@@ -246,7 +246,7 @@ def enumerate_files(
 ) -> list[str]:
     """Enumerate files to scan using git ls-files, filtered by extension."""
     if specific_files:
-        return specific_files
+        return [f for f in specific_files if not should_ignore(f, ignore_patterns)]
 
     result = run_cmd(["git", "ls-files"])
     if result.returncode != 0:

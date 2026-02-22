@@ -347,7 +347,12 @@ async function runSkills(
     const match = config
       ? resolveSkillConfigs(config, options.model).find((t) => t.skill === options.skill)
       : undefined;
-    skillsToRun = [{ skill: options.skill, remote: match?.remote, filters: match?.filters ?? {} }];
+    // Fall back to global defaults when the skill isn't in the config
+    const defaultIgnorePaths = config?.defaults?.ignorePaths;
+    const fallbackFilters = defaultIgnorePaths?.length
+      ? { ignorePaths: defaultIgnorePaths }
+      : {};
+    skillsToRun = [{ skill: options.skill, remote: match?.remote, filters: match?.filters ?? fallbackFilters }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property and filters
     const resolvedTriggers = resolveSkillConfigs(config, options.model);
