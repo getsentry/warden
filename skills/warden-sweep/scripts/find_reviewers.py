@@ -86,6 +86,12 @@ def email_to_github_username(email: str) -> str | None:
     return output if output else None
 
 
+def get_current_github_user() -> str | None:
+    """Get the currently authenticated GitHub username."""
+    output = run_cmd(["gh", "api", "/user", "--jq", ".login"])
+    return output if output else None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Find top git contributors for PR reviewer assignment"
@@ -97,7 +103,11 @@ def main():
     )
     args = parser.parse_args()
 
-    emails = get_top_authors(args.file_path, args.count)
+    current_user = get_current_github_user()
+
+    # Request extra candidates to compensate for self-exclusion
+    fetch_count = args.count + 1 if current_user else args.count
+    emails = get_top_authors(args.file_path, fetch_count)
     if not emails:
         print(json.dumps({"reviewers": [], "note": "No recent authors found"}))
         return
@@ -105,10 +115,10 @@ def main():
     reviewers: list[str] = []
     for email in emails:
         username = email_to_github_username(email)
-        if username:
+        if username and username != current_user:
             reviewers.append(username)
 
-    print(json.dumps({"reviewers": reviewers}))
+    print(json.dumps({"reviewers": reviewers[:args.count]}))
 
 
 if __name__ == "__main__":

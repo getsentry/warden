@@ -23,30 +23,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _utils import read_jsonl  # noqa: E402
-
-
-def read_json(path: str) -> dict[str, Any] | None:
-    """Read a JSON file and return parsed object."""
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return None
-
-
-def severity_badge(severity: str) -> str:
-    """Return a markdown-friendly severity indicator."""
-    badges = {
-        "critical": "**CRITICAL**",
-        "high": "**HIGH**",
-        "medium": "MEDIUM",
-        "low": "LOW",
-        "info": "info",
-    }
-    return badges.get(severity, severity)
+from _utils import read_json, read_jsonl, severity_badge  # noqa: E402
 
 
 def generate_summary_md(
@@ -65,7 +42,14 @@ def generate_summary_md(
     completed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     files_scanned = sum(1 for e in scan_index if e.get("status") == "complete")
-    files_errored = sum(1 for e in scan_index if e.get("status") == "error")
+    files_timed_out = sum(
+        1 for e in scan_index
+        if e.get("status") == "error" and e.get("error") == "timeout"
+    )
+    files_errored = sum(
+        1 for e in scan_index
+        if e.get("status") == "error" and e.get("error") != "timeout"
+    )
 
     prs_created = sum(1 for p in patches if p.get("status") == "created")
     prs_failed = sum(1 for p in patches if p.get("status") == "error")
@@ -88,6 +72,7 @@ def generate_summary_md(
         f"| Metric | Count |",
         f"|--------|-------|",
         f"| Files scanned | {files_scanned} |",
+        f"| Files timed out | {files_timed_out} |",
         f"| Files errored | {files_errored} |",
         f"| Total findings | {len(all_findings)} |",
         f"| Verified | {len(verified)} |",
@@ -176,6 +161,14 @@ def generate_report_json(
     completed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     files_scanned = sum(1 for e in scan_index if e.get("status") == "complete")
+    files_timed_out = sum(
+        1 for e in scan_index
+        if e.get("status") == "error" and e.get("error") == "timeout"
+    )
+    files_errored = sum(
+        1 for e in scan_index
+        if e.get("status") == "error" and e.get("error") != "timeout"
+    )
     prs_created = sum(1 for p in patches if p.get("status") == "created")
     prs_failed = sum(1 for p in patches if p.get("status") == "error")
 
@@ -190,6 +183,8 @@ def generate_report_json(
         "completedAt": completed_at,
         "scan": {
             "filesScanned": files_scanned,
+            "filesTimedOut": files_timed_out,
+            "filesErrored": files_errored,
             "totalFindings": len(all_findings),
         },
         "verify": {

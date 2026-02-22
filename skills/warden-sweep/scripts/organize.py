@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _utils import read_jsonl  # noqa: E402
+from _utils import pr_number_from_url, read_json, read_jsonl, write_json  # noqa: E402
 
 
 SECURITY_SKILL_PATTERNS = [
@@ -52,6 +52,15 @@ def is_security_skill(skill_name: str) -> bool:
     if "security" in name_lower:
         return True
     return name_lower in SECURITY_SKILL_PATTERNS
+
+
+def severity_label(severity: str) -> str:
+    """Format a severity string for inline display in issue comments."""
+    if not severity:
+        return ""
+    if severity in ("critical", "high"):
+        return f" (**{severity.upper()}**)"
+    return f" ({severity.upper()})"
 
 
 def identify_security_findings(
@@ -156,6 +165,96 @@ def label_security_prs(
     return labeled
 
 
+def update_tracking_issue(sweep_dir: str) -> None:
+    """Post a comment on the tracking issue with final PR results."""
+    manifest = read_json(os.path.join(sweep_dir, "data", "manifest.json"))
+    if not manifest:
+        return
+
+    issue_url = manifest.get("issueUrl")
+    if not issue_url:
+        return
+
+    patches = read_jsonl(os.path.join(sweep_dir, "data", "patches.jsonl"))
+    verified = read_jsonl(os.path.join(sweep_dir, "data", "verified.jsonl"))
+    security_index = read_jsonl(os.path.join(sweep_dir, "security", "index.jsonl"))
+
+    # Build lookup from findingId to verified finding
+    verified_lookup: dict[str, dict[str, Any]] = {}
+    for f in verified:
+        fid = f.get("findingId", "")
+        if fid:
+            verified_lookup[fid] = f
+
+    security_ids = {f.get("findingId", "") for f in security_index}
+
+    created = sum(1 for p in patches if p.get("status") == "created")
+    existing = sum(1 for p in patches if p.get("status") == "existing")
+    failed = sum(1 for p in patches if p.get("status") == "error")
+
+    lines = [
+        "## Sweep Complete",
+        "",
+        "| PRs Created | PRs Skipped (existing) | PRs Failed | Security Findings |",
+        "|-------------|------------------------|------------|-------------------|",
+        f"| {created} | {existing} | {failed} | {len(security_index)} |",
+        "",
+    ]
+
+    # PR task list
+    pr_entries = [p for p in patches if p.get("status") == "created" and p.get("prUrl")]
+    if pr_entries:
+        lines.append("### PRs")
+        lines.append("")
+        for p in pr_entries:
+            fid = p.get("findingId", "")
+            pr_number = pr_number_from_url(p.get("prUrl", ""))
+            finding = verified_lookup.get(fid, {})
+            title = finding.get("title", fid)
+            sev = severity_label(finding.get("severity", ""))
+            lines.append(f"- [ ] #{pr_number} - fix: {title}{sev}")
+        lines.append("")
+
+    # Security findings section
+    security_prs = [
+        p for p in patches
+        if p.get("status") == "created"
+        and p.get("findingId", "") in security_ids
+        and p.get("prUrl")
+    ]
+    if security_prs:
+        lines.append("### Security Findings")
+        lines.append("")
+        for p in security_prs:
+            fid = p.get("findingId", "")
+            pr_number = pr_number_from_url(p.get("prUrl", ""))
+            finding = verified_lookup.get(fid, {})
+            title = finding.get("title", fid)
+            sev = severity_label(finding.get("severity", ""))
+            lines.append(f"- #{pr_number} - {title}{sev}")
+        lines.append("")
+
+    body = "\n".join(lines)
+
+    try:
+        result = subprocess.run(
+            ["gh", "issue", "comment", issue_url, "--body", body],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            print(
+                f"Warning: Failed to comment on tracking issue: {result.stderr.strip()}",
+                file=sys.stderr,
+            )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        print(
+            f"Warning: Failed to comment on tracking issue: {e}",
+            file=sys.stderr,
+        )
+
+
 def update_findings_with_pr_links(sweep_dir: str) -> None:
     """Append PR links to findings/*.md for created PRs."""
     patches = read_jsonl(os.path.join(sweep_dir, "data", "patches.jsonl"))
@@ -218,20 +317,16 @@ def run_generate_report(sweep_dir: str, script_dir: str) -> None:
 def update_manifest(sweep_dir: str) -> None:
     """Mark organize phase complete and add completedAt timestamp."""
     manifest_path = os.path.join(sweep_dir, "data", "manifest.json")
-    if not os.path.exists(manifest_path):
+    manifest = read_json(manifest_path)
+    if not manifest:
         return
-
-    with open(manifest_path) as f:
-        manifest = json.load(f)
 
     manifest.setdefault("phases", {})["organize"] = "complete"
     manifest["completedAt"] = datetime.now(timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
 
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=2)
-        f.write("\n")
+    write_json(manifest_path, manifest)
 
 
 def main() -> None:
@@ -279,7 +374,11 @@ def main() -> None:
     print("Generating summary and report...", file=sys.stderr)
     run_generate_report(sweep_dir, script_dir)
 
-    # Step 6: Update manifest
+    # Step 6: Update tracking issue with PR results
+    print("Updating tracking issue...", file=sys.stderr)
+    update_tracking_issue(sweep_dir)
+
+    # Step 7: Update manifest
     update_manifest(sweep_dir)
 
     # Gather stats for output

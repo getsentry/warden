@@ -28,6 +28,8 @@ import os
 import secrets
 import subprocess
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -101,6 +103,7 @@ def write_manifest(sweep_dir: str, run_id: str) -> None:
         "phases": {
             "scan": "pending",
             "verify": "pending",
+            "issue": "pending",
             "patch": "pending",
             "organize": "pending",
         },
@@ -301,7 +304,7 @@ def log_path_for_file(sweep_dir: str, file_path: str) -> str:
 
 
 def scan_file(
-    file_path: str, log_file: str, timeout: int = 300
+    file_path: str, log_file: str, timeout: int = 600
 ) -> dict[str, Any]:
     """Run warden on a single file. Returns scan-index entry."""
     try:
@@ -309,8 +312,6 @@ def scan_file(
             [
                 "warden", file_path,
                 "--json", "--log",
-                "--min-confidence", "off",
-                "--fail-on", "off",
                 "--quiet",
                 "--output", log_file,
             ],
@@ -542,30 +543,41 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    # Scan remaining files
+    # Scan remaining files concurrently
     scanned = already_done
+    index_lock = threading.Lock()
 
-    for i, file_path in enumerate(remaining, start=1):
+    def _scan_and_record(file_path: str) -> dict[str, Any]:
         log_file = log_path_for_file(sweep_dir, file_path)
         entry = scan_file(file_path, log_file)
 
-        # Append to scan-index.jsonl
-        with open(scan_index_path, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        with index_lock:
+            with open(scan_index_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
 
-        scanned += 1
-        if entry["status"] == "error":
-            print(
-                f"[{scanned}/{total}] {file_path} (ERROR: {entry.get('error', 'unknown')})",
-                file=sys.stderr,
-            )
-        else:
-            count = entry.get("findingCount", 0)
-            suffix = f"({count} finding{'s' if count != 1 else ''})" if count > 0 else ""
-            print(
-                f"[{scanned}/{total}] {file_path} {suffix}".rstrip(),
-                file=sys.stderr,
-            )
+        return entry
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {
+            pool.submit(_scan_and_record, fp): fp for fp in remaining
+        }
+        for future in as_completed(futures):
+            entry = future.result()
+            scanned += 1
+            file_path = entry.get("file", futures[future])
+            if entry["status"] == "error":
+                label = "TIMEOUT" if entry.get("error") == "timeout" else "ERROR"
+                print(
+                    f"[{scanned}/{total}] {file_path} ({label}: {entry.get('error', 'unknown')})",
+                    file=sys.stderr,
+                )
+            else:
+                count = entry.get("findingCount", 0)
+                suffix = f"({count} finding{'s' if count != 1 else ''})" if count > 0 else ""
+                print(
+                    f"[{scanned}/{total}] {file_path} {suffix}".rstrip(),
+                    file=sys.stderr,
+                )
 
     # Extract findings
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -578,6 +590,7 @@ def main() -> None:
     # so that resumed scans don't include stale errors for files that later succeeded.
     # Scope to current file list so counts stay consistent with `scanned`.
     files_set = set(files)
+    timeouts: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     if os.path.exists(scan_index_path):
         last_status: dict[str, dict[str, Any]] = {}
@@ -595,36 +608,44 @@ def main() -> None:
                     continue
         for entry in last_status.values():
             if entry.get("status") == "error":
-                errors.append({
+                item = {
                     "file": entry.get("file", ""),
                     "error": entry.get("error", "unknown"),
                     "exitCode": entry.get("exitCode", -1),
-                })
+                }
+                if entry.get("error") == "timeout":
+                    timeouts.append(item)
+                else:
+                    errors.append(item)
+
+    total_failed = len(timeouts) + len(errors)
 
     # Output JSON summary
     output = {
         "runId": run_id,
         "sweepDir": sweep_dir,
-        "filesScanned": scanned - len(errors),
+        "filesScanned": scanned - total_failed,
+        "filesTimedOut": len(timeouts),
         "filesErrored": len(errors),
         "totalFindings": len(findings),
         "bySeverity": by_severity,
         "findingsPath": os.path.join(sweep_dir, "data", "all-findings.jsonl"),
         "findings": findings,
+        "timeouts": timeouts,
         "errors": errors,
     }
 
     print(json.dumps(output, indent=2))
 
     # Fatal only if every file across all runs errored (no successful scans at all)
-    successful = scanned - len(errors)
+    successful = scanned - total_failed
     if successful == 0 and scanned > 0:
         update_manifest_phase(sweep_dir, "scan", "error")
         sys.exit(1)
 
     update_manifest_phase(sweep_dir, "scan", "complete")
 
-    if len(errors) > 0:
+    if total_failed > 0:
         sys.exit(2)
 
 
