@@ -32,25 +32,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _utils import run_cmd  # noqa: E402
+
 
 SUPPORTED_EXTENSIONS = {
     ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java",
     ".rb", ".php", ".c", ".cpp", ".h", ".hpp", ".cs", ".swift",
     ".kt", ".scala", ".sh", ".bash", ".zsh",
 }
-
-
-def run_cmd(
-    args: list[str], timeout: int = 30, cwd: str | None = None
-) -> subprocess.CompletedProcess[str]:
-    """Run a command and return the result."""
-    return subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        cwd=cwd,
-    )
 
 
 def generate_run_id() -> str:

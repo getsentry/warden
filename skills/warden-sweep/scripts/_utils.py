@@ -3,7 +3,21 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from typing import Any
+
+
+def run_cmd(
+    args: list[str], timeout: int = 30, cwd: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run a command and return the result."""
+    return subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        cwd=cwd,
+    )
 
 
 def read_jsonl(path: str) -> list[dict[str, Any]]:

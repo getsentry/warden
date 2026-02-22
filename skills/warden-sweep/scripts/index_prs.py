@@ -28,20 +28,7 @@ import sys
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _utils import read_jsonl  # noqa: E402
-
-
-def run_cmd(
-    args: list[str], timeout: int = 30, cwd: str | None = None
-) -> subprocess.CompletedProcess[str]:
-    """Run a command and return the result."""
-    return subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        cwd=cwd,
-    )
+from _utils import read_jsonl, run_cmd  # noqa: E402
 
 
 def fetch_warden_prs(sweep_dir: str) -> list[dict[str, Any]]:
