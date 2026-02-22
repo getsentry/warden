@@ -575,7 +575,9 @@ def main() -> None:
     findings, by_severity = load_findings_compact(sweep_dir)
 
     # Collect errors for output, deduplicating by file (last entry wins)
-    # so that resumed scans don't include stale errors for files that later succeeded
+    # so that resumed scans don't include stale errors for files that later succeeded.
+    # Scope to current file list so counts stay consistent with `scanned`.
+    files_set = set(files)
     errors: list[dict[str, Any]] = []
     if os.path.exists(scan_index_path):
         last_status: dict[str, dict[str, Any]] = {}
@@ -587,7 +589,8 @@ def main() -> None:
                 try:
                     entry = json.loads(line)
                     file_path_key = entry.get("file", "")
-                    last_status[file_path_key] = entry
+                    if file_path_key in files_set:
+                        last_status[file_path_key] = entry
                 except json.JSONDecodeError:
                     continue
         for entry in last_status.values():
