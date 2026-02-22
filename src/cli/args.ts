@@ -396,6 +396,16 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
 
   // Handle setup-app command
   if (positionals.includes('setup-app')) {
+    const port = values.port ? parseInt(values.port as string, 10) : 3000;
+    if (Number.isNaN(port)) {
+      console.error(`Invalid --port value: ${values.port}`);
+      process.exit(1);
+    }
+    const timeout = values.timeout ? parseInt(values.timeout as string, 10) : 300;
+    if (Number.isNaN(timeout)) {
+      console.error(`Invalid --timeout value: ${values.timeout}`);
+      process.exit(1);
+    }
     return {
       command: 'setup-app',
       options: CLIOptionsSchema.parse({
@@ -404,8 +414,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       }),
       setupAppOptions: {
         org: values.org as string | undefined,
-        port: values.port ? parseInt(values.port as string, 10) : 3000,
-        timeout: values.timeout ? parseInt(values.timeout as string, 10) : 300,
+        port,
+        timeout,
         name: values.name as string | undefined,
         open: !values['no-open'],
       },
