@@ -604,8 +604,8 @@ def main() -> None:
     output = {
         "runId": run_id,
         "sweepDir": sweep_dir,
-        "filesScanned": scanned,
-        "filesErrored": errored,
+        "filesScanned": scanned - len(errors),
+        "filesErrored": len(errors),
         "totalFindings": len(findings),
         "bySeverity": by_severity,
         "findingsPath": os.path.join(sweep_dir, "data", "all-findings.jsonl"),
@@ -616,14 +616,14 @@ def main() -> None:
     print(json.dumps(output, indent=2))
 
     # Fatal only if every file across all runs errored (no successful scans at all)
-    successful = scanned - errored  # includes already_done from previous runs
+    successful = scanned - len(errors)
     if successful == 0 and scanned > 0:
         update_manifest_phase(sweep_dir, "scan", "error")
         sys.exit(1)
 
     update_manifest_phase(sweep_dir, "scan", "complete")
 
-    if errored > 0:
+    if len(errors) > 0:
         sys.exit(2)
 
 
