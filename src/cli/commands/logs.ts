@@ -262,17 +262,12 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     model: 'MODEL',
     skills: 'SKILLS',
   };
-  const widths = {
-    runId: Math.max(headers.runId.length, ...rows.map((r) => visualWidth(r.runId))),
-    date: Math.max(headers.date.length, ...rows.map((r) => visualWidth(r.date))),
-    files: Math.max(headers.files.length, ...rows.map((r) => visualWidth(r.files))),
-    findings: Math.max(headers.findings.length, ...rows.map((r) => visualWidth(r.findings))),
-    time: Math.max(headers.time.length, ...rows.map((r) => visualWidth(r.time))),
-    cost: Math.max(headers.cost.length, ...rows.map((r) => visualWidth(r.cost))),
-    sha: Math.max(headers.sha.length, ...rows.map((r) => visualWidth(r.sha))),
-    model: Math.max(headers.model.length, ...rows.map((r) => visualWidth(r.model))),
-    skills: Math.max(headers.skills.length, ...rows.map((r) => visualWidth(r.skills))),
-  };
+  const widths = Object.fromEntries(
+    Object.keys(headers).map((key) => {
+      const col = key as keyof Row;
+      return [col, Math.max(headers[col].length, ...rows.map((r) => visualWidth(r[col])))];
+    }),
+  ) as Record<keyof Row, number>;
 
   // Header row
   const headerLine =
