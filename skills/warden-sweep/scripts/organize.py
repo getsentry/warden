@@ -35,29 +35,15 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _utils import read_jsonl  # noqa: E402
+
 
 SECURITY_SKILL_PATTERNS = [
     "security-review",
     "owasp-review",
     "security-audit",
 ]
-
-
-def read_jsonl(path: str) -> list[dict[str, Any]]:
-    """Read a JSONL file and return list of parsed objects."""
-    entries: list[dict[str, Any]] = []
-    if not os.path.exists(path):
-        return entries
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return entries
 
 
 def is_security_skill(skill_name: str) -> bool:
