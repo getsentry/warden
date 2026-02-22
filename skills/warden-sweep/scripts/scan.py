@@ -624,8 +624,9 @@ def main() -> None:
 
     print(json.dumps(output, indent=2))
 
-    # Only mark scan complete if not all files errored
-    if errored == total and total > 0:
+    # Only mark scan complete if not all attempted files errored
+    attempted = len(remaining)
+    if errored == attempted and attempted > 0:
         update_manifest_phase(sweep_dir, "scan", "error")
         sys.exit(1)
 
