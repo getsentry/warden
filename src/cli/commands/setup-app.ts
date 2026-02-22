@@ -48,29 +48,33 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
     org,
   });
 
-  // Handle server errors (e.g., port already in use)
-  serverHandle.server.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code === 'EADDRINUSE') {
-      reporter.error(`Port ${port} is already in use. Try a different port with --port <number>`);
-    } else {
-      reporter.error(`Server error: ${error.message}`);
-    }
-    process.exit(1);
+  // Handle server errors (e.g., port already in use) by racing a rejection
+  // against the callback promise so the error flows into the catch block below.
+  const serverError = new Promise<never>((_, reject) => {
+    serverHandle.server.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        reject(new Error(`Port ${port} is already in use. Try a different port with --port <number>`));
+      } else {
+        reject(new Error(`Server error: ${error.message}`));
+      }
+    });
   });
 
   try {
     // Open browser to our local server (which will POST to GitHub)
+    let showUrl = !open;
     if (open) {
       reporter.step('Opening browser...');
       try {
         await openBrowser(serverHandle.startUrl);
       } catch {
         reporter.warning('Could not open browser automatically.');
-        reporter.blank();
-        reporter.text('Open this URL in your browser:');
-        reporter.text(chalk.cyan(serverHandle.startUrl));
+        showUrl = true;
       }
-    } else {
+    }
+
+    // Show the URL if the browser was not opened (or failed to open)
+    if (showUrl) {
       reporter.blank();
       reporter.text('Open this URL in your browser:');
       reporter.text(chalk.cyan(serverHandle.startUrl));
@@ -81,8 +85,8 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
     reporter.blank();
     reporter.text(chalk.dim('Waiting for GitHub callback... (Ctrl+C to cancel)'));
 
-    // Wait for callback
-    const { code } = await serverHandle.waitForCallback;
+    // Wait for callback, but also abort if the server errors out
+    const { code } = await Promise.race([serverHandle.waitForCallback, serverError]);
 
     // Exchange code for credentials
     reporter.blank();
