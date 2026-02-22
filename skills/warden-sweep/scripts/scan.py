@@ -141,11 +141,10 @@ def _strip_toml_inline_comment(line: str) -> str:
 def _toml_array_to_json(value: str) -> str:
     """Convert a TOML array string to JSON-compatible format.
 
-    Handles TOML single-quoted strings, inline comments, and trailing commas.
+    Handles TOML single-quoted strings and trailing commas.
+    Inline comments should be stripped before calling this function.
     """
     import re
-    # Strip inline comments per line
-    value = "\n".join(_strip_toml_inline_comment(line) for line in value.split("\n"))
     # Replace single-quoted strings with double-quoted (TOML literal strings)
     value = re.sub(r"'([^']*)'", r'"\1"', value)
     # Strip trailing comma before closing bracket
@@ -174,6 +173,8 @@ def load_ignore_paths() -> list[str]:
                 # Skip TOML comment lines inside multiline arrays
                 if stripped.startswith("#"):
                     continue
+                # Strip inline comments before accumulating
+                stripped = _strip_toml_inline_comment(stripped)
                 value_parts.append(stripped)
                 combined = "".join(value_parts)
                 if combined.count("[") <= combined.count("]"):
@@ -190,7 +191,7 @@ def load_ignore_paths() -> list[str]:
                 continue
             if in_defaults and stripped.startswith("ignorePaths"):
                 _, _, value = stripped.partition("=")
-                value = value.strip()
+                value = _strip_toml_inline_comment(value.strip())
                 if not value:
                     continue
                 try:
