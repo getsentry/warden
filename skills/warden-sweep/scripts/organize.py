@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _utils import pr_number_from_url, read_json, read_jsonl, write_json  # noqa: E402
+from _utils import ensure_github_label, pr_number_from_url, read_json, read_jsonl, write_json  # noqa: E402
 
 
 SECURITY_SKILL_PATTERNS = [
@@ -110,18 +110,7 @@ def copy_security_findings(
 
 def create_security_label() -> None:
     """Create the security label on GitHub (idempotent)."""
-    try:
-        subprocess.run(
-            [
-                "gh", "label", "create", "security",
-                "--color", "D93F0B",
-                "--description", "Security-related changes",
-            ],
-            capture_output=True,
-            timeout=15,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
+    ensure_github_label("security", "D93F0B", "Security-related changes")
 
 
 def label_security_prs(

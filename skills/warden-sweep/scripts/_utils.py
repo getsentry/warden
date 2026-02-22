@@ -70,3 +70,19 @@ def severity_badge(severity: str) -> str:
 def pr_number_from_url(pr_url: str) -> str:
     """Extract the PR or issue number from a GitHub URL's last path segment."""
     return pr_url.rstrip("/").split("/")[-1]
+
+
+def ensure_github_label(name: str, color: str, description: str) -> None:
+    """Create a GitHub label if it doesn't exist (idempotent)."""
+    try:
+        subprocess.run(
+            [
+                "gh", "label", "create", name,
+                "--color", color,
+                "--description", description,
+            ],
+            capture_output=True,
+            timeout=15,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass

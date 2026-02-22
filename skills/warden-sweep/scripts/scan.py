@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _utils import run_cmd  # noqa: E402
+from _utils import ensure_github_label, run_cmd  # noqa: E402
 
 
 SUPPORTED_EXTENSIONS = {
@@ -66,22 +66,6 @@ def create_sweep_dir(sweep_dir: str) -> None:
         "data/pr-diffs",
     ]:
         os.makedirs(os.path.join(sweep_dir, subdir), exist_ok=True)
-
-
-def create_warden_label() -> None:
-    """Create the warden label on GitHub (idempotent)."""
-    try:
-        subprocess.run(
-            [
-                "gh", "label", "create", "warden",
-                "--color", "5319E7",
-                "--description", "Automated fix from Warden Sweep",
-            ],
-            capture_output=True,
-            timeout=15,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
 
 
 def write_manifest(sweep_dir: str, run_id: str) -> None:
@@ -312,6 +296,7 @@ def scan_file(
             [
                 "warden", file_path,
                 "--json", "--log",
+                "--min-confidence", "off",
                 "--fail-on", "off",
                 "--quiet",
                 "--output", log_file,
@@ -512,7 +497,7 @@ def main() -> None:
     if not os.path.exists(manifest_path):
         write_manifest(sweep_dir, run_id)
 
-    create_warden_label()
+    ensure_github_label("warden", "5319E7", "Automated fix from Warden Sweep")
 
     # Enumerate files
     ignore_patterns = load_ignore_paths()

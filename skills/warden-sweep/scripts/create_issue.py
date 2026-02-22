@@ -28,6 +28,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _utils import (  # noqa: E402
+    ensure_github_label,
     pr_number_from_url,
     read_json,
     read_jsonl,
@@ -100,25 +101,9 @@ def build_issue_body(
     return "\n".join(lines) + "\n"
 
 
-def ensure_warden_label() -> None:
-    """Ensure the warden label exists on GitHub (idempotent)."""
-    try:
-        subprocess.run(
-            [
-                "gh", "label", "create", "warden",
-                "--color", "5319E7",
-                "--description", "Automated fix from Warden Sweep",
-            ],
-            capture_output=True,
-            timeout=15,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-
-
 def create_github_issue(title: str, body: str) -> dict[str, Any]:
     """Create a GitHub issue with the warden label. Returns issueUrl and issueNumber."""
-    ensure_warden_label()
+    ensure_github_label("warden", "5319E7", "Automated fix from Warden Sweep")
 
     result = subprocess.run(
         [
