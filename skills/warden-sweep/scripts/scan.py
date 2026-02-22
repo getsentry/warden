@@ -219,6 +219,10 @@ def should_ignore(path: str, ignore_patterns: list[str]) -> bool:
             simple = pattern.replace("**/", "*/")
             if fnmatch(path, simple):
                 return True
+            # Also try zero-directory match (** matches zero directories)
+            collapsed = pattern.replace("**/", "")
+            if fnmatch(path, collapsed):
+                return True
             # Also try matching any subdirectory
             parts = path.split("/")
             glob_parts = pattern.split("/")
