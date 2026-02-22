@@ -6,7 +6,7 @@ failOn = "high"
 # Show annotations for medium+ severity findings
 reportOn = "medium"
 # Exclude build output from all skills
-ignorePaths = ["dist/**"]
+ignorePaths = ["dist/**", "evals/**"]
 
 [[skills]]
 name = "find-warden-bugs"
