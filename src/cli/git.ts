@@ -170,18 +170,36 @@ function mapStatus(status: string): GitFileChange['status'] {
   }
 }
 
+export interface DiffOptions {
+  /** Use --cached to diff only staged changes against HEAD */
+  staged?: boolean;
+}
+
+/**
+ * Build the git diff arguments for a given base/head/staged configuration.
+ */
+function buildDiffArgs(base: string, head: string | undefined, options?: DiffOptions): string[] {
+  if (options?.staged) {
+    return ['diff', '--cached'];
+  }
+  const diffRef = head ? `${base}...${head}` : base;
+  return ['diff', diffRef];
+}
+
 /**
  * Get list of changed files between two refs.
  * If head is undefined, compares against the working tree.
+ * If options.staged is true, compares only staged changes against HEAD.
  */
 export function getChangedFiles(
   base: string,
   head?: string,
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
+  options?: DiffOptions
 ): GitFileChange[] {
   // Get file statuses
-  const diffRef = head ? `${base}...${head}` : base;
-  const nameStatusOutput = git(['diff', '--name-status', diffRef], cwd);
+  const baseArgs = buildDiffArgs(base, head, options);
+  const nameStatusOutput = git([...baseArgs, '--name-status'], cwd);
 
   if (!nameStatusOutput) {
     return [];
@@ -207,7 +225,7 @@ export function getChangedFiles(
   }
 
   // Get numstat for additions/deletions
-  const numstatOutput = git(['diff', '--numstat', diffRef], cwd);
+  const numstatOutput = git([...baseArgs, '--numstat'], cwd);
   if (numstatOutput) {
     for (const line of numstatOutput.split('\n')) {
       if (!line.trim()) continue;
@@ -233,11 +251,12 @@ export function getFilePatch(
   base: string,
   head: string | undefined,
   filename: string,
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
+  options?: DiffOptions
 ): string | undefined {
   try {
-    const diffRef = head ? `${base}...${head}` : base;
-    return git(['diff', diffRef, '--', filename], cwd);
+    const baseArgs = buildDiffArgs(base, head, options);
+    return git([...baseArgs, '--', filename], cwd);
   } catch {
     return undefined;
   }
@@ -276,9 +295,10 @@ function parseCombinedDiff(diffOutput: string): Map<string, string> {
 export function getChangedFilesWithPatches(
   base: string,
   head?: string,
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
+  options?: DiffOptions
 ): GitFileChange[] {
-  const files = getChangedFiles(base, head, cwd);
+  const files = getChangedFiles(base, head, cwd, options);
 
   if (files.length === 0) {
     return files;
@@ -286,8 +306,8 @@ export function getChangedFilesWithPatches(
 
   // Get all patches in a single git diff command
   try {
-    const diffRef = head ? `${base}...${head}` : base;
-    const combinedDiff = git(['diff', diffRef], cwd);
+    const baseArgs = buildDiffArgs(base, head, options);
+    const combinedDiff = git(baseArgs, cwd);
     const patches = parseCombinedDiff(combinedDiff);
 
     for (const file of files) {
@@ -297,7 +317,7 @@ export function getChangedFilesWithPatches(
   } catch {
     // Fall back to per-file patches if combined diff fails
     for (const file of files) {
-      file.patch = getFilePatch(base, head, file.filename, cwd);
+      file.patch = getFilePatch(base, head, file.filename, cwd, options);
       file.chunks = countPatchChunks(file.patch);
     }
   }

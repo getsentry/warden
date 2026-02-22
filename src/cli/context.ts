@@ -34,6 +34,8 @@ export interface LocalContextOptions {
   cwd?: string;
   /** Override auto-detected default branch (from config) */
   defaultBranch?: string;
+  /** Analyze only staged changes (git diff --cached) */
+  staged?: boolean;
 }
 
 /**
@@ -49,12 +51,14 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
   const { owner, name } = getRepoName(cwd);
   const defaultBranch = options.defaultBranch ?? getDefaultBranch(cwd);
 
-  const base = options.base ?? defaultBranch;
+  // When staged, always diff against HEAD (index vs HEAD)
+  const staged = options.staged ?? false;
+  const base = staged ? 'HEAD' : (options.base ?? defaultBranch);
   const head = options.head; // undefined means working tree
   const currentBranch = getCurrentBranch(cwd);
   const headSha = head ? head : getHeadSha(cwd);
 
-  const changedFiles = getChangedFilesWithPatches(base, head, cwd);
+  const changedFiles = getChangedFilesWithPatches(base, head, cwd, { staged });
   const files = changedFiles.map(toFileChange);
 
   // Use actual commit message when analyzing a specific commit
@@ -64,9 +68,12 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
     const commitMsg = getCommitMessage(head, cwd);
     title = commitMsg.subject || `Commit ${head}`;
     body = commitMsg.body || `Analyzing changes in ${head}`;
+  } else if (staged) {
+    title = `Staged changes: ${currentBranch}`;
+    body = `Analyzing staged changes`;
   } else {
     title = `Local changes: ${currentBranch}`;
-    body = `Analyzing local changes from ${base} to working tree`;
+    body = `Analyzing uncommitted changes from HEAD`;
   }
 
   return {

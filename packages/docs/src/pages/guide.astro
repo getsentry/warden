@@ -97,7 +97,21 @@ export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
     />
   </Terminal>
 
-  <p>Warden analyzes staged and unstaged changes, running any skills that match via your configured triggers.</p>
+  <p>Warden analyzes all uncommitted changes (staged and unstaged) against HEAD, running any skills that match via your configured triggers.</p>
+
+  <h3>Review Only Staged Changes</h3>
+
+  <p>For pre-commit workflows, analyze only what you're about to commit:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`warden --staged`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>This uses <code>git diff --cached</code> so only staged files are analyzed.</p>
 
   <h3>Review Before Pushing</h3>
 

@@ -37,6 +37,8 @@ export const CLIOptionsSchema = z.object({
   list: z.boolean().default(false),
   /** Force interpretation of ambiguous targets as git refs */
   git: z.boolean().default(false),
+  /** Analyze only staged changes (git diff --cached) */
+  staged: z.boolean().default(false),
   /** Remote repository reference for skills (e.g., "owner/repo" or "owner/repo@sha") */
   remote: z.string().optional(),
   /** Skip network operations - only use cached remote skills */
@@ -109,6 +111,7 @@ Options:
   --fix                Automatically apply all suggested fixes
   --parallel <n>       Max concurrent trigger/skill executions (default: 4)
   -x, --fail-fast      Stop after first finding
+  --staged             Analyze only staged changes
   --git                Force ambiguous targets to be treated as git refs
   --quiet              Errors and final summary only
   -v, --verbose        Show real-time findings and hunk details
@@ -291,6 +294,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'fail-fast': { type: 'boolean', short: 'x', default: false },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
+      staged: { type: 'boolean', default: false },
       log: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'V', default: false },
@@ -465,6 +469,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     force: values.force,
     parallel: values.parallel ? parseInt(values.parallel, 10) : undefined,
     git: values.git,
+    staged: values.staged,
     log: values.log,
     offline: values.offline,
     failFast: values['fail-fast'],

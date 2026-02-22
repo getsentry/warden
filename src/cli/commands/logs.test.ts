@@ -27,6 +27,7 @@ function createDefaultOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     force: false,
     list: false,
     git: false,
+    staged: false,
     offline: false,
     failFast: false,
     log: false,

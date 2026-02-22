@@ -582,11 +582,14 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Load config
   const config = loadWardenConfig(dirname(configPath));
 
-  // Build context from local git
-  reporter.startContext('Analyzing uncommitted changes...');
+  // Build context from local git — default to HEAD so only uncommitted changes are analyzed
+  const statusMessage = options.staged ? 'Analyzing staged changes...' : 'Analyzing uncommitted changes...';
+  reporter.startContext(statusMessage);
   const context = buildLocalEventContext({
+    base: 'HEAD',
     cwd: repoPath,
     defaultBranch: config.defaults?.defaultBranch,
+    staged: options.staged,
   });
 
   const pullRequest = context.pullRequest;
@@ -601,10 +604,14 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       process.stdout.write(content);
     } else {
       writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
-      const tip = !hasUncommittedChanges(repoPath)
-        ? 'Specify a git ref: warden HEAD~3 --skill <name>'
-        : undefined;
-      reporter.renderEmptyState('No changes found', tip);
+      if (options.staged) {
+        reporter.renderEmptyState('No staged changes found');
+      } else {
+        const tip = !hasUncommittedChanges(repoPath)
+          ? 'Specify a git ref: warden HEAD~3 --skill <name>'
+          : undefined;
+        reporter.renderEmptyState('No uncommitted changes found', tip);
+      }
       reporter.blank();
     }
     return 0;
@@ -736,11 +743,13 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
   const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
 
   // Build context from local git - compare against HEAD for true uncommitted changes
-  reporter.startContext('Analyzing uncommitted changes...');
+  const statusMessage = options.staged ? 'Analyzing staged changes...' : 'Analyzing uncommitted changes...';
+  reporter.startContext(statusMessage);
   const context = buildLocalEventContext({
     base: 'HEAD',
     cwd: repoPath,
     defaultBranch: config?.defaults?.defaultBranch,
+    staged: options.staged,
   });
 
   const pullRequest = context.pullRequest;
@@ -755,8 +764,12 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
       process.stdout.write(content);
     } else {
       writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
-      const tip = 'Specify a git ref to analyze committed changes: warden main --skill <name>';
-      reporter.renderEmptyState('No uncommitted changes found', tip);
+      if (options.staged) {
+        reporter.renderEmptyState('No staged changes found');
+      } else {
+        const tip = 'Specify a git ref to analyze committed changes: warden main --skill <name>';
+        reporter.renderEmptyState('No uncommitted changes found', tip);
+      }
       reporter.blank();
     }
     return 0;
@@ -769,6 +782,11 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 
 async function runCommand(options: CLIOptions, reporter: Reporter): Promise<number> {
   const targets = options.targets ?? [];
+
+  // --staged is only meaningful without explicit targets
+  if (options.staged && targets.length > 0) {
+    reporter.warning('--staged is ignored when targets are specified');
+  }
 
   // No targets with --skill → run skill directly on uncommitted changes
   if (targets.length === 0 && options.skill) {
