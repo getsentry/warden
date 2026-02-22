@@ -43,13 +43,22 @@ export function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
   const reportsWithUsage = reports.filter((r) => r.usage);
   if (reportsWithUsage.length === 0) return undefined;
 
-  return {
-    inputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.inputTokens ?? 0), 0),
-    outputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.outputTokens ?? 0), 0),
-    cacheReadInputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.cacheReadInputTokens ?? 0), 0),
-    cacheCreationInputTokens: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.cacheCreationInputTokens ?? 0), 0),
-    costUSD: reportsWithUsage.reduce((sum, r) => sum + (r.usage?.costUSD ?? 0), 0),
+  const seed: UsageStats = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    costUSD: 0,
   };
+
+  return reportsWithUsage.reduce((acc, r) => {
+    acc.inputTokens += r.usage?.inputTokens ?? 0;
+    acc.outputTokens += r.usage?.outputTokens ?? 0;
+    acc.cacheReadInputTokens = (acc.cacheReadInputTokens ?? 0) + (r.usage?.cacheReadInputTokens ?? 0);
+    acc.cacheCreationInputTokens = (acc.cacheCreationInputTokens ?? 0) + (r.usage?.cacheCreationInputTokens ?? 0);
+    acc.costUSD += r.usage?.costUSD ?? 0;
+    return acc;
+  }, seed);
 }
 
 /**
