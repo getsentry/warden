@@ -187,6 +187,29 @@ async function promptRemoteSkillSelection(
   }
 }
 
+/**
+ * Resolve which skill to add from explicit option, interactive prompt, or error.
+ * Returns the skill name, or null if the user cancelled, or a numeric exit code on error.
+ */
+async function resolveSkillName(
+  options: CLIOptions,
+  reporter: Reporter,
+  prompt: () => Promise<string | null>,
+  usageTip: string,
+): Promise<string | number> {
+  if (options.skill) {
+    return options.skill;
+  }
+  if (reporter.mode.isTTY) {
+    reporter.blank();
+    const selected = await prompt();
+    return selected ?? 0;
+  }
+  reporter.error('Skill name required when not running interactively.');
+  reporter.tip(usageTip);
+  return 1;
+}
+
 const DEFAULT_TRIGGERS = [
   {
     type: 'pull_request' as const,
@@ -271,21 +294,14 @@ async function runAddRemote(
   }
 
   // Get skill to add (from --skill or interactive prompt)
-  let skillName: string | null;
-
-  if (options.skill) {
-    skillName = options.skill;
-  } else if (reporter.mode.isTTY) {
-    reporter.blank();
-    skillName = await promptRemoteSkillSelection(remoteSkills, configuredSkills, reporter);
-    if (!skillName) {
-      return 0; // User quit or no skills available
-    }
-  } else {
-    reporter.error('Skill name required when not running interactively.');
-    reporter.tip(`Use: warden add --remote ${remote} --skill <name>`);
-    return 1;
-  }
+  const resolved = await resolveSkillName(
+    options,
+    reporter,
+    () => promptRemoteSkillSelection(remoteSkills, configuredSkills, reporter),
+    `Use: warden add --remote ${remote} --skill <name>`,
+  );
+  if (typeof resolved === 'number') return resolved;
+  const skillName = resolved;
 
   // Validate skill exists in remote, retry with fresh fetch if using stale cache
   let availableSkills = remoteSkills;
@@ -413,23 +429,14 @@ export async function runAdd(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // 8. Get skill to add (from arg or interactive prompt)
-  let skillName: string | null;
-
-  if (options.skill) {
-    // Non-interactive: skill specified as argument
-    skillName = options.skill;
-  } else if (reporter.mode.isTTY) {
-    // Interactive mode
-    skillName = await promptSkillSelection(skills, configuredSkills, reporter);
-    if (!skillName) {
-      return 0; // User quit or no skills available
-    }
-  } else {
-    // Non-TTY and no skill specified
-    reporter.error('Skill name required when not running interactively.');
-    reporter.tip('Use: warden add <skill-name> or warden add --list');
-    return 1;
-  }
+  const resolved = await resolveSkillName(
+    options,
+    reporter,
+    () => promptSkillSelection(skills, configuredSkills, reporter),
+    'Use: warden add <skill-name> or warden add --list',
+  );
+  if (typeof resolved === 'number') return resolved;
+  const skillName = resolved;
 
   // 9. Validate skill exists
   if (!skills.has(skillName)) {
