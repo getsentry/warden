@@ -22,7 +22,6 @@ import {
   type PreparedFile,
   type PRPromptContext,
 } from '../../sdk/runner.js';
-import { snapshotSessionFiles, moveNewSessions, resolveSessionsDir } from '../../sdk/session.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import { Verbosity } from './verbosity.js';
@@ -688,32 +687,10 @@ export async function runComposedSkillTasks(
   callbacks: SkillProgressCallbacks,
   semaphore: Semaphore
 ): Promise<SkillTaskResult[]> {
-  // Snapshot session files once before all skills run, then move after all
-  // complete. This avoids a race where concurrent skills each snapshot the
-  // same directory and the first to finish grabs all new files.
-  const firstTask = tasks[0];
-  const runnerOptions = firstTask?.runnerOptions ?? {};
-  const repoPath = firstTask?.context.repoPath;
-  const sessionsDir = repoPath && runnerOptions.session?.enabled
-    ? resolveSessionsDir(repoPath, runnerOptions.session.directory)
-    : undefined;
-  const sessionSnapshot = sessionsDir && repoPath ? snapshotSessionFiles(repoPath) : undefined;
-
   const results = await runPool(tasks, tasks.length,
     (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, callbacks, semaphore),
     { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
   );
-
-  // Move all new session files after every skill has finished
-  if (sessionsDir && sessionSnapshot && repoPath) {
-    try {
-      moveNewSessions(repoPath, sessionSnapshot, sessionsDir);
-    } catch (err) {
-      logger.warn('Failed to move session files', {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
 
   return results;
 }

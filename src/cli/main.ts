@@ -29,7 +29,6 @@ import {
   type SkillTaskOptions,
 } from './output/index.js';
 import { cleanupArtifacts } from './log-cleanup.js';
-import { resolveSessionsDir } from '../sdk/session.js';
 import {
   collectFixableFindings,
   applyAllFixes,
@@ -398,7 +397,6 @@ async function runSkills(
     batchDelayMs: config?.defaults?.batchDelayMs,
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
     auxiliaryMaxRetries: config?.defaults?.auxiliaryMaxRetries,
-    session: config?.sessions ?? { enabled: true },
   };
   const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters }) => ({
     name: skill,
@@ -688,7 +686,6 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       maxTurns: trigger.maxTurns,
       maxContextFiles: config.defaults?.chunking?.maxContextFiles,
       auxiliaryMaxRetries: config.defaults?.auxiliaryMaxRetries,
-      session: config.sessions ?? { enabled: true },
     },
   }));
 
@@ -886,14 +883,6 @@ export async function main(): Promise<void> {
       dir: join(cleanupRoot, '.warden', 'logs'),
       retentionDays: cfg?.logs?.retentionDays ?? 30,
       mode: cfg?.logs?.cleanup ?? 'ask',
-      isTTY: reporter.mode.isTTY,
-      reporter,
-    });
-    // Session cleanup mirrors log cleanup
-    await cleanupArtifacts({
-      dir: resolveSessionsDir(cleanupRoot, cfg?.sessions?.directory),
-      retentionDays: cfg?.sessions?.retentionDays ?? 7,
-      mode: cfg?.sessions?.cleanup ?? 'auto',
       isTTY: reporter.mode.isTTY,
       reporter,
     });
