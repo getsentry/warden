@@ -340,9 +340,9 @@ def scan_file(
                     record = json.loads(line)
                     if record.get("type") == "summary":
                         continue
-                    skill = record.get("skill", "")
-                    if skill:
-                        skills.add(skill)
+                    record_skill = record.get("skill", "")
+                    if record_skill:
+                        skills.add(record_skill)
                     findings = record.get("findings", [])
                     finding_count += len(findings)
                 except json.JSONDecodeError:
