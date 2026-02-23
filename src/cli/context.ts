@@ -73,7 +73,7 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
     body = `Analyzing staged changes`;
   } else {
     title = `Local changes: ${currentBranch}`;
-    body = `Analyzing local changes from ${base} to working tree`;
+    body = `Analyzing uncommitted changes from HEAD`;
   }
 
   return {
