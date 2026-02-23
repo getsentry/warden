@@ -293,7 +293,7 @@ async function runAddRemote(
   }
 
   // Get skill to add (from --skill or interactive prompt)
-  if (reporter.mode.isTTY) reporter.blank();
+  if (!options.skill && reporter.mode.isTTY) reporter.blank();
   const resolved = await resolveSkillName(
     options,
     reporter,
