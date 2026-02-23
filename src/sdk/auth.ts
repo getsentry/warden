@@ -29,14 +29,16 @@ export function verifyAuth({ apiKey }: { apiKey?: string }): void {
     if (isNotFound) {
       throw new WardenAuthenticationError(
         'Claude Code CLI not found on PATH.\n' +
-        'Either install Claude Code (https://claude.ai/install.sh) or set an API key.'
+        'Either install Claude Code (https://claude.ai/install.sh) or set an API key.',
+        { cause: error }
       );
     }
     const detail =
       error instanceof ExecError ? error.stderr : (error as Error).message;
     throw new WardenAuthenticationError(
       `Claude Code CLI found but failed to execute: ${detail}\n` +
-      'Check that the claude binary has correct permissions and can run in this environment.'
+      'Check that the claude binary has correct permissions and can run in this environment.',
+      { cause: error }
     );
   }
 }

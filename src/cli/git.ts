@@ -19,7 +19,7 @@ function git(args: string[], cwd: string = process.cwd()): string {
     return execGitNonInteractive(args, { cwd });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Git command failed: git ${args.join(' ')}\n${message}`);
+    throw new Error(`Git command failed: git ${args.join(' ')}\n${message}`, { cause: error });
   }
 }
 

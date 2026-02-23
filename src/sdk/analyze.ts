@@ -524,13 +524,14 @@ async function analyzeHunk(
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new WardenAuthenticationError(
               `Claude Code subprocess failed (${errorMessage}).\n` +
-              `This usually means the claude CLI cannot run in this environment.`
+              `This usually means the claude CLI cannot run in this environment.`,
+              { cause: error }
             );
           }
 
           // Authentication errors should surface immediately with helpful guidance
           if (isAuthenticationError(error)) {
-            throw new WardenAuthenticationError();
+            throw new WardenAuthenticationError(undefined, { cause: error });
           }
 
           // Don't retry if not a retryable error or we've exhausted retries

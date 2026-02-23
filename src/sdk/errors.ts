@@ -59,11 +59,11 @@ export function isSubprocessError(error: unknown): boolean {
 }
 
 export class WardenAuthenticationError extends Error {
-  constructor(sdkError?: string) {
+  constructor(sdkError?: string, options?: { cause?: unknown }) {
     const message = sdkError
       ? `Authentication failed: ${sdkError}\n${AUTH_ERROR_GUIDANCE}`
       : `Authentication required.${AUTH_ERROR_GUIDANCE}`;
-    super(message);
+    super(message, options);
     this.name = 'WardenAuthenticationError';
   }
 }

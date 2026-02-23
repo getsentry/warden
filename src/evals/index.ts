@@ -49,7 +49,7 @@ export function loadEvalFile(filePath: string): EvalFile {
   try {
     content = readFileSync(filePath, 'utf-8');
   } catch (error) {
-    throw new Error(`Failed to read ${filePath}: ${error}`);
+    throw new Error(`Failed to read ${filePath}: ${error}`, { cause: error });
   }
 
   let parsed: unknown;

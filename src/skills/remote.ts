@@ -308,7 +308,7 @@ function execGit(args: string[], options?: { cwd?: string }): string {
     return execGitNonInteractive(args, { cwd: options?.cwd });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new SkillLoaderError(`Git command failed: git ${args.join(' ')}: ${message}`);
+    throw new SkillLoaderError(`Git command failed: git ${args.join(' ')}: ${message}`, { cause: error });
   }
 }
 
