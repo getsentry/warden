@@ -4,6 +4,7 @@ import fg from 'fast-glob';
 import ignore, { type Ignore } from 'ignore';
 import { countPatchChunks } from '../types/index.js';
 import type { FileChange } from '../types/index.js';
+import { execGitNonInteractive } from '../utils/exec.js';
 
 export interface ExpandGlobOptions {
   /** Working directory for glob expansion (default: process.cwd()) */
@@ -81,43 +82,39 @@ function prefixGitignorePatterns(content: string, prefix: string): string {
  * - Negation patterns (!) work correctly
  * - Directory patterns with trailing / work correctly
  */
-async function loadGitignoreRules(gitRoot: string, cwd: string): Promise<Ignore> {
+function loadGitignoreRules(gitRoot: string): Ignore {
   const ig = ignore();
 
   // Always ignore .git directory
   ig.add('.git');
 
-  // Normalize git root for consistent comparisons
-  const normalizedGitRoot = normalizePath(gitRoot);
-
-  // Find all .gitignore files in the repository
-  // fast-glob always returns forward slashes
-  const gitignoreFiles = await fg('**/.gitignore', {
-    cwd: gitRoot,
-    absolute: true,
-    dot: true,
-    ignore: ['**/.git/**', '**/node_modules/**'],
-  });
-
-  // Also check from cwd up to git root for any .gitignore files
-  // that might be outside the search scope
-  let current = resolve(cwd);
-  while (current !== dirname(current)) {
-    const gitignorePath = join(current, '.gitignore');
-    // Normalize for comparison with fast-glob results
-    const normalizedPath = normalizePath(gitignorePath);
-    if (existsSync(gitignorePath) && !gitignoreFiles.includes(normalizedPath)) {
-      gitignoreFiles.push(normalizedPath);
-    }
-
-    if (normalizePath(current) === normalizedGitRoot) {
-      break;
-    }
-    current = dirname(current);
+  // Use git to discover .gitignore files. This naturally skips ignored
+  // directories (node_modules, .venv, vendor, etc.) without maintaining
+  // a hardcoded exclusion list.
+  let gitignoreFiles: string[];
+  try {
+    const output = execGitNonInteractive(
+      ['ls-files', '--cached', '--others', '--exclude-standard', '.gitignore', '**/.gitignore'],
+      { cwd: gitRoot }
+    );
+    gitignoreFiles = output
+      ? output.split('\n').map((f) => resolve(gitRoot, f))
+      : [];
+  } catch {
+    // Not a real git repo or git not available. Walk directories manually,
+    // skipping common large directories that would never contain relevant
+    // .gitignore files.
+    gitignoreFiles = fg.sync('.gitignore', { cwd: gitRoot, absolute: true });
+    gitignoreFiles.push(
+      ...fg.sync('**/.gitignore', {
+        cwd: gitRoot,
+        absolute: true,
+        ignore: ['**/.git/**', '**/node_modules/**'],
+      })
+    );
   }
 
   // Sort by path depth (root first, then nested)
-  // Use forward slashes for consistent depth counting
   gitignoreFiles.sort((a, b) => a.split('/').length - b.split('/').length);
 
   // Process gitignore files from root down (parent rules apply first)
@@ -179,7 +176,7 @@ export async function expandFileGlobs(
   }
 
   // Load and apply gitignore rules
-  const ig = await loadGitignoreRules(gitRoot, cwd);
+  const ig = loadGitignoreRules(gitRoot);
 
   // Filter files using gitignore rules
   // Normalize paths to forward slashes for consistent matching
