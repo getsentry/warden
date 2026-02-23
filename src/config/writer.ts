@@ -47,6 +47,18 @@ export function generateSkillToml(skill: SkillConfig): string {
     lines.push(`reportOnSuccess = ${skill.reportOnSuccess}`);
   }
 
+  if (skill.requestChanges !== undefined) {
+    lines.push(`requestChanges = ${skill.requestChanges}`);
+  }
+
+  if (skill.failCheck !== undefined) {
+    lines.push(`failCheck = ${skill.failCheck}`);
+  }
+
+  if (skill.minConfidence) {
+    lines.push(`minConfidence = "${skill.minConfidence}"`);
+  }
+
   // Nested triggers
   if (skill.triggers) {
     for (const trigger of skill.triggers) {
@@ -82,6 +94,18 @@ export function generateSkillToml(skill: SkillConfig): string {
 
       if (trigger.reportOnSuccess !== undefined) {
         lines.push(`reportOnSuccess = ${trigger.reportOnSuccess}`);
+      }
+
+      if (trigger.requestChanges !== undefined) {
+        lines.push(`requestChanges = ${trigger.requestChanges}`);
+      }
+
+      if (trigger.failCheck !== undefined) {
+        lines.push(`failCheck = ${trigger.failCheck}`);
+      }
+
+      if (trigger.minConfidence) {
+        lines.push(`minConfidence = "${trigger.minConfidence}"`);
       }
 
       if (trigger.schedule) {
