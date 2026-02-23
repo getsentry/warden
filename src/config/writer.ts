@@ -55,7 +55,7 @@ export function generateSkillToml(skill: SkillConfig): string {
     lines.push(`failCheck = ${skill.failCheck}`);
   }
 
-  if (skill.minConfidence) {
+  if (skill.minConfidence !== undefined) {
     lines.push(`minConfidence = "${skill.minConfidence}"`);
   }
 
@@ -104,7 +104,7 @@ export function generateSkillToml(skill: SkillConfig): string {
         lines.push(`failCheck = ${trigger.failCheck}`);
       }
 
-      if (trigger.minConfidence) {
+      if (trigger.minConfidence !== undefined) {
         lines.push(`minConfidence = "${trigger.minConfidence}"`);
       }
 
