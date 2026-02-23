@@ -112,8 +112,11 @@ function loadGitignoreRules(gitRoot: string): Ignore {
     });
   }
 
-  // Sort by path depth (root first, then nested)
-  gitignoreFiles.sort((a, b) => a.split('/').length - b.split('/').length);
+  // Sort by path depth (root first, then nested).
+  // Normalize to forward slashes so depth counting works on Windows too.
+  gitignoreFiles.sort(
+    (a, b) => normalizePath(a).split('/').length - normalizePath(b).split('/').length
+  );
 
   // Process gitignore files from root down (parent rules apply first)
   for (const gitignorePath of gitignoreFiles) {
