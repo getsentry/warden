@@ -9,10 +9,11 @@ export class ExecError extends Error {
     public readonly exitCode: number | null,
     public readonly stderr: string,
     public readonly signal: string | null,
-    public readonly code?: string
+    public readonly code?: string,
+    options?: { cause?: unknown }
   ) {
     const details = stderr || (signal ? `Killed by signal ${signal}` : 'Unknown error');
-    super(`Command failed: ${command}\n${details}`);
+    super(`Command failed: ${command}\n${details}`, options);
     this.name = 'ExecError';
   }
 }
@@ -70,7 +71,7 @@ export function execNonInteractive(command: string, options?: ExecOptions): stri
   });
 
   if (result.error) {
-    throw new ExecError(command, null, result.error.message, null, (result.error as NodeJS.ErrnoException).code);
+    throw new ExecError(command, null, result.error.message, null, (result.error as NodeJS.ErrnoException).code, { cause: result.error });
   }
 
   if (result.status !== 0) {
@@ -104,7 +105,7 @@ export function execFileNonInteractive(
   const result = spawnSync(file, args, spawnOptions);
 
   if (result.error) {
-    throw new ExecError(command, null, result.error.message, null, (result.error as NodeJS.ErrnoException).code);
+    throw new ExecError(command, null, result.error.message, null, (result.error as NodeJS.ErrnoException).code, { cause: result.error });
   }
 
   if (result.status !== 0) {
