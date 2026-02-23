@@ -233,13 +233,20 @@ For each verified finding, create a worktree, fix the code, and open a draft PR.
 
 **Severity triage**: Patch HIGH and above. For MEDIUM, only patch findings from bug-detection skills (e.g., `code-review`, `security-review`). Skip LOW and INFO findings.
 
-**Step 0: Index existing PRs** (1 tool call):
+**Step 0: Setup** (run once before the loop):
 
 ```bash
 uv run ${CLAUDE_SKILL_ROOT}/scripts/index_prs.py ${SWEEP_DIR}
 ```
 
 Parse the JSON stdout. Use `fileIndex` for dedup checks.
+
+Determine the default branch and fetch latest so worktrees branch from current upstream:
+
+```bash
+DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
+git fetch origin "${DEFAULT_BRANCH}"
+```
 
 **For each finding in `data/verified.jsonl`:**
 
@@ -258,10 +265,10 @@ Skip the finding only when there is both chunk overlap AND the PR addresses the 
 ```bash
 BRANCH="warden-sweep/${RUN_ID}/${FINDING_ID}"
 WORKTREE="${SWEEP_DIR}/worktrees/${FINDING_ID}"
-git worktree add "${WORKTREE}" -b "${BRANCH}"
+git worktree add "${WORKTREE}" -b "${BRANCH}" "origin/${DEFAULT_BRANCH}"
 ```
 
-Each finding branches from the current HEAD to avoid merge conflicts between PRs.
+Each finding branches from the repo's default branch so PRs contain only the fix commit.
 
 **Step 2: Generate fix**
 
