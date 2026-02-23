@@ -160,6 +160,7 @@ export async function createFixPR(
   }[] = [];
 
   let fixCount = 0;
+  const appliedFindings: Finding[] = [];
 
   for (const [filePath, fileFindings] of fixesByFile) {
     try {
@@ -187,6 +188,7 @@ export async function createFixPR(
         try {
           content = applyDiffToContent(content, diff);
           fixCount++;
+          appliedFindings.push(finding);
         } catch (err) {
           console.error(`Failed to apply fix for ${finding.title}: ${err}`);
         }
@@ -254,7 +256,7 @@ export async function createFixPR(
       '',
       '### Applied Fixes',
       '',
-      ...fixable.map((f) => {
+      ...appliedFindings.map((f) => {
         const path = f.location?.path ?? 'unknown';
         const line = f.location?.startLine ?? 0;
         return `- **${f.title}** (${path}:${line})`;
