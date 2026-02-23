@@ -328,6 +328,13 @@ Return ONLY this JSON (no surrounding text):
 }
 ````
 
+**Step 2b: Handle skipped findings**
+
+If the subagent returned `"status": "skipped"`, do NOT proceed to Steps 3-4. Instead:
+1. Record the finding in `data/patches.jsonl` with `"status": "error"` and `"error": "Subagent skipped: ${skipReason}"`
+2. Clean up the worktree
+3. Continue to the next finding
+
 **Step 3: Find reviewers**
 
 ```bash
