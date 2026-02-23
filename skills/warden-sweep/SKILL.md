@@ -267,8 +267,8 @@ Each finding branches from the current HEAD to avoid merge conflicts between PRs
 
 Launch a Task subagent (`subagent_type: "general-purpose"`) to apply the fix in the worktree:
 
-```
-Fix a verified code issue and add test coverage. You are working in a git worktree at: ${WORKTREE}
+````
+Fix a verified code issue. You are working in a git worktree at: ${WORKTREE}
 
 ## Finding
 - Title: ${TITLE}
@@ -281,14 +281,34 @@ ${FIX_DIFF}
 ```
 
 ## Instructions
-1. Read the file at the reported location (use the worktree path: ${WORKTREE}/${FILE_PATH}).
-2. Apply the suggested fix. If the diff doesn't apply cleanly, adapt it while preserving intent.
-3. Write or update tests that verify the fix:
-   - Follow existing test patterns (co-located files, same framework)
-   - At minimum, write a test that would have caught the original bug
-4. Only modify the fix target and its test file.
-5. Do NOT run tests locally. CI will validate the changes.
-6. Stage and commit with this exact message:
+
+### Step 1: Understand the code
+Read the file at ${WORKTREE}/${FILE_PATH}. Read at least 50 lines above and below the reported location. Trace callers and callees of the affected code using Grep/Glob to understand how it is used. Do NOT skip this step.
+
+### Step 2: Apply a minimal fix
+Apply the smallest change that addresses the finding. If the suggested diff doesn't apply cleanly, adapt it while preserving intent. Do NOT refactor surrounding code, rename variables, add comments, or make any change beyond what the finding requires.
+
+### Step 3: Write tests
+Write or update tests that verify the fix:
+- Follow existing test patterns (co-located files, same framework)
+- At minimum, write a test that would have caught the original bug
+- Test the specific edge case, not just the happy path
+
+Only modify the fix target and its test file.
+
+### Step 4: Self-review
+Before staging, run `git diff` in the worktree and review every changed line. Verify:
+1. The change addresses the specific finding described, not something else
+2. No unrelated code was modified (no drive-by cleanups, no formatting changes)
+3. Trace through changed code paths: does the fix introduce any new bug, null reference, type error, or broken import?
+4. Tests exercise the fix (the failure case), not just that the code runs
+
+If ANY check fails, fix the problem before proceeding. If the suggested fix is wrong or would introduce a regression you cannot resolve, do NOT commit. Instead, skip to the output step and report why.
+
+### Step 5: Commit
+Do NOT run tests locally. CI will validate the changes.
+
+Stage and commit with this exact message:
 
 fix: ${TITLE}
 
@@ -297,8 +317,16 @@ Severity: ${SEVERITY}
 
 Co-Authored-By: Warden <noreply@getsentry.com>
 
-Report what you changed: files modified, test files added/updated, any notes.
-```
+### Step 6: Output
+Return ONLY this JSON (no surrounding text):
+{
+  "status": "committed" or "skipped",
+  "filesChanged": ["list of files modified"],
+  "testFilesChanged": ["list of test files added/updated"],
+  "selfReview": "1-2 sentence summary of what you verified in your diff review",
+  "skipReason": "If status is skipped: why the fix was not applied"
+}
+````
 
 **Step 3: Find reviewers**
 
