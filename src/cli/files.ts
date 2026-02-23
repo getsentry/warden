@@ -223,7 +223,7 @@ export function createSyntheticFileChange(
   const content = readFileSync(absolutePath, 'utf-8');
   const lines = content.split('\n');
   const lineCount = lines.length;
-  const relativePath = relative(basePath, absolutePath);
+  const relativePath = normalizePath(relative(basePath, absolutePath));
   const patch = createPatchFromContent(content);
 
   return {
