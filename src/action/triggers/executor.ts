@@ -138,6 +138,7 @@ export async function executeTrigger(
             model: trigger.model,
             maxTurns: trigger.maxTurns,
             batchDelayMs: config.defaults?.batchDelayMs,
+            maxContextFiles: config.defaults?.chunking?.maxContextFiles,
             pathToClaudeCodeExecutable: claudePath,
             auxiliaryMaxRetries: config.defaults?.auxiliaryMaxRetries,
           },

@@ -120,6 +120,7 @@ export async function runScheduleWorkflow(
         model: resolved.model,
         maxTurns: resolved.maxTurns,
         batchDelayMs: config.defaults?.batchDelayMs,
+        maxContextFiles: config.defaults?.chunking?.maxContextFiles,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);
