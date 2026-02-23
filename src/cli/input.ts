@@ -1,8 +1,19 @@
 /**
+ * Custom error thrown when the user aborts via Ctrl+C during interactive input.
+ * Allows callers to handle cleanup (e.g. Sentry flush) before exiting.
+ */
+export class UserAbortError extends Error {
+  constructor() {
+    super('User aborted');
+    this.name = 'UserAbortError';
+  }
+}
+
+/**
  * Read a single keypress from stdin in raw mode.
  */
 export async function readSingleKey(): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const stdin = process.stdin;
     const wasRaw = stdin.isRaw;
 
@@ -18,7 +29,8 @@ export async function readSingleKey(): Promise<string> {
       // Handle Ctrl+C
       if (key === '\x03') {
         process.stderr.write('\n');
-        process.exit(130);
+        reject(new UserAbortError());
+        return;
       }
 
       resolve(key.toLowerCase());

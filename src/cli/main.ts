@@ -35,6 +35,7 @@ import {
   runInteractiveFixFlow,
   renderFixSummary,
 } from './fix.js';
+import { UserAbortError } from './input.js';
 import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
 import { runSetupApp } from './commands/setup-app.js';
@@ -909,7 +910,9 @@ export async function main(): Promise<void> {
       isTTY: reporter.mode.isTTY,
       reporter,
     });
-  } catch {
+  } catch (err) {
+    // Re-throw user abort so it propagates to the top-level handler for cleanup
+    if (err instanceof UserAbortError) throw err;
     // Config load or cleanup failed — skip silently
   }
 

@@ -3,6 +3,7 @@ import { initSentry, Sentry, flushSentry } from '../sentry.js';
 initSentry('cli');
 
 import { main, abortController, interrupted } from './main.js';
+import { UserAbortError } from './input.js';
 
 let interruptCount = 0;
 
@@ -22,6 +23,10 @@ process.on('SIGINT', () => {
 });
 
 main().catch(async (error) => {
+  if (error instanceof UserAbortError) {
+    await flushSentry();
+    process.exit(130);
+  }
   Sentry.captureException(error);
   await flushSentry();
   console.error('Fatal error:', error);
