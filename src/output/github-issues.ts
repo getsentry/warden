@@ -193,6 +193,9 @@ export async function createFixPR(
         }
       }
 
+      // Skip files where no fixes were actually applied
+      if (fileAppliedFindings.length === 0) continue;
+
       // Create blob with modified content
       const { data: blob } = await octokit.git.createBlob({
         owner,
