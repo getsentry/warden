@@ -59,6 +59,8 @@ export async function runSetupApp(options: SetupAppOptions, reporter: Reporter):
       }
     });
   });
+  // Prevent unhandled rejection if the server errors before Promise.race is reached
+  serverError.catch((_e: unknown) => undefined);
 
   try {
     // Open browser to our local server (which will POST to GitHub)

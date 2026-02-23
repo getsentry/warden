@@ -28,10 +28,11 @@ vi.mock('../git.js', () => ({
 
 // We need fine-grained control over the callback server mock, so we build it
 // per-test in a factory that the mock delegates to.
-let serverFactory: () => ReturnType<typeof import('./setup-app/server.js').startCallbackServer>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let serverFactory: () => any;
 
 vi.mock('./setup-app/server.js', () => ({
-  startCallbackServer: (...args: unknown[]) => serverFactory(),
+  startCallbackServer: (..._args: unknown[]) => serverFactory(),
 }));
 
 function createTestReporter(): Reporter {
@@ -131,7 +132,7 @@ describe('runSetupApp', () => {
       serverFactory = () => mock.handle;
 
       const reporter = createTestReporter();
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
 
       const errorObj: NodeJS.ErrnoException = new Error('port in use');
       errorObj.code = 'EADDRINUSE';
