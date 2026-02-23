@@ -104,14 +104,12 @@ function loadGitignoreRules(gitRoot: string): Ignore {
     // Not a real git repo or git not available. Walk directories manually,
     // skipping common large directories that would never contain relevant
     // .gitignore files.
-    gitignoreFiles = fg.sync('.gitignore', { cwd: gitRoot, absolute: true });
-    gitignoreFiles.push(
-      ...fg.sync('**/.gitignore', {
-        cwd: gitRoot,
-        absolute: true,
-        ignore: ['**/.git/**', '**/node_modules/**'],
-      })
-    );
+    gitignoreFiles = fg.sync('**/.gitignore', {
+      cwd: gitRoot,
+      absolute: true,
+      dot: true,
+      ignore: ['**/.git/**', '**/node_modules/**'],
+    });
   }
 
   // Sort by path depth (root first, then nested)
