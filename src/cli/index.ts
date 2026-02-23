@@ -24,7 +24,11 @@ process.on('SIGINT', () => {
 
 main().catch(async (error) => {
   if (error instanceof UserAbortError) {
-    await flushSentry();
+    try {
+      await flushSentry();
+    } catch {
+      // Best-effort flush - don't let Sentry errors prevent clean exit
+    }
     process.exit(130);
   }
   Sentry.captureException(error);
