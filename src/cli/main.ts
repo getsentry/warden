@@ -324,7 +324,13 @@ async function runSkills(
     verifyAuth({ apiKey });
   } catch (error: unknown) {
     reporter.error((error as WardenAuthenticationError).message);
-    writeEmptyRunLog(repoPath ?? cwd, { traceId: getTraceId(), outputPath: options.output });
+    const effectiveRepo = repoPath ?? cwd;
+    if (options.json) {
+      const { content } = writeEmptyRunLog(effectiveRepo, { traceId: getTraceId(), outputPath: options.output });
+      process.stdout.write(content);
+    } else {
+      writeEmptyRunLog(effectiveRepo, { traceId: getTraceId(), outputPath: options.output });
+    }
     return 1;
   }
 
@@ -677,7 +683,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     verifyAuth({ apiKey });
   } catch (error: unknown) {
     reporter.error((error as WardenAuthenticationError).message);
-    writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
+    if (options.json) {
+      const { content } = writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
+      process.stdout.write(content);
+    } else {
+      writeEmptyRunLog(repoPath, { traceId: getTraceId(), outputPath: options.output });
+    }
     return 1;
   }
 
