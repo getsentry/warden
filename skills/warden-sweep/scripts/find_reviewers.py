@@ -20,22 +20,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import os
 import sys
 
-
-def run_cmd(args: list[str], timeout: int = 30) -> str | None:
-    """Run a command and return stdout, or None on failure."""
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        return result.stdout.strip() if result.returncode == 0 else None
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _utils import run_cmd_stdout as run_cmd  # noqa: E402
 
 
 def get_top_authors(file_path: str, count: int = 2) -> list[str]:

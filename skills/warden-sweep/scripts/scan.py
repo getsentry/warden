@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.9"
+# dependencies = ["tomli; python_version < '3.11'"]
 # ///
 """
 Warden Sweep: Scan phase.
@@ -33,6 +34,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[no-redefine]
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _utils import ensure_github_label, run_cmd  # noqa: E402
@@ -99,84 +105,16 @@ def write_manifest(sweep_dir: str, run_id: str) -> None:
         f.write("\n")
 
 
-def _strip_toml_inline_comment(line: str) -> str:
-    """Strip inline TOML comments (# outside of quoted strings)."""
-    in_quote = False
-    quote_char = ""
-    for i, ch in enumerate(line):
-        if in_quote:
-            if ch == quote_char:
-                in_quote = False
-        elif ch in ('"', "'"):
-            in_quote = True
-            quote_char = ch
-        elif ch == "#":
-            return line[:i].rstrip()
-    return line
-
-
-def _toml_array_to_json(value: str) -> str:
-    """Convert a TOML array string to JSON-compatible format.
-
-    Handles TOML single-quoted strings and trailing commas.
-    Inline comments should be stripped before calling this function.
-    """
-    import re
-    # Replace single-quoted strings with double-quoted (TOML literal strings)
-    value = re.sub(r"'([^']*)'", r'"\1"', value)
-    # Strip trailing comma before closing bracket
-    value = re.sub(r",\s*]", "]", value)
-    return value
-
-
 def load_ignore_paths() -> list[str]:
     """Load ignorePaths from warden.toml defaults if present."""
-    try:
-        # Try to parse warden.toml for defaults.ignorePaths
-        toml_path = "warden.toml"
-        if not os.path.exists(toml_path):
-            return []
-
-        with open(toml_path) as f:
-            content = f.read()
-
-        # Simple TOML parsing for ignorePaths in [defaults] section
-        in_defaults = False
-        collecting_value = False
-        value_parts: list[str] = []
-        for line in content.splitlines():
-            stripped = line.strip()
-            if collecting_value:
-                # Skip TOML comment lines inside multiline arrays
-                if stripped.startswith("#"):
-                    continue
-                # Strip inline comments before accumulating
-                stripped = _strip_toml_inline_comment(stripped)
-                value_parts.append(stripped)
-                combined = "".join(value_parts)
-                if combined.count("[") <= combined.count("]"):
-                    try:
-                        return json.loads(_toml_array_to_json(combined))
-                    except json.JSONDecodeError:
-                        return []
-                continue
-            if stripped == "[defaults]":
-                in_defaults = True
-                continue
-            if stripped.startswith("[") and stripped != "[defaults]":
-                in_defaults = False
-                continue
-            if in_defaults and stripped.startswith("ignorePaths"):
-                _, _, value = stripped.partition("=")
-                value = _strip_toml_inline_comment(value.strip())
-                if not value:
-                    continue
-                try:
-                    return json.loads(_toml_array_to_json(value))
-                except json.JSONDecodeError:
-                    value_parts = [value]
-                    collecting_value = True
+    toml_path = "warden.toml"
+    if not os.path.exists(toml_path):
         return []
+    try:
+        with open(toml_path, "rb") as f:
+            config = tomllib.load(f)
+        paths = config.get("defaults", {}).get("ignorePaths", [])
+        return paths if isinstance(paths, list) else []
     except Exception:
         return []
 

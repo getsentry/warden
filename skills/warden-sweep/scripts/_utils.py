@@ -20,6 +20,17 @@ def run_cmd(
     )
 
 
+def run_cmd_stdout(
+    args: list[str], timeout: int = 30, cwd: str | None = None
+) -> str | None:
+    """Run a command and return stripped stdout, or None on failure."""
+    try:
+        result = run_cmd(args, timeout=timeout, cwd=cwd)
+        return result.stdout.strip() if result.returncode == 0 else None
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+
+
 def read_json(path: str) -> dict[str, Any] | None:
     """Read a JSON file and return parsed object, or None on failure."""
     if not os.path.exists(path):

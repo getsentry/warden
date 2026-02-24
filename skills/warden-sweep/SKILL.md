@@ -1,6 +1,7 @@
 ---
 name: warden-sweep
 description: Full-repository code sweep. Scans every file with warden, verifies findings via deep tracing, creates draft PRs for validated issues. Use when asked to "sweep the repo", "scan everything", "find all bugs", "full codebase review", "batch code analysis", or run warden across the entire repository.
+disable-model-invocation: true
 ---
 
 # Warden Sweep
@@ -123,33 +124,7 @@ Launch a Task subagent (`subagent_type: "general-purpose"`) for each finding. Pr
 
 **Task prompt for each finding:**
 
-```
-Verify a code analysis finding. Determine if this is a TRUE issue or a FALSE POSITIVE.
-Do NOT write or edit any files. Research only.
-
-## Finding
-- Title: ${TITLE}
-- Severity: ${SEVERITY} | Confidence: ${CONFIDENCE}
-- Skill: ${SKILL}
-- Location: ${FILE_PATH}:${START_LINE}-${END_LINE}
-- Description: ${DESCRIPTION}
-- Verification hint: ${VERIFICATION}
-
-## Instructions
-1. Read the file at the reported location. Examine at least 50 lines of surrounding context.
-2. Trace data flow to/from the flagged code using Grep/Glob.
-3. Check if the issue is mitigated elsewhere (guards, validation, try/catch upstream).
-4. Check if the issue is actually reachable in practice.
-
-Return your verdict as JSON:
-{
-  "findingId": "${FINDING_ID}",
-  "verdict": "verified" or "rejected",
-  "confidence": "high" or "medium" or "low",
-  "reasoning": "2-3 sentence explanation",
-  "traceNotes": "What code paths you examined"
-}
-```
+Read `${CLAUDE_SKILL_ROOT}/references/verify-prompt.md` for the prompt template. Substitute the finding's values into the `${...}` placeholders.
 
 **Process results:**
 
@@ -272,82 +247,7 @@ Each finding branches from the repo's default branch so PRs contain only the fix
 
 **Step 2: Generate fix**
 
-Launch a Task subagent (`subagent_type: "general-purpose"`) to apply the fix in the worktree:
-
-````
-Fix a verified code issue. You are working in a git worktree at: ${WORKTREE}
-
-## Finding
-- Title: ${TITLE}
-- File: ${FILE_PATH}:${START_LINE}
-- Description: ${DESCRIPTION}
-- Verification: ${REASONING}
-- Suggested Fix: ${FIX_DESCRIPTION}
-```diff
-${FIX_DIFF}
-```
-
-## Instructions
-
-### Step 1: Understand the code
-Read the file at ${WORKTREE}/${FILE_PATH}. Read at least 50 lines above and below the reported location. Trace callers and callees of the affected code using Grep/Glob to understand how it is used. Do NOT skip this step.
-
-### Step 2: Apply a minimal fix
-Apply the smallest change that addresses the finding. If the suggested diff doesn't apply cleanly, adapt it while preserving intent. Do NOT refactor surrounding code, rename variables, add comments, or make any change beyond what the finding requires.
-
-### Step 3: Write tests
-Write or update tests that verify the fix:
-- Follow existing test patterns (co-located files, same framework)
-- At minimum, write a test that would have caught the original bug
-- Test the specific edge case, not just the happy path
-
-Only modify the fix target and its test file.
-
-### Step 4: Self-review
-Before staging, run `git diff` in the worktree and review every changed line. Verify:
-1. The change addresses the specific finding described, not something else
-2. No unrelated code was modified (no drive-by cleanups, no formatting changes)
-3. Trace through changed code paths: does the fix introduce any new bug, null reference, type error, or broken import?
-4. Tests exercise the fix (the failure case), not just that the code runs
-
-If ANY check fails, fix the problem before proceeding. If the suggested fix is wrong or would introduce a regression you cannot resolve, do NOT commit. Instead, skip to the output step and report why.
-
-### Step 5: Commit
-Do NOT run tests locally. CI will validate the changes.
-
-Stage and commit with this exact message:
-
-fix: ${TITLE}
-
-Warden finding ${FINDING_ID}
-Severity: ${SEVERITY}
-
-Co-Authored-By: Warden <noreply@getsentry.com>
-
-### Step 6: Output
-Return ONLY valid JSON (no surrounding text). Use `"status": "applied"` if you committed a fix, or `"status": "skipped"` if you did not.
-
-```json
-{
-  "status": "applied",
-  "filesChanged": ["src/example.ts"],
-  "testFilesChanged": ["src/example.test.ts"],
-  "selfReview": "Verified the fix addresses the null check and test covers the failure case",
-  "skipReason": null
-}
-```
-
-When skipping:
-```json
-{
-  "status": "skipped",
-  "filesChanged": [],
-  "testFilesChanged": [],
-  "selfReview": null,
-  "skipReason": "The suggested fix would introduce a regression in the error handling path"
-}
-```
-````
+Launch a Task subagent (`subagent_type: "general-purpose"`) to apply the fix in the worktree. Read `${CLAUDE_SKILL_ROOT}/references/patch-prompt.md` for the prompt template. Substitute the finding's values and worktree path into the `${...}` placeholders.
 
 **Step 2b: Handle skipped findings**
 
