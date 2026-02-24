@@ -320,7 +320,7 @@ Co-Authored-By: Warden <noreply@getsentry.com>
 ### Step 6: Output
 Return ONLY this JSON (no surrounding text):
 {
-  "status": "committed" or "skipped",
+  "status": "applied" or "skipped",
   "filesChanged": ["list of files modified"],
   "testFilesChanged": ["list of test files added/updated"],
   "selfReview": "1-2 sentence summary of what you verified in your diff review",
@@ -330,7 +330,7 @@ Return ONLY this JSON (no surrounding text):
 
 **Step 2b: Handle skipped findings**
 
-If the subagent returned `"status": "skipped"`, do NOT proceed to Steps 3-4. Instead:
+If the subagent returned `"status": "skipped"` (not `"applied"`), do NOT proceed to Steps 3-4. Instead:
 1. Record the finding in `data/patches.jsonl` with `"status": "error"` and `"error": "Subagent skipped: ${skipReason}"`
 2. Clean up the worktree
 3. Continue to the next finding
@@ -380,7 +380,7 @@ Save the PR URL.
 
 **Step 5: Record and cleanup**
 
-Append to `data/patches.jsonl`:
+Append to `data/patches.jsonl` (use `"created"` as status for successful PRs, not the subagent's `"applied"`):
 ```json
 {"findingId": "...", "prUrl": "https://...", "branch": "...", "reviewers": ["user1", "user2"], "filesChanged": ["..."], "status": "created|existing|error"}
 ```
