@@ -318,14 +318,28 @@ Severity: ${SEVERITY}
 Co-Authored-By: Warden <noreply@getsentry.com>
 
 ### Step 6: Output
-Return ONLY this JSON (no surrounding text):
+Return ONLY valid JSON (no surrounding text). Use `"status": "applied"` if you committed a fix, or `"status": "skipped"` if you did not.
+
+```json
 {
-  "status": "applied" or "skipped",
-  "filesChanged": ["list of files modified"],
-  "testFilesChanged": ["list of test files added/updated"],
-  "selfReview": "1-2 sentence summary of what you verified in your diff review",
-  "skipReason": "If status is skipped: why the fix was not applied"
+  "status": "applied",
+  "filesChanged": ["src/example.ts"],
+  "testFilesChanged": ["src/example.test.ts"],
+  "selfReview": "Verified the fix addresses the null check and test covers the failure case",
+  "skipReason": null
 }
+```
+
+When skipping:
+```json
+{
+  "status": "skipped",
+  "filesChanged": [],
+  "testFilesChanged": [],
+  "selfReview": null,
+  "skipReason": "The suggested fix would introduce a regression in the error handling path"
+}
+```
 ````
 
 **Step 2b: Handle skipped findings**
