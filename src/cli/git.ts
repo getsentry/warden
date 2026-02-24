@@ -177,13 +177,21 @@ export interface DiffOptions {
 
 /**
  * Build the git diff arguments for a given base/head/staged configuration.
+ * Extra flags (e.g. '--name-status') are placed before the ref, matching
+ * the documented git-diff synopsis: git diff [<options>] [<commit>] ...
  */
-function buildDiffArgs(base: string, head: string | undefined, options?: DiffOptions): string[] {
+function buildDiffArgs(
+  base: string,
+  head: string | undefined,
+  options?: DiffOptions,
+  extraFlags?: string[]
+): string[] {
+  const flags = extraFlags ?? [];
   if (options?.staged) {
-    return ['diff', '--cached'];
+    return ['diff', ...flags, '--cached'];
   }
   const diffRef = head ? `${base}...${head}` : base;
-  return ['diff', diffRef];
+  return ['diff', ...flags, diffRef];
 }
 
 /**
@@ -198,8 +206,7 @@ export function getChangedFiles(
   options?: DiffOptions
 ): GitFileChange[] {
   // Get file statuses
-  const baseArgs = buildDiffArgs(base, head, options);
-  const nameStatusOutput = git([...baseArgs, '--name-status'], cwd);
+  const nameStatusOutput = git(buildDiffArgs(base, head, options, ['--name-status']), cwd);
 
   if (!nameStatusOutput) {
     return [];
@@ -225,7 +232,7 @@ export function getChangedFiles(
   }
 
   // Get numstat for additions/deletions
-  const numstatOutput = git([...baseArgs, '--numstat'], cwd);
+  const numstatOutput = git(buildDiffArgs(base, head, options, ['--numstat']), cwd);
   if (numstatOutput) {
     for (const line of numstatOutput.split('\n')) {
       if (!line.trim()) continue;
@@ -255,8 +262,7 @@ export function getFilePatch(
   options?: DiffOptions
 ): string | undefined {
   try {
-    const baseArgs = buildDiffArgs(base, head, options);
-    return git([...baseArgs, '--', filename], cwd);
+    return git([...buildDiffArgs(base, head, options), '--', filename], cwd);
   } catch {
     return undefined;
   }
@@ -306,8 +312,7 @@ export function getChangedFilesWithPatches(
 
   // Get all patches in a single git diff command
   try {
-    const baseArgs = buildDiffArgs(base, head, options);
-    const combinedDiff = git(baseArgs, cwd);
+    const combinedDiff = git(buildDiffArgs(base, head, options), cwd);
     const patches = parseCombinedDiff(combinedDiff);
 
     for (const file of files) {
