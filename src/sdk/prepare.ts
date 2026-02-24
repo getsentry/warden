@@ -71,6 +71,12 @@ export function prepareFiles(
 
     const diff = parseFileDiff(file.filename, file.patch, status);
 
+    // Skip files with no meaningful diff content (e.g., empty files)
+    if (diff.hunks.length === 0 || diff.hunks.every((h) => h.newCount === 0 && h.oldCount === 0)) {
+      skippedFiles.push({ filename: file.filename, reason: 'builtin' });
+      continue;
+    }
+
     // Split large hunks first (handles large files becoming single hunks)
     const splitHunks = splitLargeHunks(diff.hunks, {
       maxChunkSize: chunking?.coalesce?.maxChunkSize,
