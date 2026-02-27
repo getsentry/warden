@@ -2,12 +2,13 @@ import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
-import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics } from '../sentry.js';
+import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
+import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
@@ -910,9 +911,32 @@ export async function runSkill(
     repoPath: context.repoPath,
     maxRetries: options.auxiliaryMaxRetries,
   });
-  const mergedFindings = mergeResult.findings;
+  let mergedFindings = mergeResult.findings;
   if (mergeResult.usage) {
     allAuxiliaryUsage.push({ agent: 'merge', usage: mergeResult.usage });
+  }
+  const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
+    repoPath: context.repoPath,
+    apiKey: options.apiKey,
+    maxRetries: options.auxiliaryMaxRetries,
+  });
+  mergedFindings = sanitized.findings;
+  if (sanitized.usage) {
+    allAuxiliaryUsage.push({ agent: 'fix_gate', usage: sanitized.usage });
+  }
+  emitFixGateMetrics(
+    sanitized.stats.checked,
+    sanitized.stats.strippedDeterministic,
+    sanitized.stats.strippedSemantic,
+    sanitized.stats.semanticUnavailable
+  );
+  if (sanitized.stats.checked > 0) {
+    logger.info('Suggested fix quality gate', {
+      'fix_gate.checked': sanitized.stats.checked,
+      'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
+      'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
+      'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
+    });
   }
 
   // Generate summary

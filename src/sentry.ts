@@ -135,6 +135,20 @@ export function emitFixEvalMetrics(evaluated: number, resolved: number, failed: 
   });
 }
 
+export function emitFixGateMetrics(
+  checked: number,
+  strippedDeterministic: number,
+  strippedSemantic: number,
+  semanticUnavailable: number
+): void {
+  safeEmit(() => {
+    Sentry.metrics.count('fix_gate.checked', checked);
+    Sentry.metrics.count('fix_gate.stripped_deterministic', strippedDeterministic);
+    Sentry.metrics.count('fix_gate.stripped_semantic', strippedSemantic);
+    Sentry.metrics.count('fix_gate.semantic_unavailable', semanticUnavailable);
+  });
+}
+
 export function emitRetryMetric(skill: string, attempt: number): void {
   safeEmit(() => {
     Sentry.metrics.count('skill.retries', 1, { attributes: { skill, attempt } });

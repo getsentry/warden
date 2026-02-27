@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import type { SkillReport, Finding } from '../types/index.js';
 import { renderIssueBody, renderNoFindingsUpdate } from './issue-renderer.js';
-import { parsePatch } from '../diff/parser.js';
+import { applyDiffToContent } from '../diff/apply.js';
 
 export interface IssueResult {
   issueNumber: number;
@@ -278,61 +278,4 @@ export async function createFixPR(
     branch: branchName,
     fixCount: appliedFindings.length,
   };
-}
-
-/**
- * Apply a unified diff to file content.
- * Returns the modified content.
- */
-function applyDiffToContent(content: string, diff: string): string {
-  const hunks = parsePatch(diff);
-  if (hunks.length === 0) {
-    throw new Error('No valid hunks found in diff');
-  }
-
-  const lines = content.split('\n');
-
-  // Sort hunks by oldStart in descending order to apply from bottom to top
-  const sortedHunks = [...hunks].sort((a, b) => b.oldStart - a.oldStart);
-
-  for (const hunk of sortedHunks) {
-    // Parse hunk lines into operations
-    const oldLines: string[] = [];
-    const newLines: string[] = [];
-
-    for (const line of hunk.lines) {
-      if (line.startsWith('-')) {
-        oldLines.push(line.slice(1));
-      } else if (line.startsWith('+')) {
-        newLines.push(line.slice(1));
-      } else if (line.startsWith(' ') || line === '') {
-        // Context line - should match in both
-        const contextLine = line.startsWith(' ') ? line.slice(1) : line;
-        oldLines.push(contextLine);
-        newLines.push(contextLine);
-      }
-    }
-
-    // The start index is 0-based (hunk.oldStart is 1-based)
-    const startIndex = hunk.oldStart - 1;
-
-    // Verify the old lines match (context check)
-    for (let i = 0; i < oldLines.length; i++) {
-      const lineIndex = startIndex + i;
-      if (lineIndex >= lines.length) {
-        throw new Error(`Hunk context mismatch: line ${lineIndex + 1} doesn't exist`);
-      }
-      if (lines[lineIndex] !== oldLines[i]) {
-        throw new Error(
-          `Hunk context mismatch at line ${lineIndex + 1}: ` +
-          `expected "${oldLines[i]}", got "${lines[lineIndex]}"`
-        );
-      }
-    }
-
-    // Replace the old lines with new lines
-    lines.splice(startIndex, oldLines.length, ...newLines);
-  }
-
-  return lines.join('\n');
 }

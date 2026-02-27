@@ -7,7 +7,7 @@
 
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
-import { Sentry, emitSkillMetrics, emitDedupMetrics, logger } from '../../sentry.js';
+import { Sentry, emitSkillMetrics, emitDedupMetrics, emitFixGateMetrics, logger } from '../../sentry.js';
 import {
   prepareFiles,
   analyzeFile,
@@ -22,6 +22,7 @@ import {
   type PreparedFile,
   type PRPromptContext,
 } from '../../sdk/runner.js';
+import { sanitizeFindingsSuggestedFixes } from '../../sdk/fix-quality.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import { Verbosity } from './verbosity.js';
@@ -406,9 +407,32 @@ export async function runSkillTask(
           repoPath: context.repoPath,
           maxRetries: runnerOptions.auxiliaryMaxRetries,
         });
-        const mergedFindings = mergeResult.findings;
+        let mergedFindings = mergeResult.findings;
         if (mergeResult.usage) {
           allAuxEntries.push({ agent: 'merge', usage: mergeResult.usage });
+        }
+        const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
+          repoPath: context.repoPath,
+          apiKey: runnerOptions.apiKey,
+          maxRetries: runnerOptions.auxiliaryMaxRetries,
+        });
+        mergedFindings = sanitized.findings;
+        if (sanitized.usage) {
+          allAuxEntries.push({ agent: 'fix_gate', usage: sanitized.usage });
+        }
+        emitFixGateMetrics(
+          sanitized.stats.checked,
+          sanitized.stats.strippedDeterministic,
+          sanitized.stats.strippedSemantic,
+          sanitized.stats.semanticUnavailable
+        );
+        if (sanitized.stats.checked > 0) {
+          logger.info('Suggested fix quality gate', {
+            'fix_gate.checked': sanitized.stats.checked,
+            'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
+            'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
+            'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
+          });
         }
 
         const report: SkillReport = {
