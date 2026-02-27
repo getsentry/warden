@@ -92,7 +92,7 @@ export async function evaluateFixAttempts(
       op: 'fix_eval.run',
       name: 'evaluate fix attempts',
       attributes: {
-        'fix_eval.comment_count': comments.length,
+        'warden.fix_eval.comment_count': comments.length,
       },
     },
     async (outerSpan) => {
@@ -102,6 +102,9 @@ export async function evaluateFixAttempts(
         skipped: 0,
         evaluated: 0,
         failedEvaluations: 0,
+        uniqueFindingsEvaluated: 0,
+        uniqueFindingsCodeChanged: 0,
+        uniqueFindingsResolved: 0,
         usage: emptyUsage(),
         evaluations: [],
       };
@@ -144,6 +147,9 @@ export async function evaluateFixAttempts(
 
       const changedFiles = [...patches.keys()];
       const usages: UsageStats[] = [];
+      const uniqueEvaluatedThreadIds = new Set<string>();
+      const uniqueCodeChangedThreadIds = new Set<string>();
+      const uniqueResolvedThreadIds = new Set<string>();
 
       for (const comment of commentsToEvaluate) {
         const findingId = extractFindingId(comment.title);
@@ -165,6 +171,9 @@ export async function evaluateFixAttempts(
         }
 
         result.evaluated++;
+        if (comment.threadId) {
+          uniqueEvaluatedThreadIds.add(comment.threadId);
+        }
 
         // Fetch code after fix (optional, reduces tool calls)
         let codeAfterFix: string | undefined;
@@ -187,7 +196,7 @@ export async function evaluateFixAttempts(
             attributes: {
               'code.filepath': comment.path,
               'code.line': comment.line,
-              'fix_eval.finding_id': findingId ?? 'unknown',
+              'warden.fix_eval.finding_id': findingId ?? 'unknown',
             },
           },
           async (evalSpan) => {
@@ -200,8 +209,8 @@ export async function evaluateFixAttempts(
             );
             const durationMs = performance.now() - startTime;
 
-            evalSpan.setAttribute('fix_eval.verdict', evalResult.verdict.status);
-            evalSpan.setAttribute('fix_eval.used_fallback', evalResult.usedFallback);
+            evalSpan.setAttribute('warden.fix_eval.verdict', evalResult.verdict.status);
+            evalSpan.setAttribute('warden.fix_eval.used_fallback', evalResult.usedFallback);
 
             return { evalResult, durationMs };
           },
@@ -247,6 +256,9 @@ export async function evaluateFixAttempts(
 
         if (reDetected) {
           finalVerdict = 're_detected';
+          if (comment.threadId) {
+            uniqueCodeChangedThreadIds.add(comment.threadId);
+          }
           result.toReply.push({
             comment,
             replyBody: formatFailedFixReply(
@@ -256,8 +268,15 @@ export async function evaluateFixAttempts(
             commitSha: context.headSha,
           });
         } else if (evalResult.verdict.status === 'resolved') {
+          if (comment.threadId) {
+            uniqueCodeChangedThreadIds.add(comment.threadId);
+            uniqueResolvedThreadIds.add(comment.threadId);
+          }
           result.toResolve.push(comment);
         } else {
+          if (evalResult.verdict.status === 'attempted_failed' && comment.threadId) {
+            uniqueCodeChangedThreadIds.add(comment.threadId);
+          }
           result.toReply.push({
             comment,
             replyBody: formatFailedFixReply(context.headSha, evalResult.verdict.reasoning),
@@ -279,13 +298,32 @@ export async function evaluateFixAttempts(
       }
 
       result.usage = usages.length > 0 ? aggregateUsage(usages) : emptyUsage();
+      result.uniqueFindingsEvaluated = uniqueEvaluatedThreadIds.size;
+      result.uniqueFindingsCodeChanged = uniqueCodeChangedThreadIds.size;
+      result.uniqueFindingsResolved = uniqueResolvedThreadIds.size;
+      const codeChangeRate =
+        result.uniqueFindingsEvaluated > 0
+          ? result.uniqueFindingsCodeChanged / result.uniqueFindingsEvaluated
+          : 0;
 
       // Set summary attributes and emit metrics
-      outerSpan.setAttribute('fix_eval.evaluated', result.evaluated);
-      outerSpan.setAttribute('fix_eval.resolved', result.toResolve.length);
-      outerSpan.setAttribute('fix_eval.failed', result.failedEvaluations);
-      outerSpan.setAttribute('fix_eval.skipped', result.skipped);
-      emitFixEvalMetrics(result.evaluated, result.toResolve.length, result.failedEvaluations, result.skipped);
+      outerSpan.setAttribute('warden.fix_eval.evaluated', result.evaluated);
+      outerSpan.setAttribute('warden.fix_eval.resolved', result.toResolve.length);
+      outerSpan.setAttribute('warden.fix_eval.failed', result.failedEvaluations);
+      outerSpan.setAttribute('warden.fix_eval.skipped', result.skipped);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.evaluated', result.uniqueFindingsEvaluated);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.code_changed', result.uniqueFindingsCodeChanged);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.resolved', result.uniqueFindingsResolved);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.code_change_rate', codeChangeRate);
+      emitFixEvalMetrics(
+        result.evaluated,
+        result.toResolve.length,
+        result.failedEvaluations,
+        result.skipped,
+        result.uniqueFindingsEvaluated,
+        result.uniqueFindingsCodeChanged,
+        result.uniqueFindingsResolved
+      );
 
       return result;
     },

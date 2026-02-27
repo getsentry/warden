@@ -82,6 +82,9 @@ describe('evaluateFixAttempts', () => {
     expect(result.toResolve).toHaveLength(0);
     expect(result.toReply).toHaveLength(0);
     expect(result.evaluations).toHaveLength(0);
+    expect(result.uniqueFindingsEvaluated).toBe(0);
+    expect(result.uniqueFindingsCodeChanged).toBe(0);
+    expect(result.uniqueFindingsResolved).toBe(0);
   });
 
   it('skips resolved comments', async () => {
@@ -131,6 +134,9 @@ describe('evaluateFixAttempts', () => {
       verdict: 'resolved',
       usedFallback: false,
     });
+    expect(result.uniqueFindingsEvaluated).toBe(1);
+    expect(result.uniqueFindingsCodeChanged).toBe(1);
+    expect(result.uniqueFindingsResolved).toBe(1);
   });
 
   it('categorizes attempted_failed verdicts into toReply', async () => {
@@ -152,6 +158,9 @@ describe('evaluateFixAttempts', () => {
       verdict: 'attempted_failed',
       reasoning: 'Only partial fix',
     });
+    expect(result.uniqueFindingsEvaluated).toBe(1);
+    expect(result.uniqueFindingsCodeChanged).toBe(1);
+    expect(result.uniqueFindingsResolved).toBe(0);
   });
 
   it('skips not_attempted verdicts', async () => {
@@ -171,6 +180,9 @@ describe('evaluateFixAttempts', () => {
     expect(result.evaluations[0]).toMatchObject({
       verdict: 'not_attempted',
     });
+    expect(result.uniqueFindingsEvaluated).toBe(1);
+    expect(result.uniqueFindingsCodeChanged).toBe(0);
+    expect(result.uniqueFindingsResolved).toBe(0);
   });
 
   it('overrides resolved verdict when issue is re-detected', async () => {
@@ -198,6 +210,9 @@ describe('evaluateFixAttempts', () => {
     expect(result.evaluations[0]).toMatchObject({
       verdict: 're_detected',
     });
+    expect(result.uniqueFindingsEvaluated).toBe(1);
+    expect(result.uniqueFindingsCodeChanged).toBe(1);
+    expect(result.uniqueFindingsResolved).toBe(0);
   });
 
   it('limits evaluation to MAX_EVALUATIONS (20)', async () => {
@@ -351,5 +366,42 @@ describe('evaluateFixAttempts', () => {
     expect(result.toResolve).toHaveLength(1);
     expect(result.toReply).toHaveLength(1);
     expect(result.failedEvaluations).toBe(0);
+    expect(result.uniqueFindingsEvaluated).toBe(3);
+    expect(result.uniqueFindingsCodeChanged).toBe(2);
+    expect(result.uniqueFindingsResolved).toBe(1);
+  });
+
+  it('counts unique findings by thread id', async () => {
+    const comments = [
+      createComment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' }),
+      createComment({ id: 2, threadId: 'thread-1', path: 'src/b.ts' }),
+    ];
+
+    mockFetchFollowUpChanges.mockResolvedValue({
+      patches: new Map([
+        ['src/a.ts', 'patch-a'],
+        ['src/b.ts', 'patch-b'],
+      ]),
+      commitMessages: ['Fix issue'],
+    });
+
+    mockEvaluateFix
+      .mockResolvedValueOnce({
+        verdict: { status: 'attempted_failed', reasoning: 'Partial fix' },
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+        usedFallback: false,
+      })
+      .mockResolvedValueOnce({
+        verdict: { status: 'resolved', reasoning: 'Fixed' },
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+        usedFallback: false,
+      });
+
+    const result = await evaluateFixAttempts(mockOctokit, comments, defaultContext, [], 'api-key');
+
+    expect(result.evaluated).toBe(2);
+    expect(result.uniqueFindingsEvaluated).toBe(1);
+    expect(result.uniqueFindingsCodeChanged).toBe(1);
+    expect(result.uniqueFindingsResolved).toBe(1);
   });
 });

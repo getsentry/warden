@@ -52,6 +52,9 @@ vi.mock('../fix-evaluation/index.js', () => ({
       skipped: 0,
       evaluated: 0,
       failedEvaluations: 0,
+      uniqueFindingsEvaluated: 0,
+      uniqueFindingsCodeChanged: 0,
+      uniqueFindingsResolved: 0,
       usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
     })
   ),
@@ -702,6 +705,9 @@ describe('runPRWorkflow', () => {
         skipped: 0,
         evaluated: 1,
         failedEvaluations: 0,
+        uniqueFindingsEvaluated: 1,
+        uniqueFindingsCodeChanged: 1,
+        uniqueFindingsResolved: 1,
         usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
       });
 
@@ -765,6 +771,9 @@ describe('runPRWorkflow', () => {
         skipped: 0,
         evaluated: 1,
         failedEvaluations: 0,
+        uniqueFindingsEvaluated: 1,
+        uniqueFindingsCodeChanged: 0,
+        uniqueFindingsResolved: 0,
         usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
       });
 

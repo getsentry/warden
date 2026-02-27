@@ -353,7 +353,11 @@ async function evaluateFixesAndResolveStale(
   canResolveStale: boolean,
   anthropicApiKey: string,
   auxiliaryMaxRetries?: number
-): Promise<{ allResolved: boolean }> {
+): Promise<{
+  allResolved: boolean;
+  autoResolvedByFixEvaluation: number;
+  autoResolvedByStaleCheck: number;
+}> {
   const wardenComments = fetchedComments.filter((c) => c.isWarden);
   const commentsResolvedByFixEval = new Set<number>();
   const commentsEvaluatedByFixEval = new Set<number>();
@@ -467,7 +471,11 @@ async function evaluateFixesAndResolveStale(
     (c) => commentsResolvedByFixEval.has(c.id) || commentsResolvedByStale.has(c.id)
   );
 
-  return { allResolved };
+  return {
+    allResolved,
+    autoResolvedByFixEvaluation: commentsResolvedByFixEval.size,
+    autoResolvedByStaleCheck: commentsResolvedByStale.size,
+  };
 }
 
 /**
@@ -579,9 +587,13 @@ async function cleanupOrphanedComments(
 
   logAction(`No triggers matched, but found ${wardenComments.length} existing Warden comments. Running cleanup.`);
 
-  const { allResolved } = await evaluateFixesAndResolveStale(
+  const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck } =
+    await evaluateFixesAndResolveStale(
     octokit, context, existingComments, [], true, anthropicApiKey, auxiliaryMaxRetries
-  );
+    );
+  const activeSpan = Sentry.getActiveSpan();
+  activeSpan?.setAttribute('warden.feedback.auto_resolve.fix_eval_count', autoResolvedByFixEvaluation);
+  activeSpan?.setAttribute('warden.feedback.auto_resolve.stale_count', autoResolvedByStaleCheck);
 
   // Dismiss CHANGES_REQUESTED only if every unresolved comment was resolved
   if (allResolved) {
@@ -680,12 +692,21 @@ export async function runPRWorkflow(
 
       await Sentry.startSpan(
         { op: 'workflow.resolve', name: 'resolve stale comments' },
-        () =>
-          evaluateFixesAndResolveStale(
+        async (resolveSpan) => {
+          const resolutionResult = await evaluateFixesAndResolveStale(
             octokit, context, reviewPhase.fetchedComments,
             allFindings, canResolveStale, inputs.anthropicApiKey,
             config.defaults?.auxiliaryMaxRetries,
-          ),
+          );
+          resolveSpan.setAttribute(
+            'warden.feedback.auto_resolve.fix_eval_count',
+            resolutionResult.autoResolvedByFixEvaluation
+          );
+          resolveSpan.setAttribute(
+            'warden.feedback.auto_resolve.stale_count',
+            resolutionResult.autoResolvedByStaleCheck
+          );
+        },
       );
 
       await finalizeWorkflow(

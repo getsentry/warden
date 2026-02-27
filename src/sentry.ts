@@ -126,12 +126,23 @@ export function emitExtractionMetrics(skill: string, method: 'regex' | 'llm' | '
   });
 }
 
-export function emitFixEvalMetrics(evaluated: number, resolved: number, failed: number, skipped: number): void {
+export function emitFixEvalMetrics(
+  evaluated: number,
+  resolved: number,
+  failed: number,
+  skipped: number,
+  uniqueFindingsEvaluated: number,
+  uniqueFindingsCodeChanged: number,
+  uniqueFindingsResolved: number
+): void {
   safeEmit(() => {
-    Sentry.metrics.count('fix_eval.evaluated', evaluated);
-    Sentry.metrics.count('fix_eval.resolved', resolved);
-    Sentry.metrics.count('fix_eval.failed', failed);
-    Sentry.metrics.count('fix_eval.skipped', skipped);
+    Sentry.metrics.count('warden.fix_eval.evaluated', evaluated);
+    Sentry.metrics.count('warden.fix_eval.resolved', resolved);
+    Sentry.metrics.count('warden.fix_eval.failed', failed);
+    Sentry.metrics.count('warden.fix_eval.skipped', skipped);
+    Sentry.metrics.count('warden.fix_eval.unique_findings.evaluated', uniqueFindingsEvaluated);
+    Sentry.metrics.count('warden.fix_eval.unique_findings.code_changed', uniqueFindingsCodeChanged);
+    Sentry.metrics.count('warden.fix_eval.unique_findings.resolved', uniqueFindingsResolved);
   });
 }
 
@@ -167,7 +178,7 @@ export function emitDedupMetrics(total: number, unique: number): void {
 
 export function emitStaleResolutionMetric(count: number): void {
   safeEmit(() => {
-    Sentry.metrics.count('stale.resolved', count);
+    Sentry.metrics.count('warden.stale.resolved', count);
   });
 }
 

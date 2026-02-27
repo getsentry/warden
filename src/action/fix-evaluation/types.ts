@@ -42,6 +42,12 @@ export interface EvaluateFixAttemptsResult {
   evaluated: number;
   /** Evaluations that failed and used fallback (API errors, invalid responses) */
   failedEvaluations: number;
+  /** Unique finding threads evaluated in this run */
+  uniqueFindingsEvaluated: number;
+  /** Unique finding threads with evidence of code-change action */
+  uniqueFindingsCodeChanged: number;
+  /** Unique finding threads judged resolved */
+  uniqueFindingsResolved: number;
   /** Accumulated usage stats from all fix evaluations */
   usage: UsageStats;
   /** Per-comment evaluation details for logging/reporting */
