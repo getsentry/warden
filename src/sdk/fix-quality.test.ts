@@ -72,6 +72,20 @@ describe('sanitizeFindingsSuggestedFixes', () => {
     expect(result.stats.strippedDeterministic).toBe(1);
   });
 
+  it('keeps suggestion when old-side hunk overlaps finding after deletions', async () => {
+    const finding = makeFinding(`--- a/src/test.ts
++++ b/src/test.ts
+@@ -2,2 +2,1 @@
+-b
+-c
++B`, 'src/test.ts', 3);
+
+    const result = await sanitizeFindingsSuggestedFixes([finding], { repoPath });
+    expect(result.findings[0]?.suggestedFix).toBeDefined();
+    expect(result.stats.strippedDeterministic).toBe(0);
+    expect(result.stats.semanticUnavailable).toBe(1);
+  });
+
   it('strips suggestion when apply fails', async () => {
     const finding = makeFinding(`--- a/src/test.ts
 +++ b/src/test.ts

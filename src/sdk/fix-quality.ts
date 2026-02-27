@@ -62,8 +62,10 @@ function overlapsAnchor(diff: string, finding: Finding): boolean {
   if (hunks.length === 0) return false;
 
   return hunks.some((h) => {
-    const start = h.newStart;
-    const end = h.newStart + Math.max(h.newCount, 1) - 1;
+    // Finding locations are in pre-fix file coordinates, so compare against
+    // the old-side hunk range to avoid false mismatches when line counts shift.
+    const start = h.oldStart;
+    const end = h.oldStart + Math.max(h.oldCount, 1) - 1;
     return start <= anchorEnd && end >= anchorStart;
   });
 }
