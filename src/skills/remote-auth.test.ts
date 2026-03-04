@@ -8,7 +8,7 @@ vi.mock('../utils/exec.js', () => ({
 }));
 
 import { execGitNonInteractive } from '../utils/exec.js';
-import { fetchRemote } from './remote.js';
+import { fetchRemote, getRemotePath, saveState } from './remote.js';
 
 describe('fetchRemote auth behavior', () => {
   const originalStateDir = process.env['WARDEN_STATE_DIR'];
@@ -53,6 +53,7 @@ describe('fetchRemote auth behavior', () => {
     expect(cloneOptions?.env?.['GIT_CONFIG_COUNT']).toBe('1');
     expect(cloneOptions?.env?.['GIT_CONFIG_KEY_0']).toBe('http.https://github.com/.extraheader');
     expect(cloneOptions?.env?.['GIT_CONFIG_VALUE_0']).toContain('AUTHORIZATION: basic ');
+    expect(cloneCall?.[0].join(' ')).not.toContain('test-token');
   });
 
   it('treats whitespace-only tokens as unset', async () => {
@@ -66,5 +67,54 @@ describe('fetchRemote auth behavior', () => {
     expect(cloneOptions?.env?.['GIT_CONFIG_COUNT']).toBeUndefined();
     expect(cloneOptions?.env?.['GIT_CONFIG_KEY_0']).toBeUndefined();
     expect(cloneOptions?.env?.['GIT_CONFIG_VALUE_0']).toBeUndefined();
+  });
+
+  it('does not apply github auth env for persisted non-github clone URLs', async () => {
+    const remotePath = getRemotePath('owner/repo');
+    mkdirSync(remotePath, { recursive: true });
+    saveState({
+      remotes: {
+        'owner/repo': {
+          sha: 'abc123',
+          fetchedAt: new Date().toISOString(),
+          cloneUrl: 'https://example.com/owner/repo.git',
+        },
+      },
+    });
+
+    await fetchRemote('owner/repo', { githubToken: 'test-token', force: true });
+
+    const fetchCall = vi.mocked(execGitNonInteractive).mock.calls.find((call) => call[0][0] === 'fetch');
+    expect(fetchCall).toBeDefined();
+    expect(fetchCall?.[0]).toEqual(['fetch', '--depth=1', 'origin']);
+    const fetchOptions = fetchCall?.[1];
+    expect(fetchOptions?.env?.['GIT_CONFIG_COUNT']).toBeUndefined();
+  });
+
+  it('sanitizes token from auth-failure error messages', async () => {
+    vi.mocked(execGitNonInteractive).mockImplementation((args: string[]) => {
+      if (args[0] === 'clone') {
+        throw new Error('authentication failed for test-token');
+      }
+      return '';
+    });
+
+    await expect(fetchRemote('owner/repo', { githubToken: 'test-token' }))
+      .rejects.toThrow('Failed to authenticate when cloning owner/repo');
+    await expect(fetchRemote('owner/repo', { githubToken: 'test-token' }))
+      .rejects.not.toThrow('test-token');
+  });
+
+  it('keeps per-command auth env isolated across concurrent fetches', async () => {
+    await Promise.all([
+      fetchRemote('owner/repo-a', { githubToken: 'token-a' }),
+      fetchRemote('owner/repo-b', { githubToken: 'token-b' }),
+    ]);
+
+    const cloneCalls = vi.mocked(execGitNonInteractive).mock.calls.filter((call) => call[0][0] === 'clone');
+    expect(cloneCalls).toHaveLength(2);
+    const headers = cloneCalls.map((call) => call[1]?.env?.['GIT_CONFIG_VALUE_0']);
+    expect(headers[0]).not.toBe(headers[1]);
+    expect(headers.every((h) => typeof h === 'string' && h.startsWith('AUTHORIZATION: basic '))).toBe(true);
   });
 });

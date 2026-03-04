@@ -324,10 +324,11 @@ function buildGitHubAuthEnv(token: string): Record<string, string> {
 /**
  * Check whether this remote points to github.com.
  */
-function isGitHubRemote(parsed: ParsedRemoteRef): boolean {
-  // owner/repo shorthand is always GitHub.
-  if (!parsed.cloneUrl) return true;
-  return normalizeGitHubUrl(parsed.cloneUrl) !== null;
+function isGitHubRemote(parsed: ParsedRemoteRef, cloneUrl?: string): boolean {
+  // owner/repo shorthand is GitHub unless an explicit non-GitHub URL is persisted in state.
+  const effectiveUrl = cloneUrl ?? parsed.cloneUrl;
+  if (!effectiveUrl) return true;
+  return normalizeGitHubUrl(effectiveUrl) !== null;
 }
 
 /**
@@ -405,14 +406,15 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
     return stateEntry.sha;
   }
 
+  const sourceCloneUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl;
   const token = normalizeToken(options.githubToken);
-  const useGitHubAuth = !!token && isGitHubRemote(parsed);
+  const useGitHubAuth = !!token && isGitHubRemote(parsed, sourceCloneUrl);
   const gitAuthEnv = token && useGitHubAuth ? buildGitHubAuthEnv(token) : undefined;
 
   // Use runtime HTTPS for authenticated GitHub fetches. Otherwise preserve existing URL semantics.
   const repoUrl = useGitHubAuth
     ? getGitHubHttpsUrl(parsed)
-    : (parsed.cloneUrl ?? stateEntry?.cloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`);
+    : (sourceCloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`);
 
   // Clone or update
   if (!isCached) {
