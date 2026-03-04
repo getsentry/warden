@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { SkillDefinition, ToolName } from '../config/schema.js';
 import { ToolNameSchema } from '../config/schema.js';
+import type { RemoteAuthOptions } from './auth-options.js';
 
 export class SkillLoaderError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -380,7 +381,7 @@ export async function discoverAllSkills(
   return discoverFromDirectories(repoRoot, SKILL_DIRECTORIES, options);
 }
 
-export interface ResolveSkillOptions {
+export interface ResolveSkillOptions extends RemoteAuthOptions {
   /** Remote repository reference (e.g., "owner/repo" or "owner/repo@sha") */
   remote?: string;
   /** Skip network operations - only use cache for remote skills */
@@ -411,14 +412,14 @@ async function resolveEntry(
   options: ResolveSkillOptions | undefined,
   config: ResolveConfig,
 ): Promise<SkillDefinition> {
-  const { remote, offline } = options ?? {};
+  const { remote, offline, githubToken } = options ?? {};
 
   // 1. Remote repository resolution takes priority when specified
   if (remote) {
     // Dynamic import to avoid circular dependencies
     const { resolveRemoteSkill, resolveRemoteAgent } = await import('./remote.js');
     const resolver = config.kind === 'skill' ? resolveRemoteSkill : resolveRemoteAgent;
-    return resolver(remote, nameOrPath, { offline });
+    return resolver(remote, nameOrPath, { offline, githubToken });
   }
 
   // 2. Direct path resolution

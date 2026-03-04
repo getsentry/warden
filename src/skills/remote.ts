@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { loadSkillFromMarkdown, SkillLoaderError, AGENT_MARKER_FILE } from './loader.js';
+import type { RemoteAuthOptions } from './auth-options.js';
 import type { SkillDefinition } from '../config/schema.js';
 
 /** Default TTL for unpinned remote skills: 24 hours */
@@ -289,7 +290,7 @@ export function shouldRefresh(ref: string, state: RemoteState): boolean {
   return now - fetchedAt > ttl;
 }
 
-export interface FetchRemoteOptions {
+export interface FetchRemoteOptions extends RemoteAuthOptions {
   /** Force refresh even if cache is valid */
   force?: boolean;
   /** Skip network operations - only use cache */

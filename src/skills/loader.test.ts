@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { writeFileSync, unlinkSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
@@ -17,6 +17,13 @@ import {
   AGENT_DIRECTORIES,
   AGENT_MARKER_FILE,
 } from './loader.js';
+
+vi.mock('./remote.js', () => ({
+  resolveRemoteSkill: vi.fn(),
+  resolveRemoteAgent: vi.fn(),
+}));
+
+import { resolveRemoteSkill, resolveRemoteAgent } from './remote.js';
 
 describe('loadSkillFromFile', () => {
   it('rejects unsupported file types', async () => {
@@ -40,6 +47,46 @@ describe('resolveSkillAsync', () => {
   it('throws for unknown skills', async () => {
     await expect(resolveSkillAsync('nonexistent-skill')).rejects.toThrow(SkillLoaderError);
     await expect(resolveSkillAsync('nonexistent-skill')).rejects.toThrow('Skill not found');
+  });
+
+  it('forwards githubToken and offline to remote skill resolution', async () => {
+    vi.mocked(resolveRemoteSkill).mockResolvedValue({
+      name: 'remote-skill',
+      description: 'from remote',
+      prompt: 'prompt',
+    });
+
+    await resolveSkillAsync('remote-skill', '/tmp/repo', {
+      remote: 'owner/repo',
+      offline: true,
+      githubToken: 'test-token',
+    });
+
+    expect(resolveRemoteSkill).toHaveBeenCalledWith('owner/repo', 'remote-skill', {
+      offline: true,
+      githubToken: 'test-token',
+    });
+  });
+});
+
+describe('resolveAgentAsync', () => {
+  it('forwards githubToken and offline to remote agent resolution', async () => {
+    vi.mocked(resolveRemoteAgent).mockResolvedValue({
+      name: 'remote-agent',
+      description: 'from remote',
+      prompt: 'prompt',
+    });
+
+    await resolveAgentAsync('remote-agent', '/tmp/repo', {
+      remote: 'owner/repo',
+      offline: true,
+      githubToken: 'test-token',
+    });
+
+    expect(resolveRemoteAgent).toHaveBeenCalledWith('owner/repo', 'remote-agent', {
+      offline: true,
+      githubToken: 'test-token',
+    });
   });
 });
 
