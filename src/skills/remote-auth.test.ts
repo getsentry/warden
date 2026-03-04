@@ -9,6 +9,7 @@ vi.mock('../utils/exec.js', () => ({
 
 import { execGitNonInteractive } from '../utils/exec.js';
 import { fetchRemote, getRemotePath, saveState } from './remote.js';
+import { SkillLoaderError } from './loader.js';
 
 describe('fetchRemote auth behavior', () => {
   const originalStateDir = process.env['WARDEN_STATE_DIR'];
@@ -103,6 +104,42 @@ describe('fetchRemote auth behavior', () => {
       .rejects.toThrow('Failed to authenticate when cloning owner/repo');
     await expect(fetchRemote('owner/repo', { githubToken: 'test-token' }))
       .rejects.not.toThrow('test-token');
+  });
+
+  it('preserves original auth failure as cause for tokenized fetches', async () => {
+    vi.mocked(execGitNonInteractive).mockImplementation((args: string[]) => {
+      if (args[0] === 'clone') {
+        throw new Error('fatal: authentication failed');
+      }
+      return '';
+    });
+
+    try {
+      await fetchRemote('owner/repo', { githubToken: 'test-token' });
+      throw new Error('expected fetchRemote to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(SkillLoaderError);
+      expect((error as Error).cause).toBeInstanceOf(Error);
+      expect(((error as Error).cause as Error).message).toContain('authentication failed');
+    }
+  });
+
+  it('preserves original HTTPS prompt failure as cause for unauthenticated shorthand refs', async () => {
+    vi.mocked(execGitNonInteractive).mockImplementation((args: string[]) => {
+      if (args[0] === 'clone') {
+        throw new Error('fatal: could not read Username for \'https://github.com\': terminal prompts disabled');
+      }
+      return '';
+    });
+
+    try {
+      await fetchRemote('owner/repo');
+      throw new Error('expected fetchRemote to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(SkillLoaderError);
+      expect((error as Error).cause).toBeInstanceOf(Error);
+      expect(((error as Error).cause as Error).message).toContain('terminal prompts disabled');
+    }
   });
 
   it('keeps per-command auth env isolated across concurrent fetches', async () => {

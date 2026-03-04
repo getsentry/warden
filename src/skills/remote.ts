@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { loadSkillFromMarkdown, SkillLoaderError, AGENT_MARKER_FILE } from './loader.js';
@@ -451,13 +451,15 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
       if (token && isGitAuthFailure(message)) {
         throw new SkillLoaderError(
           `Failed to authenticate when cloning ${stateKey}. ` +
-          `Ensure the provided GitHub token has read access to ${parsed.owner}/${parsed.repo}.`
+          `Ensure the provided GitHub token has read access to ${parsed.owner}/${parsed.repo}.`,
+          { cause: error }
         );
       }
       // Unauthenticated shorthand HTTPS failure: provide explicit auth guidance.
       if (!token && !parsed.cloneUrl && (message.includes('terminal prompts disabled') || message.includes('could not read Username'))) {
         throw new SkillLoaderError(
-          `Failed to clone ${stateKey} via HTTPS. For private repos, provide a GitHub token (GITHUB_TOKEN or WARDEN_GITHUB_TOKEN) or use the SSH URL: warden add --remote git@github.com:${parsed.owner}/${parsed.repo}.git`
+          `Failed to clone ${stateKey} via HTTPS. For private repos, provide a GitHub token (GITHUB_TOKEN or WARDEN_GITHUB_TOKEN) or use the SSH URL: warden add --remote git@github.com:${parsed.owner}/${parsed.repo}.git`,
+          { cause: error }
         );
       }
       throw error;
@@ -609,7 +611,8 @@ async function discoverMarketplaceSkills(
     // Security: Ensure plugin source doesn't escape the repo directory via path traversal
     const resolvedSkillsPath = resolve(skillsPath);
     const resolvedRemotePath = resolve(remotePath);
-    if (!resolvedSkillsPath.startsWith(`${resolvedRemotePath}/`)) {
+    const relativePath = relative(resolvedRemotePath, resolvedSkillsPath);
+    if (relativePath === '..' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
       continue; // Silently skip — attacker-controlled marketplace.json, don't leak info
     }
 
