@@ -467,14 +467,14 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
     onProgress?.(`Updating ${ref}...`);
 
     if (!isPinned) {
-      // For unpinned refs, pull latest. Use direct URL fetch for tokenized GitHub auth.
+      // For unpinned refs, pull latest from the explicit remote URL so cached SSH remotes
+      // keep their transport semantics across refreshes.
       if (useGitHubAuth) {
         execGit(['fetch', '--depth=1', '--', repoUrl], { cwd: remotePath, env: gitAuthEnv });
-        execGit(['reset', '--hard', 'FETCH_HEAD'], { cwd: remotePath });
       } else {
-        execGit(['fetch', '--depth=1', 'origin'], { cwd: remotePath });
-        execGit(['reset', '--hard', 'origin/HEAD'], { cwd: remotePath });
+        execGit(['fetch', '--depth=1', '--', repoUrl], { cwd: remotePath });
       }
+      execGit(['reset', '--hard', 'FETCH_HEAD'], { cwd: remotePath });
     }
     // Pinned refs don't need updates - SHA is immutable
   }

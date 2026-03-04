@@ -86,7 +86,7 @@ describe('fetchRemote auth behavior', () => {
 
     const fetchCall = vi.mocked(execGitNonInteractive).mock.calls.find((call) => call[0][0] === 'fetch');
     expect(fetchCall).toBeDefined();
-    expect(fetchCall?.[0]).toEqual(['fetch', '--depth=1', 'origin']);
+    expect(fetchCall?.[0]).toEqual(['fetch', '--depth=1', '--', 'https://example.com/owner/repo.git']);
     const fetchOptions = fetchCall?.[1];
     expect(fetchOptions?.env?.['GIT_CONFIG_COUNT']).toBeUndefined();
   });
