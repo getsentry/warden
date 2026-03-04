@@ -28,6 +28,8 @@ export interface ActionInputs {
   failCheck?: boolean;
   /** Max concurrent trigger executions */
   parallel: number;
+  /** Path to write structured JSON findings data */
+  findingsOutputFile?: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -99,6 +101,7 @@ export function parseActionInputs(): ActionInputs {
 
   const requestChanges = parseBooleanInput(getInput('request-changes'));
   const failCheck = parseBooleanInput(getInput('fail-check'));
+  const findingsOutputFile = getInput('findings-output-file') || undefined;
 
   return {
     anthropicApiKey,
@@ -111,6 +114,7 @@ export function parseActionInputs(): ActionInputs {
     requestChanges,
     failCheck,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
+    findingsOutputFile,
   };
 }
 

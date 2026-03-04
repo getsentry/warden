@@ -25,6 +25,7 @@ import {
   findClaudeCodeExecutable,
   handleTriggerErrors,
   getDefaultBranchFromAPI,
+  writeFindingsOutput,
 } from './base.js';
 
 // -----------------------------------------------------------------------------
@@ -187,6 +188,21 @@ export async function runScheduleWorkflow(
   setOutput('findings-count', totalFindings);
   setOutput('high-count', highCount);
   setOutput('summary', allReports.map((r) => r.summary).join('\n') || 'Scheduled analysis complete');
+
+  // Write structured findings to file for external export (GCS, S3, etc.)
+  if (inputs.findingsOutputFile && allReports.length > 0) {
+    try {
+      writeFindingsOutput(inputs.findingsOutputFile, allReports, {
+        eventType: 'schedule',
+        action: 'scheduled',
+        repository: { owner, name: repo, fullName: `${owner}/${repo}`, defaultBranch },
+        repoPath,
+      });
+      console.log(`Findings written to ${inputs.findingsOutputFile}`);
+    } catch (error) {
+      console.error(`::warning::Failed to write findings output: ${error}`);
+    }
+  }
 
   if (shouldFailAction) {
     setFailed(failureReasons.join('; '));

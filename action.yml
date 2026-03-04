@@ -42,6 +42,9 @@ inputs:
     description: 'Maximum number of concurrent trigger executions'
     required: false
     default: '5'
+  findings-output-file:
+    description: 'Path to write structured JSON findings data (for external upload to GCS, S3, etc.)'
+    required: false
 
 outputs:
   findings-count:
@@ -90,5 +93,6 @@ runs:
         INPUT_REQUEST_CHANGES: ${{ inputs.request-changes }}
         INPUT_FAIL_CHECK: ${{ inputs.fail-check }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
+        INPUT_FINDINGS_OUTPUT_FILE: ${{ inputs.findings-output-file }}
         CLAUDE_CODE_PATH: ${{ env.HOME }}/.local/bin/claude
       run: node ${{ github.action_path }}/dist/action/index.js
