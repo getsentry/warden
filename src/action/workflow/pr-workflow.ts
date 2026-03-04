@@ -404,7 +404,7 @@ async function evaluateFixesAndResolveStale(
           logAction(`Resolved ${resolvedCount} comments via fix evaluation`);
         }
         // Track only actually resolved comments for allResolved check
-        resolvedIds.forEach((id) => commentsResolvedByFixEval.add(id));
+        for (const id of resolvedIds) commentsResolvedByFixEval.add(id);
       }
 
       // Post replies for failed fixes and track them so stale pass doesn't override
@@ -468,7 +468,7 @@ async function evaluateFixesAndResolveStale(
             emitStaleResolutionMetric(count, skill);
           }
         }
-        resolvedIds.forEach((id) => commentsResolvedByStale.add(id));
+        for (const id of resolvedIds) commentsResolvedByStale.add(id);
       }
     } catch (error) {
       Sentry.captureException(error, { tags: { operation: 'resolve_stale_comments' } });

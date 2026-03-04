@@ -258,8 +258,8 @@ export function saveState(state: RemoteState): void {
 export function getCacheTtlSeconds(): number {
   const envTtl = process.env['WARDEN_SKILL_CACHE_TTL'];
   if (envTtl) {
-    const parsed = parseInt(envTtl, 10);
-    if (!isNaN(parsed) && parsed > 0) {
+    const parsed = Number.parseInt(envTtl, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) {
       return parsed;
     }
   }
@@ -457,9 +457,7 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
       // Unauthenticated shorthand HTTPS failure: provide explicit auth guidance.
       if (!token && !parsed.cloneUrl && (message.includes('terminal prompts disabled') || message.includes('could not read Username'))) {
         throw new SkillLoaderError(
-          `Failed to clone ${stateKey} via HTTPS. ` +
-          `For private repos, provide a GitHub token (GITHUB_TOKEN or WARDEN_GITHUB_TOKEN) ` +
-          `or use the SSH URL: warden add --remote git@github.com:${parsed.owner}/${parsed.repo}.git`
+          `Failed to clone ${stateKey} via HTTPS. For private repos, provide a GitHub token (GITHUB_TOKEN or WARDEN_GITHUB_TOKEN) or use the SSH URL: warden add --remote git@github.com:${parsed.owner}/${parsed.repo}.git`
         );
       }
       throw error;
@@ -611,7 +609,7 @@ async function discoverMarketplaceSkills(
     // Security: Ensure plugin source doesn't escape the repo directory via path traversal
     const resolvedSkillsPath = resolve(skillsPath);
     const resolvedRemotePath = resolve(remotePath);
-    if (!resolvedSkillsPath.startsWith(resolvedRemotePath + '/')) {
+    if (!resolvedSkillsPath.startsWith(`${resolvedRemotePath}/`)) {
       continue; // Silently skip — attacker-controlled marketplace.json, don't leak info
     }
 

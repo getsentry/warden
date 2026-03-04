@@ -124,7 +124,7 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
     if (line.startsWith('  ') && inMetadata) {
       // Nested metadata value
       const metaMatch = trimmed.match(/^(\w+):\s*(.*)$/);
-      if (metaMatch && metaMatch[1]) {
+      if (metaMatch?.[1]) {
         metadata[metaMatch[1]] = metaMatch[2]?.replace(/^["']|["']$/g, '') ?? '';
       }
       continue;
@@ -132,7 +132,7 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
 
     inMetadata = false;
     const keyMatch = line.match(/^(\w[\w-]*):\s*(.*)$/);
-    if (keyMatch && keyMatch[1]) {
+    if (keyMatch?.[1]) {
       currentKey = keyMatch[1];
       const value = (keyMatch[2] ?? '').trim();
 
