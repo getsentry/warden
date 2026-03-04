@@ -903,7 +903,7 @@ export async function runSkill(
 
   // Deduplicate findings
   const uniqueFindings = deduplicateFindings(allFindings);
-  emitDedupMetrics(allFindings.length, uniqueFindings.length);
+  emitDedupMetrics(skill.name, allFindings.length, uniqueFindings.length);
 
   // Merge findings that describe the same issue at different locations
   const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
@@ -925,6 +925,7 @@ export async function runSkill(
     allAuxiliaryUsage.push({ agent: 'fix_gate', usage: sanitized.usage });
   }
   emitFixGateMetrics(
+    skill.name,
     sanitized.stats.checked,
     sanitized.stats.strippedDeterministic,
     sanitized.stats.strippedSemantic,

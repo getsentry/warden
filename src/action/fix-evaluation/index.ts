@@ -3,7 +3,7 @@ import type { ExistingComment } from '../../output/dedup.js';
 import type { Finding, UsageStats } from '../../types/index.js';
 import { aggregateUsage, emptyUsage } from '../../sdk/usage.js';
 import { findingMatchesComment } from '../../output/stale.js';
-import { Sentry, emitFixEvalMetrics } from '../../sentry.js';
+import { Sentry, emitFixEvalMetrics, emitFixEvalVerdictMetric } from '../../sentry.js';
 import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
 import { evaluateFix } from './judge.js';
 import type { FixJudgeContext } from './judge.js';
@@ -153,6 +153,7 @@ export async function evaluateFixAttempts(
 
       for (const comment of commentsToEvaluate) {
         const findingId = extractFindingId(comment.title);
+        const skill = comment.skills?.[0];
 
         // Fetch code at the issue location before the fix
         let codeBeforeFix: string;
@@ -197,6 +198,7 @@ export async function evaluateFixAttempts(
               'code.filepath': comment.path,
               'code.line': comment.line,
               'warden.fix_eval.finding_id': findingId ?? 'unknown',
+              ...(skill && { 'warden.fix_eval.skill': skill }),
             },
           },
           async (evalSpan) => {
@@ -223,6 +225,7 @@ export async function evaluateFixAttempts(
           result.failedEvaluations++;
           result.evaluations.push({
             findingId,
+            skill,
             path: comment.path,
             line: comment.line,
             title: comment.title,
@@ -232,12 +235,14 @@ export async function evaluateFixAttempts(
             usage: evalResult.usage,
             usedFallback: true,
           });
+          emitFixEvalVerdictMetric(evalResult.verdict.status, skill);
           continue;
         }
 
         if (evalResult.verdict.status === 'not_attempted') {
           result.evaluations.push({
             findingId,
+            skill,
             path: comment.path,
             line: comment.line,
             title: comment.title,
@@ -247,6 +252,7 @@ export async function evaluateFixAttempts(
             usage: evalResult.usage,
             usedFallback: false,
           });
+          emitFixEvalVerdictMetric('not_attempted', skill);
           continue;
         }
 
@@ -286,6 +292,7 @@ export async function evaluateFixAttempts(
 
         result.evaluations.push({
           findingId,
+          skill,
           path: comment.path,
           line: comment.line,
           title: comment.title,
@@ -295,6 +302,7 @@ export async function evaluateFixAttempts(
           usage: evalResult.usage,
           usedFallback: false,
         });
+        emitFixEvalVerdictMetric(finalVerdict, skill);
       }
 
       result.usage = usages.length > 0 ? aggregateUsage(usages) : emptyUsage();

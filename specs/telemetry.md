@@ -211,6 +211,7 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 | `code.filepath` | string | Creation |
 | `code.line` | number | Creation |
 | `fix_eval.finding_id` | string | Creation |
+| `fix_eval.skill` | string | Creation (when available) |
 | `fix_eval.verdict` | string | After result |
 | `fix_eval.used_fallback` | boolean | After result |
 
@@ -263,12 +264,14 @@ Called once per analysis workflow execution (CLI run or GitHub Action workflow).
 
 | Metric | Type | Per-metric attributes |
 |--------|------|-----------------------|
-| `skill.duration` | distribution (ms) | `skill` |
-| `tokens.input` | distribution | `skill` |
-| `tokens.output` | distribution | `skill` |
-| `cost.usd` | distribution | `skill` |
-| `findings.total` | count | `skill` |
-| `findings` | count | `skill`, `severity` |
+| `skill.duration` | distribution (ms) | `skill`, `model` |
+| `tokens.input` | distribution | `skill`, `model` |
+| `tokens.output` | distribution | `skill`, `model` |
+| `cost.usd` | distribution | `skill`, `model` |
+| `findings.total` | count | `skill`, `model` |
+| `findings` | count | `skill`, `model`, `severity` |
+
+`model` is included when `report.model` is set (i.e. when the caller specifies a model).
 
 ### Extraction (`emitExtractionMetrics`)
 
@@ -287,15 +290,26 @@ Called from `analyzeHunk` retry block.
 |--------|------|------------|
 | `skill.retries` | count | `skill`, `attempt` |
 
-### Deduplication (`emitDedupMetrics`)
+### Fix gate (`emitFixGateMetrics`)
 
-Called from both `runSkill()` and `_runSkillTaskInner()` after `deduplicateFindings`.
+Called from both `runSkill()` and `runSkillTask()` after `sanitizeFindingsSuggestedFixes`.
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `dedup.total` | distribution | -- |
-| `dedup.unique` | distribution | -- |
-| `dedup.removed` | distribution | -- (only when total > 0) |
+| `fix_gate.checked` | count | `skill` |
+| `fix_gate.stripped_deterministic` | count | `skill` |
+| `fix_gate.stripped_semantic` | count | `skill` |
+| `fix_gate.semantic_unavailable` | count | `skill` |
+
+### Deduplication (`emitDedupMetrics`)
+
+Called from both `runSkill()` and `runSkillTask()` after `deduplicateFindings`.
+
+| Metric | Type | Attributes |
+|--------|------|------------|
+| `dedup.total` | distribution | `skill` |
+| `dedup.unique` | distribution | `skill` |
+| `dedup.removed` | distribution | `skill` (only when total > 0) |
 
 ### Fix evaluation (`emitFixEvalMetrics`)
 
@@ -307,14 +321,17 @@ Called from `evaluateFixAttempts` after all evaluations complete.
 | `fix_eval.resolved` | count | -- |
 | `fix_eval.failed` | count | -- |
 | `fix_eval.skipped` | count | -- |
+| `warden.fix_eval.verdict` | count | `verdict`, `skill` |
+
+The aggregate metrics above are emitted once per run. The per-verdict metric is emitted after each individual evaluation with the verdict (`resolved`, `attempted_failed`, `not_attempted`, `re_detected`) and the originating skill name.
 
 ### Stale resolution (`emitStaleResolutionMetric`)
 
-Called from `evaluateFixesAndResolveStale` when stale comments are resolved.
+Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emitted once as a total (no skill attribute) and once per skill for comments that have a skill attribution.
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `stale.resolved` | count | -- |
+| `stale.resolved` | count | `skill` (optional) |
 
 ---
 

@@ -86,6 +86,9 @@ export function emitRunMetric(): void {
 export function emitSkillMetrics(report: SkillReport): void {
   safeEmit(() => {
     const attrs: Record<string, string> = { skill: report.skill };
+    if (report.model) {
+      attrs['model'] = report.model;
+    }
 
     Sentry.metrics.distribution('skill.duration', report.durationMs ?? 0, {
       unit: 'millisecond',
@@ -147,16 +150,18 @@ export function emitFixEvalMetrics(
 }
 
 export function emitFixGateMetrics(
+  skill: string,
   checked: number,
   strippedDeterministic: number,
   strippedSemantic: number,
   semanticUnavailable: number
 ): void {
   safeEmit(() => {
-    Sentry.metrics.count('fix_gate.checked', checked);
-    Sentry.metrics.count('fix_gate.stripped_deterministic', strippedDeterministic);
-    Sentry.metrics.count('fix_gate.stripped_semantic', strippedSemantic);
-    Sentry.metrics.count('fix_gate.semantic_unavailable', semanticUnavailable);
+    const attrs = { skill };
+    Sentry.metrics.count('fix_gate.checked', checked, { attributes: attrs });
+    Sentry.metrics.count('fix_gate.stripped_deterministic', strippedDeterministic, { attributes: attrs });
+    Sentry.metrics.count('fix_gate.stripped_semantic', strippedSemantic, { attributes: attrs });
+    Sentry.metrics.count('fix_gate.semantic_unavailable', semanticUnavailable, { attributes: attrs });
   });
 }
 
@@ -166,19 +171,31 @@ export function emitRetryMetric(skill: string, attempt: number): void {
   });
 }
 
-export function emitDedupMetrics(total: number, unique: number): void {
+export function emitDedupMetrics(skill: string, total: number, unique: number): void {
   safeEmit(() => {
-    Sentry.metrics.distribution('dedup.total', total);
-    Sentry.metrics.distribution('dedup.unique', unique);
+    const attrs = { skill };
+    Sentry.metrics.distribution('dedup.total', total, { attributes: attrs });
+    Sentry.metrics.distribution('dedup.unique', unique, { attributes: attrs });
     if (total > 0) {
-      Sentry.metrics.distribution('dedup.removed', total - unique);
+      Sentry.metrics.distribution('dedup.removed', total - unique, { attributes: attrs });
     }
   });
 }
 
-export function emitStaleResolutionMetric(count: number): void {
+export function emitFixEvalVerdictMetric(verdict: string, skill?: string): void {
   safeEmit(() => {
-    Sentry.metrics.count('warden.stale.resolved', count);
+    const attrs: Record<string, string> = { verdict };
+    if (skill) {
+      attrs['skill'] = skill;
+    }
+    Sentry.metrics.count('warden.fix_eval.verdict', 1, { attributes: attrs });
+  });
+}
+
+export function emitStaleResolutionMetric(count: number, skill?: string): void {
+  safeEmit(() => {
+    const attrs: Record<string, string> | undefined = skill ? { skill } : undefined;
+    Sentry.metrics.count('warden.stale.resolved', count, attrs ? { attributes: attrs } : undefined);
   });
 }
 

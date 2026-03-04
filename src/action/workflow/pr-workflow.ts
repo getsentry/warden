@@ -454,6 +454,17 @@ async function evaluateFixesAndResolveStale(
         if (resolvedCount > 0) {
           logAction(`Resolved ${resolvedCount} stale Warden comments`);
           emitStaleResolutionMetric(resolvedCount);
+          // Emit per-skill breakdown
+          const bySkill = new Map<string, number>();
+          for (const c of staleComments) {
+            const skill = c.skills?.[0];
+            if (skill) {
+              bySkill.set(skill, (bySkill.get(skill) ?? 0) + 1);
+            }
+          }
+          for (const [skill, count] of bySkill) {
+            emitStaleResolutionMetric(count, skill);
+          }
         }
         resolvedIds.forEach((id) => commentsResolvedByStale.add(id));
       }

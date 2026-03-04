@@ -21,6 +21,7 @@ export interface FixJudgeResult {
 /** Per-comment evaluation detail for structured reporting. */
 export interface FixEvaluation {
   findingId?: string;
+  skill?: string;
   path: string;
   line: number;
   title: string;

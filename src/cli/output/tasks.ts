@@ -399,7 +399,7 @@ export async function runSkillTask(
         const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
         const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
         const uniqueFindings = deduplicateFindings(allFindings);
-        emitDedupMetrics(allFindings.length, uniqueFindings.length);
+        emitDedupMetrics(skill.name, allFindings.length, uniqueFindings.length);
 
         // Merge findings that describe the same issue at different locations
         const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
@@ -421,6 +421,7 @@ export async function runSkillTask(
           allAuxEntries.push({ agent: 'fix_gate', usage: sanitized.usage });
         }
         emitFixGateMetrics(
+          skill.name,
           sanitized.stats.checked,
           sanitized.stats.strippedDeterministic,
           sanitized.stats.strippedSemantic,
