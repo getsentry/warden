@@ -7,15 +7,7 @@ agents = ["cursor", "codex", "claude"]
 allow_all = true
 
 [[skills]]
-name = "skill-creator"
-source = "getsentry/skills"
-
-[[skills]]
 name = "commit"
-source = "getsentry/skills"
-
-[[skills]]
-name = "create-pr"
 source = "getsentry/skills"
 
 [[skills]]
@@ -41,3 +33,11 @@ source = "getsentry/skills"
 [[skills]]
 name = "react-best-practices"
 source = "vercel-labs/agent-skills"
+
+[[skills]]
+name = "skill-writer"
+source = "getsentry/skills"
+
+[[skills]]
+name = "pr-writer"
+source = "getsentry/skills"

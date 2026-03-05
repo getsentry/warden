@@ -36,19 +36,19 @@ resolved_path = ".agents/skills/commit"
 commit = "187c0022b3b676f72227a04f1cfc8921a58a5020"
 integrity = "sha256-EFbC0wiqzaiVLzfKi6aNSJukKYl36mb4qHW0wYooWxU="
 
-[skills.create-pr]
-source = "getsentry/skills"
-resolved_url = "https://github.com/getsentry/skills.git"
-resolved_path = ".agents/skills/create-pr"
-commit = "187c0022b3b676f72227a04f1cfc8921a58a5020"
-integrity = "sha256-ChCXKfikzmN8vzMKcER/TWVECVjP+cCsGrDheo+WL7k="
-
 [skills.iterate-pr]
 source = "getsentry/skills"
 resolved_url = "https://github.com/getsentry/skills.git"
 resolved_path = ".agents/skills/iterate-pr"
 commit = "187c0022b3b676f72227a04f1cfc8921a58a5020"
 integrity = "sha256-55fOUUxjX6vntLGA11BPgVyKGtqFvb7lu9Q+hOUUBGo="
+
+[skills.pr-writer]
+source = "getsentry/skills"
+resolved_url = "https://github.com/getsentry/skills.git"
+resolved_path = ".agents/skills/pr-writer"
+commit = "3b816eae847ef5a761e51fd484780c7e59d74a39"
+integrity = "sha256-l+dO4vlI1vCaVeuOZRbxM0ZaZAyYW52R9+xMGlXFkds="
 
 [skills.react-best-practices]
 source = "vercel-labs/agent-skills"
@@ -57,10 +57,9 @@ resolved_path = "skills/react-best-practices"
 commit = "e23951b8cad2f4b1e7e176c5731127c1263fe86f"
 integrity = "sha256-4TWtylD35iYEPY5QwFiuF7Zcd1TPYqehTyUT8CBdaNw="
 
-[skills.skill-creator]
+[skills.skill-writer]
 source = "getsentry/skills"
 resolved_url = "https://github.com/getsentry/skills.git"
-resolved_path = ".agents/skills/skill-creator"
-commit = "187c0022b3b676f72227a04f1cfc8921a58a5020"
-integrity = "sha256-cwime8dg09zRSkfbnBU4ObFPofjGigXCmDNvpNL7NNY="
-
+resolved_path = ".agents/skills/skill-writer"
+commit = "3b816eae847ef5a761e51fd484780c7e59d74a39"
+integrity = "sha256-1S6kAVkKNlS6T6kf1Dfl4PQCwLYW6gd/aq5F1i3txOQ="
