@@ -30,30 +30,68 @@ You are a security expert analyzing code changes.
 
     <div class="cta-buttons">
       <a href={`${base}/guide`} class="btn btn-primary">Get Started</a>
-      <a href="#whats-a-skill" class="btn">What's a Skill?</a>
     </div>
   </div>
 
-  <section class="section value-props">
-    <div class="feature-grid three-col">
-      <div class="feature">
-        <h3>Skills are Markdown</h3>
-        <p>A SKILL.md file tells Warden what to look for. No plugins, no config language. Just prose.</p>
+  <section class="section github-proof" id="github-proof">
+    <h2>Every Pull Request</h2>
+    <p>Open a PR and Warden reviews it automatically. Findings appear as suggested changes you can apply with one click.</p>
+    <div class="pr-mock">
+      <div class="pr-mock-header">
+        <div class="pr-mock-avatar">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="12" fill="#000"/>
+            <g transform="translate(12, 12) scale(0.65) translate(-12, -12)">
+              <path d="M14.2666 4.9061C15.1564 4.09409 16.5921 4.60917 16.7627 5.80162L18.1123 15.2519C18.9476 14.5758 19.6675 14.156 20.2706 13.9423C20.9583 13.6988 21.61 13.6893 22.0606 14.0459C22.5331 14.4202 22.576 15.0232 22.4131 15.5224C22.2471 16.0308 21.8525 16.5326 21.2774 16.916C20.2382 17.6088 19.1848 18.1368 17.7432 18.4863C16.3131 18.833 14.518 19 12 19C9.48202 19 7.68685 18.833 6.25679 18.4863C4.81521 18.1368 3.76183 17.6088 2.72259 16.916C2.14753 16.5326 1.75289 16.0308 1.58684 15.5224C1.42401 15.0233 1.46701 14.4202 1.93938 14.0459C2.38997 13.6893 3.04168 13.6988 3.72943 13.9423C4.33238 14.1559 5.05163 14.5761 5.88667 15.2519L7.23727 5.80162C7.40784 4.60919 8.84362 4.09419 9.73338 4.9061L11.6631 6.66686C11.854 6.84121 12.146 6.84121 12.3369 6.66686L14.2666 4.9061Z" fill="white"/>
+              <path d="M12 8L13.1226 11.1094H16.7553L13.8164 13.0312L14.9389 16.1406L12 14.2188L9.06107 16.1406L10.1836 13.0312L7.24472 11.1094H10.8774L12 8Z" fill="#000"/>
+            </g>
+          </svg>
+        </div>
+        <div class="pr-mock-meta">
+          <span class="pr-mock-name">warden</span>
+          <span class="pr-mock-badge">bot</span>
+          <span class="pr-mock-time">commented now</span>
+        </div>
       </div>
-      <div class="feature">
-        <h3>Compose what matters</h3>
-        <p>Stack security, API design, accessibility, or anything else. Each skill owns one concern.</p>
+      <div class="pr-mock-body">
+        <div class="pr-mock-finding">
+          <span class="pr-mock-severity severity-high"></span>
+          <span class="pr-mock-title">SQL injection via unsanitized input</span>
+        </div>
+        <p class="pr-mock-desc">User input is interpolated directly into a SQL query. Use parameterized queries to prevent SQL injection attacks.</p>
+        <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Use parameterized query</p>
+        <div class="pr-mock-suggestion">
+          <div class="pr-mock-suggestion-header">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8.75 1.75V5H12a.75.75 0 010 1.5H8.75v3.25a.75.75 0 01-1.5 0V6.5H4a.75.75 0 010-1.5h3.25V1.75a.75.75 0 011.5 0zM4 13a.75.75 0 000 1.5h8a.75.75 0 000-1.5H4z"/>
+            </svg>
+            <span>Suggested change</span>
+          </div>
+          <div class="pr-mock-suggestion-diff">
+            <div class="pr-mock-diff-line diff-old">
+              <span class="diff-marker">−</span>
+              <span class="diff-content">db.query(`SELECT * FROM users WHERE id = $&#123;id&#125;`)</span>
+            </div>
+            <div class="pr-mock-diff-line diff-new">
+              <span class="diff-marker">+</span>
+              <span class="diff-content">db.query("SELECT * FROM users WHERE id = $1", [id])</span>
+            </div>
+          </div>
+          <div class="pr-mock-suggestion-actions">
+            <button class="pr-mock-commit-btn">Commit suggestion</button>
+          </div>
+        </div>
       </div>
-      <div class="feature">
-        <h3>Run anywhere</h3>
-        <p>Locally before you push, or on every PR via GitHub Actions. Same skills, same results.</p>
+      <div class="pr-mock-footer">
+        <a href="#" class="pr-mock-link">View all 3 findings</a>
       </div>
     </div>
+    <p>Warden ensures issues missed locally are still caught during review.</p>
   </section>
 
   <section class="section skill-showcase" id="whats-a-skill">
-    <h2>What's a Skill?</h2>
-    <p>A skill is a Markdown file that tells Warden what to look for. You write prose, not code.</p>
+    <h2>Its Just Skills</h2>
+    <p>The PR feedback above comes from skills. Skills are a known standard: a SKILL.md file tells Warden what to look for.</p>
     <Terminal title=".agents/skills/security-scanning/SKILL.md">
       <Code
         code={skillExample}
@@ -67,7 +105,7 @@ You are a security expert analyzing code changes.
 
   <section class="quick-start">
     <div class="step">
-      <h3>Install</h3>
+      <h3>Install Warden</h3>
       <p>Install the CLI globally.</p>
       <PackageManagerTabs
         npm="npm install -g @sentry/warden"
@@ -77,7 +115,7 @@ You are a security expert analyzing code changes.
     </div>
 
     <div class="step">
-      <h3>Initialize</h3>
+      <h3>Wire It In</h3>
       <p>Scaffold your project with config and GitHub workflow.</p>
       <Terminal showCopy={true} copyText="warden init">
         <pre class="cli-output"><span class="cli-dim">$</span> warden init
@@ -95,7 +133,7 @@ You are a security expert analyzing code changes.
     </div>
 
     <div class="step">
-      <h3>Add some skills</h3>
+      <h3>Load Skills</h3>
       <p>Add skills for what matters to your codebase. Local or from any GitHub repo.</p>
       <Terminal showCopy={true} copyText="warden add api-design-review --remote yourcompany/skills">
         <pre class="cli-output"><span class="cli-dim">$</span> warden add api-design-review --remote yourcompany/skills</pre>
@@ -104,9 +142,9 @@ You are a security expert analyzing code changes.
     </div>
 
     <div class="step">
-      <h3>Run Locally</h3>
+      <h3>Run Before You Push</h3>
       <p>Catch issues before you push. Multiple skills run together, each covering its own concern.</p>
-      <Terminal showCopy={false}>
+      <Terminal title="warden">
         <pre class="cli-output"><span class="cli-dim">$</span> warden
 
 Analyzing uncommitted changes...
@@ -155,65 +193,10 @@ Analyzing uncommitted changes...
 Analysis completed in <span class="cli-dim">6.1s</span></pre>
       </Terminal>
     </div>
-
-    <div class="step">
-      <h3>Findings on Every PR</h3>
-      <p>Open a PR and Warden reviews it automatically. Findings appear as suggested changes you can apply with one click.</p>
-      <div class="pr-mock">
-        <div class="pr-mock-header">
-          <div class="pr-mock-avatar">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="12" fill="#000"/>
-              <g transform="translate(12, 12) scale(0.65) translate(-12, -12)">
-                <path d="M14.2666 4.9061C15.1564 4.09409 16.5921 4.60917 16.7627 5.80162L18.1123 15.2519C18.9476 14.5758 19.6675 14.156 20.2706 13.9423C20.9583 13.6988 21.61 13.6893 22.0606 14.0459C22.5331 14.4202 22.576 15.0232 22.4131 15.5224C22.2471 16.0308 21.8525 16.5326 21.2774 16.916C20.2382 17.6088 19.1848 18.1368 17.7432 18.4863C16.3131 18.833 14.518 19 12 19C9.48202 19 7.68685 18.833 6.25679 18.4863C4.81521 18.1368 3.76183 17.6088 2.72259 16.916C2.14753 16.5326 1.75289 16.0308 1.58684 15.5224C1.42401 15.0233 1.46701 14.4202 1.93938 14.0459C2.38997 13.6893 3.04168 13.6988 3.72943 13.9423C4.33238 14.1559 5.05163 14.5761 5.88667 15.2519L7.23727 5.80162C7.40784 4.60919 8.84362 4.09419 9.73338 4.9061L11.6631 6.66686C11.854 6.84121 12.146 6.84121 12.3369 6.66686L14.2666 4.9061Z" fill="white"/>
-                <path d="M12 8L13.1226 11.1094H16.7553L13.8164 13.0312L14.9389 16.1406L12 14.2188L9.06107 16.1406L10.1836 13.0312L7.24472 11.1094H10.8774L12 8Z" fill="#000"/>
-              </g>
-            </svg>
-          </div>
-          <div class="pr-mock-meta">
-            <span class="pr-mock-name">warden</span>
-            <span class="pr-mock-badge">bot</span>
-            <span class="pr-mock-time">commented now</span>
-          </div>
-        </div>
-        <div class="pr-mock-body">
-          <div class="pr-mock-finding">
-            <span class="pr-mock-severity severity-high"></span>
-            <span class="pr-mock-title">SQL injection via unsanitized input</span>
-          </div>
-          <p class="pr-mock-desc">User input is interpolated directly into a SQL query. Use parameterized queries to prevent SQL injection attacks.</p>
-          <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Use parameterized query</p>
-          <div class="pr-mock-suggestion">
-            <div class="pr-mock-suggestion-header">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8.75 1.75V5H12a.75.75 0 010 1.5H8.75v3.25a.75.75 0 01-1.5 0V6.5H4a.75.75 0 010-1.5h3.25V1.75a.75.75 0 011.5 0zM4 13a.75.75 0 000 1.5h8a.75.75 0 000-1.5H4z"/>
-              </svg>
-              <span>Suggested change</span>
-            </div>
-            <div class="pr-mock-suggestion-diff">
-              <div class="pr-mock-diff-line diff-old">
-                <span class="diff-marker">−</span>
-                <span class="diff-content">db.query(`SELECT * FROM users WHERE id = $&#123;id&#125;`)</span>
-              </div>
-              <div class="pr-mock-diff-line diff-new">
-                <span class="diff-marker">+</span>
-                <span class="diff-content">db.query("SELECT * FROM users WHERE id = $1", [id])</span>
-              </div>
-            </div>
-            <div class="pr-mock-suggestion-actions">
-              <button class="pr-mock-commit-btn">Commit suggestion</button>
-            </div>
-          </div>
-        </div>
-        <div class="pr-mock-footer">
-          <a href="#" class="pr-mock-link">View all 3 findings</a>
-        </div>
-      </div>
-    </div>
   </section>
 
   <section class="section next-steps">
-    <h2>Next Steps</h2>
+    <h2>Keep Going</h2>
     <div class="next-steps-grid">
       <a href={`${base}/skill`} class="next-step-card">
         <strong>Write a Skill</strong>
@@ -343,7 +326,7 @@ Analysis completed in <span class="cli-dim">6.1s</span></pre>
     border-radius: 6px;
     overflow: hidden;
     font-size: 0.875rem;
-    margin-top: 1rem;
+    margin: 1rem 0 1.25rem;
   }
 
   .pr-mock-header {
