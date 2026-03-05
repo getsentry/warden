@@ -6,8 +6,8 @@
 
 import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
-import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
-import type { ScheduleConfig } from '../../config/schema.js';
+import { loadWardenConfig, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
+import type { WardenConfig, ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
 import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
@@ -42,7 +42,19 @@ export async function runScheduleWorkflow(
   logGroupEnd();
 
   const configFullPath = join(repoPath, inputs.configPath);
-  const config = loadWardenConfig(dirname(configFullPath));
+  let config: WardenConfig;
+  try {
+    config = loadWardenConfig(dirname(configFullPath));
+  } catch (error) {
+    if (error instanceof ConfigLoadError && error.message.includes('not found')) {
+      console.log('::warning::No warden.toml found. Skipping analysis.');
+      setOutput('findings-count', 0);
+      setOutput('high-count', 0);
+      setOutput('summary', 'No warden.toml found');
+      return;
+    }
+    throw error;
+  }
 
   // Find schedule triggers
   const scheduleTriggers = resolveSkillConfigs(config).filter((t) => t.type === 'schedule');

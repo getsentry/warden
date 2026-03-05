@@ -14,6 +14,7 @@ const SCHEDULE_FIXTURES = join(__dirname, '__fixtures__/schedule');
 const SCHEDULE_MULTI_FIXTURES = join(__dirname, '__fixtures__/schedule-multi');
 const SCHEDULE_FIXPR_FIXTURES = join(__dirname, '__fixtures__/schedule-fixpr');
 const SCHEDULE_TITLE_FIXTURES = join(__dirname, '__fixtures__/schedule-title');
+const NO_CONFIG_FIXTURES = join(__dirname, '__fixtures__/no-config');
 // Reuse the base fixtures dir (has only pull_request triggers, no schedule)
 const PR_ONLY_FIXTURES = join(__dirname, '__fixtures__');
 
@@ -222,6 +223,17 @@ describe('runScheduleWorkflow', () => {
   // ---------------------------------------------------------------------------
 
   describe('configuration and early exit', () => {
+    it('exits cleanly when warden.toml is missing', async () => {
+      await runScheduleWorkflow(mockOctokit, createDefaultInputs(), NO_CONFIG_FIXTURES);
+
+      expect(mockRunSkill).not.toHaveBeenCalled();
+      expect(mockCreateOrUpdateIssue).not.toHaveBeenCalled();
+      expect(mockSetFailed).not.toHaveBeenCalled();
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '::warning::No warden.toml found. Skipping analysis.'
+      );
+    });
+
     it('exits early when no schedule triggers configured', async () => {
       // The PR_ONLY_FIXTURES config only has pull_request triggers
       await runScheduleWorkflow(mockOctokit, createDefaultInputs(), PR_ONLY_FIXTURES);

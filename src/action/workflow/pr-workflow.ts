@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { Sentry, logger, emitStaleResolutionMetric, setGlobalAttributes, emitRunMetric } from '../../sentry.js';
-import { loadWardenConfig, resolveSkillConfigs } from '../../config/loader.js';
+import { loadWardenConfig, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
 import { buildEventContext } from '../../event/context.js';
@@ -109,7 +109,7 @@ async function initializeWorkflow(
   eventName: string,
   eventPath: string,
   repoPath: string
-): Promise<InitResult> {
+): Promise<InitResult | null> {
   let eventPayload: unknown;
   try {
     eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
@@ -136,7 +136,16 @@ async function initializeWorkflow(
   logGroupEnd();
 
   const configFullPath = join(repoPath, inputs.configPath);
-  const config = loadWardenConfig(dirname(configFullPath));
+  let config: WardenConfig;
+  try {
+    config = loadWardenConfig(dirname(configFullPath));
+  } catch (error) {
+    if (error instanceof ConfigLoadError && error.message.includes('not found')) {
+      console.log('::warning::No warden.toml found. Skipping analysis.');
+      return null;
+    }
+    throw error;
+  }
 
   // Resolve skills into triggers and match
   const resolvedTriggers = resolveSkillConfigs(config);
@@ -652,10 +661,19 @@ export async function runPRWorkflow(
     async (span) => {
       span.setAttribute('github.event', eventName);
 
-      const { context, config, matchedTriggers } = await Sentry.startSpan(
+      const initResult = await Sentry.startSpan(
         { op: 'workflow.init', name: 'initialize workflow' },
         () => initializeWorkflow(octokit, inputs, eventName, eventPath, repoPath),
       );
+
+      if (!initResult) {
+        setOutput('findings-count', 0);
+        setOutput('high-count', 0);
+        setOutput('summary', 'No warden.toml found');
+        return;
+      }
+
+      const { context, config, matchedTriggers } = initResult;
 
       // Set Sentry context after building event context
       if (context.pullRequest) {

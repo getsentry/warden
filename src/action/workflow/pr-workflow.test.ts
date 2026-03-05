@@ -12,6 +12,7 @@ import type { SkillReport, Finding } from '../../types/index.js';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const FIXTURES_DIR = join(__dirname, '__fixtures__');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
+const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 
 // -----------------------------------------------------------------------------
@@ -401,6 +402,25 @@ describe('runPRWorkflow', () => {
       );
 
       expect(mockSetFailed).not.toHaveBeenCalled();
+    });
+
+    it('exits cleanly when warden.toml is missing', async () => {
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        NO_CONFIG_FIXTURES_DIR
+      );
+
+      // Should not fail
+      expect(mockSetFailed).not.toHaveBeenCalled();
+      // Should not run any skills
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      // Should log a warning
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '::warning::No warden.toml found. Skipping analysis.'
+      );
     });
 
     it('fails when event payload is unreadable', async () => {
