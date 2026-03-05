@@ -51,6 +51,16 @@ export async function runScheduleWorkflow(
     setOutput('findings-count', 0);
     setOutput('high-count', 0);
     setOutput('summary', 'No schedule triggers configured');
+    try {
+      const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
+      const [o = '', n = ''] = fullName.split('/');
+      writeFindingsOutput([], {
+        eventType: 'schedule',
+        action: 'scheduled',
+        repository: { owner: o, name: n, fullName, defaultBranch: '' },
+        repoPath,
+      });
+    } catch { /* non-fatal */ }
     return;
   }
 

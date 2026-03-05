@@ -687,6 +687,7 @@ export async function runPRWorkflow(
         setOutput('findings-count', 0);
         setOutput('high-count', 0);
         setOutput('summary', 'No triggers matched');
+        try { writeFindingsOutput([], context); } catch { /* non-fatal */ }
         return;
       }
 
