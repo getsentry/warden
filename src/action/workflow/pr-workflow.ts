@@ -503,8 +503,7 @@ async function finalizeWorkflow(
   reports: SkillReport[],
   shouldFailAction: boolean,
   failureReasons: string[],
-  canResolveStale: boolean,
-  findingsOutputFile?: string
+  canResolveStale: boolean
 ): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, current run would not request changes,
@@ -542,13 +541,11 @@ async function finalizeWorkflow(
   setWorkflowOutputs(outputs);
 
   // Write structured findings to file for external export (GCS, S3, etc.)
-  if (findingsOutputFile) {
-    try {
-      writeFindingsOutput(findingsOutputFile, reports, context);
-      logAction(`Findings written to ${findingsOutputFile}`);
-    } catch (error) {
-      warnAction(`Failed to write findings output: ${error}`);
-    }
+  try {
+    const findingsPath = writeFindingsOutput(reports, context);
+    logAction(`Findings written to ${findingsPath}`);
+  } catch (error) {
+    warnAction(`Failed to write findings output: ${error}`);
   }
 
   // Update core check with overall summary
@@ -737,7 +734,7 @@ export async function runPRWorkflow(
         octokit, context, previousReviewInfo, coreCheckId,
         results, reviewPhase.reports,
         reviewPhase.shouldFailAction, reviewPhase.failureReasons,
-        canResolveStale, inputs.findingsOutputFile,
+        canResolveStale,
       );
     },
   );

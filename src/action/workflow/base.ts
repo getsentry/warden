@@ -5,7 +5,8 @@
  */
 
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { execFileNonInteractive } from '../../utils/exec.js';
@@ -247,16 +248,25 @@ export async function getDefaultBranchFromAPI(
 // -----------------------------------------------------------------------------
 
 /**
+ * Get the path for the findings output file.
+ * Uses RUNNER_TEMP (GitHub Actions) with fallback to OS temp dir.
+ */
+export function getFindingsOutputPath(): string {
+  const tmpDir = process.env['RUNNER_TEMP'] ?? tmpdir();
+  return join(tmpDir, 'warden-findings.json');
+}
+
+/**
  * Write structured findings data to a JSON file for external export (GCS, S3, etc.).
  *
- * Writes the full findings with locations and suggested fixes so consumers can
- * analyze whether linters or other tools could catch issues earlier.
+ * Always writes to a known location under RUNNER_TEMP and sets the `findings-file`
+ * output so downstream steps can reference the path.
  */
 export function writeFindingsOutput(
-  filePath: string,
   reports: SkillReport[],
   context: EventContext
-): void {
+): string {
+  const filePath = getFindingsOutputPath();
   const allFindings = reports.flatMap((r) => r.findings);
 
   const output = {
@@ -309,4 +319,6 @@ export function writeFindingsOutput(
 
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, JSON.stringify(output, null, 2));
+  setOutput('findings-file', filePath);
+  return filePath;
 }
