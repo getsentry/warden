@@ -1,0 +1,111 @@
+---
+import Base from '../layouts/Base.astro';
+import Terminal from '../components/Terminal.astro';
+import { Code } from 'astro:components';
+import { WARDEN_ACTION } from '../utils/version.js';
+---
+
+<Base title="GitHub Org Setup" description="Org-wide GitHub setup for Warden">
+  <h1>GitHub Organization Setup</h1>
+
+  <p>Use this when you want one org-level setup that covers many repositories. The pattern is: set credentials once at the organization level, then run Warden from your shared <code>.github</code> workflow conventions.</p>
+
+  <h2>1. Set Organization Secrets</h2>
+
+  <p>Go to <strong>Organization Settings → Secrets and variables → Actions</strong>, then add:</p>
+
+  <dl>
+    <dt>WARDEN_ANTHROPIC_API_KEY</dt>
+    <dd>Required. API key used by the action runtime.</dd>
+    <dt>WARDEN_MODEL <em>(optional)</em></dt>
+    <dd>Model override for all repos using the shared workflow.</dd>
+    <dt>WARDEN_SENTRY_DSN <em>(optional)</em></dt>
+    <dd>Telemetry DSN. When unset, telemetry is a no-op.</dd>
+  </dl>
+
+  <h2>2. Create and Install a GitHub App (Optional, Recommended)</h2>
+
+  <p>For branded comments and org-wide repository access:</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`npx warden setup-app --org your-org`}
+      lang="bash"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>The generated app uses these permissions:</p>
+  <ul>
+    <li><code>contents: write</code></li>
+    <li><code>pull_requests: write</code></li>
+    <li><code>issues: write</code></li>
+    <li><code>checks: write</code></li>
+    <li><code>metadata: read</code></li>
+  </ul>
+
+  <p>Add these org secrets after app creation:</p>
+  <dl>
+    <dt>WARDEN_APP_ID</dt>
+    <dd>GitHub App ID.</dd>
+    <dt>WARDEN_PRIVATE_KEY</dt>
+    <dd>Full PEM private key contents.</dd>
+  </dl>
+
+  <h2>3. Use the Org <code>.github</code> Workflow Pattern</h2>
+
+  <p>Keep a canonical workflow in your org <code>.github</code> repository and have repos consume that convention.</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`name: Warden
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
+      WARDEN_SENTRY_DSN: \${{ secrets.WARDEN_SENTRY_DSN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: \${{ secrets.WARDEN_APP_ID }}
+          private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
+          owner: \${{ github.repository_owner }}
+
+      - uses: ${WARDEN_ACTION}
+        with:
+          github-token: \${{ steps.app-token.outputs.token }}`}
+      lang="yaml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <h2>4. Roll Out Safely Across Repositories</h2>
+
+  <p>Not every repository needs to opt in on day one.</p>
+  <ul>
+    <li>If <code>warden.toml</code> is missing, Warden now logs a warning and skips analysis.</li>
+    <li>This is intentional for org-wide rollout and avoids failing unrelated repositories.</li>
+    <li>Once a repo adds <code>warden.toml</code>, it is analyzed normally.</li>
+  </ul>
+
+  <h2>5. Failure Behavior</h2>
+
+  <p>Org-wide workflows still fail for real errors:</p>
+  <ul>
+    <li>Missing authentication or GitHub token.</li>
+    <li>Invalid <code>warden.toml</code> (parse/validation errors).</li>
+    <li>Action runtime failures.</li>
+  </ul>
+</Base>

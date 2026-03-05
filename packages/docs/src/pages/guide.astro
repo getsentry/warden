@@ -12,6 +12,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <p>Warden watches over your code by running <strong>skills</strong> against your changes. Skills are prompts that define what to look for: security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.</p>
 
+  <p class="org-callout"><strong>Rolling out Warden across your entire GitHub organization?</strong> Start with <a href={`${base}/github-org-setup`}>GitHub Organization Setup</a> for the shared <code>.github</code> workflow pattern and global secret configuration.</p>
+
   <nav class="toc">
     <details open>
       <summary>On this page</summary>
@@ -285,6 +287,8 @@ Focus on issues in the changed code. For each issue found, report:
 
   <p>Add these as organization or repository secrets so all repos can use them. Organization-level secrets are recommended so you configure once.</p>
 
+  <p>For full org-wide rollout guidance, including the shared <code>.github</code> workflow pattern and skip behavior for repos without <code>warden.toml</code>, see <a href={`${base}/github-org-setup`}>GitHub Organization Setup</a>.</p>
+
   <ol>
     <li>Go to <strong>Organization Settings → Secrets and variables → Actions</strong></li>
     <li>Add the following secrets:</li>
@@ -475,5 +479,23 @@ reportOn = "medium"      # Report findings at medium and above`}
   .toc a:hover {
     color: var(--text-primary);
     text-decoration: underline;
+  }
+
+  .org-callout {
+    margin: 1rem 0 1.75rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background:
+      linear-gradient(90deg, rgba(59, 158, 255, 0.12) 0%, rgba(59, 158, 255, 0.04) 28%, var(--bg-elevated) 100%);
+    color: var(--text-secondary);
+  }
+
+  .org-callout strong {
+    color: var(--text);
+  }
+
+  .org-callout a {
+    font-weight: 600;
   }
 </style>
