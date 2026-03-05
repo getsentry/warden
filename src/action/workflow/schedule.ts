@@ -190,18 +190,16 @@ export async function runScheduleWorkflow(
   setOutput('summary', allReports.map((r) => r.summary).join('\n') || 'Scheduled analysis complete');
 
   // Write structured findings to file for external export (GCS, S3, etc.)
-  if (allReports.length > 0) {
-    try {
-      const findingsPath = writeFindingsOutput(allReports, {
-        eventType: 'schedule',
-        action: 'scheduled',
-        repository: { owner, name: repo, fullName: `${owner}/${repo}`, defaultBranch },
-        repoPath,
-      });
-      console.log(`Findings written to ${findingsPath}`);
-    } catch (error) {
-      console.error(`::warning::Failed to write findings output: ${error}`);
-    }
+  try {
+    const findingsPath = writeFindingsOutput(allReports, {
+      eventType: 'schedule',
+      action: 'scheduled',
+      repository: { owner, name: repo, fullName: `${owner}/${repo}`, defaultBranch },
+      repoPath,
+    });
+    console.log(`Findings written to ${findingsPath}`);
+  } catch (error) {
+    console.error(`::warning::Failed to write findings output: ${error}`);
   }
 
   if (shouldFailAction) {
