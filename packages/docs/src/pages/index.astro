@@ -2,19 +2,68 @@
 import Base from '../layouts/Base.astro';
 import Terminal from '../components/Terminal.astro';
 import PackageManagerTabs from '../components/PackageManagerTabs.astro';
+import { Code } from 'astro:components';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+const skillExample = `---
+name: security-scanning
 ---
 
-<Base title="Home" description="Agents that review your code. Locally or on every PR.">
+You are a security expert analyzing code changes.
+
+## What to Report
+- SQL injection via unsanitized input
+- Cross-site scripting (XSS)
+- Hardcoded secrets or credentials
+- Command injection vulnerabilities
+
+## What NOT to Report
+- Code style or formatting
+- Performance optimizations`;
+---
+
+<Base title="Home" description="Define skills in Markdown. Compose them into agents that review every change.">
   <div class="hero">
     <p class="tagline">Your Code Is Under New Management</p>
-    <p class="tagline-sub">Agents that review your code. Locally or on every PR.</p>
+    <p class="tagline-sub">Define skills in Markdown. Compose them into agents that review every change.</p>
 
     <div class="cta-buttons">
       <a href={`${base}/guide`} class="btn btn-primary">Get Started</a>
+      <a href="#whats-a-skill" class="btn">What's a Skill?</a>
     </div>
   </div>
+
+  <section class="section value-props">
+    <div class="feature-grid three-col">
+      <div class="feature">
+        <h3>Skills are Markdown</h3>
+        <p>A SKILL.md file tells Warden what to look for. No plugins, no config language. Just prose.</p>
+      </div>
+      <div class="feature">
+        <h3>Compose what matters</h3>
+        <p>Stack security, API design, accessibility, or anything else. Each skill owns one concern.</p>
+      </div>
+      <div class="feature">
+        <h3>Run anywhere</h3>
+        <p>Locally before you push, or on every PR via GitHub Actions. Same skills, same results.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section skill-showcase" id="whats-a-skill">
+    <h2>What's a Skill?</h2>
+    <p>A skill is a Markdown file that tells Warden what to look for. You write prose, not code.</p>
+    <Terminal title=".agents/skills/security-scanning/SKILL.md">
+      <Code
+        code={skillExample}
+        lang="markdown"
+        theme="vitesse-black"
+      />
+    </Terminal>
+    <p class="skill-showcase-note">That's a trivial example, but it's a working skill. No build step. No schema. No SDK.</p>
+    <p class="skill-showcase-detail">Real skills can include detailed reference material, code examples, style guides, architectural constraints, or anything else you'd put in a design doc. The prompt is the skill.</p>
+  </section>
 
   <section class="quick-start">
     <div class="step">
@@ -47,53 +96,68 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     <div class="step">
       <h3>Add some skills</h3>
-      <p>Install a skill from the community. Vercel's React best practices is a great start.</p>
-      <Terminal showCopy={true} copyText="warden add vercel-react-best-practices --remote vercel-labs/agent-skills">
-        <pre class="cli-output"><span class="cli-dim">$</span> warden add vercel-react-best-practices --remote vercel-labs/agent-skills</pre>
+      <p>Add skills for what matters to your codebase. Local or from any GitHub repo.</p>
+      <Terminal showCopy={true} copyText="warden add api-design-review --remote yourcompany/skills">
+        <pre class="cli-output"><span class="cli-dim">$</span> warden add api-design-review --remote yourcompany/skills</pre>
       </Terminal>
+      <p>Create your own skills or find ones driven by the community at <a href="https://skills.sh">skills.sh</a>.</p>
     </div>
 
     <div class="step">
       <h3>Run Locally</h3>
-      <p>Catch issues before you push. Fix them immediately.</p>
+      <p>Catch issues before you push. Multiple skills run together, each covering its own concern.</p>
       <Terminal showCopy={false}>
         <pre class="cli-output"><span class="cli-dim">$</span> warden
 
 Analyzing uncommitted changes...
 
-<span class="cli-bold">FILES</span>  <span class="cli-cyan">3 files</span> <span class="cli-dim">· 5 chunks</span>
-  <span class="cli-yellow">~</span> src/components/UserList.tsx <span class="cli-dim">(2 chunks)</span>
-  <span class="cli-yellow">~</span> src/components/Dashboard.tsx <span class="cli-dim">(2 chunks)</span>
-  <span class="cli-green">+</span> src/components/Modal.tsx <span class="cli-dim">(1 chunk)</span>
+<span class="cli-bold">FILES</span>  <span class="cli-cyan">4 files</span> <span class="cli-dim">· 6 chunks</span>
+  <span class="cli-yellow">~</span> src/api/users.ts <span class="cli-dim">(2 chunks)</span>
+  <span class="cli-yellow">~</span> src/db/queries.ts <span class="cli-dim">(2 chunks)</span>
+  <span class="cli-green">+</span> src/auth/session.ts <span class="cli-dim">(1 chunk)</span>
+  <span class="cli-yellow">~</span> src/middleware/cors.ts <span class="cli-dim">(1 chunk)</span>
 
-┌─ <span class="cli-bold">vercel-react-best-practices</span> ──────────────────────────── <span class="cli-dim">8.2s</span> ─┐
-│ <span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low                                 │
+┌─ <span class="cli-bold">security-scanning</span> ────────────────────────────────────── <span class="cli-dim">6.1s</span> ─┐
+│ <span class="cli-bold">2 findings:</span> <span class="cli-red">●</span> 1 high  <span class="cli-yellow">●</span> 1 medium                                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│ <span class="cli-yellow">●</span> <span class="cli-bold">Missing React.memo for list items</span>                             │
-│   <span class="cli-dim">src/components/UserList.tsx:15</span>                                │
-│   <span class="cli-dim">15 │</span> const UserCard = (&#123; user &#125;) =&gt; &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;;   │
+│ <span class="cli-red">●</span> <span class="cli-bold">SQL injection via unsanitized input</span>                           │
+│   <span class="cli-dim">src/db/queries.ts:42</span>                                         │
+│   <span class="cli-dim">42 │</span> db.query(`SELECT * FROM users WHERE id = $&#123;id&#125;`)        │
 │                                                                 │
-│   List item components should be memoized to prevent            │
-│   unnecessary re-renders when parent state changes.             │
+│   User input is interpolated directly into a SQL query.         │
+│   Use parameterized queries instead.                            │
 │                                                                 │
-│ <span class="cli-cyan">●</span> <span class="cli-bold">useEffect missing dependency</span>                                  │
-│   <span class="cli-dim">src/components/Dashboard.tsx:23</span>                               │
-│   <span class="cli-dim">23 │</span> useEffect(() =&gt; &#123; fetchData() &#125;, [])                     │
+│ <span class="cli-yellow">●</span> <span class="cli-bold">Hardcoded JWT secret</span>                                          │
+│   <span class="cli-dim">src/auth/session.ts:8</span>                                        │
+│   <span class="cli-dim"> 8 │</span> const SECRET = "sk_live_a1b2c3d4e5f6"                     │
 │                                                                 │
-│   The dependency array is missing 'fetchData'. This could       │
-│   lead to stale closures or unexpected behavior.                │
+│   Secrets should be loaded from environment variables,          │
+│   not committed to source.                                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─ <span class="cli-bold">api-design-review</span> ────────────────────────────────────── <span class="cli-dim">4.3s</span> ─┐
+│ <span class="cli-bold">1 finding:</span> <span class="cli-cyan">●</span> 1 low                                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ <span class="cli-cyan">●</span> <span class="cli-bold">Missing pagination on list endpoint</span>                           │
+│   <span class="cli-dim">src/api/users.ts:15</span>                                          │
+│   <span class="cli-dim">15 │</span> app.get("/users", async (req, res) =&gt; &#123;                 │
+│                                                                 │
+│   Unbounded list endpoints can return excessive data.           │
+│   Add limit/offset or cursor-based pagination.                  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 
 <span class="cli-bold">SUMMARY</span>
-<span class="cli-bold">2 findings:</span> <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low
-Analysis completed in <span class="cli-dim">8.2s</span></pre>
+<span class="cli-bold">3 findings:</span> <span class="cli-red">●</span> 1 high  <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low
+Analysis completed in <span class="cli-dim">6.1s</span></pre>
       </Terminal>
     </div>
 
     <div class="step">
-      <h3>Keep an Eye on GitHub</h3>
+      <h3>Findings on Every PR</h3>
       <p>Open a PR and Warden reviews it automatically. Findings appear as suggested changes you can apply with one click.</p>
       <div class="pr-mock">
         <div class="pr-mock-header">
@@ -114,11 +178,11 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
         </div>
         <div class="pr-mock-body">
           <div class="pr-mock-finding">
-            <span class="pr-mock-severity severity-medium"></span>
-            <span class="pr-mock-title">Missing React.memo for list items</span>
+            <span class="pr-mock-severity severity-high"></span>
+            <span class="pr-mock-title">SQL injection via unsanitized input</span>
           </div>
-          <p class="pr-mock-desc">List item components should be memoized to prevent unnecessary re-renders when parent state changes.</p>
-          <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Wrap UserCard with React.memo</p>
+          <p class="pr-mock-desc">User input is interpolated directly into a SQL query. Use parameterized queries to prevent SQL injection attacks.</p>
+          <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Use parameterized query</p>
           <div class="pr-mock-suggestion">
             <div class="pr-mock-suggestion-header">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -129,19 +193,11 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
             <div class="pr-mock-suggestion-diff">
               <div class="pr-mock-diff-line diff-old">
                 <span class="diff-marker">−</span>
-                <span class="diff-content">const UserCard = (&#123; user &#125;) =&gt; &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;;</span>
+                <span class="diff-content">db.query(`SELECT * FROM users WHERE id = $&#123;id&#125;`)</span>
               </div>
               <div class="pr-mock-diff-line diff-new">
                 <span class="diff-marker">+</span>
-                <span class="diff-content">const UserCard = React.memo((&#123; user &#125;) =&gt; (</span>
-              </div>
-              <div class="pr-mock-diff-line diff-new">
-                <span class="diff-marker">+</span>
-                <span class="diff-content">  &lt;div&gt;&#123;user.name&#125;&lt;/div&gt;</span>
-              </div>
-              <div class="pr-mock-diff-line diff-new">
-                <span class="diff-marker">+</span>
-                <span class="diff-content">));</span>
+                <span class="diff-content">db.query("SELECT * FROM users WHERE id = $1", [id])</span>
               </div>
             </div>
             <div class="pr-mock-suggestion-actions">
@@ -150,7 +206,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
           </div>
         </div>
         <div class="pr-mock-footer">
-          <a href="#" class="pr-mock-link">View all 2 findings</a>
+          <a href="#" class="pr-mock-link">View all 3 findings</a>
         </div>
       </div>
     </div>
@@ -159,13 +215,17 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
   <section class="section next-steps">
     <h2>Next Steps</h2>
     <div class="next-steps-grid">
-      <a href={`${base}/cli`} class="next-step-card">
-        <strong>CLI Reference</strong>
-        <p>Commands, options, and usage examples</p>
+      <a href={`${base}/skill`} class="next-step-card">
+        <strong>Write a Skill</strong>
+        <p>Create a custom skill for your codebase</p>
       </a>
       <a href={`${base}/config`} class="next-step-card">
-        <strong>Configure triggers</strong>
-        <p>Control when skills run with <code>warden.toml</code></p>
+        <strong>Configure Triggers</strong>
+        <p>Control when and where skills run</p>
+      </a>
+      <a href={`${base}/cli`} class="next-step-card">
+        <strong>CLI Reference</strong>
+        <p>Commands, options, and usage</p>
       </a>
     </div>
   </section>
@@ -218,6 +278,35 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
   .btn-primary:hover {
     opacity: 0.9;
     color: #000;
+  }
+
+  /* Value Props */
+  .value-props {
+    border-top: none;
+    padding-top: 1rem;
+  }
+
+  .three-col {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Skill Showcase */
+  .skill-showcase h2 {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-top: 0;
+  }
+
+  .skill-showcase-note {
+    color: var(--text-tertiary);
+    font-size: 0.9375rem;
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+
+  .skill-showcase-detail {
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
   }
 
   /* Quick Start Steps */
@@ -314,6 +403,10 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     width: 10px;
     height: 10px;
     border-radius: 50%;
+  }
+
+  .pr-mock-severity.severity-high {
+    background: #f85149;
   }
 
   .pr-mock-severity.severity-medium {
@@ -432,7 +525,7 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
   /* Next Steps */
   .next-steps-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
   }
 
@@ -472,6 +565,10 @@ Analysis completed in <span class="cli-dim">8.2s</span></pre>
     .tagline {
       font-size: 1.25rem;
       letter-spacing: 0.02em;
+    }
+
+    .three-col {
+      grid-template-columns: 1fr;
     }
 
     .next-steps-grid {

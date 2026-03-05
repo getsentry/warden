@@ -22,6 +22,7 @@
     "test:evals": "vitest run --config vitest.evals.config.ts",
     "typecheck": "tsc --noEmit",
     "update-pricing": "tsx scripts/update-pricing.ts",
+    "docs": "pnpm --filter dex-docs dev",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
