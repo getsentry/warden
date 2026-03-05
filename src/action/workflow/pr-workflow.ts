@@ -670,6 +670,16 @@ export async function runPRWorkflow(
         setOutput('findings-count', 0);
         setOutput('high-count', 0);
         setOutput('summary', 'No warden.toml found');
+        try {
+          const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
+          const [o = '', n = ''] = fullName.split('/');
+          writeFindingsOutput([], {
+            eventType: 'pull_request',
+            action: '',
+            repository: { owner: o, name: n, fullName, defaultBranch: '' },
+            repoPath,
+          });
+        } catch { /* non-fatal */ }
         return;
       }
 
