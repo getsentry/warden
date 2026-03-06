@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import Terminal from '../components/Terminal.astro';
 import PackageManagerTabs from '../components/PackageManagerTabs.astro';
+import HeroFlow from '../components/HeroFlow.astro';
 import { Code } from 'astro:components';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -25,6 +26,7 @@ You are a security expert analyzing code changes.
 
 <Base title="Home" description="Define skills in Markdown. Compose them into agents that review every change.">
   <div class="hero">
+    <HeroFlow />
     <p class="tagline">Your Code Is Under New Management</p>
     <p class="tagline-sub">Define skills in Markdown. Compose them into agents that review every change.</p>
 

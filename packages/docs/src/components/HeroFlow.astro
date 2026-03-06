@@ -1,0 +1,967 @@
+---
+const skills = [
+  "security-scanning",
+  "api-design-review",
+  "architecture-review",
+  "dependency-review",
+  "test-coverage",
+  "auth-hardening",
+  "performance-guardrails",
+  "error-handling",
+];
+const desktopSkillLayout = [
+  { side: "right", inset: "0rem" },
+  { side: "left", inset: "0rem" },
+  { side: "right", inset: "1.1rem" },
+  { side: "left", inset: "0.55rem" },
+  { side: "right", inset: "2rem" },
+  { side: "left", inset: "1.45rem" },
+  { side: "left", inset: "2.25rem" },
+  { side: "right", inset: "0.45rem" },
+];
+const connectorCount = skills.length + 2;
+---
+
+<section class="hero-flow" aria-label="Warden trigger flow">
+  <div class="hero-flow-bg" aria-hidden="true"></div>
+  <svg class="hero-flow-lines" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <mask id="hero-flow-dash-mask" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+        {Array.from({ length: connectorCount }).map((_, idx) => (
+          <path class="hero-flow-mask-path" data-mask-line={idx}></path>
+        ))}
+      </mask>
+    </defs>
+    {Array.from({ length: connectorCount }).map((_, idx) => (
+      <path class="hero-flow-line" data-line={idx}></path>
+    ))}
+    <g class="hero-flow-trails" mask="url(#hero-flow-dash-mask)">
+      {Array.from({ length: connectorCount }).map((_, idx) => (
+        <path
+          class="hero-flow-trail"
+          data-trail={idx}
+          style={`--trail-delay:${idx * 0.18}s`}
+        ></path>
+      ))}
+    </g>
+  </svg>
+
+  <div class="hero-flow-grid">
+    <div class="hero-flow-column hero-flow-column-skills">
+      <span class="hero-flow-label">Skills</span>
+      <div class="hero-flow-skills-clip">
+        <div class="hero-flow-skills-list">
+          {skills.map((skill, index) => (
+            <div
+              class="hero-skill-card"
+              data-anchor={`skill-${index}`}
+              data-side={desktopSkillLayout[index % desktopSkillLayout.length].side}
+              style={`--skill-inset:${desktopSkillLayout[index % desktopSkillLayout.length].inset}`}
+            >
+              <span class="hero-skill-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M7 3.75h6.5L18.25 8.5V20a1.25 1.25 0 0 1-1.25 1.25H7A1.25 1.25 0 0 1 5.75 20V5A1.25 1.25 0 0 1 7 3.75Z" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M13.5 3.75V8.5h4.75" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M8.5 12.25h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  <path d="M8.5 15.75h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <code>{skill}</code>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-flow-column hero-flow-column-center">
+      <div class="warden-node" data-anchor="warden" aria-label="Warden">
+        <span class="warden-shield">
+          <span class="warden-eye">
+            <span class="warden-iris"></span>
+          </span>
+        </span>
+      </div>
+    </div>
+
+    <div class="hero-flow-column hero-flow-column-output">
+      <span class="hero-flow-label">Run before you push</span>
+      <div class="hero-cli" data-anchor="cli">
+        <div class="hero-cli-header" aria-hidden="true">
+          <span class="hero-cli-dot dot-red"></span>
+          <span class="hero-cli-dot dot-yellow"></span>
+          <span class="hero-cli-dot dot-green"></span>
+        </div>
+        <div class="hero-cli-body">
+          <span class="cli-dim">$</span> warden
+        </div>
+      </div>
+
+      <span class="hero-flow-label hero-flow-label-pr">Every pull request</span>
+      <div class="hero-pr-clip">
+        <div class="pr-mock" data-anchor="pr">
+          <div class="pr-mock-header">
+            <div class="pr-mock-avatar">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="12" fill="#000"></circle>
+                <g transform="translate(12, 12) scale(0.65) translate(-12, -12)">
+                  <path d="M14.2666 4.9061C15.1564 4.09409 16.5921 4.60917 16.7627 5.80162L18.1123 15.2519C18.9476 14.5758 19.6675 14.156 20.2706 13.9423C20.9583 13.6988 21.61 13.6893 22.0606 14.0459C22.5331 14.4202 22.576 15.0232 22.4131 15.5224C22.2471 16.0308 21.8525 16.5326 21.2774 16.916C20.2382 17.6088 19.1848 18.1368 17.7432 18.4863C16.3131 18.833 14.518 19 12 19C9.48202 19 7.68685 18.833 6.25679 18.4863C4.81521 18.1368 3.76183 17.6088 2.72259 16.916C2.14753 16.5326 1.75289 16.0308 1.58684 15.5224C1.42401 15.0233 1.46701 14.4202 1.93938 14.0459C2.38997 13.6893 3.04168 13.6988 3.72943 13.9423C4.33238 14.1559 5.05163 14.5761 5.88667 15.2519L7.23727 5.80162C7.40784 4.60919 8.84362 4.09419 9.73338 4.9061L11.6631 6.66686C11.854 6.84121 12.146 6.84121 12.3369 6.66686L14.2666 4.9061Z" fill="white"></path>
+                  <path d="M12 8L13.1226 11.1094H16.7553L13.8164 13.0312L14.9389 16.1406L12 14.2188L9.06107 16.1406L10.1836 13.0312L7.24472 11.1094H10.8774L12 8Z" fill="#000"></path>
+                </g>
+              </svg>
+            </div>
+            <div class="pr-mock-meta">
+              <span class="pr-mock-name">warden</span>
+              <span class="pr-mock-badge">bot</span>
+              <span class="pr-mock-time">commented now</span>
+            </div>
+          </div>
+          <div class="pr-mock-body">
+            <div class="pr-mock-finding">
+              <span class="pr-mock-severity severity-high"></span>
+              <span class="pr-mock-title">SQL injection via unsanitized input</span>
+            </div>
+            <p class="pr-mock-desc">User input is interpolated directly into a SQL query. Use parameterized queries to prevent SQL injection attacks.</p>
+            <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Use parameterized query</p>
+            <div class="pr-mock-suggestion">
+              <div class="pr-mock-suggestion-header">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8.75 1.75V5H12a.75.75 0 010 1.5H8.75v3.25a.75.75 0 01-1.5 0V6.5H4a.75.75 0 010-1.5h3.25V1.75a.75.75 0 011.5 0zM4 13a.75.75 0 000 1.5h8a.75.75 0 000-1.5H4z"/>
+                </svg>
+                <span>Suggested change</span>
+              </div>
+              <div class="pr-mock-suggestion-diff">
+                <div class="pr-mock-diff-line diff-old">
+                  <span class="diff-marker">-</span>
+                  <span class="diff-content">db.query(`SELECT * FROM users WHERE id = $&#123;id&#125;`)</span>
+                </div>
+                <div class="pr-mock-diff-line diff-new">
+                  <span class="diff-marker">+</span>
+                  <span class="diff-content">db.query("SELECT * FROM users WHERE id = $1", [id])</span>
+                </div>
+              </div>
+              <div class="pr-mock-suggestion-actions">
+                <button class="pr-mock-commit-btn">Commit suggestion</button>
+              </div>
+            </div>
+          </div>
+          <div class="pr-mock-footer">
+            <a href="#" class="pr-mock-link">View all 3 findings</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  function heroFlowPoint(el, side, rootRect, offset = 0) {
+    const rect = el.getBoundingClientRect();
+    if (side === "top") {
+      return {
+        x: rect.left - rootRect.left + rect.width * (0.5 + offset),
+        y: rect.top - rootRect.top,
+      };
+    }
+    if (side === "bottom") {
+      return {
+        x: rect.left - rootRect.left + rect.width * (0.5 + offset),
+        y: rect.bottom - rootRect.top,
+      };
+    }
+    if (side === "left") {
+      return {
+        x: rect.left - rootRect.left,
+        y: rect.top - rootRect.top + rect.height * (0.5 + offset),
+      };
+    }
+    return {
+      x: rect.right - rootRect.left,
+      y: rect.top - rootRect.top + rect.height * (0.5 + offset),
+    };
+  }
+
+  function heroFlowCirclePoint(el, rootRect, angleDeg) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left - rootRect.left + rect.width / 2;
+    const cy = rect.top - rootRect.top + rect.height / 2;
+    const radius = (Math.min(rect.width, rect.height) / 2) - 0.5;
+    const angle = (angleDeg * Math.PI) / 180;
+    return {
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+    };
+  }
+
+  function heroFlowCurve(a, b) {
+    const dx = Math.abs(b.x - a.x);
+    const ctrl = Math.max(26, dx * 0.42);
+    const dir = b.x >= a.x ? 1 : -1;
+    const c1x = a.x + (dir * ctrl);
+    const c2x = b.x - (dir * ctrl);
+    return `M ${a.x} ${a.y} C ${c1x} ${a.y} ${c2x} ${b.y} ${b.x} ${b.y}`;
+  }
+
+  function heroFlowFan(a, b) {
+    const midY = a.y + (b.y - a.y) * 0.58;
+    return `M ${a.x} ${a.y} C ${a.x} ${midY} ${b.x} ${midY} ${b.x} ${b.y}`;
+  }
+
+  function heroFlowVertical(a, b) {
+    const midY = (a.y + b.y) / 2;
+    return `M ${a.x} ${a.y} C ${a.x} ${midY} ${b.x} ${midY} ${b.x} ${b.y}`;
+  }
+
+  function setupHeroFlows() {
+    document.querySelectorAll(".hero-flow").forEach((flow) => {
+      if (flow.__heroFlowCleanup) {
+        flow.__heroFlowCleanup();
+      }
+
+      const svg = flow.querySelector(".hero-flow-lines");
+      const lines = Array.from(flow.querySelectorAll("[data-line]"));
+      const skills = Array.from(flow.querySelectorAll("[data-anchor^='skill-']"));
+      const warden = flow.querySelector("[data-anchor='warden']");
+      const cli = flow.querySelector("[data-anchor='cli']");
+      const pr = flow.querySelector("[data-anchor='pr']");
+      const trails = Array.from(flow.querySelectorAll("[data-trail]"));
+      const maskLines = Array.from(flow.querySelectorAll("[data-mask-line]"));
+      const palette = ["#22d3ee", "#facc15", "#f87171", "#4ade80"];
+
+      if (!svg || skills.length < 3 || !warden || !cli || !pr) {
+        return;
+      }
+
+      const setTrailColor = (index) => {
+        const trail = trails.find((item) => item.dataset.trail === String(index));
+        if (!trail) return;
+        const color = palette[Math.floor(Math.random() * palette.length)];
+        trail.style.stroke = color;
+      };
+
+      trails.forEach((trail) => {
+        const trailIndex = trail.dataset.trail;
+        if (trailIndex == null) return;
+        const index = Number(trailIndex);
+        setTrailColor(index);
+      });
+
+      const trailHandlers = trails.map((trail) => {
+        const onIteration = () => {
+          const trailIndex = trail.dataset.trail;
+          if (trailIndex == null) return;
+          setTrailColor(Number(trailIndex));
+        };
+        trail.addEventListener("animationiteration", onIteration);
+        return { trail, onIteration };
+      });
+
+      const update = () => {
+        const rootRect = flow.getBoundingClientRect();
+        const width = Math.max(1, rootRect.width);
+        const height = Math.max(1, rootRect.height);
+        flow.style.setProperty("--hero-flow-mask-radius", `${height / 2}px`);
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+        const mobile = window.matchMedia("(max-width: 860px)").matches;
+        const activeSkills = skills.filter((skillEl) => getComputedStyle(skillEl).display !== "none");
+        const connectors = [];
+
+        if (mobile) {
+          const wardenCenter = heroFlowPoint(warden, "top", rootRect);
+          const leftSkills = activeSkills
+            .filter((skillEl) => {
+              const rect = skillEl.getBoundingClientRect();
+              const centerX = rect.left - rootRect.left + (rect.width / 2);
+              return centerX <= wardenCenter.x;
+            });
+          const rightSkills = activeSkills
+            .filter((skillEl) => {
+              const rect = skillEl.getBoundingClientRect();
+              const centerX = rect.left - rootRect.left + (rect.width / 2);
+              return centerX > wardenCenter.x;
+            });
+
+          const leftCount = Math.max(1, leftSkills.length - 1);
+          const rightCount = Math.max(1, rightSkills.length - 1);
+          const wardenBottomCli = heroFlowCirclePoint(warden, rootRect, 84);
+          const wardenBottomPr = heroFlowCirclePoint(warden, rootRect, 96);
+          const cliTop = heroFlowPoint(cli, "top", rootRect);
+          const prTop = heroFlowPoint(pr, "top", rootRect);
+          const leftConnectors = leftSkills.map((skillEl, index) => {
+            const ratio = leftCount === 0 ? 0.5 : (index / leftCount);
+            const angle = 252 - (ratio * 44);
+            const target = heroFlowCirclePoint(warden, rootRect, angle);
+            return heroFlowCurve(heroFlowPoint(skillEl, "right", rootRect), target);
+          });
+          const rightConnectors = rightSkills.map((skillEl, index) => {
+            const ratio = rightCount === 0 ? 0.5 : (index / rightCount);
+            const angle = 288 + (ratio * 44);
+            const target = heroFlowCirclePoint(warden, rootRect, angle);
+            return heroFlowCurve(heroFlowPoint(skillEl, "left", rootRect), target);
+          });
+          connectors.push(...leftConnectors);
+          connectors.push(...rightConnectors);
+          connectors.push(
+            heroFlowVertical(
+              wardenBottomCli,
+              { x: wardenBottomCli.x, y: cliTop.y }
+            )
+          );
+          connectors.push(
+            heroFlowVertical(
+              wardenBottomPr,
+              { x: wardenBottomPr.x, y: prTop.y }
+            )
+          );
+        } else {
+          const skillCount = Math.max(1, activeSkills.length - 1);
+          const skillConnectors = activeSkills.map((skillEl, index) => {
+            const ratio = skillCount === 0 ? 0.5 : (index / skillCount);
+            const angle = 228 - (ratio * 96);
+            const wardenLeftSlot = heroFlowCirclePoint(warden, rootRect, angle);
+            return heroFlowCurve(heroFlowPoint(skillEl, "right", rootRect), wardenLeftSlot);
+          });
+          const wardenRightCli = heroFlowCirclePoint(warden, rootRect, 340);
+          const wardenRightPr = heroFlowCirclePoint(warden, rootRect, 20);
+          connectors.push(...skillConnectors);
+          connectors.push(heroFlowCurve(wardenRightCli, heroFlowPoint(cli, "left", rootRect)));
+          connectors.push(heroFlowCurve(wardenRightPr, heroFlowPoint(pr, "left", rootRect)));
+        }
+
+        for (let i = 0; i < lines.length; i += 1) {
+          const d = connectors[i] || "";
+          if (lines[i]) lines[i].setAttribute("d", d);
+          flow.querySelectorAll(`[data-trail='${i}']`).forEach((trail) => {
+            trail.setAttribute("d", d);
+          });
+          if (maskLines[i]) {
+            maskLines[i].setAttribute("d", d);
+          }
+        }
+      };
+
+      const ro = new ResizeObserver(update);
+      ro.observe(flow);
+      skills.forEach((el) => ro.observe(el));
+      ro.observe(warden);
+      ro.observe(cli);
+      ro.observe(pr);
+
+      window.addEventListener("resize", update);
+      update();
+
+      flow.__heroFlowCleanup = () => {
+        ro.disconnect();
+        window.removeEventListener("resize", update);
+        trailHandlers.forEach(({ trail, onIteration }) => {
+          trail.removeEventListener("animationiteration", onIteration);
+        });
+      };
+    });
+  }
+
+  setupHeroFlows();
+  document.addEventListener("astro:page-load", setupHeroFlows);
+</script>
+
+<style>
+  .hero-flow {
+    position: relative;
+    width: min(1100px, calc(100vw - 2rem));
+    margin: 0 auto 2.25rem;
+  }
+
+  .hero-flow-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.7;
+    background-image: radial-gradient(circle at 0 0, #777 1.5px, #0000 0), radial-gradient(circle at 100% 100%, #777 1.5px, #0000 0);
+    background-position: 0 0, 10px 10px;
+    background-size: 20px 20px;
+    -webkit-mask-image: radial-gradient(circle var(--hero-flow-mask-radius, 10rem) at 50% 50%, #000 0%, transparent 100%);
+    mask-image: radial-gradient(circle var(--hero-flow-mask-radius, 10rem) at 50% 50%, #000 0%, transparent 100%);
+  }
+
+  .hero-flow-lines {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+  }
+
+  .hero-flow-line {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 1.25;
+    stroke-linecap: round;
+    stroke-dasharray: 4 6;
+  }
+
+  .hero-flow-mask-path {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.3;
+    stroke-linecap: round;
+    stroke-dasharray: 4 6;
+  }
+
+  .hero-flow-trail {
+    fill: none;
+    stroke: #22d3ee;
+    stroke-width: 2.3;
+    stroke-linecap: round;
+    --trail-pattern: 14 286;
+    stroke-dasharray: var(--trail-pattern);
+    stroke-dashoffset: 0;
+    animation: hero-flow-trail 15s steps(30, end) infinite;
+    animation-delay: var(--trail-delay);
+  }
+
+  @keyframes hero-flow-trail {
+    from {
+      stroke-dasharray: var(--trail-pattern);
+      stroke-dashoffset: 0;
+    }
+    to {
+      stroke-dasharray: var(--trail-pattern);
+      stroke-dashoffset: -300;
+    }
+  }
+
+  .hero-flow-grid {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px minmax(0, 1fr);
+    gap: 1rem;
+    align-items: center;
+    min-height: 27.5rem;
+  }
+
+  .hero-flow-column {
+    min-width: 0;
+  }
+
+  .hero-flow-column-skills,
+  .hero-flow-column-output {
+    position: relative;
+    padding-top: 1.35rem;
+  }
+
+  .hero-flow-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    text-align: center;
+  }
+
+  .hero-flow-column-skills > .hero-flow-label,
+  .hero-flow-column-output > .hero-flow-label:first-of-type {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    width: max-content;
+  }
+
+  .hero-flow-skills-list {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .hero-skill-card {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.52rem 0.58rem;
+    background: var(--bg-subtle);
+    width: fit-content;
+    max-width: 100%;
+    transform: none;
+  }
+
+  .hero-skill-card[data-side="right"] {
+    justify-self: end;
+    transform: translateX(calc(-1 * var(--skill-inset, 0rem)));
+  }
+
+  .hero-skill-card[data-side="left"] {
+    justify-self: start;
+    transform: translateX(var(--skill-inset, 0rem));
+  }
+
+  .hero-skill-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+
+  .hero-skill-icon svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .hero-skill-card code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 0.88rem;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .hero-flow-column-center {
+    display: grid;
+    place-items: center;
+  }
+
+  .warden-node {
+    width: 9rem;
+    height: 9rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background: var(--bg-subtle);
+  }
+
+  .warden-shield {
+    position: relative;
+    width: 4.25rem;
+    height: 4.25rem;
+    clip-path: polygon(50% 0%, 88% 14%, 88% 47%, 75% 80%, 50% 100%, 25% 80%, 12% 47%, 12% 14%);
+    background: #f5f5f5;
+    display: block;
+    overflow: hidden;
+  }
+
+  .warden-shield::before {
+    content: "";
+    position: absolute;
+    inset: 8%;
+    clip-path: inherit;
+    background: #111;
+  }
+
+  .warden-eye {
+    position: absolute;
+    inset: 29% 18% 39%;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 50% 50%, #060606 0 12%, #e9e9e9 13% 43%, rgba(255, 255, 255, 0.18) 44% 58%, transparent 59%);
+    -webkit-mask:
+      radial-gradient(105% 150% at 50% -46%, transparent 47%, #000 48%) top/100% 54% no-repeat,
+      radial-gradient(105% 150% at 50% 146%, transparent 47%, #000 48%) bottom/100% 54% no-repeat;
+    mask:
+      radial-gradient(105% 150% at 50% -46%, transparent 47%, #000 48%) top/100% 54% no-repeat,
+      radial-gradient(105% 150% at 50% 146%, transparent 47%, #000 48%) bottom/100% 54% no-repeat;
+  }
+
+  .warden-iris {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 27%;
+    height: 27%;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: #050505;
+  }
+
+  .hero-flow-column-output {
+    display: grid;
+    gap: 0.65rem;
+    align-content: center;
+  }
+
+  .hero-flow-label-pr {
+    margin-top: 0.25rem;
+  }
+
+  .hero-cli {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-subtle);
+    overflow: hidden;
+  }
+
+  .hero-cli-header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .hero-cli-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  .hero-cli-dot.dot-red {
+    background: #ff5f57;
+  }
+
+  .hero-cli-dot.dot-yellow {
+    background: #febc2e;
+  }
+
+  .hero-cli-dot.dot-green {
+    background: #28c840;
+  }
+
+  .hero-cli-body {
+    padding: 0.6rem 0.85rem;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+  }
+
+  .hero-pr-clip {
+    overflow: hidden;
+  }
+
+  .pr-mock {
+    background: #000;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  .pr-mock-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #0d1117;
+    border-bottom: 1px solid #21262d;
+  }
+
+  .pr-mock-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #050709;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .warden-shield-avatar {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .pr-mock-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .pr-mock-name {
+    font-weight: 600;
+    color: #8b949e;
+  }
+
+  .pr-mock-badge {
+    background: #238636;
+    color: #fff;
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .pr-mock-time {
+    color: #8b949e;
+    font-size: 0.75rem;
+  }
+
+  .pr-mock-body {
+    padding: 1rem;
+  }
+
+  .pr-mock-finding {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .pr-mock-severity {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .pr-mock-severity.severity-high {
+    background: #f85149;
+  }
+
+  .pr-mock-title {
+    font-weight: 600;
+    color: #9198a1;
+  }
+
+  .pr-mock-desc {
+    color: #9198a1;
+    margin: 0 0 0.75rem;
+    line-height: 1.5;
+  }
+
+  .pr-mock-suggestion-label {
+    color: #9198a1;
+    margin: 0 0 0.75rem;
+  }
+
+  .pr-mock-suggestion {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .pr-mock-suggestion-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #161b22;
+    border-bottom: 1px solid #21262d;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #8b949e;
+  }
+
+  .pr-mock-suggestion-diff {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.6;
+  }
+
+  .pr-mock-diff-line {
+    display: flex;
+    padding: 0 0.75rem;
+  }
+
+  .pr-mock-diff-line.diff-old {
+    background: rgba(248, 81, 73, 0.15);
+  }
+
+  .pr-mock-diff-line.diff-new {
+    background: rgba(63, 185, 80, 0.15);
+  }
+
+  .diff-marker {
+    width: 1.5rem;
+    flex-shrink: 0;
+    text-align: center;
+    user-select: none;
+  }
+
+  .diff-content {
+    flex: 1;
+    white-space: pre;
+  }
+
+  .diff-old .diff-marker { color: #f85149; }
+  .diff-old .diff-content { color: #ffa198; }
+
+  .diff-new .diff-marker { color: #3fb950; }
+  .diff-new .diff-content { color: #7ee787; }
+
+  .pr-mock-suggestion-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid #21262d;
+    background: #161b22;
+  }
+
+  .pr-mock-commit-btn {
+    background: #238636;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pr-mock-commit-btn:hover {
+    background: #2ea043;
+  }
+
+  .pr-mock-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #30363d;
+  }
+
+  .pr-mock-link {
+    font-size: 0.8125rem;
+    color: #58a6ff;
+  }
+
+  .pr-mock-link:hover {
+    text-decoration: underline;
+  }
+
+  @media (min-width: 861px) {
+    .hero-flow {
+      left: 50%;
+      transform: translateX(-50%);
+    }
+  }
+
+  @media (max-width: 860px) {
+    .hero-flow {
+      width: 100%;
+    }
+
+    .hero-flow-grid {
+      min-height: 34rem;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto;
+      gap: 1.25rem;
+    }
+
+    .hero-flow-column-skills {
+      order: 1;
+    }
+
+    .hero-flow-skills-clip {
+      overflow: visible;
+      padding-bottom: 0.35rem;
+    }
+
+    .hero-flow-skills-list {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    .hero-skill-card {
+      gap: 0.45rem;
+      padding: 0.5rem 0.55rem;
+      transform: none;
+    }
+
+    .hero-skill-card[data-side] {
+      transform: none;
+    }
+
+    .hero-flow-skills-list .hero-skill-card:nth-child(n + 7) {
+      display: none;
+    }
+
+    .hero-skill-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    .hero-skill-icon svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .hero-skill-card code {
+      font-size: 0.74rem;
+    }
+
+    .hero-flow-column-center {
+      order: 2;
+    }
+
+    .warden-node {
+      width: 7rem;
+      height: 7rem;
+    }
+
+    .warden-shield {
+      width: 3.5rem;
+      height: 3.5rem;
+    }
+
+    .hero-flow-column-output {
+      order: 3;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.55rem;
+      align-items: start;
+    }
+
+    .hero-flow-column-output .hero-flow-label,
+    .hero-flow-label-pr {
+      grid-column: 1;
+      margin-bottom: 0;
+      justify-self: stretch;
+      width: 100%;
+      text-align: center;
+    }
+
+    .hero-flow-label-pr {
+      margin-top: 0.4rem;
+    }
+
+    .hero-cli {
+      grid-column: 1;
+      margin-top: 0.25rem;
+      width: 100%;
+    }
+
+    .hero-pr-clip {
+      grid-column: 1;
+      overflow: hidden;
+      margin-top: 0.25rem;
+    }
+
+    .hero-pr-clip .pr-mock {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .hero-flow-column-skills > .hero-flow-label,
+    .hero-flow-column-output > .hero-flow-label:first-of-type {
+      position: static;
+      margin-bottom: 0.35rem;
+      left: auto;
+      transform: none;
+      width: 100%;
+      text-align: center;
+      justify-self: stretch;
+    }
+
+    .hero-flow-column-skills,
+    .hero-flow-column-output {
+      padding-top: 0;
+    }
+  }
+</style>
