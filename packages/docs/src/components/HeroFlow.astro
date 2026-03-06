@@ -221,14 +221,164 @@ const connectorCount = skills.length + 2;
       const lines = Array.from(flow.querySelectorAll("[data-line]"));
       const skills = Array.from(flow.querySelectorAll("[data-anchor^='skill-']"));
       const warden = flow.querySelector("[data-anchor='warden']");
+      const shield = flow.querySelector(".warden-shield");
+      const eye = flow.querySelector(".warden-eye");
       const cli = flow.querySelector("[data-anchor='cli']");
       const pr = flow.querySelector("[data-anchor='pr']");
       const trails = Array.from(flow.querySelectorAll("[data-trail]"));
       const maskLines = Array.from(flow.querySelectorAll("[data-mask-line]"));
       const palette = ["#22d3ee", "#facc15", "#f87171", "#4ade80"];
 
-      if (!svg || skills.length < 3 || !warden || !cli || !pr) {
+      if (!svg || skills.length < 3 || !warden || !shield || !eye || !cli || !pr) {
         return;
+      }
+
+      const motionEnabled = window.matchMedia("(pointer: fine)").matches;
+      const clampToCircle = (dx, dy, maxRadius) => {
+        const distance = Math.hypot(dx, dy);
+        if (distance <= maxRadius || distance === 0) {
+          return { x: dx, y: dy };
+        }
+        const ratio = maxRadius / distance;
+        return { x: dx * ratio, y: dy * ratio };
+      };
+
+      let update = () => {};
+      let rafId = 0;
+      let nodeX = 0;
+      let nodeY = 0;
+      let nodeTargetX = 0;
+      let nodeTargetY = 0;
+      let shieldX = 0;
+      let shieldY = 0;
+      let shieldTargetX = 0;
+      let shieldTargetY = 0;
+      let eyeX = 0;
+      let eyeY = 0;
+      let eyeTargetX = 0;
+      let eyeTargetY = 0;
+
+      const applyMascotMotion = () => {
+        warden.style.setProperty("--node-x", `${nodeX.toFixed(2)}px`);
+        warden.style.setProperty("--node-y", `${nodeY.toFixed(2)}px`);
+        shield.style.setProperty("--shield-x", `${shieldX.toFixed(2)}px`);
+        shield.style.setProperty("--shield-y", `${shieldY.toFixed(2)}px`);
+        eye.style.setProperty("--eye-x", `${eyeX.toFixed(2)}px`);
+        eye.style.setProperty("--eye-y", `${eyeY.toFixed(2)}px`);
+        update();
+      };
+
+      const animateMascotMotion = () => {
+        const ease = 0.16;
+        nodeX += (nodeTargetX - nodeX) * ease;
+        nodeY += (nodeTargetY - nodeY) * ease;
+        shieldX += (shieldTargetX - shieldX) * ease;
+        shieldY += (shieldTargetY - shieldY) * ease;
+        eyeX += (eyeTargetX - eyeX) * ease;
+        eyeY += (eyeTargetY - eyeY) * ease;
+        applyMascotMotion();
+
+        const settled =
+          Math.abs(nodeTargetX - nodeX) < 0.06
+          && Math.abs(nodeTargetY - nodeY) < 0.06
+          Math.abs(shieldTargetX - shieldX) < 0.06
+          && Math.abs(shieldTargetY - shieldY) < 0.06
+          && Math.abs(eyeTargetX - eyeX) < 0.06
+          && Math.abs(eyeTargetY - eyeY) < 0.06;
+
+        if (settled) {
+          nodeX = nodeTargetX;
+          nodeY = nodeTargetY;
+          shieldX = shieldTargetX;
+          shieldY = shieldTargetY;
+          eyeX = eyeTargetX;
+          eyeY = eyeTargetY;
+          applyMascotMotion();
+          rafId = 0;
+          return;
+        }
+
+        rafId = window.requestAnimationFrame(animateMascotMotion);
+      };
+
+      const requestMascotMotion = () => {
+        if (rafId !== 0) return;
+        rafId = window.requestAnimationFrame(animateMascotMotion);
+      };
+
+      const mapPointerToMascot = (clientX, clientY) => {
+        const viewportWidth = Math.max(window.innerWidth, 1);
+        const viewportHeight = Math.max(window.innerHeight, 1);
+        const nodeRect = warden.getBoundingClientRect();
+        const shieldRect = shield.getBoundingClientRect();
+        const eyeRect = eye.getBoundingClientRect();
+
+        const viewportX = ((clientX / viewportWidth) * 2) - 1;
+        const viewportY = ((clientY / viewportHeight) * 2) - 1;
+        const nodeRange = Math.max(0, Math.min(nodeRect.width, nodeRect.height) * 0.2);
+        const nodeOffset = clampToCircle(viewportX * nodeRange, viewportY * nodeRange, nodeRange);
+        nodeTargetX = nodeOffset.x;
+        nodeTargetY = nodeOffset.y;
+
+        const nodeCx = nodeRect.left + (nodeRect.width / 2);
+        const nodeCy = nodeRect.top + (nodeRect.height / 2);
+        const shieldRange = Math.max(
+          0,
+          Math.min(
+            shieldRect.left - nodeRect.left,
+            nodeRect.right - shieldRect.right,
+            shieldRect.top - nodeRect.top,
+            nodeRect.bottom - shieldRect.bottom,
+          ) - 1,
+        );
+        const shieldOffset = clampToCircle(clientX - nodeCx, clientY - nodeCy, shieldRange);
+        shieldTargetX = shieldOffset.x;
+        shieldTargetY = shieldOffset.y;
+
+        const shieldCx = shieldRect.left + (shieldRect.width / 2);
+        const shieldCy = shieldRect.top + (shieldRect.height / 2);
+        const eyeRange = Math.max(
+          0,
+          Math.min(
+            eyeRect.left - shieldRect.left,
+            shieldRect.right - eyeRect.right,
+            eyeRect.top - shieldRect.top,
+            shieldRect.bottom - eyeRect.bottom,
+          ) - 0.5,
+        );
+        const eyeOffset = clampToCircle(clientX - shieldCx, clientY - shieldCy, eyeRange);
+        eyeTargetX = eyeOffset.x;
+        eyeTargetY = eyeOffset.y;
+
+        requestMascotMotion();
+      };
+
+      const resetMascotTargets = () => {
+        nodeTargetX = 0;
+        nodeTargetY = 0;
+        shieldTargetX = 0;
+        shieldTargetY = 0;
+        eyeTargetX = 0;
+        eyeTargetY = 0;
+        requestMascotMotion();
+      };
+
+      const onPointerMove = (event) => {
+        mapPointerToMascot(event.clientX, event.clientY);
+      };
+      const onVisibilityChange = () => {
+        if (document.visibilityState !== "visible") {
+          resetMascotTargets();
+        }
+      };
+
+      if (motionEnabled) {
+        window.addEventListener("pointermove", onPointerMove, { passive: true });
+        window.addEventListener("blur", resetMascotTargets);
+        document.addEventListener("mouseleave", resetMascotTargets);
+        document.addEventListener("visibilitychange", onVisibilityChange);
+      } else {
+        applyMascotMotion();
       }
 
       const setTrailColor = (index) => {
@@ -255,7 +405,7 @@ const connectorCount = skills.length + 2;
         return { trail, onIteration };
       });
 
-      const update = () => {
+      update = () => {
         const rootRect = flow.getBoundingClientRect();
         const width = Math.max(1, rootRect.width);
         const height = Math.max(1, rootRect.height);
@@ -353,6 +503,16 @@ const connectorCount = skills.length + 2;
       flow.__heroFlowCleanup = () => {
         ro.disconnect();
         window.removeEventListener("resize", update);
+        if (motionEnabled) {
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("blur", resetMascotTargets);
+          document.removeEventListener("mouseleave", resetMascotTargets);
+          document.removeEventListener("visibilitychange", onVisibilityChange);
+        }
+        if (rafId !== 0) {
+          window.cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
         trailHandlers.forEach(({ trail, onIteration }) => {
           trail.removeEventListener("animationiteration", onIteration);
         });
@@ -541,6 +701,10 @@ const connectorCount = skills.length + 2;
     display: grid;
     place-items: center;
     background: var(--bg-subtle);
+    position: relative;
+    overflow: hidden;
+    transform: translate3d(var(--node-x, 0px), var(--node-y, 0px), 0);
+    will-change: transform;
   }
 
   .warden-shield {
@@ -551,6 +715,8 @@ const connectorCount = skills.length + 2;
     background: #f5f5f5;
     display: block;
     overflow: hidden;
+    transform: translate3d(var(--shield-x, 0px), var(--shield-y, 0px), 0);
+    will-change: transform;
   }
 
   .warden-shield::before {
@@ -573,6 +739,8 @@ const connectorCount = skills.length + 2;
     mask:
       radial-gradient(105% 150% at 50% -46%, transparent 47%, #000 48%) top/100% 54% no-repeat,
       radial-gradient(105% 150% at 50% 146%, transparent 47%, #000 48%) bottom/100% 54% no-repeat;
+    transform: translate3d(var(--eye-x, 0px), var(--eye-y, 0px), 0);
+    will-change: transform;
   }
 
   .warden-iris {
@@ -584,6 +752,7 @@ const connectorCount = skills.length + 2;
     border-radius: 50%;
     transform: translate(-50%, -50%);
     background: #050505;
+    will-change: transform;
   }
 
   .hero-flow-column-output {
