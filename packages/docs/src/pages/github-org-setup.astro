@@ -93,6 +93,17 @@ jobs:
 
   <h2>4. Roll Out Safely Across Repositories</h2>
 
+  <p>Go to <strong>Organization Settings → Repository → Rulesets</strong>, then add an org-level ruleset:</p>
+  <ul>
+    <li>Enforcement status: <strong>Evaluate</strong>. Failures won't block merges.</li>
+    <li>Target repositories: the repos you want covered.</li>
+    <li>Target branches: default branch.</li>
+    <li>Require workflows to pass: select the workflow from step 3.</li>
+  </ul>
+
+  <p>This triggers Warden on every targeted repo without maintaining a workflow copy in each one.</p>
+
+
   <p>Not every repository needs to opt in on day one.</p>
   <ul>
     <li>If <code>warden.toml</code> is missing, Warden now logs a warning and skips analysis.</li>
