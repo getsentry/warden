@@ -483,6 +483,33 @@ describe('discoverRemoteSkills', () => {
     expect(skills[0]?.name).toBe('valid');
   });
 
+  it('discovers skills with multi-line YAML description', async () => {
+    const remotePath = getRemotePath('test/repo');
+    createFileTree(remotePath, {
+      'skills/composition-patterns/SKILL.md': `---
+name: vercel-composition-patterns
+description:
+  React composition patterns that scale. Use when refactoring components with
+  boolean prop proliferation, building flexible component libraries, or
+  designing reusable APIs.
+license: MIT
+metadata:
+  author: vercel
+  version: '1.0.0'
+---
+
+# React Composition Patterns
+`,
+      'skills/react-best-practices/SKILL.md': skillMd('vercel-react-best-practices', 'React best practices'),
+    });
+
+    const skills = await discoverRemoteSkills('test/repo');
+
+    expect(skills.map((s) => s.name).sort()).toEqual(['vercel-composition-patterns', 'vercel-react-best-practices']);
+    const compositionSkill = skills.find((s) => s.name === 'vercel-composition-patterns');
+    expect(compositionSkill?.description).toContain('React composition patterns that scale');
+  });
+
   it('skips invalid SKILL.md files', async () => {
     const remotePath = getRemotePath('test/repo');
     createFileTree(remotePath, {

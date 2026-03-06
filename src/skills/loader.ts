@@ -114,11 +114,27 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
   const frontmatter: Record<string, unknown> = {};
   let currentKey: string | null = null;
   let inMetadata = false;
+  let inMultilineScalar = false;
+  let multilineLines: string[] = [];
   const metadata: Record<string, string> = {};
 
   for (const line of (yamlContent ?? '').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // Handle indented continuation lines for multi-line scalar values
+    // (e.g., description:\n  Some text\n  more text)
+    if (line.startsWith('  ') && inMultilineScalar && currentKey) {
+      multilineLines.push(trimmed);
+      continue;
+    }
+
+    // Flush any accumulated multi-line scalar value
+    if (inMultilineScalar && currentKey && multilineLines.length > 0) {
+      frontmatter[currentKey] = multilineLines.join(' ');
+      multilineLines = [];
+    }
+    inMultilineScalar = false;
 
     if (line.startsWith('  ') && inMetadata) {
       // Nested metadata value
@@ -140,8 +156,17 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
         frontmatter[currentKey] = metadata;
       } else if (value) {
         frontmatter[currentKey] = value.replace(/^["']|["']$/g, '');
+      } else {
+        // Key with no inline value — start collecting multi-line scalar
+        inMultilineScalar = true;
+        multilineLines = [];
       }
     }
+  }
+
+  // Flush any trailing multi-line scalar value
+  if (inMultilineScalar && currentKey && multilineLines.length > 0) {
+    frontmatter[currentKey] = multilineLines.join(' ');
   }
 
   return { frontmatter, body: body ?? '' };

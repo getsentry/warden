@@ -194,6 +194,94 @@ describe('resolveSkillAsync with absolute and tilde paths', () => {
   });
 });
 
+describe('multi-line YAML scalar values', () => {
+  it('parses multi-line description (block scalar style)', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-multiline-'));
+    const skillPath = join(tempDir, 'SKILL.md');
+
+    writeFileSync(
+      skillPath,
+      `---
+name: my-skill
+description:
+  This is a multi-line description that spans
+  multiple indented lines in YAML format.
+license: MIT
+---
+
+Prompt content here.
+`
+    );
+
+    try {
+      const skill = await loadSkillFromMarkdown(skillPath);
+      expect(skill.name).toBe('my-skill');
+      expect(skill.description).toBe(
+        'This is a multi-line description that spans multiple indented lines in YAML format.'
+      );
+      expect(skill.prompt).toBe('Prompt content here.');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('parses multi-line description followed by metadata block', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-multiline-meta-'));
+    const skillPath = join(tempDir, 'SKILL.md');
+
+    writeFileSync(
+      skillPath,
+      `---
+name: vercel-composition-patterns
+description:
+  React composition patterns that scale. Use when refactoring components with
+  boolean prop proliferation, building flexible component libraries, or
+  designing reusable APIs.
+license: MIT
+metadata:
+  author: vercel
+  version: '1.0.0'
+---
+
+# React Composition Patterns
+`
+    );
+
+    try {
+      const skill = await loadSkillFromMarkdown(skillPath);
+      expect(skill.name).toBe('vercel-composition-patterns');
+      expect(skill.description).toContain('React composition patterns that scale');
+      expect(skill.description).toContain('designing reusable APIs.');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('handles single-line description normally', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-singleline-'));
+    const skillPath = join(tempDir, 'SKILL.md');
+
+    writeFileSync(
+      skillPath,
+      `---
+name: simple-skill
+description: A simple one-line description
+---
+
+Prompt.
+`
+    );
+
+    try {
+      const skill = await loadSkillFromMarkdown(skillPath);
+      expect(skill.name).toBe('simple-skill');
+      expect(skill.description).toBe('A simple one-line description');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('flat markdown skill files', () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'warden-test-'));
   const tempSkillPath = join(tempDir, 'my-custom-skill.md');
