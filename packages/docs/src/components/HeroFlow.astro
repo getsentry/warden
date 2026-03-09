@@ -234,6 +234,7 @@ const connectorCount = skills.length + 2;
       }
 
       const motionEnabled = window.matchMedia("(pointer: fine)").matches;
+      const touchSwipeEnabled = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
       const clampToCircle = (dx, dy, maxRadius) => {
         const distance = Math.hypot(dx, dy);
         if (distance <= maxRadius || distance === 0) {
@@ -373,12 +374,38 @@ const connectorCount = skills.length + 2;
           resetMascotTargets();
         }
       };
+      let activeTouchId = null;
+      const onWardenTouchStart = (event) => {
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        activeTouchId = touch.identifier;
+        mapPointerToMascot(touch.clientX, touch.clientY);
+      };
+      const onWardenTouchMove = (event) => {
+        if (activeTouchId === null) return;
+        const touch = Array.from(event.touches).find((item) => item.identifier === activeTouchId);
+        if (!touch) return;
+        event.preventDefault();
+        mapPointerToMascot(touch.clientX, touch.clientY);
+      };
+      const onWardenTouchEnd = (event) => {
+        if (activeTouchId === null) return;
+        const ended = Array.from(event.changedTouches).some((item) => item.identifier === activeTouchId);
+        if (!ended) return;
+        activeTouchId = null;
+        resetMascotTargets();
+      };
 
       if (motionEnabled) {
         window.addEventListener("pointermove", onPointerMove, { passive: true });
         window.addEventListener("blur", resetMascotTargets);
         document.addEventListener("mouseleave", resetMascotTargets);
         document.addEventListener("visibilitychange", onVisibilityChange);
+      } else if (touchSwipeEnabled) {
+        warden.addEventListener("touchstart", onWardenTouchStart, { passive: true });
+        warden.addEventListener("touchmove", onWardenTouchMove, { passive: false });
+        warden.addEventListener("touchend", onWardenTouchEnd);
+        warden.addEventListener("touchcancel", onWardenTouchEnd);
       } else {
         applyMascotMotion();
       }
@@ -518,6 +545,11 @@ const connectorCount = skills.length + 2;
           window.removeEventListener("blur", resetMascotTargets);
           document.removeEventListener("mouseleave", resetMascotTargets);
           document.removeEventListener("visibilitychange", onVisibilityChange);
+        } else if (touchSwipeEnabled) {
+          warden.removeEventListener("touchstart", onWardenTouchStart);
+          warden.removeEventListener("touchmove", onWardenTouchMove);
+          warden.removeEventListener("touchend", onWardenTouchEnd);
+          warden.removeEventListener("touchcancel", onWardenTouchEnd);
         }
         if (rafId !== 0) {
           window.cancelAnimationFrame(rafId);
@@ -1056,7 +1088,9 @@ const connectorCount = skills.length + 2;
 
   @media (max-width: 860px) {
     .hero-flow {
-      width: 100%;
+      width: 100vw;
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
     }
 
     .hero-flow-grid {
@@ -1064,6 +1098,7 @@ const connectorCount = skills.length + 2;
       grid-template-columns: 1fr;
       grid-template-rows: auto auto auto;
       gap: 1.25rem;
+      padding-inline: 1.5rem;
     }
 
     .hero-flow-column-skills {
@@ -1118,6 +1153,7 @@ const connectorCount = skills.length + 2;
     .warden-node {
       width: 7rem;
       height: 7rem;
+      touch-action: none;
     }
 
     .warden-shield {
