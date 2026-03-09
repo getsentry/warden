@@ -40,7 +40,7 @@ const connectorCount = skills.length + 2;
         <path
           class="hero-flow-trail"
           data-trail={idx}
-          style={`--trail-delay:${idx * 0.18}s`}
+          style={`--trail-start:${-(idx * 30)}px`}
         ></path>
       ))}
     </g>
@@ -261,6 +261,8 @@ const connectorCount = skills.length + 2;
       const applyMascotMotion = () => {
         warden.style.setProperty("--node-x", `${nodeX.toFixed(2)}px`);
         warden.style.setProperty("--node-y", `${nodeY.toFixed(2)}px`);
+        warden.style.setProperty("--shield-x", `${shieldX.toFixed(2)}px`);
+        warden.style.setProperty("--shield-y", `${shieldY.toFixed(2)}px`);
         shield.style.setProperty("--shield-x", `${shieldX.toFixed(2)}px`);
         shield.style.setProperty("--shield-y", `${shieldY.toFixed(2)}px`);
         eye.style.setProperty("--eye-x", `${eyeX.toFixed(2)}px`);
@@ -281,7 +283,7 @@ const connectorCount = skills.length + 2;
         const settled =
           Math.abs(nodeTargetX - nodeX) < 0.06
           && Math.abs(nodeTargetY - nodeY) < 0.06
-          Math.abs(shieldTargetX - shieldX) < 0.06
+          && Math.abs(shieldTargetX - shieldX) < 0.06
           && Math.abs(shieldTargetY - shieldY) < 0.06
           && Math.abs(eyeTargetX - eyeX) < 0.06
           && Math.abs(eyeTargetY - eyeY) < 0.06;
@@ -385,7 +387,7 @@ const connectorCount = skills.length + 2;
         const trail = trails.find((item) => item.dataset.trail === String(index));
         if (!trail) return;
         const color = palette[Math.floor(Math.random() * palette.length)];
-        trail.style.stroke = color;
+        trail.style.setProperty("--trail-color", color);
       };
 
       trails.forEach((trail) => {
@@ -396,7 +398,10 @@ const connectorCount = skills.length + 2;
       });
 
       const trailHandlers = trails.map((trail) => {
-        const onIteration = () => {
+        const onIteration = (event) => {
+          if (event.animationName !== "hero-flow-trail-shift") {
+            return;
+          }
           const trailIndex = trail.dataset.trail;
           if (trailIndex == null) return;
           setTrailColor(Number(trailIndex));
@@ -409,7 +414,12 @@ const connectorCount = skills.length + 2;
         const rootRect = flow.getBoundingClientRect();
         const width = Math.max(1, rootRect.width);
         const height = Math.max(1, rootRect.height);
+        const wardenRect = warden.getBoundingClientRect();
+        const maskCenterX = (wardenRect.left - rootRect.left) + (wardenRect.width / 2) + (nodeX * 3);
+        const maskCenterY = (wardenRect.top - rootRect.top) + (wardenRect.height / 2) + (nodeY * 3);
         flow.style.setProperty("--hero-flow-mask-radius", `${height / 2}px`);
+        flow.style.setProperty("--hero-flow-mask-center-x", `${maskCenterX}px`);
+        flow.style.setProperty("--hero-flow-mask-center-y", `${maskCenterY}px`);
         svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
         const mobile = window.matchMedia("(max-width: 860px)").matches;
@@ -441,13 +451,13 @@ const connectorCount = skills.length + 2;
             const ratio = leftCount === 0 ? 0.5 : (index / leftCount);
             const angle = 252 - (ratio * 44);
             const target = heroFlowCirclePoint(warden, rootRect, angle);
-            return heroFlowCurve(heroFlowPoint(skillEl, "right", rootRect), target);
+            return heroFlowCurve(heroFlowPoint(skillEl, "left", rootRect), target);
           });
           const rightConnectors = rightSkills.map((skillEl, index) => {
             const ratio = rightCount === 0 ? 0.5 : (index / rightCount);
             const angle = 288 + (ratio * 44);
             const target = heroFlowCirclePoint(warden, rootRect, angle);
-            return heroFlowCurve(heroFlowPoint(skillEl, "left", rootRect), target);
+            return heroFlowCurve(heroFlowPoint(skillEl, "right", rootRect), target);
           });
           connectors.push(...leftConnectors);
           connectors.push(...rightConnectors);
@@ -514,7 +524,9 @@ const connectorCount = skills.length + 2;
           rafId = 0;
         }
         trailHandlers.forEach(({ trail, onIteration }) => {
-          trail.removeEventListener("animationiteration", onIteration);
+          if (trail && onIteration) {
+            trail.removeEventListener("animationiteration", onIteration);
+          }
         });
       };
     });
@@ -540,8 +552,16 @@ const connectorCount = skills.length + 2;
     background-image: radial-gradient(circle at 0 0, #777 1.5px, #0000 0), radial-gradient(circle at 100% 100%, #777 1.5px, #0000 0);
     background-position: 0 0, 10px 10px;
     background-size: 20px 20px;
-    -webkit-mask-image: radial-gradient(circle var(--hero-flow-mask-radius, 10rem) at 50% 50%, #000 0%, transparent 100%);
-    mask-image: radial-gradient(circle var(--hero-flow-mask-radius, 10rem) at 50% 50%, #000 0%, transparent 100%);
+    -webkit-mask-image: radial-gradient(
+      circle var(--hero-flow-mask-radius, 10rem) at var(--hero-flow-mask-center-x, 50%) var(--hero-flow-mask-center-y, 50%),
+      #000 0%,
+      transparent 100%
+    );
+    mask-image: radial-gradient(
+      circle var(--hero-flow-mask-radius, 10rem) at var(--hero-flow-mask-center-x, 50%) var(--hero-flow-mask-center-y, 50%),
+      #000 0%,
+      transparent 100%
+    );
   }
 
   .hero-flow-lines {
@@ -572,24 +592,23 @@ const connectorCount = skills.length + 2;
 
   .hero-flow-trail {
     fill: none;
-    stroke: #22d3ee;
+    stroke: var(--trail-color, #22d3ee);
     stroke-width: 2.3;
     stroke-linecap: round;
     --trail-pattern: 14 286;
     stroke-dasharray: var(--trail-pattern);
-    stroke-dashoffset: 0;
-    animation: hero-flow-trail 15s steps(30, end) infinite;
-    animation-delay: var(--trail-delay);
+    stroke-dashoffset: var(--trail-start, 0px);
+    animation: hero-flow-trail-shift 15s steps(30, end) infinite;
   }
 
-  @keyframes hero-flow-trail {
+  @keyframes hero-flow-trail-shift {
     from {
       stroke-dasharray: var(--trail-pattern);
-      stroke-dashoffset: 0;
+      stroke-dashoffset: var(--trail-start, 0px);
     }
     to {
       stroke-dasharray: var(--trail-pattern);
-      stroke-dashoffset: -300;
+      stroke-dashoffset: calc(var(--trail-start, 0px) - 300px);
     }
   }
 
@@ -707,12 +726,39 @@ const connectorCount = skills.length + 2;
     will-change: transform;
   }
 
+  .warden-node::before {
+    content: "";
+    position: absolute;
+    inset: -16%;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.38) 0%,
+      rgba(255, 255, 255, 0.3) 14%,
+      rgba(255, 255, 255, 0) 67%
+    );
+    -webkit-mask-image: radial-gradient(
+      circle at 50% 50%,
+      #000 0%,
+      transparent 67%
+    );
+    mask-image: radial-gradient(
+      circle at 50% 50%,
+      #000 0%,
+      transparent 67%
+    );
+    transform: translate3d(var(--shield-x, 0px), var(--shield-y, 0px), 0);
+    will-change: transform;
+  }
+
   .warden-shield {
     position: relative;
+    z-index: 1;
     width: 4.25rem;
     height: 4.25rem;
     clip-path: polygon(50% 0%, 88% 14%, 88% 47%, 75% 80%, 50% 100%, 25% 80%, 12% 47%, 12% 14%);
-    background: #f5f5f5;
+    background: rgba(245, 245, 245);
     display: block;
     overflow: hidden;
     transform: translate3d(var(--shield-x, 0px), var(--shield-y, 0px), 0);
@@ -724,7 +770,7 @@ const connectorCount = skills.length + 2;
     position: absolute;
     inset: 8%;
     clip-path: inherit;
-    background: #111;
+    background: rgba(17, 17, 17, 0.9);
   }
 
   .warden-eye {
