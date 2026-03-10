@@ -162,15 +162,15 @@ Analyzing uncommitted changes...
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │ <span class="cli-red">●</span> <span class="cli-bold">SQL injection via unsanitized input</span>                           │
-│   <span class="cli-dim">src/db/queries.ts:42</span>                                         │
-│   <span class="cli-dim">42 │</span> db.query(`SELECT * FROM users WHERE id = $&#123;id&#125;`)        │
+│   <span class="cli-dim">src/db/queries.ts:42</span>                                          │
+│   <span class="cli-dim">42 │</span> db.query(`SELECT * FROM users WHERE id = $&#123;id&#125;`)         │
 │                                                                 │
 │   User input is interpolated directly into a SQL query.         │
 │   Use parameterized queries instead.                            │
 │                                                                 │
 │ <span class="cli-yellow">●</span> <span class="cli-bold">Hardcoded JWT secret</span>                                          │
-│   <span class="cli-dim">src/auth/session.ts:8</span>                                        │
-│   <span class="cli-dim"> 8 │</span> const SECRET = "sk_live_a1b2c3d4e5f6"                     │
+│   <span class="cli-dim">src/auth/session.ts:8</span>                                         │
+│   <span class="cli-dim"> 8 │</span> const SECRET = "sk_live_a1b2c3d4e5f6"                    │
 │                                                                 │
 │   Secrets should be loaded from environment variables,          │
 │   not committed to source.                                      │
@@ -178,12 +178,12 @@ Analyzing uncommitted changes...
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─ <span class="cli-bold">api-design-review</span> ────────────────────────────────────── <span class="cli-dim">4.3s</span> ─┐
-│ <span class="cli-bold">1 finding:</span> <span class="cli-cyan">●</span> 1 low                                                │
+│ <span class="cli-bold">1 finding:</span> <span class="cli-cyan">●</span> 1 low                                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │ <span class="cli-cyan">●</span> <span class="cli-bold">Missing pagination on list endpoint</span>                           │
-│   <span class="cli-dim">src/api/users.ts:15</span>                                          │
-│   <span class="cli-dim">15 │</span> app.get("/users", async (req, res) =&gt; &#123;                 │
+│   <span class="cli-dim">src/api/users.ts:15</span>                                           │
+│   <span class="cli-dim">15 │</span> app.get("/users", async (req, res) =&gt; &#123;                  │
 │                                                                 │
 │   Unbounded list endpoints can return excessive data.           │
 │   Add limit/offset or cursor-based pagination.                  │
@@ -232,18 +232,45 @@ Analysis completed in <span class="cli-dim">6.1s</span></pre>
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: #fff;
+    background: linear-gradient(0deg, #ffffff 0%, #d2d5da 52%, #8d939b 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-wrap: balance;
   }
 
   .tagline-sub {
     font-size: 1.25rem;
     color: var(--text-secondary);
-    margin: 1rem 0 2rem;
+    max-width: 42rem;
+    margin: 1rem auto 0.625rem;
+    text-align: center;
+    text-wrap: balance;
   }
 
-  .cta-buttons {
+  .hero .cta-buttons {
     display: flex;
     gap: 1rem;
     justify-content: center;
+    margin-top: 1rem;
+  }
+
+  @media (max-width: 860px) {
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .tagline {
+      font-size: 3.4rem;
+      order: -1;
+      margin-bottom: 1.25rem;
+    }
+
+    .tagline-sub {
+      display: none;
+    }
   }
 
   .btn {
