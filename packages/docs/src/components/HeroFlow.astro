@@ -269,6 +269,10 @@ const connectorCount = skills.length + 2;
         return;
       }
 
+      const bugStageHome = bugStage.parentNode;
+      const bugStageHomeNextSibling = bugStage.nextSibling;
+      document.body.appendChild(bugStage);
+
       const motionEnabled = window.matchMedia("(pointer: fine)").matches;
       const touchSwipeEnabled = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
       const clampToCircle = (dx, dy, maxRadius) => {
@@ -1245,6 +1249,13 @@ const connectorCount = skills.length + 2;
         clearBlinkTimers();
         clearBugTimers();
         hideBugScene();
+        if (bugStageHome) {
+          if (bugStageHomeNextSibling && bugStageHomeNextSibling.parentNode === bugStageHome) {
+            bugStageHome.insertBefore(bugStage, bugStageHomeNextSibling);
+          } else {
+            bugStageHome.appendChild(bugStage);
+          }
+        }
         setBlinking(false);
         document.removeEventListener("visibilitychange", onVisibilityChange);
         document.removeEventListener("click", onDocumentClick);
@@ -1469,8 +1480,9 @@ const connectorCount = skills.length + 2;
         rgba(255, 51, 51, 0) 0%,
         rgba(255, 88, 88, 0.9) 14%,
         rgba(255, 30, 30, 0.98) 36%,
-        rgba(188, 120, 255, 0.46) 52%,
-        rgba(226, 176, 255, 0.58) 64%,
+        rgba(146, 68, 255, 0.72) 50%,
+        rgba(176, 96, 255, 0.88) 60%,
+        rgba(214, 152, 255, 0.72) 68%,
         rgba(255, 238, 238, 0.95) 78%,
         rgba(255, 255, 255, 0) 100%
       );
