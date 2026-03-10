@@ -6,11 +6,11 @@ import Terminal from '../components/Terminal.astro';
 import { Code } from 'astro:components';
 
 const tocItems = [
-  { href: '#warden', title: 'warden' },
-  { href: '#warden-init', title: 'warden init' },
-  { href: '#warden-add', title: 'warden add' },
-  { href: '#warden-sync', title: 'warden sync' },
-  { href: '#warden-setup-app', title: 'warden setup-app' },
+  { href: '#warden', title: 'warden', variant: 'code' as const },
+  { href: '#warden-init', title: 'warden init', variant: 'code' as const },
+  { href: '#warden-add', title: 'warden add', variant: 'code' as const },
+  { href: '#warden-sync', title: 'warden sync', variant: 'code' as const },
+  { href: '#warden-setup-app', title: 'warden setup-app', variant: 'code' as const },
   { href: '#global-options', title: 'Global Options' },
   { href: '#skill-references', title: 'Skill References' },
   { href: '#environment-variables', title: 'Environment Variables' },
@@ -186,3 +186,11 @@ warden --skill ~/my-skills/security`}
   </dl>
   </DocsPageShell>
 </Base>
+
+<style is:global>
+  @media (max-width: 1379px) {
+    .docs-page-shell > .docs-toc + .docs-page-content {
+      margin-top: 1.25rem;
+    }
+  }
+</style>

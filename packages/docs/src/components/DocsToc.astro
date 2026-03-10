@@ -2,6 +2,7 @@
 interface TocItem {
   href: string;
   title: string;
+  variant?: 'default' | 'code';
 }
 
 interface Props {
@@ -18,7 +19,15 @@ const { items } = Astro.props;
         <span class="docs-toc-progress" aria-hidden="true"></span>
         <span class="docs-toc-summary-copy">
           <span class="docs-toc-summary-eyebrow">On this page</span>
-          <span class="docs-toc-summary-title" data-toc-summary-title>{items[0]?.title ?? 'Overview'}</span>
+          <span
+            class:list={[
+              'docs-toc-summary-title',
+              { 'docs-toc-summary-title-code': items[0]?.variant === 'code' },
+            ]}
+            data-toc-summary-title
+          >
+            {items[0]?.title ?? 'Overview'}
+          </span>
         </span>
       </span>
       <span class="docs-toc-summary-chevron" aria-hidden="true"></span>
@@ -26,7 +35,16 @@ const { items } = Astro.props;
     <div class="docs-toc-panel">
       <ul>
         {items.map((item) => (
-          <li><a href={item.href}>{item.title}</a></li>
+          <li>
+            <a
+              href={item.href}
+              data-toc-variant={item.variant ?? 'default'}
+            >
+              {item.variant === 'code' ? (
+                <span class="docs-toc-link-pill docs-toc-link-pill-code">{item.title}</span>
+              ) : item.title}
+            </a>
+          </li>
         ))}
       </ul>
     </div>
@@ -37,7 +55,13 @@ const { items } = Astro.props;
   type DocsTocElement = HTMLElement & {
     __tocAbort?: AbortController;
   };
-  type TocSection = { href: string; link: HTMLAnchorElement; section: HTMLElement; title: string };
+  type TocSection = {
+    href: string;
+    link: HTMLAnchorElement;
+    section: HTMLElement;
+    title: string;
+    variant: 'default' | 'code';
+  };
 
   const DOCS_TOC_DESKTOP_QUERY = '(min-width: 1380px)';
 
@@ -81,6 +105,7 @@ const { items } = Astro.props;
           link,
           section,
           title: (link.textContent || '').trim(),
+          variant: link.dataset.tocVariant === 'code' ? 'code' : 'default',
         };
       })
       .filter((entry): entry is TocSection => entry !== null);
@@ -100,17 +125,17 @@ const { items } = Astro.props;
       toc.dataset.tocState = desktopQuery.matches ? 'desktop' : (isOpen ? 'expanded' : 'collapsed');
     }
 
-    function animatePanel(isOpen: boolean) {
+    function animatePanel(isOpen: boolean): Promise<void> {
       panelAnimation?.cancel();
 
       if (desktopQuery.matches) {
         finishPanelState(true);
-        return;
+        return Promise.resolve();
       }
 
       if (reducedMotionQuery.matches) {
         finishPanelState(isOpen);
-        return;
+        return Promise.resolve();
       }
 
       const startHeight = panel.getBoundingClientRect().height;
@@ -120,23 +145,64 @@ const { items } = Astro.props;
       panel.style.height = `${startHeight}px`;
 
       const endHeight = isOpen ? panel.scrollHeight : 0;
-      panelAnimation = panel.animate(
-        [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
-        {
-          duration: 220,
-          easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
-          fill: 'forwards',
-        }
+      return new Promise((resolve) => {
+        panelAnimation = panel.animate(
+          [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
+          {
+            duration: 220,
+            easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
+            fill: 'forwards',
+          }
+        );
+
+        panelAnimation.onfinish = () => {
+          finishPanelState(isOpen);
+          panelAnimation = null;
+          resolve();
+        };
+
+        panelAnimation.oncancel = () => {
+          panelAnimation = null;
+          resolve();
+        };
+      });
+    }
+
+    function waitForLayout(): Promise<void> {
+      return new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => resolve());
+        });
+      });
+    }
+
+    function updateHash(hash: string) {
+      const url = new URL(window.location.href);
+
+      if (url.hash === hash) {
+        history.replaceState(history.state, '', hash);
+        return;
+      }
+
+      history.pushState(history.state, '', hash);
+    }
+
+    async function navigateToSection(entry: TocSection) {
+      await animatePanel(false);
+      await waitForLayout();
+
+      const top = Math.max(
+        window.scrollY + entry.section.getBoundingClientRect().top - getScrollOffset(),
+        0
       );
 
-      panelAnimation.onfinish = () => {
-        finishPanelState(isOpen);
-        panelAnimation = null;
-      };
+      updateHash(entry.href);
+      window.scrollTo({
+        top,
+        behavior: reducedMotionQuery.matches ? 'auto' : 'smooth',
+      });
 
-      panelAnimation.oncancel = () => {
-        panelAnimation = null;
-      };
+      requestSync();
     }
 
     function syncTocMode() {
@@ -177,6 +243,7 @@ const { items } = Astro.props;
       }
 
       summaryTitle.textContent = active.title;
+      summaryTitle.classList.toggle('docs-toc-summary-title-code', active.variant === 'code');
 
       const firstTop = window.scrollY + sections[0].section.getBoundingClientRect().top - offset;
       const lastSection = sections[sections.length - 1].section;
@@ -225,10 +292,19 @@ const { items } = Astro.props;
     window.addEventListener('hashchange', requestSync, { signal: abortController.signal });
 
     links.forEach((link) => {
-      link.addEventListener('click', () => {
-        if (!desktopQuery.matches) {
-          animatePanel(false);
+      link.addEventListener('click', async (event) => {
+        if (desktopQuery.matches) {
+          return;
         }
+
+        const href = link.getAttribute('href');
+        const target = href ? sections.find((section) => section.href === href) : undefined;
+        if (!target) {
+          return;
+        }
+
+        event.preventDefault();
+        await navigateToSection(target);
       }, { signal: abortController.signal });
     });
   }
@@ -336,6 +412,18 @@ const { items } = Astro.props;
     text-overflow: ellipsis;
   }
 
+  .docs-toc-summary-title-code {
+    display: inline-flex;
+    align-self: flex-start;
+    font-family: var(--font-mono);
+    font-size: 0.83rem;
+    line-height: 1.2;
+    padding: 0.28rem 0.45rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
   .docs-toc-summary-chevron {
     width: 0.55rem;
     height: 0.55rem;
@@ -388,6 +476,11 @@ const { items } = Astro.props;
     transition: color 0.15s ease, border-color 0.15s ease;
   }
 
+  .docs-toc a[data-toc-variant="code"] {
+    padding-top: 0.18rem;
+    padding-bottom: 0.18rem;
+  }
+
   .docs-toc a:hover {
     color: var(--text);
     border-left-color: rgba(255, 255, 255, 0.18);
@@ -396,6 +489,33 @@ const { items } = Astro.props;
   .docs-toc a.active {
     color: var(--docs-toc-accent);
     border-left-color: var(--docs-toc-accent);
+  }
+
+  .docs-toc-link-pill {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    color: inherit;
+  }
+
+  .docs-toc-link-pill-code {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.32rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.25;
+  }
+
+  .docs-toc a:hover .docs-toc-link-pill-code {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .docs-toc a.active .docs-toc-link-pill-code {
+    background: rgba(59, 158, 255, 0.08);
   }
 
   @media (min-width: 1380px) {
@@ -453,6 +573,7 @@ const { items } = Astro.props;
     .docs-toc li {
       margin: 0;
     }
+
   }
 
   @media (max-width: 640px) {
