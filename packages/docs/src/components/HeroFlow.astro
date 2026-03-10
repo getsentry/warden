@@ -116,7 +116,7 @@ const connectorCount = skills.length + 2;
 
       <span class="hero-flow-label hero-flow-label-pr">
         <span class="hero-flow-label-desktop">Every pull request</span>
-        <span class="hero-flow-label-mobile">Review every change.</span>
+        <span class="hero-flow-label-mobile">Compose them into agents that review every change.</span>
       </span>
       <div class="hero-pr-clip">
         <div class="pr-mock" data-anchor="pr">
@@ -681,6 +681,7 @@ const connectorCount = skills.length + 2;
         const mobile = window.matchMedia("(max-width: 860px)").matches;
         const activeSkills = skills.filter((skillEl) => getComputedStyle(skillEl).display !== "none");
         const connectors = [];
+        let outputConnectorCount = 0;
 
         if (mobile) {
           const wardenCenter = heroFlowPoint(warden, "top", rootRect);
@@ -705,8 +706,8 @@ const connectorCount = skills.length + 2;
           };
           const wardenBottomCli = heroFlowCirclePoint(warden, rootRect, 84);
           const wardenBottomPr = heroFlowCirclePoint(warden, rootRect, 96);
-          const cliTop = heroFlowPoint(cli, "top", rootRect);
-          const prTop = heroFlowPoint(pr, "top", rootRect);
+          const cliVisible = getComputedStyle(cli).display !== "none";
+          const prVisible = getComputedStyle(pr).display !== "none";
           const leftConnectors = leftSkills.map((skillEl, index) => {
             const ratio = connectorRatio(index, leftSkills.length);
             const angle = 198 - (ratio * 36);
@@ -721,18 +722,26 @@ const connectorCount = skills.length + 2;
           });
           connectors.push(...leftConnectors);
           connectors.push(...rightConnectors);
-          connectors.push(
-            heroFlowVertical(
-              wardenBottomCli,
-              { x: wardenBottomCli.x, y: cliTop.y }
-            )
-          );
-          connectors.push(
-            heroFlowVertical(
-              wardenBottomPr,
-              { x: wardenBottomPr.x, y: prTop.y }
-            )
-          );
+          if (cliVisible) {
+            const cliTop = heroFlowPoint(cli, "top", rootRect);
+            connectors.push(
+              heroFlowVertical(
+                wardenBottomCli,
+                { x: wardenBottomCli.x, y: cliTop.y }
+              )
+            );
+            outputConnectorCount += 1;
+          }
+          if (prVisible) {
+            const prTop = heroFlowPoint(pr, "top", rootRect);
+            connectors.push(
+              heroFlowVertical(
+                wardenBottomPr,
+                { x: wardenBottomPr.x, y: prTop.y }
+              )
+            );
+            outputConnectorCount += 1;
+          }
         } else {
           const skillCount = Math.max(1, activeSkills.length - 1);
           const skillConnectors = activeSkills.map((skillEl, index) => {
@@ -746,12 +755,13 @@ const connectorCount = skills.length + 2;
           connectors.push(...skillConnectors);
           connectors.push(heroFlowCurve(wardenRightCli, heroFlowPoint(cli, "left", rootRect)));
           connectors.push(heroFlowCurve(wardenRightPr, heroFlowPoint(pr, "left", rootRect)));
+          outputConnectorCount = 2;
         }
 
-        const outputStartIndex = Math.max(0, connectors.length - 2);
+        const outputStartIndex = Math.max(0, connectors.length - outputConnectorCount);
         for (let i = 0; i < lines.length; i += 1) {
           const d = connectors[i] || "";
-          const isOutputConnector = d !== "" && i >= outputStartIndex && i < (outputStartIndex + 2);
+          const isOutputConnector = d !== "" && i >= outputStartIndex && i < (outputStartIndex + outputConnectorCount);
           if (lines[i]) lines[i].setAttribute("d", d);
           flow.querySelectorAll(`[data-trail='${i}']`).forEach((trail) => {
             trail.setAttribute("d", d);
@@ -917,8 +927,8 @@ const connectorCount = skills.length + 2;
   .hero-flow-label-mobile {
     display: none;
     text-transform: none;
-    letter-spacing: 0.015em;
-    color: var(--text-secondary);
+    letter-spacing: 0;
+    color: inherit;
   }
 
   .hero-flow-column-skills > .hero-flow-label,
@@ -1012,6 +1022,10 @@ const connectorCount = skills.length + 2;
     padding: 0;
     font-size: 0.88rem;
     color: var(--text);
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
     position: relative;
     z-index: 2;
@@ -1122,6 +1136,7 @@ const connectorCount = skills.length + 2;
   }
 
   .hero-flow-label-pr {
+    margin-bottom: 0;
     margin-top: 0.25rem;
   }
 
@@ -1578,9 +1593,8 @@ const connectorCount = skills.length + 2;
 
     .hero-flow-skills-list {
       width: 100%;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 1rem;
     }
 
@@ -1589,6 +1603,10 @@ const connectorCount = skills.length + 2;
       --skill-card-padding-x: 0.55rem;
       gap: 0.45rem;
       padding: var(--skill-card-padding-y) var(--skill-card-padding-x);
+      width: fit-content;
+      min-width: 0;
+      max-width: 100%;
+      justify-self: center;
       transform: translate3d(var(--skill-offset-x, 0px), var(--skill-offset-y, 0px), 0);
     }
 
@@ -1646,6 +1664,16 @@ const connectorCount = skills.length + 2;
       text-align: center;
     }
 
+    .hero-flow-label {
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--text-secondary);
+      text-wrap: balance;
+    }
+
     .hero-flow-label-desktop {
       display: none;
     }
@@ -1654,14 +1682,21 @@ const connectorCount = skills.length + 2;
       display: inline;
     }
 
+    .hero-flow-label-pr .hero-flow-label-mobile {
+      display: inline-block;
+      max-width: 22rem;
+    }
+
+    .hero-flow-column-output > .hero-flow-label:first-of-type {
+      display: none;
+    }
+
     .hero-flow-label-pr {
-      margin-top: 0.4rem;
+      margin-top: 0;
     }
 
     .hero-cli {
-      grid-column: 1;
-      margin-top: 0.25rem;
-      width: 100%;
+      display: none;
     }
 
     .hero-pr-clip {
@@ -1689,6 +1724,16 @@ const connectorCount = skills.length + 2;
     .hero-flow-column-skills,
     .hero-flow-column-output {
       padding-top: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .hero-flow-skills-list {
+      gap: 0.85rem;
+    }
+
+    .hero-skill-card code {
+      font-size: 0.68rem;
     }
   }
 

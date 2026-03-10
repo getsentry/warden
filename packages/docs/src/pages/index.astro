@@ -147,7 +147,8 @@ You are a security expert analyzing code changes.
       <h3>Run Before You Push</h3>
       <p>Catch issues before you push. Multiple skills run together, each covering its own concern.</p>
       <Terminal title="warden">
-        <pre class="cli-output"><span class="cli-dim">$</span> warden
+        <div class="cli-output-scroll">
+          <pre class="cli-output cli-output-report"><span class="cli-dim">$</span> warden
 
 Analyzing uncommitted changes...
 
@@ -193,6 +194,7 @@ Analyzing uncommitted changes...
 <span class="cli-bold">SUMMARY</span>
 <span class="cli-bold">3 findings:</span> <span class="cli-red">●</span> 1 high  <span class="cli-yellow">●</span> 1 medium  <span class="cli-cyan">●</span> 1 low
 Analysis completed in <span class="cli-dim">6.1s</span></pre>
+        </div>
       </Terminal>
     </div>
   </section>
@@ -255,21 +257,39 @@ Analysis completed in <span class="cli-dim">6.1s</span></pre>
     margin-top: 1rem;
   }
 
+  .cli-output-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .cli-output-report {
+    min-width: max-content;
+  }
+
   @media (max-width: 860px) {
     .hero {
       display: flex;
       flex-direction: column;
       align-items: center;
+      padding-top: 2.25rem;
     }
 
-    .tagline {
-      font-size: 3.4rem;
+    .hero .tagline {
+      font-size: 1.75rem;
+      width: min(100%, 35rem);
       order: -1;
       margin-bottom: 1.25rem;
     }
 
     .tagline-sub {
       display: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .cli-output-report {
+      white-space: pre;
+      word-break: normal;
     }
   }
 
