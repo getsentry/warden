@@ -105,7 +105,7 @@ const connectorCount = skills.length + 2;
           <span class="hero-border-base"></span>
           <span class="hero-border-shimmer-spot"></span>
         </span>
-        <div class="hero-cli-header" aria-hidden="true">
+        <div class="hero-cli-header hero-shimmer-divider hero-shimmer-divider-bottom" aria-hidden="true">
           <span class="hero-cli-dot dot-red"></span>
           <span class="hero-cli-dot dot-yellow"></span>
           <span class="hero-cli-dot dot-green"></span>
@@ -122,7 +122,7 @@ const connectorCount = skills.length + 2;
             <span class="hero-border-base"></span>
             <span class="hero-border-shimmer-spot"></span>
           </span>
-          <div class="pr-mock-header">
+          <div class="pr-mock-header hero-shimmer-divider hero-shimmer-divider-bottom">
             <div class="pr-mock-avatar">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="12" fill="#000"></circle>
@@ -146,7 +146,7 @@ const connectorCount = skills.length + 2;
             <p class="pr-mock-desc">User input is interpolated directly into a SQL query. Use parameterized queries to prevent SQL injection attacks.</p>
             <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Use parameterized query</p>
             <div class="pr-mock-suggestion">
-              <div class="pr-mock-suggestion-header">
+              <div class="pr-mock-suggestion-header hero-shimmer-divider hero-shimmer-divider-bottom">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M8.75 1.75V5H12a.75.75 0 010 1.5H8.75v3.25a.75.75 0 01-1.5 0V6.5H4a.75.75 0 010-1.5h3.25V1.75a.75.75 0 011.5 0zM4 13a.75.75 0 000 1.5h8a.75.75 0 000-1.5H4z"/>
                 </svg>
@@ -162,12 +162,12 @@ const connectorCount = skills.length + 2;
                   <span class="diff-content">db.query("SELECT * FROM users WHERE id = $1", [id])</span>
                 </div>
               </div>
-              <div class="pr-mock-suggestion-actions">
+              <div class="pr-mock-suggestion-actions hero-shimmer-divider hero-shimmer-divider-top">
                 <button class="pr-mock-commit-btn">Commit suggestion</button>
               </div>
             </div>
           </div>
-          <div class="pr-mock-footer">
+          <div class="pr-mock-footer hero-shimmer-divider hero-shimmer-divider-top">
             <a href="#" class="pr-mock-link">View all 3 findings</a>
           </div>
         </div>
@@ -1058,6 +1058,10 @@ const connectorCount = skills.length + 2;
     --border-shimmer-size: 36%;
     --border-shimmer-spot-inset: -100%;
     --border-shimmer-translate-scale: 0.36;
+    --divider-shimmer-strength: 0.22;
+    --divider-shimmer-translate-scale: 0.36;
+    --divider-shimmer-spot-inset: -120%;
+    --divider-line-thickness: 0.5px;
     --border-base-color: var(--border);
     position: relative;
     border: 1px solid transparent;
@@ -1067,12 +1071,41 @@ const connectorCount = skills.length + 2;
   }
 
   .hero-cli-header {
+    --divider-base-color: var(--border);
     display: flex;
     align-items: center;
     gap: 0.35rem;
     padding: 0.5rem 0.7rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 0.5px solid transparent;
     background: rgba(255, 255, 255, 0.02);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-cli-header::before {
+    content: "";
+    position: absolute;
+    inset: -100%;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, calc(0.08 * var(--shimmer-brightness, 1))) 0%,
+      rgba(255, 255, 255, calc(0.035 * var(--shimmer-brightness, 1))) 24%,
+      rgba(255, 255, 255, calc(0.012 * var(--shimmer-brightness, 1))) 38%,
+      rgba(255, 255, 255, 0) 58%
+    );
+    transform: translate3d(
+      calc((var(--box-shimmer-x, 50%) - 50%) * 0.333333),
+      calc((var(--box-shimmer-y, 50%) - 50%) * 0.333333),
+      0
+    );
+    will-change: transform;
+  }
+
+  .hero-cli-header > * {
+    position: relative;
+    z-index: 1;
   }
 
   .hero-cli-dot {
@@ -1136,6 +1169,10 @@ const connectorCount = skills.length + 2;
     --border-shimmer-size: 35%;
     --border-shimmer-spot-inset: -100%;
     --border-shimmer-translate-scale: 0.333333;
+    --divider-shimmer-strength: 0.2;
+    --divider-shimmer-translate-scale: 0.333333;
+    --divider-shimmer-spot-inset: -120%;
+    --divider-line-thickness: 0.5px;
     --border-base-color: #21262d;
     position: relative;
     border: 1px solid transparent;
@@ -1224,12 +1261,13 @@ const connectorCount = skills.length + 2;
   }
 
   .pr-mock-header {
+    --divider-base-color: #21262d;
     display: flex;
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
     background: #0d1117;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 0.5px solid transparent;
   }
 
   .pr-mock-avatar {
@@ -1320,12 +1358,13 @@ const connectorCount = skills.length + 2;
   }
 
   .pr-mock-suggestion-header {
+    --divider-base-color: #21262d;
     display: flex;
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
     background: #161b22;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 0.5px solid transparent;
     font-size: 0.75rem;
     font-weight: 600;
     color: #8b949e;
@@ -1369,10 +1408,11 @@ const connectorCount = skills.length + 2;
   .diff-new .diff-content { color: #7ee787; }
 
   .pr-mock-suggestion-actions {
+    --divider-base-color: #21262d;
     display: flex;
     justify-content: flex-end;
     padding: 0.5rem 0.75rem;
-    border-top: 1px solid #21262d;
+    border-top: 0.5px solid transparent;
     background: #161b22;
   }
 
@@ -1392,8 +1432,46 @@ const connectorCount = skills.length + 2;
   }
 
   .pr-mock-footer {
+    --divider-base-color: #30363d;
     padding: 0.75rem 1rem;
-    border-top: 1px solid #30363d;
+    border-top: 0.5px solid transparent;
+  }
+
+  .hero-shimmer-divider {
+    position: relative;
+  }
+
+  .hero-shimmer-divider::after {
+    content: "";
+    position: absolute;
+    left: var(--divider-shimmer-spot-inset, -120%);
+    right: var(--divider-shimmer-spot-inset, -120%);
+    height: var(--divider-line-thickness, 0.5px);
+    pointer-events: none;
+    z-index: 2;
+    background:
+      radial-gradient(
+        ellipse 26% 700% at 50% 50%,
+        rgba(255, 255, 255, calc(var(--divider-shimmer-strength, 0.2) * var(--shimmer-brightness, 1))) 0%,
+        rgba(255, 255, 255, calc(var(--divider-shimmer-strength, 0.2) * 0.72 * var(--shimmer-brightness, 1))) 32%,
+        rgba(255, 255, 255, calc(var(--divider-shimmer-strength, 0.2) * 0.28 * var(--shimmer-brightness, 1))) 52%,
+        rgba(255, 255, 255, 0) 70%
+      ),
+      linear-gradient(var(--divider-base-color, var(--border)), var(--divider-base-color, var(--border)));
+    transform: translate3d(
+      calc((var(--box-shimmer-x, 50%) - 50%) * var(--divider-shimmer-translate-scale, 0.333333)),
+      0,
+      0
+    );
+    will-change: transform;
+  }
+
+  .hero-shimmer-divider-bottom::after {
+    bottom: 0;
+  }
+
+  .hero-shimmer-divider-top::after {
+    top: 0;
   }
 
   .pr-mock-link {
