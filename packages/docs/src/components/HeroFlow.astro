@@ -1034,18 +1034,37 @@ const connectorCount = skills.length + 2;
     height: 0.55rem;
     border-radius: 999px;
     display: inline-block;
+    position: relative;
+    overflow: hidden;
+    background: var(--dot-base-color, #999);
+    box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.18);
+  }
+
+  .hero-cli-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      circle at var(--box-shimmer-x, 50%) var(--box-shimmer-y, 50%),
+      rgba(255, 255, 255, 0.58) 0%,
+      rgba(255, 255, 255, 0.3) 26%,
+      rgba(255, 255, 255, 0.08) 42%,
+      rgba(255, 255, 255, 0) 62%
+    );
   }
 
   .hero-cli-dot.dot-red {
-    background: #ff5f57;
+    --dot-base-color: #ff5f57;
   }
 
   .hero-cli-dot.dot-yellow {
-    background: #febc2e;
+    --dot-base-color: #febc2e;
   }
 
   .hero-cli-dot.dot-green {
-    background: #28c840;
+    --dot-base-color: #28c840;
   }
 
   .hero-cli-body {
