@@ -694,6 +694,23 @@ metadata:
       expect(skills[0]?.name).toBe('good-skill');
       expect(skills[0]?.pluginName).toBe('legit');
     });
+
+    it('ignores plugins with absolute source paths', async () => {
+      const remotePath = getRemotePath('test/repo');
+      createFileTree(remotePath, {
+        '.claude-plugin/marketplace.json': marketplaceJson([
+          { name: 'absolute', source: '/tmp/absolute-plugin' },
+          { name: 'legit', source: './plugins/legit' },
+        ]),
+        'plugins/legit/skills/good-skill/SKILL.md': skillMd('good-skill', 'Legit skill'),
+      });
+
+      const skills = await discoverRemoteSkills('test/repo');
+
+      expect(skills.length).toBe(1);
+      expect(skills[0]?.name).toBe('good-skill');
+      expect(skills[0]?.pluginName).toBe('legit');
+    });
   });
 });
 

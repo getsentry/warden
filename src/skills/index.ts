@@ -22,6 +22,8 @@ export type {
   ResolveSkillOptions,
 } from './loader.js';
 
+export type { RemoteAuthOptions } from './auth-options.js';
+
 export {
   parseRemoteRef,
   formatRemoteRef,

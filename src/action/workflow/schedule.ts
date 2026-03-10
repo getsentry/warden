@@ -146,6 +146,7 @@ export async function runScheduleWorkflow(
       // Run skill
       const skill = await resolveSkillAsync(resolved.skill, repoPath, {
         remote: resolved.remote,
+        githubToken: inputs.githubToken,
       });
       const claudePath = await findClaudeCodeExecutable();
       const report = await runSkill(skill, context, {

@@ -289,6 +289,10 @@ describe('runScheduleWorkflow', () => {
 
       await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_FIXTURES);
 
+      expect(mockResolveSkillAsync).toHaveBeenCalledWith('test-skill', SCHEDULE_FIXTURES, {
+        remote: undefined,
+        githubToken: 'test-github-token',
+      });
       expect(mockRunSkill).toHaveBeenCalledTimes(1);
       expect(mockCreateOrUpdateIssue).toHaveBeenCalledWith(
         mockOctokit,

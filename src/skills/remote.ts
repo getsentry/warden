@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { loadSkillFromMarkdown, SkillLoaderError, AGENT_MARKER_FILE } from './loader.js';
+import type { RemoteAuthOptions } from './auth-options.js';
 import type { SkillDefinition } from '../config/schema.js';
 
 /** Default TTL for unpinned remote skills: 24 hours */
@@ -257,8 +258,8 @@ export function saveState(state: RemoteState): void {
 export function getCacheTtlSeconds(): number {
   const envTtl = process.env['WARDEN_SKILL_CACHE_TTL'];
   if (envTtl) {
-    const parsed = parseInt(envTtl, 10);
-    if (!isNaN(parsed) && parsed > 0) {
+    const parsed = Number.parseInt(envTtl, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) {
       return parsed;
     }
   }
@@ -289,7 +290,7 @@ export function shouldRefresh(ref: string, state: RemoteState): boolean {
   return now - fetchedAt > ttl;
 }
 
-export interface FetchRemoteOptions {
+export interface FetchRemoteOptions extends RemoteAuthOptions {
   /** Force refresh even if cache is valid */
   force?: boolean;
   /** Skip network operations - only use cache */
@@ -299,13 +300,67 @@ export interface FetchRemoteOptions {
 }
 
 /**
+ * Normalize token input from env/action inputs.
+ * Empty-string values in CI should behave as "unset".
+ */
+function normalizeToken(token?: string): string | undefined {
+  const normalized = token?.trim();
+  return normalized ? normalized : undefined;
+}
+
+/**
+ * Build one-shot git auth environment for GitHub HTTPS requests.
+ * Uses a transient extraheader, avoiding tokenized URLs or persisted git config.
+ */
+function buildGitHubAuthEnv(token: string): Record<string, string> {
+  const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+  return {
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+  };
+}
+
+/**
+ * Check whether this remote points to github.com.
+ */
+function isGitHubRemote(parsed: ParsedRemoteRef, cloneUrl?: string): boolean {
+  // owner/repo shorthand is GitHub unless an explicit non-GitHub URL is persisted in state.
+  const effectiveUrl = cloneUrl ?? parsed.cloneUrl;
+  if (!effectiveUrl) return true;
+  return normalizeGitHubUrl(effectiveUrl) !== null;
+}
+
+/**
+ * Runtime clone URL for authenticated GitHub fetches.
+ * Deliberately separate from stored cloneUrl/state.
+ */
+function getGitHubHttpsUrl(parsed: ParsedRemoteRef): string {
+  return `https://github.com/${parsed.owner}/${parsed.repo}.git`;
+}
+
+function isGitAuthFailure(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('authentication failed') ||
+    lower.includes('could not read username') ||
+    lower.includes('terminal prompts disabled') ||
+    lower.includes('repository not found') ||
+    lower.includes('http basic: access denied') ||
+    lower.includes('permission denied') ||
+    lower.includes('access denied') ||
+    lower.includes('403')
+  );
+}
+
+/**
  * Execute a git command and return stdout.
  * Uses non-interactive mode to prevent SSH passphrase prompts.
  * Throws SkillLoaderError on failure.
  */
-function execGit(args: string[], options?: { cwd?: string }): string {
+function execGit(args: string[], options?: { cwd?: string; env?: Record<string, string> }): string {
   try {
-    return execGitNonInteractive(args, { cwd: options?.cwd });
+    return execGitNonInteractive(args, { cwd: options?.cwd, env: options?.env });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new SkillLoaderError(`Git command failed: git ${args.join(' ')}: ${message}`, { cause: error });
@@ -351,8 +406,15 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
     return stateEntry.sha;
   }
 
-  // Use the original clone URL if provided, fall back to stored URL from state, then HTTPS
-  const repoUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`;
+  const sourceCloneUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl;
+  const token = normalizeToken(options.githubToken);
+  const useGitHubAuth = !!token && isGitHubRemote(parsed, sourceCloneUrl);
+  const gitAuthEnv = token && useGitHubAuth ? buildGitHubAuthEnv(token) : undefined;
+
+  // Use runtime HTTPS for authenticated GitHub fetches. Otherwise preserve existing URL semantics.
+  const repoUrl = useGitHubAuth
+    ? getGitHubHttpsUrl(parsed)
+    : (sourceCloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`);
 
   // Clone or update
   if (!isCached) {
@@ -369,28 +431,35 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
       const { sha } = parsed;
       if (sha) {
         // For pinned refs, shallow clone then checkout the specific SHA
-        execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
+        execGit(['clone', '--depth=1', '--', repoUrl, remotePath], { env: gitAuthEnv });
 
         try {
           // Try to fetch the pinned SHA directly
-          execGit(['fetch', '--depth=1', 'origin', '--', sha], { cwd: remotePath });
+          execGit(['fetch', '--depth=1', 'origin', '--', sha], { cwd: remotePath, env: gitAuthEnv });
           execGit(['checkout', sha], { cwd: remotePath });
         } catch {
           // If SHA not found in shallow history, do a full fetch and retry
-          execGit(['fetch', '--unshallow'], { cwd: remotePath });
+          execGit(['fetch', '--unshallow'], { cwd: remotePath, env: gitAuthEnv });
           execGit(['checkout', sha], { cwd: remotePath });
         }
       } else {
         // For unpinned refs, shallow clone of default branch
-        execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
+        execGit(['clone', '--depth=1', '--', repoUrl, remotePath], { env: gitAuthEnv });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      // Detect HTTPS auth failures and suggest SSH URL
-      if (!parsed.cloneUrl && (message.includes('terminal prompts disabled') || message.includes('could not read Username'))) {
+      if (token && isGitAuthFailure(message)) {
         throw new SkillLoaderError(
-          `Failed to clone ${stateKey} via HTTPS. ` +
-          `For private repos, use the SSH URL: warden add --remote git@github.com:${parsed.owner}/${parsed.repo}.git`
+          `Failed to authenticate when cloning ${stateKey}. ` +
+          `Ensure the provided GitHub token has read access to ${parsed.owner}/${parsed.repo}.`,
+          { cause: error }
+        );
+      }
+      // Unauthenticated shorthand HTTPS failure: provide explicit auth guidance.
+      if (!token && !parsed.cloneUrl && (message.includes('terminal prompts disabled') || message.includes('could not read Username'))) {
+        throw new SkillLoaderError(
+          `Failed to clone ${stateKey} via HTTPS. For private repos, provide a GitHub token (GITHUB_TOKEN or WARDEN_GITHUB_TOKEN) or use the SSH URL: warden add --remote git@github.com:${parsed.owner}/${parsed.repo}.git`,
+          { cause: error }
         );
       }
       throw error;
@@ -400,9 +469,14 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
     onProgress?.(`Updating ${ref}...`);
 
     if (!isPinned) {
-      // For unpinned refs, pull latest
-      execGit(['fetch', '--depth=1', 'origin'], { cwd: remotePath });
-      execGit(['reset', '--hard', 'origin/HEAD'], { cwd: remotePath });
+      // For unpinned refs, pull latest from the explicit remote URL so cached SSH remotes
+      // keep their transport semantics across refreshes.
+      if (useGitHubAuth) {
+        execGit(['fetch', '--depth=1', '--', repoUrl], { cwd: remotePath, env: gitAuthEnv });
+      } else {
+        execGit(['fetch', '--depth=1', '--', repoUrl], { cwd: remotePath });
+      }
+      execGit(['reset', '--hard', 'FETCH_HEAD'], { cwd: remotePath });
     }
     // Pinned refs don't need updates - SHA is immutable
   }
@@ -537,7 +611,8 @@ async function discoverMarketplaceSkills(
     // Security: Ensure plugin source doesn't escape the repo directory via path traversal
     const resolvedSkillsPath = resolve(skillsPath);
     const resolvedRemotePath = resolve(remotePath);
-    if (!resolvedSkillsPath.startsWith(resolvedRemotePath + '/')) {
+    const relativePath = relative(resolvedRemotePath, resolvedSkillsPath);
+    if (relativePath === '..' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
       continue; // Silently skip — attacker-controlled marketplace.json, don't leak info
     }
 
