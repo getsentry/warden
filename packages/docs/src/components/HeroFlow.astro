@@ -347,12 +347,13 @@ const connectorCount = skills.length + 2;
       const animateMascotMotion = () => {
         const ease = 0.16;
         const skillBorderEase = 0.28;
+        const nodeShimmerEase = 0.46;
         nodeX += (nodeTargetX - nodeX) * ease;
         nodeY += (nodeTargetY - nodeY) * ease;
-        nodeBorderX += (nodeTargetBorderX - nodeBorderX) * skillBorderEase;
-        nodeBorderY += (nodeTargetBorderY - nodeBorderY) * skillBorderEase;
-        nodeHighlightX += (nodeTargetHighlightX - nodeHighlightX) * skillBorderEase;
-        nodeHighlightY += (nodeTargetHighlightY - nodeHighlightY) * skillBorderEase;
+        nodeBorderX += (nodeTargetBorderX - nodeBorderX) * nodeShimmerEase;
+        nodeBorderY += (nodeTargetBorderY - nodeBorderY) * nodeShimmerEase;
+        nodeHighlightX += (nodeTargetHighlightX - nodeHighlightX) * nodeShimmerEase;
+        nodeHighlightY += (nodeTargetHighlightY - nodeHighlightY) * nodeShimmerEase;
         shieldX += (shieldTargetX - shieldX) * ease;
         shieldY += (shieldTargetY - shieldY) * ease;
         eyeX += (eyeTargetX - eyeX) * ease;
@@ -433,7 +434,7 @@ const connectorCount = skills.length + 2;
           : { x: shimmerDirX, y: shimmerDirY };
         // Cursor influence is intentionally damped near the Warden center.
         const centerDistance = Math.min(1, Math.hypot(normalizedX, normalizedY) / Math.SQRT2);
-        const directionalInfluence = 0.04 + (Math.pow(centerDistance, 1.6) * 0.96);
+        const directionalInfluence = 0.14 + (Math.pow(centerDistance, 1.45) * 0.86);
         const blendedDir = {
           x: (shimmerDirX * (1 - directionalInfluence)) + (targetDir.x * directionalInfluence),
           y: (shimmerDirY * (1 - directionalInfluence)) + (targetDir.y * directionalInfluence),
