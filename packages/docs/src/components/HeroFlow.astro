@@ -1007,6 +1007,8 @@ const connectorCount = skills.length + 2;
           return;
         }
 
+        updateDefenseScene();
+
         if (document.visibilityState === "visible" && bugScheduleTimerId === 0) {
           scheduleBugPatrol(true);
         }
@@ -1382,7 +1384,7 @@ const connectorCount = skills.length + 2;
     width: 100vw;
     height: 100vh;
     transform: translateX(-50%);
-    z-index: 6;
+    z-index: 140;
     pointer-events: none;
     overflow: hidden;
   }
@@ -1394,6 +1396,7 @@ const connectorCount = skills.length + 2;
     width: 2rem;
     height: 2rem;
     opacity: 0;
+    z-index: 1;
     transform: translate3d(-50%, -50%, 0) rotate(var(--bug-angle-0, 0deg));
     transform-origin: center;
     transition:
@@ -1471,6 +1474,7 @@ const connectorCount = skills.length + 2;
     width: var(--laser-length, 0px);
     height: 0.5rem;
     opacity: 0;
+    z-index: 2;
     pointer-events: none;
     transform: translateY(-50%) rotate(var(--laser-angle, 0deg));
     transform-origin: left center;
