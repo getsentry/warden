@@ -46,6 +46,9 @@ const connectorCount = skills.length + 2;
     </g>
   </svg>
 
+  <div class="hero-bug-stage" aria-hidden="true">
+  </div>
+
   <div class="hero-flow-grid">
     <div class="hero-flow-column hero-flow-column-skills">
       <span class="hero-flow-label">
@@ -88,7 +91,7 @@ const connectorCount = skills.length + 2;
         </span>
         <span class="warden-shield">
           <span class="warden-eye">
-            <span class="warden-iris"></span>
+            <span class="warden-iris warden-pupil"></span>
           </span>
         </span>
       </div>
@@ -252,6 +255,8 @@ const connectorCount = skills.length + 2;
       const warden = flow.querySelector("[data-anchor='warden']");
       const shield = flow.querySelector(".warden-shield");
       const eye = flow.querySelector(".warden-eye");
+      const pupil = flow.querySelector(".warden-pupil");
+      const bugStage = flow.querySelector(".hero-bug-stage");
       const cli = flow.querySelector("[data-anchor='cli']");
       const pr = flow.querySelector("[data-anchor='pr']");
       const trails = Array.from(flow.querySelectorAll("[data-trail]"));
@@ -259,7 +264,7 @@ const connectorCount = skills.length + 2;
       const outputTrailPalette = ["#22d3ee", "#facc15", "#f87171", "#4ade80"];
       const skillTrailPalette = ["#b8f2fb", "#fff2b8", "#ffd4cf", "#cdf5d8"];
 
-      if (!svg || skills.length < 3 || !warden || !shield || !eye || !cli || !pr) {
+      if (!svg || skills.length < 3 || !warden || !shield || !eye || !pupil || !bugStage || !cli || !pr) {
         return;
       }
 
@@ -274,6 +279,7 @@ const connectorCount = skills.length + 2;
         return { x: dx * ratio, y: dy * ratio };
       };
       const lerp = (start, end, amount) => start + ((end - start) * amount);
+      const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
       const projectToCircleBorder = (x, y) => {
         const radius = Math.max(Math.hypot(x, y), 0.0001);
         return { x: x / radius, y: y / radius };
@@ -303,6 +309,18 @@ const connectorCount = skills.length + 2;
       let eyeY = 0;
       let eyeTargetX = 0;
       let eyeTargetY = 0;
+      let eyeAimOverrideActive = false;
+      let eyeAimOverrideX = 0;
+      let eyeAimOverrideY = 0;
+      let blinkScheduleTimerId = 0;
+      let blinkFollowupTimerId = 0;
+      let blinkResetTimerId = 0;
+      let bugScheduleTimerId = 0;
+      let bugActorSerial = 0;
+      let lastPointerClientX = window.innerWidth / 2;
+      let lastPointerClientY = window.innerHeight / 2;
+      let updateDefenseScene = () => {};
+      const activeBugActors = [];
       const skillMotionStates = skills.map((skillEl) => ({
         el: skillEl,
         x: 0,
@@ -366,12 +384,15 @@ const connectorCount = skills.length + 2;
         eye.style.setProperty("--eye-y", `${eyeY.toFixed(2)}px`);
         applySkillMotion();
         update();
+        updateDefenseScene();
       };
 
       const animateMascotMotion = () => {
         const ease = 0.16;
         const skillBorderEase = 0.28;
         const nodeShimmerEase = 0.46;
+        const activeEyeTargetX = eyeAimOverrideActive ? eyeAimOverrideX : eyeTargetX;
+        const activeEyeTargetY = eyeAimOverrideActive ? eyeAimOverrideY : eyeTargetY;
         nodeX += (nodeTargetX - nodeX) * ease;
         nodeY += (nodeTargetY - nodeY) * ease;
         nodeBorderX += (nodeTargetBorderX - nodeBorderX) * nodeShimmerEase;
@@ -380,8 +401,8 @@ const connectorCount = skills.length + 2;
         nodeHighlightY += (nodeTargetHighlightY - nodeHighlightY) * nodeShimmerEase;
         shieldX += (shieldTargetX - shieldX) * ease;
         shieldY += (shieldTargetY - shieldY) * ease;
-        eyeX += (eyeTargetX - eyeX) * ease;
-        eyeY += (eyeTargetY - eyeY) * ease;
+        eyeX += (activeEyeTargetX - eyeX) * ease;
+        eyeY += (activeEyeTargetY - eyeY) * ease;
         skillMotionStates.forEach((state) => {
           state.x += (state.targetX - state.x) * ease;
           state.y += (state.targetY - state.y) * ease;
@@ -403,8 +424,8 @@ const connectorCount = skills.length + 2;
           && Math.abs(nodeTargetHighlightY - nodeHighlightY) < 0.06
           && Math.abs(shieldTargetX - shieldX) < 0.06
           && Math.abs(shieldTargetY - shieldY) < 0.06
-          && Math.abs(eyeTargetX - eyeX) < 0.06
-          && Math.abs(eyeTargetY - eyeY) < 0.06
+          && Math.abs(activeEyeTargetX - eyeX) < 0.06
+          && Math.abs(activeEyeTargetY - eyeY) < 0.06
           && skillMotionStates.every((state) =>
             Math.abs(state.targetX - state.x) < 0.06
             && Math.abs(state.targetY - state.y) < 0.06
@@ -425,8 +446,8 @@ const connectorCount = skills.length + 2;
           nodeHighlightY = nodeTargetHighlightY;
           shieldX = shieldTargetX;
           shieldY = shieldTargetY;
-          eyeX = eyeTargetX;
-          eyeY = eyeTargetY;
+          eyeX = activeEyeTargetX;
+          eyeY = activeEyeTargetY;
           applyMascotMotion();
           rafId = 0;
           return;
@@ -440,10 +461,383 @@ const connectorCount = skills.length + 2;
         rafId = window.requestAnimationFrame(animateMascotMotion);
       };
 
+      const createBugActorElements = () => {
+        const laserEl = document.createElement("div");
+        laserEl.className = "hero-eye-laser";
+
+        const bugEl = document.createElement("div");
+        bugEl.className = "hero-bug";
+        bugEl.innerHTML = `
+          <span class="hero-bug-flash"></span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="hero-bug-svg lucide lucide-bug-icon lucide-bug"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.45"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <g class="hero-bug-shell">
+              <path d="M12 20v-9"></path>
+              <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+              <path d="M14.12 3.88 16 2"></path>
+              <path d="m8 2 1.88 1.88"></path>
+              <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+            </g>
+            <g class="hero-bug-legs hero-bug-legs-right">
+              <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+              <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+              <path d="M22 13h-4"></path>
+            </g>
+            <g class="hero-bug-legs hero-bug-legs-left">
+              <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+              <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+              <path d="M6 13H2"></path>
+            </g>
+          </svg>
+        `;
+        bugStage.append(laserEl, bugEl);
+
+        return { laserEl, bugEl };
+      };
+
+      const clearBugActorTimers = (actor) => {
+        if (actor.aimTimerId !== 0) {
+          window.clearTimeout(actor.aimTimerId);
+          actor.aimTimerId = 0;
+        }
+        if (actor.hitTimerId !== 0) {
+          window.clearTimeout(actor.hitTimerId);
+          actor.hitTimerId = 0;
+        }
+        if (actor.cleanupTimerId !== 0) {
+          window.clearTimeout(actor.cleanupTimerId);
+          actor.cleanupTimerId = 0;
+        }
+      };
+
+      const getPriorityBugActor = () => {
+        let nextActor = null;
+
+        activeBugActors.forEach((actor) => {
+          if (!nextActor) {
+            nextActor = actor;
+            return;
+          }
+
+          const actorPriority = actor.state === "firing" ? 2 : actor.state === "aiming" ? 1 : 0;
+          const nextPriority = nextActor.state === "firing" ? 2 : nextActor.state === "aiming" ? 1 : 0;
+
+          if (actorPriority > nextPriority || (actorPriority === nextPriority && actor.serial > nextActor.serial)) {
+            nextActor = actor;
+          }
+        });
+
+        return nextActor;
+      };
+
+      const syncEyeAimOverride = () => {
+        const aimActor = getPriorityBugActor();
+
+        if (!aimActor) {
+          eyeAimOverrideActive = false;
+          requestMascotMotion();
+          return;
+        }
+
+        const bugRect = aimActor.bugEl.getBoundingClientRect();
+        const eyeOffset = getEyeOffsetForPoint(
+          bugRect.left + (bugRect.width / 2),
+          bugRect.top + (bugRect.height / 2),
+        );
+        eyeAimOverrideActive = true;
+        eyeAimOverrideX = eyeOffset.x;
+        eyeAimOverrideY = eyeOffset.y;
+        requestMascotMotion();
+      };
+
+      const clearBugTimers = () => {
+        if (bugScheduleTimerId !== 0) {
+          window.clearTimeout(bugScheduleTimerId);
+          bugScheduleTimerId = 0;
+        }
+      };
+
+      const clearBugActors = () => {
+        activeBugActors.slice().forEach((actor) => {
+          clearBugActorTimers(actor);
+          actor.laserEl.remove();
+          actor.bugEl.remove();
+        });
+        activeBugActors.length = 0;
+      };
+
+      const hideBugScene = () => {
+        clearBugActors();
+        eyeAimOverrideActive = false;
+        updateDefenseScene();
+        requestMascotMotion();
+      };
+
+      const clearPendingBlinkTimers = () => {
+        if (blinkFollowupTimerId !== 0) {
+          window.clearTimeout(blinkFollowupTimerId);
+          blinkFollowupTimerId = 0;
+        }
+        if (blinkResetTimerId !== 0) {
+          window.clearTimeout(blinkResetTimerId);
+          blinkResetTimerId = 0;
+        }
+      };
+
+      const clearBlinkTimers = () => {
+        if (blinkScheduleTimerId !== 0) {
+          window.clearTimeout(blinkScheduleTimerId);
+          blinkScheduleTimerId = 0;
+        }
+        clearPendingBlinkTimers();
+      };
+
+      const setBlinking = (isBlinking) => {
+        eye.classList.toggle("is-blinking", isBlinking);
+      };
+
+      const triggerBlink = (shouldDoubleBlink = false) => {
+        clearPendingBlinkTimers();
+        setBlinking(false);
+        void eye.offsetWidth;
+        setBlinking(true);
+
+        blinkResetTimerId = window.setTimeout(() => {
+          setBlinking(false);
+          blinkResetTimerId = 0;
+
+          if (shouldDoubleBlink && document.visibilityState === "visible") {
+            blinkFollowupTimerId = window.setTimeout(() => {
+              blinkFollowupTimerId = 0;
+              triggerBlink(false);
+            }, 140);
+          }
+        }, 190);
+      };
+
+      const scheduleBlink = () => {
+        if (document.visibilityState !== "visible") {
+          return;
+        }
+
+        if (blinkScheduleTimerId !== 0) {
+          window.clearTimeout(blinkScheduleTimerId);
+        }
+        const delay = 2400 + (Math.random() * 4600);
+        // Blink timing is separate from pointer motion so the eye still feels alive when idle.
+        blinkScheduleTimerId = window.setTimeout(() => {
+          blinkScheduleTimerId = 0;
+          triggerBlink(Math.random() < 0.2);
+          scheduleBlink();
+        }, delay);
+      };
+
+      const getEyeOffsetForPoint = (clientX, clientY) => {
+        const shieldRect = shield.getBoundingClientRect();
+        const eyeRect = eye.getBoundingClientRect();
+        const shieldCx = shieldRect.left + (shieldRect.width / 2);
+        const shieldCy = shieldRect.top + (shieldRect.height / 2);
+        const eyeRange = Math.max(
+          0,
+          Math.min(
+            eyeRect.left - shieldRect.left,
+            shieldRect.right - eyeRect.right,
+            eyeRect.top - shieldRect.top,
+            shieldRect.bottom - eyeRect.bottom,
+          ) - 0.5,
+        );
+
+        return clampToCircle(clientX - shieldCx, clientY - shieldCy, eyeRange);
+      };
+
+      const isFlowAboveFold = () => {
+        const rect = flow.getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < (window.innerHeight * 0.95);
+      };
+
+      const getBugSpawnOrigin = () => {
+        const stageRect = getBugStageRect();
+        return {
+          x: clamp(lastPointerClientX - stageRect.left, 0, stageRect.width),
+          y: clamp(lastPointerClientY - stageRect.top, 0, stageRect.height),
+        };
+      };
+
+      const getBugStageRect = () => bugStage.getBoundingClientRect();
+
+      const positionBug = (actor, originPoint = null) => {
+        const stageRect = getBugStageRect();
+        const bugHalfWidth = 16;
+        const bugHalfHeight = 16;
+
+        let startX = 0;
+        let startY = 0;
+        let direction = 1;
+
+        if (originPoint) {
+          startX = originPoint.x;
+          startY = originPoint.y;
+          direction = startX < (stageRect.width / 2) ? 1 : -1;
+        } else {
+          startX = stageRect.width / 2;
+          startY = stageRect.height * 0.16;
+          direction = 1;
+        }
+
+        const travelX = (180 + (Math.random() * 140)) * direction;
+        const endX = clamp(startX + travelX, bugHalfWidth, stageRect.width - bugHalfWidth);
+        const endY = clamp(
+          startY + ((Math.random() * 64) - 32),
+          bugHalfHeight,
+          stageRect.height - bugHalfHeight,
+        );
+        const runDuration = 950 + (Math.random() * 350);
+        const deltaX = endX - startX;
+        const deltaY = endY - startY;
+        const zigAmplitude = 18 + (Math.random() * 28);
+        const zigDirection = Math.random() < 0.5 ? -1 : 1;
+        const zig1X = deltaX * (0.26 + (Math.random() * 0.1));
+        const zig2X = deltaX * (0.62 + (Math.random() * 0.12));
+        const zig1Y = (deltaY * 0.3) + (zigAmplitude * zigDirection);
+        const zig2Y = (deltaY * 0.68) - (zigAmplitude * zigDirection * 0.9);
+        const angle0 = (Math.atan2(zig1Y, zig1X) * (180 / Math.PI)) + 90;
+        const angle1 = (Math.atan2(zig2Y - zig1Y, zig2X - zig1X) * (180 / Math.PI)) + 90;
+        const angle2 = (Math.atan2(deltaY - zig2Y, deltaX - zig2X) * (180 / Math.PI)) + 90;
+
+        actor.bugEl.style.setProperty("--bug-left", `${startX.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-top", `${startY.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-run-x", `${deltaX.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-run-y", `${deltaY.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-zig-1x", `${zig1X.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-zig-1y", `${zig1Y.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-zig-2x", `${zig2X.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-zig-2y", `${zig2Y.toFixed(2)}px`);
+        actor.bugEl.style.setProperty("--bug-angle-0", `${angle0.toFixed(2)}deg`);
+        actor.bugEl.style.setProperty("--bug-angle-1", `${angle1.toFixed(2)}deg`);
+        actor.bugEl.style.setProperty("--bug-angle-2", `${angle2.toFixed(2)}deg`);
+        actor.bugEl.style.setProperty("--bug-run-duration", `${runDuration.toFixed(0)}ms`);
+
+        return runDuration;
+      };
+
+      const spawnBugAttack = (originPoint = null) => {
+        if (document.visibilityState !== "visible" || !isFlowAboveFold()) {
+          return false;
+        }
+
+        const actor = {
+          ...createBugActorElements(),
+          serial: ++bugActorSerial,
+          state: "running",
+          aimTimerId: 0,
+          hitTimerId: 0,
+          cleanupTimerId: 0,
+        };
+        activeBugActors.push(actor);
+        actor.bugEl.style.setProperty("--bug-color", pickPaletteColor(outputTrailPalette));
+
+        const runDuration = positionBug(actor, originPoint);
+        actor.bugEl.classList.add("is-active");
+        updateDefenseScene();
+
+        actor.aimTimerId = window.setTimeout(() => {
+          actor.aimTimerId = 0;
+          actor.state = "aiming";
+          syncEyeAimOverride();
+        }, runDuration - 180);
+
+        actor.hitTimerId = window.setTimeout(() => {
+          actor.hitTimerId = 0;
+          const bugTransform = window.getComputedStyle(actor.bugEl).transform;
+          actor.bugEl.style.animation = "none";
+          if (bugTransform !== "none") {
+            actor.bugEl.style.transform = bugTransform;
+          }
+          actor.state = "firing";
+          actor.laserEl.classList.add("is-active");
+          updateDefenseScene();
+          actor.bugEl.classList.add("is-hit");
+          syncEyeAimOverride();
+        }, runDuration + 120);
+
+        actor.cleanupTimerId = window.setTimeout(() => {
+          actor.cleanupTimerId = 0;
+          clearBugActorTimers(actor);
+          actor.laserEl.remove();
+          actor.bugEl.remove();
+          const actorIndex = activeBugActors.indexOf(actor);
+          if (actorIndex !== -1) {
+            activeBugActors.splice(actorIndex, 1);
+          }
+          syncEyeAimOverride();
+          updateDefenseScene();
+          scheduleBugPatrol();
+        }, runDuration + 440);
+
+        return true;
+      };
+
+      const scheduleBugPatrol = (isInitial = false) => {
+        if (document.visibilityState !== "visible" || !isFlowAboveFold()) {
+          return;
+        }
+
+        if (bugScheduleTimerId !== 0) {
+          window.clearTimeout(bugScheduleTimerId);
+        }
+
+        const delay = isInitial
+          ? 3800 + (Math.random() * 2600)
+          : 9000 + (Math.random() * 9000);
+
+        bugScheduleTimerId = window.setTimeout(() => {
+          bugScheduleTimerId = 0;
+          if (!isFlowAboveFold()) {
+            scheduleBugPatrol(true);
+            return;
+          }
+
+          if (!spawnBugAttack(getBugSpawnOrigin())) {
+            scheduleBugPatrol(true);
+          }
+        }, delay);
+      };
+
+      updateDefenseScene = () => {
+        const stageRect = getBugStageRect();
+        const pupilRect = pupil.getBoundingClientRect();
+        const startX = (pupilRect.left - stageRect.left) + (pupilRect.width / 2);
+        const startY = (pupilRect.top - stageRect.top) + (pupilRect.height / 2);
+
+        activeBugActors.forEach((actor) => {
+          const bugRect = actor.bugEl.getBoundingClientRect();
+          const endX = (bugRect.left - stageRect.left) + (bugRect.width / 2);
+          const endY = (bugRect.top - stageRect.top) + (bugRect.height / 2);
+          const dx = endX - startX;
+          const dy = endY - startY;
+          const length = Math.hypot(dx, dy);
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+          actor.laserEl.style.setProperty("--laser-x", `${startX.toFixed(2)}px`);
+          actor.laserEl.style.setProperty("--laser-y", `${startY.toFixed(2)}px`);
+          actor.laserEl.style.setProperty("--laser-length", actor.laserEl.classList.contains("is-active") ? `${length.toFixed(2)}px` : "0px");
+          actor.laserEl.style.setProperty("--laser-angle", `${angle.toFixed(2)}deg`);
+        });
+      };
+
       const mapPointerToMascot = (clientX, clientY) => {
         const nodeRect = warden.getBoundingClientRect();
         const shieldRect = shield.getBoundingClientRect();
-        const eyeRect = eye.getBoundingClientRect();
         const nodeCx = nodeRect.left + (nodeRect.width / 2);
         const nodeCy = nodeRect.top + (nodeRect.height / 2);
         const nodeNormalizedX = (clientX - nodeCx) / Math.max(window.innerWidth * 0.5, 1);
@@ -516,19 +910,7 @@ const connectorCount = skills.length + 2;
         const shieldOffset = clampToCircle(clientX - nodeCx, clientY - nodeCy, shieldRange);
         shieldTargetX = shieldOffset.x;
         shieldTargetY = shieldOffset.y;
-
-        const shieldCx = shieldRect.left + (shieldRect.width / 2);
-        const shieldCy = shieldRect.top + (shieldRect.height / 2);
-        const eyeRange = Math.max(
-          0,
-          Math.min(
-            eyeRect.left - shieldRect.left,
-            shieldRect.right - eyeRect.right,
-            eyeRect.top - shieldRect.top,
-            shieldRect.bottom - eyeRect.bottom,
-          ) - 0.5,
-        );
-        const eyeOffset = clampToCircle(clientX - shieldCx, clientY - shieldCy, eyeRange);
+        const eyeOffset = getEyeOffsetForPoint(clientX, clientY);
         eyeTargetX = eyeOffset.x;
         eyeTargetY = eyeOffset.y;
 
@@ -585,11 +967,60 @@ const connectorCount = skills.length + 2;
       };
 
       const onPointerMove = (event) => {
+        lastPointerClientX = event.clientX;
+        lastPointerClientY = event.clientY;
         mapPointerToMascot(event.clientX, event.clientY);
       };
       const onVisibilityChange = () => {
         if (document.visibilityState !== "visible") {
+          clearBlinkTimers();
+          clearBugTimers();
+          hideBugScene();
+          setBlinking(false);
           resetMascotTargets();
+          return;
+        }
+        scheduleBlink();
+        scheduleBugPatrol(true);
+      };
+      const onWindowScroll = () => {
+        if (!isFlowAboveFold()) {
+          clearBugTimers();
+          hideBugScene();
+          return;
+        }
+
+        if (document.visibilityState === "visible" && bugScheduleTimerId === 0) {
+          scheduleBugPatrol(true);
+        }
+      };
+      const onDocumentClick = (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+          return;
+        }
+
+        const interactive = target.closest(
+          "a, button, input, select, textarea, summary, label, details, [role='button'], [role='link'], [contenteditable='true'], [tabindex]:not([tabindex='-1'])",
+        );
+        if (interactive) {
+          return;
+        }
+
+        const stageRect = getBugStageRect();
+        const withinStage =
+          event.clientX >= stageRect.left
+          && event.clientX <= stageRect.right
+          && event.clientY >= stageRect.top
+          && event.clientY <= stageRect.bottom;
+        if (!withinStage || !isFlowAboveFold()) {
+          return;
+        }
+
+        lastPointerClientX = event.clientX;
+        lastPointerClientY = event.clientY;
+        if (spawnBugAttack({ x: event.clientX - stageRect.left, y: event.clientY - stageRect.top })) {
+          scheduleBugPatrol();
         }
       };
       let activeTouchId = null;
@@ -597,6 +1028,8 @@ const connectorCount = skills.length + 2;
         const touch = event.changedTouches[0];
         if (!touch) return;
         activeTouchId = touch.identifier;
+        lastPointerClientX = touch.clientX;
+        lastPointerClientY = touch.clientY;
         mapPointerToMascot(touch.clientX, touch.clientY);
       };
       const onWardenTouchMove = (event) => {
@@ -604,6 +1037,8 @@ const connectorCount = skills.length + 2;
         const touch = Array.from(event.touches).find((item) => item.identifier === activeTouchId);
         if (!touch) return;
         event.preventDefault();
+        lastPointerClientX = touch.clientX;
+        lastPointerClientY = touch.clientY;
         mapPointerToMascot(touch.clientX, touch.clientY);
       };
       const onWardenTouchEnd = (event) => {
@@ -614,11 +1049,14 @@ const connectorCount = skills.length + 2;
         resetMascotTargets();
       };
 
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      document.addEventListener("click", onDocumentClick);
+      window.addEventListener("scroll", onWindowScroll, { passive: true });
+
       if (motionEnabled) {
         window.addEventListener("pointermove", onPointerMove, { passive: true });
         window.addEventListener("blur", resetMascotTargets);
         document.addEventListener("mouseleave", resetMascotTargets);
-        document.addEventListener("visibilitychange", onVisibilityChange);
       } else if (touchSwipeEnabled) {
         warden.addEventListener("touchstart", onWardenTouchStart, { passive: true });
         warden.addEventListener("touchmove", onWardenTouchMove, { passive: false });
@@ -627,6 +1065,8 @@ const connectorCount = skills.length + 2;
       } else {
         applyMascotMotion();
       }
+
+      const pickPaletteColor = (palette) => palette[Math.floor(Math.random() * palette.length)];
 
       const applyTrailColor = (trail, isOutputConnector, forceRandomize = false) => {
         const role = isOutputConnector ? "output" : "skill";
@@ -638,7 +1078,7 @@ const connectorCount = skills.length + 2;
           return;
         }
 
-        const color = palette[Math.floor(Math.random() * palette.length)];
+        const color = pickPaletteColor(palette);
         trail.style.setProperty("--trail-color", color);
       };
 
@@ -783,15 +1223,23 @@ const connectorCount = skills.length + 2;
 
       window.addEventListener("resize", update);
       update();
+      scheduleBlink();
+      scheduleBugPatrol(true);
 
       flow.__heroFlowCleanup = () => {
         ro.disconnect();
         window.removeEventListener("resize", update);
+        clearBlinkTimers();
+        clearBugTimers();
+        hideBugScene();
+        setBlinking(false);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        document.removeEventListener("click", onDocumentClick);
+        window.removeEventListener("scroll", onWindowScroll);
         if (motionEnabled) {
           window.removeEventListener("pointermove", onPointerMove);
           window.removeEventListener("blur", resetMascotTargets);
           document.removeEventListener("mouseleave", resetMascotTargets);
-          document.removeEventListener("visibilitychange", onVisibilityChange);
         } else if (touchSwipeEnabled) {
           warden.removeEventListener("touchstart", onWardenTouchStart);
           warden.removeEventListener("touchmove", onWardenTouchMove);
@@ -901,6 +1349,254 @@ const connectorCount = skills.length + 2;
     gap: 1rem;
     align-items: center;
     min-height: 27.5rem;
+  }
+
+  .hero-bug-stage {
+    position: fixed;
+    left: 50%;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    transform: translateX(-50%);
+    z-index: 6;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  :global(.hero-bug) {
+    position: absolute;
+    left: var(--bug-left, 50%);
+    top: var(--bug-top, 10%);
+    width: 2rem;
+    height: 2rem;
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) rotate(var(--bug-angle-0, 0deg));
+    transform-origin: center;
+    transition: opacity 120ms ease, filter 160ms ease;
+    color: var(--bug-color, rgba(215, 108, 118, 0.96));
+    filter:
+      drop-shadow(0 0.04rem 0 rgba(115, 42, 48, 0.4))
+      drop-shadow(0 0.12rem 0.18rem rgba(0, 0, 0, 0.18));
+  }
+
+  :global(.hero-bug.is-active) {
+    opacity: 1;
+    animation: hero-bug-run var(--bug-run-duration, 1600ms) linear forwards;
+  }
+
+  :global(.hero-bug-svg) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  :global(.hero-bug-shell),
+  :global(.hero-bug-legs) {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  :global(.hero-bug-legs-right) {
+    transform-origin: 76% 50%;
+  }
+
+  :global(.hero-bug-legs-left) {
+    transform-origin: 24% 50%;
+  }
+
+  :global(.hero-bug.is-active .hero-bug-legs-right) {
+    animation: hero-bug-legs-right 220ms ease-in-out infinite;
+  }
+
+  :global(.hero-bug.is-active .hero-bug-legs-left) {
+    animation: hero-bug-legs-left 220ms ease-in-out infinite;
+  }
+
+  :global(.hero-bug.is-hit) {
+    opacity: 0;
+    filter:
+      drop-shadow(0 0 0.55rem rgba(255, 55, 55, 0.85))
+      drop-shadow(0 0 1rem rgba(255, 110, 110, 0.45));
+  }
+
+  :global(.hero-bug.is-hit .hero-bug-legs-right),
+  :global(.hero-bug.is-hit .hero-bug-legs-left) {
+    animation: none;
+  }
+
+  :global(.hero-bug-flash) {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+    background: radial-gradient(circle, rgba(255, 248, 248, 1) 0 18%, rgba(255, 54, 54, 0.92) 36%, rgba(255, 54, 54, 0) 72%);
+  }
+
+  :global(.hero-bug.is-hit .hero-bug-flash) {
+    animation: hero-bug-flash 340ms ease-out forwards;
+  }
+
+  :global(.hero-eye-laser) {
+    position: absolute;
+    left: var(--laser-x, 0px);
+    top: var(--laser-y, 0px);
+    width: var(--laser-length, 0px);
+    height: 0.5rem;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%) rotate(var(--laser-angle, 0deg));
+    transform-origin: left center;
+    background:
+      linear-gradient(
+        90deg,
+        rgba(255, 61, 61, 0) 0%,
+        rgba(255, 84, 84, 0.96) 14%,
+        rgba(196, 126, 255, 0.82) 30%,
+        rgba(255, 154, 74, 0.92) 48%,
+        rgba(255, 199, 80, 0.94) 64%,
+        rgba(255, 236, 168, 0.92) 82%,
+        rgba(255, 245, 214, 0.82) 92%,
+        rgba(255, 255, 255, 0) 100%
+      );
+    filter:
+      drop-shadow(0 0 0.25rem rgba(255, 30, 30, 0.85))
+      drop-shadow(0 0 0.7rem rgba(255, 30, 30, 0.45));
+    transition: opacity 90ms linear;
+    mix-blend-mode: screen;
+  }
+
+  :global(.hero-eye-laser)::before {
+    content: "";
+    position: absolute;
+    inset: 0.14rem 0;
+    border-radius: 999px;
+    background: rgba(255, 245, 245, 0.95);
+    opacity: 0.88;
+  }
+
+  :global(.hero-eye-laser.is-active) {
+    opacity: 1;
+    animation: hero-eye-laser-pulse 85ms linear infinite alternate;
+  }
+
+  @keyframes hero-bug-run {
+    0% {
+      transform: translate3d(-50%, -50%, 0) rotate(var(--bug-angle-0, 0deg));
+    }
+
+    33.999% {
+      transform: translate3d(
+        calc(-50% + var(--bug-zig-1x, 0px)),
+        calc(-50% + var(--bug-zig-1y, 0px)),
+        0
+      ) rotate(var(--bug-angle-0, 0deg));
+    }
+
+    34% {
+      transform: translate3d(
+        calc(-50% + var(--bug-zig-1x, 0px)),
+        calc(-50% + var(--bug-zig-1y, 0px)),
+        0
+      ) rotate(var(--bug-angle-1, 0deg));
+    }
+
+    67.999% {
+      transform: translate3d(
+        calc(-50% + var(--bug-zig-2x, 0px)),
+        calc(-50% + var(--bug-zig-2y, 0px)),
+        0
+      ) rotate(var(--bug-angle-1, 0deg));
+    }
+
+    68% {
+      transform: translate3d(
+        calc(-50% + var(--bug-zig-2x, 0px)),
+        calc(-50% + var(--bug-zig-2y, 0px)),
+        0
+      ) rotate(var(--bug-angle-2, 0deg));
+    }
+
+    to {
+      transform: translate3d(
+        calc(-50% + var(--bug-run-x, 0px)),
+        calc(-50% + var(--bug-run-y, 0px)),
+        0
+      ) rotate(var(--bug-angle-2, 0deg));
+    }
+  }
+
+  @keyframes hero-bug-legs-right {
+    0%,
+    100% {
+      transform: translateX(0) rotate(0deg);
+    }
+
+    50% {
+      transform: translateX(0.55px) rotate(-10deg);
+    }
+  }
+
+  @keyframes hero-bug-legs-left {
+    0%,
+    100% {
+      transform: translateX(0) rotate(0deg);
+    }
+
+    50% {
+      transform: translateX(-0.55px) rotate(10deg);
+    }
+  }
+
+  @keyframes hero-bug-incinerate {
+    0% {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+
+    35% {
+      opacity: 1;
+      transform: scale(1.12) rotate(8deg);
+    }
+
+    100% {
+      opacity: 0;
+      transform: scale(0.2) rotate(18deg);
+    }
+  }
+
+  @keyframes hero-bug-flash {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.2);
+    }
+
+    20% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.35);
+    }
+
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(2.4);
+    }
+  }
+
+  @keyframes hero-eye-laser-pulse {
+    0% {
+      filter:
+        drop-shadow(0 0 0.18rem rgba(255, 30, 30, 0.82))
+        drop-shadow(0 0 0.45rem rgba(255, 30, 30, 0.38));
+    }
+
+    100% {
+      filter:
+        drop-shadow(0 0 0.3rem rgba(255, 72, 72, 0.95))
+        drop-shadow(0 0 0.9rem rgba(255, 72, 72, 0.55));
+    }
   }
 
   .hero-flow-column {
@@ -1126,7 +1822,39 @@ const connectorCount = skills.length + 2;
     border-radius: 50%;
     transform: translate(-50%, -50%);
     background: #050505;
-    will-change: transform;
+    will-change: transform, opacity;
+  }
+
+  .warden-eye.is-blinking {
+    animation: warden-eye-squish 190ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .warden-eye.is-blinking .warden-pupil {
+    animation: warden-eye-pupil-hide 190ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes warden-eye-squish {
+    0%,
+    100% {
+      transform: scaleY(1);
+    }
+
+    45%,
+    55% {
+      transform: scaleY(0.08);
+    }
+  }
+
+  @keyframes warden-eye-pupil-hide {
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    45%,
+    55% {
+      opacity: 0;
+    }
   }
 
   .hero-flow-column-output {
