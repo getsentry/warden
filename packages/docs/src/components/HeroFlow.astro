@@ -263,6 +263,7 @@ const connectorCount = skills.length + 2;
       const maskLines = Array.from(flow.querySelectorAll("[data-mask-line]"));
       const outputTrailPalette = ["#22d3ee", "#facc15", "#f87171", "#4ade80"];
       const skillTrailPalette = ["#b8f2fb", "#fff2b8", "#ffd4cf", "#cdf5d8"];
+      const bugPalette = ["#f87171"];
 
       if (!svg || skills.length < 3 || !warden || !shield || !eye || !pupil || !bugStage || !cli || !pr) {
         return;
@@ -518,6 +519,10 @@ const connectorCount = skills.length + 2;
           window.clearTimeout(actor.cleanupTimerId);
           actor.cleanupTimerId = 0;
         }
+        if (actor.laserStopTimerId !== 0) {
+          window.clearTimeout(actor.laserStopTimerId);
+          actor.laserStopTimerId = 0;
+        }
       };
 
       const getPriorityBugActor = () => {
@@ -701,7 +706,7 @@ const connectorCount = skills.length + 2;
           bugHalfHeight,
           stageRect.height - bugHalfHeight,
         );
-        const runDuration = 950 + (Math.random() * 350);
+        const runDuration = 860 + (Math.random() * 300);
         const deltaX = endX - startX;
         const deltaY = endY - startY;
         const zigAmplitude = 18 + (Math.random() * 28);
@@ -742,9 +747,10 @@ const connectorCount = skills.length + 2;
           aimTimerId: 0,
           hitTimerId: 0,
           cleanupTimerId: 0,
+          laserStopTimerId: 0,
         };
         activeBugActors.push(actor);
-        actor.bugEl.style.setProperty("--bug-color", pickPaletteColor(outputTrailPalette));
+        actor.bugEl.style.setProperty("--bug-color", pickPaletteColor(bugPalette));
 
         const runDuration = positionBug(actor, originPoint);
         actor.bugEl.classList.add("is-active");
@@ -759,16 +765,23 @@ const connectorCount = skills.length + 2;
         actor.hitTimerId = window.setTimeout(() => {
           actor.hitTimerId = 0;
           const bugTransform = window.getComputedStyle(actor.bugEl).transform;
-          actor.bugEl.style.animation = "none";
+          actor.bugEl.classList.remove("is-active");
           if (bugTransform !== "none") {
             actor.bugEl.style.transform = bugTransform;
           }
           actor.state = "firing";
           actor.laserEl.classList.add("is-active");
           updateDefenseScene();
+          void actor.bugEl.offsetWidth;
           actor.bugEl.classList.add("is-hit");
           syncEyeAimOverride();
         }, runDuration + 120);
+
+        actor.laserStopTimerId = window.setTimeout(() => {
+          actor.laserStopTimerId = 0;
+          actor.laserEl.classList.remove("is-active");
+          actor.laserEl.style.setProperty("--laser-length", "0px");
+        }, runDuration + 280);
 
         actor.cleanupTimerId = window.setTimeout(() => {
           actor.cleanupTimerId = 0;
@@ -782,7 +795,7 @@ const connectorCount = skills.length + 2;
           syncEyeAimOverride();
           updateDefenseScene();
           scheduleBugPatrol();
-        }, runDuration + 440);
+        }, runDuration + 1220);
 
         return true;
       };
@@ -1372,7 +1385,10 @@ const connectorCount = skills.length + 2;
     opacity: 0;
     transform: translate3d(-50%, -50%, 0) rotate(var(--bug-angle-0, 0deg));
     transform-origin: center;
-    transition: opacity 120ms ease, filter 160ms ease;
+    transition:
+      opacity 120ms ease,
+      filter 160ms ease,
+      transform 120ms ease;
     color: var(--bug-color, rgba(215, 108, 118, 0.96));
     filter:
       drop-shadow(0 0.04rem 0 rgba(115, 42, 48, 0.4))
@@ -1413,10 +1429,7 @@ const connectorCount = skills.length + 2;
   }
 
   :global(.hero-bug.is-hit) {
-    opacity: 0;
-    filter:
-      drop-shadow(0 0 0.55rem rgba(255, 55, 55, 0.85))
-      drop-shadow(0 0 1rem rgba(255, 110, 110, 0.45));
+    animation: hero-bug-evaporate 1000ms cubic-bezier(0.18, 0.82, 0.24, 1) forwards;
   }
 
   :global(.hero-bug.is-hit .hero-bug-legs-right),
@@ -1453,13 +1466,12 @@ const connectorCount = skills.length + 2;
     background:
       linear-gradient(
         90deg,
-        rgba(255, 61, 61, 0) 0%,
-        rgba(255, 84, 84, 0.96) 14%,
-        rgba(196, 126, 255, 0.82) 30%,
-        rgba(255, 154, 74, 0.92) 48%,
-        rgba(255, 199, 80, 0.94) 64%,
-        rgba(255, 236, 168, 0.92) 82%,
-        rgba(255, 245, 214, 0.82) 92%,
+        rgba(255, 51, 51, 0) 0%,
+        rgba(255, 88, 88, 0.9) 14%,
+        rgba(255, 30, 30, 0.98) 36%,
+        rgba(188, 120, 255, 0.46) 52%,
+        rgba(226, 176, 255, 0.58) 64%,
+        rgba(255, 238, 238, 0.95) 78%,
         rgba(255, 255, 255, 0) 100%
       );
     filter:
@@ -1551,20 +1563,45 @@ const connectorCount = skills.length + 2;
     }
   }
 
-  @keyframes hero-bug-incinerate {
+  @keyframes hero-bug-evaporate {
     0% {
       opacity: 1;
-      transform: scale(1) rotate(0deg);
+      filter:
+        blur(0)
+        brightness(1)
+        contrast(1)
+        drop-shadow(0 0 0.55rem rgba(255, 55, 55, 0.85))
+        drop-shadow(0 0 1rem rgba(255, 110, 110, 0.45));
     }
 
-    35% {
-      opacity: 1;
-      transform: scale(1.12) rotate(8deg);
+    18% {
+      opacity: 0.92;
+      filter:
+        blur(0.18rem)
+        brightness(1.35)
+        contrast(1.22)
+        drop-shadow(0 0 0.9rem rgba(255, 88, 88, 0.68))
+        drop-shadow(0 0 1.3rem rgba(255, 160, 160, 0.28));
+    }
+
+    48% {
+      opacity: 0.58;
+      filter:
+        blur(0.34rem)
+        brightness(1.52)
+        contrast(1.28)
+        drop-shadow(0 0 0.52rem rgba(255, 110, 110, 0.24))
+        drop-shadow(0 0 1rem rgba(255, 200, 200, 0.1));
     }
 
     100% {
       opacity: 0;
-      transform: scale(0.2) rotate(18deg);
+      filter:
+        blur(0.52rem)
+        brightness(1.18)
+        contrast(1.08)
+        drop-shadow(0 0 0.3rem rgba(255, 120, 120, 0.08))
+        drop-shadow(0 0 0.8rem rgba(255, 200, 200, 0));
     }
   }
 
