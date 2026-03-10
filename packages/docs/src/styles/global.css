@@ -70,28 +70,50 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.25;
   color: var(--text);
   letter-spacing: -0.02em;
+  scroll-margin-top: var(--nav-scroll-offset, 5.5rem);
 }
 
 /* Heading anchors */
 .heading-anchor {
   position: absolute;
+  top: 0;
   left: -1.5em;
+  display: inline-flex;
+  align-items: center;
+  width: 1.5em;
   opacity: 0;
   font-weight: 400;
   text-decoration: none;
   color: var(--text-tertiary);
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.heading-anchor:visited {
+  color: var(--text-tertiary);
 }
 
 h1:hover .heading-anchor,
 h2:hover .heading-anchor,
 h3:hover .heading-anchor,
-h4:hover .heading-anchor {
+h4:hover .heading-anchor,
+h1:focus-within .heading-anchor,
+h2:focus-within .heading-anchor,
+h3:focus-within .heading-anchor,
+h4:focus-within .heading-anchor {
   opacity: 1;
 }
 
-.heading-anchor:hover {
-  color: var(--link);
+.heading-anchor:hover,
+.heading-anchor:focus-visible {
+  color: var(--link-hover);
+}
+
+h1:target .heading-anchor,
+h2:target .heading-anchor,
+h3:target .heading-anchor,
+h4:target .heading-anchor {
+  opacity: 1;
+  color: #c084fc;
 }
 
 h1 {

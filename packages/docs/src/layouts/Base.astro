@@ -201,6 +201,10 @@ const pageTransition = {
         });
       }
 
+      function updateNavScrollOffset() {
+        document.documentElement.style.setProperty('--nav-scroll-offset', '5rem');
+      }
+
       // Scroll to anchor on load if hash present
       function scrollToHash() {
         if (!window.location.hash) {
@@ -209,7 +213,7 @@ const pageTransition = {
 
         const target = document.querySelector(window.location.hash);
         if (target) {
-          setTimeout(() => target.scrollIntoView(), 0);
+          setTimeout(() => target.scrollIntoView({ block: 'start' }), 0);
         }
       }
 
@@ -293,6 +297,7 @@ const pageTransition = {
       function initPage() {
         initNavToggle();
         initHeadingAnchors();
+        updateNavScrollOffset();
         scrollToHash();
       }
 
@@ -302,6 +307,8 @@ const pageTransition = {
       const docsWindow = window as DocsWindow;
       if (!docsWindow.__wardenDocsBaseInit) {
         docsWindow.__wardenDocsBaseInit = true;
+        window.addEventListener('resize', updateNavScrollOffset);
+        window.addEventListener('hashchange', scrollToHash);
         document.addEventListener('astro:before-preparation', (event) => {
           if (window.matchMedia('(max-width: 768px)').matches) {
             return;
