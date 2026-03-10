@@ -217,6 +217,7 @@ async function executeQuery(
                 'gen_ai.operation.name': 'chat',
                 'gen_ai.provider.name': 'anthropic',
                 'gen_ai.agent.name': skillName,
+                'gen_ai.request.model': modelId,
                 'gen_ai.response.model': turn.model,
                 'gen_ai.usage.input_tokens': totalInput,
                 'gen_ai.usage.output_tokens': turn.outputTokens,
