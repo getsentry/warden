@@ -248,6 +248,7 @@ const connectorCount = skills.length + 2;
       const trails = Array.from(flow.querySelectorAll("[data-trail]"));
       const maskLines = Array.from(flow.querySelectorAll("[data-mask-line]"));
       const palette = ["#22d3ee", "#facc15", "#f87171", "#4ade80"];
+      const neutralTrailColor = "rgba(255, 255, 255, 0.8)";
 
       if (!svg || skills.length < 3 || !warden || !shield || !eye || !cli || !pr) {
         return;
@@ -589,11 +590,28 @@ const connectorCount = skills.length + 2;
         applyMascotMotion();
       }
 
-      const setTrailColor = (index) => {
-        const trail = trails.find((item) => item.dataset.trail === String(index));
-        if (!trail) return;
+      const applyTrailColor = (trail, isOutputConnector, forceRandomize = false) => {
+        const role = isOutputConnector ? "output" : "skill";
+        const previousRole = trail.dataset.connectorRole;
+
+        trail.dataset.connectorRole = role;
+        if (!isOutputConnector) {
+          trail.style.setProperty("--trail-color", neutralTrailColor);
+          return;
+        }
+
+        if (!forceRandomize && previousRole === "output" && trail.style.getPropertyValue("--trail-color")) {
+          return;
+        }
+
         const color = palette[Math.floor(Math.random() * palette.length)];
         trail.style.setProperty("--trail-color", color);
+      };
+
+      const setTrailColor = (index, isOutputConnector = false) => {
+        const trail = trails.find((item) => item.dataset.trail === String(index));
+        if (!trail) return;
+        applyTrailColor(trail, isOutputConnector);
       };
 
       trails.forEach((trail) => {
@@ -608,9 +626,7 @@ const connectorCount = skills.length + 2;
           if (event.animationName !== "hero-flow-trail-shift") {
             return;
           }
-          const trailIndex = trail.dataset.trail;
-          if (trailIndex == null) return;
-          setTrailColor(Number(trailIndex));
+          applyTrailColor(trail, trail.dataset.connectorRole === "output", true);
         };
         trail.addEventListener("animationiteration", onIteration);
         return { trail, onIteration };
@@ -706,6 +722,7 @@ const connectorCount = skills.length + 2;
           flow.querySelectorAll(`[data-trail='${i}']`).forEach((trail) => {
             trail.setAttribute("d", d);
             trail.style.setProperty("--trail-duration", isOutputConnector ? "1.5s" : "15s");
+            applyTrailColor(trail, isOutputConnector);
           });
           if (maskLines[i]) {
             maskLines[i].setAttribute("d", d);
