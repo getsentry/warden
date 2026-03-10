@@ -647,21 +647,25 @@ const connectorCount = skills.length + 2;
               return centerX > wardenCenter.x;
             });
 
-          const leftCount = Math.max(1, leftSkills.length - 1);
-          const rightCount = Math.max(1, rightSkills.length - 1);
+          const connectorRatio = (index, total) => {
+            if (total <= 1) {
+              return 0.5;
+            }
+            return index / (total - 1);
+          };
           const wardenBottomCli = heroFlowCirclePoint(warden, rootRect, 84);
           const wardenBottomPr = heroFlowCirclePoint(warden, rootRect, 96);
           const cliTop = heroFlowPoint(cli, "top", rootRect);
           const prTop = heroFlowPoint(pr, "top", rootRect);
           const leftConnectors = leftSkills.map((skillEl, index) => {
-            const ratio = leftCount === 0 ? 0.5 : (index / leftCount);
-            const angle = 252 - (ratio * 44);
+            const ratio = connectorRatio(index, leftSkills.length);
+            const angle = 198 - (ratio * 36);
             const target = heroFlowCirclePoint(warden, rootRect, angle);
             return heroFlowCurve(heroFlowPoint(skillEl, "left", rootRect), target);
           });
           const rightConnectors = rightSkills.map((skillEl, index) => {
-            const ratio = rightCount === 0 ? 0.5 : (index / rightCount);
-            const angle = 288 + (ratio * 44);
+            const ratio = connectorRatio(index, rightSkills.length);
+            const angle = 342 + (ratio * 36);
             const target = heroFlowCirclePoint(warden, rootRect, angle);
             return heroFlowCurve(heroFlowPoint(skillEl, "right", rootRect), target);
           });
@@ -694,11 +698,14 @@ const connectorCount = skills.length + 2;
           connectors.push(heroFlowCurve(wardenRightPr, heroFlowPoint(pr, "left", rootRect)));
         }
 
+        const outputStartIndex = Math.max(0, connectors.length - 2);
         for (let i = 0; i < lines.length; i += 1) {
           const d = connectors[i] || "";
+          const isOutputConnector = d !== "" && i >= outputStartIndex && i < (outputStartIndex + 2);
           if (lines[i]) lines[i].setAttribute("d", d);
           flow.querySelectorAll(`[data-trail='${i}']`).forEach((trail) => {
             trail.setAttribute("d", d);
+            trail.style.setProperty("--trail-duration", isOutputConnector ? "1.5s" : "15s");
           });
           if (maskLines[i]) {
             maskLines[i].setAttribute("d", d);
@@ -750,6 +757,7 @@ const connectorCount = skills.length + 2;
 <style>
   .hero-flow {
     --shimmer-brightness: 0.8;
+    --hero-flow-bg-opacity: 0.7;
     position: relative;
     width: min(1100px, calc(100vw - 2rem));
     margin: 0 auto 2.25rem;
@@ -760,7 +768,7 @@ const connectorCount = skills.length + 2;
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.7;
+    opacity: var(--hero-flow-bg-opacity);
     background-image: radial-gradient(circle at 0 0, #777 1.5px, #0000 0), radial-gradient(circle at 100% 100%, #777 1.5px, #0000 0);
     background-position: 0 0, 10px 10px;
     background-size: 20px 20px;
@@ -810,7 +818,7 @@ const connectorCount = skills.length + 2;
     --trail-pattern: 14 286;
     stroke-dasharray: var(--trail-pattern);
     stroke-dashoffset: var(--trail-start, 0px);
-    animation: hero-flow-trail-shift 15s steps(30, end) infinite;
+    animation: hero-flow-trail-shift var(--trail-duration, 15s) steps(30, end) infinite;
   }
 
   @keyframes hero-flow-trail-shift {
@@ -1164,6 +1172,7 @@ const connectorCount = skills.length + 2;
     padding: 0.6rem 0.85rem;
     font-family: var(--font-mono);
     white-space: nowrap;
+    text-align: left;
   }
 
   .hero-pr-clip {
@@ -1189,6 +1198,7 @@ const connectorCount = skills.length + 2;
     overflow: hidden;
     font-size: 0.875rem;
     margin: 0;
+    text-align: left;
   }
 
   .hero-border-shimmer {
@@ -1485,6 +1495,7 @@ const connectorCount = skills.length + 2;
 
   @media (max-width: 860px) {
     .hero-flow {
+      --hero-flow-bg-opacity: 0.35;
       width: 100vw;
       margin-left: calc(50% - 50vw);
       margin-right: calc(50% - 50vw);
