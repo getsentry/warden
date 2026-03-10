@@ -1,14 +1,31 @@
 ---
 import Base from '../layouts/Base.astro';
+import DocsPageShell from '../components/DocsPageShell.astro';
+import DocsToc from '../components/DocsToc.astro';
 import Terminal from '../components/Terminal.astro';
 import { Code } from 'astro:components';
+
+const tocItems = [
+  { href: '#warden', title: 'warden' },
+  { href: '#warden-init', title: 'warden init' },
+  { href: '#warden-add', title: 'warden add' },
+  { href: '#warden-sync', title: 'warden sync' },
+  { href: '#warden-setup-app', title: 'warden setup-app' },
+  { href: '#global-options', title: 'Global Options' },
+  { href: '#skill-references', title: 'Skill References' },
+  { href: '#environment-variables', title: 'Environment Variables' },
+];
 ---
 
 <Base title="CLI" description="Warden CLI commands and options">
-  <h1 transition:name="page-title">CLI</h1>
+  <DocsPageShell>
+    <Fragment slot="intro">
+      <h1 transition:name="page-title">CLI</h1>
+    </Fragment>
+    <DocsToc slot="toc" items={tocItems} />
 
   <div class="command-card">
-    <h3>warden</h3>
+    <h3 id="warden">warden</h3>
     <div class="synopsis">warden [target] [options]</div>
     <p>Run code analysis on the specified target. If no target is given, analyzes uncommitted changes.</p>
     <ul>
@@ -27,7 +44,7 @@ warden HEAD~3..HEAD        # Analyze changes in a git range`}
   </div>
 
   <div class="command-card">
-    <h3>warden init</h3>
+    <h3 id="warden-init">warden init</h3>
     <div class="synopsis">warden init [options]</div>
     <p>Initialize Warden in your project. Creates a configuration file and GitHub workflow.</p>
     <ul>
@@ -44,7 +61,7 @@ warden init --force    # Overwrite existing files`}
   </div>
 
   <div class="command-card">
-    <h3>warden add</h3>
+    <h3 id="warden-add">warden add</h3>
     <div class="synopsis">warden add [skill-name] [options]</div>
     <p>Add a skill trigger to your configuration. Run without arguments for interactive mode.</p>
     <ul>
@@ -68,7 +85,7 @@ warden add --remote getsentry/warden-skills@abc123 --skill api-review  # Pinned 
   </div>
 
   <div class="command-card">
-    <h3>warden sync</h3>
+    <h3 id="warden-sync">warden sync</h3>
     <div class="synopsis">warden sync [remote]</div>
     <p>Update cached remote skills. Refreshes unpinned skills to their latest versions.</p>
     <ul>
@@ -85,7 +102,7 @@ warden sync getsentry/warden-skills  # Update specific remote`}
   </div>
 
   <div class="command-card">
-    <h3>warden setup-app</h3>
+    <h3 id="warden-setup-app">warden setup-app</h3>
     <div class="synopsis">warden setup-app [options]</div>
     <p>Create a GitHub App for Warden. This gives you a custom bot identity instead of the generic "github-actions" user.</p>
     <ul>
@@ -105,7 +122,7 @@ warden setup-app --org my-org  # For an organization`}
     </Terminal>
   </div>
 
-  <h2>Global Options</h2>
+  <h2 id="global-options">Global Options</h2>
   <ul>
     <li><code>--skill &lt;name-or-path&gt;</code>  - Run a specific skill by name or path (see <a href="#skill-references">Skill References</a>)</li>
     <li><code>--fix</code>  - Automatically apply suggested fixes</li>
@@ -157,7 +174,7 @@ warden --skill ~/my-skills/security`}
     <li>Conventional directories: <code>.agents/skills/</code>, <code>.claude/skills/</code></li>
   </ol>
 
-  <h2>Environment Variables</h2>
+  <h2 id="environment-variables">Environment Variables</h2>
 
   <dl>
     <dt>WARDEN_ANTHROPIC_API_KEY</dt>
@@ -167,4 +184,5 @@ warden --skill ~/my-skills/security`}
     <dt>WARDEN_SKILL_CACHE_TTL</dt>
     <dd>Cache duration for unpinned remote skills. Default: 24h</dd>
   </dl>
+  </DocsPageShell>
 </Base>

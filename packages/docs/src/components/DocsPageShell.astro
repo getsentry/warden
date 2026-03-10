@@ -1,0 +1,25 @@
+<div class="docs-page-shell">
+  <div class="docs-page-intro">
+    <slot name="intro" />
+  </div>
+  <slot name="toc" />
+  <div class="docs-page-content">
+    <slot />
+  </div>
+</div>
+
+<style is:global>
+  .docs-page-shell {
+    position: relative;
+  }
+
+  .docs-page-content {
+    min-width: 0;
+  }
+
+  @media (max-width: 1379px) {
+    .docs-page-content :is(h2, h3, h4) {
+      scroll-margin-top: 8rem;
+    }
+  }
+</style>
