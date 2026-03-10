@@ -247,8 +247,8 @@ const connectorCount = skills.length + 2;
       const pr = flow.querySelector("[data-anchor='pr']");
       const trails = Array.from(flow.querySelectorAll("[data-trail]"));
       const maskLines = Array.from(flow.querySelectorAll("[data-mask-line]"));
-      const palette = ["#22d3ee", "#facc15", "#f87171", "#4ade80"];
-      const neutralTrailColor = "rgba(255, 255, 255, 0.8)";
+      const outputTrailPalette = ["#22d3ee", "#facc15", "#f87171", "#4ade80"];
+      const skillTrailPalette = ["#b8f2fb", "#fff2b8", "#ffd4cf", "#cdf5d8"];
 
       if (!svg || skills.length < 3 || !warden || !shield || !eye || !cli || !pr) {
         return;
@@ -622,14 +622,10 @@ const connectorCount = skills.length + 2;
       const applyTrailColor = (trail, isOutputConnector, forceRandomize = false) => {
         const role = isOutputConnector ? "output" : "skill";
         const previousRole = trail.dataset.connectorRole;
+        const palette = isOutputConnector ? outputTrailPalette : skillTrailPalette;
 
         trail.dataset.connectorRole = role;
-        if (!isOutputConnector) {
-          trail.style.setProperty("--trail-color", neutralTrailColor);
-          return;
-        }
-
-        if (!forceRandomize && previousRole === "output" && trail.style.getPropertyValue("--trail-color")) {
+        if (!forceRandomize && previousRole === role && trail.style.getPropertyValue("--trail-color")) {
           return;
         }
 
@@ -931,7 +927,7 @@ const connectorCount = skills.length + 2;
     --skill-border-y: 50%;
     --border-shimmer-x: var(--skill-border-x, 50%);
     --border-shimmer-y: var(--skill-border-y, 50%);
-    --skill-card-radius: 12px;
+    --skill-card-radius: 10px;
     --skill-card-padding-y: 0.52rem;
     --skill-card-padding-x: 0.58rem;
     --border-shimmer-strength: 0.4;
