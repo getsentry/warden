@@ -310,7 +310,7 @@ const pageTransition = {
         window.addEventListener('resize', updateNavScrollOffset);
         window.addEventListener('hashchange', scrollToHash);
         document.addEventListener('astro:before-preparation', (event) => {
-          if (window.matchMedia('(max-width: 768px)').matches) {
+          if (window.matchMedia('(max-width: 580px)').matches) {
             return;
           }
 
@@ -578,7 +578,7 @@ const pageTransition = {
     transform: translateY(-6px) rotate(-45deg);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 580px) {
     ::view-transition-old(*),
     ::view-transition-new(*),
     ::view-transition-group(*) {

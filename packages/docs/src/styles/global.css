@@ -116,6 +116,13 @@ h4:target .heading-anchor {
   color: #c084fc;
 }
 
+@media (max-width: 900px) {
+  .heading-anchor {
+    left: -0.9em;
+    width: 0.9em;
+  }
+}
+
 h1 {
   font-size: 2.25rem;
   margin: 0 0 1.5rem;
