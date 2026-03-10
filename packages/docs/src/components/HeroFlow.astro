@@ -62,14 +62,7 @@ const connectorCount = skills.length + 2;
                 <span class="hero-border-base"></span>
                 <span class="hero-border-shimmer-spot"></span>
               </span>
-              <span class="hero-skill-inner-shimmer" aria-hidden="true">
-                <span class="hero-skill-inner-shimmer-spot"></span>
-              </span>
               <span class="hero-skill-icon" aria-hidden="true">
-                <span class="hero-border-shimmer" aria-hidden="true">
-                  <span class="hero-border-base"></span>
-                  <span class="hero-border-shimmer-spot"></span>
-                </span>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path d="M7 3.75h6.5L18.25 8.5V20a1.25 1.25 0 0 1-1.25 1.25H7A1.25 1.25 0 0 1 5.75 20V5A1.25 1.25 0 0 1 7 3.75Z" stroke="currentColor" stroke-width="1.4"/>
                   <path d="M13.5 3.75V8.5h4.75" stroke="currentColor" stroke-width="1.4"/>
@@ -146,6 +139,10 @@ const connectorCount = skills.length + 2;
             <p class="pr-mock-desc">User input is interpolated directly into a SQL query. Use parameterized queries to prevent SQL injection attacks.</p>
             <p class="pr-mock-suggestion-label"><strong>Suggested fix:</strong> Use parameterized query</p>
             <div class="pr-mock-suggestion">
+              <span class="hero-border-shimmer" aria-hidden="true">
+                <span class="hero-border-base"></span>
+                <span class="hero-border-shimmer-spot"></span>
+              </span>
               <div class="pr-mock-suggestion-header hero-shimmer-divider hero-shimmer-divider-bottom">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M8.75 1.75V5H12a.75.75 0 010 1.5H8.75v3.25a.75.75 0 01-1.5 0V6.5H4a.75.75 0 010-1.5h3.25V1.75a.75.75 0 011.5 0zM4 13a.75.75 0 000 1.5h8a.75.75 0 000-1.5H4z"/>
@@ -283,9 +280,9 @@ const connectorCount = skills.length + 2;
       let nodeBorderY = 50;
       let nodeTargetBorderX = 50;
       let nodeTargetBorderY = 50;
-      let nodeHighlightX = 88;
+      let nodeHighlightX = 50;
       let nodeHighlightY = 50;
-      let nodeTargetHighlightX = 88;
+      let nodeTargetHighlightX = 50;
       let nodeTargetHighlightY = 50;
       let shieldX = 0;
       let shieldY = 0;
@@ -313,6 +310,7 @@ const connectorCount = skills.length + 2;
         targetBorderX: 50,
         targetBorderY: 50,
       }));
+      const cliPanelMotionState = panelMotionStates.find((state) => state.el === cli) ?? null;
 
       const applySkillMotion = () => {
         skillMotionStates.forEach((state) => {
@@ -328,12 +326,27 @@ const connectorCount = skills.length + 2;
       };
 
       const applyMascotMotion = () => {
+        const nodeShimmerDistance = Math.min(
+          1,
+          Math.hypot((nodeBorderX - 50) / 46, (nodeBorderY - 50) / 46),
+        );
+        const nodeShimmerMix = nodeShimmerDistance * nodeShimmerDistance * (3 - (2 * nodeShimmerDistance));
+        const nodeCircleShimmerScale = 0.5 + (nodeShimmerMix * 0.5);
+        const cliShimmerDistance = cliPanelMotionState
+          ? Math.min(
+            1,
+            Math.hypot((cliPanelMotionState.borderX - 50) / 48, (cliPanelMotionState.borderY - 50) / 42),
+          )
+          : 0;
+        const cliDotShimmerScale = 0.2 + (cliShimmerDistance * 0.8);
         warden.style.setProperty("--node-x", `${nodeX.toFixed(2)}px`);
         warden.style.setProperty("--node-y", `${nodeY.toFixed(2)}px`);
         warden.style.setProperty("--node-shimmer-x", `${nodeBorderX.toFixed(2)}%`);
         warden.style.setProperty("--node-shimmer-y", `${nodeBorderY.toFixed(2)}%`);
         warden.style.setProperty("--node-highlight-x", `${nodeHighlightX.toFixed(2)}%`);
         warden.style.setProperty("--node-highlight-y", `${nodeHighlightY.toFixed(2)}%`);
+        warden.style.setProperty("--node-circle-shimmer-scale", nodeCircleShimmerScale.toFixed(3));
+        cli.style.setProperty("--cli-dot-shimmer-scale", cliDotShimmerScale.toFixed(3));
         warden.style.setProperty("--shield-x", `${shieldX.toFixed(2)}px`);
         warden.style.setProperty("--shield-y", `${shieldY.toFixed(2)}px`);
         shield.style.setProperty("--shield-x", `${shieldX.toFixed(2)}px`);
@@ -513,8 +526,8 @@ const connectorCount = skills.length + 2;
         nodeTargetY = 0;
         nodeTargetBorderX = 50;
         nodeTargetBorderY = 50;
-        nodeTargetHighlightX = 50 + (shimmerDirX * 38);
-        nodeTargetHighlightY = 50 + (shimmerDirY * 38);
+        nodeTargetHighlightX = 50;
+        nodeTargetHighlightY = 50;
         shieldTargetX = 0;
         shieldTargetY = 0;
         eyeTargetX = 0;
@@ -864,22 +877,21 @@ const connectorCount = skills.length + 2;
     --skill-border-y: 50%;
     --border-shimmer-x: var(--skill-border-x, 50%);
     --border-shimmer-y: var(--skill-border-y, 50%);
+    --skill-card-radius: 12px;
+    --skill-card-padding-y: 0.52rem;
+    --skill-card-padding-x: 0.58rem;
     --border-shimmer-strength: 0.4;
     --border-shimmer-size: 38%;
     --border-shimmer-spot-inset: -100%;
     --border-shimmer-translate-scale: 0.36;
-    --skill-inner-shimmer-inset: 0px;
-    --skill-inner-shimmer-spot-inset: -100%;
-    --skill-inner-shimmer-translate-scale: 0.36;
-    --skill-inner-shimmer-brightness: 0.5;
     --border-base-color: rgba(255, 255, 255, 0.14);
     display: flex;
     align-items: center;
     gap: 0.45rem;
     position: relative;
     border: 1px solid transparent;
-    border-radius: 8px;
-    padding: 0.52rem 0.58rem;
+    border-radius: var(--skill-card-radius);
+    padding: var(--skill-card-padding-y) var(--skill-card-padding-x);
     background: var(--bg-subtle);
     overflow: hidden;
     width: fit-content;
@@ -907,12 +919,6 @@ const connectorCount = skills.length + 2;
   }
 
   .hero-skill-icon {
-    --border-shimmer-x: var(--skill-border-x, 50%);
-    --border-shimmer-y: var(--skill-border-y, 50%);
-    --border-shimmer-strength: 0.37;
-    --border-shimmer-size: 44%;
-    --border-shimmer-spot-inset: -120%;
-    --border-shimmer-translate-scale: 0.294;
     --border-base-color: rgba(255, 255, 255, 0.13);
     width: 1.5rem;
     height: 1.5rem;
@@ -920,8 +926,8 @@ const connectorCount = skills.length + 2;
     align-items: center;
     justify-content: center;
     position: relative;
-    border-radius: 6px;
-    border: 1px solid transparent;
+    border-radius: calc(var(--skill-card-radius, 12px) - var(--skill-card-padding-y, 0px));
+    border: 0.5px solid var(--border-base-color);
     background: var(--bg-subtle);
     color: var(--text-secondary);
     flex-shrink: 0;
@@ -953,7 +959,9 @@ const connectorCount = skills.length + 2;
   .warden-node {
     --border-shimmer-x: var(--node-shimmer-x, 50%);
     --border-shimmer-y: var(--node-shimmer-y, 50%);
-    --border-shimmer-strength: 0.43;
+    --border-shimmer-inset: 1px;
+    --node-circle-shimmer-brightness: 0.5;
+    --border-shimmer-strength: calc(0.43 * var(--node-circle-shimmer-scale, 0.5) * var(--node-circle-shimmer-brightness, 1));
     --border-shimmer-size: 34%;
     --border-shimmer-spot-inset: -18.889%;
     --border-shimmer-translate-scale: 0.725806;
@@ -979,9 +987,9 @@ const connectorCount = skills.length + 2;
     pointer-events: none;
     background: radial-gradient(
       circle at 50% 50%,
-      rgba(255, 255, 255, calc(0.38 * var(--shimmer-brightness, 1))) 0%,
-      rgba(255, 255, 255, calc(0.28 * var(--shimmer-brightness, 1))) 15%,
-      rgba(255, 255, 255, calc(0.1 * var(--shimmer-brightness, 1))) 30%,
+      rgba(255, 255, 255, calc(0.38 * var(--shimmer-brightness, 1) * var(--node-circle-shimmer-scale, 0.5) * var(--node-circle-shimmer-brightness, 1))) 0%,
+      rgba(255, 255, 255, calc(0.28 * var(--shimmer-brightness, 1) * var(--node-circle-shimmer-scale, 0.5) * var(--node-circle-shimmer-brightness, 1))) 15%,
+      rgba(255, 255, 255, calc(0.1 * var(--shimmer-brightness, 1) * var(--node-circle-shimmer-scale, 0.5) * var(--node-circle-shimmer-brightness, 1))) 30%,
       rgba(255, 255, 255, 0) 56%
     );
     transform: translate3d(
@@ -1127,9 +1135,9 @@ const connectorCount = skills.length + 2;
     pointer-events: none;
     background: radial-gradient(
       circle at 50% 50%,
-      rgba(255, 255, 255, calc(0.58 * var(--shimmer-brightness, 1))) 0%,
-      rgba(255, 255, 255, calc(0.3 * var(--shimmer-brightness, 1))) 26%,
-      rgba(255, 255, 255, calc(0.08 * var(--shimmer-brightness, 1))) 42%,
+      rgba(255, 255, 255, calc(0.58 * var(--shimmer-brightness, 1) * var(--cli-dot-shimmer-scale, 0.2))) 0%,
+      rgba(255, 255, 255, calc(0.3 * var(--shimmer-brightness, 1) * var(--cli-dot-shimmer-scale, 0.2))) 26%,
+      rgba(255, 255, 255, calc(0.08 * var(--shimmer-brightness, 1) * var(--cli-dot-shimmer-scale, 0.2))) 42%,
       rgba(255, 255, 255, 0) 62%
     );
     transform: translate3d(
@@ -1183,8 +1191,7 @@ const connectorCount = skills.length + 2;
     margin: 0;
   }
 
-  .hero-border-shimmer,
-  .hero-skill-inner-shimmer {
+  .hero-border-shimmer {
     position: absolute;
     inset: 0;
     border-radius: inherit;
@@ -1229,32 +1236,6 @@ const connectorCount = skills.length + 2;
     transform: translate3d(
       calc((var(--border-shimmer-x, 50%) - 50%) * var(--border-shimmer-translate-scale)),
       calc((var(--border-shimmer-y, 50%) - 50%) * var(--border-shimmer-translate-scale)),
-      0
-    );
-    will-change: transform;
-  }
-
-  .hero-skill-inner-shimmer {
-    --skill-inner-shimmer-spot-inset: -100%;
-    --skill-inner-shimmer-translate-scale: 0.333333;
-    padding: var(--skill-inner-shimmer-inset, 0px);
-    z-index: 1;
-  }
-
-  .hero-skill-inner-shimmer-spot {
-    position: absolute;
-    inset: var(--skill-inner-shimmer-spot-inset);
-    border-radius: inherit;
-    background: radial-gradient(
-      circle at 50% 50%,
-      rgba(255, 255, 255, calc(0.12 * var(--shimmer-brightness, 1) * var(--skill-inner-shimmer-brightness, 1))) 0%,
-      rgba(255, 255, 255, calc(0.06 * var(--shimmer-brightness, 1) * var(--skill-inner-shimmer-brightness, 1))) 24%,
-      rgba(255, 255, 255, calc(0.02 * var(--shimmer-brightness, 1) * var(--skill-inner-shimmer-brightness, 1))) 38%,
-      rgba(255, 255, 255, 0) 58%
-    );
-    transform: translate3d(
-      calc((var(--border-shimmer-x, 50%) - 50%) * var(--skill-inner-shimmer-translate-scale)),
-      calc((var(--border-shimmer-y, 50%) - 50%) * var(--skill-inner-shimmer-translate-scale)),
       0
     );
     will-change: transform;
@@ -1351,10 +1332,22 @@ const connectorCount = skills.length + 2;
   }
 
   .pr-mock-suggestion {
+    --border-shimmer-x: var(--box-shimmer-x, 50%);
+    --border-shimmer-y: var(--box-shimmer-y, 50%);
+    --border-shimmer-strength: 0.24;
+    --border-shimmer-size: 36%;
+    --border-shimmer-spot-inset: -100%;
+    --border-shimmer-translate-scale: 0.333333;
+    --border-base-color: #21262d;
+    --divider-shimmer-strength: 0.18;
+    --divider-shimmer-translate-scale: 0.333333;
+    --divider-shimmer-spot-inset: -120%;
+    --divider-line-thickness: 0.5px;
     background: #0d1117;
-    border: 1px solid #21262d;
+    border: 1px solid transparent;
     border-radius: 6px;
     overflow: hidden;
+    position: relative;
   }
 
   .pr-mock-suggestion-header {
@@ -1523,8 +1516,10 @@ const connectorCount = skills.length + 2;
     }
 
     .hero-skill-card {
+      --skill-card-padding-y: 0.5rem;
+      --skill-card-padding-x: 0.55rem;
       gap: 0.45rem;
-      padding: 0.5rem 0.55rem;
+      padding: var(--skill-card-padding-y) var(--skill-card-padding-x);
       transform: translate3d(var(--skill-offset-x, 0px), var(--skill-offset-y, 0px), 0);
     }
 
