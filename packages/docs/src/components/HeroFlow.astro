@@ -58,7 +58,18 @@ const connectorCount = skills.length + 2;
               data-side={desktopSkillLayout[index % desktopSkillLayout.length].side}
               style={`--skill-inset:${desktopSkillLayout[index % desktopSkillLayout.length].inset}`}
             >
+              <span class="hero-border-shimmer" aria-hidden="true">
+                <span class="hero-border-base"></span>
+                <span class="hero-border-shimmer-spot"></span>
+              </span>
+              <span class="hero-skill-inner-shimmer" aria-hidden="true">
+                <span class="hero-skill-inner-shimmer-spot"></span>
+              </span>
               <span class="hero-skill-icon" aria-hidden="true">
+                <span class="hero-border-shimmer" aria-hidden="true">
+                  <span class="hero-border-base"></span>
+                  <span class="hero-border-shimmer-spot"></span>
+                </span>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path d="M7 3.75h6.5L18.25 8.5V20a1.25 1.25 0 0 1-1.25 1.25H7A1.25 1.25 0 0 1 5.75 20V5A1.25 1.25 0 0 1 7 3.75Z" stroke="currentColor" stroke-width="1.4"/>
                   <path d="M13.5 3.75V8.5h4.75" stroke="currentColor" stroke-width="1.4"/>
@@ -75,6 +86,10 @@ const connectorCount = skills.length + 2;
 
     <div class="hero-flow-column hero-flow-column-center">
       <div class="warden-node" data-anchor="warden" aria-label="Warden">
+        <span class="hero-border-shimmer" aria-hidden="true">
+          <span class="hero-border-base"></span>
+          <span class="hero-border-shimmer-spot"></span>
+        </span>
         <span class="warden-shield">
           <span class="warden-eye">
             <span class="warden-iris"></span>
@@ -86,6 +101,10 @@ const connectorCount = skills.length + 2;
     <div class="hero-flow-column hero-flow-column-output">
       <span class="hero-flow-label">Run before you push</span>
       <div class="hero-cli" data-anchor="cli">
+        <span class="hero-border-shimmer" aria-hidden="true">
+          <span class="hero-border-base"></span>
+          <span class="hero-border-shimmer-spot"></span>
+        </span>
         <div class="hero-cli-header" aria-hidden="true">
           <span class="hero-cli-dot dot-red"></span>
           <span class="hero-cli-dot dot-yellow"></span>
@@ -99,6 +118,10 @@ const connectorCount = skills.length + 2;
       <span class="hero-flow-label hero-flow-label-pr">Every pull request</span>
       <div class="hero-pr-clip">
         <div class="pr-mock" data-anchor="pr">
+          <span class="hero-border-shimmer" aria-hidden="true">
+            <span class="hero-border-base"></span>
+            <span class="hero-border-shimmer-spot"></span>
+          </span>
           <div class="pr-mock-header">
             <div class="pr-mock-avatar">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
@@ -712,6 +735,7 @@ const connectorCount = skills.length + 2;
 
 <style>
   .hero-flow {
+    --shimmer-brightness: 0.8;
     position: relative;
     width: min(1100px, calc(100vw - 2rem));
     margin: 0 auto 2.25rem;
@@ -841,7 +865,12 @@ const connectorCount = skills.length + 2;
     --border-shimmer-y: var(--skill-border-y, 50%);
     --border-shimmer-strength: 0.4;
     --border-shimmer-size: 38%;
-    --skill-inner-shimmer-inset: 4px;
+    --border-shimmer-spot-inset: -100%;
+    --border-shimmer-translate-scale: 0.36;
+    --skill-inner-shimmer-inset: 0px;
+    --skill-inner-shimmer-spot-inset: -100%;
+    --skill-inner-shimmer-translate-scale: 0.36;
+    --skill-inner-shimmer-brightness: 0.5;
     --border-base-color: rgba(255, 255, 255, 0.14);
     display: flex;
     align-items: center;
@@ -851,6 +880,7 @@ const connectorCount = skills.length + 2;
     border-radius: 8px;
     padding: 0.52rem 0.58rem;
     background: var(--bg-subtle);
+    overflow: hidden;
     width: fit-content;
     max-width: 100%;
     transform: none;
@@ -880,6 +910,8 @@ const connectorCount = skills.length + 2;
     --border-shimmer-y: var(--skill-border-y, 50%);
     --border-shimmer-strength: 0.37;
     --border-shimmer-size: 44%;
+    --border-shimmer-spot-inset: -120%;
+    --border-shimmer-translate-scale: 0.294;
     --border-base-color: rgba(255, 255, 255, 0.13);
     width: 1.5rem;
     height: 1.5rem;
@@ -892,6 +924,8 @@ const connectorCount = skills.length + 2;
     background: var(--bg-subtle);
     color: var(--text-secondary);
     flex-shrink: 0;
+    overflow: hidden;
+    z-index: 2;
   }
 
   .hero-skill-icon svg {
@@ -906,6 +940,8 @@ const connectorCount = skills.length + 2;
     font-size: 0.88rem;
     color: var(--text);
     white-space: nowrap;
+    position: relative;
+    z-index: 2;
   }
 
   .hero-flow-column-center {
@@ -918,6 +954,8 @@ const connectorCount = skills.length + 2;
     --border-shimmer-y: var(--node-shimmer-y, 50%);
     --border-shimmer-strength: 0.43;
     --border-shimmer-size: 34%;
+    --border-shimmer-spot-inset: -18.889%;
+    --border-shimmer-translate-scale: 0.725806;
     --border-base-color: var(--border);
     width: 9rem;
     height: 9rem;
@@ -935,17 +973,22 @@ const connectorCount = skills.length + 2;
   .warden-node::before {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: -18.889%;
     z-index: 0;
     pointer-events: none;
     background: radial-gradient(
-      circle at var(--node-highlight-x, 88%) var(--node-highlight-y, 50%),
-      rgba(255, 255, 255, 0.38) 0%,
-      rgba(255, 255, 255, 0.28) 15%,
-      rgba(255, 255, 255, 0.1) 30%,
+      circle at 50% 50%,
+      rgba(255, 255, 255, calc(0.38 * var(--shimmer-brightness, 1))) 0%,
+      rgba(255, 255, 255, calc(0.28 * var(--shimmer-brightness, 1))) 15%,
+      rgba(255, 255, 255, calc(0.1 * var(--shimmer-brightness, 1))) 30%,
       rgba(255, 255, 255, 0) 56%
     );
-    will-change: background;
+    transform: translate3d(
+      calc((var(--node-highlight-x, 88%) - 50%) * 0.725806),
+      calc((var(--node-highlight-y, 50%) - 50%) * 0.725806),
+      0
+    );
+    will-change: transform;
   }
 
   .warden-shield {
@@ -1012,6 +1055,8 @@ const connectorCount = skills.length + 2;
     --border-shimmer-y: var(--box-shimmer-y, 50%);
     --border-shimmer-strength: 0.39;
     --border-shimmer-size: 36%;
+    --border-shimmer-spot-inset: -100%;
+    --border-shimmer-translate-scale: 0.36;
     --border-base-color: var(--border);
     position: relative;
     border: 1px solid transparent;
@@ -1043,16 +1088,22 @@ const connectorCount = skills.length + 2;
   .hero-cli-dot::after {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: -66.667%;
     border-radius: inherit;
     pointer-events: none;
     background: radial-gradient(
-      circle at var(--box-shimmer-x, 50%) var(--box-shimmer-y, 50%),
-      rgba(255, 255, 255, 0.58) 0%,
-      rgba(255, 255, 255, 0.3) 26%,
-      rgba(255, 255, 255, 0.08) 42%,
+      circle at 50% 50%,
+      rgba(255, 255, 255, calc(0.58 * var(--shimmer-brightness, 1))) 0%,
+      rgba(255, 255, 255, calc(0.3 * var(--shimmer-brightness, 1))) 26%,
+      rgba(255, 255, 255, calc(0.08 * var(--shimmer-brightness, 1))) 42%,
       rgba(255, 255, 255, 0) 62%
     );
+    transform: translate3d(
+      calc((var(--box-shimmer-x, 50%) - 50%) * 0.48),
+      calc((var(--box-shimmer-y, 50%) - 50%) * 0.48),
+      0
+    );
+    will-change: transform;
   }
 
   .hero-cli-dot.dot-red {
@@ -1082,6 +1133,8 @@ const connectorCount = skills.length + 2;
     --border-shimmer-y: var(--box-shimmer-y, 50%);
     --border-shimmer-strength: 0.31;
     --border-shimmer-size: 35%;
+    --border-shimmer-spot-inset: -100%;
+    --border-shimmer-translate-scale: 0.333333;
     --border-base-color: #21262d;
     position: relative;
     border: 1px solid transparent;
@@ -1092,28 +1145,20 @@ const connectorCount = skills.length + 2;
     margin: 0;
   }
 
-  .hero-skill-card::after,
-  .hero-skill-icon::after,
-  .warden-node::after,
-  .hero-cli::after,
-  .pr-mock::after {
-    content: "";
+  .hero-border-shimmer,
+  .hero-skill-inner-shimmer {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    padding: var(--border-shimmer-inset, 0.5px);
     pointer-events: none;
+    overflow: hidden;
+  }
+
+  .hero-border-shimmer {
+    --border-shimmer-spot-inset: -100%;
+    --border-shimmer-translate-scale: 0.333333;
+    padding: var(--border-shimmer-inset, 0.5px);
     z-index: 3;
-    background:
-      radial-gradient(
-        circle at var(--border-shimmer-x, 50%) var(--border-shimmer-y, 50%),
-        rgba(255, 255, 255, var(--border-shimmer-strength, 0.35)) 0%,
-        rgba(255, 255, 255, calc(var(--border-shimmer-strength, 0.35) * 0.72)) calc(var(--border-shimmer-size, 36%) - 18%),
-        rgba(255, 255, 255, calc(var(--border-shimmer-strength, 0.35) * 0.38)) calc(var(--border-shimmer-size, 36%) - 10%),
-        rgba(255, 255, 255, calc(var(--border-shimmer-strength, 0.35) * 0.14)) var(--border-shimmer-size, 36%),
-        rgba(255, 255, 255, 0) calc(var(--border-shimmer-size, 36%) + 12%)
-      ),
-      linear-gradient(var(--border-base-color, var(--border)), var(--border-base-color, var(--border)));
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -1124,28 +1169,57 @@ const connectorCount = skills.length + 2;
     mask-composite: exclude;
   }
 
-  .hero-skill-card::before {
-    content: "";
+  .hero-border-base {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    padding: var(--skill-inner-shimmer-inset, 4px);
-    pointer-events: none;
+    background: linear-gradient(var(--border-base-color, var(--border)), var(--border-base-color, var(--border)));
+  }
+
+  .hero-border-shimmer-spot {
+    position: absolute;
+    inset: var(--border-shimmer-spot-inset);
+    border-radius: inherit;
     background: radial-gradient(
-      circle at var(--border-shimmer-x, 50%) var(--border-shimmer-y, 50%),
-      rgba(255, 255, 255, 0.12) 0%,
-      rgba(255, 255, 255, 0.06) 24%,
-      rgba(255, 255, 255, 0.02) 38%,
+      circle at 50% 50%,
+      rgba(255, 255, 255, calc(var(--border-shimmer-strength, 0.35) * var(--shimmer-brightness, 1))) 0%,
+      rgba(255, 255, 255, calc(var(--border-shimmer-strength, 0.35) * 0.72 * var(--shimmer-brightness, 1))) calc(var(--border-shimmer-size, 36%) - 18%),
+      rgba(255, 255, 255, calc(var(--border-shimmer-strength, 0.35) * 0.38 * var(--shimmer-brightness, 1))) calc(var(--border-shimmer-size, 36%) - 10%),
+      rgba(255, 255, 255, calc(var(--border-shimmer-strength, 0.35) * 0.14 * var(--shimmer-brightness, 1))) var(--border-shimmer-size, 36%),
+      rgba(255, 255, 255, 0) calc(var(--border-shimmer-size, 36%) + 12%)
+    );
+    transform: translate3d(
+      calc((var(--border-shimmer-x, 50%) - 50%) * var(--border-shimmer-translate-scale)),
+      calc((var(--border-shimmer-y, 50%) - 50%) * var(--border-shimmer-translate-scale)),
+      0
+    );
+    will-change: transform;
+  }
+
+  .hero-skill-inner-shimmer {
+    --skill-inner-shimmer-spot-inset: -100%;
+    --skill-inner-shimmer-translate-scale: 0.333333;
+    padding: var(--skill-inner-shimmer-inset, 0px);
+    z-index: 1;
+  }
+
+  .hero-skill-inner-shimmer-spot {
+    position: absolute;
+    inset: var(--skill-inner-shimmer-spot-inset);
+    border-radius: inherit;
+    background: radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, calc(0.12 * var(--shimmer-brightness, 1) * var(--skill-inner-shimmer-brightness, 1))) 0%,
+      rgba(255, 255, 255, calc(0.06 * var(--shimmer-brightness, 1) * var(--skill-inner-shimmer-brightness, 1))) 24%,
+      rgba(255, 255, 255, calc(0.02 * var(--shimmer-brightness, 1) * var(--skill-inner-shimmer-brightness, 1))) 38%,
       rgba(255, 255, 255, 0) 58%
     );
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask-composite: exclude;
+    transform: translate3d(
+      calc((var(--border-shimmer-x, 50%) - 50%) * var(--skill-inner-shimmer-translate-scale)),
+      calc((var(--border-shimmer-y, 50%) - 50%) * var(--skill-inner-shimmer-translate-scale)),
+      0
+    );
+    will-change: transform;
   }
 
   .pr-mock-header {
