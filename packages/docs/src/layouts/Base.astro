@@ -1,5 +1,6 @@
 ---
 import { Font } from "astro:assets";
+import { ClientRouter, fade } from "astro:transitions";
 
 interface Props {
   title: string;
@@ -10,10 +11,56 @@ const { title, description = 'Code review agents for GitHub' } = Astro.props;
 const currentPath = Astro.url.pathname;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
+
+function normalizePathname(pathname: string): string {
+  const withoutBase = base && pathname.startsWith(base) ? pathname.slice(base.length) || '/' : pathname;
+  const normalized = withoutBase.replace(/\/+$/, '');
+  return normalized || '/';
+}
+
+function getNavIndex(pathname: string): number {
+  switch (normalizePathname(pathname)) {
+    case '/':
+      return 0;
+    case '/guide':
+    case '/github-org-setup':
+      return 1;
+    case '/skill':
+      return 2;
+    case '/config':
+      return 3;
+    case '/cli':
+      return 4;
+    default:
+      return -1;
+  }
+}
+
+const currentNavIndex = getNavIndex(currentPath);
+const baseFade = fade({ duration: '120ms' });
+const pageTransition = {
+  ...baseFade,
+  'nav-left': {
+    old: [
+      { name: 'pageFadeOutToRight', duration: '200ms', easing: 'cubic-bezier(0.55, 0, 0.8, 0.2)', fillMode: 'both' },
+    ],
+    new: [
+      { name: 'pageFadeInFromLeft', duration: '200ms', delay: '100ms', easing: 'cubic-bezier(0.2, 0.9, 0.2, 1)', fillMode: 'both' },
+    ],
+  },
+  'nav-right': {
+    old: [
+      { name: 'pageFadeOutToLeft', duration: '200ms', easing: 'cubic-bezier(0.55, 0, 0.8, 0.2)', fillMode: 'both' },
+    ],
+    new: [
+      { name: 'pageFadeInFromRight', duration: '200ms', delay: '100ms', easing: 'cubic-bezier(0.2, 0.9, 0.2, 1)', fillMode: 'both' },
+    ],
+  },
+} as any;
 ---
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-nav-current-index={currentNavIndex} data-base-path={base}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -21,11 +68,16 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
     <title>{pageTitle}</title>
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
     <Font cssVariable="--font-geist-mono" preload />
+    <ClientRouter />
   </head>
   <body>
     <nav class="nav">
       <div class="nav-inner container">
-        <a href={`${base}/`} class="nav-logo">
+        <a
+          href={`${base}/`}
+          class:list={['nav-logo', { active: currentNavIndex === 0 }]}
+          data-nav-index="0"
+        >
           <svg width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M32 10 L50 17 L50 35 C50 45 42 52 32 55 C22 52 14 45 14 35 L14 17 Z" fill="currentColor"/>
             <path d="M32 17 L44 22 L44 35 C44 42 39 47 32 49 C25 47 20 42 20 35 L20 22 Z" fill="#000"/>
@@ -37,10 +89,10 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
           <span class="hamburger"></span>
         </button>
         <div class="nav-links">
-          <a href={`${base}/guide`} class:list={[{ active: currentPath.endsWith('/guide') || currentPath.endsWith('/guide/') }]}>Guide</a>
-          <a href={`${base}/skill`} class:list={[{ active: currentPath.endsWith('/skill') || currentPath.endsWith('/skill/') }]}>Skill</a>
-          <a href={`${base}/config`} class:list={[{ active: currentPath.endsWith('/config') || currentPath.endsWith('/config/') }]}>Config</a>
-          <a href={`${base}/cli`} class:list={[{ active: currentPath.endsWith('/cli') || currentPath.endsWith('/cli/') }]}>CLI</a>
+          <a href={`${base}/guide`} class:list={[{ active: currentNavIndex === 1 }]} data-nav-index="1">Guide</a>
+          <a href={`${base}/skill`} class:list={[{ active: currentNavIndex === 2 }]} data-nav-index="2">Skill</a>
+          <a href={`${base}/config`} class:list={[{ active: currentNavIndex === 3 }]} data-nav-index="3">Config</a>
+          <a href={`${base}/cli`} class:list={[{ active: currentNavIndex === 4 }]} data-nav-index="4">CLI</a>
           <a href="https://github.com/getsentry/warden" class="nav-github" aria-label="GitHub">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
@@ -50,13 +102,58 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
       </div>
     </nav>
     <script>
-      const toggle = document.querySelector('.nav-toggle');
-      const nav = document.querySelector('.nav');
-      toggle?.addEventListener('click', () => {
-        const expanded = toggle.getAttribute('aria-expanded') === 'true';
-        toggle.setAttribute('aria-expanded', String(!expanded));
-        nav?.classList.toggle('nav-open');
-      });
+      type DocsWindow = Window & { __wardenDocsBaseInit?: boolean };
+
+      const PM_STORAGE_KEY = 'warden-docs-pm';
+      const NAV_LEFT = 'nav-left';
+      const NAV_RIGHT = 'nav-right';
+
+      function normalizeClientPathname(pathname: string): string {
+        const basePath = document.documentElement.dataset.basePath ?? '';
+        const withoutBase = basePath && pathname.startsWith(basePath) ? pathname.slice(basePath.length) || '/' : pathname;
+        const normalized = withoutBase.replace(/\/+$/, '');
+        return normalized || '/';
+      }
+
+      function getClientNavIndex(pathname: string): number {
+        switch (normalizeClientPathname(pathname)) {
+          case '/':
+            return 0;
+          case '/guide':
+          case '/github-org-setup':
+            return 1;
+          case '/skill':
+            return 2;
+          case '/config':
+            return 3;
+          case '/cli':
+            return 4;
+          default:
+            return -1;
+        }
+      }
+
+      function initNavToggle() {
+        const toggle = document.querySelector('.nav-toggle');
+        const nav = document.querySelector('.nav');
+        if (!(toggle instanceof HTMLButtonElement) || !(nav instanceof HTMLElement)) {
+          return;
+        }
+
+        toggle.setAttribute('aria-expanded', 'false');
+        nav.classList.remove('nav-open');
+
+        if (toggle.dataset.bound === 'true') {
+          return;
+        }
+
+        toggle.dataset.bound = 'true';
+        toggle.addEventListener('click', () => {
+          const expanded = toggle.getAttribute('aria-expanded') === 'true';
+          toggle.setAttribute('aria-expanded', String(!expanded));
+          nav.classList.toggle('nav-open');
+        });
+      }
 
       // Add anchor links to headings
       function slugify(text: string): string {
@@ -66,41 +163,70 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
           .replace(/(^-|-$)/g, '');
       }
 
-      const headings = document.querySelectorAll('main h2, main h3, main h4');
-      const usedIds = new Set<string>();
+      function initHeadingAnchors() {
+        const headings = document.querySelectorAll('main h2, main h3, main h4');
+        const usedIds = new Set<string>();
 
-      headings.forEach((heading) => {
-        const text = heading.textContent || '';
-        let id = slugify(text);
+        headings.forEach((heading) => {
+          const existingId = heading.id?.trim();
+          if (existingId) {
+            usedIds.add(existingId);
+          }
+        });
 
-        // Handle duplicates
-        let counter = 1;
-        let uniqueId = id;
-        while (usedIds.has(uniqueId)) {
-          uniqueId = `${id}-${counter++}`;
-        }
-        usedIds.add(uniqueId);
+        headings.forEach((heading) => {
+          if (heading.querySelector(':scope > .heading-anchor')) {
+            return;
+          }
 
-        heading.id = uniqueId;
+          const text = heading.textContent || '';
+          const existingId = heading.id?.trim();
+          const baseId = existingId || slugify(text);
 
-        const anchor = document.createElement('a');
-        anchor.href = `#${uniqueId}`;
-        anchor.className = 'heading-anchor';
-        anchor.textContent = '#';
-        anchor.setAttribute('aria-label', `Link to ${text}`);
-        heading.prepend(anchor);
-      });
+          let uniqueId = baseId;
+          let counter = 1;
+          while (usedIds.has(uniqueId) && uniqueId !== existingId) {
+            uniqueId = `${baseId}-${counter++}`;
+          }
+
+          usedIds.add(uniqueId);
+          heading.id = uniqueId;
+
+          const anchor = document.createElement('a');
+          anchor.href = `#${uniqueId}`;
+          anchor.className = 'heading-anchor';
+          anchor.textContent = '#';
+          anchor.setAttribute('aria-label', `Link to ${text}`);
+          heading.prepend(anchor);
+        });
+      }
 
       // Scroll to anchor on load if hash present
-      if (window.location.hash) {
+      function scrollToHash() {
+        if (!window.location.hash) {
+          return;
+        }
+
         const target = document.querySelector(window.location.hash);
         if (target) {
           setTimeout(() => target.scrollIntoView(), 0);
         }
       }
 
-      // Package manager preference (shared across all pages)
-      const PM_STORAGE_KEY = 'warden-docs-pm';
+      function getCurrentNavIndex(): number {
+        const value = Number(document.documentElement.dataset.navCurrentIndex ?? '-1');
+        return Number.isNaN(value) ? -1 : value;
+      }
+
+      function getSourceNavIndex(sourceElement: Element | null): number {
+        const navLink = sourceElement?.closest('[data-nav-index]');
+        if (!(navLink instanceof HTMLElement)) {
+          return -1;
+        }
+
+        const value = Number(navLink.dataset.navIndex);
+        return Number.isNaN(value) ? -1 : value;
+      }
 
       function setPackageManager(pm: string) {
         document.querySelectorAll('.pm-tabs').forEach((container) => {
@@ -125,6 +251,11 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
 
         document.querySelectorAll('.pm-tabs').forEach((container) => {
           container.querySelectorAll('.tab-btn').forEach((btn) => {
+            if (!(btn instanceof HTMLButtonElement) || btn.dataset.bound === 'true') {
+              return;
+            }
+
+            btn.dataset.bound = 'true';
             btn.addEventListener('click', () => {
               const pm = btn.getAttribute('data-pm');
               if (!pm) return;
@@ -134,7 +265,8 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
           });
 
           const copyButton = container.querySelector('.copy-button');
-          if (copyButton) {
+          if (copyButton instanceof HTMLButtonElement && copyButton.dataset.bound !== 'true') {
+            copyButton.dataset.bound = 'true';
             copyButton.addEventListener('click', async () => {
               const activeContent = container.querySelector('.tab-content:not(.hidden)');
               if (!activeContent) return;
@@ -158,11 +290,48 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
         });
       }
 
-      initPackageManagerTabs();
-      document.addEventListener('astro:page-load', initPackageManagerTabs);
+      function initPage() {
+        initNavToggle();
+        initHeadingAnchors();
+        scrollToHash();
+      }
 
+      initPage();
+      initPackageManagerTabs();
+
+      const docsWindow = window as DocsWindow;
+      if (!docsWindow.__wardenDocsBaseInit) {
+        docsWindow.__wardenDocsBaseInit = true;
+        document.addEventListener('astro:before-preparation', (event) => {
+          if (window.matchMedia('(max-width: 768px)').matches) {
+            return;
+          }
+
+          const fromNavIndex = getClientNavIndex(event.from.pathname);
+          const toNavIndex = getClientNavIndex(event.to.pathname);
+
+          if (fromNavIndex !== -1 && toNavIndex !== -1 && fromNavIndex !== toNavIndex) {
+            event.direction = toNavIndex > fromNavIndex ? NAV_RIGHT : NAV_LEFT;
+            return;
+          }
+
+          const sourceNavIndex = getSourceNavIndex(event.sourceElement instanceof Element ? event.sourceElement : null);
+          const currentNavIndex = getCurrentNavIndex();
+
+          if (sourceNavIndex === -1 || currentNavIndex === -1 || sourceNavIndex === currentNavIndex) {
+            return;
+          }
+
+          event.direction = sourceNavIndex > currentNavIndex ? NAV_RIGHT : NAV_LEFT;
+        });
+
+        document.addEventListener('astro:page-load', () => {
+          initPage();
+          initPackageManagerTabs();
+        });
+      }
     </script>
-    <main class="container">
+    <main class="container" transition:name="page" transition:animate={pageTransition}>
       <slot />
     </main>
     <footer class="footer">
@@ -213,6 +382,71 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
   .nav-logo:hover {
     color: #fff !important;
     opacity: 0.8;
+  }
+
+  .nav-logo.active {
+    opacity: 1;
+  }
+
+  @keyframes pageFadeOutToLeft {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(-18px, 0, 0);
+    }
+  }
+
+  @keyframes pageFadeOutToRight {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate3d(18px, 0, 0);
+    }
+  }
+
+  @keyframes pageFadeInFromLeft {
+    0% {
+      opacity: 0;
+      transform: translate3d(-18px, 0, 0);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes pageFadeInFromRight {
+    0% {
+      opacity: 0;
+      transform: translate3d(18px, 0, 0);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(page),
+    ::view-transition-new(page),
+    [data-astro-transition="nav-left"]::view-transition-old(page),
+    [data-astro-transition="nav-left"]::view-transition-new(page),
+    [data-astro-transition="nav-right"]::view-transition-old(page),
+    [data-astro-transition="nav-right"]::view-transition-new(page) {
+      animation-duration: 120ms !important;
+      animation-delay: 0ms !important;
+      animation-timing-function: linear !important;
+    }
   }
 
   .nav-links {
@@ -338,6 +572,16 @@ const pageTitle = title === 'Home' ? 'Warden' : `${title} | Warden`;
   }
 
   @media (max-width: 768px) {
+    ::view-transition-old(*),
+    ::view-transition-new(*),
+    ::view-transition-group(*) {
+      animation: none !important;
+    }
+
+    [data-astro-transition-scope] {
+      animation: none !important;
+    }
+
     .nav-toggle {
       display: block;
     }
