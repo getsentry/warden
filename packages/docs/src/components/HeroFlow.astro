@@ -264,6 +264,7 @@ const connectorCount = skills.length + 2;
         const ratio = maxRadius / distance;
         return { x: dx * ratio, y: dy * ratio };
       };
+      const lerp = (start, end, amount) => start + ((end - start) * amount);
       const projectToCircleBorder = (x, y) => {
         const radius = Math.max(Math.hypot(x, y), 0.0001);
         return { x: x / radius, y: y / radius };
@@ -436,36 +437,63 @@ const connectorCount = skills.length + 2;
         const eyeRect = eye.getBoundingClientRect();
         const nodeCx = nodeRect.left + (nodeRect.width / 2);
         const nodeCy = nodeRect.top + (nodeRect.height / 2);
-        const normalizedX = (clientX - nodeCx) / Math.max(window.innerWidth * 0.5, 1);
-        const normalizedY = (clientY - nodeCy) / Math.max(window.innerHeight * 0.5, 1);
+        const nodeNormalizedX = (clientX - nodeCx) / Math.max(window.innerWidth * 0.5, 1);
+        const nodeNormalizedY = (clientY - nodeCy) / Math.max(window.innerHeight * 0.5, 1);
+        const panelShimmerReachX = motionEnabled ? 0.68 : 0.5;
+        const panelShimmerReachY = motionEnabled ? 0.58 : 0.5;
+        const normalizedX = (clientX - nodeCx) / Math.max(window.innerWidth * panelShimmerReachX, 1);
+        const normalizedY = (clientY - nodeCy) / Math.max(window.innerHeight * panelShimmerReachY, 1);
 
         const dampAxis = (value, gain) => Math.tanh(value * gain) / Math.tanh(gain);
+        const nodeShimmerXRaw = dampAxis(nodeNormalizedX, 2.15);
+        const nodeShimmerYRaw = dampAxis(nodeNormalizedY, 1.45);
         const shimmerXRaw = dampAxis(normalizedX, 2.15);
         const shimmerYRaw = dampAxis(normalizedY, 1.45);
+        const nodeShimmerMagnitude = Math.hypot(nodeShimmerXRaw, nodeShimmerYRaw);
         const shimmerMagnitude = Math.hypot(shimmerXRaw, shimmerYRaw);
+        const nodeTargetDir = nodeShimmerMagnitude > 0.0001
+          ? { x: nodeShimmerXRaw / nodeShimmerMagnitude, y: nodeShimmerYRaw / nodeShimmerMagnitude }
+          : { x: shimmerDirX, y: shimmerDirY };
         const targetDir = shimmerMagnitude > 0.0001
           ? { x: shimmerXRaw / shimmerMagnitude, y: shimmerYRaw / shimmerMagnitude }
           : { x: shimmerDirX, y: shimmerDirY };
         // Cursor influence is intentionally damped near the Warden center.
         const centerDistance = Math.min(1, Math.hypot(normalizedX, normalizedY) / Math.SQRT2);
         const directionalInfluence = 0.14 + (Math.pow(centerDistance, 1.45) * 0.86);
+        const nodeCenterDistance = Math.min(1, Math.hypot(nodeNormalizedX, nodeNormalizedY) / Math.SQRT2);
+        const nodeDirectionalInfluence = 0.14 + (Math.pow(nodeCenterDistance, 1.45) * 0.86);
+        const nodeBlendedDir = {
+          x: (shimmerDirX * (1 - nodeDirectionalInfluence)) + (nodeTargetDir.x * nodeDirectionalInfluence),
+          y: (shimmerDirY * (1 - nodeDirectionalInfluence)) + (nodeTargetDir.y * nodeDirectionalInfluence),
+        };
         const blendedDir = {
           x: (shimmerDirX * (1 - directionalInfluence)) + (targetDir.x * directionalInfluence),
           y: (shimmerDirY * (1 - directionalInfluence)) + (targetDir.y * directionalInfluence),
         };
+        const nodeBlendedMagnitude = Math.max(Math.hypot(nodeBlendedDir.x, nodeBlendedDir.y), 0.0001);
         const blendedMagnitude = Math.max(Math.hypot(blendedDir.x, blendedDir.y), 0.0001);
+        const nodeShimmerDirX = nodeBlendedDir.x / nodeBlendedMagnitude;
+        const nodeShimmerDirY = nodeBlendedDir.y / nodeBlendedMagnitude;
         shimmerDirX = blendedDir.x / blendedMagnitude;
         shimmerDirY = blendedDir.y / blendedMagnitude;
-        const uniformShimmer = projectToCircleBorder(shimmerDirX, shimmerDirY);
+        const rawShimmerTravel = Math.min(1, shimmerMagnitude);
+        const panelShimmerTravel = motionEnabled
+          ? lerp(rawShimmerTravel, rawShimmerTravel * rawShimmerTravel, 0.38)
+          : 1;
+        const nodeShimmer = projectToCircleBorder(nodeShimmerDirX, nodeShimmerDirY);
+        const panelShimmer = {
+          x: shimmerDirX * panelShimmerTravel,
+          y: shimmerDirY * panelShimmerTravel,
+        };
         const nodeMotionScale = motionEnabled ? 0.11 : 0.22;
         const nodeRange = Math.max(0, Math.min(nodeRect.width, nodeRect.height) * nodeMotionScale);
         const nodeOffset = clampToCircle(clientX - nodeCx, clientY - nodeCy, nodeRange);
         nodeTargetX = nodeOffset.x;
         nodeTargetY = nodeOffset.y;
-        nodeTargetBorderX = 50 + (uniformShimmer.x * 46);
-        nodeTargetBorderY = 50 + (uniformShimmer.y * 46);
-        nodeTargetHighlightX = 50 + (uniformShimmer.x * 38);
-        nodeTargetHighlightY = 50 + (uniformShimmer.y * 38);
+        nodeTargetBorderX = 50 + (nodeShimmer.x * 46);
+        nodeTargetBorderY = 50 + (nodeShimmer.y * 46);
+        nodeTargetHighlightX = 50 + (nodeShimmer.x * 38);
+        nodeTargetHighlightY = 50 + (nodeShimmer.y * 38);
 
         const shieldRange = Math.max(
           0,
@@ -506,8 +534,8 @@ const connectorCount = skills.length + 2;
 
           state.targetX = 0;
           state.targetY = 0;
-          state.targetBorderX = 50 + (uniformShimmer.x * 48);
-          state.targetBorderY = 50 + (uniformShimmer.y * 42);
+          state.targetBorderX = 50 + (panelShimmer.x * 48);
+          state.targetBorderY = 50 + (panelShimmer.y * 42);
         });
         panelMotionStates.forEach((state) => {
           if (getComputedStyle(state.el).display === "none") {
@@ -516,8 +544,8 @@ const connectorCount = skills.length + 2;
             return;
           }
 
-          state.targetBorderX = 50 + (uniformShimmer.x * 48);
-          state.targetBorderY = 50 + (uniformShimmer.y * 42);
+          state.targetBorderX = 50 + (panelShimmer.x * 48);
+          state.targetBorderY = 50 + (panelShimmer.y * 42);
         });
 
         requestMascotMotion();
