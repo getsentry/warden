@@ -2,7 +2,16 @@ import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
-import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
+import {
+  Sentry,
+  emitExtractionMetrics,
+  emitRetryMetric,
+  emitDedupMetrics,
+  emitFixGateMetrics,
+  logger,
+  setFindingStageAttributes,
+  captureFindingStage,
+} from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
@@ -106,6 +115,100 @@ export function filterOutOfRangeFindings(
     }
   }
   return { filtered, dropped };
+}
+
+export interface FinalizeSkillReportOptions {
+  skillName: string;
+  model?: string;
+  startTime: number;
+  repoPath: string;
+  apiKey?: string;
+  auxiliaryMaxRetries?: number;
+  allFindings: Finding[];
+  allUsage: UsageStats[];
+  allAuxiliaryUsage: AuxiliaryUsageEntry[];
+  files?: SkillReport['files'];
+}
+
+export async function finalizeSkillReport(options: FinalizeSkillReportOptions): Promise<SkillReport> {
+  const {
+    skillName,
+    model,
+    startTime,
+    repoPath,
+    apiKey,
+    auxiliaryMaxRetries,
+    allFindings,
+    allUsage,
+    allAuxiliaryUsage,
+    files,
+  } = options;
+
+  return Sentry.startSpan(
+    {
+      op: 'skill.finalize_findings',
+      name: `finalize findings ${skillName}`,
+    },
+    async () => {
+      const uniqueFindings = deduplicateFindings(allFindings);
+      emitDedupMetrics(skillName, allFindings.length, uniqueFindings.length);
+      captureFindingStage('report_deduped', uniqueFindings, { skill: skillName });
+
+      const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
+        apiKey,
+        repoPath,
+        maxRetries: auxiliaryMaxRetries,
+      });
+      let mergedFindings = mergeResult.findings;
+      if (mergeResult.usage) {
+        allAuxiliaryUsage.push({ agent: 'merge', usage: mergeResult.usage });
+      }
+      captureFindingStage('report_merged', mergedFindings, { skill: skillName });
+
+      const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
+        repoPath,
+        apiKey,
+        maxRetries: auxiliaryMaxRetries,
+      });
+      mergedFindings = sanitized.findings;
+      if (sanitized.usage) {
+        allAuxiliaryUsage.push({ agent: 'fix_gate', usage: sanitized.usage });
+      }
+      emitFixGateMetrics(
+        skillName,
+        sanitized.stats.checked,
+        sanitized.stats.strippedDeterministic,
+        sanitized.stats.strippedSemantic,
+        sanitized.stats.semanticUnavailable
+      );
+      if (sanitized.stats.checked > 0) {
+        logger.info('Suggested fix quality gate', {
+          'fix_gate.checked': sanitized.stats.checked,
+          'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
+          'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
+          'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
+        });
+      }
+      captureFindingStage('report_final', mergedFindings, { skill: skillName });
+
+      const report: SkillReport = {
+        skill: skillName,
+        summary: generateSummary(skillName, mergedFindings),
+        findings: mergedFindings,
+        usage: aggregateUsage(allUsage),
+        durationMs: Date.now() - startTime,
+        model,
+        files,
+      };
+
+      const auxUsage = aggregateAuxiliaryUsage(allAuxiliaryUsage);
+      if (auxUsage) {
+        report.auxiliaryUsage = auxUsage;
+      }
+
+      return report;
+    },
+  );
 }
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
@@ -500,6 +603,7 @@ async function analyzeHunk(
 
           span.setAttribute('hunk.failed', false);
           span.setAttribute('finding.count', filteredFindings.length);
+          setFindingStageAttributes(span, 'initial', filteredFindings, { skill: skill.name });
 
           return {
             findings: filteredFindings,
@@ -902,65 +1006,23 @@ export async function runSkill(
     );
   }
 
-  // Deduplicate findings
-  const uniqueFindings = deduplicateFindings(allFindings);
-  emitDedupMetrics(skill.name, allFindings.length, uniqueFindings.length);
-
-  // Merge findings that describe the same issue at different locations
-  const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
-    apiKey: options.apiKey,
-    repoPath: context.repoPath,
-    maxRetries: options.auxiliaryMaxRetries,
-  });
-  let mergedFindings = mergeResult.findings;
-  if (mergeResult.usage) {
-    allAuxiliaryUsage.push({ agent: 'merge', usage: mergeResult.usage });
-  }
-  const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
-    repoPath: context.repoPath,
-    apiKey: options.apiKey,
-    maxRetries: options.auxiliaryMaxRetries,
-  });
-  mergedFindings = sanitized.findings;
-  if (sanitized.usage) {
-    allAuxiliaryUsage.push({ agent: 'fix_gate', usage: sanitized.usage });
-  }
-  emitFixGateMetrics(
-    skill.name,
-    sanitized.stats.checked,
-    sanitized.stats.strippedDeterministic,
-    sanitized.stats.strippedSemantic,
-    sanitized.stats.semanticUnavailable
-  );
-  if (sanitized.stats.checked > 0) {
-    logger.info('Suggested fix quality gate', {
-      'fix_gate.checked': sanitized.stats.checked,
-      'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
-      'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
-      'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
-    });
-  }
-
-  // Generate summary
-  const summary = generateSummary(skill.name, mergedFindings);
-
-  // Aggregate usage across all hunks
-  const totalUsage = aggregateUsage(allUsage);
-
-  const report: SkillReport = {
-    skill: skill.name,
-    summary,
-    findings: mergedFindings,
-    usage: totalUsage,
-    durationMs: Date.now() - startTime,
+  const report = await finalizeSkillReport({
+    skillName: skill.name,
     model: options.model,
+    startTime,
+    repoPath: context.repoPath,
+    apiKey: options.apiKey,
+    auxiliaryMaxRetries: options.auxiliaryMaxRetries,
+    allFindings,
+    allUsage,
+    allAuxiliaryUsage,
     files: fileResults.map((fr) => ({
       filename: fr.filename,
       findingCount: fr.result.findings.length,
       durationMs: fr.durationMs,
       usage: fr.result.usage,
     })),
-  };
+  });
   if (skippedFiles.length > 0) {
     report.skippedFiles = skippedFiles;
   }
@@ -969,10 +1031,6 @@ export async function runSkill(
   }
   if (totalFailedExtractions > 0) {
     report.failedExtractions = totalFailedExtractions;
-  }
-  const auxUsage = aggregateAuxiliaryUsage(allAuxiliaryUsage);
-  if (auxUsage) {
-    report.auxiliaryUsage = auxUsage;
   }
   return report;
 }

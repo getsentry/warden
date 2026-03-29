@@ -7,22 +7,17 @@
 
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
-import { Sentry, emitSkillMetrics, emitDedupMetrics, emitFixGateMetrics, logger } from '../../sentry.js';
+import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import {
   prepareFiles,
   analyzeFile,
-  aggregateUsage,
-  aggregateAuxiliaryUsage,
-  deduplicateFindings,
-  mergeCrossLocationFindings,
-  generateSummary,
+  finalizeSkillReport,
   type AuxiliaryUsageEntry,
   type SkillRunnerOptions,
   type FileAnalysisCallbacks,
   type PreparedFile,
   type PRPromptContext,
 } from '../../sdk/runner.js';
-import { sanitizeFindingsSuggestedFixes } from '../../sdk/fix-quality.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import { Verbosity } from './verbosity.js';
@@ -392,57 +387,21 @@ export async function runSkillTask(
         }
 
         // Build report
-        const duration = Date.now() - startTime;
         const allFindings = allResults.flatMap((r) => r.findings);
         const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
         const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
         const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
         const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
-        const uniqueFindings = deduplicateFindings(allFindings);
-        emitDedupMetrics(skill.name, allFindings.length, uniqueFindings.length);
-
-        // Merge findings that describe the same issue at different locations
-        const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
-          apiKey: runnerOptions.apiKey,
-          repoPath: context.repoPath,
-          maxRetries: runnerOptions.auxiliaryMaxRetries,
-        });
-        let mergedFindings = mergeResult.findings;
-        if (mergeResult.usage) {
-          allAuxEntries.push({ agent: 'merge', usage: mergeResult.usage });
-        }
-        const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
+        const report: SkillReport = await finalizeSkillReport({
+          skillName: skill.name,
+          model: runnerOptions.model,
+          startTime,
           repoPath: context.repoPath,
           apiKey: runnerOptions.apiKey,
-          maxRetries: runnerOptions.auxiliaryMaxRetries,
-        });
-        mergedFindings = sanitized.findings;
-        if (sanitized.usage) {
-          allAuxEntries.push({ agent: 'fix_gate', usage: sanitized.usage });
-        }
-        emitFixGateMetrics(
-          skill.name,
-          sanitized.stats.checked,
-          sanitized.stats.strippedDeterministic,
-          sanitized.stats.strippedSemantic,
-          sanitized.stats.semanticUnavailable
-        );
-        if (sanitized.stats.checked > 0) {
-          logger.info('Suggested fix quality gate', {
-            'fix_gate.checked': sanitized.stats.checked,
-            'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
-            'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
-            'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
-          });
-        }
-
-        const report: SkillReport = {
-          skill: skill.name,
-          summary: generateSummary(skill.name, mergedFindings),
-          findings: mergedFindings,
-          usage: aggregateUsage(allUsage),
-          durationMs: duration,
-          model: runnerOptions?.model,
+          auxiliaryMaxRetries: runnerOptions.auxiliaryMaxRetries,
+          allFindings,
+          allUsage,
+          allAuxiliaryUsage: allAuxEntries,
           files: preparedFiles.map((file, i) => {
             const r = allResults[i];
             return {
@@ -452,7 +411,7 @@ export async function runSkillTask(
               usage: r?.usage,
             };
           }),
-        };
+        });
         if (skippedFiles.length > 0) {
           report.skippedFiles = skippedFiles;
         }
@@ -462,11 +421,6 @@ export async function runSkillTask(
         if (totalFailedExtractions > 0) {
           report.failedExtractions = totalFailedExtractions;
         }
-        const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
-        if (auxUsage) {
-          report.auxiliaryUsage = auxUsage;
-        }
-
         // Emit metrics and log completion
         emitSkillMetrics(report);
         logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
@@ -477,8 +431,8 @@ export async function runSkillTask(
         // Notify skill complete
         callbacks.onSkillUpdate(name, {
           status: 'done',
-          durationMs: duration,
-          findings: mergedFindings,
+          durationMs: report.durationMs,
+          findings: report.findings,
           usage: report.usage,
         });
         callbacks.onSkillComplete(name, report);

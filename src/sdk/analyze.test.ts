@@ -1,15 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { filterOutOfRangeFindings } from './analyze.js';
+import { describe, expect, it } from 'vitest';
 import type { Finding } from '../types/index.js';
+import { filterOutOfRangeFindings } from './analyze.js';
 
-function makeFinding(startLine: number, id = `f-${startLine}`): Finding {
+function makeFinding(id: string, title: string, startLine = 10): Finding {
   return {
     id,
     severity: 'medium',
     confidence: 'high',
-    title: `Finding at line ${startLine}`,
-    description: 'test',
-    location: { path: 'file.ts', startLine },
+    title,
+    description: `${title} description`,
+    location: { path: 'src/test.ts', startLine },
   };
 }
 
@@ -26,28 +26,28 @@ describe('filterOutOfRangeFindings', () => {
   const hunkRange = { start: 10, end: 20 };
 
   it('preserves finding within hunk range', () => {
-    const findings = [makeFinding(15)];
+    const findings = [makeFinding('in-range', 'In range', 15)];
     const { filtered, dropped } = filterOutOfRangeFindings(findings, hunkRange);
     expect(filtered).toEqual(findings);
     expect(dropped).toEqual([]);
   });
 
   it('preserves findings at range boundaries', () => {
-    const findings = [makeFinding(10, 'at-start'), makeFinding(20, 'at-end')];
+    const findings = [makeFinding('at-start', 'At start', 10), makeFinding('at-end', 'At end', 20)];
     const { filtered, dropped } = filterOutOfRangeFindings(findings, hunkRange);
     expect(filtered).toHaveLength(2);
     expect(dropped).toEqual([]);
   });
 
   it('drops finding below hunk start', () => {
-    const findings = [makeFinding(5)];
+    const findings = [makeFinding('below', 'Below', 5)];
     const { filtered, dropped } = filterOutOfRangeFindings(findings, hunkRange);
     expect(filtered).toEqual([]);
     expect(dropped).toEqual(findings);
   });
 
   it('drops finding above hunk end', () => {
-    const findings = [makeFinding(25)];
+    const findings = [makeFinding('above', 'Above', 25)];
     const { filtered, dropped } = filterOutOfRangeFindings(findings, hunkRange);
     expect(filtered).toEqual([]);
     expect(dropped).toEqual(findings);
@@ -61,13 +61,12 @@ describe('filterOutOfRangeFindings', () => {
   });
 
   it('filters mixed set correctly', () => {
-    const inRange = makeFinding(15, 'in-range');
-    const belowRange = makeFinding(3, 'below');
-    const aboveRange = makeFinding(50, 'above');
+    const inRange = makeFinding('in-range', 'In range', 15);
+    const belowRange = makeFinding('below', 'Below', 3);
+    const aboveRange = makeFinding('above', 'Above', 50);
     const general = makeGeneralFinding('general');
-    const findings = [inRange, belowRange, aboveRange, general];
 
-    const { filtered, dropped } = filterOutOfRangeFindings(findings, hunkRange);
+    const { filtered, dropped } = filterOutOfRangeFindings([inRange, belowRange, aboveRange, general], hunkRange);
     expect(filtered).toEqual([inRange, general]);
     expect(dropped).toEqual([belowRange, aboveRange]);
   });

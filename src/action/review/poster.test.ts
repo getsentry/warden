@@ -508,4 +508,49 @@ describe('postTriggerReview', () => {
     // Consolidation should NOT be called for a single finding
     expect(consolidateBatchFindings).not.toHaveBeenCalled();
   });
+
+  it('returns posted false when re-render produces no review to post', async () => {
+    const finding1 = createFinding({ id: 'f1', severity: 'high', title: 'Root cause' });
+    const finding2 = createFinding({ id: 'f2', severity: 'medium', title: 'Different framing' });
+
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 2 issues',
+        findings: [finding1, finding2],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [
+            { path: 'test.ts', line: 10, body: 'Comment 1' },
+            { path: 'test.ts', line: 10, body: 'Comment 2' },
+          ],
+        },
+      }),
+      reportOn: 'low',
+      maxFindings: 1,
+    };
+
+    vi.mocked(consolidateBatchFindings).mockResolvedValue({
+      findings: [finding1],
+      removedCount: 1,
+    });
+    vi.mocked(renderSkillReport).mockReturnValue(undefined as never);
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(postResult.newComments).toEqual([]);
+    expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+  });
 });

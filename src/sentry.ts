@@ -1,9 +1,22 @@
 import * as Sentry from '@sentry/node';
-import type { Severity, SkillReport } from './types/index.js';
+import type { Severity, SkillReport, Finding } from './types/index.js';
 import { SEVERITY_ORDER } from './types/index.js';
 import { getVersion } from './utils/index.js';
+import {
+  buildFindingStageAttributes,
+  type ActiveSpanIds,
+  type FindingTelemetryContext,
+  type FindingTelemetryStage,
+  type SpanAttributes,
+} from './telemetry/findings.js';
 
 export type SentryContext = 'cli' | 'action';
+export type { FindingTelemetryStage } from './telemetry/findings.js';
+
+interface SpanLike {
+  setAttributes(attributes: SpanAttributes): unknown;
+  spanContext(): { traceId: string; spanId: string };
+}
 
 let initialized = false;
 
@@ -52,11 +65,58 @@ export function setGlobalAttributes(attrs: Record<string, string | number | bool
  * Useful for correlating runs to Sentry traces in logs and output.
  */
 export function getTraceId(): string | undefined {
+  return getActiveSpanIds()?.traceId;
+}
+
+export function getActiveSpanIds(): ActiveSpanIds | undefined {
   if (!initialized) return undefined;
   try {
-    return Sentry.getActiveSpan()?.spanContext().traceId;
+    const context = Sentry.getActiveSpan()?.spanContext();
+    if (!context) return undefined;
+    return { traceId: context.traceId, spanId: context.spanId };
   } catch {
     return undefined;
+  }
+}
+
+export function setFindingStageAttributes(
+  span: SpanLike,
+  stage: FindingTelemetryStage,
+  findings: Finding[],
+  context: FindingTelemetryContext = {}
+): void {
+  if (!initialized) return;
+  try {
+    span.setAttributes(buildFindingStageAttributes(stage, findings, context, span.spanContext()));
+  } catch {
+    // Never break the workflow
+  }
+}
+
+export function captureFindingStage(
+  stage: FindingTelemetryStage,
+  findings: Finding[],
+  context: FindingTelemetryContext = {}
+): void {
+  if (!initialized) return;
+
+  try {
+    const parentSpanIds = getActiveSpanIds();
+    Sentry.startSpan(
+      {
+        op: 'warden.findings',
+        name: `findings ${stage}`,
+      },
+      (span) => {
+        setFindingStageAttributes(span, stage, findings, {
+          ...context,
+          parentTraceId: parentSpanIds?.traceId,
+          parentSpanId: parentSpanIds?.spanId,
+        });
+      },
+    );
+  } catch {
+    // Never break the workflow
   }
 }
 

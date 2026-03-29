@@ -52,7 +52,8 @@ export type { ExtractFindingsResult, MergeResult } from './extract.js';
 export { prepareFiles } from './prepare.js';
 
 // Re-export analysis functions
-export { analyzeFile, runSkill, generateSummary } from './analyze.js';
+export { analyzeFile, runSkill, generateSummary, finalizeSkillReport } from './analyze.js';
+export type { FinalizeSkillReportOptions } from './analyze.js';
 
 // Re-export types
 export type {
@@ -65,4 +66,3 @@ export type {
   FileAnalysisCallbacks,
   FileAnalysisResult,
 } from './types.js';
-

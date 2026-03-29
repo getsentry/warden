@@ -76,7 +76,16 @@ workflow.run "review pull_request"
             gen_ai.chat "chat {skill} turn 2"
             gen_ai.chat "chat {skill} turn 3"
               gen_ai.execute_tool "Read"
+      skill.finalize_findings "finalize findings {skill}"
+        warden.findings "findings report_deduped"
+        warden.findings "findings report_merged"
+        warden.findings "findings report_final"
   workflow.review "post reviews"
+    trigger.review_post "review {trigger}"
+      warden.findings "findings review_filtered"
+      warden.findings "findings review_consolidated"
+      warden.findings "findings review_deduped"
+      warden.findings "findings review_posted"
   workflow.resolve "resolve stale comments"
     fix_eval.run "evaluate fix attempts"
       fix_eval.evaluate "evaluate fix {path}:{line}"
@@ -93,6 +102,9 @@ workflow.run "review pull_request"
 | `gen_ai.chat` (auto) | Direct Anthropic API calls | Auto-created by `anthropicAIIntegration` for non-SDK calls |
 | `skill.analyze_file` | Per-file orchestration | Internal workflow span |
 | `skill.analyze_hunk` | Per-hunk retry loop | Internal workflow span |
+| `skill.finalize_findings` | Per-skill post-processing | Shared finalization path for dedup, merge, and fix-gate |
+| `warden.findings` | Finding-set snapshot | Child span carrying one lifecycle stage of findings |
+| `trigger.review_post` | Per-trigger review posting | Wraps reportOn filtering, consolidation, dedup, and post |
 | `fix_eval.run` | Fix evaluation batch | Internal workflow span |
 | `fix_eval.evaluate` | Single comment evaluation | Internal workflow span |
 
@@ -193,6 +205,79 @@ The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic
 | `finding.count` | number | After result |
 
 Retries add a breadcrumb (`category: 'retry'`) with attempt number, error message, and delay.
+
+This span also carries the `initial` finding set in flattened indexed attributes under `warden.findings.*` after validation and hunk-range filtering.
+
+### `skill.finalize_findings`
+
+This span exists to make the report lifecycle visible across all execution paths (`runSkill()` and `runSkillTask()`). It emits child `warden.findings` spans after each mutating stage in report assembly:
+
+- `report_deduped`
+- `report_merged`
+- `report_final`
+
+`report_final` is a full snapshot. `report_deduped` and `report_merged` are reference-only stages that record finding IDs and fingerprints, not full finding bodies.
+
+### `trigger.review_post`
+
+This span wraps the action-only review posting pipeline for a single trigger. It emits child `warden.findings` spans after each mutating stage:
+
+- `review_filtered` after `reportOn` and confidence filtering
+- `review_consolidated` after intra-batch consolidation
+- `review_deduped` after dedup against existing comments
+- `review_posted` for the exact set that is about to be posted after `maxFindings`
+
+`review_posted` is a full snapshot. The earlier review stages are reference-only.
+
+### `warden.findings`
+
+This is a Warden-specific span, not an OTel semantic-convention span. It records one snapshot of a finding set at a specific lifecycle stage.
+
+Top-level attributes:
+
+| Attribute | Type | Notes |
+|-----------|------|-------|
+| `warden.findings.stage` | string | Lifecycle stage name |
+| `warden.findings.count` | number | Number of findings on this snapshot |
+| `warden.findings.trace_id` | string | Trace ID of the snapshot span |
+| `warden.findings.span_id` | string | Span ID of the snapshot span |
+| `warden.findings.parent_trace_id` | string | Parent active span trace ID when available |
+| `warden.findings.parent_span_id` | string | Parent active span span ID when available |
+| `warden.findings.skill` | string | Skill name when available |
+| `warden.findings.trigger_name` | string | Trigger name on review-stage snapshots |
+| `warden.findings.ids` | string[] | Finding IDs in stage order |
+| `warden.findings.fingerprints` | string[] | Stable correlation keys in stage order |
+
+For `full` stages, per-finding attributes are flattened and indexed:
+
+- `warden.findings.{i}.id`
+- `warden.findings.{i}.fingerprint`
+- `warden.findings.{i}.severity`
+- `warden.findings.{i}.confidence`
+- `warden.findings.{i}.title`
+- `warden.findings.{i}.elapsed_ms`
+- `warden.findings.{i}.location.path`
+- `warden.findings.{i}.location.start_line`
+- `warden.findings.{i}.location.end_line`
+- `warden.findings.{i}.has_suggested_fix`
+- `warden.findings.{i}.additional_locations.count`
+- `warden.findings.{i}.additional_locations.{j}.path`
+- `warden.findings.{i}.additional_locations.{j}.start_line`
+- `warden.findings.{i}.additional_locations.{j}.end_line`
+
+#### Encoding rule
+
+OTel/Sentry span attributes are flat key/value pairs. They support arrays of primitives, but not arrays of objects. For that reason, reference stages use primitive arrays (`warden.findings.ids`, `warden.findings.fingerprints`) while full snapshot stages use flattened indexed keys (`warden.findings.0.location.path`) instead of a nested JSON/object attribute like `warden.findings = [{...}]`.
+
+#### Why multiple stages
+
+The same logical finding can appear, be merged, be deduplicated, or be filtered out as it moves through the pipeline. Recording only the final report loses that history. The snapshot spans above preserve:
+
+- the initial hunk-level extraction result
+- the final per-skill report output
+- the final per-trigger review payload
+
+The `warden.findings.{i}.fingerprint` field exists to correlate a logical finding across those stages. `finding.id` is still recorded, but it is generated per run and is not the only join key.
 
 ### `fix_eval.run`
 
@@ -345,6 +430,8 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emi
 6. **Attributes over events.** Prefer span attributes to separate events. Attributes are searchable in Sentry and don't create noise.
 7. **Breadcrumbs for retries.** Retry attempts are breadcrumbs (not spans) because they're supplementary context for the parent span, not independent operations.
 8. **Tokens are totals, subfields are subsets.** `gen_ai.usage.input_tokens` is the total count including cached. `.cached` and `.cache_write` are subsets that Sentry subtracts to derive the raw portion. Never set the top-level field to only the uncached count.
+9. **Flatten structured finding data.** When we need to attach complex Warden-specific payloads to spans, use indexed flat keys rather than JSON blobs or arrays of objects.
+10. **Record lifecycle snapshots, not just survivors.** Initial findings are preserved even if later dedup, consolidation, or filtering removes them from the final report or review.
 
 ---
 
