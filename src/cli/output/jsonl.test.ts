@@ -772,6 +772,22 @@ another bad line
     expect(summary.totalFailedExtractions).toBeUndefined();
   });
 
+  it('passes through fix-evaluation records without treating them as malformed', () => {
+    // Fix-evaluation records have type:'fix-evaluation' and lack the
+    // skill/summary/findings fields. The parser must skip them via the
+    // type discriminator, not by falling through to JsonlRecordSchema.parse
+    // (which would Zod-error and trigger logger.warn for every fix-eval line).
+    const jsonlContent = `{"run":{"timestamp":"2026-04-25T00:00:00.000Z","durationMs":1000,"cwd":"/test","runId":"fix-eval-123"},"skill":"review","summary":"ok","findings":[]}
+{"run":{"timestamp":"2026-04-25T00:00:00.000Z","durationMs":1000,"cwd":"/test","runId":"fix-eval-123"},"type":"fix-evaluation","evaluated":2,"resolved":1,"needsAttention":1,"skipped":0,"failedEvaluations":0}
+{"run":{"timestamp":"2026-04-25T00:00:00.000Z","durationMs":1000,"cwd":"/test","runId":"fix-eval-123"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}
+`;
+    const result = parseJsonlReports(jsonlContent);
+    expect(result.reports).toHaveLength(1);
+    expect(result.reports[0]!.skill).toBe('review');
+    // The summary record's runMetadata wins; ensure parse reached it.
+    expect(result.runMetadata?.runId).toBe('fix-eval-123');
+  });
+
   it('parses older logs without the new error fields', () => {
     const legacy = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"legacy-123"},"skill":"old","summary":"done","findings":[]}
 {"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"legacy-123"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}

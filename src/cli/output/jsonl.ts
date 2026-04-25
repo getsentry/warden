@@ -287,6 +287,11 @@ export function parseJsonlReports(content: string): ParsedJsonlLog {
         continue;
       }
 
+      // Fix-evaluation records are valid JSONL but not SkillReports; let
+      // them pass through silently so we don't warn on every line of a log
+      // that contains them.
+      if (parsed.type === 'fix-evaluation') continue;
+
       // A JsonlRecord is a SkillReport + { run }. Strip `run` to get the
       // SkillReport without rebuilding it field-by-field.
       const { run, ...report } = JsonlRecordSchema.parse(parsed);

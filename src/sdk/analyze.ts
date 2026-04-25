@@ -710,6 +710,11 @@ export async function analyzeFile(
 
         const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
 
+        // `failed` and `extractionFailed` are conceptually mutually exclusive:
+        // if analysis failed (no output produced), there's nothing to extract.
+        // Use else-if so a future change that violates this invariant doesn't
+        // silently double-count (one hunk → two hunkFailures entries +
+        // failedHunks AND failedExtractions both incremented).
         if (result.failed) {
           failedHunks++;
           hunkFailures.push({
@@ -720,8 +725,7 @@ export async function analyzeFile(
             message: result.failureMessage ?? 'unknown error',
             ...(result.attempts !== undefined ? { attempts: result.attempts } : {}),
           });
-        }
-        if (result.extractionFailed) {
+        } else if (result.extractionFailed) {
           failedExtractions++;
           hunkFailures.push({
             type: 'extraction',
