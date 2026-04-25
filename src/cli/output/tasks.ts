@@ -423,6 +423,19 @@ export async function runSkillTask(
             usage: aggregateUsage(allUsage),
             durationMs: duration,
             model: runnerOptions?.model,
+            // Preserve per-file metadata (timing, partial usage, attempted
+            // filenames) on failure runs too — `warden logs` and JSONL
+            // consumers iterate this array to count attempted files. Without
+            // it, a failed run shows totalFiles: 0.
+            files: preparedFiles.map((file, i) => {
+              const r = allResults[i];
+              return {
+                filename: file.filename,
+                findings: r?.findings.length ?? 0,
+                durationMs: r?.durationMs,
+                usage: r?.usage,
+              };
+            }),
             failedHunks: totalFailedHunks,
             hunkFailures: allHunkFailures,
             error: {
