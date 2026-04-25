@@ -214,6 +214,8 @@ export async function runSkillTask(
               summary: 'No code changes to analyze',
               findings: [],
               usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+              durationMs: Date.now() - startTime,
+              model: runnerOptions?.model,
               skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
             },
             failOn,
