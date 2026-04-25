@@ -161,7 +161,7 @@ Fields: `filename`, `hunkNum`, `totalHunks`, `lineRange`
 
 #### 8. `skill_complete`
 
-Fields: `name`, `durationMs`, `findingCount`, `usage?`
+Fields: `name`, `durationMs`, `findings` (count), `usage?`
 
 **TTY:** Skill moves from spinner to checkmark in the dynamic area: `checkmark security-review [4.2s]` (green checkmark, duration dimmed). After all skills finish and Ink unmounts, the full per-skill + per-file breakdown prints to stderr.
 
