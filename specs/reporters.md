@@ -587,7 +587,7 @@ Each line in a JSONL file is one of three record types, discriminated by the pre
 
 **ErrorCode**: one of `"auth_failed"`, `"sdk_error"`, `"subprocess_failure"`, `"max_turns"`, `"aborted"`, `"all_hunks_failed"`, `"skill_resolution_failed"`, `"extraction_invalid_json"`, `"extraction_unbalanced_json"`, `"extraction_no_findings_json"`, `"extraction_missing_findings_key"`, `"extraction_findings_not_array"`, `"extraction_llm_failed"`, `"extraction_llm_timeout"`, `"extraction_no_api_key"`, `"unknown"`. Stable public contract.
 
-**BySeverity**: `{ critical: int, high: int, medium: int, low: int, info: int }`
+**BySeverity**: `{ high: int, medium: int, low: int }`. Legacy 5-level keys (`critical`, `info`) are still accepted on read for backward compatibility with older logs and normalized to `high`/`low`; new output is strictly 3-level.
 
 **FixEvalDetail**: `{ path: string, line: int, findingId?: string, verdict: "not_attempted" | "attempted_failed" | "resolved" | "re_detected", reasoning?: string, durationMs: number, usage: UsageStats }`
 
@@ -626,7 +626,7 @@ All reporters use shared formatters from `src/cli/output/formatters.ts`.
 | `formatSeverityBadge(severity)` | `Severity` | Colored dot + text | `. (high)` |
 | `formatSeverityPlain(severity)` | `Severity` | Bracketed | `[high]` |
 | `formatConfidenceBadge(confidence?)` | `Confidence \| undefined` | Colored bracketed (empty if undefined) | `[high confidence]` |
-| `countBySeverity(findings)` | `Finding[]` | `Record<Severity, number>` | `{ critical: 0, high: 1, ... }` |
+| `countBySeverity(findings)` | `Finding[]` | `Record<Severity, number>` | `{ high: 1, medium: 0, low: 0 }` |
 | `pluralize(count, singular, plural?)` | `number, string` | Pluralized word | `file` / `files` |
 
 ---
@@ -814,7 +814,6 @@ If a previous Warden review exists on the PR: `[...] warden: Previous Warden rev
 Written to `GITHUB_OUTPUT` via `setOutput()`:
 ```
 findings-count=5
-critical-count=1
 high-count=2
 summary=Warden found 5 issues across 2 skills
 ```

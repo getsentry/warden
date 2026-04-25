@@ -8,7 +8,7 @@ import type { FileAnalysisResult } from '../../sdk/types.js';
 import type { HunkWithContext } from '../../diff/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Semaphore, runPool } from '../../utils/index.js';
-import { WardenAuthenticationError } from '../../sdk/errors.js';
+import { SkillRunnerError, WardenAuthenticationError } from '../../sdk/errors.js';
 import * as sdkRunner from '../../sdk/runner.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
@@ -695,6 +695,11 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(result.report!.failedHunks).toBe(1);
     expect(result.report!.hunkFailures).toEqual(hunkFailures);
     expect(onSkillError).toHaveBeenCalledTimes(1);
+    // A typed error must travel alongside the report so consumers that
+    // re-throw (action executor, Sentry) preserve the ErrorCode. A missing
+    // error here produces a plain Error downstream and loses classification.
+    expect(result.error).toBeInstanceOf(SkillRunnerError);
+    expect((result.error as SkillRunnerError).code).toBe('all_hunks_failed');
   });
 });
 

@@ -435,7 +435,10 @@ export async function runSkillTask(
           if (skippedFiles.length > 0) errorReport.skippedFiles = skippedFiles;
           if (auxUsage) errorReport.auxiliaryUsage = auxUsage;
           callbacks.onSkillError(name, errorMessage);
-          return { name, report: errorReport, failOn, minConfidence };
+          // Carry a typed error alongside the report so consumers that re-throw
+          // (action executor, Sentry.captureException) preserve the ErrorCode.
+          const runnerError = new SkillRunnerError(errorMessage, { code: 'all_hunks_failed' });
+          return { name, report: errorReport, error: runnerError, failOn, minConfidence };
         }
 
         const uniqueFindings = deduplicateFindings(allFindings);

@@ -25,6 +25,7 @@ import {
 } from '../../output/github-checks.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
 import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
+import { SkillRunnerError } from '../../sdk/errors.js';
 import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 
@@ -154,9 +155,14 @@ export async function executeTrigger(
         }
         // runSkillTask now synthesizes a report even on failure so the CLI
         // can log it as JSONL. The action's fail-check path still expects a
-        // thrown error, so re-throw when the report carries one.
+        // thrown error, so re-throw when the report carries one. Preserve
+        // the ErrorCode in the fallback so Sentry / failSkillCheck see a
+        // typed error.
         if (report.error) {
-          throw result.error ?? new Error(report.error.message);
+          throw (
+            result.error ??
+            new SkillRunnerError(report.error.message, { code: report.error.code })
+          );
         }
 
         console.log(`Found ${report.findings.length} findings`);

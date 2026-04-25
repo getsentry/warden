@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { z } from 'zod';
 import {
   writeJsonlReport,
   getRepoLogPath,
@@ -9,7 +11,9 @@ import {
   shortRunId,
   readJsonlLog,
   parseJsonlReports,
+  JsonlRecordSchema,
   JsonlSummaryRecordSchema,
+  JsonlFixEvaluationRecordSchema,
   renderJsonlString,
   type JsonlRecord,
   type JsonlSummaryRecord,
@@ -852,5 +856,30 @@ describe('parseSummaryFromLastLine', () => {
 
     const result = parseSummaryFromLastLine(noSummaryPath);
     expect(result).toBeUndefined();
+  });
+});
+
+describe('specs/jsonl-examples.jsonl', () => {
+  const EXAMPLES_PATH = resolve(
+    fileURLToPath(new URL('../../../specs/jsonl-examples.jsonl', import.meta.url)),
+  );
+  const union = z.union([
+    JsonlRecordSchema,
+    JsonlSummaryRecordSchema,
+    JsonlFixEvaluationRecordSchema,
+  ]);
+
+  it('every example payload is in canonical form (no stripped keys, no normalization drift)', () => {
+    const lines = readFileSync(EXAMPLES_PATH, 'utf-8')
+      .trim()
+      .split('\n')
+      .filter((l) => l.trim());
+    for (const [i, line] of lines.entries()) {
+      const raw = JSON.parse(line);
+      const parsed = union.parse(raw);
+      // If Zod stripped or normalized anything, the example is showing a
+      // shape we never actually emit. Keep examples as the canonical output.
+      expect(parsed, `line ${i + 1} differs from canonical form`).toEqual(raw);
+    }
   });
 });
