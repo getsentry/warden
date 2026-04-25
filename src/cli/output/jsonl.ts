@@ -4,13 +4,14 @@ import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import {
   UsageStatsSchema,
-  FindingSchema,
-  SkippedFileSchema,
+  SkillReportSchema,
+  FileReportSchema,
   AuxiliaryUsageMapSchema,
   FixStatusSchema,
 } from '../../types/index.js';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
+import { logger } from '../../sentry.js';
 import { countBySeverity } from './formatters.js';
 
 /**
@@ -61,50 +62,49 @@ export const JsonlRunMetadataSchema = z.object({
 });
 export type JsonlRunMetadata = z.infer<typeof JsonlRunMetadataSchema>;
 
-/** Per-file breakdown within a skill record. */
-export const JsonlFileRecordSchema = z.object({
-  filename: z.string(),
-  findings: z.number().int().nonnegative(),
-  durationMs: z.number().nonnegative().optional(),
-  usage: UsageStatsSchema.optional(),
-});
+/** Per-file breakdown within a skill record (re-exported from shared types). */
+export const JsonlFileRecordSchema = FileReportSchema;
 export type JsonlFileRecord = z.infer<typeof JsonlFileRecordSchema>;
 
-/** One skill's analysis results. */
-export const JsonlRecordSchema = z.object({
+/**
+ * One skill's analysis results. This is the shared SkillReport plus a `run`
+ * block of run-wide metadata, so any new SkillReport field is automatically
+ * part of the JSONL contract without a parallel schema.
+ */
+export const JsonlRecordSchema = SkillReportSchema.extend({
   run: JsonlRunMetadataSchema,
-  skill: z.string(),
-  summary: z.string(),
-  findings: z.array(FindingSchema),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  model: z.string().optional(),
-  durationMs: z.number().nonnegative().optional(),
-  usage: UsageStatsSchema.optional(),
-  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
-  files: z.array(JsonlFileRecordSchema).optional(),
-  skippedFiles: z.array(SkippedFileSchema).optional(),
-  failedHunks: z.number().int().nonnegative().optional(),
-  failedExtractions: z.number().int().nonnegative().optional(),
 });
 export type JsonlRecord = z.infer<typeof JsonlRecordSchema>;
 
+/** Normalized output shape — what we emit. */
+const BySeverityOutputSchema = z.object({
+  high: z.number().int().nonnegative(),
+  medium: z.number().int().nonnegative(),
+  low: z.number().int().nonnegative(),
+});
+
 /**
  * Severity breakdown in the summary record.
- * Uses a transform to normalize legacy keys ('critical' → 'high', 'info' → 'low')
- * so old JSONL logs parse correctly. Accepts any string keys to handle old 5-level logs.
+ *
+ * Parse-time accepts any string keys (legacy logs may emit 5-level severities
+ * like 'critical'/'info'); a transform normalizes 'critical' → 'high' and
+ * 'info' → 'low' and drops unknown keys. The piped output shape is the
+ * strict `{ high, medium, low }` triple we emit going forward, so
+ * JSON-Schema derivation describes the output contract (not the lax input).
  */
-const BySeveritySchema = z.record(z.string(), z.number().int().nonnegative()).transform(
-  (obj) => {
-    const result: Record<string, number> = {};
+const BySeveritySchema = z
+  .record(z.string(), z.number().int().nonnegative())
+  .transform((obj) => {
+    const result = { high: 0, medium: 0, low: 0 };
     for (const [key, value] of Object.entries(obj)) {
       const normalized = key === 'critical' ? 'high' : key === 'info' ? 'low' : key;
       if (normalized === 'high' || normalized === 'medium' || normalized === 'low') {
-        result[normalized] = (result[normalized] ?? 0) + value;
+        result[normalized] += value;
       }
     }
-    return result as Record<'high' | 'medium' | 'low', number>;
-  },
-);
+    return result;
+  })
+  .pipe(BySeverityOutputSchema);
 
 /** Aggregate summary across all skills (always the last JSONL line). */
 export const JsonlSummaryRecordSchema = z.object({
@@ -115,6 +115,9 @@ export const JsonlSummaryRecordSchema = z.object({
   usage: UsageStatsSchema.optional(),
   totalSkippedFiles: z.number().int().nonnegative().optional(),
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+  failedSkills: z.array(z.string()).optional(),
+  totalFailedHunks: z.number().int().nonnegative().optional(),
+  totalFailedExtractions: z.number().int().nonnegative().optional(),
 });
 export type JsonlSummaryRecord = z.infer<typeof JsonlSummaryRecordSchema>;
 
@@ -186,26 +189,15 @@ export function renderJsonlString(
   const lines: string[] = [];
 
   for (const report of reports) {
-    const record: JsonlRecord = {
-      run: runMetadata,
-      skill: report.skill,
-      summary: report.summary,
-      findings: report.findings,
-      metadata: report.metadata,
-      model: report.model,
-      durationMs: report.durationMs,
-      usage: report.usage,
-      auxiliaryUsage: report.auxiliaryUsage,
-      files: report.files?.map((f) => ({
-        filename: f.filename,
-        findings: f.findingCount,
-        durationMs: f.durationMs,
-        usage: f.usage,
-      })),
+    // Drop empty optional arrays and zero counts so JSONL stays compact.
+    const trimmed: SkillReport = {
+      ...report,
       skippedFiles: report.skippedFiles?.length ? report.skippedFiles : undefined,
       failedHunks: report.failedHunks || undefined,
       failedExtractions: report.failedExtractions || undefined,
+      hunkFailures: report.hunkFailures?.length ? report.hunkFailures : undefined,
     };
+    const record: JsonlRecord = { ...trimmed, run: runMetadata };
     lines.push(JSON.stringify(record));
   }
 
@@ -215,6 +207,9 @@ export function renderJsonlString(
     (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
     undefined
   );
+  const failedSkills = reports.filter((r) => r.error).map((r) => r.skill);
+  const totalFailedHunks = reports.reduce((n, r) => n + (r.failedHunks ?? 0), 0);
+  const totalFailedExtractions = reports.reduce((n, r) => n + (r.failedExtractions ?? 0), 0);
   const summaryRecord: JsonlSummaryRecord = {
     run: runMetadata,
     type: 'summary',
@@ -223,6 +218,9 @@ export function renderJsonlString(
     usage: aggregateUsage(reports),
     totalSkippedFiles: totalSkippedFiles > 0 ? totalSkippedFiles : undefined,
     auxiliaryUsage: totalAuxiliaryUsage,
+    failedSkills: failedSkills.length > 0 ? failedSkills : undefined,
+    totalFailedHunks: totalFailedHunks > 0 ? totalFailedHunks : undefined,
+    totalFailedExtractions: totalFailedExtractions > 0 ? totalFailedExtractions : undefined,
   };
   lines.push(JSON.stringify(summaryRecord));
 
@@ -289,35 +287,20 @@ export function parseJsonlReports(content: string): ParsedJsonlLog {
         continue;
       }
 
-      // Parse skill record and convert to SkillReport
-      const record = JsonlRecordSchema.parse(parsed);
-      reports.push({
-        skill: record.skill,
-        summary: record.summary,
-        findings: record.findings,
-        metadata: record.metadata,
-        model: record.model,
-        durationMs: record.durationMs,
-        usage: record.usage,
-        auxiliaryUsage: record.auxiliaryUsage,
-        skippedFiles: record.skippedFiles,
-        failedHunks: record.failedHunks,
-        failedExtractions: record.failedExtractions,
-        files: record.files?.map((f) => ({
-          filename: f.filename,
-          findingCount: f.findings,
-          durationMs: f.durationMs,
-          usage: f.usage,
-        })),
-      });
+      // A JsonlRecord is a SkillReport + { run }. Strip `run` to get the
+      // SkillReport without rebuilding it field-by-field.
+      const { run, ...report } = JsonlRecordSchema.parse(parsed);
+      reports.push(report);
 
       // Capture run metadata from first record if no summary yet
       if (!runMetadata) {
-        runMetadata = record.run;
-        totalDurationMs = record.run.durationMs;
+        runMetadata = run;
+        totalDurationMs = run.durationMs;
       }
-    } catch {
-      // Skip invalid lines
+    } catch (err) {
+      logger.warn('Skipping malformed JSONL line', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -385,8 +368,10 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
             }
           }
         }
-      } catch {
-        // Skip unparseable lines
+      } catch (err) {
+        logger.warn('Skipping malformed JSONL line', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

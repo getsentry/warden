@@ -152,6 +152,12 @@ export async function executeTrigger(
         if (!report) {
           throw result.error ?? new Error('Skill task returned no report');
         }
+        // runSkillTask now synthesizes a report even on failure so the CLI
+        // can log it as JSONL. The action's fail-check path still expects a
+        // thrown error, so re-throw when the report carries one.
+        if (report.error) {
+          throw result.error ?? new Error(report.error.message);
+        }
 
         console.log(`Found ${report.findings.length} findings`);
 

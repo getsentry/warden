@@ -22,6 +22,7 @@
     "test:evals": "vitest run --config vitest.evals.config.ts",
     "typecheck": "tsc --noEmit",
     "update-pricing": "tsx scripts/update-pricing.ts",
+    "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts",
     "docs": "pnpm --filter dex-docs dev",
     "prepare": "simple-git-hooks"
   },

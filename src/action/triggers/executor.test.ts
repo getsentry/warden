@@ -170,6 +170,30 @@ describe('executeTrigger', () => {
     );
   });
 
+  it('treats a report with error as a trigger failure', async () => {
+    // runSkillTask now populates report even on failure; the action must
+    // still route the skill check to the fail path.
+    const failedReport = {
+      skill: 'test-skill',
+      summary: 'test-skill: failed (all_hunks_failed)',
+      findings: [],
+      error: { code: 'all_hunks_failed' as const, message: 'All 2 chunks failed to analyze.' },
+    };
+    vi.mocked(runSkillTask).mockResolvedValue({
+      name: 'test-trigger',
+      report: failedReport,
+      error: new Error('All 2 chunks failed to analyze.'),
+    });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(failSkillCheck).mockResolvedValue(undefined);
+
+    const result = await executeTrigger(mockTrigger, mockDeps);
+
+    expect(result.error).toBeDefined();
+    expect(result.report).toBeUndefined();
+    expect(failSkillCheck).toHaveBeenCalled();
+  });
+
   it('continues if check creation fails', async () => {
     const mockReport = createReport();
 

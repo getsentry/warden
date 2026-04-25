@@ -27,6 +27,10 @@ export {
   FileReportSchema,
   // Skill Report
   SkillReportSchema,
+  // Run errors
+  ErrorCodeSchema,
+  SkillErrorSchema,
+  HunkFailureSchema,
   // GitHub Events
   GitHubEventTypeSchema,
   PullRequestActionSchema,
@@ -46,6 +50,9 @@ export type {
   Finding,
   FileReport,
   SkillReport,
+  ErrorCode,
+  SkillError,
+  HunkFailure,
   GitHubEventType,
   PullRequestAction,
   FileChange,

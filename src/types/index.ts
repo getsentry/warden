@@ -164,14 +164,56 @@ export const SkippedFileSchema = z.object({
 });
 export type SkippedFile = z.infer<typeof SkippedFileSchema>;
 
-// Per-file report within a skill
+// Per-file report within a skill. `findings` is a count; the per-skill
+// record uses the same name for the findings array. This matches the
+// JSONL contract (see specs/jsonl-examples.jsonl).
 export const FileReportSchema = z.object({
   filename: z.string(),
-  findingCount: z.number().int().nonnegative(),
+  findings: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative().optional(),
   usage: UsageStatsSchema.optional(),
 });
 export type FileReport = z.infer<typeof FileReportSchema>;
+
+// Stable codes for run failures. Public contract: add new codes, do not rename.
+export const ErrorCodeSchema = z.enum([
+  'auth_failed',
+  'sdk_error',
+  'subprocess_failure',
+  'max_turns',
+  'aborted',
+  'all_hunks_failed',
+  'skill_resolution_failed',
+  'extraction_invalid_json',
+  'extraction_unbalanced_json',
+  'extraction_no_findings_json',
+  'extraction_missing_findings_key',
+  'extraction_findings_not_array',
+  'extraction_llm_failed',
+  'extraction_llm_timeout',
+  'extraction_no_api_key',
+  'unknown',
+]);
+export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
+
+export const SkillErrorSchema = z.object({
+  code: ErrorCodeSchema,
+  message: z.string(),
+  timestamp: z.string().datetime().optional(),
+});
+export type SkillError = z.infer<typeof SkillErrorSchema>;
+
+// 'analysis' = SDK/auth/abort failure, 'extraction' = parse-tier failure.
+export const HunkFailureSchema = z.object({
+  type: z.enum(['analysis', 'extraction']),
+  filename: z.string(),
+  lineRange: z.string(),
+  code: ErrorCodeSchema,
+  message: z.string(),
+  preview: z.string().optional(),
+  attempts: z.number().int().nonnegative().optional(),
+});
+export type HunkFailure = z.infer<typeof HunkFailureSchema>;
 
 // Skill report output
 export const SkillReportSchema = z.object({
@@ -187,6 +229,10 @@ export const SkillReportSchema = z.object({
   failedHunks: z.number().int().nonnegative().optional(),
   /** Number of hunks where findings extraction failed (JSON parse errors) */
   failedExtractions: z.number().int().nonnegative().optional(),
+  /** Per-hunk failure details, in execution order. */
+  hunkFailures: z.array(HunkFailureSchema).optional(),
+  /** Set when the run cannot complete normally. */
+  error: SkillErrorSchema.optional(),
   /** Usage from auxiliary LLM calls (extraction repair, semantic dedup, etc.) */
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
   /** Per-file breakdown of findings, timing, and usage */

@@ -190,8 +190,8 @@ describe('writeJsonlReport', () => {
         durationMs: 2000,
         usage: { inputTokens: 5000, outputTokens: 800, costUSD: 0.005 },
         files: [
-          { filename: 'src/api.ts', findingCount: 1, durationMs: 1200, usage: { inputTokens: 3000, outputTokens: 500, costUSD: 0.003 } },
-          { filename: 'src/utils.ts', findingCount: 0, durationMs: 800, usage: { inputTokens: 2000, outputTokens: 300, costUSD: 0.002 } },
+          { filename: 'src/api.ts', findings: 1, durationMs: 1200, usage: { inputTokens: 3000, outputTokens: 500, costUSD: 0.003 } },
+          { filename: 'src/utils.ts', findings: 0, durationMs: 800, usage: { inputTokens: 2000, outputTokens: 300, costUSD: 0.002 } },
         ],
       },
     ];
@@ -622,7 +622,7 @@ another bad line
     expect(result.reports[0]!.files).toBeDefined();
     expect(result.reports[0]!.files!.length).toBe(2);
     expect(result.reports[0]!.files![0]!.filename).toBe('src/api.ts');
-    expect(result.reports[0]!.files![0]!.findingCount).toBe(1);
+    expect(result.reports[0]!.files![0]!.findings).toBe(1);
     expect(result.reports[0]!.files![1]!.filename).toBe('src/utils.ts');
   });
 
@@ -650,7 +650,7 @@ another bad line
         durationMs: 1500,
         usage: { inputTokens: 500, outputTokens: 250, costUSD: 0.005 },
         files: [
-          { filename: 'src/test.ts', findingCount: 1, durationMs: 1500 },
+          { filename: 'src/test.ts', findings: 1, durationMs: 1500 },
         ],
       },
     ];
@@ -669,7 +669,113 @@ another bad line
     expect(result.reports[0]!.durationMs).toBe(1500);
     expect(result.reports[0]!.usage?.inputTokens).toBe(500);
     expect(result.reports[0]!.files?.length).toBe(1);
-    expect(result.reports[0]!.files![0]!.findingCount).toBe(1);
+    expect(result.reports[0]!.files![0]!.findings).toBe(1);
+  });
+
+  it('round-trips SkillReport.error and hunkFailures', () => {
+    const original: SkillReport[] = [
+      {
+        skill: 'security-review',
+        summary: 'security-review: failed (all_hunks_failed)',
+        findings: [],
+        durationMs: 2200,
+        failedHunks: 3,
+        failedExtractions: 1,
+        hunkFailures: [
+          {
+            type: 'analysis',
+            filename: 'src/api.ts',
+            lineRange: '10-30',
+            code: 'sdk_error',
+            message: 'SDK execution failed: rate limit',
+            attempts: 3,
+          },
+          {
+            type: 'extraction',
+            filename: 'src/api.ts',
+            lineRange: '50-70',
+            code: 'extraction_invalid_json',
+            message: 'invalid_json',
+            preview: '{"findings": [bad',
+          },
+        ],
+        error: {
+          code: 'all_hunks_failed',
+          message: 'All 3 chunks failed to analyze.',
+          timestamp: '2026-04-24T12:00:00.000Z',
+        },
+      },
+    ];
+
+    const jsonlContent = renderJsonlString(original, 2200, { runId: 'err-round-trip' });
+    const result = parseJsonlReports(jsonlContent);
+
+    expect(result.reports.length).toBe(1);
+    const report = result.reports[0]!;
+    expect(report.error?.code).toBe('all_hunks_failed');
+    expect(report.error?.message).toContain('3 chunks failed');
+    expect(report.hunkFailures?.length).toBe(2);
+    expect(report.hunkFailures![0]!.type).toBe('analysis');
+    expect(report.hunkFailures![0]!.code).toBe('sdk_error');
+    expect(report.hunkFailures![0]!.attempts).toBe(3);
+    expect(report.hunkFailures![1]!.type).toBe('extraction');
+    expect(report.hunkFailures![1]!.preview).toContain('bad');
+  });
+
+  it('emits summary extras when any report has errors', () => {
+    const original: SkillReport[] = [
+      {
+        skill: 'skill-a',
+        summary: 'all chunks failed',
+        findings: [],
+        failedHunks: 2,
+        hunkFailures: [
+          {
+            type: 'analysis',
+            filename: 'a.ts',
+            lineRange: '1-10',
+            code: 'auth_failed',
+            message: 'auth',
+          },
+        ],
+        error: { code: 'auth_failed', message: 'bad key' },
+      },
+      {
+        skill: 'skill-b',
+        summary: 'ok',
+        findings: [],
+        failedExtractions: 1,
+      },
+    ];
+    const content = renderJsonlString(original, 1000, { runId: 'sum-123' });
+    const lines = content.trim().split('\n');
+    const summary = JSON.parse(lines[lines.length - 1]!);
+    expect(summary.type).toBe('summary');
+    expect(summary.failedSkills).toEqual(['skill-a']);
+    expect(summary.totalFailedHunks).toBe(2);
+    expect(summary.totalFailedExtractions).toBe(1);
+  });
+
+  it('omits summary extras when there are no failures', () => {
+    const original: SkillReport[] = [
+      { skill: 'ok-skill', summary: 'no issues', findings: [] },
+    ];
+    const content = renderJsonlString(original, 500);
+    const lines = content.trim().split('\n');
+    const summary = JSON.parse(lines[lines.length - 1]!);
+    expect(summary.failedSkills).toBeUndefined();
+    expect(summary.totalFailedHunks).toBeUndefined();
+    expect(summary.totalFailedExtractions).toBeUndefined();
+  });
+
+  it('parses older logs without the new error fields', () => {
+    const legacy = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"legacy-123"},"skill":"old","summary":"done","findings":[]}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"legacy-123"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}
+`;
+    const result = parseJsonlReports(legacy);
+    expect(result.reports.length).toBe(1);
+    expect(result.reports[0]!.error).toBeUndefined();
+    expect(result.reports[0]!.hunkFailures).toBeUndefined();
   });
 });
 

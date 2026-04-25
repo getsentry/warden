@@ -2,399 +2,583 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://warden.dev/schemas/jsonl-v1.json",
   "title": "Warden JSONL Output",
-  "description": "Schema for a single line in Warden's JSONL output. Each line is one of: skill record, summary record, or fix-evaluation record.",
-  "oneOf": [
-    { "$ref": "#/$defs/SkillRecord" },
-    { "$ref": "#/$defs/SummaryRecord" },
-    { "$ref": "#/$defs/FixEvaluationRecord" }
+  "description": "Schema for a single line in Warden's JSONL output. Each line is one of: skill record, summary record, or fix-evaluation record. Generated from src/cli/output/jsonl-schema-gen.ts — do not edit by hand.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/SkillRecord"
+    },
+    {
+      "$ref": "#/$defs/SummaryRecord"
+    },
+    {
+      "$ref": "#/$defs/FixEvaluationRecord"
+    }
   ],
   "$defs": {
-    "RunMetadata": {
-      "type": "object",
-      "description": "Metadata common to every JSONL record.",
-      "properties": {
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "description": "ISO-8601 timestamp when the run started."
-        },
-        "durationMs": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Total wall-clock duration of the run in milliseconds."
-        },
-        "cwd": {
-          "type": "string",
-          "description": "Working directory where warden was invoked."
-        },
-        "runId": {
-          "type": "string",
-          "description": "Unique identifier for this run (UUID)."
-        },
-        "traceId": {
-          "type": "string",
-          "description": "Sentry trace ID for correlating with observability data. Omitted when Sentry is not initialized."
-        }
-      },
-      "required": ["timestamp", "durationMs", "cwd", "runId"],
-      "additionalProperties": false
-    },
-
-    "UsageStats": {
-      "type": "object",
-      "description": "Token usage and cost from an LLM call.",
-      "properties": {
-        "inputTokens": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Total input tokens (includes cached and cache-creation tokens as subsets)."
-        },
-        "outputTokens": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Output tokens generated."
-        },
-        "cacheReadInputTokens": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Input tokens served from cache (subset of inputTokens). Omitted when zero."
-        },
-        "cacheCreationInputTokens": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Input tokens that created new cache entries (subset of inputTokens). Omitted when zero."
-        },
-        "costUSD": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Estimated cost in USD."
-        }
-      },
-      "required": ["inputTokens", "outputTokens", "costUSD"],
-      "additionalProperties": false
-    },
-
-    "Location": {
-      "type": "object",
-      "description": "Source location of a finding.",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "File path relative to the repository root."
-        },
-        "startLine": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Starting line number (1-based)."
-        },
-        "endLine": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Ending line number (1-based). Omitted for single-line findings."
-        }
-      },
-      "required": ["path", "startLine"],
-      "additionalProperties": false
-    },
-
-    "SuggestedFix": {
-      "type": "object",
-      "description": "A suggested code fix for a finding.",
-      "properties": {
-        "description": {
-          "type": "string",
-          "description": "Human-readable description of the fix."
-        },
-        "diff": {
-          "type": "string",
-          "description": "Unified diff of the suggested change."
-        }
-      },
-      "required": ["description", "diff"],
-      "additionalProperties": false
-    },
-
-    "Finding": {
-      "type": "object",
-      "description": "A single finding from a skill analysis.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique finding identifier (e.g., SEC-001)."
-        },
-        "severity": {
-          "type": "string",
-          "enum": ["critical", "high", "medium", "low", "info"],
-          "description": "Severity level."
-        },
-        "confidence": {
-          "type": "string",
-          "enum": ["high", "medium", "low"],
-          "description": "Confidence level. Omitted when not assessed."
-        },
-        "title": {
-          "type": "string",
-          "description": "Short title describing the finding."
-        },
-        "description": {
-          "type": "string",
-          "description": "Detailed explanation of the finding."
-        },
-        "location": {
-          "$ref": "#/$defs/Location",
-          "description": "Source location. Omitted for findings without a specific location."
-        },
-        "suggestedFix": {
-          "$ref": "#/$defs/SuggestedFix",
-          "description": "Suggested fix. Omitted when no fix is available."
-        },
-        "elapsedMs": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Time elapsed since skill start when this finding was produced. Omitted when not tracked."
-        }
-      },
-      "required": ["id", "severity", "title", "description"],
-      "additionalProperties": false
-    },
-
-    "FileRecord": {
-      "type": "object",
-      "description": "Per-file breakdown within a skill record.",
-      "properties": {
-        "filename": {
-          "type": "string",
-          "description": "File path relative to the repository root."
-        },
-        "findings": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Number of findings in this file."
-        },
-        "durationMs": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Analysis duration for this file. Omitted when not tracked."
-        },
-        "usage": {
-          "$ref": "#/$defs/UsageStats",
-          "description": "Token usage for this file. Omitted when not tracked."
-        }
-      },
-      "required": ["filename", "findings"],
-      "additionalProperties": false
-    },
-
-    "BySeverity": {
-      "type": "object",
-      "description": "Finding counts broken down by severity level.",
-      "properties": {
-        "critical": { "type": "integer", "minimum": 0 },
-        "high": { "type": "integer", "minimum": 0 },
-        "medium": { "type": "integer", "minimum": 0 },
-        "low": { "type": "integer", "minimum": 0 },
-        "info": { "type": "integer", "minimum": 0 }
-      },
-      "required": ["critical", "high", "medium", "low", "info"],
-      "additionalProperties": false
-    },
-
-    "FixEvalDetail": {
-      "type": "object",
-      "description": "Per-comment evaluation result in fix evaluation.",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "File path of the evaluated comment."
-        },
-        "line": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Line number of the evaluated comment."
-        },
-        "findingId": {
-          "type": "string",
-          "description": "Original finding ID, if available."
-        },
-        "verdict": {
-          "type": "string",
-          "enum": ["not_attempted", "attempted_failed", "resolved", "re_detected"],
-          "description": "Evaluation verdict."
-        },
-        "reasoning": {
-          "type": "string",
-          "description": "LLM reasoning for the verdict. Present for attempted_failed."
-        },
-        "durationMs": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Duration of this evaluation in milliseconds."
-        },
-        "usage": {
-          "$ref": "#/$defs/UsageStats",
-          "description": "Token usage for this evaluation."
-        }
-      },
-      "required": ["path", "line", "verdict", "durationMs", "usage"],
-      "additionalProperties": false
-    },
-
     "SkillRecord": {
       "type": "object",
-      "description": "One skill's analysis results. Discriminated by having a 'skill' field and no 'type' field.",
       "properties": {
-        "run": { "$ref": "#/$defs/RunMetadata" },
         "skill": {
-          "type": "string",
-          "description": "Skill name that produced this record."
+          "type": "string"
         },
         "summary": {
-          "type": "string",
-          "description": "Human-readable summary of the skill's findings."
+          "type": "string"
         },
         "findings": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Finding" },
-          "description": "All findings from this skill."
+          "items": {
+            "$ref": "#/$defs/Finding"
+          }
         },
         "metadata": {
           "type": "object",
-          "description": "Arbitrary skill metadata. Omitted when empty.",
-          "additionalProperties": true
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
         },
         "durationMs": {
           "type": "number",
-          "minimum": 0,
-          "description": "Skill execution duration in milliseconds."
+          "minimum": 0
         },
         "usage": {
-          "$ref": "#/$defs/UsageStats",
-          "description": "Aggregate token usage for the skill."
-        },
-        "auxiliaryUsage": {
-          "type": "object",
-          "description": "Usage from auxiliary LLM calls (extraction repair, semantic dedup). Keys are agent names, values are UsageStats. Omitted when no auxiliary calls occurred.",
-          "additionalProperties": { "$ref": "#/$defs/UsageStats" }
-        },
-        "files": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/FileRecord" },
-          "description": "Per-file breakdown. Omitted when not available."
+          "$ref": "#/$defs/UsageStats"
         },
         "skippedFiles": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "filename": { "type": "string" },
-              "reason": { "type": "string", "enum": ["pattern", "builtin"] },
-              "pattern": { "type": "string" }
-            },
-            "required": ["filename", "reason"],
-            "additionalProperties": false
-          },
-          "description": "Files skipped due to chunking patterns. Omitted when none were skipped."
+            "$ref": "#/$defs/SkippedFile"
+          }
         },
         "failedHunks": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of hunks that failed to analyze (SDK/API errors). Omitted when zero."
+          "maximum": 9007199254740991
         },
         "failedExtractions": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of hunks where findings extraction failed (parse errors). Omitted when zero."
+          "maximum": 9007199254740991
+        },
+        "hunkFailures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HunkFailure"
+          }
+        },
+        "error": {
+          "$ref": "#/$defs/SkillError"
+        },
+        "auxiliaryUsage": {
+          "$ref": "#/$defs/AuxiliaryUsage"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FileRecord"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "run": {
+          "$ref": "#/$defs/RunMetadata"
         }
       },
-      "required": ["run", "skill", "summary", "findings"],
-      "not": {
-        "required": ["type"]
-      },
+      "required": [
+        "skill",
+        "summary",
+        "findings",
+        "run"
+      ],
       "additionalProperties": false
     },
-
+    "Finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "verification": {
+          "type": "string"
+        },
+        "location": {
+          "$ref": "#/$defs/Location"
+        },
+        "additionalLocations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Location"
+          }
+        },
+        "suggestedFix": {
+          "$ref": "#/$defs/SuggestedFix"
+        },
+        "elapsedMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "severity",
+        "title",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "Location": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "startLine": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endLine": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "path",
+        "startLine"
+      ],
+      "additionalProperties": false
+    },
+    "SuggestedFix": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "diff"
+      ],
+      "additionalProperties": false
+    },
+    "UsageStats": {
+      "type": "object",
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cacheReadInputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cacheCreationInputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "costUSD": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "costUSD"
+      ],
+      "additionalProperties": false
+    },
+    "SkippedFile": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "pattern",
+            "builtin"
+          ]
+        },
+        "pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "HunkFailure": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "analysis",
+            "extraction"
+          ]
+        },
+        "filename": {
+          "type": "string"
+        },
+        "lineRange": {
+          "type": "string"
+        },
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "filename",
+        "lineRange",
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "auth_failed",
+        "sdk_error",
+        "subprocess_failure",
+        "max_turns",
+        "aborted",
+        "all_hunks_failed",
+        "skill_resolution_failed",
+        "extraction_invalid_json",
+        "extraction_unbalanced_json",
+        "extraction_no_findings_json",
+        "extraction_missing_findings_key",
+        "extraction_findings_not_array",
+        "extraction_llm_failed",
+        "extraction_llm_timeout",
+        "extraction_no_api_key",
+        "unknown"
+      ]
+    },
+    "SkillError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "AuxiliaryUsage": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/UsageStats"
+      }
+    },
+    "FileRecord": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string"
+        },
+        "findings": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats"
+        }
+      },
+      "required": [
+        "filename",
+        "findings"
+      ],
+      "additionalProperties": false
+    },
+    "RunMetadata": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "headSha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "timestamp",
+        "durationMs",
+        "cwd",
+        "runId"
+      ],
+      "additionalProperties": false
+    },
     "SummaryRecord": {
       "type": "object",
-      "description": "Aggregate summary across all skills. Always the last line in a JSONL file.",
       "properties": {
-        "run": { "$ref": "#/$defs/RunMetadata" },
+        "run": {
+          "$ref": "#/$defs/RunMetadata"
+        },
         "type": {
-          "const": "summary",
-          "description": "Discriminator for summary records."
+          "type": "string",
+          "const": "summary"
         },
         "totalFindings": {
           "type": "integer",
           "minimum": 0,
-          "description": "Total findings across all skills."
+          "maximum": 9007199254740991
         },
         "bySeverity": {
-          "$ref": "#/$defs/BySeverity",
-          "description": "Breakdown of findings by severity."
+          "type": "object",
+          "properties": {
+            "high": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "medium": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "low": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "additionalProperties": false
         },
         "usage": {
-          "$ref": "#/$defs/UsageStats",
-          "description": "Aggregate token usage across all skills."
+          "$ref": "#/$defs/UsageStats"
         },
         "totalSkippedFiles": {
           "type": "integer",
           "minimum": 0,
-          "description": "Total files skipped due to chunking patterns across all skills. Omitted when zero."
+          "maximum": 9007199254740991
         },
         "auxiliaryUsage": {
-          "type": "object",
-          "description": "Merged auxiliary usage across all skills. Omitted when no auxiliary calls occurred.",
-          "additionalProperties": { "$ref": "#/$defs/UsageStats" }
+          "$ref": "#/$defs/AuxiliaryUsage"
+        },
+        "failedSkills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "totalFailedHunks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalFailedExtractions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
-      "required": ["run", "type", "totalFindings", "bySeverity"],
+      "required": [
+        "run",
+        "type",
+        "totalFindings",
+        "bySeverity"
+      ],
       "additionalProperties": false
     },
-
     "FixEvaluationRecord": {
       "type": "object",
-      "description": "Fix evaluation results for unresolved PR comments. Defined but not yet wired to JSONL output.",
       "properties": {
-        "run": { "$ref": "#/$defs/RunMetadata" },
+        "run": {
+          "$ref": "#/$defs/RunMetadata"
+        },
         "type": {
-          "const": "fix-evaluation",
-          "description": "Discriminator for fix evaluation records."
+          "type": "string",
+          "const": "fix-evaluation"
         },
         "evaluated": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of comments sent to LLM for evaluation."
+          "maximum": 9007199254740991
         },
         "resolved": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of comments where the fix was confirmed."
+          "maximum": 9007199254740991
         },
         "needsAttention": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of comments where the fix attempt failed."
+          "maximum": 9007199254740991
         },
         "skipped": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of comments not evaluated (no patches, over limit)."
+          "maximum": 9007199254740991
         },
         "failedEvaluations": {
           "type": "integer",
           "minimum": 0,
-          "description": "Number of evaluations that failed (API errors, invalid responses)."
+          "maximum": 9007199254740991
         },
         "usage": {
-          "$ref": "#/$defs/UsageStats",
-          "description": "Aggregate usage from all fix evaluations."
+          "$ref": "#/$defs/UsageStats"
         },
         "evaluations": {
           "type": "array",
-          "items": { "$ref": "#/$defs/FixEvalDetail" },
-          "description": "Per-comment evaluation details. Omitted when empty."
+          "items": {
+            "$ref": "#/$defs/FixEvalDetail"
+          }
         }
       },
-      "required": ["run", "type", "evaluated", "resolved", "needsAttention", "skipped", "failedEvaluations"],
+      "required": [
+        "run",
+        "type",
+        "evaluated",
+        "resolved",
+        "needsAttention",
+        "skipped",
+        "failedEvaluations"
+      ],
+      "additionalProperties": false
+    },
+    "FixEvalDetail": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "findingId": {
+          "type": "string"
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "not_attempted",
+                "attempted_failed",
+                "resolved"
+              ]
+            },
+            {
+              "type": "string",
+              "const": "re_detected"
+            }
+          ]
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats"
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "verdict",
+        "durationMs",
+        "usage"
+      ],
       "additionalProperties": false
     }
   }

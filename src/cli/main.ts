@@ -149,8 +149,9 @@ interface ProcessedResults {
 
 /**
  * Process skill task results into reports and check for failures.
+ * Exported for testing; callers inside main.ts use it directly.
  */
-function processTaskResults(
+export function processTaskResults(
   results: Awaited<ReturnType<typeof runSkillTasks>>,
   reportOn: CLIOptions['reportOn'],
   minConfidence?: ConfidenceThreshold
@@ -160,18 +161,25 @@ function processTaskResults(
   const failureReasons: string[] = [];
 
   for (const result of results) {
-    if (result.report) {
-      reports.push(result.report);
-      // Apply confidence filtering before failOn evaluation so low-confidence findings
-      // don't cause exit code 1. Per-result minConfidence (from trigger config) takes
-      // precedence over the global default.
-      const effectiveConfidence = result.minConfidence ?? minConfidence;
-      const reportForFail = { ...result.report, findings: filterFindings(result.report.findings, undefined, effectiveConfidence) };
-      if (result.failOn && shouldFail(reportForFail, result.failOn)) {
-        hasFailure = true;
-        const count = countFindingsAtOrAbove(reportForFail, result.failOn);
-        failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
-      }
+    if (!result.report) continue;
+    reports.push(result.report);
+
+    // Skill-level errors always fail the run, independent of failOn thresholds.
+    if (result.report.error) {
+      hasFailure = true;
+      failureReasons.push(`${result.name}: ${result.report.error.code}: ${result.report.error.message}`);
+      continue;
+    }
+
+    // Apply confidence filtering before failOn evaluation so low-confidence findings
+    // don't cause exit code 1. Per-result minConfidence (from trigger config) takes
+    // precedence over the global default.
+    const effectiveConfidence = result.minConfidence ?? minConfidence;
+    const reportForFail = { ...result.report, findings: filterFindings(result.report.findings, undefined, effectiveConfidence) };
+    if (result.failOn && shouldFail(reportForFail, result.failOn)) {
+      hasFailure = true;
+      const count = countFindingsAtOrAbove(reportForFail, result.failOn);
+      failureReasons.push(`${result.name}: ${count} ${result.failOn}+ severity ${pluralize(count, 'issue')}`);
     }
   }
 

@@ -204,7 +204,7 @@ Fields: `name`, `error`
 [2026-02-08T14:30:48.600Z] warden: ERROR: security-review - API timeout after 30s
 ```
 
-**JSONL:** --
+**JSONL:** A skill record with `findings: []` and an `error` object (`code`, `message`, `timestamp`). Partial results (e.g. `hunkFailures`) may also be populated when an all-chunks-failed path produced them.
 
 ---
 
@@ -533,6 +533,8 @@ Each line in a JSONL file is one of three record types, discriminated by the pre
 | `files` | `FileRecord[]` | no | Per-file breakdown |
 | `failedHunks` | `number` | no | Number of chunks that failed to analyze. Present only when > 0. |
 | `failedExtractions` | `number` | no | Number of finding extractions that failed. Present only when > 0. |
+| `hunkFailures` | `HunkFailure[]` | no | Per-hunk failure details in execution order. Present only when hunks failed. |
+| `error` | `SkillError` | no | Top-level skill failure (auth, resolution, all-hunks-failed). Present only when the skill could not complete normally. |
 
 ### Summary Record
 
@@ -545,6 +547,9 @@ Each line in a JSONL file is one of three record types, discriminated by the pre
 | `usage` | `UsageStats` | no | Aggregate usage across skills |
 | `totalSkippedFiles` | `integer` | no | Total files skipped across all skills. Present only when > 0. |
 | `auxiliaryUsage` | `Record<string, UsageStats>` | no | Merged auxiliary usage. Present only when auxiliary calls occurred. |
+| `failedSkills` | `string[]` | no | Names of skills whose run errored at the top level. Present only when any skill errored. |
+| `totalFailedHunks` | `integer` | no | Aggregate failed-hunk count across all skills. Present only when > 0. |
+| `totalFailedExtractions` | `integer` | no | Aggregate failed-extraction count across all skills. Present only when > 0. |
 
 ### Fix Evaluation Record
 
@@ -575,6 +580,12 @@ Each line in a JSONL file is one of three record types, discriminated by the pre
 **SuggestedFix**: `{ description: string, diff: string }`
 
 **FileRecord**: `{ filename: string, findings: int, durationMs?: number, usage?: UsageStats }`
+
+**SkillError**: `{ code: ErrorCode, message: string, timestamp?: string }`
+
+**HunkFailure**: `{ type: "analysis" | "extraction", filename: string, lineRange: string, code: ErrorCode, message: string, preview?: string, attempts?: int }`
+
+**ErrorCode**: one of `"auth_failed"`, `"sdk_error"`, `"subprocess_failure"`, `"max_turns"`, `"aborted"`, `"all_hunks_failed"`, `"skill_resolution_failed"`, `"extraction_invalid_json"`, `"extraction_unbalanced_json"`, `"extraction_no_findings_json"`, `"extraction_missing_findings_key"`, `"extraction_findings_not_array"`, `"extraction_llm_failed"`, `"extraction_llm_timeout"`, `"extraction_no_api_key"`, `"unknown"`. Stable public contract.
 
 **BySeverity**: `{ critical: int, high: int, medium: int, low: int, info: int }`
 

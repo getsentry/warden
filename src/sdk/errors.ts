@@ -5,11 +5,15 @@ import {
   APIConnectionError,
   APIConnectionTimeoutError,
 } from '@anthropic-ai/sdk';
+import type { ErrorCode } from '../types/index.js';
 
 export class SkillRunnerError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
+  /** Optional classification so callers skip message-sniffing. */
+  code?: ErrorCode;
+  constructor(message: string, options?: { cause?: unknown; code?: ErrorCode }) {
     super(message, options);
     this.name = 'SkillRunnerError';
+    if (options?.code) this.code = options.code;
   }
 }
 
@@ -100,4 +104,45 @@ export function isAuthenticationError(error: unknown): boolean {
   // Check error message for common auth failure patterns
   const message = error instanceof Error ? error.message : String(error);
   return isAuthenticationErrorMessage(message);
+}
+
+/** Classify an unknown error into a stable ErrorCode + message. */
+export function classifyError(error: unknown): { code: ErrorCode; message: string } {
+  const message = error instanceof Error ? error.message : String(error ?? 'unknown error');
+
+  if (error instanceof WardenAuthenticationError) {
+    return { code: 'auth_failed', message };
+  }
+  if (error instanceof SkillRunnerError && error.code) {
+    return { code: error.code, message };
+  }
+  if (isSubprocessError(error)) {
+    return { code: 'subprocess_failure', message };
+  }
+  if (isAuthenticationError(error)) {
+    return { code: 'auth_failed', message };
+  }
+  if (error instanceof Error && error.name === 'AbortError') {
+    return { code: 'aborted', message };
+  }
+  if (/\baborted\b/i.test(message)) {
+    return { code: 'aborted', message };
+  }
+  return { code: 'unknown', message };
+}
+
+/** Map an internal extract.ts error string to a stable public ErrorCode. */
+export function mapExtractionErrorCode(raw: string | undefined): ErrorCode {
+  if (!raw) return 'unknown';
+  if (raw === 'invalid_json') return 'extraction_invalid_json';
+  if (raw === 'unbalanced_json') return 'extraction_unbalanced_json';
+  if (raw === 'no_findings_json' || raw === 'no_findings_to_extract') return 'extraction_no_findings_json';
+  if (raw === 'missing_findings_key') return 'extraction_missing_findings_key';
+  if (raw === 'findings_not_array') return 'extraction_findings_not_array';
+  if (raw === 'no_api_key_for_fallback') return 'extraction_no_api_key';
+  if (raw.startsWith('llm_extraction_failed')) {
+    if (/timeout|timed out/i.test(raw)) return 'extraction_llm_timeout';
+    return 'extraction_llm_failed';
+  }
+  return 'unknown';
 }

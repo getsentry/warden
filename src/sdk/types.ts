@@ -1,4 +1,4 @@
-import type { Finding, UsageStats, SkippedFile, RetryConfig } from '../types/index.js';
+import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig } from '../config/schema.js';
 
@@ -26,6 +26,12 @@ export interface HunkAnalysisResult {
   extractionError?: string;
   /** Preview of the output that failed to parse */
   extractionPreview?: string;
+  /** Error code when `failed: true` (analysis-path failure). */
+  failureCode?: ErrorCode;
+  /** Human-readable error when `failed: true`. */
+  failureMessage?: string;
+  /** Retry attempts made before giving up (analysis failures only). */
+  attempts?: number;
   /** Usage from auxiliary LLM calls (e.g., extraction repair) */
   auxiliaryUsage?: AuxiliaryUsageEntry[];
 }
@@ -143,6 +149,8 @@ export interface FileAnalysisResult {
   failedHunks: number;
   /** Number of hunks where findings extraction failed */
   failedExtractions: number;
+  /** Per-hunk failure details (analysis + extraction), in execution order. */
+  hunkFailures: HunkFailure[];
   /** Usage from auxiliary LLM calls across all hunks */
   auxiliaryUsage?: AuxiliaryUsageEntry[];
 }

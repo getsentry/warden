@@ -5,9 +5,10 @@
  * Reporter spec: specs/reporters.md
  */
 
-import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext } from '../../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, emitDedupMetrics, emitFixGateMetrics, logger } from '../../sentry.js';
+import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
 import {
   prepareFiles,
   analyzeFile,
@@ -41,6 +42,7 @@ interface FileProcessResult {
   durationMs: number;
   failedHunks: number;
   failedExtractions: number;
+  hunkFailures: HunkFailure[];
   auxiliaryUsage?: AuxiliaryUsageEntry[];
 }
 
@@ -188,8 +190,14 @@ export async function runSkillTask(
       const startTime = Date.now();
 
       try {
-        // Resolve the skill
-        const skill = await resolveSkill();
+        let skill: SkillDefinition;
+        try {
+          skill = await resolveSkill();
+        } catch (err) {
+          if (err instanceof WardenAuthenticationError) throw err;
+          const message = err instanceof Error ? err.message : String(err);
+          throw new SkillRunnerError(message, { cause: err, code: 'skill_resolution_failed' });
+        }
 
         // Prepare files (parse patches into hunks)
         const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
@@ -346,6 +354,7 @@ export async function runSkillTask(
             durationMs: fileDurationMs,
             failedHunks: result.failedHunks,
             failedExtractions: result.failedExtractions,
+            hunkFailures: result.hunkFailures,
             auxiliaryUsage: result.auxiliaryUsage,
           };
         };
@@ -356,7 +365,7 @@ export async function runSkillTask(
           if (localState) localState.status = 'skipped';
           const filename = preparedFiles[index]?.filename ?? 'unknown';
           callbacks.onFileUpdate(name, filename, { status: 'skipped' });
-          return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0 };
+          return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0, hunkFailures: [] };
         };
 
         // Process files with sliding-window concurrency pool
@@ -398,6 +407,37 @@ export async function runSkillTask(
         const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
         const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
         const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
+        const allHunkFailures: HunkFailure[] = allResults.flatMap((r) => r.hunkFailures);
+        const totalHunks = preparedFiles.reduce((sum, f) => sum + f.hunks.length, 0);
+
+        if (totalHunks > 0 && totalFailedHunks === totalHunks && allFindings.length === 0) {
+          const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
+          const errorMessage =
+            `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
+            `This usually indicates an authentication problem. ` +
+            `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`;
+          const errorReport: SkillReport = {
+            skill: skill.name,
+            summary: `${skill.name}: all chunks failed`,
+            findings: [],
+            usage: aggregateUsage(allUsage),
+            durationMs: duration,
+            model: runnerOptions?.model,
+            failedHunks: totalFailedHunks,
+            hunkFailures: allHunkFailures,
+            error: {
+              code: 'all_hunks_failed',
+              message: errorMessage,
+              timestamp: new Date().toISOString(),
+            },
+          };
+          if (totalFailedExtractions > 0) errorReport.failedExtractions = totalFailedExtractions;
+          if (skippedFiles.length > 0) errorReport.skippedFiles = skippedFiles;
+          if (auxUsage) errorReport.auxiliaryUsage = auxUsage;
+          callbacks.onSkillError(name, errorMessage);
+          return { name, report: errorReport, failOn, minConfidence };
+        }
+
         const uniqueFindings = deduplicateFindings(allFindings);
         emitDedupMetrics(skill.name, allFindings.length, uniqueFindings.length);
 
@@ -447,7 +487,7 @@ export async function runSkillTask(
             const r = allResults[i];
             return {
               filename: file.filename,
-              findingCount: r?.findings.length ?? 0,
+              findings: r?.findings.length ?? 0,
               durationMs: r?.durationMs,
               usage: r?.usage,
             };
@@ -461,6 +501,9 @@ export async function runSkillTask(
         }
         if (totalFailedExtractions > 0) {
           report.failedExtractions = totalFailedExtractions;
+        }
+        if (allHunkFailures.length > 0) {
+          report.hunkFailures = allHunkFailures;
         }
         const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
         if (auxUsage) {
@@ -485,9 +528,17 @@ export async function runSkillTask(
 
         return { name, report, failOn, minConfidence };
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        callbacks.onSkillError(name, errorMessage);
-        return { name, error: err, failOn, minConfidence };
+        const { code, message } = classifyError(err);
+        callbacks.onSkillError(name, message);
+        const errorReport: SkillReport = {
+          skill: name,
+          summary: `${name}: failed (${code})`,
+          findings: [],
+          durationMs: Date.now() - startTime,
+          model: runnerOptions?.model,
+          error: { code, message, timestamp: new Date().toISOString() },
+        };
+        return { name, report: errorReport, error: err, failOn, minConfidence };
       }
     },
   );

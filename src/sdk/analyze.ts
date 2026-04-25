@@ -3,7 +3,7 @@ import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
-import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError } from './errors.js';
+import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
@@ -21,7 +21,7 @@ import {
   type FileAnalysisResult,
 } from './types.js';
 import { prepareFiles } from './prepare.js';
-import type { EventContext, SkillReport, UsageStats } from '../types/index.js';
+import type { EventContext, SkillReport, UsageStats, HunkFailure } from '../types/index.js';
 import { runPool } from '../utils/index.js';
 
 /** Result from parsing hunk output */
@@ -404,7 +404,15 @@ async function analyzeHunk(
           if (callbacks?.onHunkFailed) {
             callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted');
           }
-          return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+          return {
+            findings: [],
+            usage: aggregateUsage(accumulatedUsage),
+            failed: true,
+            extractionFailed: false,
+            failureCode: 'aborted',
+            failureMessage: 'Analysis aborted',
+            attempts: attempt,
+          };
         }
 
         try {
@@ -422,7 +430,15 @@ async function analyzeHunk(
             } else {
               console.error('SDK returned no result');
             }
-            return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+            return {
+              findings: [],
+              usage: aggregateUsage(accumulatedUsage),
+              failed: true,
+              extractionFailed: false,
+              failureCode: 'sdk_error',
+              failureMessage: 'SDK returned no result',
+              attempts: attempt + 1,
+            };
           }
 
           // Extract usage from the result, regardless of success/error status
@@ -457,6 +473,9 @@ async function analyzeHunk(
               usage: aggregateUsage(accumulatedUsage),
               failed: true,
               extractionFailed: false,
+              failureCode: resultMessage.subtype === 'error_max_turns' ? 'max_turns' : 'sdk_error',
+              failureMessage: `SDK execution failed: ${errorSummary}`,
+              attempts: attempt + 1,
             };
           }
 
@@ -569,7 +588,15 @@ async function analyzeHunk(
             if (callbacks?.onHunkFailed) {
               callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted during retry delay');
             }
-            return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+            return {
+              findings: [],
+              usage: aggregateUsage(accumulatedUsage),
+              failed: true,
+              extractionFailed: false,
+              failureCode: 'aborted',
+              failureMessage: 'Analysis aborted during retry delay',
+              attempts: attempt + 1,
+            };
           }
         }
       }
@@ -600,7 +627,16 @@ async function analyzeHunk(
       span.setAttribute('hunk.failed', true);
       span.setAttribute('finding.count', 0);
 
-      return { findings: [], usage: aggregateUsage(accumulatedUsage), failed: true, extractionFailed: false };
+      const { code: retryCode, message: retryMsg } = classifyError(lastError);
+      return {
+        findings: [],
+        usage: aggregateUsage(accumulatedUsage),
+        failed: true,
+        extractionFailed: false,
+        failureCode: retryCode,
+        failureMessage: `All retry attempts failed: ${retryMsg}`,
+        attempts: retryConfig.maxRetries + 1,
+      };
     },
   );
 }
@@ -650,6 +686,7 @@ export async function analyzeFile(
       const fileFindings: Finding[] = [];
       const fileUsage: UsageStats[] = [];
       const fileAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
+      const hunkFailures: HunkFailure[] = [];
       let failedHunks = 0;
       let failedExtractions = 0;
 
@@ -675,9 +712,25 @@ export async function analyzeFile(
 
         if (result.failed) {
           failedHunks++;
+          hunkFailures.push({
+            type: 'analysis',
+            filename: file.filename,
+            lineRange,
+            code: result.failureCode ?? 'unknown',
+            message: result.failureMessage ?? 'unknown error',
+            ...(result.attempts !== undefined ? { attempts: result.attempts } : {}),
+          });
         }
         if (result.extractionFailed) {
           failedExtractions++;
+          hunkFailures.push({
+            type: 'extraction',
+            filename: file.filename,
+            lineRange,
+            code: mapExtractionErrorCode(result.extractionError),
+            message: result.extractionError ?? 'unknown extraction error',
+            ...(result.extractionPreview !== undefined ? { preview: result.extractionPreview } : {}),
+          });
         }
 
         attachElapsedTime(result.findings, callbacks?.skillStartTime);
@@ -700,6 +753,7 @@ export async function analyzeFile(
         usage: aggregateUsage(fileUsage),
         failedHunks,
         failedExtractions,
+        hunkFailures,
         auxiliaryUsage: fileAuxiliaryUsage.length > 0 ? fileAuxiliaryUsage : undefined,
       };
     },
@@ -883,22 +937,30 @@ export async function runSkill(
   }
 
   // Accumulate results from ordered fileResults
+  const allHunkFailures: HunkFailure[] = [];
   for (const fr of fileResults) {
     allFindings.push(...fr.result.findings);
     allUsage.push(fr.result.usage);
     totalFailedHunks += fr.result.failedHunks;
     totalFailedExtractions += fr.result.failedExtractions;
+    if (fr.result.hunkFailures.length > 0) {
+      allHunkFailures.push(...fr.result.hunkFailures);
+    }
     if (fr.result.auxiliaryUsage) {
       allAuxiliaryUsage.push(...fr.result.auxiliaryUsage);
     }
   }
 
-  // Check if all analysis failed (indicates a systemic problem like auth failure)
+  // All hunks failed — typically a systemic problem (auth, subprocess, etc).
+  // Throw so direct SDK consumers (evals, scheduled workflows) keep their
+  // prior exception-based contract. The CLI path (tasks.ts) has its own
+  // all-hunks-fail detection that emits a structured JSONL record instead.
   if (totalFailedHunks > 0 && totalFailedHunks === totalHunks && allFindings.length === 0) {
     throw new SkillRunnerError(
       `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
       `This usually indicates an authentication problem. ` +
-      `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`
+      `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`,
+      { code: 'all_hunks_failed' },
     );
   }
 
@@ -956,7 +1018,7 @@ export async function runSkill(
     model: options.model,
     files: fileResults.map((fr) => ({
       filename: fr.filename,
-      findingCount: fr.result.findings.length,
+      findings: fr.result.findings.length,
       durationMs: fr.durationMs,
       usage: fr.result.usage,
     })),
@@ -969,6 +1031,9 @@ export async function runSkill(
   }
   if (totalFailedExtractions > 0) {
     report.failedExtractions = totalFailedExtractions;
+  }
+  if (allHunkFailures.length > 0) {
+    report.hunkFailures = allHunkFailures;
   }
   const auxUsage = aggregateAuxiliaryUsage(allAuxiliaryUsage);
   if (auxUsage) {
