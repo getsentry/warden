@@ -46,8 +46,6 @@ export {
   renderJsonlSkillLine,
   renderJsonlSummaryLine,
   buildRunMetadata,
-  buildSkillJsonlRecord,
-  buildSummaryJsonlRecord,
   initJsonlFile,
   appendJsonlLine,
   getRepoLogPath,

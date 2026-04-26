@@ -547,6 +547,50 @@ describe('runRunsFollow', () => {
     expect(exit).toBe(0);
   });
 
+  it('with no run id, skips files whose last line is corrupt instead of hanging on them', async () => {
+    // Regression: resolveFollowTarget used to swallow JSON.parse errors
+    // and treat a corrupted final line as "still in progress." That
+    // would hang `runs follow` forever waiting for a summary that will
+    // never come. The right behavior is to skip the corrupt file and
+    // pick an older candidate (or report no active session).
+    const logDir = join(testDir, '.warden', 'logs');
+
+    // Newer file with a corrupted last line — must NOT be the chosen target.
+    const corruptPath = join(logDir, 'corrupt0-2026-04-25T15-00-00-000Z.jsonl');
+    initJsonlFile(corruptPath);
+    appendJsonlLine(corruptPath, '{"this is not valid json\n');
+
+    // Older still-in-progress file (no summary, only skill record). This is
+    // what the resolver should pick.
+    const livePath = join(logDir, 'liverun0-2026-04-25T13-00-00-000Z.jsonl');
+    const liveRun = buildRunMetadata({
+      runId: 'liverun0-0000-0000-0000-000000000000',
+      durationMs: 0,
+      timestamp: new Date('2026-04-25T13:00:00.000Z'),
+    });
+    initJsonlFile(livePath);
+    appendJsonlLine(
+      livePath,
+      renderJsonlSkillLine({ skill: 'live', summary: 'ok', findings: [], durationMs: 50 }, liveRun),
+    );
+
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const reporter = createTestReporter();
+    const followPromise = runRunsFollow(
+      { subcommand: 'follow', files: [] },
+      createDefaultOptions(),
+      reporter,
+    );
+
+    // Finalize the live run so the watcher exits.
+    await new Promise((r) => setTimeout(r, 50));
+    appendJsonlLine(livePath, renderJsonlSummaryLine([], liveRun));
+
+    const exit = await followPromise;
+    expect(exit).toBe(0);
+  }, 5000);
+
   it('errors when no run id matches and no session is in progress', async () => {
     vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
 

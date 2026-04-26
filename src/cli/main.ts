@@ -340,10 +340,18 @@ async function outputResultsAndHandleFixes(
 
   const traceId = runLog.baseRun.traceId;
 
+  // Run-level error recorded on the summary record. Today no caller of
+  // outputResultsAndHandleFixes has produced one — auth/config failures
+  // take the emitEmptyRunLog path before we ever get here. The variable
+  // exists so the file-finalize and `--json` fallback paths use the same
+  // value, keeping the on-disk file and stdout byte-identical if a
+  // future code path threads an error through.
+  const runError: SkillError | undefined = undefined;
+
   // Append the run-final summary record to every active log file. Skill
   // records were appended incrementally as each skill completed, so this
   // just closes the file with the aggregate.
-  finalizeRunLog(runLog, reports, totalDuration);
+  finalizeRunLog(runLog, reports, totalDuration, runError);
 
   // Notify that the user-supplied --output file was successfully written.
   // Reuses the prior wording — only emitted on a clean finalize.
@@ -385,6 +393,7 @@ async function outputResultsAndHandleFixes(
         model: runLog.baseRun.model,
         headSha: runLog.baseRun.headSha,
         cwd: runLog.baseRun.cwd,
+        error: runError,
       });
     }
     process.stdout.write(jsonlContent);

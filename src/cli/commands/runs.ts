@@ -559,20 +559,29 @@ function resolveFollowTarget(arg: string | undefined, logDir: string): string | 
   }
   for (const entry of entries) {
     const filePath = join(logDir, entry);
+    let content: string;
     try {
-      const content = readFileSync(filePath, 'utf-8');
-      const lines = content.trim().split('\n').filter((l) => l.trim());
-      const last = lines[lines.length - 1];
-      if (!last) {
-        // Empty file = freshly initialized run that hasn't emitted anything yet.
-        return filePath;
-      }
-      const parsed = JSON.parse(last);
-      if (parsed?.type !== 'summary') {
-        return filePath;
-      }
+      content = readFileSync(filePath, 'utf-8');
     } catch {
-      // Treat parse errors as "still in progress"; the watcher will sort it out.
+      // Can't read this candidate; try the next.
+      continue;
+    }
+    const lines = content.trim().split('\n').filter((l) => l.trim());
+    const last = lines[lines.length - 1];
+    if (!last) {
+      // Empty file = freshly initialized run that hasn't emitted anything yet.
+      return filePath;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(last);
+    } catch {
+      // Last line is unparseable — the run wrote a corrupt tail and
+      // isn't going to recover. Treating this as "in progress" would
+      // hang the follower forever, so skip and look at older entries.
+      continue;
+    }
+    if ((parsed as { type?: string } | null)?.type !== 'summary') {
       return filePath;
     }
   }
