@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
@@ -365,16 +365,28 @@ async function outputResultsAndHandleFixes(
   // Output results
   reporter.blank();
   if (options.json) {
-    // --json: render JSONL content matching what we just wrote to disk so
-    // stdout mirrors the on-disk contract for piping consumers.
-    const jsonlContent = renderJsonlString(reports, totalDuration, {
-      runId: runLog.baseRun.runId,
-      traceId,
-      timestamp: new Date(runLog.baseRun.timestamp),
-      model: runLog.baseRun.model,
-      headSha: runLog.baseRun.headSha,
-      cwd: runLog.baseRun.cwd,
-    });
+    // --json mirrors the on-disk file byte-for-byte (specs/reporters.md §4).
+    // Read the just-finalized log back so per-skill `run.durationMs`
+    // snapshots match what tooling sees on disk; fall back to an
+    // in-memory render only if the primary log couldn't be written.
+    let jsonlContent: string | undefined;
+    if (runLog.primaryLogWritten) {
+      try {
+        jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8');
+      } catch {
+        // Fall through to the in-memory path.
+      }
+    }
+    if (jsonlContent === undefined) {
+      jsonlContent = renderJsonlString(reports, totalDuration, {
+        runId: runLog.baseRun.runId,
+        traceId,
+        timestamp: new Date(runLog.baseRun.timestamp),
+        model: runLog.baseRun.model,
+        headSha: runLog.baseRun.headSha,
+        cwd: runLog.baseRun.cwd,
+      });
+    }
     process.stdout.write(jsonlContent);
   } else {
     // Suppress fix diffs in report when interactive step-through will show them
