@@ -3,6 +3,8 @@
 
 # AI tooling
 .serena/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
 
 # Dependencies
 node_modules/
