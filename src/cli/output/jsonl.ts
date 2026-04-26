@@ -603,7 +603,9 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
           headSha = chunk.data.run.headSha;
         }
         if (!firstRun) firstRun = chunk.data.run;
-        uniqueFiles.add(chunk.data.chunk.file);
+        if (chunk.data.chunk.file) {
+          uniqueFiles.add(chunk.data.chunk.file);
+        }
       } else if (parsed.type === 'summary') {
         summary = JsonlSummaryRecordSchema.parse(parsed);
         recognizedRecords++;

@@ -11,6 +11,7 @@ import {
   shortRunId,
   readJsonlLog,
   parseJsonlReports,
+  parseLogMetadata,
   JsonlChunkRecordSchema,
   JsonlRecordSchema,
   JsonlSummaryRecordSchema,
@@ -563,6 +564,40 @@ describe('repo-local logging integration', () => {
     expect(content2.run.durationMs).toBe(200);
     expect(content1.run.runId).toBe(runId1);
     expect(content2.run.runId).toBe(runId2);
+  });
+});
+
+describe('parseLogMetadata', () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `warden-test-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true });
+    }
+  });
+
+  it('does not count synthetic empty chunk files', () => {
+    const run = buildRunMetadata({ runId: 'metadata-run-error', durationMs: 120 });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'run',
+      chunk: { file: '', index: 1, total: 1, lineRange: '' },
+      status: 'error',
+      findings: [],
+      durationMs: 120,
+      error: { code: 'auth_failed', message: 'bad key' },
+    };
+    const outputPath = join(testDir, 'run-error.jsonl');
+
+    writeFileSync(outputPath, renderJsonlChunkLine(chunk));
+
+    expect(parseLogMetadata(outputPath)?.totalFiles).toBe(0);
   });
 });
 
