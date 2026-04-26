@@ -179,6 +179,7 @@ const noopCallbacks: SkillProgressCallbacks = {
   onSkillStart: noop,
   onSkillUpdate: noop,
   onFileUpdate: noop,
+  onChunkComplete: noop,
   onSkillComplete: noop,
   onSkillSkipped: noop,
   onSkillError: noop,
@@ -240,7 +241,7 @@ export async function runSkillTasksWithInk(
   tasks: SkillTaskOptions[],
   options: RunTasksOptions
 ): Promise<SkillTaskResult[]> {
-  const { verbosity, concurrency, failFastController, onSkillComplete: streamHook } = options;
+  const { verbosity, concurrency, failFastController, onSkillComplete: streamHook, onChunkComplete } = options;
 
   const fireStreamHook = streamHook
     ? (report: SkillReport) => {
@@ -268,6 +269,14 @@ export async function runSkillTasksWithInk(
             onSkillComplete: (name: string, report) => {
               noopCallbacks.onSkillComplete(name, report);
               fireStreamHook(report);
+            },
+          }
+        : {}),
+      ...(onChunkComplete
+        ? {
+            onChunkComplete: (name, chunk) => {
+              noopCallbacks.onChunkComplete?.(name, chunk);
+              try { onChunkComplete(name, chunk); } catch { /* streaming hook must not break the run */ }
             },
           }
         : {}),
@@ -359,6 +368,9 @@ export async function runSkillTasksWithInk(
     onSkillComplete: (_name, report) => {
       fireStreamHook?.(report);
       updateUI();
+    },
+    onChunkComplete: (name, chunk) => {
+      try { onChunkComplete?.(name, chunk); } catch { /* streaming hook must not break the run */ }
     },
     onSkillSkipped: (name) => {
       skillStates.push(makeTerminalSkillState(tasks, name, { status: 'skipped' }));

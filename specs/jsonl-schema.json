@@ -2,8 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://warden.dev/schemas/jsonl-v1.json",
   "title": "Warden JSONL Output",
-  "description": "Schema for a single line in Warden's JSONL output. Each line is one of: skill record, summary record, or fix-evaluation record. Generated from src/cli/output/jsonl-schema-gen.ts — do not edit by hand.",
+  "description": "Schema for a single line in Warden's JSONL output. New run logs are homogeneous chunk records; legacy skill, summary, and fix-evaluation records remain parseable. Generated from src/cli/output/jsonl-schema-gen.ts — do not edit by hand.",
   "anyOf": [
+    {
+      "$ref": "#/$defs/ChunkRecord"
+    },
     {
       "$ref": "#/$defs/SkillRecord"
     },
@@ -15,14 +18,57 @@
     }
   ],
   "$defs": {
-    "SkillRecord": {
+    "ChunkRecord": {
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "run": {
+          "$ref": "#/$defs/RunMetadata"
+        },
         "skill": {
           "type": "string"
         },
-        "summary": {
+        "model": {
           "type": "string"
+        },
+        "chunk": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "index": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "total": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "lineRange": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "file",
+            "index",
+            "total",
+            "lineRange"
+          ],
+          "additionalProperties": false
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "error",
+            "skipped"
+          ]
         },
         "findings": {
           "type": "array",
@@ -30,66 +76,70 @@
             "$ref": "#/$defs/Finding"
           }
         },
-        "metadata": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {}
+        "usage": {
+          "$ref": "#/$defs/UsageStats"
         },
         "durationMs": {
           "type": "number",
           "minimum": 0
         },
-        "usage": {
-          "$ref": "#/$defs/UsageStats"
+        "auxiliaryUsage": {
+          "$ref": "#/$defs/AuxiliaryUsage"
+        },
+        "error": {
+          "$ref": "#/$defs/SkillError"
         },
         "skippedFiles": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/SkippedFile"
           }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "run",
+        "skill",
+        "chunk",
+        "status",
+        "findings",
+        "durationMs"
+      ],
+      "additionalProperties": false
+    },
+    "RunMetadata": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
         },
-        "failedHunks": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
         },
-        "failedExtractions": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
+        "cwd": {
+          "type": "string"
         },
-        "hunkFailures": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/HunkFailure"
-          }
+        "runId": {
+          "type": "string"
         },
-        "error": {
-          "$ref": "#/$defs/SkillError"
-        },
-        "auxiliaryUsage": {
-          "$ref": "#/$defs/AuxiliaryUsage"
-        },
-        "files": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/FileRecord"
-          }
+        "traceId": {
+          "type": "string"
         },
         "model": {
           "type": "string"
         },
-        "run": {
-          "$ref": "#/$defs/RunMetadata"
+        "headSha": {
+          "type": "string"
         }
       },
       "required": [
-        "skill",
-        "summary",
-        "findings",
-        "run"
+        "timestamp",
+        "durationMs",
+        "cwd",
+        "runId"
       ],
       "additionalProperties": false
     },
@@ -223,6 +273,57 @@
       ],
       "additionalProperties": false
     },
+    "AuxiliaryUsage": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/UsageStats"
+      }
+    },
+    "SkillError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "auth_failed",
+        "sdk_error",
+        "subprocess_failure",
+        "max_turns",
+        "aborted",
+        "all_hunks_failed",
+        "skill_resolution_failed",
+        "extraction_invalid_json",
+        "extraction_unbalanced_json",
+        "extraction_no_findings_json",
+        "extraction_missing_findings_key",
+        "extraction_findings_not_array",
+        "extraction_llm_failed",
+        "extraction_llm_timeout",
+        "extraction_no_api_key",
+        "unknown"
+      ]
+    },
     "SkippedFile": {
       "type": "object",
       "properties": {
@@ -243,6 +344,84 @@
       "required": [
         "filename",
         "reason"
+      ],
+      "additionalProperties": false
+    },
+    "SkillRecord": {
+      "type": "object",
+      "properties": {
+        "skill": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Finding"
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats"
+        },
+        "skippedFiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkippedFile"
+          }
+        },
+        "failedHunks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "failedExtractions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "hunkFailures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HunkFailure"
+          }
+        },
+        "error": {
+          "$ref": "#/$defs/SkillError"
+        },
+        "auxiliaryUsage": {
+          "$ref": "#/$defs/AuxiliaryUsage"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FileRecord"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "run": {
+          "$ref": "#/$defs/RunMetadata"
+        }
+      },
+      "required": [
+        "skill",
+        "summary",
+        "findings",
+        "run"
       ],
       "additionalProperties": false
     },
@@ -286,57 +465,6 @@
       ],
       "additionalProperties": false
     },
-    "ErrorCode": {
-      "type": "string",
-      "enum": [
-        "auth_failed",
-        "sdk_error",
-        "subprocess_failure",
-        "max_turns",
-        "aborted",
-        "all_hunks_failed",
-        "skill_resolution_failed",
-        "extraction_invalid_json",
-        "extraction_unbalanced_json",
-        "extraction_no_findings_json",
-        "extraction_missing_findings_key",
-        "extraction_findings_not_array",
-        "extraction_llm_failed",
-        "extraction_llm_timeout",
-        "extraction_no_api_key",
-        "unknown"
-      ]
-    },
-    "SkillError": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "$ref": "#/$defs/ErrorCode"
-        },
-        "message": {
-          "type": "string"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-        }
-      },
-      "required": [
-        "code",
-        "message"
-      ],
-      "additionalProperties": false
-    },
-    "AuxiliaryUsage": {
-      "type": "object",
-      "propertyNames": {
-        "type": "string"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/UsageStats"
-      }
-    },
     "FileRecord": {
       "type": "object",
       "properties": {
@@ -359,42 +487,6 @@
       "required": [
         "filename",
         "findings"
-      ],
-      "additionalProperties": false
-    },
-    "RunMetadata": {
-      "type": "object",
-      "properties": {
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-        },
-        "durationMs": {
-          "type": "number",
-          "minimum": 0
-        },
-        "cwd": {
-          "type": "string"
-        },
-        "runId": {
-          "type": "string"
-        },
-        "traceId": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        },
-        "headSha": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "timestamp",
-        "durationMs",
-        "cwd",
-        "runId"
       ],
       "additionalProperties": false
     },

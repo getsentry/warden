@@ -22,6 +22,7 @@ import {
   type FileAnalysisCallbacks,
   type PreparedFile,
   type PRPromptContext,
+  type ChunkAnalysisResult,
 } from '../../sdk/runner.js';
 import { sanitizeFindingsSuggestedFixes } from '../../sdk/fix-quality.js';
 import chalk from 'chalk';
@@ -140,6 +141,8 @@ export interface RunTasksOptions {
   failFastController?: AbortController;
   /** Hook fired after each skill finishes; used by the CLI to stream JSONL to disk. */
   onSkillComplete?: (report: SkillReport) => void;
+  /** Hook fired after each chunk finishes; used by the CLI to stream JSONL to disk. */
+  onChunkComplete?: (skillName: string, chunk: ChunkAnalysisResult) => void;
 }
 
 /**
@@ -151,6 +154,7 @@ export interface SkillProgressCallbacks {
   onFileUpdate: (skillName: string, filename: string, updates: Partial<FileState>) => void;
   /** Called when a hunk analysis starts (one SDK invocation per hunk) */
   onHunkStart?: (skillName: string, filename: string, hunkNum: number, totalHunks: number, lineRange: string) => void;
+  onChunkComplete?: (skillName: string, chunk: ChunkAnalysisResult) => void;
   onSkillComplete: (name: string, report: SkillReport) => void;
   onSkillSkipped: (name: string) => void;
   onSkillError: (name: string, error: string) => void;
@@ -318,6 +322,11 @@ export async function runSkillTask(
             onExtractionResult: callbacks.onExtractionResult
               ? (lineRange, findingsCount, method) => {
                   callbacks.onExtractionResult?.(name, filename, lineRange, findingsCount, method);
+                }
+              : undefined,
+            onChunkComplete: callbacks.onChunkComplete
+              ? (chunk) => {
+                  callbacks.onChunkComplete?.(skill.name, chunk);
                 }
               : undefined,
             onHunkFailed: callbacks.onHunkFailed
@@ -858,7 +867,7 @@ export async function runSkillTasks(
   options: RunTasksOptions,
   callbacks?: SkillProgressCallbacks
 ): Promise<SkillTaskResult[]> {
-  const { mode, verbosity, concurrency, failFastController, onSkillComplete } = options;
+  const { mode, verbosity, concurrency, failFastController, onSkillComplete, onChunkComplete } = options;
 
   // Global semaphore gates file-level work across all skills.
   // All skills launch immediately so the UI shows them as "running",
@@ -884,6 +893,14 @@ export async function runSkillTasks(
           onSkillComplete: (name: string, report: SkillReport) => {
             effectiveCallbacks.onSkillComplete(name, report);
             try { onSkillComplete(report); } catch { /* streaming hook must not break the run */ }
+          },
+        }
+      : {}),
+    ...(onChunkComplete
+      ? {
+          onChunkComplete: (name: string, chunk: ChunkAnalysisResult) => {
+            effectiveCallbacks.onChunkComplete?.(name, chunk);
+            try { onChunkComplete(name, chunk); } catch { /* streaming hook must not break the run */ }
           },
         }
       : {}),

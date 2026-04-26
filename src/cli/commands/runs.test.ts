@@ -14,8 +14,10 @@ import {
   appendJsonlLine,
   buildRunMetadata,
   initJsonlFile,
+  renderJsonlChunkLine,
   renderJsonlSkillLine,
   renderJsonlSummaryLine,
+  type JsonlChunkRecord,
 } from '../output/jsonl.js';
 import { Reporter, parseVerbosity } from '../output/index.js';
 import type { CLIOptions } from '../args.js';
@@ -745,4 +747,56 @@ describe('runRunsFollow', () => {
 
     stdoutSpy.mockRestore();
   });
+
+  it('renders chunk findings while the run is still active and exits on done marker', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const livePath = join(logDir, 'chunkrun-2026-04-25T16-00-00-000Z.jsonl');
+    const run = buildRunMetadata({
+      runId: 'chunkrun-0000-0000-0000-000000000000',
+      durationMs: 0,
+      timestamp: new Date('2026-04-25T16:00:00.000Z'),
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'live-skill',
+      chunk: { file: 'src/a.ts', index: 1, total: 2, lineRange: '10-20' },
+      status: 'ok',
+      findings: [{
+        id: 'FIND-1',
+        severity: 'high',
+        title: 'Escaped finding',
+        description: 'This should render before the run is complete.',
+        location: { path: 'src/a.ts', startLine: 12 },
+      }],
+      usage: { inputTokens: 100, outputTokens: 20, costUSD: 0.001 },
+      durationMs: 250,
+    };
+
+    initJsonlFile(livePath);
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const writes: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((chunk = '') => {
+      writes.push(String(chunk));
+    });
+
+    const reporter = createTestReporter();
+    const followPromise = runRunsFollow(
+      { subcommand: 'follow', files: [] },
+      createDefaultOptions(),
+      reporter,
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    appendJsonlLine(livePath, renderJsonlChunkLine(chunk));
+    await new Promise((r) => setTimeout(r, 50));
+    writeFileSync(`${livePath}.done`, '');
+
+    const exit = await followPromise;
+    expect(exit).toBe(0);
+    expect(writes.join('\n')).toContain('Escaped finding');
+
+    logSpy.mockRestore();
+  }, 5000);
 });

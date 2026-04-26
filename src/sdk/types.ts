@@ -36,6 +36,25 @@ export interface HunkAnalysisResult {
   auxiliaryUsage?: AuxiliaryUsageEntry[];
 }
 
+/** Result from one completed chunk, suitable for durable run logging. */
+export interface ChunkAnalysisResult {
+  filename: string;
+  model?: string;
+  index: number;
+  total: number;
+  lineRange: string;
+  findings: Finding[];
+  usage: UsageStats;
+  durationMs: number;
+  failed: boolean;
+  extractionFailed: boolean;
+  failureCode?: ErrorCode;
+  failureMessage?: string;
+  extractionError?: string;
+  extractionPreview?: string;
+  auxiliaryUsage?: AuxiliaryUsageEntry[];
+}
+
 /**
  * Callbacks for progress reporting during skill execution.
  */
@@ -124,6 +143,7 @@ export interface FileAnalysisCallbacks {
   skillStartTime?: number;
   onHunkStart?: (hunkNum: number, totalHunks: number, lineRange: string) => void;
   onHunkComplete?: (hunkNum: number, findings: Finding[], usage: UsageStats) => void;
+  onChunkComplete?: (chunk: ChunkAnalysisResult) => void;
   /** Called when a prompt exceeds the large prompt threshold */
   onLargePrompt?: (lineRange: string, chars: number, estimatedTokens: number) => void;
   /** Called with prompt size info in debug mode */

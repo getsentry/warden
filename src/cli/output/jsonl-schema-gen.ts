@@ -21,6 +21,7 @@ import {
 } from '../../types/index.js';
 import {
   JsonlRecordSchema,
+  JsonlChunkRecordSchema,
   JsonlSummaryRecordSchema,
   JsonlFixEvaluationRecordSchema,
   JsonlRunMetadataSchema,
@@ -46,11 +47,13 @@ export function buildJsonlJsonSchema(): Record<string, unknown> {
   registry.add(FileReportSchema, { id: 'FileRecord' });
   registry.add(JsonlRunMetadataSchema, { id: 'RunMetadata' });
   registry.add(JsonlFixEvalDetailSchema, { id: 'FixEvalDetail' });
+  registry.add(JsonlChunkRecordSchema, { id: 'ChunkRecord' });
   registry.add(JsonlRecordSchema, { id: 'SkillRecord' });
   registry.add(JsonlSummaryRecordSchema, { id: 'SummaryRecord' });
   registry.add(JsonlFixEvaluationRecordSchema, { id: 'FixEvaluationRecord' });
 
   const union = z.union([
+    JsonlChunkRecordSchema,
     JsonlRecordSchema,
     JsonlSummaryRecordSchema,
     JsonlFixEvaluationRecordSchema,
@@ -76,7 +79,7 @@ export function buildJsonlJsonSchema(): Record<string, unknown> {
     $id: 'https://warden.dev/schemas/jsonl-v1.json',
     title: 'Warden JSONL Output',
     description:
-      'Schema for a single line in Warden\'s JSONL output. Each line is one of: skill record, summary record, or fix-evaluation record. Generated from src/cli/output/jsonl-schema-gen.ts — do not edit by hand.',
+      'Schema for a single line in Warden\'s JSONL output. New run logs are homogeneous chunk records; legacy skill, summary, and fix-evaluation records remain parseable. Generated from src/cli/output/jsonl-schema-gen.ts — do not edit by hand.',
     ...generated,
   };
 }

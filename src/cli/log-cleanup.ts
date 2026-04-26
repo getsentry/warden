@@ -69,6 +69,7 @@ export async function cleanupArtifacts(opts: {
   for (const filePath of expired) {
     try {
       unlinkSync(filePath);
+      try { unlinkSync(`${filePath}.done`); } catch { /* sidecar may not exist */ }
       deleted++;
     } catch {
       // Skip files we can't delete

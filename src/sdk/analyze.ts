@@ -19,6 +19,7 @@ import {
   type PreparedFile,
   type FileAnalysisCallbacks,
   type FileAnalysisResult,
+  type ChunkAnalysisResult,
 } from './types.js';
 import { prepareFiles } from './prepare.js';
 import type { EventContext, SkillReport, UsageStats, HunkFailure } from '../types/index.js';
@@ -708,7 +709,9 @@ export async function analyzeFile(
             }
           : undefined;
 
+        const hunkStartTime = Date.now();
         const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
+        const hunkDurationMs = Date.now() - hunkStartTime;
 
         // `failed` and `extractionFailed` are conceptually mutually exclusive:
         // if analysis failed (no output produced), there's nothing to extract.
@@ -739,6 +742,24 @@ export async function analyzeFile(
 
         attachElapsedTime(result.findings, callbacks?.skillStartTime);
         callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
+        const chunkResult: ChunkAnalysisResult = {
+          filename: file.filename,
+          model: options.model,
+          index: hunkIndex + 1,
+          total: file.hunks.length,
+          lineRange,
+          findings: result.findings,
+          usage: result.usage,
+          durationMs: hunkDurationMs,
+          failed: result.failed,
+          extractionFailed: result.extractionFailed,
+          failureCode: result.failureCode,
+          failureMessage: result.failureMessage,
+          extractionError: result.extractionError,
+          extractionPreview: result.extractionPreview,
+          auxiliaryUsage: result.auxiliaryUsage,
+        };
+        callbacks?.onChunkComplete?.(chunkResult);
 
         fileFindings.push(...result.findings);
         fileUsage.push(result.usage);

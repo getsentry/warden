@@ -64,5 +64,5 @@ export type {
   PrepareFilesResult,
   FileAnalysisCallbacks,
   FileAnalysisResult,
+  ChunkAnalysisResult,
 } from './types.js';
-
