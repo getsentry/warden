@@ -626,8 +626,8 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
 
 /** `--json` mode: pass the raw line through unmodified for downstream tools. */
 function passthroughFollowLine(line: string): { stop: boolean } {
-  process.stdout.write(line);
-  process.stdout.write('\n');
+  // One write keeps the line + newline atomic for piped consumers.
+  process.stdout.write(line + '\n');
   try {
     const parsed = JSON.parse(line) as { type?: string };
     if (parsed?.type === 'summary') return { stop: true };
