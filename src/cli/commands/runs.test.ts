@@ -452,6 +452,30 @@ describe('runRunsList default filtering', () => {
     stdoutSpy.mockRestore();
   });
 
+  it('renders fully-corrupt files as parse-error rows, not in-progress', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const corruptPath = join(logDir, 'corrupt0-2026-04-25T12-00-00-000Z.jsonl');
+    initJsonlFile(corruptPath);
+    appendJsonlLine(corruptPath, '{"this is not valid json\n');
+    appendJsonlLine(corruptPath, 'also garbage\n');
+
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const reporter = createTestReporter();
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const exit = await runRunsList({ ...createDefaultOptions(), json: true }, reporter, { all: true });
+    expect(exit).toBe(0);
+    const output = JSON.parse(stdoutSpy.mock.calls[0]![0] as string) as { inProgress?: boolean; runId?: string }[];
+    expect(output).toHaveLength(1);
+    // Corrupt files have no metadata: inProgress defaults to false in the JSON output
+    // and runId is undefined; the table renderer shows them as "parse error".
+    expect(output[0]!.inProgress).toBe(false);
+    expect(output[0]!.runId).toBeUndefined();
+
+    stdoutSpy.mockRestore();
+  });
+
   it('marks in-progress runs as running (not parse error) and surfaces their runId', async () => {
     const logDir = join(testDir, '.warden', 'logs');
 

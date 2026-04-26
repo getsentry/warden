@@ -419,8 +419,9 @@ export interface LogFileMetadata {
 
 /**
  * Parse a JSONL log file's summary, skill names, and high-level metadata.
- * Returns undefined only if the file can't be read; in-progress files
- * (no summary record yet) return metadata with `inProgress: true`.
+ * Returns undefined when the file can't be read or contains no parseable
+ * records; in-progress files (valid records but no summary yet) return
+ * metadata with `inProgress: true`.
  */
 export function parseLogMetadata(filePath: string): LogFileMetadata | undefined {
   let content: string;
@@ -429,7 +430,7 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
   } catch {
     return undefined;
   }
-  const lines = content.trim().split('\n');
+  const lines = content.trim().split('\n').filter((l) => l.trim());
 
   let summary: JsonlSummaryRecord | undefined;
   let firstRun: JsonlRunMetadata | undefined;
@@ -437,13 +438,14 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
   let model: string | undefined;
   let headSha: string | undefined;
   const uniqueFiles = new Set<string>();
+  let recognizedRecords = 0;
 
   for (const line of lines) {
-    if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line);
       if (parsed.type === 'summary') {
         summary = JsonlSummaryRecordSchema.parse(parsed);
+        recognizedRecords++;
         if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
           model = parsed.run.model;
         }
@@ -452,6 +454,7 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
         }
         if (!firstRun) firstRun = summary.run;
       } else if (parsed.skill && typeof parsed.skill === 'string') {
+        recognizedRecords++;
         if (!skills.includes(parsed.skill)) {
           skills.push(parsed.skill);
         }
@@ -479,6 +482,10 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
       });
     }
   }
+
+  // Empty or fully corrupt files (no parseable records) surface as
+  // "parse error" in the list, not as in-progress runs.
+  if (recognizedRecords === 0 && lines.length > 0) return undefined;
 
   return {
     summary,
