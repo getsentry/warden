@@ -218,18 +218,24 @@ export async function runSkillTask(
 
         if (preparedFiles.length === 0) {
           // No files to analyze - skip
+          const skippedReport: SkillReport = {
+            skill: skill.name,
+            summary: 'No code changes to analyze',
+            findings: [],
+            usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+            durationMs: Date.now() - startTime,
+            model: runnerOptions?.model,
+            skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
+          };
           callbacks.onSkillSkipped(name);
+          // Mirror the success / error paths: emit `onSkillComplete` so the
+          // incremental JSONL writer captures skipped skills. Without this,
+          // `--json` (file read-back) drops them while the in-memory render
+          // path includes them, producing inconsistent output.
+          callbacks.onSkillComplete(name, skippedReport);
           return {
             name,
-            report: {
-              skill: skill.name,
-              summary: 'No code changes to analyze',
-              findings: [],
-              usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
-              durationMs: Date.now() - startTime,
-              model: runnerOptions?.model,
-              skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
-            },
+            report: skippedReport,
             failOn,
             minConfidence,
           };

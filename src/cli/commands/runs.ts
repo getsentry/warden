@@ -692,6 +692,14 @@ export async function runRunsFollow(
     // even if change events get dropped on macOS / network filesystems.
     try {
       watcher = watch(target, { persistent: true }, () => tick());
+      // FSWatcher is an EventEmitter: an unhandled 'error' (file deleted by
+      // `runs gc`, inotify limit hit) crashes the process. The viewer must
+      // exit cleanly, so trap the error and let the polling fallback carry
+      // on serving updates from disk.
+      watcher.on('error', () => {
+        try { watcher?.close(); } catch { /* ignore */ }
+        watcher = undefined;
+      });
     } catch {
       // If watch isn't available, polling alone is fine.
     }

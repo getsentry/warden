@@ -762,6 +762,63 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
   });
 });
 
+describe('runSkillTask skipped path', () => {
+  function noopCallbacks(): SkillProgressCallbacks {
+    return {
+      onSkillStart: () => undefined,
+      onSkillUpdate: () => undefined,
+      onFileUpdate: () => undefined,
+      onSkillComplete: () => undefined,
+      onSkillSkipped: () => undefined,
+      onSkillError: () => undefined,
+    };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('emits onSkillComplete alongside onSkillSkipped so incremental JSONL captures skipped skills', async () => {
+    // Regression: the incremental JSONL writer hooks `onSkillComplete`. The
+    // skip path used to call only `onSkillSkipped`, so skipped skills were
+    // dropped from the on-disk file even though they appeared in the
+    // in-memory reports passed to finalize. That made `--json` output
+    // (file read-back) inconsistent with the fallback render path.
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({ files: [], skippedFiles: [] });
+
+    const options: SkillTaskOptions = {
+      name: 'no-files-skill',
+      resolveSkill: async () =>
+        ({ name: 'no-files-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'a', baseSha: 'b', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    };
+
+    const onSkillSkipped = vi.fn();
+    const onSkillComplete = vi.fn();
+    const result = await runSkillTask(options, 1, {
+      ...noopCallbacks(),
+      onSkillSkipped,
+      onSkillComplete,
+    });
+
+    expect(onSkillSkipped).toHaveBeenCalledExactlyOnceWith('no-files-skill');
+    expect(onSkillComplete).toHaveBeenCalledTimes(1);
+    const [name, report] = onSkillComplete.mock.calls[0]!;
+    expect(name).toBe('no-files-skill');
+    expect(report.skill).toBe('no-files-skill');
+    expect(report.summary).toBe('No code changes to analyze');
+    // The same report object handed to onSkillComplete must be the one
+    // returned in the task result, so `--json` (file) and the in-memory
+    // reports stay consistent.
+    expect(result.report).toBe(report);
+  });
+});
+
 describe('runSkillTask error capture', () => {
   function noopCallbacks(): SkillProgressCallbacks {
     return {
