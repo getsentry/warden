@@ -959,7 +959,11 @@ export async function runSkill(
   // Throw so direct SDK consumers (evals, scheduled workflows) keep their
   // prior exception-based contract. The CLI path (tasks.ts) has its own
   // all-hunks-fail detection that emits a structured JSONL record instead.
-  if (totalFailedHunks > 0 && totalFailedHunks === totalHunks && allFindings.length === 0) {
+  // Count both analysis and extraction failures: each hunk contributes to
+  // at most one (analyzeFile makes them mutually exclusive), and an
+  // extraction-only failure scenario would otherwise slip through silently.
+  const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
+  if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
     throw new SkillRunnerError(
       `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
       `This usually indicates an authentication problem. ` +

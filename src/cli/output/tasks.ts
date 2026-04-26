@@ -416,8 +416,14 @@ export async function runSkillTask(
         const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
         const allHunkFailures: HunkFailure[] = allResults.flatMap((r) => r.hunkFailures);
         const totalHunks = preparedFiles.reduce((sum, f) => sum + f.hunks.length, 0);
+        // Each hunk contributes to at most one of failedHunks / failedExtractions
+        // (mutually exclusive in analyzeFile), so summing them gives the total
+        // failed-hunk count. Counting only analysis failures would miss the
+        // scenario where every hunk's SDK call succeeded but every extraction
+        // failed — a silent zero-findings run otherwise.
+        const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
 
-        if (totalHunks > 0 && totalFailedHunks === totalHunks && allFindings.length === 0) {
+        if (totalHunks > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
           const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
           const errorMessage =
             `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
@@ -575,6 +581,16 @@ export async function runSkillTask(
           model: runnerOptions?.model,
           error: { code, message, timestamp: new Date().toISOString() },
         };
+        // Mirror the success / all-hunks-fail paths: emit a final completion
+        // event so non-TTY (log-mode) renderers print a per-skill summary
+        // line for the failure. Without this, log mode shows only the
+        // bare error string with no timing or duration.
+        callbacks.onSkillUpdate(name, {
+          status: 'error',
+          durationMs: errorReport.durationMs,
+          findings: [],
+        });
+        callbacks.onSkillComplete(name, errorReport);
         return { name, report: errorReport, error: err, failOn, minConfidence };
       }
     },

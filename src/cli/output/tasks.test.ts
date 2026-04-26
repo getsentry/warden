@@ -706,6 +706,60 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(result.report!.files).toHaveLength(1);
     expect(result.report!.files![0]!.filename).toBe('a.ts');
   });
+
+  it('triggers all_hunks_failed when every hunk succeeded at SDK level but extraction failed for all', async () => {
+    // Regression test for the if/else mutual-exclusion change: each hunk
+    // contributes to either failedHunks OR failedExtractions, not both.
+    // If every hunk fails extraction (SDK call succeeds, parsing fails)
+    // then failedHunks is 0 — naive `failedHunks === totalHunks` checks
+    // would silently produce a "0 findings" run. Detection must sum both.
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const hunkFailures: HunkFailure[] = [
+      {
+        type: 'extraction',
+        filename: 'a.ts',
+        lineRange: '1-10',
+        code: 'extraction_invalid_json',
+        message: 'invalid_json',
+      },
+    ];
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+
+    const failedFileResult: FileAnalysisResult = {
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      failedHunks: 0,
+      failedExtractions: 1,
+      hunkFailures,
+    };
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue(failedFileResult);
+
+    const options: SkillTaskOptions = {
+      name: 'extraction-fail-skill',
+      resolveSkill: async () =>
+        ({ name: 'extraction-fail-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    };
+
+    const result = await runSkillTask(options, 1, noopCallbacks());
+
+    expect(result.report).toBeDefined();
+    expect(result.report!.error?.code).toBe('all_hunks_failed');
+    expect(result.report!.failedExtractions).toBe(1);
+    expect(result.report!.findings).toEqual([]);
+  });
 });
 
 describe('runSkillTask error capture', () => {
