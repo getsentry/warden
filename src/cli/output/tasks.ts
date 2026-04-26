@@ -645,6 +645,20 @@ export function createDefaultCallbacks(
       if (verbosity === Verbosity.Quiet) return;
       const displayName = displayNameFor(name);
 
+      // Errored runs render as failures, not as misleading "completed -
+      // 0 findings" lines with a green checkmark. onSkillError already
+      // printed the error message; this line carries timing only.
+      if (report.error) {
+        if (mode.isTTY) {
+          const duration = report.durationMs !== undefined ? ` ${chalk.dim(`[${formatDuration(report.durationMs)}]`)}` : '';
+          console.error(`${chalk.red('✗')} ${displayName}${duration} ${chalk.red(`(${report.error.code})`)}`);
+        } else {
+          const duration = report.durationMs !== undefined ? formatDuration(report.durationMs) : '?';
+          logPlain(`${displayName} failed in ${duration} (${report.error.code})`);
+        }
+        return;
+      }
+
       if (mode.isTTY) {
         const duration = report.durationMs !== undefined ? ` ${chalk.dim(`[${formatDuration(report.durationMs)}]`)}` : '';
         console.error(`${chalk.green(ICON_CHECK)} ${displayName}${duration}`);
