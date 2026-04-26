@@ -936,4 +936,61 @@ describe('runRunsFollow', () => {
 
     logSpy.mockRestore();
   }, 5000);
+
+  it('with --json, emits finalized replacement records after live records', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const livePath = join(logDir, 'jsonlive-2026-04-25T16-00-00-000Z.jsonl');
+    const run = buildRunMetadata({
+      runId: 'jsonlive',
+      durationMs: 100,
+      timestamp: new Date('2026-04-25T16:00:00.000Z'),
+      cwd: testDir,
+    });
+    const liveChunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'json-skill',
+      chunk: { file: 'src/a.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [{ id: 'RAW', severity: 'high', title: 'Raw finding', description: 'raw' }],
+      durationMs: 100,
+    };
+    const finalChunk: JsonlChunkRecord = {
+      ...liveChunk,
+      findings: [{ id: 'FINAL', severity: 'high', title: 'Final finding', description: 'final' }],
+    };
+
+    initJsonlFile(livePath);
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const writes: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8'));
+      return true;
+    });
+
+    const reporter = createTestReporter();
+    const followPromise = runRunsFollow(
+      { subcommand: 'follow', files: [] },
+      { ...createDefaultOptions(), json: true },
+      reporter,
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    appendJsonlLine(livePath, renderJsonlChunkLine(liveChunk));
+    await new Promise((r) => setTimeout(r, 50));
+    const finalPath = `${livePath}.tmp`;
+    writeFileSync(finalPath, renderJsonlChunkLine(finalChunk));
+    renameSync(finalPath, livePath);
+    await new Promise((r) => setTimeout(r, 50));
+    writeFileSync(`${livePath}.done`, '');
+
+    const exit = await followPromise;
+    const output = writes.join('');
+    expect(exit).toBe(0);
+    expect(output).toContain('Raw finding');
+    expect(output).toContain('Final finding');
+
+    stdoutSpy.mockRestore();
+  }, 5000);
 });

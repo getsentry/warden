@@ -397,8 +397,19 @@ function finalizeRunLog(
 ): Set<string> {
   const wrote = new Set<string>();
   if (log.paths.length === 0) return wrote;
-  const records = buildFinalChunkRecords(log, reports, totalDurationMs, error);
-  const content = records.map((record) => renderJsonlChunkLine(record)).join('');
+  let content: string;
+  try {
+    const records = buildFinalChunkRecords(log, reports, totalDurationMs, error);
+    content = records.flatMap((record) => {
+      try {
+        return [renderJsonlChunkLine(record)];
+      } catch {
+        return [];
+      }
+    }).join('');
+  } catch {
+    return wrote;
+  }
   for (const p of log.paths) {
     const targetPath = resolve(process.cwd(), p);
     const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;

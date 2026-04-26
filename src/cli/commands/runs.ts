@@ -725,7 +725,7 @@ export async function runRunsFollow(
       if (fileIdentity && identity !== fileIdentity) {
         fileIdentity = identity;
         buffer = '';
-        if (offset > 0) {
+        if (offset > 0 && !options.json) {
           offset = stat.size;
           return;
         }
