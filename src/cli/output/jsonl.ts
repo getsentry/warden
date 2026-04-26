@@ -402,11 +402,15 @@ export function parseJsonlReports(content: string): ParsedJsonlLog {
 }
 
 /**
- * Lightweight metadata extracted from a JSONL log file.
- * Includes the summary record plus skill names from the skill records.
+ * Lightweight metadata extracted from a JSONL log file. `summary` is
+ * absent for in-progress runs (no trailing summary record yet); use
+ * `inProgress` to distinguish those from completed runs.
  */
 export interface LogFileMetadata {
-  summary: JsonlSummaryRecord;
+  summary?: JsonlSummaryRecord;
+  inProgress: boolean;
+  /** Run metadata pulled from the summary or, failing that, the first skill record. */
+  runMetadata?: JsonlRunMetadata;
   skills: string[];
   model?: string;
   headSha?: string;
@@ -414,64 +418,75 @@ export interface LogFileMetadata {
 }
 
 /**
- * Parse a JSONL log file for its summary and skill names.
- * Reads all lines but only fully parses the summary; extracts skill names
- * from non-summary lines with minimal parsing.
+ * Parse a JSONL log file's summary, skill names, and high-level metadata.
+ * Returns undefined only if the file can't be read; in-progress files
+ * (no summary record yet) return metadata with `inProgress: true`.
  */
 export function parseLogMetadata(filePath: string): LogFileMetadata | undefined {
+  let content: string;
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.trim().split('\n');
-
-    let summary: JsonlSummaryRecord | undefined;
-    const skills: string[] = [];
-    let model: string | undefined;
-    let headSha: string | undefined;
-    const uniqueFiles = new Set<string>();
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line);
-        if (parsed.type === 'summary') {
-          summary = JsonlSummaryRecordSchema.parse(parsed);
-          // Fall back to summary's run metadata for model/headSha (empty runs have no skill records)
-          if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
-            model = parsed.run.model;
-          }
-          if (!headSha && parsed.run?.headSha && typeof parsed.run.headSha === 'string') {
-            headSha = parsed.run.headSha;
-          }
-        } else if (parsed.skill && typeof parsed.skill === 'string') {
-          if (!skills.includes(parsed.skill)) {
-            skills.push(parsed.skill);
-          }
-          // Extract model and headSha from first record's run metadata
-          if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
-            model = parsed.run.model;
-          }
-          if (!headSha && parsed.run?.headSha && typeof parsed.run.headSha === 'string') {
-            headSha = parsed.run.headSha;
-          }
-          // Count unique filenames across skill records' files arrays
-          if (Array.isArray(parsed.files)) {
-            for (const f of parsed.files) {
-              if (f && typeof f.filename === 'string') {
-                uniqueFiles.add(f.filename);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        logger.warn('Skipping malformed JSONL line', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    if (!summary) return undefined;
-    return { summary, skills, model, headSha, totalFiles: uniqueFiles.size };
+    content = readFileSync(filePath, 'utf-8');
   } catch {
     return undefined;
   }
+  const lines = content.trim().split('\n');
+
+  let summary: JsonlSummaryRecord | undefined;
+  let firstRun: JsonlRunMetadata | undefined;
+  const skills: string[] = [];
+  let model: string | undefined;
+  let headSha: string | undefined;
+  const uniqueFiles = new Set<string>();
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed.type === 'summary') {
+        summary = JsonlSummaryRecordSchema.parse(parsed);
+        if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
+          model = parsed.run.model;
+        }
+        if (!headSha && parsed.run?.headSha && typeof parsed.run.headSha === 'string') {
+          headSha = parsed.run.headSha;
+        }
+        if (!firstRun) firstRun = summary.run;
+      } else if (parsed.skill && typeof parsed.skill === 'string') {
+        if (!skills.includes(parsed.skill)) {
+          skills.push(parsed.skill);
+        }
+        if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
+          model = parsed.run.model;
+        }
+        if (!headSha && parsed.run?.headSha && typeof parsed.run.headSha === 'string') {
+          headSha = parsed.run.headSha;
+        }
+        if (!firstRun && parsed.run) {
+          const runResult = JsonlRunMetadataSchema.safeParse(parsed.run);
+          if (runResult.success) firstRun = runResult.data;
+        }
+        if (Array.isArray(parsed.files)) {
+          for (const f of parsed.files) {
+            if (f && typeof f.filename === 'string') {
+              uniqueFiles.add(f.filename);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn('Skipping malformed JSONL line', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    summary,
+    inProgress: !summary,
+    runMetadata: summary?.run ?? firstRun,
+    skills,
+    model,
+    headSha,
+    totalFiles: uniqueFiles.size,
+  };
 }

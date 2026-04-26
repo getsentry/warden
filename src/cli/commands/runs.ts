@@ -179,18 +179,22 @@ export async function runRunsList(
     const filePath = join(logDir, entry);
     allLogData.push({ entry, meta: parseLogMetadata(filePath) });
   }
-  // In-progress runs have no summary; fall back to the filename timestamp
-  // so they sort to the top instead of the bottom.
+  // In-progress runs have no summary; fall back to the run record's
+  // timestamp, then to the filename, so they sort to the top.
   const sortKey = (entry: { entry: string; meta: LogFileMetadata | undefined }) =>
-    entry.meta?.summary.run.timestamp ?? filenameTimestamp(entry.entry);
+    entry.meta?.summary?.run.timestamp ??
+    entry.meta?.runMetadata?.timestamp ??
+    filenameTimestamp(entry.entry);
   allLogData.sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
 
   // Run-level errors (auth, config) stay visible even with zero files —
-  // the error is the point of keeping the record.
+  // the error is the point of keeping the record. In-progress runs also
+  // stay visible so users can find the active session.
   const isEmptyRun = (entry: { meta: LogFileMetadata | undefined }) => {
-    if (!entry.meta) return false;
-    if (entry.meta.summary.error) return false;
-    return entry.meta.totalFiles === 0 && entry.meta.skills.length === 0;
+    const meta = entry.meta;
+    if (!meta || meta.inProgress) return false;
+    if (meta.summary?.error) return false;
+    return meta.totalFiles === 0 && meta.skills.length === 0;
   };
   const showAll = listOptions.all ?? false;
   const logData = showAll ? allLogData : allLogData.filter((e) => !isEmptyRun(e));
@@ -199,16 +203,17 @@ export async function runRunsList(
   if (options.json) {
     const results = logData.map(({ entry, meta }) => ({
       file: entry,
-      runId: meta?.summary.run.runId,
-      timestamp: meta?.summary.run.timestamp,
+      runId: meta?.runMetadata?.runId,
+      timestamp: meta?.runMetadata?.timestamp,
       model: meta?.model,
       headSha: meta?.headSha,
       files: meta?.totalFiles,
-      findings: meta?.summary.totalFindings,
-      bySeverity: meta?.summary.bySeverity,
-      durationMs: meta?.summary.run.durationMs,
-      costUSD: meta?.summary.usage?.costUSD,
+      findings: meta?.summary?.totalFindings,
+      bySeverity: meta?.summary?.bySeverity,
+      durationMs: meta?.summary?.run.durationMs,
+      costUSD: meta?.summary?.usage?.costUSD,
       skills: meta?.skills,
+      inProgress: meta?.inProgress ?? false,
     }));
 
     process.stdout.write(JSON.stringify(results, null, 2) + '\n');
@@ -255,30 +260,49 @@ export async function runRunsList(
       continue;
     }
 
-    const { summary, skills } = meta;
-    totals.findings += summary.totalFindings;
-    totals.durationMs += summary.run.durationMs;
-    if (summary.usage) {
-      totals.costUSD += summary.usage.costUSD;
-    }
-    for (const [sev, count] of Object.entries(summary.bySeverity)) {
-      totals.bySeverity[sev as Severity] += count;
-    }
-    for (const skill of skills) {
-      totals.skills.add(skill);
+    const { summary, runMetadata, skills, inProgress } = meta;
+
+    if (inProgress) {
+      const ts = runMetadata?.timestamp ?? filenameTimestamp(entry);
+      const runId = runMetadata?.runId
+        ? shortRunId(runMetadata.runId)
+        : entry.slice(0, 8);
+      rows.push({
+        runId,
+        date: ts ? formatRelativeTime(new Date(ts)) : '',
+        files: meta.totalFiles > 0 ? String(meta.totalFiles) : '',
+        findings: chalk.yellow('running'),
+        time: '',
+        cost: '',
+        sha: meta.headSha ? meta.headSha.slice(0, 7) : '',
+        model: meta.model ?? '-',
+        skills: skills.join(', '),
+      });
+      for (const skill of skills) totals.skills.add(skill);
+      continue;
     }
 
-    rows.push({
-      runId: shortRunId(summary.run.runId),
-      date: formatRelativeTime(new Date(summary.run.timestamp)),
-      files: meta.totalFiles > 0 ? String(meta.totalFiles) : '',
-      findings: formatSeverityBreakdown(summary.bySeverity),
-      time: formatDuration(summary.run.durationMs),
-      cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
-      sha: meta.headSha ? meta.headSha.slice(0, 7) : '',
-      model: meta.model ?? '-',
-      skills: skills.join(', '),
-    });
+    if (summary) {
+      totals.findings += summary.totalFindings;
+      totals.durationMs += summary.run.durationMs;
+      if (summary.usage) totals.costUSD += summary.usage.costUSD;
+      for (const [sev, count] of Object.entries(summary.bySeverity)) {
+        totals.bySeverity[sev as Severity] += count;
+      }
+      for (const skill of skills) totals.skills.add(skill);
+
+      rows.push({
+        runId: shortRunId(summary.run.runId),
+        date: formatRelativeTime(new Date(summary.run.timestamp)),
+        files: meta.totalFiles > 0 ? String(meta.totalFiles) : '',
+        findings: formatSeverityBreakdown(summary.bySeverity),
+        time: formatDuration(summary.run.durationMs),
+        cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
+        sha: meta.headSha ? meta.headSha.slice(0, 7) : '',
+        model: meta.model ?? '-',
+        skills: skills.join(', '),
+      });
+    }
   }
 
   // Calculate column widths

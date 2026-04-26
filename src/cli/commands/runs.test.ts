@@ -452,6 +452,36 @@ describe('runRunsList default filtering', () => {
     stdoutSpy.mockRestore();
   });
 
+  it('marks in-progress runs as running (not parse error) and surfaces their runId', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+
+    const livePath = join(logDir, 'liverun0-2026-04-25T15-00-00-000Z.jsonl');
+    const liveRun = buildRunMetadata({
+      runId: 'liverun0-0000-0000-0000-000000000000',
+      durationMs: 0,
+      timestamp: new Date('2026-04-25T15:00:00.000Z'),
+    });
+    initJsonlFile(livePath);
+    appendJsonlLine(
+      livePath,
+      renderJsonlSkillLine({ skill: 'live', summary: 'ok', findings: [], durationMs: 50 }, liveRun),
+    );
+
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const reporter = createTestReporter();
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const exit = await runRunsList({ ...createDefaultOptions(), json: true }, reporter);
+    expect(exit).toBe(0);
+    const output = JSON.parse(stdoutSpy.mock.calls[0]![0] as string) as { runId?: string; inProgress?: boolean }[];
+    expect(output).toHaveLength(1);
+    expect(output[0]!.inProgress).toBe(true);
+    expect(output[0]!.runId).toBe('liverun0-0000-0000-0000-000000000000');
+
+    stdoutSpy.mockRestore();
+  });
+
   it('sorts in-progress (no-summary) runs to the top using the filename timestamp', async () => {
     const logDir = join(testDir, '.warden', 'logs');
 
