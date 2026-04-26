@@ -222,18 +222,28 @@ function appendSkillToRunLog(log: RunLog, report: SkillReport): void {
   }
 }
 
+/**
+ * Append the run-final summary record. Returns the set of paths that
+ * accepted the write, so the caller can decide whether to claim
+ * "wrote JSONL output to X" (only true when the summary actually landed).
+ */
 function finalizeRunLog(
   log: RunLog,
   reports: SkillReport[],
   totalDurationMs: number,
   error?: SkillError
-): void {
-  if (log.paths.length === 0) return;
+): Set<string> {
+  const wrote = new Set<string>();
+  if (log.paths.length === 0) return wrote;
   const run: JsonlRunMetadata = { ...log.baseRun, durationMs: totalDurationMs };
   const line = renderJsonlSummaryLine(reports, run, error);
   for (const p of log.paths) {
-    try { appendJsonlLine(p, line); } catch { /* best-effort */ }
+    try {
+      appendJsonlLine(p, line);
+      wrote.add(p);
+    } catch { /* best-effort */ }
   }
+  return wrote;
 }
 
 /**
@@ -307,12 +317,15 @@ async function outputResultsAndHandleFixes(
 
   const traceId = runLog.baseRun.traceId;
 
-  finalizeRunLog(runLog, reports, totalDuration);
+  const finalizedPaths = finalizeRunLog(runLog, reports, totalDuration);
 
-  // Notify that the user-supplied --output file was successfully written.
-  // Reuses the prior wording — only emitted on a clean finalize.
+  // Only claim --output succeeded if the summary actually landed there.
   if (runLog.outputPath) {
-    reporter.success(`Wrote JSONL output to ${runLog.outputPath}`);
+    if (finalizedPaths.has(runLog.outputPath)) {
+      reporter.success(`Wrote JSONL output to ${runLog.outputPath}`);
+    } else {
+      reporter.warning(`Failed to write output file: ${runLog.outputPath}`);
+    }
   }
 
   // Collect fixable findings early so we know whether to suppress diffs in the report
@@ -328,7 +341,9 @@ async function outputResultsAndHandleFixes(
 
   reporter.blank();
   if (options.json) {
-    // --json mirrors the on-disk file byte-for-byte (specs/reporters.md §4).
+    // Prefer reading the on-disk log (per-skill durationMs is a snapshot).
+    // The fallback render uses the run total for every record — structurally
+    // valid but not byte-identical to the file.
     let jsonlContent: string | undefined;
     if (runLog.primaryLogWritten) {
       try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }

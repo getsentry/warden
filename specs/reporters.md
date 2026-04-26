@@ -610,7 +610,7 @@ Per-skill `run.durationMs` is the elapsed-since-start at the moment that record 
 
 `--json` outputs the JSONL log file contents to stdout. This is the same format as the always-on `.warden/logs/` file: one JSON object per line, with skill records followed by a summary record. See Section 3 for the full JSONL specification.
 
-After the run finalizes, `--json` reads the on-disk log file back and writes it to stdout via `process.stdout.write()`. This ensures `--json` output is byte-identical to the log file contents (including the per-skill `run.durationMs` snapshots).
+After the run finalizes, `--json` reads the on-disk log file back and writes it to stdout — preserving the per-skill `run.durationMs` snapshots. If the file isn't readable (init failed, mid-run write errors leaving the file empty), `--json` falls back to an in-memory render via `renderJsonlString`. The fallback is structurally valid but stamps every skill record with the run total `durationMs` instead of per-skill snapshots.
 
 ---
 
