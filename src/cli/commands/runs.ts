@@ -594,7 +594,6 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
     return { stop: false };
   }
 
-  // Skill record (terminal type or absent-`type` legacy shape).
   const skillResult = JsonlRecordSchema.safeParse(obj);
   if (!skillResult.success) {
     reporter.warning(`Skipping unrecognized record`);
