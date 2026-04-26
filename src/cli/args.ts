@@ -57,18 +57,20 @@ export interface SetupAppOptions {
   open: boolean;
 }
 
-export type LogsSubcommand = 'list' | 'show' | 'gc';
+export type RunsSubcommand = 'list' | 'show' | 'gc' | 'follow';
 
-export interface LogsOptions {
-  subcommand: LogsSubcommand;
+export interface RunsOptions {
+  subcommand: RunsSubcommand;
   files: string[];
+  /** Include sessions with zero analyzed files in `list` output. */
+  all?: boolean;
 }
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'logs';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs';
   options: CLIOptions;
   setupAppOptions?: SetupAppOptions;
-  logsOptions?: LogsOptions;
+  runsOptions?: RunsOptions;
 }
 
 export function showVersion(): void {
@@ -85,9 +87,10 @@ Commands:
   add [skill]          Add a skill trigger to warden.toml
   sync [remote]        Update cached remote skills to latest
   setup-app            Create a GitHub App for Warden via manifest flow
-  logs [list]          List saved run logs (default)
-  logs show <files...> Show results from JSONL log files
-  logs gc              Remove expired log files
+  runs [list]          List saved sessions (default)
+  runs show <files...> Show results from a saved session
+  runs follow [run]    Tail a session live as skills complete
+  runs gc              Remove expired session logs
   (default)            Run analysis on targets or using warden.toml triggers
 
 Targets:
@@ -309,6 +312,10 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       name: { type: 'string' },
       open: { type: 'boolean', default: true },
       'no-open': { type: 'boolean' },
+      // logs/runs follow + list options
+      // (no short alias for --follow: -f already maps to --force on init/add)
+      follow: { type: 'boolean', default: false },
+      all: { type: 'boolean', default: false },
     },
     allowPositionals: true,
   });
@@ -327,8 +334,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     };
   }
 
-  // Filter out known commands from positionals
-  const commands = ['run', 'help', 'init', 'add', 'version', 'setup-app', 'sync', 'logs'];
+  // Filter out known commands from positionals.
+  const commands = ['run', 'help', 'init', 'add', 'version', 'setup-app', 'sync', 'runs'];
   const targets = positionals.filter((p) => !commands.includes(p));
 
   // Handle explicit help command
@@ -422,32 +429,40 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     };
   }
 
-  // Handle logs command group
-  if (positionals.includes('logs')) {
-    const logsIndex = positionals.indexOf('logs');
-    const subArgs = positionals.slice(logsIndex + 1);
+  // Handle the `runs` command group.
+  if (positionals.includes('runs')) {
+    const runsIndex = positionals.indexOf('runs');
+    const subArgs = positionals.slice(runsIndex + 1);
     const subcommandArg = subArgs[0];
 
     let files: string[] = [];
 
-    // Determine subcommand: explicit keyword, or infer 'show' if arg is not a known subcommand
-    let subcommand: LogsSubcommand;
-    if (subcommandArg === 'list' || subcommandArg === 'show' || subcommandArg === 'gc') {
+    // Determine subcommand: explicit keyword, --follow flag, or infer 'show'.
+    let subcommand: RunsSubcommand;
+    if (
+      subcommandArg === 'list' ||
+      subcommandArg === 'show' ||
+      subcommandArg === 'gc' ||
+      subcommandArg === 'follow'
+    ) {
       subcommand = subcommandArg;
+      if (subcommand === 'show' || subcommand === 'follow') {
+        files = subArgs.slice(1);
+      }
+    } else if (values.follow) {
+      // `warden runs --follow [runId]` — flag form
+      subcommand = 'follow';
+      files = subcommandArg ? subArgs : [];
     } else if (subcommandArg) {
-      // Non-keyword arg (file path, run ID, etc.) — infer 'show'
+      // Bare arg (file path or run ID) — infer 'show'
       subcommand = 'show';
       files = subArgs;
     } else {
       subcommand = 'list';
     }
 
-    if (subcommand === 'show' && files.length === 0) {
-      files = subArgs.slice(1);
-    }
-
     return {
-      command: 'logs',
+      command: 'runs',
       options: CLIOptionsSchema.parse({
         json: values.json,
         reportOn: values['report-on'] as SeverityThreshold | undefined,
@@ -458,9 +473,10 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         log: values.log,
         color: resolveColorOption(values),
       }),
-      logsOptions: {
+      runsOptions: {
         subcommand,
         files,
+        all: values.all,
       },
     };
   }

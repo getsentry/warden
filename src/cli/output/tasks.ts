@@ -138,6 +138,13 @@ export interface RunTasksOptions {
   concurrency: number;
   /** Controller that fires when fail-fast detects a finding. Created by caller. */
   failFastController?: AbortController;
+  /**
+   * Side-effect hook fired after each skill finishes (success, error, or
+   * skip). Used by the CLI to stream incremental JSONL records to disk so
+   * `warden runs follow` and crash-safe artifacts work. Runs alongside —
+   * not in place of — the runner's own progress output.
+   */
+  onSkillComplete?: (report: SkillReport) => void;
 }
 
 /**
@@ -437,7 +444,7 @@ export async function runSkillTask(
             durationMs: duration,
             model: runnerOptions?.model,
             // Preserve per-file metadata (timing, partial usage, attempted
-            // filenames) on failure runs too — `warden logs` and JSONL
+            // filenames) on failure runs too — `warden runs` and JSONL
             // consumers iterate this array to count attempted files. Without
             // it, a failed run shows totalFiles: 0.
             files: preparedFiles.map((file, i) => {
@@ -847,7 +854,7 @@ export async function runSkillTasks(
   options: RunTasksOptions,
   callbacks?: SkillProgressCallbacks
 ): Promise<SkillTaskResult[]> {
-  const { mode, verbosity, concurrency, failFastController } = options;
+  const { mode, verbosity, concurrency, failFastController, onSkillComplete } = options;
 
   // Global semaphore gates file-level work across all skills.
   // All skills launch immediately so the UI shows them as "running",
@@ -856,18 +863,33 @@ export async function runSkillTasks(
 
   const effectiveCallbacks = callbacks ?? createDefaultCallbacks(tasks, mode, verbosity);
 
-  // Wrap onFileUpdate to detect findings and trigger fail-fast
-  const wrappedCallbacks: SkillProgressCallbacks = failFastController
-    ? {
-        ...effectiveCallbacks,
-        onFileUpdate: (skillName, filename, updates) => {
-          effectiveCallbacks.onFileUpdate(skillName, filename, updates);
-          if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
-            failFastController.abort();
-          }
-        },
-      }
-    : effectiveCallbacks;
+  // Wrap onFileUpdate to detect findings and trigger fail-fast,
+  // and onSkillComplete to fire the streaming hook for incremental output.
+  const wrappedCallbacks: SkillProgressCallbacks = {
+    ...effectiveCallbacks,
+    ...(failFastController
+      ? {
+          onFileUpdate: (skillName: string, filename: string, updates: Partial<FileState>) => {
+            effectiveCallbacks.onFileUpdate(skillName, filename, updates);
+            if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
+              failFastController.abort();
+            }
+          },
+        }
+      : {}),
+    ...(onSkillComplete
+      ? {
+          onSkillComplete: (name: string, report: SkillReport) => {
+            effectiveCallbacks.onSkillComplete(name, report);
+            try {
+              onSkillComplete(report);
+            } catch {
+              // Streaming hook errors must never break the run loop.
+            }
+          },
+        }
+      : {}),
+  };
 
   // Output SKILLS header (TTY only - in log mode, "Running..." lines are sufficient)
   if (verbosity !== Verbosity.Quiet && tasks.length > 0 && mode.isTTY) {

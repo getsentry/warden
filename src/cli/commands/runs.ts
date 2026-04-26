@@ -1,9 +1,9 @@
-import { existsSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
+import { existsSync, openSync, closeSync, fstatSync, readSync, readdirSync, readFileSync, unlinkSync, watch } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import chalk from 'chalk';
 import { loadWardenConfig } from '../../config/loader.js';
 import type { ConfidenceThreshold, Severity, SkillReport } from '../../types/index.js';
-import type { CLIOptions, LogsOptions } from '../args.js';
+import type { CLIOptions, RunsOptions } from '../args.js';
 import { getRepoRoot } from '../git.js';
 import { findExpiredArtifacts } from '../log-cleanup.js';
 import { renderTerminalReport, filterReports } from '../terminal.js';
@@ -16,6 +16,8 @@ import {
   parseJsonlReports,
   parseLogMetadata,
   renderJsonlString,
+  JsonlRecordSchema,
+  JsonlSummaryRecordSchema,
   type JsonlRunMetadata,
   type LogFileMetadata,
 } from '../output/index.js';
@@ -126,9 +128,17 @@ function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>):
 }
 
 /**
- * List all JSONL log files in .warden/logs/.
+ * List all JSONL session files in .warden/logs/.
+ *
+ * Sessions with zero analyzed files (early-exit / no-op runs) are hidden
+ * by default — they're rarely interesting and crowd out actual analysis
+ * runs. Pass `all=true` (CLI: `--all`) to include them.
  */
-export async function runLogsList(options: CLIOptions, reporter: Reporter): Promise<number> {
+export async function runRunsList(
+  options: CLIOptions,
+  reporter: Reporter,
+  listOptions: { all?: boolean } = {},
+): Promise<number> {
   const resolved = resolveLogDir();
   if (!resolved) {
     reporter.error('Not a git repository');
@@ -148,22 +158,35 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
   }
 
   if (entries.length === 0) {
-    reporter.warning('No log files found');
-    reporter.tip('Run warden to generate logs in .warden/logs/');
+    reporter.warning('No saved sessions found');
+    reporter.tip('Run warden to generate sessions in .warden/logs/');
     return 0;
   }
 
   // Parse all logs for metadata and sort by timestamp (newest first)
-  const logData: { entry: string; meta: LogFileMetadata | undefined }[] = [];
+  const allLogData: { entry: string; meta: LogFileMetadata | undefined }[] = [];
   for (const entry of entries) {
     const filePath = join(logDir, entry);
-    logData.push({ entry, meta: parseLogMetadata(filePath) });
+    allLogData.push({ entry, meta: parseLogMetadata(filePath) });
   }
-  logData.sort((a, b) => {
+  allLogData.sort((a, b) => {
     const tsA = a.meta?.summary.run.timestamp ?? '';
     const tsB = b.meta?.summary.run.timestamp ?? '';
     return tsB.localeCompare(tsA);
   });
+
+  // Default view hides no-op sessions: 0 files analyzed AND no run-level error.
+  // A run that errored before any skill ran (auth, config) still shows up — the
+  // error is the whole point of keeping the record. Parse-error rows also stay
+  // visible so the user can see something went wrong with their archive.
+  const isEmptyRun = (entry: { meta: LogFileMetadata | undefined }) => {
+    if (!entry.meta) return false;
+    if (entry.meta.summary.error) return false;
+    return entry.meta.totalFiles === 0 && entry.meta.skills.length === 0;
+  };
+  const showAll = listOptions.all ?? false;
+  const logData = showAll ? allLogData : allLogData.filter((e) => !isEmptyRun(e));
+  const hiddenCount = allLogData.length - logData.length;
 
   if (options.json) {
     const results = logData.map(({ entry, meta }) => ({
@@ -301,7 +324,7 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
   reporter.blank();
   reporter.text(
     chalk.dim(
-      `${entries.length} ${pluralize(entries.length, 'run')}  ·  ` +
+      `${rows.length} ${pluralize(rows.length, 'run')}  ·  ` +
       `${totals.findings} ${pluralize(totals.findings, 'finding')}  `
     ) +
     formatSeverityBreakdown(totals.bySeverity) +
@@ -312,22 +335,30 @@ export async function runLogsList(options: CLIOptions, reporter: Reporter): Prom
     )
   );
 
+  if (hiddenCount > 0) {
+    reporter.text(
+      chalk.dim(
+        `${hiddenCount} empty ${pluralize(hiddenCount, 'session')} hidden — pass --all to show`,
+      ),
+    );
+  }
+
   return 0;
 }
 
 /**
  * Show results from JSONL log files (replaces `warden replay`).
  */
-export async function runLogsShow(
-  logsOptions: LogsOptions,
+export async function runRunsShow(
+  runsOptions: RunsOptions,
   options: CLIOptions,
   reporter: Reporter,
 ): Promise<number> {
-  const { files: fileArgs } = logsOptions;
+  const { files: fileArgs } = runsOptions;
 
   if (fileArgs.length === 0) {
     reporter.error('No log files specified');
-    reporter.tip('Usage: warden logs show <file.jsonl> [file2.jsonl ...]');
+    reporter.tip('Usage: warden runs show <file.jsonl> [file2.jsonl ...]');
     return 1;
   }
 
@@ -433,7 +464,7 @@ export async function runLogsShow(
 /**
  * Garbage-collect expired log files.
  */
-export async function runLogsGc(options: CLIOptions, reporter: Reporter): Promise<number> {
+export async function runRunsGc(options: CLIOptions, reporter: Reporter): Promise<number> {
   const resolved = resolveLogDir();
   if (!resolved) {
     reporter.error('Not a git repository');
@@ -477,19 +508,224 @@ export async function runLogsGc(options: CLIOptions, reporter: Reporter): Promis
 }
 
 /**
- * Dispatch to the appropriate logs subcommand.
+ * Resolve a run-id-or-path argument to the active session file.
+ *
+ * `--follow` accepts the same shapes as `show` plus a no-arg form that
+ * targets "the most recent session that hasn't been closed yet" — a
+ * session is open until its trailing `summary` line is written, so this
+ * is a reliable proxy for "the run currently happening in another
+ * terminal."
  */
-export async function runLogs(
-  logsOptions: LogsOptions,
+function resolveFollowTarget(arg: string | undefined, logDir: string): string | undefined {
+  if (arg) {
+    if (arg.includes('/') || arg.includes('.')) {
+      return resolve(process.cwd(), arg);
+    }
+    const matches = resolveFileArg(arg, logDir);
+    return matches[0];
+  }
+
+  // No arg: pick the newest log file that has no trailing summary record.
+  let entries: string[];
+  try {
+    entries = readdirSync(logDir)
+      .filter((e) => e.endsWith('.jsonl'))
+      .sort()
+      .reverse();
+  } catch {
+    return undefined;
+  }
+  for (const entry of entries) {
+    const filePath = join(logDir, entry);
+    try {
+      const content = readFileSync(filePath, 'utf-8');
+      const lines = content.trim().split('\n').filter((l) => l.trim());
+      const last = lines[lines.length - 1];
+      if (!last) {
+        // Empty file = freshly initialized run that hasn't emitted anything yet.
+        return filePath;
+      }
+      const parsed = JSON.parse(last);
+      if (parsed?.type !== 'summary') {
+        return filePath;
+      }
+    } catch {
+      // Treat parse errors as "still in progress"; the watcher will sort it out.
+      return filePath;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Render a single skill-record line via the terminal renderer.
+ * Summary lines and unknown record types are rendered as one-line
+ * status strings so the user sees a steady cadence of output.
+ */
+function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    // Malformed line — show it raw so a corrupt log doesn't silently swallow output.
+    reporter.warning(`Skipping malformed line: ${line.slice(0, 80)}`);
+    return { stop: false };
+  }
+
+  const obj = parsed as { type?: string };
+
+  if (obj.type === 'summary') {
+    const summary = JsonlSummaryRecordSchema.safeParse(obj);
+    if (summary.success) {
+      const { totalFindings, bySeverity } = summary.data;
+      reporter.blank();
+      reporter.text(
+        chalk.dim(
+          `Run finished — ${totalFindings} ${pluralize(totalFindings, 'finding')}  `,
+        ) +
+          formatSeverityBreakdown(bySeverity),
+      );
+    }
+    return { stop: true };
+  }
+
+  if (obj.type === 'fix-evaluation') {
+    // Don't render fix-evaluation records in --follow; they're auxiliary.
+    return { stop: false };
+  }
+
+  // Skill record (terminal type or absent-`type` legacy shape).
+  const skillResult = JsonlRecordSchema.safeParse(obj);
+  if (!skillResult.success) {
+    reporter.warning(`Skipping unrecognized record`);
+    return { stop: false };
+  }
+  const { run: _run, ...report } = skillResult.data;
+  console.log(renderTerminalReport([report], reporter.mode, { verbosity: reporter.verbosity }));
+  return { stop: false };
+}
+
+/**
+ * Tail a JSONL session file, rendering each appended skill record live.
+ * Exits when the trailing summary record is appended or on Ctrl-C.
+ *
+ * The viewer always exits 0 — `--follow` is not a build gate, and
+ * exit-on-findings would surprise users who run it in a second terminal
+ * to watch progress.
+ */
+export async function runRunsFollow(
+  runsOptions: RunsOptions,
   options: CLIOptions,
   reporter: Reporter,
 ): Promise<number> {
-  switch (logsOptions.subcommand) {
+  const resolved = resolveLogDir();
+  if (!resolved) {
+    reporter.error('Not a git repository');
+    return 1;
+  }
+  const { logDir } = resolved;
+
+  const target = resolveFollowTarget(runsOptions.files[0], logDir);
+  if (!target) {
+    if (runsOptions.files[0]) {
+      reporter.error(`No matching session for ${runsOptions.files[0]}`);
+    } else {
+      reporter.error('No active session to follow');
+      reporter.tip('Start a run in another terminal, or pass an explicit run id.');
+    }
+    return 1;
+  }
+
+  if (!options.json) {
+    reporter.dim(`Following: ${target}`);
+    reporter.blank();
+  }
+
+  // Render anything already on disk and remember where we left off.
+  let offset = 0;
+  let buffer = '';
+  let stopped = false;
+
+  const drainFile = (): void => {
+    let fd: number;
+    try {
+      fd = openSync(target, 'r');
+    } catch {
+      return;
+    }
+    try {
+      const stat = fstatSync(fd);
+      if (stat.size <= offset) return;
+      const len = stat.size - offset;
+      const buf = Buffer.alloc(len);
+      readSync(fd, buf, 0, len, offset);
+      offset = stat.size;
+      buffer += buf.toString('utf-8');
+      let nl: number;
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 1);
+        if (!line.trim()) continue;
+        const result = renderFollowLine(line, reporter);
+        if (result.stop) {
+          stopped = true;
+          return;
+        }
+      }
+    } finally {
+      try { closeSync(fd); } catch { /* ignore */ }
+    }
+  };
+
+  drainFile();
+  if (stopped) return 0;
+
+  return new Promise<number>((resolvePromise) => {
+    let watcher: ReturnType<typeof watch> | undefined;
+
+    const tick = () => {
+      drainFile();
+      if (stopped) finish(0);
+    };
+
+    // fs.watch is best-effort — coalesces events and varies by platform.
+    // Keep a polling fallback (1s) so we always make forward progress
+    // even if change events get dropped on macOS / network filesystems.
+    try {
+      watcher = watch(target, { persistent: true }, () => tick());
+    } catch {
+      // If watch isn't available, polling alone is fine.
+    }
+    const pollTimer = setInterval(tick, 1000);
+
+    const finish = (code: number) => {
+      if (watcher) {
+        try { watcher.close(); } catch { /* ignore */ }
+      }
+      clearInterval(pollTimer);
+      process.off('SIGINT', onSigint);
+      resolvePromise(code);
+    };
+
+    const onSigint = () => finish(0);
+    process.on('SIGINT', onSigint);
+  });
+}
+
+/** Dispatch to the appropriate `runs` subcommand. */
+export async function runRuns(
+  runsOptions: RunsOptions,
+  options: CLIOptions,
+  reporter: Reporter,
+): Promise<number> {
+  switch (runsOptions.subcommand) {
     case 'list':
-      return runLogsList(options, reporter);
+      return runRunsList(options, reporter, { all: runsOptions.all });
     case 'show':
-      return runLogsShow(logsOptions, options, reporter);
+      return runRunsShow(runsOptions, options, reporter);
     case 'gc':
-      return runLogsGc(options, reporter);
+      return runRunsGc(options, reporter);
+    case 'follow':
+      return runRunsFollow(runsOptions, options, reporter);
   }
 }

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
@@ -181,6 +181,117 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 }
 
 /**
+ * Build a run metadata block for the current write moment.
+ *
+ * Used by both the one-shot `renderJsonlString` and the incremental
+ * writer. Per-record `durationMs` is the runtime as of when the record
+ * was emitted — for skill records written mid-run that's a snapshot;
+ * for the final summary it's the run total.
+ */
+export function buildRunMetadata(options: {
+  runId: string;
+  durationMs: number;
+  timestamp?: Date;
+  traceId?: string;
+  model?: string;
+  headSha?: string;
+  cwd?: string;
+}): JsonlRunMetadata {
+  return {
+    timestamp: (options.timestamp ?? new Date()).toISOString(),
+    durationMs: options.durationMs,
+    cwd: options.cwd ?? process.cwd(),
+    runId: options.runId,
+    traceId: options.traceId,
+    model: options.model,
+    headSha: options.headSha,
+  };
+}
+
+/**
+ * Build a single skill JSONL record. Drops empty optional arrays and
+ * zero counts to keep the on-disk shape compact and stable.
+ */
+export function buildSkillJsonlRecord(report: SkillReport, run: JsonlRunMetadata): JsonlRecord {
+  const trimmed: SkillReport = {
+    ...report,
+    skippedFiles: report.skippedFiles?.length ? report.skippedFiles : undefined,
+    failedHunks: report.failedHunks || undefined,
+    failedExtractions: report.failedExtractions || undefined,
+    hunkFailures: report.hunkFailures?.length ? report.hunkFailures : undefined,
+  };
+  return { ...trimmed, run };
+}
+
+/** Build the aggregate summary JSONL record. */
+export function buildSummaryJsonlRecord(
+  reports: SkillReport[],
+  run: JsonlRunMetadata,
+  error?: SkillError
+): JsonlSummaryRecord {
+  const allFindings = reports.flatMap((r) => r.findings);
+  const totalSkippedFiles = reports.reduce((n, r) => n + (r.skippedFiles?.length ?? 0), 0);
+  const totalAuxiliaryUsage = reports.reduce<AuxiliaryUsageMap | undefined>(
+    (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
+    undefined
+  );
+  const failedSkills = reports.filter((r) => r.error).map((r) => r.skill);
+  const totalFailedHunks = reports.reduce((n, r) => n + (r.failedHunks ?? 0), 0);
+  const totalFailedExtractions = reports.reduce((n, r) => n + (r.failedExtractions ?? 0), 0);
+  return {
+    run,
+    type: 'summary',
+    totalFindings: allFindings.length,
+    bySeverity: countBySeverity(allFindings),
+    usage: aggregateUsage(reports),
+    totalSkippedFiles: totalSkippedFiles > 0 ? totalSkippedFiles : undefined,
+    auxiliaryUsage: totalAuxiliaryUsage,
+    failedSkills: failedSkills.length > 0 ? failedSkills : undefined,
+    totalFailedHunks: totalFailedHunks > 0 ? totalFailedHunks : undefined,
+    totalFailedExtractions: totalFailedExtractions > 0 ? totalFailedExtractions : undefined,
+    error,
+  };
+}
+
+/** Render a single skill JSONL record as one line including trailing newline. */
+export function renderJsonlSkillLine(report: SkillReport, run: JsonlRunMetadata): string {
+  return JSON.stringify(buildSkillJsonlRecord(report, run)) + '\n';
+}
+
+/** Render the summary JSONL record as one line including trailing newline. */
+export function renderJsonlSummaryLine(
+  reports: SkillReport[],
+  run: JsonlRunMetadata,
+  error?: SkillError
+): string {
+  return JSON.stringify(buildSummaryJsonlRecord(reports, run, error)) + '\n';
+}
+
+/**
+ * Initialize a JSONL log file: create parent directories and truncate
+ * to empty so the next append starts a fresh run.
+ */
+export function initJsonlFile(outputPath: string): void {
+  const resolvedPath = resolve(process.cwd(), outputPath);
+  mkdirSync(dirname(resolvedPath), { recursive: true });
+  writeFileSync(resolvedPath, '');
+}
+
+/**
+ * Append a pre-rendered JSONL line to a file. The line must already
+ * include its trailing newline. Parent directory is created on demand.
+ *
+ * On POSIX, `appendFileSync` of a single line under PIPE_BUF (4KB
+ * minimum) is atomic with respect to other appenders, which is why
+ * the producer can safely emit per-skill records concurrently.
+ */
+export function appendJsonlLine(outputPath: string, line: string): void {
+  const resolvedPath = resolve(process.cwd(), outputPath);
+  mkdirSync(dirname(resolvedPath), { recursive: true });
+  appendFileSync(resolvedPath, line);
+}
+
+/**
  * Render skill reports as a JSONL string.
  * Each line contains one skill report with run metadata.
  * A final summary line is appended at the end.
@@ -199,57 +310,21 @@ export function renderJsonlString(
     error?: SkillError;
   }
 ): string {
-  const timestamp = (options?.timestamp ?? new Date()).toISOString();
-  const cwd = options?.cwd ?? process.cwd();
-
-  const runMetadata: JsonlRunMetadata = {
-    timestamp,
-    durationMs,
-    cwd,
+  const runMetadata = buildRunMetadata({
     runId: options?.runId ?? generateRunId(),
+    durationMs,
+    timestamp: options?.timestamp,
     traceId: options?.traceId,
     model: options?.model,
     headSha: options?.headSha,
-  };
+    cwd: options?.cwd,
+  });
 
   const lines: string[] = [];
-
   for (const report of reports) {
-    // Drop empty optional arrays and zero counts so JSONL stays compact.
-    const trimmed: SkillReport = {
-      ...report,
-      skippedFiles: report.skippedFiles?.length ? report.skippedFiles : undefined,
-      failedHunks: report.failedHunks || undefined,
-      failedExtractions: report.failedExtractions || undefined,
-      hunkFailures: report.hunkFailures?.length ? report.hunkFailures : undefined,
-    };
-    const record: JsonlRecord = { ...trimmed, run: runMetadata };
-    lines.push(JSON.stringify(record));
+    lines.push(JSON.stringify(buildSkillJsonlRecord(report, runMetadata)));
   }
-
-  const allFindings = reports.flatMap((r) => r.findings);
-  const totalSkippedFiles = reports.reduce((n, r) => n + (r.skippedFiles?.length ?? 0), 0);
-  const totalAuxiliaryUsage = reports.reduce<AuxiliaryUsageMap | undefined>(
-    (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
-    undefined
-  );
-  const failedSkills = reports.filter((r) => r.error).map((r) => r.skill);
-  const totalFailedHunks = reports.reduce((n, r) => n + (r.failedHunks ?? 0), 0);
-  const totalFailedExtractions = reports.reduce((n, r) => n + (r.failedExtractions ?? 0), 0);
-  const summaryRecord: JsonlSummaryRecord = {
-    run: runMetadata,
-    type: 'summary',
-    totalFindings: allFindings.length,
-    bySeverity: countBySeverity(allFindings),
-    usage: aggregateUsage(reports),
-    totalSkippedFiles: totalSkippedFiles > 0 ? totalSkippedFiles : undefined,
-    auxiliaryUsage: totalAuxiliaryUsage,
-    failedSkills: failedSkills.length > 0 ? failedSkills : undefined,
-    totalFailedHunks: totalFailedHunks > 0 ? totalFailedHunks : undefined,
-    totalFailedExtractions: totalFailedExtractions > 0 ? totalFailedExtractions : undefined,
-    error: options?.error,
-  };
-  lines.push(JSON.stringify(summaryRecord));
+  lines.push(JSON.stringify(buildSummaryJsonlRecord(reports, runMetadata, options?.error)));
 
   return lines.join('\n') + '\n';
 }

@@ -700,7 +700,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     // error here produces a plain Error downstream and loses classification.
     expect(result.error).toBeInstanceOf(SkillRunnerError);
     expect((result.error as SkillRunnerError).code).toBe('all_hunks_failed');
-    // Per-file metadata must be present even on failure runs — `warden logs`
+    // Per-file metadata must be present even on failure runs — `warden runs`
     // and JSONL consumers count attempted files via report.files. Empty
     // files would show totalFiles: 0 for an all-hunks-failed run.
     expect(result.report!.files).toHaveLength(1);

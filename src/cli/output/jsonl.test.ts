@@ -15,6 +15,11 @@ import {
   JsonlSummaryRecordSchema,
   JsonlFixEvaluationRecordSchema,
   renderJsonlString,
+  renderJsonlSkillLine,
+  renderJsonlSummaryLine,
+  buildRunMetadata,
+  initJsonlFile,
+  appendJsonlLine,
   type JsonlRecord,
   type JsonlSummaryRecord,
 } from './jsonl.js';
@@ -887,6 +892,108 @@ describe('parseSummaryFromLastLine', () => {
 
     const result = parseSummaryFromLastLine(noSummaryPath);
     expect(result).toBeUndefined();
+  });
+});
+
+describe('incremental JSONL writes', () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `warden-incr-${Date.now()}`);
+    mkdirSync(testDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true });
+    }
+  });
+
+  it('initJsonlFile creates parent dir and truncates an existing file', () => {
+    const target = join(testDir, 'nested', 'run.jsonl');
+    initJsonlFile(target);
+    expect(existsSync(target)).toBe(true);
+    expect(readFileSync(target, 'utf-8')).toBe('');
+
+    // Pre-existing content should be truncated when re-initialized.
+    writeFileSync(target, 'leftover\n');
+    initJsonlFile(target);
+    expect(readFileSync(target, 'utf-8')).toBe('');
+  });
+
+  it('append-as-you-go produces the same on-disk shape as renderJsonlString', () => {
+    // The whole point of incremental writes: the bytes hit disk in
+    // smaller chunks, but the final file is byte-identical to the
+    // one-shot render. Old readers (parseJsonlReports, downstream
+    // dashboards) must not be able to tell the difference.
+    const reports: SkillReport[] = [
+      {
+        skill: 'security-review',
+        summary: 'one issue',
+        findings: [{ id: 'f1', severity: 'high', title: 't', description: 'd' }],
+        durationMs: 1200,
+        usage: { inputTokens: 10, outputTokens: 5, costUSD: 0.001 },
+      },
+      {
+        skill: 'code-review',
+        summary: 'no issues',
+        findings: [],
+        durationMs: 800,
+      },
+    ];
+    const runId = '11111111-2222-3333-4444-555555555555';
+    const timestamp = new Date('2026-04-25T12:00:00.000Z');
+    const cwd = '/test/repo';
+
+    const oneShot = renderJsonlString(reports, 2000, { runId, timestamp, cwd });
+
+    // Build the same record sequence via the per-line helpers, using a
+    // run metadata block whose durationMs matches the one-shot render
+    // for every line (same as the legacy code path).
+    const run = buildRunMetadata({ runId, durationMs: 2000, timestamp, cwd });
+    const target = join(testDir, 'incr.jsonl');
+    initJsonlFile(target);
+    for (const r of reports) appendJsonlLine(target, renderJsonlSkillLine(r, run));
+    appendJsonlLine(target, renderJsonlSummaryLine(reports, run));
+
+    expect(readFileSync(target, 'utf-8')).toBe(oneShot);
+  });
+
+  it('a partial file (skills appended, no summary) parses and renders skill records', () => {
+    // Crash-safety check: if the run dies before finalize, we still
+    // want every completed skill on disk and parseable.
+    const partialReports: SkillReport[] = [
+      { skill: 'sa', summary: 'ok', findings: [], durationMs: 100 },
+      { skill: 'sb', summary: 'ok', findings: [], durationMs: 200 },
+    ];
+    const run = buildRunMetadata({
+      runId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      durationMs: 0,
+      timestamp: new Date('2026-04-25T12:00:00.000Z'),
+    });
+    const target = join(testDir, 'partial.jsonl');
+    initJsonlFile(target);
+    for (const r of partialReports) appendJsonlLine(target, renderJsonlSkillLine(r, run));
+
+    const content = readFileSync(target, 'utf-8');
+    const parsed = parseJsonlReports(content);
+    expect(parsed.reports.map((r) => r.skill)).toEqual(['sa', 'sb']);
+    // No summary record means totalDurationMs falls back to the first record's run.durationMs.
+    expect(parsed.runMetadata?.runId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+  });
+
+  it('parseJsonlReports keeps its legacy contract: a one-shot file from a prior version still parses', () => {
+    // BACKWARD COMPATIBILITY: a file written entirely up-front by an old
+    // version (today's pre-incremental path) must continue to parse and
+    // render with the current code. This is the load-bearing test for
+    // the issue's hard constraint.
+    const legacy = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"legacy-oneshot"},"skill":"sec","summary":"ok","findings":[]}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"legacy-oneshot"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}
+`;
+    const result = parseJsonlReports(legacy);
+    expect(result.reports.length).toBe(1);
+    expect(result.reports[0]!.skill).toBe('sec');
+    expect(result.totalDurationMs).toBe(2000);
   });
 });
 

@@ -24,8 +24,13 @@ import {
   MODEL_DEFAULT_SENTINEL,
   writeJsonlContent,
   renderJsonlString,
+  renderJsonlSkillLine,
+  renderJsonlSummaryLine,
+  initJsonlFile,
+  appendJsonlLine,
   getRepoLogPath,
   generateRunId,
+  type JsonlRunMetadata,
   type SkillTaskOptions,
 } from './output/index.js';
 import { cleanupArtifacts } from './log-cleanup.js';
@@ -40,7 +45,7 @@ import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
 import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
-import { runLogs } from './commands/logs.js';
+import { runRuns } from './commands/runs.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -147,6 +152,124 @@ function emitEmptyRunLog(
 }
 
 /**
+ * Tracks the in-flight JSONL log for a run.
+ *
+ * Both the repo-local `.warden/logs/<runId>.jsonl` and the user's optional
+ * `--output` path are appended to in real time as each skill completes —
+ * so a second terminal can `warden runs follow <runId>` to watch
+ * progress, and CI artifacts contain everything that ran even if the
+ * process crashes before the summary is appended.
+ *
+ * Per-skill records carry the run's elapsed-so-far in `run.durationMs`;
+ * the trailing summary record carries the final total. Older readers
+ * derive total run time from the summary (`parseJsonlReports`), so the
+ * snapshot value on skill records doesn't change post-hoc semantics.
+ */
+interface RunLog {
+  /** Files to append to. Empty if every initialization failed. */
+  paths: string[];
+  /** Repo-local log path (always set; `paths` includes it iff init succeeded). */
+  primaryLogPath: string;
+  /** Whether the primary log file was successfully initialized for writing. */
+  primaryLogWritten: boolean;
+  /** User-supplied --output path, if init succeeded; otherwise undefined. */
+  outputPath: string | undefined;
+  /** Wall-clock start of the run, for computing per-record `durationMs`. */
+  startTime: number;
+  /** Run metadata baseline; per write we plug in a fresh `durationMs`. */
+  baseRun: Omit<JsonlRunMetadata, 'durationMs'>;
+}
+
+/**
+ * Initialize the run's JSONL log files. Both paths are truncated to empty
+ * so subsequent appends start a fresh run; on initialization failure the
+ * path is dropped from the write set and a warning is surfaced.
+ */
+function initializeRunLog(args: {
+  repoPath: string;
+  runId: string;
+  timestamp: Date;
+  traceId: string | undefined;
+  headSha: string | undefined;
+  model: string | undefined;
+  outputPath: string | undefined;
+  reporter: Reporter;
+  startTime: number;
+}): RunLog {
+  const { repoPath, runId, timestamp, traceId, headSha, model, outputPath, reporter, startTime } = args;
+
+  const baseRun: Omit<JsonlRunMetadata, 'durationMs'> = {
+    timestamp: timestamp.toISOString(),
+    cwd: process.cwd(),
+    runId,
+    traceId,
+    model,
+    headSha,
+  };
+
+  const primaryLogPath = getRepoLogPath(repoPath, runId, timestamp);
+  let primaryLogWritten = false;
+  try {
+    initJsonlFile(primaryLogPath);
+    primaryLogWritten = true;
+  } catch (err) {
+    reporter.warning(`Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  let resolvedOutputPath: string | undefined;
+  if (outputPath) {
+    try {
+      initJsonlFile(outputPath);
+      resolvedOutputPath = outputPath;
+    } catch (err) {
+      reporter.warning(`Failed to write output file: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const paths: string[] = [];
+  if (primaryLogWritten) paths.push(primaryLogPath);
+  if (resolvedOutputPath) paths.push(resolvedOutputPath);
+
+  return { paths, primaryLogPath, primaryLogWritten, outputPath: resolvedOutputPath, startTime, baseRun };
+}
+
+/**
+ * Append a completed skill's record to every active log file.
+ * Best-effort: a failed write on one path doesn't block the others.
+ */
+function appendSkillToRunLog(log: RunLog, report: SkillReport): void {
+  if (log.paths.length === 0) return;
+  const run: JsonlRunMetadata = { ...log.baseRun, durationMs: Date.now() - log.startTime };
+  const line = renderJsonlSkillLine(report, run);
+  for (const p of log.paths) {
+    try {
+      appendJsonlLine(p, line);
+    } catch {
+      // Don't let a transient I/O failure abort the run.
+    }
+  }
+}
+
+/** Append the run-final summary record to every active log file. */
+function finalizeRunLog(
+  log: RunLog,
+  reports: SkillReport[],
+  totalDurationMs: number,
+  error?: SkillError
+): void {
+  if (log.paths.length === 0) return;
+  const run: JsonlRunMetadata = { ...log.baseRun, durationMs: totalDurationMs };
+  const line = renderJsonlSummaryLine(reports, run, error);
+  for (const p of log.paths) {
+    try {
+      appendJsonlLine(p, line);
+    } catch {
+      // Best-effort; the on-disk skill records remain valid as a partial run.
+    }
+  }
+}
+
+/**
  * Result of processing skill task results.
  */
 interface SkillToRun {
@@ -209,46 +332,23 @@ async function outputResultsAndHandleFixes(
   processed: ProcessedResults,
   options: CLIOptions,
   reporter: Reporter,
-  repoPath: string,
+  runLog: RunLog,
   totalDuration: number,
   failFastAborted?: boolean,
-  resolvedModel?: string,
 ): Promise<number> {
   const { reports, filteredReports, hasFailure, failureReasons } = processed;
 
-  const traceId = getTraceId();
-  const runId = generateRunId();
-  const timestamp = new Date();
+  const traceId = runLog.baseRun.traceId;
 
-  // Capture HEAD SHA safely (non-fatal if not in a git repo)
-  let headSha: string | undefined;
-  try {
-    headSha = getHeadSha(repoPath);
-  } catch {
-    // Not in a git repo or HEAD is unborn
-  }
+  // Append the run-final summary record to every active log file. Skill
+  // records were appended incrementally as each skill completed, so this
+  // just closes the file with the aggregate.
+  finalizeRunLog(runLog, reports, totalDuration);
 
-  // Render JSONL content once so repo log and --output have identical timestamps
-  const jsonlContent = renderJsonlString(reports, totalDuration, { runId, traceId, timestamp, model: resolvedModel, headSha });
-
-  // Always write repo-local JSONL log (non-fatal — don't lose analysis output)
-  const logPath = getRepoLogPath(repoPath, runId, timestamp);
-  let logWritten = false;
-  try {
-    writeJsonlContent(logPath, jsonlContent);
-    logWritten = true;
-  } catch (err) {
-    reporter.warning(`Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  // Write additional copy to --output path if specified
-  if (options.output) {
-    try {
-      writeJsonlContent(options.output, jsonlContent);
-      reporter.success(`Wrote JSONL output to ${options.output}`);
-    } catch (err) {
-      reporter.warning(`Failed to write output file: ${err instanceof Error ? err.message : String(err)}`);
-    }
+  // Notify that the user-supplied --output file was successfully written.
+  // Reuses the prior wording — only emitted on a clean finalize.
+  if (runLog.outputPath) {
+    reporter.success(`Wrote JSONL output to ${runLog.outputPath}`);
   }
 
   // Collect fixable findings early so we know whether to suppress diffs in the report
@@ -265,7 +365,16 @@ async function outputResultsAndHandleFixes(
   // Output results
   reporter.blank();
   if (options.json) {
-    // --json: output pre-rendered JSONL (identical to log file contents)
+    // --json: render JSONL content matching what we just wrote to disk so
+    // stdout mirrors the on-disk contract for piping consumers.
+    const jsonlContent = renderJsonlString(reports, totalDuration, {
+      runId: runLog.baseRun.runId,
+      traceId,
+      timestamp: new Date(runLog.baseRun.timestamp),
+      model: runLog.baseRun.model,
+      headSha: runLog.baseRun.headSha,
+      cwd: runLog.baseRun.cwd,
+    });
     process.stdout.write(jsonlContent);
   } else {
     // Suppress fix diffs in report when interactive step-through will show them
@@ -286,8 +395,8 @@ async function outputResultsAndHandleFixes(
   reporter.renderSummary(filteredReports, totalDuration, { traceId });
 
   // Show log file path after summary (only if write succeeded)
-  if (!options.json && logWritten) {
-    reporter.dim(`Log: ${logPath}`);
+  if (!options.json && runLog.primaryLogWritten) {
+    reporter.dim(`Log: ${runLog.primaryLogPath}`);
   }
 
   // Handle fixes: --fix (automatic) always runs, interactive step-through in TTY mode
@@ -440,6 +549,31 @@ async function runSkills(
     runnerOptions,
   }));
 
+  // Initialize the run's JSONL log up front so a second terminal can
+  // `warden runs follow <runId>` while skills are still running.
+  // Skill records are appended on each completion; the trailing summary
+  // is appended in `outputResultsAndHandleFixes`.
+  const runId = generateRunId();
+  const timestamp = new Date();
+  const traceId = getTraceId();
+  let headSha: string | undefined;
+  try {
+    headSha = getHeadSha(repoPath ?? cwd);
+  } catch {
+    // Not a git repo or HEAD is unborn — non-fatal
+  }
+  const runLog = initializeRunLog({
+    repoPath: repoPath ?? cwd,
+    runId,
+    timestamp,
+    traceId,
+    headSha,
+    model: logModel,
+    outputPath: options.output,
+    reporter,
+    startTime,
+  });
+
   // Run skills with Ink UI (TTY) or simple console output (non-TTY)
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
   failFastController = options.failFast ? new AbortController() : undefined;
@@ -448,6 +582,7 @@ async function runSkills(
     verbosity: reporter.verbosity,
     concurrency,
     failFastController,
+    onSkillComplete: (report: SkillReport) => appendSkillToRunLog(runLog, report),
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
@@ -457,7 +592,7 @@ async function runSkills(
   const totalDuration = Date.now() - startTime;
   const effectiveMinConfidence = options.minConfidence ?? config?.defaults?.minConfidence ?? 'medium';
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath ?? cwd, totalDuration, failFastController?.signal.aborted, logModel);
+  return outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
 }
 
 /**
@@ -721,6 +856,33 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     },
   }));
 
+  // Initialize the run's JSONL log up front so a second terminal can
+  // `warden runs follow <runId>` while skills are still running.
+  // Skill records are appended on each completion; the trailing summary
+  // is appended in `outputResultsAndHandleFixes`.
+  // Run-level model is the default (ignoring per-trigger overrides); per-skill models are on each report.
+  const defaultModel = config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
+  const runId = generateRunId();
+  const timestamp = new Date();
+  const traceId = getTraceId();
+  let headSha: string | undefined;
+  try {
+    headSha = getHeadSha(repoPath);
+  } catch {
+    // Not a git repo or HEAD is unborn — non-fatal
+  }
+  const runLog = initializeRunLog({
+    repoPath,
+    runId,
+    timestamp,
+    traceId,
+    headSha,
+    model: defaultModel,
+    outputPath: options.output,
+    reporter,
+    startTime,
+  });
+
   // Run triggers with Ink UI (TTY) or simple console output (non-TTY)
   const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
   failFastController = options.failFast ? new AbortController() : undefined;
@@ -729,6 +891,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     verbosity: reporter.verbosity,
     concurrency,
     failFastController,
+    onSkillComplete: (report: SkillReport) => appendSkillToRunLog(runLog, report),
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
@@ -737,9 +900,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  // Run-level model is the default (ignoring per-trigger overrides); per-skill models are on each report.
-  const defaultModel = config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
-  return outputResultsAndHandleFixes(processed, options, reporter, repoPath, totalDuration, failFastController?.signal.aborted, defaultModel);
+  return outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
 }
 
 /**
@@ -843,7 +1004,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
 }
 
 export async function main(): Promise<void> {
-  const { command, options, setupAppOptions, logsOptions } = parseCliArgs();
+  const { command, options, setupAppOptions, runsOptions } = parseCliArgs();
 
   if (command === 'help') {
     showHelp();
@@ -897,12 +1058,12 @@ export async function main(): Promise<void> {
           return runSetupApp(setupAppOptions, reporter);
         case 'sync':
           return runSync(options, reporter);
-        case 'logs':
-          if (!logsOptions) {
-            reporter.error('Missing logs options');
+        case 'runs':
+          if (!runsOptions) {
+            reporter.error('Missing runs options');
             process.exit(1);
           }
-          return runLogs(logsOptions, options, reporter);
+          return runRuns(runsOptions, options, reporter);
         default:
           return runCommand(options, reporter);
       }

@@ -29,6 +29,7 @@ import { Semaphore } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
+import type { SkillReport } from '../../types/index.js';
 
 interface SkillRunnerProps {
   skills: SkillState[];
@@ -239,23 +240,39 @@ export async function runSkillTasksWithInk(
   tasks: SkillTaskOptions[],
   options: RunTasksOptions
 ): Promise<SkillTaskResult[]> {
-  const { verbosity, concurrency, failFastController } = options;
+  const { verbosity, concurrency, failFastController, onSkillComplete: streamHook } = options;
+
+  /** Fire the streaming hook, swallowing errors so they never break the run. */
+  const fireStreamHook = streamHook
+    ? (report: SkillReport) => {
+        try { streamHook(report); } catch { /* ignore */ }
+      }
+    : undefined;
 
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
     // No tasks or quiet mode - run without UI using global semaphore
     const semaphore = new Semaphore(concurrency);
     const composedTasks = composeTasksWithFailFast(tasks, failFastController);
-    // Wrap noopCallbacks to detect findings and trigger fail-fast
-    const callbacks: SkillProgressCallbacks = failFastController
-      ? {
-          ...noopCallbacks,
-          onFileUpdate: (_skillName, _filename, updates) => {
-            if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
-              failFastController.abort();
-            }
-          },
-        }
-      : noopCallbacks;
+    // Wrap noopCallbacks to detect findings, trigger fail-fast, and stream completions
+    const callbacks: SkillProgressCallbacks = {
+      ...noopCallbacks,
+      ...(failFastController
+        ? {
+            onFileUpdate: (_skillName: string, _filename: string, updates: Partial<FileState>) => {
+              if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
+                failFastController.abort();
+              }
+            },
+          }
+        : {}),
+      ...(fireStreamHook
+        ? {
+            onSkillComplete: (_name: string, report) => {
+              fireStreamHook(report);
+            },
+          }
+        : {}),
+    };
     return runComposedSkillTasks(composedTasks, callbacks, semaphore);
   }
 
@@ -340,7 +357,8 @@ export async function runSkillTasksWithInk(
         }
       }
     },
-    onSkillComplete: () => {
+    onSkillComplete: (_name, report) => {
+      fireStreamHook?.(report);
       updateUI();
     },
     onSkillSkipped: (name) => {
