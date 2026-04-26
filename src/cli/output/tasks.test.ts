@@ -403,6 +403,23 @@ describe('createDefaultCallbacks', () => {
       const msg = errorSpy.mock.calls[0]![0] as string;
       expect(msg).toMatch(/\[.*\] warden: code-scanner skipped/);
     });
+
+    it('suppresses the duplicate completed line when onSkillComplete fires after onSkillSkipped', () => {
+      // Regression: the skip path now calls both onSkillSkipped (for the
+      // user-facing "skipped" line) and onSkillComplete (for the
+      // incremental JSONL writer). createDefaultCallbacks must not emit
+      // a contradictory "completed" line on top of "skipped".
+      const tasks = [makeTask('my-trigger', 'code-scanner')];
+      const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
+
+      cb.onSkillSkipped('my-trigger');
+      cb.onSkillComplete('my-trigger', makeReport({ skill: 'code-scanner', findings: [], durationMs: 0 }));
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const msg = errorSpy.mock.calls[0]![0] as string;
+      expect(msg).toMatch(/code-scanner skipped/);
+      expect(msg).not.toMatch(/completed/);
+    });
   });
 
   describe('onSkillError', () => {

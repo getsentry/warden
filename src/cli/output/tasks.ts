@@ -628,6 +628,13 @@ export function createDefaultCallbacks(
   /** Track per-skill skipped file counts for collapsed summary in non-TTY mode. */
   const skippedCounts = new Map<string, number>();
 
+  // Track skills that fired onSkillSkipped so onSkillComplete (which is
+  // also called on the skip path to feed the incremental JSONL writer)
+  // doesn't double-print a contradictory "completed" line in plain/CI
+  // mode. The JSONL streaming hook is wired separately and runs
+  // regardless of this short-circuit.
+  const skippedSkills = new Set<string>();
+
   return {
     onSkillStart: (skill) => {
       if (verbosity === Verbosity.Quiet) return;
@@ -656,6 +663,9 @@ export function createDefaultCallbacks(
     },
     onSkillComplete: (name, report) => {
       if (verbosity === Verbosity.Quiet) return;
+      // Skipped skills already printed their `[skipped]` line via
+      // onSkillSkipped; suppress the duplicate "completed" output.
+      if (skippedSkills.has(name)) return;
       const displayName = displayNameFor(name);
 
       // Errored runs render as failures, not as misleading "completed -
@@ -710,6 +720,10 @@ export function createDefaultCallbacks(
       }
     },
     onSkillSkipped: (name) => {
+      // Mark before any verbosity-driven early return so onSkillComplete
+      // can short-circuit even at Quiet verbosity (where neither callback
+      // prints, the marker is harmless either way).
+      skippedSkills.add(name);
       if (verbosity === Verbosity.Quiet) return;
       const displayName = displayNameFor(name);
       if (mode.isTTY) {
