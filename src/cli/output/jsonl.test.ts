@@ -685,6 +685,16 @@ describe('parseJsonlReports', () => {
         durationMs: 200,
         error: { code: 'sdk_error', message: 'sdk failed' },
       },
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: '', index: 1, total: 1, lineRange: '' },
+        status: 'error',
+        findings: [],
+        durationMs: 300,
+        error: { code: 'all_hunks_failed', message: 'All chunks failed.' },
+      },
     ];
 
     const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
@@ -692,6 +702,7 @@ describe('parseJsonlReports', () => {
     const report = result.reports[0]!;
     expect(report.failedExtractions).toBe(1);
     expect(report.failedHunks).toBe(1);
+    expect(report.error?.code).toBe('all_hunks_failed');
     expect(report.hunkFailures?.map((failure) => failure.type)).toEqual(['extraction', 'analysis']);
   });
 

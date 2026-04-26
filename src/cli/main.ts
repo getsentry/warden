@@ -310,7 +310,7 @@ function hasReportRecord(log: RunLog, report: SkillReport): boolean {
 
 function shouldStreamReportRecord(log: RunLog, report: SkillReport): boolean {
   if (hasReportRecord(log, report)) return false;
-  return Boolean(report.skippedFiles?.length || !log.chunks.some((chunk) => chunk.skill === report.skill));
+  return Boolean(report.error || report.skippedFiles?.length || !log.chunks.some((chunk) => chunk.skill === report.skill));
 }
 
 function appendReportToRunLog(log: RunLog, report: SkillReport): void {

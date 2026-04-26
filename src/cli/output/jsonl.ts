@@ -430,6 +430,8 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     const filesByName = new Map<string, FileReport>();
     const hunkFailures: HunkFailure[] = [];
     const skippedFiles = records.flatMap((r) => r.skippedFiles ?? []);
+    const reportLevelError = records.find(isReportLevelErrorRecord)?.error;
+    const chunkRecords = records.filter((record) => !isReportLevelErrorRecord(record));
     for (const record of records) {
       const existing = filesByName.get(record.chunk.file);
       if (record.chunk.file) {
@@ -440,7 +442,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
           usage: addUsage(existing?.usage, record.usage),
         });
       }
-      if (record.error) {
+      if (record.error && !isReportLevelErrorRecord(record)) {
         hunkFailures.push({
           type: isExtractionErrorCode(record.error.code) ? 'extraction' : 'analysis',
           filename: record.chunk.file,
@@ -450,10 +452,14 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
         });
       }
     }
-    const failedHunks = records.filter(
+    const failedHunks = chunkRecords.filter(
       (r) => r.status === 'error' && (!r.error || !isExtractionErrorCode(r.error.code)),
     ).length;
-    const failedExtractions = records.filter((r) => r.error && isExtractionErrorCode(r.error.code)).length;
+    const failedExtractions = chunkRecords.filter((r) => r.error && isExtractionErrorCode(r.error.code)).length;
+    const allChunksFailed =
+      chunkRecords.length > 0 &&
+      findings.length === 0 &&
+      chunkRecords.every((record) => record.status === 'error');
     const report: SkillReport = {
       skill,
       summary: summarizeFindings(skill, findings),
@@ -463,6 +469,14 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
       files: [...filesByName.values()],
       model: records.find((r) => r.model)?.model,
     };
+    if (reportLevelError) {
+      report.error = reportLevelError;
+    } else if (allChunksFailed) {
+      report.error = {
+        code: 'all_hunks_failed',
+        message: `All ${chunkRecords.length} ${chunkRecords.length === 1 ? 'chunk' : 'chunks'} failed to analyze.`,
+      };
+    }
     if (auxiliaryUsage) report.auxiliaryUsage = auxiliaryUsage;
     if (failedHunks > 0) report.failedHunks = failedHunks;
     if (failedExtractions > 0) report.failedExtractions = failedExtractions;
@@ -471,6 +485,10 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     reports.push(report);
   }
   return reports;
+}
+
+function isReportLevelErrorRecord(record: JsonlChunkRecord): boolean {
+  return record.status === 'error' && record.chunk.file === '' && Boolean(record.error);
 }
 
 export function parseJsonlReports(content: string): ParsedJsonlLog {
