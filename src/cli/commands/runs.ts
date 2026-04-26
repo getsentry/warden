@@ -547,7 +547,8 @@ export async function runRunsGc(options: CLIOptions, reporter: Reporter): Promis
 function resolveFollowTarget(arg: string | undefined, logDir: string): string | undefined {
   if (arg) {
     if (arg.includes('/') || arg.includes('.')) {
-      return resolve(process.cwd(), arg);
+      const path = resolve(process.cwd(), arg);
+      return existsSync(path) ? path : undefined;
     }
     return resolveFileArg(arg, logDir)[0];
   }

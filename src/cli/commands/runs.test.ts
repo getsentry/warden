@@ -610,6 +610,18 @@ describe('runRunsFollow', () => {
     expect(exit).toBe(0);
   }, 5000);
 
+  it('errors when an explicit path does not exist instead of hanging in the poll loop', async () => {
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const reporter = createTestReporter();
+    const exit = await runRunsFollow(
+      { subcommand: 'follow', files: ['./does-not-exist.jsonl'] },
+      createDefaultOptions(),
+      reporter,
+    );
+    expect(exit).toBe(1);
+  });
+
   it('errors when no run id matches and no session is in progress', async () => {
     vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
 
