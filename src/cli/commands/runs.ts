@@ -2,7 +2,7 @@ import { existsSync, openSync, closeSync, fstatSync, readSync, readdirSync, read
 import { dirname, join, resolve } from 'node:path';
 import chalk from 'chalk';
 import { loadWardenConfig } from '../../config/loader.js';
-import type { ConfidenceThreshold, Severity, SkillReport } from '../../types/index.js';
+import { isExtractionErrorCode, type ConfidenceThreshold, type Severity, type SkillReport } from '../../types/index.js';
 import type { CLIOptions, RunsOptions } from '../args.js';
 import { getRepoRoot } from '../git.js';
 import { findExpiredArtifacts } from '../log-cleanup.js';
@@ -639,7 +639,7 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
       error: chunk.error,
       hunkFailures: chunk.error
         ? [{
-            type: chunk.error.code.startsWith('extraction_') ? 'extraction' : 'analysis',
+            type: isExtractionErrorCode(chunk.error.code) ? 'extraction' : 'analysis',
             filename: chunk.chunk.file,
             lineRange: chunk.chunk.lineRange,
             code: chunk.error.code,

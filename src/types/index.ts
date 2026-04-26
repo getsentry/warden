@@ -215,6 +215,21 @@ export const ErrorCodeSchema = z.enum([
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
+const EXTRACTION_ERROR_CODES = new Set<ErrorCode>([
+  'extraction_invalid_json',
+  'extraction_unbalanced_json',
+  'extraction_no_findings_json',
+  'extraction_missing_findings_key',
+  'extraction_findings_not_array',
+  'extraction_llm_failed',
+  'extraction_llm_timeout',
+  'extraction_no_api_key',
+]);
+
+export function isExtractionErrorCode(code: ErrorCode): boolean {
+  return EXTRACTION_ERROR_CODES.has(code);
+}
+
 export const SkillErrorSchema = z.object({
   code: ErrorCodeSchema,
   message: z.string(),

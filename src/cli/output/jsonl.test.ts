@@ -662,6 +662,39 @@ describe('parseJsonlReports', () => {
     expect(result.runMetadata?.runId).toBe('chunk-123');
   });
 
+  it('classifies chunk errors from explicit error codes', () => {
+    const run = buildRunMetadata({ runId: 'chunk-errors', durationMs: 300 });
+    const chunks: JsonlChunkRecord[] = [
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 1, total: 2, lineRange: '10-20' },
+        status: 'error',
+        findings: [],
+        durationMs: 100,
+        error: { code: 'extraction_invalid_json', message: 'bad json' },
+      },
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 2, total: 2, lineRange: '21-30' },
+        status: 'error',
+        findings: [],
+        durationMs: 200,
+        error: { code: 'sdk_error', message: 'sdk failed' },
+      },
+    ];
+
+    const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
+
+    const report = result.reports[0]!;
+    expect(report.failedExtractions).toBe(1);
+    expect(report.failedHunks).toBe(1);
+    expect(report.hunkFailures?.map((failure) => failure.type)).toEqual(['extraction', 'analysis']);
+  });
+
   it('reconstructs skipped-file reports from synthetic chunk records', () => {
     const run = buildRunMetadata({
       runId: 'skipped-123',

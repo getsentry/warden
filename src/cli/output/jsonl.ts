@@ -9,6 +9,7 @@ import {
   FindingSchema,
   AuxiliaryUsageMapSchema,
   FixStatusSchema,
+  isExtractionErrorCode,
   SkillErrorSchema,
   SkippedFileSchema,
 } from '../../types/index.js';
@@ -441,7 +442,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
       }
       if (record.error) {
         hunkFailures.push({
-          type: record.error.code.startsWith('extraction_') ? 'extraction' : 'analysis',
+          type: isExtractionErrorCode(record.error.code) ? 'extraction' : 'analysis',
           filename: record.chunk.file,
           lineRange: record.chunk.lineRange,
           code: record.error.code,
@@ -449,8 +450,10 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
         });
       }
     }
-    const failedHunks = records.filter((r) => r.status === 'error' && !r.error?.code.startsWith('extraction_')).length;
-    const failedExtractions = records.filter((r) => r.error?.code.startsWith('extraction_')).length;
+    const failedHunks = records.filter(
+      (r) => r.status === 'error' && (!r.error || !isExtractionErrorCode(r.error.code)),
+    ).length;
+    const failedExtractions = records.filter((r) => r.error && isExtractionErrorCode(r.error.code)).length;
     const report: SkillReport = {
       skill,
       summary: summarizeFindings(skill, findings),
