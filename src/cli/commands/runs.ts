@@ -37,6 +37,25 @@ function resolveLogDir(): { logDir: string; repoPath: string } | undefined {
 }
 
 /**
+ * Recover an ISO timestamp from a session filename.
+ *
+ * Filenames are `{runId8}-{ISO-datetime}.jsonl` with `:` and `.`
+ * replaced by `-` (see `getRepoLogPath`). Used as the sort key for
+ * in-progress runs whose JSONL doesn't yet contain a summary record.
+ * Returns the empty string if the name doesn't match the expected
+ * shape — those rows fall to the bottom, which is fine.
+ */
+function filenameTimestamp(filename: string): string {
+  const match = filename.match(/-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.jsonl$/);
+  const stamp = match?.[1];
+  if (!stamp) return '';
+  return stamp.replace(
+    /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/,
+    '$1:$2:$3.$4Z',
+  );
+}
+
+/**
  * Resolve a file argument to a full path.
  * If the argument looks like a run ID (no `/` or `.`), look up matching files in .warden/logs/.
  */
@@ -163,17 +182,20 @@ export async function runRunsList(
     return 0;
   }
 
-  // Parse all logs for metadata and sort by timestamp (newest first)
+  // Parse all logs for metadata and sort by timestamp (newest first).
+  // In-progress runs have no summary record yet, so `parseLogMetadata`
+  // returns undefined. Fall back to the timestamp embedded in the
+  // filename (`{runId8}-{ISO-datetime}.jsonl`) so active runs sort to
+  // the top instead of the bottom — they're the most interesting rows
+  // for someone listing sessions.
   const allLogData: { entry: string; meta: LogFileMetadata | undefined }[] = [];
   for (const entry of entries) {
     const filePath = join(logDir, entry);
     allLogData.push({ entry, meta: parseLogMetadata(filePath) });
   }
-  allLogData.sort((a, b) => {
-    const tsA = a.meta?.summary.run.timestamp ?? '';
-    const tsB = b.meta?.summary.run.timestamp ?? '';
-    return tsB.localeCompare(tsA);
-  });
+  const sortKey = (entry: { entry: string; meta: LogFileMetadata | undefined }) =>
+    entry.meta?.summary.run.timestamp ?? filenameTimestamp(entry.entry);
+  allLogData.sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
 
   // Default view hides no-op sessions: 0 files analyzed AND no run-level error.
   // A run that errored before any skill ran (auth, config) still shows up — the
@@ -605,6 +627,24 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
 }
 
 /**
+ * In `--json` mode, pass the raw JSONL line straight through to stdout.
+ * Lets downstream tools consume the live record stream without reparsing
+ * Warden's terminal output. Stops on the trailing summary record.
+ */
+function passthroughFollowLine(line: string): { stop: boolean } {
+  process.stdout.write(line);
+  process.stdout.write('\n');
+  let stop = false;
+  try {
+    const parsed = JSON.parse(line) as { type?: string };
+    if (parsed?.type === 'summary') stop = true;
+  } catch {
+    // Don't stop on malformed lines — the run might still emit a valid summary.
+  }
+  return { stop };
+}
+
+/**
  * Tail a JSONL session file, rendering each appended skill record live.
  * Exits when the trailing summary record is appended or on Ctrl-C.
  *
@@ -665,7 +705,9 @@ export async function runRunsFollow(
         const line = buffer.slice(0, nl);
         buffer = buffer.slice(nl + 1);
         if (!line.trim()) continue;
-        const result = renderFollowLine(line, reporter);
+        const result = options.json
+          ? passthroughFollowLine(line)
+          : renderFollowLine(line, reporter);
         if (result.stop) {
           stopped = true;
           return;

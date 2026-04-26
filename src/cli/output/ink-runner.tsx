@@ -250,10 +250,14 @@ export async function runSkillTasksWithInk(
     : undefined;
 
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
-    // No tasks or quiet mode - run without UI using global semaphore
+    // No tasks or quiet mode - run without UI using global semaphore.
+    // Chain (don't replace) onSkillComplete so the stream hook fires
+    // alongside the base callback. Today the base is a noop, so chaining
+    // is functionally equivalent — but keeping the wrapping pattern
+    // identical to runSkillTasks prevents a refactor from silently
+    // dropping the base callback.
     const semaphore = new Semaphore(concurrency);
     const composedTasks = composeTasksWithFailFast(tasks, failFastController);
-    // Wrap noopCallbacks to detect findings, trigger fail-fast, and stream completions
     const callbacks: SkillProgressCallbacks = {
       ...noopCallbacks,
       ...(failFastController
@@ -267,7 +271,8 @@ export async function runSkillTasksWithInk(
         : {}),
       ...(fireStreamHook
         ? {
-            onSkillComplete: (_name: string, report) => {
+            onSkillComplete: (name: string, report) => {
+              noopCallbacks.onSkillComplete(name, report);
               fireStreamHook(report);
             },
           }

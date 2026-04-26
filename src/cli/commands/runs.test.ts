@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { renderJsonlString } from '../output/jsonl.js';
@@ -451,6 +451,55 @@ describe('runRunsList default filtering', () => {
 
     stdoutSpy.mockRestore();
   });
+
+  it('sorts in-progress (no-summary) runs to the top using the filename timestamp', async () => {
+    // Regression: an in-progress run has no summary record yet, so
+    // parseLogMetadata returns undefined. With a naive `?? ''` fallback,
+    // active runs sorted to the bottom of a descending sort. They should
+    // sort to the top because they're the most interesting rows for
+    // someone listing sessions.
+    const logDir = join(testDir, '.warden', 'logs');
+
+    // Older finalized session (Apr 25 11:00).
+    writeFixture(
+      logDir,
+      'oldsess0-2026-04-25T11-00-00-000Z.jsonl',
+      [{ skill: 'review', summary: 'ok', findings: [{ id: 'f', severity: 'high', title: 't', description: 'd' }], files: [{ filename: 'a.ts', findings: 1 }] }],
+      1000,
+      'oldsess0-0000-0000-0000-000000000000',
+      new Date('2026-04-25T11:00:00.000Z'),
+    );
+
+    // Newer in-progress session (Apr 25 13:00) — no summary record.
+    const livePath = join(logDir, 'livesess-2026-04-25T13-00-00-000Z.jsonl');
+    const run = buildRunMetadata({
+      runId: 'livesess-0000-0000-0000-000000000000',
+      durationMs: 0,
+      timestamp: new Date('2026-04-25T13:00:00.000Z'),
+    });
+    initJsonlFile(livePath);
+    appendJsonlLine(
+      livePath,
+      renderJsonlSkillLine(
+        { skill: 'live', summary: 'ok', findings: [], durationMs: 50, files: [{ filename: 'b.ts', findings: 0 }] },
+        run,
+      ),
+    );
+
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const reporter = createTestReporter();
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const exit = await runRunsList({ ...createDefaultOptions(), json: true }, reporter, { all: true });
+    expect(exit).toBe(0);
+    const output = JSON.parse(stdoutSpy.mock.calls[0]![0] as string) as { runId?: string; file: string }[];
+    expect(output).toHaveLength(2);
+    expect(output[0]!.file).toBe('livesess-2026-04-25T13-00-00-000Z.jsonl');
+    expect(output[1]!.file).toBe('oldsess0-2026-04-25T11-00-00-000Z.jsonl');
+
+    stdoutSpy.mockRestore();
+  });
 });
 
 describe('runRunsFollow', () => {
@@ -555,4 +604,55 @@ describe('runRunsFollow', () => {
     const exit = await followPromise;
     expect(exit).toBe(0);
   }, 5000);
+
+  it('with --json, passes through raw JSONL lines verbatim and exits on summary', async () => {
+    // Lets downstream tools (jq, log shippers) consume the live record
+    // stream. Each line on disk lands on stdout exactly once, with no
+    // terminal formatting injected.
+    const logDir = join(testDir, '.warden', 'logs');
+    const filePath = writeFixture(
+      logDir,
+      'jsonpass-2026-04-25T15-00-00-000Z.jsonl',
+      [
+        { skill: 'sa', summary: 'ok', findings: [], durationMs: 100 },
+        { skill: 'sb', summary: 'ok', findings: [], durationMs: 200 },
+      ],
+      400,
+      'jsonpass-0000-0000-0000-000000000000',
+      new Date('2026-04-25T15:00:00.000Z'),
+    );
+
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const writes: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8'));
+      return true;
+    });
+
+    const reporter = createTestReporter();
+    const exit = await runRunsFollow(
+      { subcommand: 'follow', files: ['jsonpass'] },
+      { ...createDefaultOptions(), json: true },
+      reporter,
+    );
+    expect(exit).toBe(0);
+
+    // Reconstruct the stdout stream and parse each line as JSON.
+    const stdoutText = writes.join('');
+    const lines = stdoutText.split('\n').filter((l) => l.length > 0);
+    expect(lines.length).toBe(3); // 2 skill records + 1 summary
+    const records = lines.map((l) => JSON.parse(l));
+    expect(records[0]!.skill).toBe('sa');
+    expect(records[1]!.skill).toBe('sb');
+    expect(records[2]!.type).toBe('summary');
+
+    // The on-disk file should be byte-identical to the stdout stream
+    // (modulo trailing newline handling). This is the core --json
+    // contract: stdout mirrors the canonical log.
+    const onDisk = readFileSync(filePath, 'utf-8');
+    expect(stdoutText).toBe(onDisk);
+
+    stdoutSpy.mockRestore();
+  });
 });
