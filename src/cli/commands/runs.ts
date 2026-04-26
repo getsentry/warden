@@ -710,6 +710,7 @@ export async function runRunsFollow(
   let buffer = '';
   let fileIdentity: string | undefined;
   let stopped = false;
+  const emittedJsonLines = new Set<string>();
   const targetComplete = () => existsSync(`${target}.done`);
 
   const drainFile = (): void => {
@@ -747,9 +748,9 @@ export async function runRunsFollow(
         const line = buffer.slice(0, nl);
         buffer = buffer.slice(nl + 1);
         if (!line.trim()) continue;
-        const result = options.json
-          ? passthroughFollowLine(line)
-          : renderFollowLine(line, reporter);
+        if (options.json && emittedJsonLines.has(line)) continue;
+        if (options.json) emittedJsonLines.add(line);
+        const result = options.json ? passthroughFollowLine(line) : renderFollowLine(line, reporter);
         if (result.stop) {
           stopped = true;
           return;

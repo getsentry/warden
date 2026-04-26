@@ -993,4 +993,57 @@ describe('runRunsFollow', () => {
 
     stdoutSpy.mockRestore();
   }, 5000);
+
+  it('with --json, does not re-emit unchanged replacement records', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const livePath = join(logDir, 'jsondedupe-2026-04-25T16-00-00-000Z.jsonl');
+    const run = buildRunMetadata({
+      runId: 'jsondedupe',
+      durationMs: 100,
+      timestamp: new Date('2026-04-25T16:00:00.000Z'),
+      cwd: testDir,
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'json-skill',
+      chunk: { file: 'src/a.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [{ id: 'SAME', severity: 'high', title: 'Same finding', description: 'same' }],
+      durationMs: 100,
+    };
+
+    initJsonlFile(livePath);
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const writes: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8'));
+      return true;
+    });
+
+    const reporter = createTestReporter();
+    const followPromise = runRunsFollow(
+      { subcommand: 'follow', files: [] },
+      { ...createDefaultOptions(), json: true },
+      reporter,
+    );
+
+    const line = renderJsonlChunkLine(chunk);
+    await new Promise((r) => setTimeout(r, 50));
+    appendJsonlLine(livePath, line);
+    await new Promise((r) => setTimeout(r, 50));
+    const finalPath = `${livePath}.tmp`;
+    writeFileSync(finalPath, line);
+    renameSync(finalPath, livePath);
+    await new Promise((r) => setTimeout(r, 50));
+    writeFileSync(`${livePath}.done`, '');
+
+    const exit = await followPromise;
+    const output = writes.join('');
+    expect(exit).toBe(0);
+    expect(output.match(/Same finding/g)).toHaveLength(1);
+
+    stdoutSpy.mockRestore();
+  }, 5000);
 });
