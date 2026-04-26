@@ -333,7 +333,7 @@ async function outputResultsAndHandleFixes(
     if (runLog.primaryLogWritten) {
       try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }
     }
-    if (jsonlContent === undefined) {
+    if (!jsonlContent) {
       jsonlContent = renderJsonlString(reports, totalDuration, {
         runId: runLog.baseRun.runId,
         traceId,
