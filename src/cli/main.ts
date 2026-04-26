@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
@@ -339,11 +339,17 @@ function finalizeRunLog(
   const records = buildFinalChunkRecords(log, reports, totalDurationMs, error);
   const content = records.map((record) => renderJsonlChunkLine(record)).join('');
   for (const p of log.paths) {
+    const targetPath = resolve(process.cwd(), p);
+    const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
     try {
-      writeJsonlContent(p, content);
-      writeFileSync(`${p}.done`, '');
+      writeJsonlContent(tempPath, content);
+      renameSync(tempPath, targetPath);
+      writeFileSync(`${targetPath}.done`, '');
       wrote.add(p);
-    } catch { /* best-effort */ }
+    } catch {
+      try { unlinkSync(tempPath); } catch { /* ignore */ }
+      // best-effort
+    }
   }
   return wrote;
 }

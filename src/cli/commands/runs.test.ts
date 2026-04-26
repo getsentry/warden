@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { renderJsonlString } from '../output/jsonl.js';
@@ -798,5 +798,69 @@ describe('runRunsFollow', () => {
     expect(writes.join('\n')).toContain('Escaped finding');
 
     logSpy.mockRestore();
+  }, 5000);
+
+  it('does not read from the middle of a finalized replacement file', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const livePath = join(logDir, 'replace0-2026-04-25T16-00-00-000Z.jsonl');
+    const run = buildRunMetadata({
+      runId: 'replace0',
+      durationMs: 100,
+      timestamp: new Date('2026-04-25T16:00:00.000Z'),
+      cwd: testDir,
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'live-skill',
+      chunk: { file: 'src/a.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [{
+        id: 'FIND-1',
+        severity: 'high',
+        title: 'Live finding',
+        description: 'This should render once.',
+      }],
+      durationMs: 100,
+    };
+
+    initJsonlFile(livePath);
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const writes: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((chunk = '') => {
+      writes.push(String(chunk));
+    });
+    const warningSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const reporter = createTestReporter();
+    const followPromise = runRunsFollow(
+      { subcommand: 'follow', files: [] },
+      createDefaultOptions(),
+      reporter,
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    appendJsonlLine(livePath, renderJsonlChunkLine(chunk));
+    await new Promise((r) => setTimeout(r, 50));
+    const finalPath = `${livePath}.tmp`;
+    writeFileSync(finalPath, renderJsonlChunkLine({
+      ...chunk,
+      findings: [],
+      run: { ...run, durationMs: 250 },
+    }));
+    renameSync(finalPath, livePath);
+    await new Promise((r) => setTimeout(r, 50));
+    writeFileSync(`${livePath}.done`, '');
+
+    const exit = await followPromise;
+    const output = writes.join('\n');
+    expect(exit).toBe(0);
+    expect(output).toContain('Live finding');
+    expect(output.match(/Live finding/g)).toHaveLength(1);
+    expect(warningSpy).not.toHaveBeenCalledWith(expect.stringContaining('Skipping unrecognized record'));
+
+    logSpy.mockRestore();
+    warningSpy.mockRestore();
   }, 5000);
 });

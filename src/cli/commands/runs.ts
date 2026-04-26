@@ -709,6 +709,7 @@ export async function runRunsFollow(
   // Render anything already on disk and remember where we left off.
   let offset = 0;
   let buffer = '';
+  let fileIdentity: string | undefined;
   let stopped = false;
   const targetComplete = () => existsSync(`${target}.done`);
 
@@ -721,6 +722,18 @@ export async function runRunsFollow(
     }
     try {
       const stat = fstatSync(fd);
+      const identity = `${stat.dev}:${stat.ino}`;
+      if (fileIdentity && identity !== fileIdentity) {
+        fileIdentity = identity;
+        buffer = '';
+        offset = stat.size;
+        return;
+      }
+      fileIdentity = identity;
+      if (stat.size < offset) {
+        buffer = '';
+        offset = 0;
+      }
       if (stat.size <= offset) return;
       const len = stat.size - offset;
       const buf = Buffer.alloc(len);
