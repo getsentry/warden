@@ -163,8 +163,7 @@ export async function runRunsList(
   try {
     entries = readdirSync(logDir)
       .filter((e) => e.endsWith('.jsonl'))
-      .sort()
-      .reverse(); // newest first (filenames embed timestamps)
+      .sort((a, b) => filenameTimestamp(b).localeCompare(filenameTimestamp(a)));
   } catch {
     entries = [];
   }

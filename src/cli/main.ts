@@ -549,21 +549,21 @@ async function outputResultsAndHandleFixes(
     // Prefer reading the on-disk log (per-skill durationMs is a snapshot).
     // Only read it back if finalize actually landed the summary there;
     // a half-written file should fall through to the in-memory render.
-    // The fallback uses the run total for every record — structurally
-    // valid but not byte-identical to the file.
+    // The fallback renders the same chunk-record shape in memory.
     let jsonlContent: string | undefined;
     if (finalizedPaths.has(runLog.primaryLogPath)) {
       try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }
     }
     if (!jsonlContent) {
-      jsonlContent = renderJsonlString(reports, totalDuration, {
-        runId: runLog.baseRun.runId,
-        traceId,
-        timestamp: new Date(runLog.baseRun.timestamp),
-        model: runLog.baseRun.model,
-        headSha: runLog.baseRun.headSha,
-        cwd: runLog.baseRun.cwd,
-      });
+      jsonlContent = buildFinalChunkRecords(runLog, reports, totalDuration)
+        .flatMap((record) => {
+          try {
+            return [renderJsonlChunkLine(record)];
+          } catch {
+            return [];
+          }
+        })
+        .join('');
     }
     process.stdout.write(jsonlContent);
   } else {
