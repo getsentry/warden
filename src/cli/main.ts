@@ -342,10 +342,12 @@ async function outputResultsAndHandleFixes(
   reporter.blank();
   if (options.json) {
     // Prefer reading the on-disk log (per-skill durationMs is a snapshot).
-    // The fallback render uses the run total for every record — structurally
+    // Only read it back if finalize actually landed the summary there;
+    // a half-written file should fall through to the in-memory render.
+    // The fallback uses the run total for every record — structurally
     // valid but not byte-identical to the file.
     let jsonlContent: string | undefined;
-    if (runLog.primaryLogWritten) {
+    if (finalizedPaths.has(runLog.primaryLogPath)) {
       try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }
     }
     if (!jsonlContent) {
