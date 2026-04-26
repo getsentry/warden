@@ -192,7 +192,7 @@ Skills define what Warden analyzes and when.
 | `ignorePaths` | Files to exclude (glob patterns) |
 | `failOn` | Minimum severity to fail: `critical`, `high`, `medium`, `low`, `info`, `off` |
 | `reportOn` | Minimum severity to report |
-| `remote` | GitHub repository for remote skills: `owner/repo` or `owner/repo@sha` |
+| `remote` | GitHub repository for remote skills: `owner/repo` or `owner/repo@sha`. Hosted private remotes use `github-token` auth on `github.com`. |
 | `model` | Model override |
 | `maxTurns` | Max agentic turns per hunk |
 
@@ -473,7 +473,7 @@ jobs:
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| `github-token` | `GITHUB_TOKEN` | GitHub token for posting comments |
+| `github-token` | `GITHUB_TOKEN` | GitHub token for posting comments and private remote-skill fetch auth in hosted runs |
 | `anthropic-api-key` | - | Anthropic API key (falls back to `WARDEN_ANTHROPIC_API_KEY`) |
 | `config-path` | `warden.toml` | Path to config file |
 | `fail-on` | - | Minimum severity to fail the check |

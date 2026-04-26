@@ -31,6 +31,7 @@ vi.mock('../../output/renderer.js', () => ({
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { createSkillCheck, updateSkillCheck, failSkillCheck } from '../../output/github-checks.js';
 import { renderSkillReport } from '../../output/renderer.js';
+import { resolveSkillAsync } from '../../skills/loader.js';
 
 describe('executeTrigger', () => {
   // Suppress console output during tests
@@ -75,6 +76,7 @@ describe('executeTrigger', () => {
     context: mockContext,
     config: mockConfig,
     anthropicApiKey: 'test-key',
+    githubToken: 'gh-token',
     claudePath: '/test/claude',
     globalMaxFindings: 10,
   };
@@ -102,7 +104,12 @@ describe('executeTrigger', () => {
     vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
     vi.mocked(renderSkillReport).mockReturnValue(mockRenderResult);
 
-    const result = await executeTrigger(mockTrigger, mockDeps);
+    const triggerWithRemote: ResolvedTrigger = {
+      ...mockTrigger,
+      remote: 'owner/repo',
+    };
+
+    const result = await executeTrigger(triggerWithRemote, mockDeps);
 
     expect(result.triggerName).toBe('test-trigger');
     expect(result.report).toBe(mockReport);
@@ -121,6 +128,14 @@ describe('executeTrigger', () => {
       reportOn: undefined,
       minConfidence: 'medium',
       failCheck: undefined,
+    });
+
+    const taskOptions = vi.mocked(runSkillTask).mock.calls[0]?.[0];
+    expect(taskOptions).toBeDefined();
+    await taskOptions?.resolveSkill();
+    expect(resolveSkillAsync).toHaveBeenCalledWith('test-skill', '/test/path', {
+      remote: 'owner/repo',
+      githubToken: 'gh-token',
     });
   });
 

@@ -62,7 +62,10 @@ actions = ["opened", "synchronize"]`}
     <dt>reportOn</dt>
     <dd>Minimum severity to report</dd>
     <dt>remote</dt>
-    <dd>GitHub repository for remote skills: <code>owner/repo</code> or <code>owner/repo@sha</code></dd>
+    <dd>
+      GitHub repository for remote skills: <code>owner/repo</code> or <code>owner/repo@sha</code>.
+      In hosted GitHub Actions runs, private remotes use <code>github-token</code> auth on <code>github.com</code>.
+    </dd>
     <dt>model</dt>
     <dd>Model override (optional)</dd>
     <dt>maxTurns</dt>
@@ -448,7 +451,7 @@ jobs:
 
   <dl>
     <dt>github-token</dt>
-    <dd>GitHub token for posting comments. Default: <code>GITHUB_TOKEN</code></dd>
+    <dd>GitHub token for posting comments and private remote-skill fetch auth in hosted runs. Default: <code>GITHUB_TOKEN</code></dd>
     <dt>anthropic-api-key</dt>
     <dd>Anthropic API key (falls back to <code>WARDEN_ANTHROPIC_API_KEY</code>)</dd>
     <dt>config-path</dt>
@@ -466,5 +469,13 @@ jobs:
     <dt>parallel</dt>
     <dd>Maximum concurrent trigger executions. Default: <code>5</code></dd>
   </dl>
+  <h3>Private Remote Troubleshooting</h3>
+
+  <ul>
+    <li>Use a token with repository read access (for example <code>contents: read</code> equivalent).</li>
+    <li>For GitHub App tokens, ensure the app is installed on the remote skill repository.</li>
+    <li>Hosted auth support in this version is scoped to <code>github.com</code> remotes.</li>
+    <li>SSH URLs are no longer required in hosted checks when token access is configured.</li>
+  </ul>
   </DocsPageShell>
 </Base>

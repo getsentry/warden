@@ -45,6 +45,7 @@ export interface TriggerExecutorDeps {
   context: EventContext;
   config: WardenConfig;
   anthropicApiKey: string;
+  githubToken?: string;
   claudePath: string;
   /** Global fail-on from action inputs (trigger-specific takes precedence) */
   globalFailOn?: SeverityThreshold;
@@ -132,6 +133,7 @@ export async function executeTrigger(
           failOn,
           resolveSkill: () => resolveSkillAsync(trigger.skill, context.repoPath, {
             remote: trigger.remote,
+            githubToken: deps.githubToken,
           }),
           context: filterContextByPaths(context, trigger.filters),
           runnerOptions: {

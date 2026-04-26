@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { SkillDefinition, ToolName } from '../config/schema.js';
 import { ToolNameSchema } from '../config/schema.js';
+import type { RemoteAuthOptions } from './auth-options.js';
 
 export class SkillLoaderError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -139,7 +140,7 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
     if (line.startsWith('  ') && inMetadata) {
       // Nested metadata value
       const metaMatch = trimmed.match(/^(\w+):\s*(.*)$/);
-      if (metaMatch && metaMatch[1]) {
+      if (metaMatch?.[1]) {
         metadata[metaMatch[1]] = metaMatch[2]?.replace(/^["']|["']$/g, '') ?? '';
       }
       continue;
@@ -147,7 +148,7 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
 
     inMetadata = false;
     const keyMatch = line.match(/^(\w[\w-]*):\s*(.*)$/);
-    if (keyMatch && keyMatch[1]) {
+    if (keyMatch?.[1]) {
       currentKey = keyMatch[1];
       const value = (keyMatch[2] ?? '').trim();
 
@@ -405,7 +406,7 @@ export async function discoverAllSkills(
   return discoverFromDirectories(repoRoot, SKILL_DIRECTORIES, options);
 }
 
-export interface ResolveSkillOptions {
+export interface ResolveSkillOptions extends RemoteAuthOptions {
   /** Remote repository reference (e.g., "owner/repo" or "owner/repo@sha") */
   remote?: string;
   /** Skip network operations - only use cache for remote skills */
@@ -436,14 +437,14 @@ async function resolveEntry(
   options: ResolveSkillOptions | undefined,
   config: ResolveConfig,
 ): Promise<SkillDefinition> {
-  const { remote, offline } = options ?? {};
+  const { remote, offline, githubToken } = options ?? {};
 
   // 1. Remote repository resolution takes priority when specified
   if (remote) {
     // Dynamic import to avoid circular dependencies
     const { resolveRemoteSkill, resolveRemoteAgent } = await import('./remote.js');
     const resolver = config.kind === 'skill' ? resolveRemoteSkill : resolveRemoteAgent;
-    return resolver(remote, nameOrPath, { offline });
+    return resolver(remote, nameOrPath, { offline, githubToken });
   }
 
   // 2. Direct path resolution
