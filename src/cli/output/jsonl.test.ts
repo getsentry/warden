@@ -706,6 +706,28 @@ describe('parseJsonlReports', () => {
     expect(report.hunkFailures?.map((failure) => failure.type)).toEqual(['extraction', 'analysis']);
   });
 
+  it('reconstructs run-level failures from synthetic chunk records', () => {
+    const run = buildRunMetadata({ runId: 'run-error', durationMs: 120 });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'run',
+      chunk: { file: '', index: 1, total: 1, lineRange: '' },
+      status: 'error',
+      findings: [],
+      durationMs: 120,
+      error: { code: 'auth_failed', message: 'bad key' },
+    };
+
+    const result = parseJsonlReports(renderJsonlChunkLine(chunk));
+
+    expect(result.reports).toHaveLength(1);
+    expect(result.reports[0]!.skill).toBe('run');
+    expect(result.reports[0]!.error?.code).toBe('auth_failed');
+    expect(result.reports[0]!.failedHunks).toBeUndefined();
+    expect(result.totalDurationMs).toBe(120);
+  });
+
   it('reconstructs skipped-file reports from synthetic chunk records', () => {
     const run = buildRunMetadata({
       runId: 'skipped-123',

@@ -295,6 +295,28 @@ function buildReportChunkRecord(
   };
 }
 
+function buildRunErrorChunkRecord(
+  log: RunLog,
+  runDurationMs: number,
+  error: SkillError,
+): JsonlChunkRecord {
+  return {
+    schemaVersion: 1,
+    run: { ...log.baseRun, durationMs: runDurationMs },
+    skill: 'run',
+    chunk: {
+      file: '',
+      index: 1,
+      total: 1,
+      lineRange: '',
+    },
+    status: 'error',
+    findings: [],
+    durationMs: runDurationMs,
+    error,
+  };
+}
+
 function hasReportRecord(log: RunLog, report: SkillReport): boolean {
   return log.chunks.some((chunk) => {
     if (chunk.skill !== report.skill) return false;
@@ -352,6 +374,9 @@ function buildFinalChunkRecords(
 ): JsonlChunkRecord[] {
   const finalRun: JsonlRunMetadata = { ...log.baseRun, durationMs: totalDurationMs };
   if (log.chunks.length === 0) {
+    if (reports.length === 0 && error) {
+      return [buildRunErrorChunkRecord(log, totalDurationMs, error)];
+    }
     return reports.map((report, index) =>
       buildReportChunkRecord(log, report, totalDurationMs, index + 1, reports.length, error)
     );
