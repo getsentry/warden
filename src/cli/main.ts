@@ -260,6 +260,64 @@ function appendChunkToRunLog(log: RunLog, skillName: string, chunk: ChunkAnalysi
   }
 }
 
+function buildReportChunkRecord(
+  log: RunLog,
+  report: SkillReport,
+  runDurationMs: number,
+  index = 1,
+  total = 1,
+  error?: SkillError,
+): JsonlChunkRecord {
+  const reportError = report.error ?? error;
+  return {
+    schemaVersion: 1,
+    run: { ...log.baseRun, durationMs: runDurationMs },
+    skill: report.skill,
+    model: report.model,
+    chunk: {
+      file: report.skippedFiles?.[0]?.filename ?? '',
+      index,
+      total,
+      lineRange: '',
+    },
+    status: reportError ? 'error' : report.skippedFiles?.length ? 'skipped' : 'ok',
+    findings: report.findings,
+    usage: report.usage,
+    durationMs: report.durationMs ?? runDurationMs,
+    auxiliaryUsage: report.auxiliaryUsage,
+    error: reportError,
+    skippedFiles: report.skippedFiles,
+  };
+}
+
+function hasReportRecord(log: RunLog, report: SkillReport): boolean {
+  return log.chunks.some((chunk) => {
+    if (chunk.skill !== report.skill) return false;
+    if (report.error) {
+      return chunk.error?.code === report.error.code && chunk.error.message === report.error.message;
+    }
+    if (report.skippedFiles?.length) {
+      return (chunk.skippedFiles?.length ?? 0) > 0;
+    }
+    return true;
+  });
+}
+
+function shouldStreamReportRecord(log: RunLog, report: SkillReport): boolean {
+  if (hasReportRecord(log, report)) return false;
+  return Boolean(report.skippedFiles?.length || !log.chunks.some((chunk) => chunk.skill === report.skill));
+}
+
+function appendReportToRunLog(log: RunLog, report: SkillReport): void {
+  if (!shouldStreamReportRecord(log, report)) return;
+  const record = buildReportChunkRecord(log, report, Date.now() - log.startTime);
+  log.chunks.push(record);
+  const line = renderJsonlChunkLine(record);
+  for (const p of log.paths) {
+    try { appendJsonlLine(p, line); } catch { /* best-effort */ }
+  }
+}
+
 function lineRangeIncludes(lineRange: string, line: number): boolean {
   const [startText, endText] = lineRange.split('-');
   const start = Number(startText);
@@ -284,25 +342,9 @@ function buildFinalChunkRecords(
 ): JsonlChunkRecord[] {
   const finalRun: JsonlRunMetadata = { ...log.baseRun, durationMs: totalDurationMs };
   if (log.chunks.length === 0) {
-    return reports.map((report, index) => ({
-      schemaVersion: 1,
-      run: finalRun,
-      skill: report.skill,
-      model: report.model,
-      chunk: {
-        file: report.skippedFiles?.[0]?.filename ?? '',
-        index: index + 1,
-        total: reports.length,
-        lineRange: '',
-      },
-      status: (report.error ?? error) ? 'error' : report.skippedFiles?.length ? 'skipped' : 'ok',
-      findings: report.findings,
-      usage: report.usage,
-      durationMs: report.durationMs ?? totalDurationMs,
-      auxiliaryUsage: report.auxiliaryUsage,
-      error: report.error ?? error,
-      skippedFiles: report.skippedFiles,
-    }));
+    return reports.map((report, index) =>
+      buildReportChunkRecord(log, report, totalDurationMs, index + 1, reports.length, error)
+    );
   }
 
   const findingsByChunk = new Map<JsonlChunkRecord, Finding[]>();
@@ -316,11 +358,20 @@ function buildFinalChunkRecords(
     }
   }
 
-  return log.chunks.map((chunk) => ({
+  const chunkRecords = log.chunks.map((chunk) => ({
     ...chunk,
-    run: { ...chunk.run, durationMs: totalDurationMs },
+    run: { ...finalRun },
     findings: findingsByChunk.get(chunk) ?? [],
   }));
+
+  const finalLog = { ...log, chunks: chunkRecords };
+  const missingReports = reports.filter((report) => shouldStreamReportRecord(finalLog, report));
+  return [
+    ...chunkRecords,
+    ...missingReports.map((report, index) =>
+      buildReportChunkRecord(log, report, totalDurationMs, chunkRecords.length + index + 1, chunkRecords.length + missingReports.length, error)
+    ),
+  ];
 }
 
 /**
@@ -673,6 +724,7 @@ async function runSkills(
     concurrency,
     failFastController,
     onChunkComplete: (skillName: string, chunk: ChunkAnalysisResult) => appendChunkToRunLog(runLog, skillName, chunk),
+    onSkillComplete: (report: SkillReport) => appendReportToRunLog(runLog, report),
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
@@ -982,6 +1034,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     concurrency,
     failFastController,
     onChunkComplete: (skillName: string, chunk: ChunkAnalysisResult) => appendChunkToRunLog(runLog, skillName, chunk),
+    onSkillComplete: (report: SkillReport) => appendReportToRunLog(runLog, report),
   };
   const results = reporter.mode.isTTY
     ? await runSkillTasksWithInk(tasks, taskOptions)
