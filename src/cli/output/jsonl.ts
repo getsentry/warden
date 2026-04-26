@@ -181,12 +181,8 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 }
 
 /**
- * Build a run metadata block for the current write moment.
- *
- * Used by both the one-shot `renderJsonlString` and the incremental
- * writer. Per-record `durationMs` is the runtime as of when the record
- * was emitted — for skill records written mid-run that's a snapshot;
- * for the final summary it's the run total.
+ * Build a JSONL run metadata block. `durationMs` is a snapshot at write
+ * time for skill records, the run total on the trailing summary record.
  */
 export function buildRunMetadata(options: {
   runId: string;
@@ -208,10 +204,7 @@ export function buildRunMetadata(options: {
   };
 }
 
-/**
- * Build a single skill JSONL record. Drops empty optional arrays and
- * zero counts to keep the on-disk shape compact and stable.
- */
+/** Build a skill JSONL record, dropping zero-valued optional fields. */
 export function buildSkillJsonlRecord(report: SkillReport, run: JsonlRunMetadata): JsonlRecord {
   const trimmed: SkillReport = {
     ...report,
@@ -267,10 +260,7 @@ export function renderJsonlSummaryLine(
   return JSON.stringify(buildSummaryJsonlRecord(reports, run, error)) + '\n';
 }
 
-/**
- * Initialize a JSONL log file: create parent directories and truncate
- * to empty so the next append starts a fresh run.
- */
+/** Create parent dirs and truncate the file to empty. */
 export function initJsonlFile(outputPath: string): void {
   const resolvedPath = resolve(process.cwd(), outputPath);
   mkdirSync(dirname(resolvedPath), { recursive: true });
@@ -278,12 +268,9 @@ export function initJsonlFile(outputPath: string): void {
 }
 
 /**
- * Append a pre-rendered JSONL line to a file. The line must already
- * include its trailing newline. Parent directory is created on demand.
- *
- * On POSIX, `appendFileSync` of a single line under PIPE_BUF (4KB
- * minimum) is atomic with respect to other appenders, which is why
- * the producer can safely emit per-skill records concurrently.
+ * Append a pre-rendered line (must include its trailing newline).
+ * Atomic w.r.t. other appenders on POSIX for lines under PIPE_BUF, which
+ * is what makes parallel skill execution safe to write straight to disk.
  */
 export function appendJsonlLine(outputPath: string, line: string): void {
   const resolvedPath = resolve(process.cwd(), outputPath);

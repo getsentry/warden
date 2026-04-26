@@ -922,10 +922,6 @@ describe('incremental JSONL writes', () => {
   });
 
   it('append-as-you-go produces the same on-disk shape as renderJsonlString', () => {
-    // The whole point of incremental writes: the bytes hit disk in
-    // smaller chunks, but the final file is byte-identical to the
-    // one-shot render. Old readers (parseJsonlReports, downstream
-    // dashboards) must not be able to tell the difference.
     const reports: SkillReport[] = [
       {
         skill: 'security-review',
@@ -947,9 +943,6 @@ describe('incremental JSONL writes', () => {
 
     const oneShot = renderJsonlString(reports, 2000, { runId, timestamp, cwd });
 
-    // Build the same record sequence via the per-line helpers, using a
-    // run metadata block whose durationMs matches the one-shot render
-    // for every line (same as the legacy code path).
     const run = buildRunMetadata({ runId, durationMs: 2000, timestamp, cwd });
     const target = join(testDir, 'incr.jsonl');
     initJsonlFile(target);
@@ -960,8 +953,6 @@ describe('incremental JSONL writes', () => {
   });
 
   it('a partial file (skills appended, no summary) parses and renders skill records', () => {
-    // Crash-safety check: if the run dies before finalize, we still
-    // want every completed skill on disk and parseable.
     const partialReports: SkillReport[] = [
       { skill: 'sa', summary: 'ok', findings: [], durationMs: 100 },
       { skill: 'sb', summary: 'ok', findings: [], durationMs: 200 },
@@ -978,15 +969,10 @@ describe('incremental JSONL writes', () => {
     const content = readFileSync(target, 'utf-8');
     const parsed = parseJsonlReports(content);
     expect(parsed.reports.map((r) => r.skill)).toEqual(['sa', 'sb']);
-    // No summary record means totalDurationMs falls back to the first record's run.durationMs.
     expect(parsed.runMetadata?.runId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
   });
 
   it('parseJsonlReports keeps its legacy contract: a one-shot file from a prior version still parses', () => {
-    // BACKWARD COMPATIBILITY: a file written entirely up-front by an old
-    // version (today's pre-incremental path) must continue to parse and
-    // render with the current code. This is the load-bearing test for
-    // the issue's hard constraint.
     const legacy = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"legacy-oneshot"},"skill":"sec","summary":"ok","findings":[]}
 {"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":2000,"cwd":"/test","runId":"legacy-oneshot"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}
 `;

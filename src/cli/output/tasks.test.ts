@@ -405,10 +405,8 @@ describe('createDefaultCallbacks', () => {
     });
 
     it('suppresses the duplicate completed line when onSkillComplete fires after onSkillSkipped', () => {
-      // Regression: the skip path now calls both onSkillSkipped (for the
-      // user-facing "skipped" line) and onSkillComplete (for the
-      // incremental JSONL writer). createDefaultCallbacks must not emit
-      // a contradictory "completed" line on top of "skipped".
+      // The skip path fires both callbacks (onSkillComplete for the
+      // JSONL writer); plain output must show "skipped" only.
       const tasks = [makeTask('my-trigger', 'code-scanner')];
       const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
 
@@ -796,11 +794,6 @@ describe('runSkillTask skipped path', () => {
   });
 
   it('emits onSkillComplete alongside onSkillSkipped so incremental JSONL captures skipped skills', async () => {
-    // Regression: the incremental JSONL writer hooks `onSkillComplete`. The
-    // skip path used to call only `onSkillSkipped`, so skipped skills were
-    // dropped from the on-disk file even though they appeared in the
-    // in-memory reports passed to finalize. That made `--json` output
-    // (file read-back) inconsistent with the fallback render path.
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({ files: [], skippedFiles: [] });
 
     const options: SkillTaskOptions = {
@@ -829,9 +822,6 @@ describe('runSkillTask skipped path', () => {
     expect(name).toBe('no-files-skill');
     expect(report.skill).toBe('no-files-skill');
     expect(report.summary).toBe('No code changes to analyze');
-    // The same report object handed to onSkillComplete must be the one
-    // returned in the task result, so `--json` (file) and the in-memory
-    // reports stay consistent.
     expect(result.report).toBe(report);
   });
 });

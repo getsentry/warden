@@ -152,39 +152,19 @@ function emitEmptyRunLog(
 }
 
 /**
- * Tracks the in-flight JSONL log for a run.
- *
- * Both the repo-local `.warden/logs/<runId>.jsonl` and the user's optional
- * `--output` path are appended to in real time as each skill completes —
- * so a second terminal can `warden runs follow <runId>` to watch
- * progress, and CI artifacts contain everything that ran even if the
- * process crashes before the summary is appended.
- *
- * Per-skill records carry the run's elapsed-so-far in `run.durationMs`;
- * the trailing summary record carries the final total. Older readers
- * derive total run time from the summary (`parseJsonlReports`), so the
- * snapshot value on skill records doesn't change post-hoc semantics.
+ * In-flight JSONL log state for a run. Skill records are appended as
+ * each skill finishes; the summary is appended at finalize. A path is
+ * dropped from `paths` if its initial write failed.
  */
 interface RunLog {
-  /** Files to append to. Empty if every initialization failed. */
   paths: string[];
-  /** Repo-local log path (always set; `paths` includes it iff init succeeded). */
   primaryLogPath: string;
-  /** Whether the primary log file was successfully initialized for writing. */
   primaryLogWritten: boolean;
-  /** User-supplied --output path, if init succeeded; otherwise undefined. */
   outputPath: string | undefined;
-  /** Wall-clock start of the run, for computing per-record `durationMs`. */
   startTime: number;
-  /** Run metadata baseline; per write we plug in a fresh `durationMs`. */
   baseRun: Omit<JsonlRunMetadata, 'durationMs'>;
 }
 
-/**
- * Initialize the run's JSONL log files. Both paths are truncated to empty
- * so subsequent appends start a fresh run; on initialization failure the
- * path is dropped from the write set and a warning is surfaced.
- */
 function initializeRunLog(args: {
   repoPath: string;
   runId: string;
@@ -233,24 +213,15 @@ function initializeRunLog(args: {
   return { paths, primaryLogPath, primaryLogWritten, outputPath: resolvedOutputPath, startTime, baseRun };
 }
 
-/**
- * Append a completed skill's record to every active log file.
- * Best-effort: a failed write on one path doesn't block the others.
- */
 function appendSkillToRunLog(log: RunLog, report: SkillReport): void {
   if (log.paths.length === 0) return;
   const run: JsonlRunMetadata = { ...log.baseRun, durationMs: Date.now() - log.startTime };
   const line = renderJsonlSkillLine(report, run);
   for (const p of log.paths) {
-    try {
-      appendJsonlLine(p, line);
-    } catch {
-      // Don't let a transient I/O failure abort the run.
-    }
+    try { appendJsonlLine(p, line); } catch { /* best-effort */ }
   }
 }
 
-/** Append the run-final summary record to every active log file. */
 function finalizeRunLog(
   log: RunLog,
   reports: SkillReport[],
@@ -261,11 +232,7 @@ function finalizeRunLog(
   const run: JsonlRunMetadata = { ...log.baseRun, durationMs: totalDurationMs };
   const line = renderJsonlSummaryLine(reports, run, error);
   for (const p of log.paths) {
-    try {
-      appendJsonlLine(p, line);
-    } catch {
-      // Best-effort; the on-disk skill records remain valid as a partial run.
-    }
+    try { appendJsonlLine(p, line); } catch { /* best-effort */ }
   }
 }
 
@@ -340,18 +307,7 @@ async function outputResultsAndHandleFixes(
 
   const traceId = runLog.baseRun.traceId;
 
-  // Run-level error recorded on the summary record. Today no caller of
-  // outputResultsAndHandleFixes has produced one — auth/config failures
-  // take the emitEmptyRunLog path before we ever get here. The variable
-  // exists so the file-finalize and `--json` fallback paths use the same
-  // value, keeping the on-disk file and stdout byte-identical if a
-  // future code path threads an error through.
-  const runError: SkillError | undefined = undefined;
-
-  // Append the run-final summary record to every active log file. Skill
-  // records were appended incrementally as each skill completed, so this
-  // just closes the file with the aggregate.
-  finalizeRunLog(runLog, reports, totalDuration, runError);
+  finalizeRunLog(runLog, reports, totalDuration);
 
   // Notify that the user-supplied --output file was successfully written.
   // Reuses the prior wording — only emitted on a clean finalize.
@@ -370,20 +326,12 @@ async function outputResultsAndHandleFixes(
     && reporter.mode.isTTY
     && process.stdin.isTTY;
 
-  // Output results
   reporter.blank();
   if (options.json) {
     // --json mirrors the on-disk file byte-for-byte (specs/reporters.md §4).
-    // Read the just-finalized log back so per-skill `run.durationMs`
-    // snapshots match what tooling sees on disk; fall back to an
-    // in-memory render only if the primary log couldn't be written.
     let jsonlContent: string | undefined;
     if (runLog.primaryLogWritten) {
-      try {
-        jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8');
-      } catch {
-        // Fall through to the in-memory path.
-      }
+      try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }
     }
     if (jsonlContent === undefined) {
       jsonlContent = renderJsonlString(reports, totalDuration, {
@@ -393,12 +341,10 @@ async function outputResultsAndHandleFixes(
         model: runLog.baseRun.model,
         headSha: runLog.baseRun.headSha,
         cwd: runLog.baseRun.cwd,
-        error: runError,
       });
     }
     process.stdout.write(jsonlContent);
   } else {
-    // Suppress fix diffs in report when interactive step-through will show them
     console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
   }
 
@@ -570,10 +516,8 @@ async function runSkills(
     runnerOptions,
   }));
 
-  // Initialize the run's JSONL log up front so a second terminal can
-  // `warden runs follow <runId>` while skills are still running.
-  // Skill records are appended on each completion; the trailing summary
-  // is appended in `outputResultsAndHandleFixes`.
+  // Open the run's JSONL log before launching skills so `warden runs
+  // follow <runId>` works from a second terminal while the run is live.
   const runId = generateRunId();
   const timestamp = new Date();
   const traceId = getTraceId();

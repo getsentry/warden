@@ -37,13 +37,8 @@ function resolveLogDir(): { logDir: string; repoPath: string } | undefined {
 }
 
 /**
- * Recover an ISO timestamp from a session filename.
- *
- * Filenames are `{runId8}-{ISO-datetime}.jsonl` with `:` and `.`
- * replaced by `-` (see `getRepoLogPath`). Used as the sort key for
- * in-progress runs whose JSONL doesn't yet contain a summary record.
- * Returns the empty string if the name doesn't match the expected
- * shape — those rows fall to the bottom, which is fine.
+ * Recover an ISO timestamp from `{runId8}-{ISO-datetime}.jsonl`.
+ * Used as the list sort key for in-progress runs (no summary yet).
  */
 function filenameTimestamp(filename: string): string {
   const match = filename.match(/-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.jsonl$/);
@@ -147,11 +142,8 @@ function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>):
 }
 
 /**
- * List all JSONL session files in .warden/logs/.
- *
- * Sessions with zero analyzed files (early-exit / no-op runs) are hidden
- * by default — they're rarely interesting and crowd out actual analysis
- * runs. Pass `all=true` (CLI: `--all`) to include them.
+ * List sessions in `.warden/logs/`. Empty (no-file, no-skill) runs
+ * are hidden unless `all` is set.
  */
 export async function runRunsList(
   options: CLIOptions,
@@ -182,25 +174,19 @@ export async function runRunsList(
     return 0;
   }
 
-  // Parse all logs for metadata and sort by timestamp (newest first).
-  // In-progress runs have no summary record yet, so `parseLogMetadata`
-  // returns undefined. Fall back to the timestamp embedded in the
-  // filename (`{runId8}-{ISO-datetime}.jsonl`) so active runs sort to
-  // the top instead of the bottom — they're the most interesting rows
-  // for someone listing sessions.
   const allLogData: { entry: string; meta: LogFileMetadata | undefined }[] = [];
   for (const entry of entries) {
     const filePath = join(logDir, entry);
     allLogData.push({ entry, meta: parseLogMetadata(filePath) });
   }
+  // In-progress runs have no summary; fall back to the filename timestamp
+  // so they sort to the top instead of the bottom.
   const sortKey = (entry: { entry: string; meta: LogFileMetadata | undefined }) =>
     entry.meta?.summary.run.timestamp ?? filenameTimestamp(entry.entry);
   allLogData.sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
 
-  // Default view hides no-op sessions: 0 files analyzed AND no run-level error.
-  // A run that errored before any skill ran (auth, config) still shows up — the
-  // error is the whole point of keeping the record. Parse-error rows also stay
-  // visible so the user can see something went wrong with their archive.
+  // Run-level errors (auth, config) stay visible even with zero files —
+  // the error is the point of keeping the record.
   const isEmptyRun = (entry: { meta: LogFileMetadata | undefined }) => {
     if (!entry.meta) return false;
     if (entry.meta.summary.error) return false;
@@ -530,24 +516,18 @@ export async function runRunsGc(options: CLIOptions, reporter: Reporter): Promis
 }
 
 /**
- * Resolve a run-id-or-path argument to the active session file.
- *
- * `--follow` accepts the same shapes as `show` plus a no-arg form that
- * targets "the most recent session that hasn't been closed yet" — a
- * session is open until its trailing `summary` line is written, so this
- * is a reliable proxy for "the run currently happening in another
- * terminal."
+ * Resolve a follow target. With no arg, picks the newest session whose
+ * file lacks a trailing `summary` record — a reliable proxy for "the
+ * run currently happening in another terminal."
  */
 function resolveFollowTarget(arg: string | undefined, logDir: string): string | undefined {
   if (arg) {
     if (arg.includes('/') || arg.includes('.')) {
       return resolve(process.cwd(), arg);
     }
-    const matches = resolveFileArg(arg, logDir);
-    return matches[0];
+    return resolveFileArg(arg, logDir)[0];
   }
 
-  // No arg: pick the newest log file that has no trailing summary record.
   let entries: string[];
   try {
     entries = readdirSync(logDir)
@@ -563,22 +543,16 @@ function resolveFollowTarget(arg: string | undefined, logDir: string): string | 
     try {
       content = readFileSync(filePath, 'utf-8');
     } catch {
-      // Can't read this candidate; try the next.
       continue;
     }
     const lines = content.trim().split('\n').filter((l) => l.trim());
     const last = lines[lines.length - 1];
-    if (!last) {
-      // Empty file = freshly initialized run that hasn't emitted anything yet.
-      return filePath;
-    }
+    if (!last) return filePath;
     let parsed: unknown;
     try {
       parsed = JSON.parse(last);
     } catch {
-      // Last line is unparseable — the run wrote a corrupt tail and
-      // isn't going to recover. Treating this as "in progress" would
-      // hang the follower forever, so skip and look at older entries.
+      // Corrupt tail — treating this as in-progress would hang forever.
       continue;
     }
     if ((parsed as { type?: string } | null)?.type !== 'summary') {
@@ -588,17 +562,12 @@ function resolveFollowTarget(arg: string | undefined, logDir: string): string | 
   return undefined;
 }
 
-/**
- * Render a single skill-record line via the terminal renderer.
- * Summary lines and unknown record types are rendered as one-line
- * status strings so the user sees a steady cadence of output.
- */
+/** Render one JSONL line for the human follower. Stops on the summary record. */
 function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
   } catch {
-    // Malformed line — show it raw so a corrupt log doesn't silently swallow output.
     reporter.warning(`Skipping malformed line: ${line.slice(0, 80)}`);
     return { stop: false };
   }
@@ -611,19 +580,14 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
       const { totalFindings, bySeverity } = summary.data;
       reporter.blank();
       reporter.text(
-        chalk.dim(
-          `Run finished — ${totalFindings} ${pluralize(totalFindings, 'finding')}  `,
-        ) +
+        chalk.dim(`Run finished — ${totalFindings} ${pluralize(totalFindings, 'finding')}  `) +
           formatSeverityBreakdown(bySeverity),
       );
     }
     return { stop: true };
   }
 
-  if (obj.type === 'fix-evaluation') {
-    // Don't render fix-evaluation records in --follow; they're auxiliary.
-    return { stop: false };
-  }
+  if (obj.type === 'fix-evaluation') return { stop: false };
 
   const skillResult = JsonlRecordSchema.safeParse(obj);
   if (!skillResult.success) {
@@ -635,31 +599,23 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
   return { stop: false };
 }
 
-/**
- * In `--json` mode, pass the raw JSONL line straight through to stdout.
- * Lets downstream tools consume the live record stream without reparsing
- * Warden's terminal output. Stops on the trailing summary record.
- */
+/** `--json` mode: pass the raw line through unmodified for downstream tools. */
 function passthroughFollowLine(line: string): { stop: boolean } {
   process.stdout.write(line);
   process.stdout.write('\n');
-  let stop = false;
   try {
     const parsed = JSON.parse(line) as { type?: string };
-    if (parsed?.type === 'summary') stop = true;
+    if (parsed?.type === 'summary') return { stop: true };
   } catch {
-    // Don't stop on malformed lines — the run might still emit a valid summary.
+    // partial / invalid line; keep waiting for a valid summary
   }
-  return { stop };
+  return { stop: false };
 }
 
 /**
- * Tail a JSONL session file, rendering each appended skill record live.
- * Exits when the trailing summary record is appended or on Ctrl-C.
- *
- * The viewer always exits 0 — `--follow` is not a build gate, and
- * exit-on-findings would surprise users who run it in a second terminal
- * to watch progress.
+ * Tail a JSONL session file, rendering each appended record live.
+ * Exits 0 on summary record or Ctrl-C — never on findings; this is a
+ * viewer, not a build gate.
  */
 export async function runRunsFollow(
   runsOptions: RunsOptions,
@@ -738,22 +694,16 @@ export async function runRunsFollow(
       if (stopped) finish(0);
     };
 
-    // fs.watch is best-effort — coalesces events and varies by platform.
-    // Keep a polling fallback (1s) so we always make forward progress
-    // even if change events get dropped on macOS / network filesystems.
+    // fs.watch is best-effort across platforms; the 1s poll below is the
+    // real correctness guarantee.
     try {
       watcher = watch(target, { persistent: true }, () => tick());
-      // FSWatcher is an EventEmitter: an unhandled 'error' (file deleted by
-      // `runs gc`, inotify limit hit) crashes the process. The viewer must
-      // exit cleanly, so trap the error and let the polling fallback carry
-      // on serving updates from disk.
+      // FSWatcher 'error' would crash the process otherwise (file deleted, inotify limit, ...).
       watcher.on('error', () => {
         try { watcher?.close(); } catch { /* ignore */ }
         watcher = undefined;
       });
-    } catch {
-      // If watch isn't available, polling alone is fine.
-    }
+    } catch { /* polling alone is fine */ }
     const pollTimer = setInterval(tick, 1000);
 
     const finish = (code: number) => {
