@@ -788,6 +788,21 @@ another bad line
     expect(result.runMetadata?.runId).toBe('fix-eval-123');
   });
 
+  it('parses pre-rename logs that used findingCount instead of findings', () => {
+    // Backward compat: breaking old log formats is NEVER ALLOWED. Old logs
+    // (written before the FileReport.findingCount → findings rename) must
+    // still parse cleanly. Schema preprocesses the legacy field name.
+    const legacy = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1500,"cwd":"/test","runId":"old-fc-123"},"skill":"review","summary":"Found 1","findings":[{"id":"X","severity":"medium","title":"t","description":"d"}],"files":[{"filename":"src/api.ts","findingCount":1,"durationMs":1200},{"filename":"src/utils.ts","findingCount":0,"durationMs":800}]}
+{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1500,"cwd":"/test","runId":"old-fc-123"},"type":"summary","totalFindings":1,"bySeverity":{"high":0,"medium":1,"low":0}}
+`;
+    const result = parseJsonlReports(legacy);
+    expect(result.reports).toHaveLength(1);
+    expect(result.reports[0]!.files).toHaveLength(2);
+    expect(result.reports[0]!.files![0]!.findings).toBe(1);
+    expect(result.reports[0]!.files![1]!.findings).toBe(0);
+    expect(result.reports[0]!.files![0]!.filename).toBe('src/api.ts');
+  });
+
   it('parses older logs without the new error fields', () => {
     const legacy = `{"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"legacy-123"},"skill":"old","summary":"done","findings":[]}
 {"run":{"timestamp":"2026-02-18T14:32:15.123Z","durationMs":1000,"cwd":"/test","runId":"legacy-123"},"type":"summary","totalFindings":0,"bySeverity":{"high":0,"medium":0,"low":0}}

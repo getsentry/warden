@@ -167,12 +167,31 @@ export type SkippedFile = z.infer<typeof SkippedFileSchema>;
 // Per-file report within a skill. `findings` is a count; the per-skill
 // record uses the same name for the findings array. This matches the
 // JSONL contract (see specs/jsonl-examples.jsonl).
-export const FileReportSchema = z.object({
-  filename: z.string(),
-  findings: z.number().int().nonnegative(),
-  durationMs: z.number().nonnegative().optional(),
-  usage: UsageStatsSchema.optional(),
-});
+//
+// IMPORTANT: breaking on-disk JSONL log formats is NEVER ALLOWED. Old
+// `.warden/logs/*.jsonl` files must always parse. The schema may evolve
+// (add fields, normalize values) but readers must accept all historical
+// shapes — convert legacy fields via preprocess/transform here, never by
+// asking users to delete old logs. The preprocess below maps the legacy
+// `findingCount` field (used pre-rename) into `findings`.
+export const FileReportSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const obj = val as Record<string, unknown>;
+      if ('findingCount' in obj && !('findings' in obj)) {
+        const { findingCount, ...rest } = obj;
+        return { ...rest, findings: findingCount };
+      }
+    }
+    return val;
+  },
+  z.object({
+    filename: z.string(),
+    findings: z.number().int().nonnegative(),
+    durationMs: z.number().nonnegative().optional(),
+    usage: UsageStatsSchema.optional(),
+  }),
+);
 export type FileReport = z.infer<typeof FileReportSchema>;
 
 // Stable codes for run failures. Public contract: add new codes, do not rename.

@@ -196,6 +196,16 @@ function renderSkillBoxTTY(report: SkillReport, mode: OutputMode, options?: Rend
 
   box.header();
 
+  // Errored runs render as failures, not "No issues found" — the skill
+  // never finished, so a finding count is the wrong frame.
+  if (report.error) {
+    box.content(chalk.red(`FAILED (${report.error.code})`));
+    box.blank();
+    box.content(report.error.message);
+    box.footer();
+    return box.render();
+  }
+
   // Finding counts summary line
   const countStr = formatFindingCounts(counts);
   box.content(countStr);
@@ -230,6 +240,19 @@ function renderSkillCI(report: SkillReport, verbosity: Verbosity = Verbosity.Nor
   const lines: string[] = [];
   const counts = countBySeverity(report.findings);
   const durationStr = report.durationMs !== undefined ? ` (${formatDuration(report.durationMs)})` : '';
+
+  // For errored runs, lead with the failure rather than a misleading
+  // "No issues found" line — the skill never finished, so a finding count
+  // is the wrong frame.
+  if (report.error) {
+    lines.push(`${report.skill}${durationStr} - FAILED (${report.error.code})`);
+    lines.push(`  ${report.error.message}`);
+    if (report.failedHunks) {
+      lines.push(`  ${report.failedHunks} ${pluralize(report.failedHunks, 'chunk')} failed to analyze`);
+    }
+    return lines;
+  }
+
   const summary = formatFindingCountsPlain(counts);
 
   // Header: skill (duration) - summary

@@ -6,7 +6,7 @@ import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions } from '../sdk/runner.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
-import type { SkillReport, ConfidenceThreshold } from '../types/index.js';
+import type { SkillReport, ConfidenceThreshold, SkillError } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
@@ -102,12 +102,14 @@ function resolveConfigPath(options: CLIOptions, repoPath: string): string {
  * Behavior:
  * - `--json`: writes to stdout (the API contract for piping consumers).
  * - `--output <path>`: writes to that explicit path (CI artifacts).
- * - Default `.warden/logs/` is intentionally NOT written. An empty record
- *   would just clutter the log directory for runs that did no work.
+ * - Default `.warden/logs/`: written only when `error` is set. Real
+ *   failures (auth, config load, etc.) belong in the on-disk audit trail;
+ *   pure no-ops (no files, no skills) would just clutter it.
  */
 function emitEmptyRunLog(
   repoPath: string,
   options: CLIOptions,
+  error?: SkillError,
 ): void {
   const runId = generateRunId();
   const timestamp = new Date();
@@ -117,7 +119,21 @@ function emitEmptyRunLog(
   } catch {
     // Not in a git repo or HEAD is unborn
   }
-  const content = renderJsonlString([], 0, { runId, traceId: getTraceId(), timestamp, headSha });
+  const content = renderJsonlString([], 0, {
+    runId,
+    traceId: getTraceId(),
+    timestamp,
+    headSha,
+    error,
+  });
+  if (error) {
+    const logPath = getRepoLogPath(repoPath, runId, timestamp);
+    try {
+      writeJsonlContent(logPath, content);
+    } catch (err) {
+      console.warn(`Warning: Failed to write run log: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   if (options.output) {
     try {
       writeJsonlContent(options.output, content);
@@ -331,8 +347,13 @@ async function runSkills(
   try {
     verifyAuth({ apiKey });
   } catch (error: unknown) {
-    reporter.error((error as WardenAuthenticationError).message);
-    emitEmptyRunLog(repoPath ?? cwd, options);
+    const message = (error as WardenAuthenticationError).message;
+    reporter.error(message);
+    emitEmptyRunLog(repoPath ?? cwd, options, {
+      code: 'auth_failed',
+      message,
+      timestamp: new Date().toISOString(),
+    });
     return 1;
   }
 
@@ -668,8 +689,13 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   try {
     verifyAuth({ apiKey });
   } catch (error: unknown) {
-    reporter.error((error as WardenAuthenticationError).message);
-    emitEmptyRunLog(repoPath, options);
+    const message = (error as WardenAuthenticationError).message;
+    reporter.error(message);
+    emitEmptyRunLog(repoPath, options, {
+      code: 'auth_failed',
+      message,
+      timestamp: new Date().toISOString(),
+    });
     return 1;
   }
 

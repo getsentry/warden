@@ -188,11 +188,16 @@ export async function runSkillTask(
       });
 
       const startTime = Date.now();
+      // Mirror of the inner-scope `skill` so the outer catch can use
+      // skill.name when resolveSkill succeeded but a later step threw.
+      // Stays undefined only if resolveSkill itself failed.
+      let resolvedSkillName: string | undefined;
 
       try {
         let skill: SkillDefinition;
         try {
           skill = await resolveSkill();
+          resolvedSkillName = skill.name;
         } catch (err) {
           if (err instanceof WardenAuthenticationError) throw err;
           const message = err instanceof Error ? err.message : String(err);
@@ -450,6 +455,16 @@ export async function runSkillTask(
           if (skippedFiles.length > 0) errorReport.skippedFiles = skippedFiles;
           if (auxUsage) errorReport.auxiliaryUsage = auxUsage;
           callbacks.onSkillError(name, errorMessage);
+          // Mirror the success path: emit a final completion event with the
+          // (errored) report so terminal renderers print the per-skill
+          // summary line. Without this, console mode shows the error string
+          // alone with no breakdown of timing, cost, or attempted files.
+          callbacks.onSkillUpdate(name, {
+            status: 'error',
+            durationMs: duration,
+            findings: [],
+          });
+          callbacks.onSkillComplete(name, errorReport);
           // Carry a typed error alongside the report so consumers that re-throw
           // (action executor, Sentry.captureException) preserve the ErrorCode.
           const runnerError = new SkillRunnerError(errorMessage, { code: 'all_hunks_failed' });
@@ -548,9 +563,13 @@ export async function runSkillTask(
       } catch (err) {
         const { code, message } = classifyError(err);
         callbacks.onSkillError(name, message);
+        // Use the resolved skill name when available so JSONL output matches
+        // the success path's identifier. Falls back to the trigger name only
+        // when resolveSkill itself threw.
+        const skillName = resolvedSkillName ?? name;
         const errorReport: SkillReport = {
-          skill: name,
-          summary: `${name}: failed (${code})`,
+          skill: skillName,
+          summary: `${skillName}: failed (${code})`,
           findings: [],
           durationMs: Date.now() - startTime,
           model: runnerOptions?.model,

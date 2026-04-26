@@ -8,8 +8,9 @@ import {
   FileReportSchema,
   AuxiliaryUsageMapSchema,
   FixStatusSchema,
+  SkillErrorSchema,
 } from '../../types/index.js';
-import type { SkillReport, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
+import type { SkillReport, UsageStats, AuxiliaryUsageMap, SkillError } from '../../types/index.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 import { logger } from '../../sentry.js';
 import { countBySeverity } from './formatters.js';
@@ -48,6 +49,16 @@ export function getRepoLogPath(repoRoot: string, runId: string, timestamp: Date 
  * Formal JSON Schema: specs/jsonl-schema.json
  * Example payloads:   specs/jsonl-examples.jsonl
  * Reporter spec:      specs/reporters.md Section 3 "JSONL Specification"
+ *
+ * BACKWARD COMPATIBILITY: breaking on-disk JSONL log formats is NEVER
+ * ALLOWED. Users keep .warden/logs/*.jsonl across versions. The schema
+ * may evolve — new optional fields, additive enum values, normalization
+ * — but every historical shape must continue to parse cleanly. Field
+ * renames require a preprocess that maps the old name to the new one
+ * (see FileReportSchema's `findingCount → findings` preprocess in
+ * src/types/index.ts). Removing a field is fine; making it optional in
+ * the schema preserves old logs. If you can't reconcile an old shape
+ * with a preprocess, the change is wrong — find a different path.
  */
 
 /** Metadata common to every JSONL record. */
@@ -118,6 +129,12 @@ export const JsonlSummaryRecordSchema = z.object({
   failedSkills: z.array(z.string()).optional(),
   totalFailedHunks: z.number().int().nonnegative().optional(),
   totalFailedExtractions: z.number().int().nonnegative().optional(),
+  /**
+   * Top-level run error captured before any skill ran (e.g. auth failure,
+   * config load error). Skill-level errors live on the SkillRecord; this
+   * is for failures that prevent the per-skill loop from starting.
+   */
+  error: SkillErrorSchema.optional(),
 });
 export type JsonlSummaryRecord = z.infer<typeof JsonlSummaryRecordSchema>;
 
@@ -171,7 +188,16 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
 export function renderJsonlString(
   reports: SkillReport[],
   durationMs: number,
-  options?: { runId?: string; traceId?: string; timestamp?: Date; model?: string; headSha?: string; cwd?: string }
+  options?: {
+    runId?: string;
+    traceId?: string;
+    timestamp?: Date;
+    model?: string;
+    headSha?: string;
+    cwd?: string;
+    /** Top-level run error (e.g. auth failure) recorded on the summary record. */
+    error?: SkillError;
+  }
 ): string {
   const timestamp = (options?.timestamp ?? new Date()).toISOString();
   const cwd = options?.cwd ?? process.cwd();
@@ -221,6 +247,7 @@ export function renderJsonlString(
     failedSkills: failedSkills.length > 0 ? failedSkills : undefined,
     totalFailedHunks: totalFailedHunks > 0 ? totalFailedHunks : undefined,
     totalFailedExtractions: totalFailedExtractions > 0 ? totalFailedExtractions : undefined,
+    error: options?.error,
   };
   lines.push(JSON.stringify(summaryRecord));
 
