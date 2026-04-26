@@ -559,8 +559,7 @@ function resolveFollowTarget(arg: string | undefined, logDir: string): string | 
   try {
     entries = readdirSync(logDir)
       .filter((e) => e.endsWith('.jsonl'))
-      .sort()
-      .reverse();
+      .sort((a, b) => filenameTimestamp(b).localeCompare(filenameTimestamp(a)));
   } catch {
     return undefined;
   }
@@ -726,8 +725,11 @@ export async function runRunsFollow(
       if (fileIdentity && identity !== fileIdentity) {
         fileIdentity = identity;
         buffer = '';
-        offset = stat.size;
-        return;
+        if (offset > 0) {
+          offset = stat.size;
+          return;
+        }
+        offset = 0;
       }
       fileIdentity = identity;
       if (stat.size < offset) {

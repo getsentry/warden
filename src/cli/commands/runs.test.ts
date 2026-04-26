@@ -673,20 +673,36 @@ describe('runRunsFollow', () => {
       new Date('2026-04-25T13:00:00.000Z'),
     );
 
+    const olderPath = join(logDir, 'zzzzzzzz-2026-04-25T13-30-00-000Z.jsonl');
+    const olderRun = buildRunMetadata({
+      runId: 'zzzzzzzz-0000-0000-0000-000000000000',
+      durationMs: 0,
+      timestamp: new Date('2026-04-25T13:30:00.000Z'),
+    });
+    initJsonlFile(olderPath);
+    appendJsonlLine(
+      olderPath,
+      renderJsonlSkillLine({ skill: 'older-live', summary: 'ok', findings: [], durationMs: 50 }, olderRun),
+    );
+
     // Newer in-progress session (skill records but no summary yet).
-    const newerPath = join(logDir, 'inprog00-2026-04-25T14-00-00-000Z.jsonl');
+    const newerPath = join(logDir, 'aaaaaaaa-2026-04-25T14-00-00-000Z.jsonl');
     const run = buildRunMetadata({
-      runId: 'inprog00-0000-0000-0000-000000000000',
+      runId: 'aaaaaaaa-0000-0000-0000-000000000000',
       durationMs: 0,
       timestamp: new Date('2026-04-25T14:00:00.000Z'),
     });
     initJsonlFile(newerPath);
     appendJsonlLine(
       newerPath,
-      renderJsonlSkillLine({ skill: 'live', summary: 'ok', findings: [], durationMs: 50 }, run),
+      renderJsonlSkillLine({ skill: 'newer-live', summary: 'ok', findings: [], durationMs: 50 }, run),
     );
 
     vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+    const writes: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((chunk = '') => {
+      writes.push(String(chunk));
+    });
 
     const reporter = createTestReporter();
     const followPromise = runRunsFollow(
@@ -697,10 +713,14 @@ describe('runRunsFollow', () => {
 
     // Wait for the watcher to attach, then append a summary so it stops.
     await new Promise((r) => setTimeout(r, 50));
+    appendJsonlLine(olderPath, renderJsonlSummaryLine([], olderRun));
     appendJsonlLine(newerPath, renderJsonlSummaryLine([], run));
 
     const exit = await followPromise;
     expect(exit).toBe(0);
+    expect(writes.join('\n')).toContain('newer-live');
+    expect(writes.join('\n')).not.toContain('older-live');
+    logSpy.mockRestore();
   }, 5000);
 
   it('with --json, passes through raw JSONL lines verbatim and exits on summary', async () => {
@@ -862,5 +882,58 @@ describe('runRunsFollow', () => {
 
     logSpy.mockRestore();
     warningSpy.mockRestore();
+  }, 5000);
+
+  it('reads a finalized replacement file when no live bytes were consumed', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const livePath = join(logDir, 'replace1-2026-04-25T16-00-00-000Z.jsonl');
+    const run = buildRunMetadata({
+      runId: 'replace1',
+      durationMs: 100,
+      timestamp: new Date('2026-04-25T16:00:00.000Z'),
+      cwd: testDir,
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'final-skill',
+      chunk: { file: 'src/a.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [{
+        id: 'FIND-2',
+        severity: 'high',
+        title: 'Final finding',
+        description: 'This should render from the replacement file.',
+      }],
+      durationMs: 100,
+    };
+
+    initJsonlFile(livePath);
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const writes: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((chunk = '') => {
+      writes.push(String(chunk));
+    });
+
+    const reporter = createTestReporter();
+    const followPromise = runRunsFollow(
+      { subcommand: 'follow', files: [] },
+      createDefaultOptions(),
+      reporter,
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    const finalPath = `${livePath}.tmp`;
+    writeFileSync(finalPath, renderJsonlChunkLine(chunk));
+    renameSync(finalPath, livePath);
+    await new Promise((r) => setTimeout(r, 50));
+    writeFileSync(`${livePath}.done`, '');
+
+    const exit = await followPromise;
+    expect(exit).toBe(0);
+    expect(writes.join('\n')).toContain('Final finding');
+
+    logSpy.mockRestore();
   }, 5000);
 });

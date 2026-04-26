@@ -253,8 +253,13 @@ function appendChunkToRunLog(log: RunLog, skillName: string, chunk: ChunkAnalysi
     auxiliaryUsage,
     error,
   };
+  let line: string;
+  try {
+    line = renderJsonlChunkLine(record);
+  } catch {
+    return;
+  }
   log.chunks.push(record);
-  const line = renderJsonlChunkLine(record);
   for (const p of log.paths) {
     try { appendJsonlLine(p, line); } catch { /* best-effort */ }
   }
@@ -311,8 +316,13 @@ function shouldStreamReportRecord(log: RunLog, report: SkillReport): boolean {
 function appendReportToRunLog(log: RunLog, report: SkillReport): void {
   if (!shouldStreamReportRecord(log, report)) return;
   const record = buildReportChunkRecord(log, report, Date.now() - log.startTime);
+  let line: string;
+  try {
+    line = renderJsonlChunkLine(record);
+  } catch {
+    return;
+  }
   log.chunks.push(record);
-  const line = renderJsonlChunkLine(record);
   for (const p of log.paths) {
     try { appendJsonlLine(p, line); } catch { /* best-effort */ }
   }
