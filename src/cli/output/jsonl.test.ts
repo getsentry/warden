@@ -741,6 +741,36 @@ describe('parseJsonlReports', () => {
     expect(report.hunkFailures?.map((failure) => failure.type)).toEqual(['extraction', 'analysis']);
   });
 
+  it('only counts error-status chunks as failed extractions', () => {
+    const run = buildRunMetadata({ runId: 'chunk-extraction-status', durationMs: 300 });
+    const chunks: JsonlChunkRecord[] = [
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 1, total: 2, lineRange: '10-20' },
+        status: 'ok',
+        findings: [],
+        durationMs: 100,
+        error: { code: 'extraction_invalid_json', message: 'ignored metadata' },
+      },
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 2, total: 2, lineRange: '21-30' },
+        status: 'error',
+        findings: [],
+        durationMs: 200,
+        error: { code: 'extraction_invalid_json', message: 'bad json' },
+      },
+    ];
+
+    const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
+
+    expect(result.reports[0]!.failedExtractions).toBe(1);
+  });
+
   it('reconstructs run-level failures from synthetic chunk records', () => {
     const run = buildRunMetadata({ runId: 'run-error', durationMs: 120 });
     const chunk: JsonlChunkRecord = {

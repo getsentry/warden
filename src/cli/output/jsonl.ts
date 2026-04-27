@@ -455,7 +455,9 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     const failedHunks = chunkRecords.filter(
       (r) => r.status === 'error' && (!r.error || !isExtractionErrorCode(r.error.code)),
     ).length;
-    const failedExtractions = chunkRecords.filter((r) => r.error && isExtractionErrorCode(r.error.code)).length;
+    const failedExtractions = chunkRecords.filter(
+      (r) => r.status === 'error' && r.error && isExtractionErrorCode(r.error.code),
+    ).length;
     const allChunksFailed =
       chunkRecords.length > 0 &&
       findings.length === 0 &&

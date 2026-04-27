@@ -377,9 +377,7 @@ function buildFinalChunkRecords(
     if (reports.length === 0 && error) {
       return [buildRunErrorChunkRecord(log, totalDurationMs, error)];
     }
-    return reports.map((report, index) =>
-      buildReportChunkRecord(log, report, totalDurationMs, index + 1, reports.length, error)
-    );
+    return reports.map((report) => buildReportChunkRecord(log, report, totalDurationMs, undefined, undefined, error));
   }
 
   const findingsByChunk = new Map<JsonlChunkRecord, Finding[]>();
@@ -403,9 +401,7 @@ function buildFinalChunkRecords(
   const missingReports = reports.filter((report) => shouldStreamReportRecord(finalLog, report));
   return [
     ...chunkRecords,
-    ...missingReports.map((report, index) =>
-      buildReportChunkRecord(log, report, totalDurationMs, chunkRecords.length + index + 1, chunkRecords.length + missingReports.length, error)
-    ),
+    ...missingReports.map((report) => buildReportChunkRecord(log, report, totalDurationMs, undefined, undefined, error)),
   ];
 }
 
