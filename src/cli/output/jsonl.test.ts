@@ -17,6 +17,7 @@ import {
   JsonlSummaryRecordSchema,
   JsonlFixEvaluationRecordSchema,
   renderJsonlChunkLine,
+  renderJsonlChunkRecords,
   renderJsonlString,
   renderJsonlSkillLine,
   renderJsonlSummaryLine,
@@ -769,6 +770,25 @@ describe('parseJsonlReports', () => {
     const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
 
     expect(result.reports[0]!.failedExtractions).toBe(1);
+  });
+
+  it('fails chunk content rendering instead of dropping invalid records', () => {
+    const run = buildRunMetadata({ runId: 'strict-chunk-render', durationMs: 300 });
+    const valid: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'security-review',
+      chunk: { file: 'src/api.ts', index: 1, total: 2, lineRange: '10-20' },
+      status: 'ok',
+      findings: [],
+      durationMs: 100,
+    };
+    const invalid = {
+      ...valid,
+      chunk: { file: 'src/api.ts', index: 0, total: 2, lineRange: '21-30' },
+    } as JsonlChunkRecord;
+
+    expect(() => renderJsonlChunkRecords([valid, invalid])).toThrow();
   });
 
   it('reconstructs run-level failures from synthetic chunk records', () => {

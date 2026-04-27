@@ -290,6 +290,10 @@ export function renderJsonlChunkLine(record: JsonlChunkRecord): string {
   return JSON.stringify(JsonlChunkRecordSchema.parse(record)) + '\n';
 }
 
+export function renderJsonlChunkRecords(records: JsonlChunkRecord[]): string {
+  return records.map((record) => renderJsonlChunkLine(record)).join('');
+}
+
 /** Create parent dirs and truncate the file to empty. */
 export function initJsonlFile(outputPath: string): void {
   const resolvedPath = resolve(process.cwd(), outputPath);

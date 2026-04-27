@@ -46,6 +46,7 @@ export {
   renderJsonlSkillLine,
   renderJsonlSummaryLine,
   renderJsonlChunkLine,
+  renderJsonlChunkRecords,
   buildRunMetadata,
   initJsonlFile,
   appendJsonlLine,

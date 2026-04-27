@@ -27,6 +27,7 @@ import {
   writeJsonlContent,
   renderJsonlString,
   renderJsonlChunkLine,
+  renderJsonlChunkRecords,
   initJsonlFile,
   appendJsonlLine,
   getRepoLogPath,
@@ -421,13 +422,7 @@ function finalizeRunLog(
   let content: string;
   try {
     const records = buildFinalChunkRecords(log, reports, totalDurationMs, error);
-    content = records.flatMap((record) => {
-      try {
-        return [renderJsonlChunkLine(record)];
-      } catch {
-        return [];
-      }
-    }).join('');
+    content = renderJsonlChunkRecords(records);
   } catch {
     return wrote;
   }
@@ -551,15 +546,7 @@ async function outputResultsAndHandleFixes(
       try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }
     }
     if (!jsonlContent) {
-      jsonlContent = buildFinalChunkRecords(runLog, reports, totalDuration)
-        .flatMap((record) => {
-          try {
-            return [renderJsonlChunkLine(record)];
-          } catch {
-            return [];
-          }
-        })
-        .join('');
+      jsonlContent = renderJsonlChunkRecords(buildFinalChunkRecords(runLog, reports, totalDuration));
     }
     process.stdout.write(jsonlContent);
   } else {
