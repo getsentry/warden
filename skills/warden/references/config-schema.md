@@ -1,5 +1,14 @@
 # warden.toml Configuration Schema
 
+## Contents
+
+- Top-Level Structure
+- Defaults Section
+- Skills Section
+- Severity Values
+- Built-in Skip Patterns
+- Environment Variables
+
 ## Top-Level Structure
 
 ```toml

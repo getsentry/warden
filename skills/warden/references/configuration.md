@@ -1,5 +1,14 @@
 # Configuration (warden.toml)
 
+## Contents
+
+- Minimal Example
+- Skill Configuration
+- Common Patterns
+- Model Precedence
+- Environment Variables
+- Troubleshooting
+
 See [config-schema.md](config-schema.md) for the complete schema reference.
 
 ## Minimal Example

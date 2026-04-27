@@ -1,12 +1,21 @@
 # CLI Reference
 
+## Contents
+
+- Usage
+- Commands
+- Targets
+- Options
+- Per-Command Options
+- Severity Levels
+- Exit Codes
+- Examples
+
 ## Usage
 
 ```
 warden [command] [targets...] [options]
 ```
-
-Analyze code for security issues and code quality.
 
 ## Commands
 
@@ -82,8 +91,6 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 | `--no-open` | Print URL instead of opening browser |
 
 ## Severity Levels
-
-Used in `--fail-on` and `--report-on`:
 
 | Level | Meaning |
 |-------|---------|

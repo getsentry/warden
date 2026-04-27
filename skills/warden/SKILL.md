@@ -11,10 +11,10 @@ Read the relevant reference when the task requires deeper detail:
 
 | Document | Read When |
 |----------|-----------|
-| `${CLAUDE_SKILL_ROOT}/references/cli-reference.md` | Full option details, per-command flags, examples |
-| `${CLAUDE_SKILL_ROOT}/references/configuration.md` | Editing warden.toml, triggers, patterns, troubleshooting |
-| `${CLAUDE_SKILL_ROOT}/references/config-schema.md` | Exact field names, types, and defaults |
-| `${CLAUDE_SKILL_ROOT}/references/creating-skills.md` | Writing custom skills, remote skills, skill discovery |
+| `<skill-root>/references/cli-reference.md` | Full option details, per-command flags, examples |
+| `<skill-root>/references/configuration.md` | Editing warden.toml, triggers, patterns, troubleshooting |
+| `<skill-root>/references/config-schema.md` | Exact field names, types, and defaults |
+| `<skill-root>/references/creating-skills.md` | Writing custom skills, remote skills, skill discovery |
 
 ## Running Warden
 
@@ -73,4 +73,4 @@ Run Warden once to validate work. Do not loop re-running Warden on the same chan
 | `warden sync [remote]` | Update cached remote skills |
 | `warden setup-app` | Create GitHub App via manifest flow |
 
-For full options and flags, read `${CLAUDE_SKILL_ROOT}/references/cli-reference.md`.
+For full options and flags, read `<skill-root>/references/cli-reference.md`.
