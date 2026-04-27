@@ -446,7 +446,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
           usage: addUsage(existing?.usage, record.usage),
         });
       }
-      if (record.error && !isReportLevelErrorRecord(record)) {
+      if (record.status === 'error' && record.error && !isReportLevelErrorRecord(record)) {
         hunkFailures.push({
           type: isExtractionErrorCode(record.error.code) ? 'extraction' : 'analysis',
           filename: record.chunk.file,

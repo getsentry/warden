@@ -742,7 +742,7 @@ describe('parseJsonlReports', () => {
     expect(report.hunkFailures?.map((failure) => failure.type)).toEqual(['extraction', 'analysis']);
   });
 
-  it('only counts error-status chunks as failed extractions', () => {
+  it('only treats error-status chunks as extraction failures', () => {
     const run = buildRunMetadata({ runId: 'chunk-extraction-status', durationMs: 300 });
     const chunks: JsonlChunkRecord[] = [
       {
@@ -770,6 +770,8 @@ describe('parseJsonlReports', () => {
     const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
 
     expect(result.reports[0]!.failedExtractions).toBe(1);
+    expect(result.reports[0]!.hunkFailures).toHaveLength(1);
+    expect(result.reports[0]!.hunkFailures![0]!.message).toBe('bad json');
   });
 
   it('fails chunk content rendering instead of dropping invalid records', () => {
