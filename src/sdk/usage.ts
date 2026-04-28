@@ -1,6 +1,38 @@
 import type { UsageStats, AuxiliaryUsageMap } from '../types/index.js';
 import type { AuxiliaryUsageEntry } from './types.js';
 
+export interface RuntimeUsageResult {
+  usage?: {
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+    cache_creation_input_tokens?: number | null;
+  } | null;
+  total_cost_usd?: number | null;
+}
+
+/**
+ * Extract usage stats from a runtime result message.
+ *
+ * The Anthropic API reports `input_tokens` as only the non-cached portion.
+ * We normalize so that `inputTokens` is the total input token count
+ * (non-cached + cache_read + cache_creation), with cache fields reported
+ * separately as subsets of that total.
+ */
+export function extractUsage(result: RuntimeUsageResult): UsageStats {
+  const usage = result.usage;
+  const rawInput = usage?.input_tokens ?? 0;
+  const cacheRead = usage?.cache_read_input_tokens ?? 0;
+  const cacheCreation = usage?.cache_creation_input_tokens ?? 0;
+  return {
+    inputTokens: rawInput + cacheRead + cacheCreation,
+    outputTokens: usage?.output_tokens ?? 0,
+    cacheReadInputTokens: cacheRead,
+    cacheCreationInputTokens: cacheCreation,
+    costUSD: result.total_cost_usd ?? 0,
+  };
+}
+
 /**
  * Create empty usage stats.
  */

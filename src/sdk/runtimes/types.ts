@@ -1,18 +1,30 @@
 import type { UsageStats } from '../../types/index.js';
-import type { SkillRunnerOptions } from '../types.js';
+
+export type AgentRuntimeMessageSubtype =
+  | 'success'
+  | 'error_during_execution'
+  | 'error_max_turns'
+  | 'error_max_budget_usd'
+  | 'error_max_structured_output_retries';
+
+export interface AgentRuntimeOptions {
+  maxTurns?: number;
+  model?: string;
+  abortController?: AbortController;
+}
 
 export interface AgentRuntimeRequest {
   systemPrompt: string;
   userPrompt: string;
   repoPath: string;
   skillName: string;
-  options: SkillRunnerOptions;
+  options: AgentRuntimeOptions;
 }
 
 export interface AgentRuntimeMessage {
-  subtype: string;
+  subtype: AgentRuntimeMessageSubtype;
   isError: boolean;
-  result?: string;
+  result: string;
   errors: string[];
   usage: UsageStats;
   responseId?: string;

@@ -1,11 +1,41 @@
 import { describe, it, expect } from 'vitest';
-import { aggregateAuxiliaryUsage, mergeAuxiliaryUsage } from './usage.js';
+import { aggregateAuxiliaryUsage, extractUsage, mergeAuxiliaryUsage } from './usage.js';
 import type { UsageStats } from '../types/index.js';
 
 const makeUsage = (input: number, output: number, cost: number): UsageStats => ({
   inputTokens: input,
   outputTokens: output,
   costUSD: cost,
+});
+
+describe('extractUsage', () => {
+  it('counts cached input tokens in total input tokens', () => {
+    expect(extractUsage({
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 2,
+        cache_creation_input_tokens: 3,
+      },
+      total_cost_usd: 0.01,
+    })).toEqual({
+      inputTokens: 15,
+      outputTokens: 5,
+      cacheReadInputTokens: 2,
+      cacheCreationInputTokens: 3,
+      costUSD: 0.01,
+    });
+  });
+
+  it('returns valid zero usage when runtime usage is absent', () => {
+    expect(extractUsage({})).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      costUSD: 0,
+    });
+  });
 });
 
 describe('aggregateAuxiliaryUsage', () => {

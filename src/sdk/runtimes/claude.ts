@@ -1,7 +1,7 @@
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { UsageStats } from '../../types/index.js';
 import { Sentry } from '../../sentry.js';
-import type { AgentRuntime, AgentRuntimeExecutionResult, AgentRuntimeMessage, AgentRuntimeRequest } from './types.js';
+import { extractUsage } from '../usage.js';
+import type { AgentRuntime, AgentRuntimeExecutionResult, AgentRuntimeMessage, AgentRuntimeOptions, AgentRuntimeRequest } from './types.js';
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
 interface TurnData {
@@ -13,28 +13,25 @@ interface TurnData {
   model: string;
 }
 
-function claudeUsageToStats(result: SDKResultMessage): UsageStats {
-  const rawInput = result.usage['input_tokens'];
-  const cacheRead = result.usage['cache_read_input_tokens'] ?? 0;
-  const cacheCreation = result.usage['cache_creation_input_tokens'] ?? 0;
-  return {
-    inputTokens: rawInput + cacheRead + cacheCreation,
-    outputTokens: result.usage['output_tokens'],
-    cacheReadInputTokens: cacheRead,
-    cacheCreationInputTokens: cacheCreation,
-    costUSD: result.total_cost_usd,
-  };
+interface ClaudeRuntimeOptions extends AgentRuntimeOptions {
+  pathToClaudeCodeExecutable?: string;
+}
+
+function singleResponseModel(modelUsage: SDKResultMessage['modelUsage'] | undefined): string | undefined {
+  const models = Object.keys(modelUsage ?? {});
+  return models.length === 1 ? models[0] : undefined;
 }
 
 function normalizeResult(result: SDKResultMessage): AgentRuntimeMessage {
   const errors = 'errors' in result ? result.errors : [];
   return {
     subtype: result.subtype,
-    isError: result.is_error ?? result.subtype !== 'success',
-    result: result.subtype === 'success' ? result.result : undefined,
+    isError: result.is_error || result.subtype !== 'success',
+    result: result.subtype === 'success' ? result.result : '',
     errors,
-    usage: claudeUsageToStats(result),
+    usage: extractUsage(result),
     responseId: result.uuid,
+    responseModel: singleResponseModel(result.modelUsage),
     sessionId: result.session_id,
     durationMs: result.duration_ms,
     durationApiMs: result.duration_api_ms,
@@ -42,12 +39,32 @@ function normalizeResult(result: SDKResultMessage): AgentRuntimeMessage {
   };
 }
 
+function appendClaudeStderr(error: unknown, stderr: string): unknown {
+  const originalMessage = error instanceof Error ? error.message : String(error);
+  const message = `${originalMessage}\nClaude Code stderr: ${stderr}`;
+
+  if (error instanceof Error) {
+    try {
+      error.message = message;
+      (error as Error & { claudeStderr?: string }).claudeStderr = stderr;
+      return error;
+    } catch {
+      const enhancedError = new Error(message);
+      enhancedError.cause = error;
+      return enhancedError;
+    }
+  }
+
+  return new Error(message);
+}
+
 export const claudeAgentRuntime: AgentRuntime = {
   name: 'claude',
 
   async execute(request: AgentRuntimeRequest): Promise<AgentRuntimeExecutionResult> {
     const { systemPrompt, userPrompt, repoPath, options, skillName } = request;
-    const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
+    const { maxTurns = 50, model, abortController } = options;
+    const { pathToClaudeCodeExecutable } = options as ClaudeRuntimeOptions;
     const modelId = model ?? 'unknown';
 
     return Sentry.startSpan(
@@ -180,10 +197,7 @@ export const claudeAgentRuntime: AgentRuntime = {
         } catch (error) {
           const stderr = stderrChunks.join('').trim();
           if (stderr) {
-            const originalMessage = error instanceof Error ? error.message : String(error);
-            const enhancedError = new Error(`${originalMessage}\nClaude Code stderr: ${stderr}`);
-            enhancedError.cause = error;
-            throw enhancedError;
+            throw appendClaudeStderr(error, stderr);
           }
           throw error;
         } finally {
@@ -211,9 +225,9 @@ export const claudeAgentRuntime: AgentRuntime = {
             span.setAttribute('gen_ai.response.id', resultMessage.uuid);
           }
           if (resultMessage.modelUsage) {
-            const models = Object.keys(resultMessage.modelUsage);
-            if (models.length === 1 && models[0]) {
-              span.setAttribute('gen_ai.response.model', models[0]);
+            const responseModel = singleResponseModel(resultMessage.modelUsage);
+            if (responseModel) {
+              span.setAttribute('gen_ai.response.model', responseModel);
             }
           }
 

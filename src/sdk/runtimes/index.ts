@@ -6,6 +6,8 @@ export type {
   AgentRuntime,
   AgentRuntimeExecutionResult,
   AgentRuntimeMessage,
+  AgentRuntimeMessageSubtype,
+  AgentRuntimeOptions,
   AgentRuntimeRequest,
 } from './types.js';
 

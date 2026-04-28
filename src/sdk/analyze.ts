@@ -52,7 +52,7 @@ async function parseHunkOutput(
   apiKey?: string,
   auxiliaryMaxRetries?: number
 ): Promise<ParseHunkOutputResult> {
-  if (result.subtype !== 'success' || !result.result) {
+  if (result.subtype !== 'success') {
     // SDK error - not an extraction failure, just no findings
     return { findings: [], extractionFailed: false, extractionMethod: 'none' };
   }
