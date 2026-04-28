@@ -429,7 +429,7 @@ Add these as organization or repository secrets:
 ### Repository Setup
 
 ```bash
-npx warden init
+npx @sentry/warden init
 ```
 
 Creates `warden.toml` and `.github/workflows/warden.yml`.

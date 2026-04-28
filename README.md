@@ -18,14 +18,14 @@ Your code is under new management. Agents that review your code - locally or on 
 
 ```bash
 # Initialize warden in your repository
-npx warden init
+npx @sentry/warden init
 
 # Run on uncommitted changes
 # Uses Claude Code subscription if logged in, or set WARDEN_ANTHROPIC_API_KEY
-npx warden
+npx @sentry/warden
 
 # Fix issues automatically
-npx warden --fix
+npx @sentry/warden --fix
 ```
 
 **[Read the full documentation →](https://warden.sentry.dev/)**
