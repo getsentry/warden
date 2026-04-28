@@ -69,6 +69,7 @@ interface ReviewPhaseResult {
   reports: SkillReport[];
   fetchedComments: ExistingComment[];
   existingComments: ExistingComment[];
+  activeWardenCommentIds: Set<number>;
   shouldFailAction: boolean;
   failureReasons: string[];
 }
@@ -314,6 +315,7 @@ async function postReviewsAndTrackFailures(
 
   // Post reviews to GitHub (sequentially to avoid rate limits)
   const reports: SkillReport[] = [];
+  const activeWardenCommentIds = new Set<number>();
   let shouldFailAction = false;
   const failureReasons: string[] = [];
 
@@ -334,6 +336,7 @@ async function postReviewsAndTrackFailures(
 
       // Add newly posted comments to existing comments for cross-trigger deduplication
       existingComments.push(...postResult.newComments);
+      postResult.activeWardenCommentIds.forEach((id) => activeWardenCommentIds.add(id));
 
       // Check if we should fail based on this trigger's config
       // Filter by confidence first so low-confidence findings don't cause failure
@@ -347,7 +350,14 @@ async function postReviewsAndTrackFailures(
     }
   }
 
-  return { reports, fetchedComments, existingComments, shouldFailAction, failureReasons };
+  return {
+    reports,
+    fetchedComments,
+    existingComments,
+    activeWardenCommentIds,
+    shouldFailAction,
+    failureReasons,
+  };
 }
 
 /**
@@ -360,6 +370,7 @@ async function evaluateFixesAndResolveStale(
   context: EventContext,
   fetchedComments: ExistingComment[],
   allFindings: Finding[],
+  activeWardenCommentIds: ReadonlySet<number>,
   canResolveStale: boolean,
   anthropicApiKey: string,
   auxiliaryMaxRetries?: number
@@ -372,24 +383,27 @@ async function evaluateFixesAndResolveStale(
   const commentsResolvedByFixEval = new Set<number>();
   const commentsEvaluatedByFixEval = new Set<number>();
   const commentsResolvedByStale = new Set<number>();
+  const commentsForFixEvaluation = wardenComments.filter(
+    (c) => !activeWardenCommentIds.has(c.id)
+  );
 
   // Evaluate follow-up commit fix attempts
   if (
     context.pullRequest &&
-    wardenComments.length > 0 &&
+    commentsForFixEvaluation.length > 0 &&
     canResolveStale &&
     anthropicApiKey
   ) {
     try {
       logGroup('Fix evaluation');
-      const unresolvedCount = wardenComments.filter((c) => !c.isResolved && c.threadId).length;
+      const unresolvedCount = commentsForFixEvaluation.filter((c) => !c.isResolved && c.threadId).length;
       if (unresolvedCount > 0) {
         logAction(`Fix evaluation: evaluating ${unresolvedCount} unresolved comments`);
       }
 
       const fixEvaluation = await evaluateFixAttempts(
         octokit,
-        wardenComments,
+        commentsForFixEvaluation,
         {
           owner: context.repository.owner,
           repo: context.repository.name,
@@ -455,7 +469,10 @@ async function evaluateFixesAndResolveStale(
     try {
       const scope = buildAnalyzedScope(context.pullRequest.files);
       const commentsForStaleCheck = wardenComments.filter(
-        (c) => !commentsResolvedByFixEval.has(c.id) && !commentsEvaluatedByFixEval.has(c.id)
+        (c) =>
+          !activeWardenCommentIds.has(c.id) &&
+          !commentsResolvedByFixEval.has(c.id) &&
+          !commentsEvaluatedByFixEval.has(c.id)
       );
       const staleComments = findStaleComments(commentsForStaleCheck, allFindings, scope);
 
@@ -619,7 +636,7 @@ async function cleanupOrphanedComments(
 
   const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck } =
     await evaluateFixesAndResolveStale(
-    octokit, context, existingComments, [], true, anthropicApiKey, auxiliaryMaxRetries
+      octokit, context, existingComments, [], new Set(), true, anthropicApiKey, auxiliaryMaxRetries
     );
   const activeSpan = Sentry.getActiveSpan();
   activeSpan?.setAttribute('warden.feedback.auto_resolve.fix_eval_count', autoResolvedByFixEvaluation);
@@ -745,7 +762,8 @@ export async function runPRWorkflow(
         async (resolveSpan) => {
           const resolutionResult = await evaluateFixesAndResolveStale(
             octokit, context, reviewPhase.fetchedComments,
-            allFindings, canResolveStale, inputs.anthropicApiKey,
+            allFindings, reviewPhase.activeWardenCommentIds,
+            canResolveStale, inputs.anthropicApiKey,
             config.defaults?.auxiliaryMaxRetries,
           );
           resolveSpan.setAttribute(

@@ -44,6 +44,8 @@ export interface ReviewPostResult {
   posted: boolean;
   /** New comments that were posted (for cross-trigger deduplication) */
   newComments: ExistingComment[];
+  /** Existing Warden comment IDs matched by current findings */
+  activeWardenCommentIds: Set<number>;
   /** Whether this trigger should cause the action to fail */
   shouldFail: boolean;
   /** Reason for failure, if any */
@@ -159,9 +161,10 @@ export async function postTriggerReview(
   const { octokit, context } = deps;
 
   const newComments: ExistingComment[] = [];
+  const activeWardenCommentIds = new Set<number>();
 
   if (!result.report) {
-    return { posted: false, newComments, shouldFail: false };
+    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
   }
 
   // Filter findings by reportOn threshold and confidence
@@ -170,7 +173,7 @@ export async function postTriggerReview(
 
   // Skip if nothing to post
   if (!result.renderResult || (filteredFindings.length === 0 && !reportOnSuccess)) {
-    return { posted: false, newComments, shouldFail: false };
+    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
   }
 
   try {
@@ -219,6 +222,12 @@ export async function postTriggerReview(
         logAction(
           `Found ${dedupResult.duplicateActions.length} duplicate findings for ${result.triggerName}`
         );
+      }
+
+      for (const action of dedupResult.duplicateActions) {
+        if (action.existingComment.isWarden && action.existingComment.id > 0) {
+          activeWardenCommentIds.add(action.existingComment.id);
+        }
       }
     }
 
@@ -292,12 +301,12 @@ export async function postTriggerReview(
         }
       }
 
-      return { posted: true, newComments, shouldFail: false };
+      return { posted: true, newComments, activeWardenCommentIds, shouldFail: false };
     }
 
-    return { posted: false, newComments, shouldFail: false };
+    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
   } catch (error) {
     warnAction(`Failed to post review for ${result.triggerName}: ${error}`);
-    return { posted: false, newComments, shouldFail: false };
+    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
   }
 }

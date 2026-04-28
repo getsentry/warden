@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Octokit } from '@octokit/rest';
 import type { ActionInputs } from '../inputs.js';
 import type { SkillReport, Finding } from '../../types/index.js';
+import type { ExistingComment } from '../../output/dedup.js';
 
 // -----------------------------------------------------------------------------
 // Fixtures Directory
@@ -638,6 +639,54 @@ describe('runPRWorkflow', () => {
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
       expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-resolve comments matched by current-run deduplication', async () => {
+      const existingComment: ExistingComment = {
+        id: 1,
+        path: 'src/test.ts',
+        line: 10,
+        title: 'Old warning wording',
+        description: 'Old description',
+        contentHash: 'oldhash',
+        isWarden: true,
+        isResolved: false,
+        threadId: 'thread-1',
+      };
+      const finding = createFinding({
+        severity: 'high',
+        title: 'Current warning wording',
+        description: 'Current description',
+        location: { path: 'src/test.ts', startLine: 10 },
+      });
+
+      mockFetchExistingComments.mockResolvedValue([existingComment]);
+      mockRunSkillTask.mockResolvedValue({
+        name: 'test-trigger',
+        report: createSkillReport({ findings: [finding] }),
+      });
+      mockDeduplicateFindings.mockResolvedValue({
+        newFindings: [],
+        duplicateActions: [
+          {
+            type: 'update_warden',
+            finding,
+            existingComment,
+            matchType: 'semantic',
+          },
+        ],
+      });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ failOn: 'high', requestChanges: true }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.graphql).not.toHaveBeenCalled();
     });
   });
 

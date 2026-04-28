@@ -230,6 +230,7 @@ describe('postTriggerReview', () => {
     );
     // Since all findings were duplicates and failOn not triggered, nothing new to post
     expect(postResult.posted).toBe(false);
+    expect(postResult.activeWardenCommentIds.size).toBe(0);
   });
 
   it('posts REQUEST_CHANGES when all findings deduplicated but failOn threshold met', async () => {
@@ -293,6 +294,7 @@ describe('postTriggerReview', () => {
     );
     // Even though all findings were deduplicated, REQUEST_CHANGES should still be posted
     expect(postResult.posted).toBe(true);
+    expect([...postResult.activeWardenCommentIds]).toEqual([1]);
     expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'REQUEST_CHANGES',
