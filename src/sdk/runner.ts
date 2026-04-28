@@ -54,6 +54,15 @@ export { prepareFiles } from './prepare.js';
 // Re-export analysis functions
 export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 
+// Re-export runtime adapter contract
+export { getAgentRuntime, claudeAgentRuntime } from './runtimes/index.js';
+export type {
+  AgentRuntime,
+  AgentRuntimeExecutionResult,
+  AgentRuntimeMessage,
+  AgentRuntimeRequest,
+} from './runtimes/index.js';
+
 // Re-export types
 export type {
   AuxiliaryUsageEntry,

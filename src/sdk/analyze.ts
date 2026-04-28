@@ -1,14 +1,14 @@
-import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
-import { extractUsage, aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
+import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
 import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
+import { getAgentRuntime, type AgentRuntimeMessage } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
@@ -47,12 +47,12 @@ interface ParseHunkOutputResult {
  * 2. LLM fallback using haiku (handles malformed output gracefully)
  */
 async function parseHunkOutput(
-  result: SDKResultMessage,
+  result: AgentRuntimeMessage,
   filename: string,
   apiKey?: string,
   auxiliaryMaxRetries?: number
 ): Promise<ParseHunkOutputResult> {
-  if (result.subtype !== 'success') {
+  if (result.subtype !== 'success' || !result.result) {
     // SDK error - not an extraction failure, just no findings
     return { findings: [], extractionFailed: false, extractionMethod: 'none' };
   }
@@ -107,244 +107,6 @@ export function filterOutOfRangeFindings(
     }
   }
   return { filtered, dropped };
-}
-
-/** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
-interface TurnData {
-  toolUses: { id: string; name: string }[];
-  inputTokens: number;
-  outputTokens: number;
-  cacheRead: number;
-  cacheWrite: number;
-  model: string;
-}
-
-/**
- * Result from executing an SDK query, including any captured errors.
- */
-interface QueryExecutionResult {
-  result?: SDKResultMessage;
-  /** Authentication error captured from auth_status message */
-  authError?: string;
-  /** Captured stderr output from Claude Code process */
-  stderr?: string;
-}
-
-/**
- * Execute a single SDK query attempt.
- * Captures stderr for better error diagnostics when Claude Code fails.
- */
-async function executeQuery(
-  systemPrompt: string,
-  userPrompt: string,
-  repoPath: string,
-  options: SkillRunnerOptions,
-  skillName: string
-): Promise<QueryExecutionResult> {
-  const { maxTurns = 50, model, abortController, pathToClaudeCodeExecutable } = options;
-  const modelId = model ?? 'unknown';
-
-  return Sentry.startSpan(
-    {
-      op: 'gen_ai.invoke_agent',
-      name: `invoke_agent ${skillName}`,
-      attributes: {
-        'gen_ai.operation.name': 'invoke_agent',
-        'gen_ai.provider.name': 'anthropic',
-        'gen_ai.agent.name': skillName,
-        'gen_ai.request.model': modelId,
-        'warden.request.max_turns': maxTurns,
-      },
-    },
-    async (span) => {
-      span.setAttribute('gen_ai.request.messages', JSON.stringify([
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ]));
-
-      // Capture stderr output for better error diagnostics
-      const stderrChunks: string[] = [];
-
-      const stream = query({
-        prompt: userPrompt,
-        options: {
-          maxTurns,
-          cwd: repoPath,
-          systemPrompt,
-          // Only allow read-only tools - context is already provided in the prompt
-          allowedTools: ['Read', 'Grep', 'Glob'],
-          // Explicitly block modification/side-effect tools as defense-in-depth
-          disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
-          permissionMode: 'bypassPermissions',
-          // Prevent SDK from writing session .jsonl files and polluting Claude Code's session index
-          persistSession: false,
-          model,
-          abortController,
-          pathToClaudeCodeExecutable,
-          stderr: (data: string) => {
-            stderrChunks.push(data);
-          },
-        },
-      });
-
-      let resultMessage: SDKResultMessage | undefined;
-      let authError: string | undefined;
-
-      // Per-turn tracing: buffer assistant messages and tool progress to create
-      // child spans (gen_ai.chat + gen_ai.execute_tool) under the invoke_agent span.
-      // We flush the previous turn when a new assistant message or result arrives,
-      // ensuring tool_progress events are captured before span creation.
-      let turnCount = 0;
-      let pendingTurn: TurnData | null = null;
-      const pendingToolProgress = new Map<string, number>();
-
-      /** Flush buffered turn data into gen_ai.chat and gen_ai.execute_tool child spans. */
-      function flushPendingTurn(): void {
-        if (!pendingTurn) return;
-        turnCount++;
-        const turn = pendingTurn;
-        const toolProgress = new Map(pendingToolProgress);
-        pendingTurn = null;
-        pendingToolProgress.clear();
-
-        try {
-          const totalInput = turn.inputTokens + turn.cacheRead + turn.cacheWrite;
-
-          Sentry.startSpan(
-            {
-              op: 'gen_ai.chat',
-              name: `chat ${skillName} turn ${turnCount}`,
-              attributes: {
-                'gen_ai.operation.name': 'chat',
-                'gen_ai.provider.name': 'anthropic',
-                'gen_ai.agent.name': skillName,
-                'gen_ai.request.model': modelId,
-                'gen_ai.response.model': turn.model,
-                'gen_ai.usage.input_tokens': totalInput,
-                'gen_ai.usage.output_tokens': turn.outputTokens,
-                'gen_ai.usage.input_tokens.cached': turn.cacheRead,
-                'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
-                'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
-                'gen_ai.tool_use.count': turn.toolUses.length,
-              },
-            },
-            () => {
-              for (const toolUse of turn.toolUses) {
-                const elapsed = toolProgress.get(toolUse.id);
-                Sentry.startSpan(
-                  {
-                    op: 'gen_ai.execute_tool',
-                    name: toolUse.name,
-                    attributes: {
-                      'gen_ai.tool.name': toolUse.name,
-                      ...(elapsed !== undefined && { 'tool.elapsed_seconds': elapsed }),
-                    },
-                  },
-                  () => { /* point-in-time span */ }
-                );
-              }
-            }
-          );
-        } catch {
-          // Telemetry should never break the workflow
-        }
-      }
-
-      try {
-        for await (const message of stream) {
-          if (message.type === 'assistant') {
-            flushPendingTurn();
-            const msg = message.message;
-            const toolUses = msg.content
-              .filter((block): block is typeof block & { type: 'tool_use' } => block.type === 'tool_use')
-              .map(({ id, name }) => ({ id, name }));
-            pendingTurn = {
-              toolUses,
-              inputTokens: msg.usage?.input_tokens ?? 0,
-              outputTokens: msg.usage?.output_tokens ?? 0,
-              cacheRead: msg.usage?.cache_read_input_tokens ?? 0,
-              cacheWrite: msg.usage?.cache_creation_input_tokens ?? 0,
-              model: msg.model,
-            };
-          } else if (message.type === 'tool_progress') {
-            pendingToolProgress.set(message.tool_use_id, message.elapsed_time_seconds);
-          } else if (message.type === 'result') {
-            flushPendingTurn();
-            resultMessage = message;
-          } else if (message.type === 'auth_status' && message.error) {
-            authError = message.error;
-          }
-        }
-      } catch (error) {
-        // Re-throw with stderr info if available
-        const stderr = stderrChunks.join('').trim();
-        if (stderr) {
-          const originalMessage = error instanceof Error ? error.message : String(error);
-          const enhancedError = new Error(`${originalMessage}\nClaude Code stderr: ${stderr}`);
-          enhancedError.cause = error;
-          throw enhancedError;
-        }
-        throw error;
-      } finally {
-        // Flush any pending turn data for trace completeness
-        flushPendingTurn();
-      }
-
-      // Set response attributes from SDK result
-      if (resultMessage) {
-        const usage = resultMessage.usage;
-        if (usage) {
-          const inputTokens = usage.input_tokens ?? 0;
-          const outputTokens = usage.output_tokens ?? 0;
-          const cacheRead = usage.cache_read_input_tokens ?? 0;
-          const cacheWrite = usage.cache_creation_input_tokens ?? 0;
-          // Anthropic API's input_tokens is only the non-cached portion.
-          // OpenTelemetry gen_ai.usage.input_tokens expects the total input tokens.
-          const totalInputTokens = inputTokens + cacheRead + cacheWrite;
-          span.setAttribute('gen_ai.usage.input_tokens', totalInputTokens);
-          span.setAttribute('gen_ai.usage.output_tokens', outputTokens);
-          span.setAttribute('gen_ai.usage.input_tokens.cached', cacheRead);
-          span.setAttribute('gen_ai.usage.input_tokens.cache_write', cacheWrite);
-          span.setAttribute('gen_ai.usage.total_tokens', totalInputTokens + outputTokens);
-        }
-        if (resultMessage.total_cost_usd !== undefined) {
-          span.setAttribute('gen_ai.cost.total_tokens', resultMessage.total_cost_usd);
-        }
-        if (resultMessage.uuid) {
-          span.setAttribute('gen_ai.response.id', resultMessage.uuid);
-        }
-        if (resultMessage.modelUsage) {
-          const models = Object.keys(resultMessage.modelUsage);
-          if (models.length === 1 && models[0]) {
-            // Single model: set per OTel spec (string, one model)
-            span.setAttribute('gen_ai.response.model', models[0]);
-          }
-          // Multiple models: don't set gen_ai.response.model on the parent.
-          // Per-turn gen_ai.chat child spans carry the correct model each.
-        }
-
-        if (resultMessage.subtype === 'success' && resultMessage.result) {
-          span.setAttribute('gen_ai.response.text', JSON.stringify([resultMessage.result]));
-        }
-
-        // Optional SDK metadata attributes
-        const optionalAttrs: Record<string, string | number | undefined> = {
-          'gen_ai.conversation.id': resultMessage.session_id,
-          'sdk.duration_ms': resultMessage.duration_ms,
-          'sdk.duration_api_ms': resultMessage.duration_api_ms,
-          'sdk.num_turns': resultMessage.num_turns,
-        };
-        for (const [key, value] of Object.entries(optionalAttrs)) {
-          if (value !== undefined) {
-            span.setAttribute(key, value);
-          }
-        }
-      }
-
-      const stderr = stderrChunks.join('').trim() || undefined;
-      return { result: resultMessage, authError, stderr };
-    },
-  );
 }
 
 /**
@@ -417,7 +179,14 @@ async function analyzeHunk(
         }
 
         try {
-          const { result: resultMessage, authError } = await executeQuery(systemPrompt, userPrompt, repoPath, options, skill.name);
+          const runtime = getAgentRuntime();
+          const { result: resultMessage, authError } = await runtime.execute({
+            systemPrompt,
+            userPrompt,
+            repoPath,
+            skillName: skill.name,
+            options,
+          });
 
           // Check for authentication errors from auth_status messages
           // auth_status errors are always auth-related - throw immediately
@@ -443,15 +212,15 @@ async function analyzeHunk(
           }
 
           // Extract usage from the result, regardless of success/error status
-          const usage = extractUsage(resultMessage);
+          const usage = resultMessage.usage;
           accumulatedUsage.push(usage);
 
           // Check if the SDK returned an error result (e.g., max turns, budget exceeded)
-          const isError = resultMessage.is_error || resultMessage.subtype !== 'success';
+          const isError = resultMessage.isError || resultMessage.subtype !== 'success';
 
           if (isError) {
             // Extract error messages from SDK result
-            const errorMessages = 'errors' in resultMessage ? resultMessage.errors : [];
+            const errorMessages = resultMessage.errors;
 
             // Check if any error indicates authentication failure
             for (const err of errorMessages) {
