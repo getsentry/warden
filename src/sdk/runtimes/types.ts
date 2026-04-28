@@ -1,3 +1,18 @@
+/**
+ * Runtime contract for model-backed agents.
+ *
+ * Warden's analysis pipeline builds prompts, handles retry policy, parses
+ * findings, and aggregates report data. A runtime is the narrow provider
+ * boundary underneath that pipeline: it executes one prepared prompt in a repo
+ * context and returns a normalized result shape that does not expose provider
+ * SDK message types.
+ *
+ * Runtime implementations are responsible for provider-specific execution
+ * details such as tool allowlists, model identifiers, stream events,
+ * authentication side channels, stderr/diagnostics, telemetry attributes, and
+ * usage normalization. Callers should be able to switch runtime implementations
+ * without changing hunk parsing or report generation.
+ */
 import type { UsageStats } from '../../types/index.js';
 
 export type AgentRuntimeMessageSubtype =

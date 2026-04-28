@@ -1,3 +1,18 @@
+/**
+ * Claude Code runtime adapter.
+ *
+ * This module is the only place where the main analysis runtime should know
+ * about `@anthropic-ai/claude-agent-sdk`. It translates Warden's generic
+ * `AgentRuntimeRequest` into a Claude Code SDK query, keeps Claude-specific
+ * tool policy and process options local, emits Claude/OpenTelemetry spans, and
+ * normalizes Claude result messages into the provider-neutral runtime result.
+ *
+ * Important invariants:
+ * - Claude receives read-only tools for hunk analysis.
+ * - SDK errors remain classifiable by downstream retry/auth logic.
+ * - Runtime results always contain valid `UsageStats`.
+ * - Non-success SDK subtypes normalize to `isError: true`.
+ */
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { Sentry } from '../../sentry.js';
 import { extractUsage } from '../usage.js';
