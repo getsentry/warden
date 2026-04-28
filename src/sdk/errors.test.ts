@@ -4,6 +4,7 @@ import {
   classifyError,
   isSubprocessError,
   mapExtractionErrorCode,
+  sanitizeErrorMessage,
   SkillRunnerError,
   WardenAuthenticationError,
 } from './errors.js';
@@ -117,6 +118,24 @@ describe('classifyError', () => {
     expect(classifyError(null).message).toContain('unknown error');
     expect(classifyError('boom').message).toBe('boom');
     expect(classifyError(undefined).message).toContain('unknown error');
+  });
+});
+
+describe('sanitizeErrorMessage', () => {
+  it('redacts Anthropic and generic secret-looking keys', () => {
+    const sanitized = sanitizeErrorMessage(
+      'request failed for apiKey=sk-ant-api03-secret and backup sk-abcdefghijklmnop'
+    );
+    expect(sanitized).not.toContain('sk-ant-api03-secret');
+    expect(sanitized).not.toContain('sk-abcdefghijklmnop');
+    expect(sanitized).toContain('[redacted]');
+  });
+
+  it('redacts authorization tokens', () => {
+    expect(sanitizeErrorMessage('Authorization: Bearer secret.token-value')).toBe(
+      'Authorization: Bearer [redacted]'
+    );
+    expect(sanitizeErrorMessage('oauth_token=abc123')).toBe('oauth_token=[redacted]');
   });
 });
 

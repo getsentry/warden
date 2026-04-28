@@ -2,7 +2,7 @@ import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
-import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode } from './errors.js';
+import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
@@ -236,7 +236,7 @@ async function analyzeHunk(
 
             // SDK error - log and return failure with error details
             const errorSummary = errorMessages.length > 0
-              ? errorMessages.join('; ')
+              ? sanitizeErrorMessage(errorMessages.join('; '))
               : `SDK error: ${resultMessage.subtype}`;
             if (callbacks?.onHunkFailed) {
               callbacks.onHunkFailed(callbacks.lineRange, `SDK execution failed: ${errorSummary}`);
@@ -337,7 +337,7 @@ async function analyzeHunk(
 
           // Calculate delay and wait before retry
           const delayMs = calculateRetryDelay(attempt, retryConfig);
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage = sanitizeErrorMessage(error instanceof Error ? error.message : String(error));
 
           Sentry.addBreadcrumb({
             category: 'retry',
@@ -377,14 +377,14 @@ async function analyzeHunk(
       }
 
       // All attempts failed - return failure with any accumulated usage
-      const finalError = lastError instanceof Error ? lastError.message : String(lastError);
+      const finalError = sanitizeErrorMessage(lastError instanceof Error ? lastError.message : String(lastError));
 
       // Log the final error
       if (lastError) {
         if (callbacks?.onHunkFailed) {
           callbacks.onHunkFailed(callbacks.lineRange, `All retry attempts failed: ${finalError}`);
         } else {
-          console.error(`All retry attempts failed: ${finalError}`);
+          console.error('All retry attempts failed');
         }
       }
 
@@ -402,7 +402,8 @@ async function analyzeHunk(
       span.setAttribute('hunk.failed', true);
       span.setAttribute('finding.count', 0);
 
-      const { code: retryCode, message: retryMsg } = classifyError(lastError);
+      const { code: retryCode, message } = classifyError(lastError);
+      const retryMsg = sanitizeErrorMessage(message);
       return {
         findings: [],
         usage: aggregateUsage(accumulatedUsage),

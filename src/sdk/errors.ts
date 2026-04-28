@@ -17,6 +17,28 @@ export class SkillRunnerError extends Error {
   }
 }
 
+const SENSITIVE_VALUE = '[redacted]';
+
+/**
+ * Remove likely credential material before an error message is surfaced through
+ * logs, callbacks, reports, or telemetry.
+ */
+export function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/\b(sk-ant-[A-Za-z0-9_-]+)/g, SENSITIVE_VALUE)
+    .replace(/\b(sk-[A-Za-z0-9_-]{16,})\b/g, SENSITIVE_VALUE)
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, `$1${SENSITIVE_VALUE}`)
+    .replace(
+      /\b(authorization)(\s*[:=]\s*)(["']?)(Bearer\s+)?[^"',\s)]+/gi,
+      (_match, key: string, separator: string, quote: string, bearer: string | undefined) =>
+        `${key}${separator}${quote}${bearer ?? ''}${SENSITIVE_VALUE}`
+    )
+    .replace(
+      /\b(api[_-]?key|x-api-key|auth[_-]?token|oauth[_-]?token|token)(\s*[:=]\s*)(["']?)[^"',\s)]+/gi,
+      `$1$2$3${SENSITIVE_VALUE}`
+    );
+}
+
 /** Patterns that indicate an authentication failure */
 const AUTH_ERROR_PATTERNS = [
   'authentication',
