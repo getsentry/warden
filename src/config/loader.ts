@@ -12,6 +12,7 @@ import {
   type CoalesceConfig,
   type RunnerConfig,
   type LogsConfig,
+  type RuntimeProviderName,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -280,14 +281,20 @@ export interface ResolvedTrigger {
   model?: string;
   /** Max agentic turns (merged: trigger > skill > defaults) */
   maxTurns?: number;
+  /** Provider for repo-aware skill execution. */
+  agentProvider?: RuntimeProviderName;
+  /** Provider for auxiliary structured model calls. */
+  fastModelProvider?: RuntimeProviderName;
+  /** Model for auxiliary structured model calls. */
+  fastModelModel?: string;
+  /** Max retries for auxiliary structured model calls. */
+  auxiliaryMaxRetries?: number;
   /** Minimum confidence for findings (merged: trigger > skill > defaults) */
   minConfidence?: ConfidenceThreshold;
   /** Batch delay to use for this trigger's skill execution */
   batchDelayMs?: number;
   /** Max number of context files to include in prompts for this trigger */
   maxContextFiles?: number;
-  /** Max retries for auxiliary model calls during this trigger */
-  auxiliaryMaxRetries?: number;
   /** Schedule-specific configuration */
   schedule?: ScheduleConfig;
 }
@@ -309,10 +316,11 @@ function emptyToUndefined(value: string | undefined): string | undefined {
  * Model precedence (highest to lowest):
  * 1. trigger-level model
  * 2. skill-level model
- * 3. defaults.model (warden.toml [defaults])
- * 4. cliModel (--model flag)
- * 5. WARDEN_MODEL env var
- * 6. SDK default (not set here)
+ * 3. defaults.agent.model
+ * 4. defaults.model (legacy warden.toml [defaults])
+ * 5. cliModel (--model flag)
+ * 6. WARDEN_MODEL env var
+ * 7. SDK default (not set here)
  */
 export function resolveSkillConfigs(
   config: WardenConfig,
@@ -322,13 +330,19 @@ export function resolveSkillConfigs(
   const defaults = config.defaults;
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
   const result: ResolvedTrigger[] = [];
+  const agentProvider = defaults?.agent?.provider ?? 'claude';
+  const fastModelProvider = defaults?.fastModel?.provider ?? 'claude';
+  const fastModelModel = emptyToUndefined(defaults?.fastModel?.model);
+  const auxiliaryMaxRetries = defaults?.fastModel?.maxRetries ?? defaults?.auxiliaryMaxRetries;
 
   for (const skill of config.skills) {
     const baseModel =
       emptyToUndefined(skill.model) ??
+      emptyToUndefined(defaults?.agent?.model) ??
       emptyToUndefined(defaults?.model) ??
       emptyToUndefined(cliModel) ??
       envModel;
+    const baseMaxTurns = skill.maxTurns ?? defaults?.agent?.maxTurns ?? defaults?.maxTurns;
 
     // Merge ignorePaths: skill-level + defaults (additive, not override)
     const mergedIgnorePaths = [
@@ -357,11 +371,14 @@ export function resolveSkillConfigs(
         requestChanges: skill.requestChanges ?? defaults?.requestChanges,
         failCheck: skill.failCheck ?? defaults?.failCheck,
         model: baseModel,
-        maxTurns: skill.maxTurns ?? defaults?.maxTurns,
+        maxTurns: baseMaxTurns,
+        agentProvider,
+        fastModelProvider,
+        fastModelModel,
+        auxiliaryMaxRetries,
         minConfidence: skill.minConfidence ?? defaults?.minConfidence,
         batchDelayMs: defaults?.batchDelayMs,
         maxContextFiles: defaults?.chunking?.maxContextFiles,
-        auxiliaryMaxRetries: defaults?.auxiliaryMaxRetries,
       });
     } else {
       for (const trigger of skill.triggers) {
@@ -381,11 +398,14 @@ export function resolveSkillConfigs(
           requestChanges: trigger.requestChanges ?? skill.requestChanges ?? defaults?.requestChanges,
           failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
           model: emptyToUndefined(trigger.model) ?? baseModel,
-          maxTurns: trigger.maxTurns ?? skill.maxTurns ?? defaults?.maxTurns,
+          maxTurns: trigger.maxTurns ?? baseMaxTurns,
+          agentProvider,
+          fastModelProvider,
+          fastModelModel,
+          auxiliaryMaxRetries,
           minConfidence: trigger.minConfidence ?? skill.minConfidence ?? defaults?.minConfidence,
           batchDelayMs: defaults?.batchDelayMs,
           maxContextFiles: defaults?.chunking?.maxContextFiles,
-          auxiliaryMaxRetries: defaults?.auxiliaryMaxRetries,
           schedule: trigger.schedule,
         });
       }

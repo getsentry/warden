@@ -1,6 +1,7 @@
 import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig } from '../config/schema.js';
+import type { RuntimeProviderName } from './providers/types.js';
 
 /** A single auxiliary usage entry, keyed by agent name (e.g. 'extraction', 'dedup'). */
 export interface AuxiliaryUsageEntry {
@@ -92,11 +93,17 @@ export interface SkillRunnerOptions {
   batchDelayMs?: number;
   /** Model to use for analysis (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
   model?: string;
+  /** Provider for repo-aware skill execution. Defaults to Claude. */
+  agentProvider?: RuntimeProviderName;
+  /** Provider for auxiliary structured model calls. Defaults to Claude. */
+  fastModelProvider?: RuntimeProviderName;
+  /** Model to use for auxiliary structured model calls. Uses provider default if not specified. */
+  fastModelModel?: string;
   /** Progress callbacks */
   callbacks?: SkillRunnerCallbacks;
   /** Abort controller for cancellation on SIGINT */
   abortController?: AbortController;
-  /** Path to Claude Code CLI executable. Required in CI environments. */
+  /** Path to Claude Code CLI executable. Required in CI environments when using the Claude agent provider. */
   pathToClaudeCodeExecutable?: string;
   /** Retry configuration for transient API failures */
   retry?: RetryConfig;

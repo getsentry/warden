@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { parsePatch } from '../diff/parser.js';
 import { applyDiffToContent } from '../diff/apply.js';
 import type { Finding, UsageStats } from '../types/index.js';
-import { callHaiku } from './haiku.js';
+import { getFastModelRuntime } from './providers/index.js';
+import type { RuntimeProviderName } from './providers/types.js';
 import { aggregateUsage } from './usage.js';
 
 export interface FixQualityStats {
@@ -23,6 +24,8 @@ export interface SanitizeSuggestedFixesResult {
 interface SanitizeSuggestedFixesOptions {
   repoPath: string;
   apiKey?: string;
+  provider?: RuntimeProviderName;
+  model?: string;
   maxRetries?: number;
 }
 
@@ -127,9 +130,9 @@ async function runSemanticGate(
   finding: Finding,
   fileContent: string,
   patchedContent: string,
-  apiKey?: string,
-  maxRetries?: number
+  options: SanitizeSuggestedFixesOptions
 ): Promise<{ verdict: 'pass' | 'fail' | 'unavailable'; usage?: UsageStats }> {
+  const { apiKey, provider, model, maxRetries } = options;
   if (!apiKey) {
     return { verdict: 'unavailable' };
   }
@@ -154,10 +157,11 @@ async function runSemanticGate(
     finding.suggestedFix?.diff ?? '',
   ].join('\n');
 
-  const result = await callHaiku({
+  const result = await getFastModelRuntime(provider).generateObject({
     apiKey,
     prompt,
     schema: SemanticFixVerdictSchema,
+    model,
     maxTokens: 220,
     timeout: 8000,
     maxRetries: maxRetries ?? 1,
@@ -202,8 +206,7 @@ export async function sanitizeFindingsSuggestedFixes(
       finding,
       deterministic.fileContent,
       deterministic.patchedContent,
-      options.apiKey,
-      options.maxRetries
+      options
     );
     if (semantic.usage) {
       semanticUsage.push(semantic.usage);

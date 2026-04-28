@@ -50,8 +50,7 @@ interface ParseHunkOutputResult {
 async function parseHunkOutput(
   result: AgentRuntimeMessage,
   filename: string,
-  apiKey?: string,
-  auxiliaryMaxRetries?: number
+  options: SkillRunnerOptions
 ): Promise<ParseHunkOutputResult> {
   if (result.subtype !== 'success') {
     // SDK error - not an extraction failure, just no findings
@@ -66,7 +65,12 @@ async function parseHunkOutput(
   }
 
   // Tier 2: Try LLM fallback for malformed output
-  const fallback = await extractFindingsWithLLM(result.result, apiKey, auxiliaryMaxRetries);
+  const fallback = await extractFindingsWithLLM(result.result, {
+    apiKey: options.apiKey,
+    provider: options.fastModelProvider,
+    model: options.fastModelModel,
+    maxRetries: options.auxiliaryMaxRetries,
+  });
 
   if (fallback.success) {
     return { findings: validateFindings(fallback.findings, filename), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
@@ -133,7 +137,7 @@ async function analyzeHunk(
       },
     },
     async (span) => {
-      const { apiKey, abortController, retry } = options;
+      const { abortController, retry } = options;
 
       const systemPrompt = buildHunkSystemPrompt(skill);
       const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
@@ -180,7 +184,7 @@ async function analyzeHunk(
         }
 
         try {
-          const runtime = getAgentRuntime();
+          const runtime = getAgentRuntime(options.agentProvider);
           const { result: resultMessage, authError } = await runtime.execute({
             systemPrompt,
             userPrompt,
@@ -250,7 +254,7 @@ async function analyzeHunk(
             };
           }
 
-          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, apiKey, options.auxiliaryMaxRetries);
+          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, options);
 
           // Filter findings outside hunk line range (defense-in-depth)
           const hunkRange = getHunkLineRange(hunkCtx.hunk);
@@ -771,6 +775,8 @@ export async function runSkill(
   const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
     apiKey: options.apiKey,
     repoPath: context.repoPath,
+    provider: options.fastModelProvider,
+    model: options.fastModelModel,
     maxRetries: options.auxiliaryMaxRetries,
   });
   let mergedFindings = mergeResult.findings;
@@ -780,6 +786,8 @@ export async function runSkill(
   const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
     repoPath: context.repoPath,
     apiKey: options.apiKey,
+    provider: options.fastModelProvider,
+    model: options.fastModelModel,
     maxRetries: options.auxiliaryMaxRetries,
   });
   mergedFindings = sanitized.findings;

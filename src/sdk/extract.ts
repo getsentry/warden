@@ -1,13 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { customAlphabet } from 'nanoid';
 import { FindingSchema, compareFindingPriority } from '../types/index.js';
 import type { Finding, Location, UsageStats } from '../types/index.js';
-import { Sentry } from '../sentry.js';
-import { callHaiku, DEFAULT_AUXILIARY_MAX_RETRIES, HAIKU_MODEL, setGenAiResponseAttrs } from './haiku.js';
-import { apiUsageToStats } from './pricing.js';
+import { getFastModelRuntime } from './providers/index.js';
+import type { RuntimeProviderName } from './providers/types.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
@@ -18,6 +16,13 @@ export const FINDINGS_JSON_START = /\{\s*"findings"/;
 export type ExtractFindingsResult =
   | { success: true; findings: unknown[]; usage?: UsageStats }
   | { success: false; error: string; preview: string; usage?: UsageStats };
+
+export interface FastModelCallOptions {
+  apiKey?: string;
+  provider?: RuntimeProviderName;
+  model?: string;
+  maxRetries?: number;
+}
 
 /**
  * Extract JSON object from text, handling nested braces correctly.
@@ -169,13 +174,19 @@ export function truncateForLLMFallback(rawText: string, maxChars: number): strin
 
 /**
  * Extract findings from malformed output using LLM as a fallback.
- * Uses Haiku for lightweight, fast extraction.
+ * Uses the configured fast-model runtime for lightweight, structured extraction.
  */
 export async function extractFindingsWithLLM(
   rawText: string,
-  apiKey?: string,
+  apiKeyOrOptions?: string | FastModelCallOptions,
   maxRetries?: number
 ): Promise<ExtractFindingsResult> {
+  const options: FastModelCallOptions =
+    typeof apiKeyOrOptions === 'object'
+      ? apiKeyOrOptions
+      : { apiKey: apiKeyOrOptions, maxRetries };
+  const { apiKey, provider, model } = options;
+
   if (!apiKey) {
     return {
       success: false,
@@ -196,66 +207,37 @@ export async function extractFindingsWithLLM(
   // Truncate input while preserving JSON boundaries
   const truncatedText = truncateForLLMFallback(rawText, LLM_FALLBACK_MAX_CHARS);
 
-  return Sentry.startSpan(
-    {
-      op: 'gen_ai.chat',
-      name: `chat ${HAIKU_MODEL}`,
-      attributes: {
-        'gen_ai.operation.name': 'chat',
-        'gen_ai.provider.name': 'anthropic',
-        'gen_ai.request.model': HAIKU_MODEL,
-        'gen_ai.request.max_tokens': LLM_FALLBACK_MAX_TOKENS,
-      },
-    },
-    async (span) => {
-      try {
-        const client = new Anthropic({ apiKey, timeout: LLM_FALLBACK_TIMEOUT_MS, maxRetries: maxRetries ?? DEFAULT_AUXILIARY_MAX_RETRIES });
-        const userContent = `Extract the findings JSON from this model output.
+  const userContent = `Extract the findings JSON from this model output.
 Return ONLY valid JSON in format: {"findings": [...]}
 If no findings exist, return: {"findings": []}
 
 Model output:
 ${truncatedText}`;
-        const messages: Anthropic.MessageParam[] = [
-          { role: 'user', content: userContent },
-        ];
 
-        span.setAttribute('gen_ai.request.messages', JSON.stringify(messages));
+  const result = await getFastModelRuntime(provider).generateObject({
+    apiKey,
+    prompt: userContent,
+    schema: z.object({ findings: z.array(z.unknown()) }),
+    model,
+    maxTokens: LLM_FALLBACK_MAX_TOKENS,
+    timeout: LLM_FALLBACK_TIMEOUT_MS,
+    maxRetries: options.maxRetries,
+  });
 
-        const response = await client.messages.create({
-          model: HAIKU_MODEL,
-          max_tokens: LLM_FALLBACK_MAX_TOKENS,
-          messages,
-        });
+  if (!result.success) {
+    return {
+      success: false,
+      error: result.error,
+      preview: rawText.slice(0, 200),
+      usage: result.usage,
+    };
+  }
 
-        const usage = apiUsageToStats(HAIKU_MODEL, response.usage);
-
-        const content = response.content[0];
-        if (!content || content.type !== 'text') {
-          setGenAiResponseAttrs(span, response.usage, response.stop_reason);
-          return {
-            success: false,
-            error: 'llm_unexpected_response',
-            preview: rawText.slice(0, 200),
-            usage,
-          };
-        }
-
-        setGenAiResponseAttrs(span, response.usage, response.stop_reason, content.text);
-
-        // Parse the LLM response as JSON
-        const result = extractFindingsJson(content.text);
-        return { ...result, usage };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `llm_extraction_failed: ${errorMessage}`,
-          preview: rawText.slice(0, 200),
-        };
-      }
-    },
-  );
+  return {
+    success: true,
+    findings: result.data.findings,
+    usage: result.usage,
+  };
 }
 
 /** Unambiguous uppercase alphanumeric alphabet (no O/0, I/1). */
@@ -466,9 +448,10 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
 /**
  * Merge findings that describe the same issue across different code locations.
  *
- * Uses Haiku to identify groups of findings about the same root cause at
- * different locations. For each group, the highest-priority finding becomes
- * the primary; other locations move to `additionalLocations`.
+ * Uses the configured fast-model runtime to identify groups of findings about
+ * the same root cause at different locations. For each group, the
+ * highest-priority finding becomes the primary; other locations move to
+ * `additionalLocations`.
  *
  * Skips entirely (no LLM call) when:
  * - Fewer than 2 findings have locations
@@ -476,7 +459,7 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
  */
 export async function mergeCrossLocationFindings(
   findings: Finding[],
-  options?: { apiKey?: string; repoPath?: string; maxRetries?: number }
+  options?: FastModelCallOptions & { repoPath?: string }
 ): Promise<MergeResult> {
   const apiKey = options?.apiKey;
   const repoPath = options?.repoPath ?? '.';
@@ -505,10 +488,11 @@ ${findingDescriptions.join('\n')}
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
 Singletons should not appear. Return [] if no findings describe the same issue.`;
 
-  const result = await callHaiku({
+  const result = await getFastModelRuntime(options?.provider).generateObject({
     apiKey,
     prompt,
     schema: MergeGroupsSchema,
+    model: options?.model,
     maxTokens: 512,
     maxRetries: options?.maxRetries,
   });

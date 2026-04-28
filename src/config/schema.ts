@@ -47,6 +47,29 @@ export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 export const TriggerTypeSchema = z.enum(['pull_request', 'local', 'schedule']);
 export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 
+export const RuntimeProviderNameSchema = z.enum(['claude', 'pi']);
+export type RuntimeProviderName = z.infer<typeof RuntimeProviderNameSchema>;
+
+export const AgentRuntimeConfigSchema = z.object({
+  /** Provider for repo-aware skill execution. Default: claude */
+  provider: RuntimeProviderNameSchema.optional(),
+  /** Model for repo-aware skill execution. Overrides legacy defaults.model. */
+  model: z.string().optional(),
+  /** Maximum agentic turns for repo-aware skill execution. Overrides legacy defaults.maxTurns. */
+  maxTurns: z.number().int().positive().optional(),
+});
+export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeConfigSchema>;
+
+export const FastModelRuntimeConfigSchema = z.object({
+  /** Provider for auxiliary structured model calls. Default: claude */
+  provider: RuntimeProviderNameSchema.optional(),
+  /** Model for auxiliary structured model calls. Uses provider default if omitted. */
+  model: z.string().optional(),
+  /** Max retries for auxiliary structured model calls. Overrides legacy auxiliaryMaxRetries. */
+  maxRetries: z.number().int().positive().optional(),
+});
+export type FastModelRuntimeConfig = z.infer<typeof FastModelRuntimeConfigSchema>;
+
 // Skill trigger definition (nested under [[skills.triggers]])
 export const SkillTriggerSchema = z.object({
   /** Trigger type: pull_request (GitHub), local (CLI), or schedule (cron) */
@@ -167,6 +190,10 @@ export const DefaultsSchema = z.object({
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
   maxTurns: z.number().int().positive().optional(),
+  /** Provider/model defaults for repo-aware skill execution. */
+  agent: AgentRuntimeConfigSchema.optional(),
+  /** Provider/model defaults for auxiliary structured model calls. */
+  fastModel: FastModelRuntimeConfigSchema.optional(),
   /** Minimum confidence level for findings. Findings below this are filtered from output. Default: medium */
   minConfidence: ConfidenceThresholdSchema.optional(),
   /** Path patterns to exclude from all skills */

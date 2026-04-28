@@ -78,9 +78,16 @@ describe('mergeCrossLocationFindings', () => {
       usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
     });
 
-    const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
+    const result = await mergeCrossLocationFindings(findings, {
+      apiKey: 'test-key',
+      repoPath: tempDir,
+      model: 'claude-test-fast',
+    });
     expect(result.findings).toHaveLength(2);
     expect(result.mergedCount).toBe(0);
+    expect(mockCallHaiku).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-test-fast',
+    }));
   });
 
   it('merges two findings into one with additionalLocations', async () => {

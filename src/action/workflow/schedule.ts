@@ -37,6 +37,16 @@ import {
 // Main Schedule Workflow
 // -----------------------------------------------------------------------------
 
+function ensureClaudeAgentAuth(inputs: ActionInputs): void {
+  if (inputs.anthropicApiKey || inputs.oauthToken) {
+    return;
+  }
+  setFailed(
+    'Authentication not found. Provide an API key via anthropic-api-key input, ' +
+      'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
+  );
+}
+
 export async function runScheduleWorkflow(
   octokit: Octokit,
   inputs: ActionInputs,
@@ -166,15 +176,23 @@ export async function runScheduleWorkflow(
       const skill = await resolveSkillAsync(resolved.skill, resolved.skillRoot ?? repoPath, {
         remote: resolved.remote,
       });
-      const claudePath = await findClaudeCodeExecutable();
+      const usesClaudeAgent = resolved.agentProvider === 'claude';
+      if (usesClaudeAgent) {
+        ensureClaudeAgentAuth(inputs);
+      }
+      const claudePath = usesClaudeAgent ? await findClaudeCodeExecutable() : undefined;
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
+        agentProvider: resolved.agentProvider,
+        fastModelProvider: resolved.fastModelProvider,
+        fastModelModel: resolved.fastModelModel,
         maxTurns: resolved.maxTurns,
         batchDelayMs: resolved.batchDelayMs,
         maxContextFiles: resolved.maxContextFiles,
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         pathToClaudeCodeExecutable: claudePath,
+        auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
       });
       console.log(`Found ${report.findings.length} findings`);
 

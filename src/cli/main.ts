@@ -476,6 +476,12 @@ interface SkillToRun {
   skill: string;
   remote?: string;
   filters: { paths?: string[]; ignorePaths?: string[] };
+  model?: string;
+  maxTurns?: number;
+  agentProvider?: SkillRunnerOptions['agentProvider'];
+  fastModelProvider?: SkillRunnerOptions['fastModelProvider'];
+  fastModelModel?: string;
+  auxiliaryMaxRetries?: number;
 }
 
 interface ProcessedResults {
@@ -656,20 +662,6 @@ async function runSkills(
     // Not in a git repo - that's fine for file mode
   }
 
-  // Pre-flight: verify auth will work before starting analysis
-  try {
-    verifyAuth({ apiKey });
-  } catch (error: unknown) {
-    const message = (error as WardenAuthenticationError).message;
-    reporter.error(message);
-    emitEmptyRunLog(repoPath ?? cwd, options, {
-      code: 'auth_failed',
-      message,
-      timestamp: new Date().toISOString(),
-    });
-    return 1;
-  }
-
   // Resolve config path
   let configPath: string | null = null;
   if (options.config) {
@@ -695,7 +687,17 @@ async function runSkills(
     const fallbackFilters = defaultIgnorePaths?.length
       ? { ignorePaths: defaultIgnorePaths }
       : {};
-    skillsToRun = [{ skill: options.skill, remote: match?.remote, filters: match?.filters ?? fallbackFilters }];
+    skillsToRun = [{
+      skill: options.skill,
+      remote: match?.remote,
+      filters: match?.filters ?? fallbackFilters,
+      model: match?.model ?? config?.defaults?.agent?.model ?? config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'],
+      maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
+      agentProvider: match?.agentProvider ?? config?.defaults?.agent?.provider ?? 'claude',
+      fastModelProvider: match?.fastModelProvider ?? config?.defaults?.fastModel?.provider ?? 'claude',
+      fastModelModel: match?.fastModelModel ?? config?.defaults?.fastModel?.model,
+      auxiliaryMaxRetries: match?.auxiliaryMaxRetries ?? config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries,
+    }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property and filters
     const resolvedTriggers = resolveSkillConfigs(config, options.model);
@@ -708,7 +710,17 @@ async function runSkills(
         seen.add(t.skill);
         return true;
       })
-      .map((t) => ({ skill: t.skill, remote: t.remote, filters: t.filters }));
+      .map((t) => ({
+        skill: t.skill,
+        remote: t.remote,
+        filters: t.filters,
+        model: t.model,
+        maxTurns: t.maxTurns,
+        agentProvider: t.agentProvider,
+        fastModelProvider: t.fastModelProvider,
+        fastModelModel: t.fastModelModel,
+        auxiliaryMaxRetries: t.auxiliaryMaxRetries,
+      }));
   } else {
     skillsToRun = [];
   }
@@ -727,22 +739,40 @@ async function runSkills(
     return 0;
   }
 
+  if (skillsToRun.some((skill) => skill.agentProvider === 'claude')) {
+    try {
+      verifyAuth({ apiKey });
+    } catch (error: unknown) {
+      const message = (error as WardenAuthenticationError).message;
+      reporter.error(message);
+      emitEmptyRunLog(repoPath ?? cwd, options, {
+        code: 'auth_failed',
+        message,
+        timestamp: new Date().toISOString(),
+      });
+      return 1;
+    }
+  }
+
   // Build skill tasks
-  // Model precedence: defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
+  // Model precedence: defaults.agent.model > defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
   // sdkModel is undefined when no model is explicitly configured (lets SDK use its default).
   // logModel records what was used for JSONL logs (sentinel when no explicit model).
-  const sdkModel = config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'];
+  const sdkModel = config?.defaults?.agent?.model ?? config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'];
   const logModel = sdkModel ?? MODEL_DEFAULT_SENTINEL;
   const runnerOptions: SkillRunnerOptions = {
     apiKey,
     model: sdkModel,
+    agentProvider: config?.defaults?.agent?.provider ?? 'claude',
+    fastModelProvider: config?.defaults?.fastModel?.provider ?? 'claude',
+    fastModelModel: config?.defaults?.fastModel?.model,
     abortController,
-    maxTurns: config?.defaults?.maxTurns,
+    maxTurns: config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
     batchDelayMs: config?.defaults?.batchDelayMs,
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
-    auxiliaryMaxRetries: config?.defaults?.auxiliaryMaxRetries,
+    auxiliaryMaxRetries: config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries,
   };
-  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters }) => ({
+  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters, ...skillOptions }) => ({
     name: skill,
     failOn: options.failOn,
     resolveSkill: () => resolveSkillAsync(skill, repoPath, {
@@ -750,7 +780,10 @@ async function runSkills(
       offline: options.offline,
     }),
     context: filterContextByPaths(context, filters),
-    runnerOptions,
+    runnerOptions: {
+      ...runnerOptions,
+      ...skillOptions,
+    },
   }));
 
   // Open the run's JSONL log before launching skills so `warden runs
@@ -1028,18 +1061,19 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     reporter.debug('No API key found. Using Claude Code subscription auth.');
   }
 
-  // Pre-flight: verify auth will work before starting analysis
-  try {
-    verifyAuth({ apiKey });
-  } catch (error: unknown) {
-    const message = (error as WardenAuthenticationError).message;
-    reporter.error(message);
-    emitEmptyRunLog(repoPath, options, {
-      code: 'auth_failed',
-      message,
-      timestamp: new Date().toISOString(),
-    });
-    return 1;
+  if (triggersToRun.some((trigger) => trigger.agentProvider === 'claude')) {
+    try {
+      verifyAuth({ apiKey });
+    } catch (error: unknown) {
+      const message = (error as WardenAuthenticationError).message;
+      reporter.error(message);
+      emitEmptyRunLog(repoPath, options, {
+        code: 'auth_failed',
+        message,
+        timestamp: new Date().toISOString(),
+      });
+      return 1;
+    }
   }
 
   // Build trigger tasks
@@ -1057,10 +1091,13 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     runnerOptions: {
       apiKey,
       model: trigger.model,
+      agentProvider: trigger.agentProvider,
+      fastModelProvider: trigger.fastModelProvider,
+      fastModelModel: trigger.fastModelModel,
       abortController,
       maxTurns: trigger.maxTurns,
       maxContextFiles: config.defaults?.chunking?.maxContextFiles,
-      auxiliaryMaxRetries: config.defaults?.auxiliaryMaxRetries,
+      auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
     },
   }));
 
@@ -1069,7 +1106,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Skill records are appended on each completion; the trailing summary
   // is appended in `outputResultsAndHandleFixes`.
   // Run-level model is the default (ignoring per-trigger overrides); per-skill models are on each report.
-  const defaultModel = config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
+  const defaultModel = config.defaults?.agent?.model ?? config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
   const runId = generateRunId();
   const timestamp = new Date();
   const traceId = getTraceId();

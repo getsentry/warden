@@ -7,7 +7,7 @@
  * =====================
  *
  * Fatal errors (setFailed - exit immediately):
- * - Missing required inputs (API key, GitHub token, environment variables)
+ * - Missing required inputs (GitHub token, environment variables)
  * - Environment setup failures (not running in GitHub Actions)
  * - Claude Code CLI not found
  * - Event payload parsing failures

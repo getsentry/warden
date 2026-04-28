@@ -695,7 +695,7 @@ describe('runPRWorkflow', () => {
         }),
         expect.any(Array),
         'test-api-key',
-        undefined
+        expect.objectContaining({ provider: 'claude' })
       );
     });
 
@@ -795,7 +795,7 @@ describe('runPRWorkflow', () => {
         }),
         [],
         'test-api-key',
-        undefined
+        expect.objectContaining({ provider: 'claude' })
       );
 
       // Should NOT run skill tasks (no triggers matched)

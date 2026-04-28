@@ -38,11 +38,13 @@ describe('parseActionInputs', () => {
       expect(inputs.anthropicApiKey).toBe('');
     });
 
-    it('throws when no auth token is found', () => {
+    it('allows missing Anthropic auth so non-Claude providers can run', () => {
       delete process.env['ANTHROPIC_API_KEY'];
       delete process.env['WARDEN_ANTHROPIC_API_KEY'];
       delete process.env['CLAUDE_CODE_OAUTH_TOKEN'];
-      expect(() => parseActionInputs()).toThrow('Authentication not found');
+      const inputs = parseActionInputs();
+      expect(inputs.anthropicApiKey).toBe('');
+      expect(inputs.oauthToken).toBe('');
     });
   });
 

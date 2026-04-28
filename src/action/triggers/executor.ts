@@ -43,7 +43,7 @@ export interface TriggerExecutorDeps {
   octokit: Octokit;
   context: EventContext;
   anthropicApiKey: string;
-  claudePath: string;
+  claudePath?: string;
   /** Global fail-on from action inputs (trigger-specific takes precedence) */
   globalFailOn?: SeverityThreshold;
   /** Global report-on from action inputs (trigger-specific takes precedence) */
@@ -135,6 +135,9 @@ export async function executeTrigger(
           runnerOptions: {
             apiKey: anthropicApiKey,
             model: trigger.model,
+            agentProvider: trigger.agentProvider,
+            fastModelProvider: trigger.fastModelProvider,
+            fastModelModel: trigger.fastModelModel,
             maxTurns: trigger.maxTurns,
             batchDelayMs: trigger.batchDelayMs,
             maxContextFiles: trigger.maxContextFiles,

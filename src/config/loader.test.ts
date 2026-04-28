@@ -354,6 +354,19 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.model).toBe('claude-sonnet-4-20250514');
     });
 
+    it('defaults.agent.model takes precedence over legacy defaults.model', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          model: 'claude-sonnet-4-20250514',
+          agent: { model: 'pi-agent-model' },
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.model).toBe('pi-agent-model');
+    });
+
     it('cliModel is used when no config model is set', () => {
       const [resolved] = resolveSkillConfigs(baseConfig, 'claude-haiku-3-5-20241022');
       expect(resolved?.model).toBe('claude-haiku-3-5-20241022');
@@ -384,6 +397,37 @@ describe('resolveSkillConfigs', () => {
 
       const [resolved] = resolveSkillConfigs(config, 'claude-haiku-3-5-20241022');
       expect(resolved?.model).toBe('claude-haiku-3-5-20241022');
+    });
+  });
+
+  describe('runtime providers', () => {
+    it('defaults runtime providers to Claude', () => {
+      const [resolved] = resolveSkillConfigs(baseConfig);
+
+      expect(resolved?.agentProvider).toBe('claude');
+      expect(resolved?.fastModelProvider).toBe('claude');
+      expect(resolved?.fastModelModel).toBeUndefined();
+      expect(resolved?.auxiliaryMaxRetries).toBeUndefined();
+    });
+
+    it('resolves agent and fast-model defaults independently', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          agent: { provider: 'pi', model: 'pi-main', maxTurns: 12 },
+          fastModel: { provider: 'claude', model: 'claude-haiku-4-5', maxRetries: 2 },
+          auxiliaryMaxRetries: 5,
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+
+      expect(resolved?.agentProvider).toBe('pi');
+      expect(resolved?.model).toBe('pi-main');
+      expect(resolved?.maxTurns).toBe(12);
+      expect(resolved?.fastModelProvider).toBe('claude');
+      expect(resolved?.fastModelModel).toBe('claude-haiku-4-5');
+      expect(resolved?.auxiliaryMaxRetries).toBe(2);
     });
   });
 
@@ -714,6 +758,33 @@ describe('loadLayeredWardenConfig', () => {
 });
 
 describe('maxTurns config', () => {
+  it('accepts agent and fastModel defaults', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        agent: { provider: 'pi', model: 'pi-main', maxTurns: 25 },
+        fastModel: { provider: 'claude', model: 'claude-haiku-4-5', maxRetries: 2 },
+      },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.agent?.provider).toBe('pi');
+    expect(result.data?.defaults?.fastModel?.model).toBe('claude-haiku-4-5');
+  });
+
+  it('rejects unknown runtime providers', () => {
+    const config = {
+      version: 1,
+      defaults: { agent: { provider: 'ai-sdk' } },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
   it('accepts maxTurns in defaults', () => {
     const config = {
       version: 1,

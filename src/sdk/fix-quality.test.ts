@@ -110,9 +110,16 @@ describe('sanitizeFindingsSuggestedFixes', () => {
       usage: { inputTokens: 10, outputTokens: 4, costUSD: 0.0001 },
     });
 
-    const result = await sanitizeFindingsSuggestedFixes([finding], { repoPath, apiKey: 'k' });
+    const result = await sanitizeFindingsSuggestedFixes([finding], {
+      repoPath,
+      apiKey: 'k',
+      model: 'claude-test-fast',
+    });
     expect(result.findings[0]?.suggestedFix).toBeUndefined();
     expect(result.stats.strippedSemantic).toBe(1);
+    expect(mockCallHaiku).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-test-fast',
+    }));
   });
 
   it('keeps suggestion when semantic gate is unavailable', async () => {

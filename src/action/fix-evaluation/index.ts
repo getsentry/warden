@@ -6,7 +6,7 @@ import { findingMatchesComment } from '../../output/stale.js';
 import { Sentry, emitFixEvalMetrics, emitFixEvalVerdictMetric } from '../../sentry.js';
 import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
 import { evaluateFix } from './judge.js';
-import type { FixJudgeContext } from './judge.js';
+import type { FixJudgeContext, FixJudgeRuntimeOptions } from './judge.js';
 import { fetchFollowUpChanges, fetchFileContent, formatFailedFixReply } from './github.js';
 
 export { postThreadReply } from './github.js';
@@ -85,8 +85,12 @@ export async function evaluateFixAttempts(
   context: EvaluateFixAttemptsContext,
   currentFindings: Finding[],
   apiKey: string,
-  maxRetries?: number
+  runtimeOptionsOrMaxRetries?: number | FixJudgeRuntimeOptions
 ): Promise<EvaluateFixAttemptsResult> {
+  const runtimeOptions: FixJudgeRuntimeOptions =
+    typeof runtimeOptionsOrMaxRetries === 'object'
+      ? runtimeOptionsOrMaxRetries
+      : { maxRetries: runtimeOptionsOrMaxRetries };
   return Sentry.startSpan(
     {
       op: 'fix_eval.run',
@@ -207,7 +211,7 @@ export async function evaluateFixAttempts(
               { comment, changedFiles, codeBeforeFix, codeAfterFix, commitMessages },
               toolContext,
               apiKey,
-              maxRetries
+              runtimeOptions
             );
             const durationMs = performance.now() - startTime;
 

@@ -65,7 +65,7 @@ function parseBooleanInput(value: string): boolean | undefined {
 
 /**
  * Parse action inputs from the GitHub Actions environment.
- * Throws if required inputs are missing.
+ * Provider-specific auth can be absent here; runtime setup validates it when needed.
  */
 export function parseActionInputs(): ActionInputs {
   // Check for auth token: supports both API keys and OAuth tokens
@@ -76,13 +76,6 @@ export function parseActionInputs(): ActionInputs {
     process.env['ANTHROPIC_API_KEY'] ||
     process.env['CLAUDE_CODE_OAUTH_TOKEN'] ||
     '';
-
-  if (!authToken) {
-    throw new Error(
-      'Authentication not found. Provide an API key via anthropic-api-key input, ' +
-        'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
-    );
-  }
 
   // Detect token type: OAuth tokens start with 'sk-ant-oat', API keys are other 'sk-ant-' prefixes
   const isOAuthToken = authToken.startsWith('sk-ant-oat');
@@ -141,7 +134,7 @@ export function validateInputs(inputs: ActionInputs): void {
 export function setupAuthEnv(inputs: ActionInputs): void {
   if (inputs.oauthToken) {
     process.env['CLAUDE_CODE_OAUTH_TOKEN'] = inputs.oauthToken;
-  } else {
+  } else if (inputs.anthropicApiKey) {
     process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
     process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
   }

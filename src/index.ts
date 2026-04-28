@@ -72,6 +72,9 @@ export {
   SkillConfigSchema,
   SkillTriggerSchema,
   TriggerTypeSchema,
+  RuntimeProviderNameSchema,
+  AgentRuntimeConfigSchema,
+  FastModelRuntimeConfigSchema,
   WardenConfigSchema,
   // Functions
   loadWardenConfig,
@@ -85,6 +88,9 @@ export type {
   SkillConfig,
   SkillTrigger,
   TriggerType,
+  RuntimeProviderName,
+  AgentRuntimeConfig,
+  FastModelRuntimeConfig,
   WardenConfig,
   ResolvedTrigger,
 } from './config/index.js';
