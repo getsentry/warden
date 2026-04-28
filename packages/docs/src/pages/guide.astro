@@ -87,9 +87,9 @@ export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
 
     <p>Get an API key from <a href="https://console.anthropic.com/">console.anthropic.com</a>. <code>ANTHROPIC_API_KEY</code> is also accepted as a fallback. CI/CD environments require an API key.</p>
 
-    <h3>Review Uncommitted Changes</h3>
+    <h3>Run a Pre-Review</h3>
 
-    <p>Run Warden with no arguments to review your working directory:</p>
+    <p>Run Warden with no arguments to review the current branch before opening or updating a pull request:</p>
 
     <Terminal showCopy={true}>
       <Code
@@ -99,7 +99,7 @@ export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
       />
     </Terminal>
 
-    <p>Warden analyzes all uncommitted changes (staged and unstaged) against HEAD, running any skills that match via your configured triggers.</p>
+    <p>Warden compares your current branch to the default branch, preferring the local <code>origin/&lt;default&gt;</code> ref when it exists. This matches the pull request review workflow without requiring a network fetch.</p>
 
     <h3>Review Only Staged Changes</h3>
 
@@ -115,9 +115,9 @@ export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
 
     <p>This uses <code>git diff --cached</code> so only staged files are analyzed.</p>
 
-    <h3>Review Before Pushing</h3>
+    <h3>Review a Git Range</h3>
 
-    <p>Review all commits on your branch that aren't on main:</p>
+    <p>Use an explicit git range when you need to review a specific slice of history:</p>
 
     <Terminal showCopy={true}>
       <Code
@@ -127,7 +127,7 @@ export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
       />
     </Terminal>
 
-    <p>This catches everything you're about to push.</p>
+    <p>Explicit ranges are useful when the default branch is not the right comparison point.</p>
 
     <h3>Run a Specific Skill</h3>
 

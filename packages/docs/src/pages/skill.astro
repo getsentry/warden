@@ -51,27 +51,27 @@ const tocItems = [
 
   <p>The <code>/warden</code> skill teaches agents how to:</p>
   <ul>
-    <li>Run Warden against uncommitted changes before committing</li>
+    <li>Run Warden against current branch changes before review</li>
     <li>Interpret findings and fix the code</li>
     <li>Configure skills in <code>warden.toml</code></li>
     <li>Create custom skills</li>
   </ul>
 
-  <p>Agents load it automatically when they detect trigger phrases like "run warden", "check my changes", or "review before commit".</p>
+  <p>Agents load it automatically when they detect trigger phrases like "run warden", "check my changes", or "review before PR".</p>
 
   <h2 id="usage">Usage</h2>
 
-  <p>In any agent that supports the spec (like Claude Code), use <code>/warden</code> before committing:</p>
+  <p>In any agent that supports the spec (like Claude Code), use <code>/warden</code> before opening a pull request:</p>
 
   <Terminal showCopy={false}>
     <Code
-      code={`> Use /warden before committing`}
+      code={`> Use /warden before opening a PR`}
       lang="txt"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <p>The agent runs <code>warden</code>, reads the output, fixes what it finds, and commits clean code.</p>
+  <p>The agent runs <code>warden</code>, reads the output, and fixes what it finds.</p>
 
   <h2 id="how-it-works">How It Works</h2>
 

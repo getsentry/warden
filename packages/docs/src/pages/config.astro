@@ -427,6 +427,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.pull_request.head.sha }}
 
       # Uncomment for GitHub App (branded comments)
       # - uses: actions/create-github-app-token@v1

@@ -97,7 +97,7 @@ Targets:
   <files>              Analyze specific files (e.g., src/auth.ts)
   <glob>               Analyze files matching pattern (e.g., "src/**/*.ts")
   <git-ref>            Analyze changes from git ref (e.g., HEAD~3, main..feature)
-  (none)               Analyze uncommitted changes using warden.toml triggers
+  (none)               Analyze current branch changes against the default branch
 
 Options:
   --skill <name>       Run only this skill (default: run all built-in skills)

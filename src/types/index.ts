@@ -307,6 +307,14 @@ export const FileChangeSchema = z.object({
 });
 export type FileChange = z.infer<typeof FileChangeSchema>;
 
+// Source used to read surrounding file context for diff hunks.
+export const DiffContextSourceSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('working-tree') }),
+  z.object({ type: z.literal('git-index') }),
+  z.object({ type: z.literal('git-ref'), ref: z.string() }),
+]);
+export type DiffContextSource = z.infer<typeof DiffContextSourceSchema>;
+
 /**
  * Count the number of chunks/hunks in a patch string.
  * Each chunk starts with @@ -X,Y +A,B @@
@@ -347,6 +355,7 @@ export const EventContextSchema = z.object({
   repository: RepositoryContextSchema,
   pullRequest: PullRequestContextSchema.optional(),
   repoPath: z.string(),
+  diffContextSource: DiffContextSourceSchema.optional(),
 });
 export type EventContext = z.infer<typeof EventContextSchema>;
 

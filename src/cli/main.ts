@@ -13,7 +13,7 @@ import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
-import { getRepoRoot, getHeadSha, refExists, hasUncommittedChanges } from './git.js';
+import { getRepoRoot, getHeadSha, refExists, getDefaultBranch } from './git.js';
 import { renderTerminalReport, filterReports } from './terminal.js';
 import {
   Reporter,
@@ -102,6 +102,22 @@ function createReporter(options: CLIOptions): Reporter {
 function resolveConfigPath(options: CLIOptions, repoPath: string): string {
   const cwd = process.cwd();
   return options.config ? resolve(cwd, options.config) : resolve(repoPath, 'warden.toml');
+}
+
+function resolveLocalReviewBase(configDefaultBranch: string | undefined, repoPath: string): {
+  defaultBranch: string;
+  base: string;
+} {
+  const defaultBranch = configDefaultBranch ?? getDefaultBranch(repoPath);
+  if (defaultBranch.includes('/')) {
+    return { defaultBranch, base: defaultBranch };
+  }
+
+  const remoteTrackingRef = `origin/${defaultBranch}`;
+  return {
+    defaultBranch,
+    base: refExists(remoteTrackingRef, repoPath) ? remoteTrackingRef : defaultBranch,
+  };
 }
 
 /**
@@ -924,13 +940,18 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Load config
   const config = loadWardenConfig(dirname(configPath));
 
-  // Build context from local git — default to HEAD so only uncommitted changes are analyzed
-  const statusMessage = options.staged ? 'Analyzing staged changes...' : 'Analyzing uncommitted changes...';
+  // Build context from local git. By default, mirror PR-style analysis:
+  // compare the configured/default branch merge base to HEAD.
+  const localReviewBase = resolveLocalReviewBase(config.defaults?.defaultBranch, repoPath);
+  const statusMessage = options.staged
+    ? 'Analyzing staged changes...'
+    : `Analyzing changes from ${localReviewBase.base} to HEAD...`;
   reporter.startContext(statusMessage);
   const context = buildLocalEventContext({
-    base: 'HEAD',
+    base: options.staged ? 'HEAD' : localReviewBase.base,
+    head: options.staged ? undefined : 'HEAD',
     cwd: repoPath,
-    defaultBranch: config.defaults?.defaultBranch,
+    defaultBranch: localReviewBase.defaultBranch,
     staged: options.staged,
   });
 
@@ -946,10 +967,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       if (options.staged) {
         reporter.renderEmptyState('No staged changes found');
       } else {
-        const tip = !hasUncommittedChanges(repoPath)
-          ? 'Specify a git ref: warden HEAD~3 --skill <name>'
-          : undefined;
-        reporter.renderEmptyState('No uncommitted changes found', tip);
+        reporter.renderEmptyState(
+          `No changes found from ${pullRequest.baseBranch} to HEAD`,
+          'Use --staged to analyze staged changes'
+        );
       }
       reporter.blank();
     }
@@ -1092,7 +1113,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 }
 
 /**
- * Run in direct skill mode: run a specific skill on uncommitted changes.
+ * Run in direct skill mode: run a specific skill on current branch changes.
  * Used when --skill is specified without targets.
  */
 async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Promise<number> {
@@ -1111,13 +1132,18 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
   const configPath = resolveConfigPath(options, repoPath);
   const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
 
-  // Build context from local git - compare against HEAD for true uncommitted changes
-  const statusMessage = options.staged ? 'Analyzing staged changes...' : 'Analyzing uncommitted changes...';
+  // Build context from local git. By default, mirror PR-style analysis:
+  // compare the configured/default branch merge base to HEAD.
+  const localReviewBase = resolveLocalReviewBase(config?.defaults?.defaultBranch, repoPath);
+  const statusMessage = options.staged
+    ? 'Analyzing staged changes...'
+    : `Analyzing changes from ${localReviewBase.base} to HEAD...`;
   reporter.startContext(statusMessage);
   const context = buildLocalEventContext({
-    base: 'HEAD',
+    base: options.staged ? 'HEAD' : localReviewBase.base,
+    head: options.staged ? undefined : 'HEAD',
     cwd: repoPath,
-    defaultBranch: config?.defaults?.defaultBranch,
+    defaultBranch: localReviewBase.defaultBranch,
     staged: options.staged,
   });
 
@@ -1133,8 +1159,10 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
       if (options.staged) {
         reporter.renderEmptyState('No staged changes found');
       } else {
-        const tip = 'Specify a git ref to analyze committed changes: warden main --skill <name>';
-        reporter.renderEmptyState('No uncommitted changes found', tip);
+        reporter.renderEmptyState(
+          `No changes found from ${pullRequest.baseBranch} to HEAD`,
+          'Use --staged to analyze staged changes'
+        );
       }
       reporter.blank();
     }
@@ -1154,7 +1182,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
     reporter.warning('--staged is ignored when targets are specified');
   }
 
-  // No targets with --skill → run skill directly on uncommitted changes
+  // No targets with --skill → run skill directly on current branch changes
   if (targets.length === 0 && options.skill) {
     return runDirectSkillMode(options, reporter);
   }

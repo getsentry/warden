@@ -120,6 +120,8 @@ jobs:
       WARDEN_SENTRY_DSN: \${{ secrets.WARDEN_SENTRY_DSN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.pull_request.head.sha }}
       - uses: getsentry/warden@v${majorVersion}
         with:
           anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}

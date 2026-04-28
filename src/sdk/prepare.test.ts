@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, it, expect } from 'vitest';
 import { prepareFiles } from './prepare.js';
 import type { EventContext, FileChange } from '../types/index.js';
+import { buildLocalEventContext } from '../cli/context.js';
 
 function makeContext(
   files: { filename: string; patch: string; status?: FileChange['status'] }[],
@@ -33,6 +38,36 @@ function makeContext(
 }
 
 describe('prepareFiles', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function git(cwd: string, args: string[]): string {
+    return execFileSync('git', args, {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  }
+
+  function createGitRepo(): string {
+    const repoPath = mkdtempSync(join(tmpdir(), 'warden-prepare-'));
+    tempDirs.push(repoPath);
+    git(repoPath, ['init']);
+    git(repoPath, ['config', 'user.email', 'warden@example.com']);
+    git(repoPath, ['config', 'user.name', 'Warden Test']);
+    return repoPath;
+  }
+
+  function writeTrackedFile(repoPath: string, lines: string[]): void {
+    mkdirSync(join(repoPath, 'src'), { recursive: true });
+    writeFileSync(join(repoPath, 'src/file.ts'), `${lines.join('\n')}\n`);
+  }
+
   it('skips files with empty patch content (zero-line hunks)', () => {
     const context = makeContext([
       { filename: 'empty.ts', patch: '@@ -0,0 +0,0 @@\n' },
@@ -84,5 +119,48 @@ describe('prepareFiles', () => {
 
     expect(result.files).toEqual([]);
     expect(result.skippedFiles).toEqual([]);
+  });
+
+  it('reads git-ref hunk context from the analyzed commit, not the dirty working tree', () => {
+    const repoPath = createGitRepo();
+    const baseLines = ['one', 'two', 'three', 'old value', 'after one', 'after two', 'after three', 'clean context'];
+    const headLines = [...baseLines];
+    headLines[3] = 'new value';
+    const dirtyLines = [...headLines];
+    dirtyLines[7] = 'dirty context';
+
+    writeTrackedFile(repoPath, baseLines);
+    git(repoPath, ['add', 'src/file.ts']);
+    git(repoPath, ['commit', '-m', 'base']);
+    writeTrackedFile(repoPath, headLines);
+    git(repoPath, ['add', 'src/file.ts']);
+    git(repoPath, ['commit', '-m', 'head']);
+    writeTrackedFile(repoPath, dirtyLines);
+
+    const context = buildLocalEventContext({ base: 'HEAD^', head: 'HEAD', cwd: repoPath });
+    const result = prepareFiles(context, { contextLines: 1 });
+
+    expect(result.files[0]?.hunks[0]?.contextAfter).toEqual(['clean context']);
+  });
+
+  it('reads staged hunk context from the index, not unstaged changes', () => {
+    const repoPath = createGitRepo();
+    const baseLines = ['one', 'two', 'three', 'old value', 'after one', 'after two', 'after three', 'index context'];
+    const stagedLines = [...baseLines];
+    stagedLines[3] = 'new value';
+    const dirtyLines = [...stagedLines];
+    dirtyLines[7] = 'dirty context';
+
+    writeTrackedFile(repoPath, baseLines);
+    git(repoPath, ['add', 'src/file.ts']);
+    git(repoPath, ['commit', '-m', 'base']);
+    writeTrackedFile(repoPath, stagedLines);
+    git(repoPath, ['add', 'src/file.ts']);
+    writeTrackedFile(repoPath, dirtyLines);
+
+    const context = buildLocalEventContext({ cwd: repoPath, staged: true });
+    const result = prepareFiles(context, { contextLines: 1 });
+
+    expect(result.files[0]?.hunks[0]?.contextAfter).toEqual(['index context']);
   });
 });

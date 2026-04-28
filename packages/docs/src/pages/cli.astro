@@ -27,15 +27,16 @@ const tocItems = [
   <div class="command-card">
     <h3 id="warden">warden</h3>
     <div class="synopsis">warden [target] [options]</div>
-    <p>Run code analysis on the specified target. If no target is given, analyzes uncommitted changes.</p>
+    <p>Run code analysis on the specified target. If no target is given, Warden reviews the current branch against the default branch.</p>
     <ul>
       <li><code>target</code> - Files, directories, or git refs to analyze (optional)</li>
     </ul>
     <Terminal>
       <Code
-        code={`warden                     # Analyze uncommitted changes (default)
+        code={`warden                     # Review current branch changes
 warden src/auth.ts         # Analyze specific file
 warden src/api/            # Analyze a directory
+warden --staged            # Analyze staged changes
 warden HEAD~3..HEAD        # Analyze changes in a git range`}
         lang="bash"
         theme="vitesse-black"

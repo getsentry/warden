@@ -99,6 +99,7 @@ export async function buildEventContext(
     action: payload.action,
     repository,
     pullRequest,
+    diffContextSource: { type: 'working-tree' },
     repoPath,
   };
 

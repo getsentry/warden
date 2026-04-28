@@ -56,7 +56,7 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
   const base = staged ? 'HEAD' : (options.base ?? defaultBranch);
   const head = options.head; // undefined means working tree
   const currentBranch = getCurrentBranch(cwd);
-  const headSha = head ? head : getHeadSha(cwd);
+  const headSha = head ? resolveRef(head, cwd) : getHeadSha(cwd);
 
   const changedFiles = getChangedFilesWithPatches(base, head, cwd, { staged });
   const files = changedFiles.map(toFileChange);
@@ -75,6 +75,12 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
     title = `Local changes: ${currentBranch}`;
     body = `Analyzing local changes from ${base} to working tree`;
   }
+
+  const diffContextSource = staged
+    ? { type: 'git-index' as const }
+    : head
+      ? { type: 'git-ref' as const, ref: headSha }
+      : { type: 'working-tree' as const };
 
   return {
     eventType: 'pull_request',
@@ -96,6 +102,7 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
       baseSha: resolveRef(base, cwd),
       files,
     },
+    diffContextSource,
     repoPath,
   };
 }
@@ -136,6 +143,7 @@ export async function buildFileEventContext(options: FileContextOptions): Promis
       baseSha: 'file-analysis',
       files,
     },
+    diffContextSource: { type: 'working-tree' },
     repoPath: cwd,
   };
 }

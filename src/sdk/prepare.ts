@@ -91,7 +91,10 @@ export function prepareFiles(
         })
       : splitHunks;
 
-    const hunksWithContext = expandDiffContext(context.repoPath, { ...diff, hunks }, contextLines);
+    const hunksWithContext = expandDiffContext(context.repoPath, { ...diff, hunks }, {
+      contextLines,
+      contentSource: context.diffContextSource,
+    });
     allHunks.push(...hunksWithContext);
   }
 

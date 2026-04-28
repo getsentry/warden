@@ -1,10 +1,20 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { DiffHunk, ParsedDiff } from './parser.js';
 import { getExpandedLineRange } from './parser.js';
+import type { DiffContextSource } from '../types/index.js';
+import { GIT_NON_INTERACTIVE_ENV } from '../utils/exec.js';
 
 /** Cache for file contents to avoid repeated reads */
 const fileCache = new Map<string, string[] | null>();
+
+export interface ExpandContextOptions {
+  /** Number of context lines to read before and after each hunk */
+  contextLines?: number;
+  /** Source tree to read hunk context from */
+  contentSource?: DiffContextSource;
+}
 
 /** Clear the file cache (useful for testing or long-running processes) */
 export function clearFileCache(): void {
@@ -12,26 +22,92 @@ export function clearFileCache(): void {
 }
 
 /** Get cached file lines or read and cache them */
-function getCachedFileLines(filePath: string): string[] | null {
-  if (fileCache.has(filePath)) {
-    return fileCache.get(filePath) ?? null;
+function normalizeOptions(options: number | ExpandContextOptions): Required<ExpandContextOptions> {
+  if (typeof options === 'number') {
+    return {
+      contextLines: options,
+      contentSource: { type: 'working-tree' },
+    };
   }
 
+  return {
+    contextLines: options.contextLines ?? 20,
+    contentSource: options.contentSource ?? { type: 'working-tree' },
+  };
+}
+
+function cacheKey(repoPath: string, filename: string, source: DiffContextSource): string {
+  const sourceKey = source.type === 'git-ref' ? `${source.type}:${source.ref}` : source.type;
+  return `${sourceKey}:${repoPath}:${filename}`;
+}
+
+function isInsideRepo(repoPath: string, filename: string): boolean {
+  const resolvedRepo = resolve(repoPath);
+  const resolvedFile = resolve(join(repoPath, filename));
+  return resolvedFile === resolvedRepo || resolvedFile.startsWith(resolvedRepo + '/');
+}
+
+function readWorkingTreeLines(repoPath: string, filename: string): string[] | null {
+  const filePath = join(repoPath, filename);
+
   if (!existsSync(filePath)) {
-    fileCache.set(filePath, null);
     return null;
   }
 
   try {
     const content = readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
-    fileCache.set(filePath, lines);
-    return lines;
+    return content.split('\n');
   } catch {
     // Binary file or read error
-    fileCache.set(filePath, null);
     return null;
   }
+}
+
+function readGitSourceLines(
+  repoPath: string,
+  filename: string,
+  source: Extract<DiffContextSource, { type: 'git-index' | 'git-ref' }>
+): string[] | null {
+  const refPath = source.type === 'git-index'
+    ? `:${filename}`
+    : `${source.ref}:${filename}`;
+
+  const result = spawnSync('git', ['show', refPath], {
+    cwd: repoPath,
+    encoding: 'utf-8',
+    env: { ...process.env, ...GIT_NON_INTERACTIVE_ENV },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (result.error || result.status !== 0 || typeof result.stdout !== 'string') {
+    return null;
+  }
+
+  return result.stdout.split('\n');
+}
+
+/** Get cached file lines or read and cache them */
+function getCachedFileLines(
+  repoPath: string,
+  filename: string,
+  source: DiffContextSource
+): string[] | null {
+  const key = cacheKey(repoPath, filename, source);
+  if (fileCache.has(key)) {
+    return fileCache.get(key) ?? null;
+  }
+
+  if (!isInsideRepo(repoPath, filename)) {
+    fileCache.set(key, null);
+    return null;
+  }
+
+  const lines = source.type === 'working-tree'
+    ? readWorkingTreeLines(repoPath, filename)
+    : readGitSourceLines(repoPath, filename, source);
+
+  fileCache.set(key, lines);
+  return lines;
 }
 
 export interface HunkWithContext {
@@ -94,11 +170,13 @@ function detectLanguage(filename: string): string {
  * Returns empty array if file doesn't exist or is binary.
  */
 function readFileLines(
-  filePath: string,
+  repoPath: string,
+  filename: string,
+  source: DiffContextSource,
   startLine: number,
   endLine: number
 ): string[] {
-  const lines = getCachedFileLines(filePath);
+  const lines = getCachedFileLines(repoPath, filename, source);
   if (!lines) {
     return [];
   }
@@ -113,12 +191,12 @@ export function expandHunkContext(
   repoPath: string,
   filename: string,
   hunk: DiffHunk,
-  contextLines = 20
+  options: number | ExpandContextOptions = 20
 ): HunkWithContext {
-  const filePath = join(repoPath, filename);
+  const { contextLines, contentSource } = normalizeOptions(options);
 
   // Defense-in-depth: ensure filename doesn't escape repo directory
-  if (!resolve(filePath).startsWith(resolve(repoPath) + '/')) {
+  if (!isInsideRepo(repoPath, filename)) {
     return { filename, hunk, contextBefore: [], contextAfter: [], contextStartLine: 1, language: detectLanguage(filename) };
   }
 
@@ -126,14 +204,18 @@ export function expandHunkContext(
 
   // Read context before the hunk
   const contextBefore = readFileLines(
-    filePath,
+    repoPath,
+    filename,
+    contentSource,
     expandedRange.start,
     hunk.newStart - 1
   );
 
   // Read context after the hunk
   const contextAfter = readFileLines(
-    filePath,
+    repoPath,
+    filename,
+    contentSource,
     hunk.newStart + hunk.newCount,
     expandedRange.end
   );
@@ -154,10 +236,10 @@ export function expandHunkContext(
 export function expandDiffContext(
   repoPath: string,
   diff: ParsedDiff,
-  contextLines = 20
+  options: number | ExpandContextOptions = 20
 ): HunkWithContext[] {
   return diff.hunks.map((hunk) =>
-    expandHunkContext(repoPath, diff.filename, hunk, contextLines)
+    expandHunkContext(repoPath, diff.filename, hunk, options)
   );
 }
 

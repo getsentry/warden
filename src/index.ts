@@ -36,6 +36,7 @@ export {
   PullRequestActionSchema,
   // File Changes
   FileChangeSchema,
+  DiffContextSourceSchema,
   // Context
   PullRequestContextSchema,
   RepositoryContextSchema,
@@ -56,6 +57,7 @@ export type {
   GitHubEventType,
   PullRequestAction,
   FileChange,
+  DiffContextSource,
   PullRequestContext,
   RepositoryContext,
   EventContext,

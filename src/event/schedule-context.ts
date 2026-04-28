@@ -72,6 +72,7 @@ export async function buildScheduleEventContext(
       baseSha: headSha, // No actual base for scheduled runs
       files: fileChanges,
     },
+    diffContextSource: { type: 'working-tree' },
     repoPath,
   };
 }
