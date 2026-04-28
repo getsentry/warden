@@ -565,7 +565,7 @@ New run logs are homogeneous: every line is a chunk result. Each line is self-co
 
 ### Write Timing
 
-The file is initialized (truncated to empty) before any skill runs, then each chunk record is appended via `fs.appendFileSync` from the runner's chunk-complete hook the moment that chunk finishes. No summary trailer is appended to new logs. At finalization, Warden rewrites the file from the final post-processed reports so durable JSONL matches deduplication, merge, and suggested-fix quality gates. If a skill produced no chunks, finalization writes a synthetic chunk record with `status: "skipped"` or `status: "error"` so the outcome is still durable. A single appended live line under PIPE_BUF is atomic with respect to concurrent appenders on POSIX.
+The file is initialized (truncated to empty) before any skill runs, then each chunk record is appended via `fs.appendFileSync` from the runner's chunk-complete hook the moment that chunk finishes. No summary trailer is appended to new logs. At finalization, Warden rewrites the file from the final post-processed reports so durable JSONL matches deduplication, merge, and suggested-fix quality gates. If a skill produced no chunks, finalization writes a synthetic chunk record with `status: "skipped"` or `status: "error"` so the outcome is still durable. Each live record is emitted with one synchronous append call, so parallel callbacks in the Warden process cannot interleave partial JSON records.
 
 Crash safety falls out for free: if the process dies mid-run, every chunk that completed is already on disk and `parseJsonlReports` will reconstruct reports from those chunks. The absence of the `.done` sidecar is the signal that the run is still in progress (or crashed); `warden runs follow` uses this to auto-resolve "the active session" when called without an argument.
 
@@ -577,7 +577,7 @@ Per-chunk `run.durationMs` is the elapsed-since-start at the moment that record 
 
 `--json` outputs the JSONL log file contents to stdout. This is the same format as the always-on `.warden/logs/` file: one chunk result per line. See Section 3 for the full JSONL specification.
 
-After the run finalizes, `--json` reads the on-disk log file back and writes it to stdout, preserving the per-chunk `run.durationMs` snapshots. If the file isn't readable (init failed, mid-run write errors leaving the file empty), `--json` falls back to an in-memory legacy render via `renderJsonlString`.
+After the run finalizes, `--json` reads the on-disk log file back and writes it to stdout, preserving the per-chunk `run.durationMs` snapshots. If the file isn't readable (init failed, mid-run write errors leaving the file empty), `--json` falls back to rendering the same chunk-record shape in memory.
 
 ---
 

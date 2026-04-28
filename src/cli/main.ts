@@ -211,8 +211,15 @@ function initializeRunLog(args: {
   }
 
   const paths: string[] = [];
-  if (primaryLogWritten) paths.push(primaryLogPath);
-  if (resolvedOutputPath) paths.push(resolvedOutputPath);
+  const seenPaths = new Set<string>();
+  const addPath = (path: string): void => {
+    const key = resolve(process.cwd(), path);
+    if (seenPaths.has(key)) return;
+    seenPaths.add(key);
+    paths.push(path);
+  };
+  if (primaryLogWritten) addPath(primaryLogPath);
+  if (resolvedOutputPath) addPath(resolvedOutputPath);
 
   return { paths, primaryLogPath, primaryLogWritten, outputPath: resolvedOutputPath, startTime, baseRun, chunks: [] };
 }
@@ -407,9 +414,9 @@ function buildFinalChunkRecords(
 }
 
 /**
- * Append the run-final summary record. Returns the set of paths that
+ * Rewrite the run log with final chunk records. Returns the set of paths that
  * accepted the write, so the caller can decide whether to claim
- * "wrote JSONL output to X" (only true when the summary actually landed).
+ * "wrote JSONL output to X" (only true when the final log actually landed).
  */
 function finalizeRunLog(
   log: RunLog,

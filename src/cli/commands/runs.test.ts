@@ -820,6 +820,46 @@ describe('runRunsFollow', () => {
     logSpy.mockRestore();
   }, 5000);
 
+  it('follows an explicit completed chunk log', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const livePath = join(logDir, 'donechunk-2026-04-25T16-00-00-000Z.jsonl');
+    const run = buildRunMetadata({
+      runId: 'donechunk-0000-0000-0000-000000000000',
+      durationMs: 250,
+      timestamp: new Date('2026-04-25T16:00:00.000Z'),
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'done-skill',
+      chunk: { file: 'src/a.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [{ id: 'DONE-1', severity: 'high', title: 'Done finding', description: 'done' }],
+      durationMs: 250,
+    };
+
+    initJsonlFile(livePath);
+    appendJsonlLine(livePath, renderJsonlChunkLine(chunk));
+    writeFileSync(`${livePath}.done`, '');
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const writes: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((chunk = '') => {
+      writes.push(String(chunk));
+    });
+
+    const exit = await runRunsFollow(
+      { subcommand: 'follow', files: ['donechunk'] },
+      createDefaultOptions(),
+      createTestReporter(),
+    );
+
+    expect(exit).toBe(0);
+    expect(writes.join('\n')).toContain('Done finding');
+
+    logSpy.mockRestore();
+  }, 5000);
+
   it('does not read from the middle of a finalized replacement file', async () => {
     const logDir = join(testDir, '.warden', 'logs');
     const livePath = join(logDir, 'replace0-2026-04-25T16-00-00-000Z.jsonl');

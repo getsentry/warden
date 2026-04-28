@@ -708,6 +708,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: 'src/api.ts', index: 1, total: 2, lineRange: '10-20' },
         status: 'error',
         findings: [],
+        usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
         durationMs: 100,
         error: { code: 'extraction_invalid_json', message: 'bad json' },
       },
@@ -718,6 +719,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: 'src/api.ts', index: 2, total: 2, lineRange: '21-30' },
         status: 'error',
         findings: [],
+        usage: { inputTokens: 200, outputTokens: 20, costUSD: 0.002 },
         durationMs: 200,
         error: { code: 'sdk_error', message: 'sdk failed' },
       },
@@ -728,6 +730,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: '', index: 1, total: 1, lineRange: '' },
         status: 'error',
         findings: [],
+        usage: { inputTokens: 300, outputTokens: 30, costUSD: 0.003 },
         durationMs: 300,
         error: { code: 'all_hunks_failed', message: 'All chunks failed.' },
       },
@@ -740,6 +743,8 @@ describe('parseJsonlReports', () => {
     expect(report.failedHunks).toBe(1);
     expect(report.error?.code).toBe('all_hunks_failed');
     expect(report.hunkFailures?.map((failure) => failure.type)).toEqual(['extraction', 'analysis']);
+    expect(report.durationMs).toBe(300);
+    expect(report.usage?.inputTokens).toBe(300);
   });
 
   it('only treats error-status chunks as extraction failures', () => {

@@ -303,8 +303,8 @@ export function initJsonlFile(outputPath: string): void {
 
 /**
  * Append a pre-rendered line (must include its trailing newline).
- * Atomic w.r.t. other appenders on POSIX for lines under PIPE_BUF, which
- * is what makes parallel skill execution safe to write straight to disk.
+ * This uses one synchronous append call so parallel skill callbacks in this
+ * process cannot interleave partial JSON records.
  */
 export function appendJsonlLine(outputPath: string, line: string): void {
   const resolvedPath = resolve(process.cwd(), outputPath);
@@ -425,18 +425,19 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
 
   const reports: SkillReport[] = [];
   for (const [skill, records] of bySkill) {
-    const findings = records.flatMap((r) => r.findings);
-    const usage = records.reduce<UsageStats | undefined>((acc, r) => addUsage(acc, r.usage), undefined);
-    const auxiliaryUsage = records.reduce<AuxiliaryUsageMap | undefined>(
+    const reportLevelError = records.find(isReportLevelErrorRecord)?.error;
+    const chunkRecords = records.filter((record) => !isReportLevelErrorRecord(record));
+    const aggregateRecords = chunkRecords.length > 0 ? chunkRecords : records;
+    const findings = aggregateRecords.flatMap((r) => r.findings);
+    const usage = aggregateRecords.reduce<UsageStats | undefined>((acc, r) => addUsage(acc, r.usage), undefined);
+    const auxiliaryUsage = aggregateRecords.reduce<AuxiliaryUsageMap | undefined>(
       (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
       undefined,
     );
     const filesByName = new Map<string, FileReport>();
     const hunkFailures: HunkFailure[] = [];
     const skippedFiles = records.flatMap((r) => r.skippedFiles ?? []);
-    const reportLevelError = records.find(isReportLevelErrorRecord)?.error;
-    const chunkRecords = records.filter((record) => !isReportLevelErrorRecord(record));
-    for (const record of records) {
+    for (const record of aggregateRecords) {
       const existing = filesByName.get(record.chunk.file);
       if (record.chunk.file) {
         filesByName.set(record.chunk.file, {
@@ -470,10 +471,10 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
       skill,
       summary: summarizeFindings(skill, findings),
       findings,
-      durationMs: records.reduce((sum, r) => sum + r.durationMs, 0),
+      durationMs: aggregateRecords.reduce((sum, r) => sum + r.durationMs, 0),
       usage,
       files: [...filesByName.values()],
-      model: records.find((r) => r.model)?.model,
+      model: aggregateRecords.find((r) => r.model)?.model,
     };
     if (reportLevelError) {
       report.error = reportLevelError;
@@ -551,8 +552,8 @@ export function parseJsonlReports(content: string): ParsedJsonlLog {
 
 /**
  * Lightweight metadata extracted from a JSONL log file. `summary` is
- * absent for in-progress runs (no trailing summary record yet); use
- * `inProgress` to distinguish those from completed runs.
+ * parsed from legacy summary records or synthesized from chunk records;
+ * use `inProgress` to distinguish active runs from completed runs.
  */
 export interface LogFileMetadata {
   summary?: JsonlSummaryRecord;

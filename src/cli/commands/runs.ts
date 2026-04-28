@@ -564,7 +564,7 @@ function resolveFollowTarget(arg: string | undefined, logDir: string): string | 
   }
   for (const entry of entries) {
     const filePath = join(logDir, entry);
-    if (existsSync(`${filePath}.done`)) continue;
+    if (!arg && existsSync(`${filePath}.done`)) continue;
     let content: string;
     try {
       content = readFileSync(filePath, 'utf-8');
