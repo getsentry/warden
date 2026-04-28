@@ -1,6 +1,3 @@
-import { claudeAgentRuntime } from './claude.js';
-import type { AgentRuntime } from './types.js';
-
 export { claudeAgentRuntime } from './claude.js';
 export type {
   AgentRuntime,
@@ -9,8 +6,9 @@ export type {
   AgentRuntimeMessageSubtype,
   AgentRuntimeOptions,
   AgentRuntimeRequest,
+  FastModelGenerateObjectRequest,
+  FastModelGenerateObjectWithToolsRequest,
+  FastModelResult,
+  FastModelRuntime,
+  FastModelTool,
 } from './types.js';
-
-export function getAgentRuntime(): AgentRuntime {
-  return claudeAgentRuntime;
-}

@@ -8,7 +8,8 @@ import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } f
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
 import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
-import { getAgentRuntime, type AgentRuntimeMessage } from './runtimes/index.js';
+import { getAgentRuntime } from './providers/index.js';
+import type { AgentRuntimeMessage } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,

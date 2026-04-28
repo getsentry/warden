@@ -54,13 +54,28 @@ export { prepareFiles } from './prepare.js';
 // Re-export analysis functions
 export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 
-// Re-export runtime adapter contract
-export { getAgentRuntime, claudeAgentRuntime } from './runtimes/index.js';
+// Re-export provider registry and runtime adapter contracts
+export {
+  claudeFastModelRuntime,
+  claudeProvider,
+  getAgentRuntime,
+  getFastModelRuntime,
+  getRuntimeProvider,
+} from './providers/index.js';
+export { claudeAgentRuntime } from './runtimes/index.js';
+export type { RuntimeProvider, RuntimeProviderName } from './providers/index.js';
 export type {
   AgentRuntime,
   AgentRuntimeExecutionResult,
   AgentRuntimeMessage,
+  AgentRuntimeMessageSubtype,
+  AgentRuntimeOptions,
   AgentRuntimeRequest,
+  FastModelGenerateObjectRequest,
+  FastModelGenerateObjectWithToolsRequest,
+  FastModelResult,
+  FastModelRuntime,
+  FastModelTool,
 } from './runtimes/index.js';
 
 // Re-export types
