@@ -553,7 +553,12 @@ async function outputResultsAndHandleFixes(
       try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }
     }
     if (!jsonlContent) {
-      jsonlContent = renderJsonlChunkRecords(buildFinalChunkRecords(runLog, reports, totalDuration));
+      try {
+        jsonlContent = renderJsonlChunkRecords(buildFinalChunkRecords(runLog, reports, totalDuration));
+      } catch (err) {
+        reporter.error(`Failed to render JSONL output: ${err instanceof Error ? err.message : String(err)}`);
+        return 1;
+      }
     }
     process.stdout.write(jsonlContent);
   } else {

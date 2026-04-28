@@ -779,6 +779,26 @@ describe('parseJsonlReports', () => {
     expect(result.reports[0]!.hunkFailures![0]!.message).toBe('bad json');
   });
 
+  it('does not count error chunks without error details as hunk failures', () => {
+    const run = buildRunMetadata({ runId: 'chunk-error-no-detail', durationMs: 100 });
+    const chunks: JsonlChunkRecord[] = [
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 1, total: 1, lineRange: '10-20' },
+        status: 'error',
+        findings: [],
+        durationMs: 100,
+      },
+    ];
+
+    const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
+
+    expect(result.reports[0]!.failedHunks).toBeUndefined();
+    expect(result.reports[0]!.hunkFailures).toBeUndefined();
+  });
+
   it('fails chunk content rendering instead of dropping invalid records', () => {
     const run = buildRunMetadata({ runId: 'strict-chunk-render', durationMs: 300 });
     const valid: JsonlChunkRecord = {
