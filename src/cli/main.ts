@@ -359,6 +359,7 @@ function appendReportToRunLog(log: RunLog, report: SkillReport): void {
 }
 
 function lineRangeIncludes(lineRange: string, line: number): boolean {
+  if (!lineRange) return false;
   const [startText, endText] = lineRange.split('-');
   const start = Number(startText);
   const end = endText ? Number(endText) : start;
@@ -366,7 +367,7 @@ function lineRangeIncludes(lineRange: string, line: number): boolean {
 }
 
 function findChunkForFinding(chunks: JsonlChunkRecord[], skill: string, finding: Finding): JsonlChunkRecord | undefined {
-  const sameSkill = chunks.filter((chunk) => chunk.skill === skill);
+  const sameSkill = chunks.filter((chunk) => chunk.skill === skill && chunk.chunk.file);
   const location = finding.location;
   if (!location) return sameSkill[0];
   return sameSkill.find((chunk) =>
@@ -436,13 +437,16 @@ function finalizeRunLog(
   for (const p of log.paths) {
     const targetPath = resolve(process.cwd(), p);
     const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
+    const tempDonePath = `${tempPath}.done`;
     try {
       writeJsonlContent(tempPath, content);
+      writeFileSync(tempDonePath, '');
       renameSync(tempPath, targetPath);
-      writeFileSync(`${targetPath}.done`, '');
+      renameSync(tempDonePath, `${targetPath}.done`);
       wrote.add(p);
     } catch {
       try { unlinkSync(tempPath); } catch { /* ignore */ }
+      try { unlinkSync(tempDonePath); } catch { /* ignore */ }
       // best-effort
     }
   }
