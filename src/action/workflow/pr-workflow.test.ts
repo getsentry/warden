@@ -15,6 +15,7 @@ const FIXTURES_DIR = join(__dirname, '__fixtures__');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
+const MERGE_GROUP_EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/merge_group_checks_requested.json');
 
 // -----------------------------------------------------------------------------
 // Mocks - ONLY external boundaries: LLM calls
@@ -422,6 +423,43 @@ describe('runPRWorkflow', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(
         '::warning::No warden.toml found. Skipping analysis.'
       );
+    });
+
+    it('loads config-path and resolves local skills from that Warden root', async () => {
+      mockRunSkillTask.mockImplementationOnce(async (taskOptions) => {
+        const skill = await taskOptions.resolveSkill();
+        return { name: taskOptions.name, report: createSkillReport({ skill: skill.name }) };
+      });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          configPath: 'org-root/org-warden.toml',
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'org-skill' }),
+        expect.any(Number),
+        expect.any(Object),
+        expect.any(Semaphore)
+      );
+    });
+
+    it('exits cleanly for merge_group events when only PR triggers are configured', async () => {
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'merge_group',
+        MERGE_GROUP_EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockSetFailed).not.toHaveBeenCalled();
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
     });
 
     it('fails when event payload is unreadable', async () => {

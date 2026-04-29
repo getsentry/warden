@@ -15,7 +15,7 @@ inputs:
     required: false
     default: ${{ github.token }}
   config-path:
-    description: 'Path to warden.toml config file (relative to repo root)'
+    description: 'Path to warden.toml config file (relative to workspace). Local skills resolve from the directory containing this file.'
     required: false
     default: 'warden.toml'
   fail-on:

@@ -279,6 +279,8 @@ export type SkillReport = z.infer<typeof SkillReportSchema>;
 // GitHub event types
 export const GitHubEventTypeSchema = z.enum([
   'pull_request',
+  'pull_request_target',
+  'merge_group',
   'issues',
   'issue_comment',
   'pull_request_review',

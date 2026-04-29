@@ -5,10 +5,10 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { Sentry, logger, emitStaleResolutionMetric, setGlobalAttributes, emitRunMetric } from '../../sentry.js';
-import { loadWardenConfig, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
+import { loadWardenConfigFile, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { WardenConfig } from '../../config/schema.js';
 import { buildEventContext } from '../../event/context.js';
@@ -136,12 +136,13 @@ async function initializeWorkflow(
   console.log(`Config path: ${inputs.configPath}`);
   logGroupEnd();
 
-  const configFullPath = join(repoPath, inputs.configPath);
+  const configFullPath = resolve(repoPath, inputs.configPath);
+  const configRoot = dirname(configFullPath);
   let config: WardenConfig;
   try {
-    config = loadWardenConfig(dirname(configFullPath));
+    config = loadWardenConfigFile(configFullPath);
   } catch (error) {
-    if (error instanceof ConfigLoadError && error.message.includes('not found')) {
+    if (inputs.configPath === 'warden.toml' && error instanceof ConfigLoadError && error.message.includes('not found')) {
       console.log('::warning::No warden.toml found. Skipping analysis.');
       return null;
     }
@@ -149,7 +150,7 @@ async function initializeWorkflow(
   }
 
   // Resolve skills into triggers and match
-  const resolvedTriggers = resolveSkillConfigs(config);
+  const resolvedTriggers = resolveSkillConfigs(config, undefined, { sourceRoot: configRoot });
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
 
   if (matchedTriggers.length > 0) {

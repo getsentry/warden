@@ -4,9 +4,9 @@
  * Handles schedule and workflow_dispatch events.
  */
 
-import { dirname, join } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
-import { loadWardenConfig, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
+import { loadWardenConfigFile, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
 import type { WardenConfig, ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
@@ -41,12 +41,13 @@ export async function runScheduleWorkflow(
   console.log(`Config path: ${inputs.configPath}`);
   logGroupEnd();
 
-  const configFullPath = join(repoPath, inputs.configPath);
+  const configFullPath = resolve(repoPath, inputs.configPath);
+  const configRoot = dirname(configFullPath);
   let config: WardenConfig;
   try {
-    config = loadWardenConfig(dirname(configFullPath));
+    config = loadWardenConfigFile(configFullPath);
   } catch (error) {
-    if (error instanceof ConfigLoadError && error.message.includes('not found')) {
+    if (inputs.configPath === 'warden.toml' && error instanceof ConfigLoadError && error.message.includes('not found')) {
       console.log('::warning::No warden.toml found. Skipping analysis.');
       setOutput('findings-count', 0);
       setOutput('high-count', 0);
@@ -67,7 +68,7 @@ export async function runScheduleWorkflow(
   }
 
   // Find schedule triggers
-  const scheduleTriggers = resolveSkillConfigs(config).filter((t) => t.type === 'schedule');
+  const scheduleTriggers = resolveSkillConfigs(config, undefined, { sourceRoot: configRoot }).filter((t) => t.type === 'schedule');
   if (scheduleTriggers.length === 0) {
     console.log('No schedule triggers configured');
     setOutput('findings-count', 0);
@@ -144,7 +145,7 @@ export async function runScheduleWorkflow(
       console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
 
       // Run skill
-      const skill = await resolveSkillAsync(resolved.skill, repoPath, {
+      const skill = await resolveSkillAsync(resolved.skill, resolved.sourceRoot ?? repoPath, {
         remote: resolved.remote,
       });
       const claudePath = await findClaudeCodeExecutable();

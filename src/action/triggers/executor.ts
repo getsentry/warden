@@ -130,7 +130,7 @@ export async function executeTrigger(
           name: trigger.name,
           displayName: trigger.skill,
           failOn,
-          resolveSkill: () => resolveSkillAsync(trigger.skill, context.repoPath, {
+          resolveSkill: () => resolveSkillAsync(trigger.skill, trigger.sourceRoot ?? context.repoPath, {
             remote: trigger.remote,
           }),
           context: filterContextByPaths(context, trigger.filters),

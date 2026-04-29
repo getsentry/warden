@@ -1,6 +1,31 @@
-import { describe, it, expect } from 'vitest';
-import { resolveSkillConfigs } from './loader.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { loadWardenConfigFile, resolveSkillConfigs } from './loader.js';
 import { WardenConfigSchema, type SkillConfig, type WardenConfig } from './schema.js';
+
+describe('loadWardenConfigFile', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = join(tmpdir(), `warden-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tempDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('loads an exact config file path', () => {
+    const configPath = join(tempDir, 'org-warden.toml');
+    writeFileSync(configPath, 'version = 1\n\n[[skills]]\nname = "org-skill"\n', 'utf-8');
+
+    const config = loadWardenConfigFile(configPath);
+
+    expect(config.skills[0]?.name).toBe('org-skill');
+  });
+});
 
 describe('resolveSkillConfigs', () => {
   const baseSkill: SkillConfig = {
@@ -268,6 +293,12 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.remote).toBe('org/repo');
     expect(resolved?.filters.paths).toEqual(['src/**']);
     expect(resolved?.filters.ignorePaths).toEqual(['*.test.ts']);
+  });
+
+  it('attaches sourceRoot to resolved triggers', () => {
+    const [resolved] = resolveSkillConfigs(baseConfig, undefined, { sourceRoot: '/org/.github' });
+
+    expect(resolved?.sourceRoot).toBe('/org/.github');
   });
 
   describe('ignorePaths merging', () => {

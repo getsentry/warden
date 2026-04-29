@@ -18,6 +18,7 @@ export interface ActionInputs {
   /** OAuth token for Claude Code (empty if using API key) */
   oauthToken: string;
   githubToken: string;
+  /** Config file path, relative to GITHUB_WORKSPACE unless absolute */
   configPath: string;
   failOn?: SeverityThreshold;
   reportOn?: SeverityThreshold;
@@ -99,12 +100,13 @@ export function parseActionInputs(): ActionInputs {
 
   const requestChanges = parseBooleanInput(getInput('request-changes'));
   const failCheck = parseBooleanInput(getInput('fail-check'));
+  const configPath = getInput('config-path') || 'warden.toml';
 
   return {
     anthropicApiKey,
     oauthToken,
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
-    configPath: getInput('config-path') || 'warden.toml',
+    configPath,
     failOn,
     reportOn,
     maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,

@@ -475,7 +475,7 @@ jobs:
 |-------|---------|-------------|
 | `github-token` | `GITHUB_TOKEN` | GitHub token for posting comments |
 | `anthropic-api-key` | - | Anthropic API key (falls back to `WARDEN_ANTHROPIC_API_KEY`) |
-| `config-path` | `warden.toml` | Path to config file |
+| `config-path` | `warden.toml` | Path to Warden config file. Local skills resolve from the directory containing this file |
 | `fail-on` | - | Minimum severity to fail the check |
 | `report-on` | - | Minimum severity to post comments |
 | `max-findings` | `50` | Maximum findings to report |

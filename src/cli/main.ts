@@ -2,7 +2,7 @@ import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
-import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
+import { loadWardenConfigFile, resolveSkillConfigs } from '../config/loader.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { mergeAuxiliaryUsage } from '../sdk/usage.js';
@@ -475,6 +475,7 @@ function finalizeRunLog(
 interface SkillToRun {
   skill: string;
   remote?: string;
+  sourceRoot?: string;
   filters: { paths?: string[]; ignorePaths?: string[] };
 }
 
@@ -679,8 +680,9 @@ async function runSkills(
   }
 
   // Load config if available
+  const configRoot = configPath ? dirname(configPath) : undefined;
   const config = configPath && existsSync(configPath)
-    ? loadWardenConfig(dirname(configPath))
+    ? loadWardenConfigFile(configPath)
     : null;
 
   // Determine which triggers/skills to run
@@ -688,17 +690,23 @@ async function runSkills(
   if (options.skill) {
     // Explicit skill specified via CLI — check config for remote/filters if available
     const match = config
-      ? resolveSkillConfigs(config, options.model).find((t) => t.skill === options.skill)
+      ? resolveSkillConfigs(config, options.model, { sourceRoot: configRoot })
+        .find((t) => t.skill === options.skill)
       : undefined;
     // Fall back to global defaults when the skill isn't in the config
     const defaultIgnorePaths = config?.defaults?.ignorePaths;
     const fallbackFilters = defaultIgnorePaths?.length
       ? { ignorePaths: defaultIgnorePaths }
       : {};
-    skillsToRun = [{ skill: options.skill, remote: match?.remote, filters: match?.filters ?? fallbackFilters }];
+    skillsToRun = [{
+      skill: options.skill,
+      remote: match?.remote,
+      sourceRoot: match?.sourceRoot ?? configRoot,
+      filters: match?.filters ?? fallbackFilters,
+    }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property and filters
-    const resolvedTriggers = resolveSkillConfigs(config, options.model);
+    const resolvedTriggers = resolveSkillConfigs(config, options.model, { sourceRoot: configRoot });
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
     // Dedupe by skill name but keep first occurrence (with its remote property and filters)
     const seen = new Set<string>();
@@ -708,7 +716,7 @@ async function runSkills(
         seen.add(t.skill);
         return true;
       })
-      .map((t) => ({ skill: t.skill, remote: t.remote, filters: t.filters }));
+      .map((t) => ({ skill: t.skill, remote: t.remote, sourceRoot: t.sourceRoot, filters: t.filters }));
   } else {
     skillsToRun = [];
   }
@@ -742,10 +750,10 @@ async function runSkills(
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
     auxiliaryMaxRetries: config?.defaults?.auxiliaryMaxRetries,
   };
-  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters }) => ({
+  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, sourceRoot, filters }) => ({
     name: skill,
     failOn: options.failOn,
-    resolveSkill: () => resolveSkillAsync(skill, repoPath, {
+    resolveSkill: () => resolveSkillAsync(skill, sourceRoot ?? repoPath, {
       remote,
       offline: options.offline,
     }),
@@ -881,7 +889,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
 
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
-  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
+  const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
 
   // Build context from local git
   reporter.startContext(`Analyzing changes from ${gitRef}...`);
@@ -938,7 +946,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // Load config
-  const config = loadWardenConfig(dirname(configPath));
+  const config = loadWardenConfigFile(configPath);
+  const configRoot = dirname(configPath);
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -984,7 +993,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   emitRunMetric();
 
   // Resolve skills into triggers and match
-  const resolvedTriggers = resolveSkillConfigs(config, options.model);
+  const resolvedTriggers = resolveSkillConfigs(config, options.model, { sourceRoot: configRoot });
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'local'));
 
   // Filter by skill if specified
@@ -1049,7 +1058,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     displayName: trigger.skill,
     failOn: trigger.failOn ?? options.failOn,
     minConfidence: trigger.minConfidence ?? effectiveMinConfidence,
-    resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, {
+    resolveSkill: () => resolveSkillAsync(trigger.skill, trigger.sourceRoot ?? repoPath, {
       remote: trigger.remote,
       offline: options.offline,
     }),
@@ -1130,7 +1139,7 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
-  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
+  const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -1295,7 +1304,7 @@ export async function main(): Promise<void> {
       cleanupRoot = cwd;
     }
     const cfgPath = resolve(cleanupRoot, 'warden.toml');
-    const cfg = existsSync(cfgPath) ? loadWardenConfig(dirname(cfgPath)) : undefined;
+    const cfg = existsSync(cfgPath) ? loadWardenConfigFile(cfgPath) : undefined;
     await cleanupArtifacts({
       dir: join(cleanupRoot, '.warden', 'logs'),
       retentionDays: cfg?.logs?.retentionDays ?? 30,
