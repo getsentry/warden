@@ -12,10 +12,11 @@
  * normalization. Callers should be able to switch runtimes without changing
  * hunk parsing, auxiliary object generation, or report generation.
  */
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { UsageStats } from '../../types/index.js';
 
-export type RuntimeName = 'claude';
+export const RuntimeNameSchema = z.enum(['claude']);
+export type RuntimeName = z.infer<typeof RuntimeNameSchema>;
 
 export type AgentRuntimeMessageSubtype =
   | 'success'

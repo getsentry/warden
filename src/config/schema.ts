@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RuntimeNameSchema, type RuntimeName } from '../sdk/runtimes/types.js';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
 
 // Tool names that can be allowed/denied
@@ -47,8 +48,8 @@ export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 export const TriggerTypeSchema = z.enum(['pull_request', 'local', 'schedule']);
 export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 
-export const RuntimeNameSchema = z.enum(['claude']);
-export type RuntimeName = z.infer<typeof RuntimeNameSchema>;
+export { RuntimeNameSchema };
+export type { RuntimeName };
 
 export const AgentRuntimeConfigSchema = z.object({
   /** Model for repo-aware skill execution. Overrides legacy defaults.model. */
