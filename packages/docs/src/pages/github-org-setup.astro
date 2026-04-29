@@ -74,16 +74,16 @@ jobs:
       WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
       WARDEN_SENTRY_DSN: \${{ secrets.WARDEN_SENTRY_DSN }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.pull_request.head.sha }}
+
       - uses: actions/create-github-app-token@v2
         id: app-token
         with:
           app-id: \${{ secrets.WARDEN_APP_ID }}
           private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
           owner: \${{ github.repository_owner }}
-
-        uses: actions/checkout@v4
-        with:
-          ref: \${{ github.event.pull_request.head.sha }}
 
       - uses: ${WARDEN_ACTION}
         with:
