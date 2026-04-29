@@ -311,20 +311,16 @@ describe('runScheduleWorkflow', () => {
       expect(mockCreateOrUpdateIssue).toHaveBeenCalledTimes(1);
     });
 
-    it('loads config-path without changing local skill resolution root', async () => {
-      await runScheduleWorkflow(
-        mockOctokit,
-        createDefaultInputs({
-          configPath: 'org-root/org-warden.toml',
-        }),
-        PR_ONLY_FIXTURES
-      );
-
-      expect(mockResolveSkillAsync).toHaveBeenCalledWith(
-        'org-skill',
-        PR_ONLY_FIXTURES,
-        { remote: undefined }
-      );
+    it('fails when a non-default config-path is missing', async () => {
+      await expect(
+        runScheduleWorkflow(
+          mockOctokit,
+          createDefaultInputs({
+            configPath: 'org-root/warden.toml',
+          }),
+          NO_CONFIG_FIXTURES
+        )
+      ).rejects.toThrow('Configuration file not found');
     });
 
     it('skips skill run when no files match trigger', async () => {

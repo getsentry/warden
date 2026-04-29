@@ -4,9 +4,9 @@
  * Handles schedule and workflow_dispatch events.
  */
 
-import { resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
-import { loadWardenConfigFile, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
+import { loadWardenConfig, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
 import type { WardenConfig, ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
@@ -41,10 +41,10 @@ export async function runScheduleWorkflow(
   console.log(`Config path: ${inputs.configPath}`);
   logGroupEnd();
 
-  const configFullPath = resolve(repoPath, inputs.configPath);
+  const configFullPath = join(repoPath, inputs.configPath);
   let config: WardenConfig;
   try {
-    config = loadWardenConfigFile(configFullPath);
+    config = loadWardenConfig(dirname(configFullPath));
   } catch (error) {
     if (inputs.configPath === 'warden.toml' && error instanceof ConfigLoadError && error.message.includes('not found')) {
       console.log('::warning::No warden.toml found. Skipping analysis.');

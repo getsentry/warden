@@ -17,10 +17,12 @@ export class ConfigLoadError extends Error {
   }
 }
 
-function loadWardenConfigFromPath(configPath: string): WardenConfig {
+export function loadWardenConfig(repoPath: string): WardenConfig {
   return Sentry.startSpan(
     { op: 'config.load', name: 'load config' },
     () => {
+      const configPath = join(repoPath, 'warden.toml');
+
       if (!existsSync(configPath)) {
         throw new ConfigLoadError(`Configuration file not found: ${configPath}`);
       }
@@ -61,14 +63,6 @@ function loadWardenConfigFromPath(configPath: string): WardenConfig {
       return result.data;
     },
   );
-}
-
-export function loadWardenConfig(repoPath: string): WardenConfig {
-  return loadWardenConfigFromPath(join(repoPath, 'warden.toml'));
-}
-
-export function loadWardenConfigFile(configPath: string): WardenConfig {
-  return loadWardenConfigFromPath(configPath);
 }
 
 /**

@@ -115,21 +115,6 @@ describe('parseActionInputs', () => {
     });
   });
 
-  describe('config-path input handling', () => {
-    it('uses config-path as an exact file path', () => {
-      process.env['INPUT_CONFIG_PATH'] = 'custom/warden.toml';
-
-      const inputs = parseActionInputs();
-
-      expect(inputs.configPath).toBe('custom/warden.toml');
-    });
-
-    it('defaults to warden.toml when no config-path input is set', () => {
-      const inputs = parseActionInputs();
-
-      expect(inputs.configPath).toBe('warden.toml');
-    });
-  });
 });
 
 describe('setupAuthEnv', () => {

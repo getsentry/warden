@@ -425,21 +425,18 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('loads config-path without changing local skill resolution root', async () => {
-      await runPRWorkflow(
-        mockOctokit,
-        createDefaultInputs({
-          configPath: 'org-root/org-warden.toml',
-        }),
-        'pull_request',
-        EVENT_PAYLOAD_PATH,
-        FIXTURES_DIR
-      );
-
-      const [taskOptions] = mockRunSkillTask.mock.calls[0] ?? [];
-      const skill = taskOptions ? await taskOptions.resolveSkill() : null;
-
-      expect(skill?.description).toBe('Repo-level test skill');
+    it('fails when a non-default config-path is missing', async () => {
+      await expect(
+        runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({
+            configPath: 'org-root/warden.toml',
+          }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          NO_CONFIG_FIXTURES_DIR
+        )
+      ).rejects.toThrow('Configuration file not found');
     });
 
     it('exits cleanly for merge_group events when only PR triggers are configured', async () => {

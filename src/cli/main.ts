@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
-import { loadWardenConfigFile, resolveSkillConfigs } from '../config/loader.js';
+import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { mergeAuxiliaryUsage } from '../sdk/usage.js';
@@ -680,7 +680,7 @@ async function runSkills(
 
   // Load config if available
   const config = configPath && existsSync(configPath)
-    ? loadWardenConfigFile(configPath)
+    ? loadWardenConfig(dirname(configPath))
     : null;
 
   // Determine which triggers/skills to run
@@ -885,7 +885,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
 
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
-  const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
+  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
 
   // Build context from local git
   reporter.startContext(`Analyzing changes from ${gitRef}...`);
@@ -942,7 +942,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // Load config
-  const config = loadWardenConfigFile(configPath);
+  const config = loadWardenConfig(dirname(configPath));
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -1134,7 +1134,7 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
-  const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
+  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -1299,7 +1299,7 @@ export async function main(): Promise<void> {
       cleanupRoot = cwd;
     }
     const cfgPath = resolve(cleanupRoot, 'warden.toml');
-    const cfg = existsSync(cfgPath) ? loadWardenConfigFile(cfgPath) : undefined;
+    const cfg = existsSync(cfgPath) ? loadWardenConfig(dirname(cfgPath)) : undefined;
     await cleanupArtifacts({
       dir: join(cleanupRoot, '.warden', 'logs'),
       retentionDays: cfg?.logs?.retentionDays ?? 30,
