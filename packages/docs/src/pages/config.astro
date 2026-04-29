@@ -447,7 +447,7 @@ jobs:
 
   <h3>Global Workflow With Layered Config</h3>
 
-  <p>A global workflow and an org-wide base config solve different problems. Put the workflow file in your org <code>.github</code> repository to run Warden everywhere, then add a second checkout only if you want one shared base <code>warden.toml</code> for the whole org.</p>
+  <p>Put the workflow file in your org <code>.github</code> repository to make Warden run everywhere with one mandatory workflow definition. Add the second checkout when you also want one shared base <code>warden.toml</code> so every repo inherits the same baseline skills and defaults.</p>
 
   <Terminal showCopy={true}>
     <Code
