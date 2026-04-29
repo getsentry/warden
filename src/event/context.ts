@@ -70,7 +70,7 @@ export async function buildEventContext(
 
   let pullRequest: PullRequestContext | undefined;
 
-  if ((eventName === 'pull_request' || eventName === 'pull_request_target') && payload.pull_request) {
+  if (eventName === 'pull_request' && payload.pull_request) {
     const pr = payload.pull_request;
 
     // Fetch files changed in the PR

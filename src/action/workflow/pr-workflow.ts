@@ -141,7 +141,7 @@ async function initializeWorkflow(
   try {
     config = loadWardenConfig(dirname(configFullPath));
   } catch (error) {
-    if (inputs.configPath === 'warden.toml' && error instanceof ConfigLoadError && error.message.includes('not found')) {
+    if (error instanceof ConfigLoadError && error.message.includes('not found')) {
       console.log('::warning::No warden.toml found. Skipping analysis.');
       return null;
     }

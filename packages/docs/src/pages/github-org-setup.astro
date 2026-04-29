@@ -8,7 +8,7 @@ import { WARDEN_ACTION } from '../utils/version.js';
 <Base title="GitHub Org Setup" description="Org-wide GitHub setup for Warden">
   <h1>GitHub Organization Setup</h1>
 
-  <p>Use this when you want one org-level setup that covers many repositories. The pattern is: set credentials once at the organization level, then load a shared Warden config from your org <code>.github</code> repository.</p>
+  <p>Use this when you want one org-level setup that covers many repositories. The pattern is: set credentials once at the organization level, then run Warden from your shared <code>.github</code> workflow conventions.</p>
 
   <h2>1. Set Organization Secrets</h2>
 
@@ -52,26 +52,9 @@ import { WARDEN_ACTION } from '../utils/version.js';
     <dd>Full PEM private key contents.</dd>
   </dl>
 
-  <h2>3. Define the Shared Org Config</h2>
+  <h2>3. Use the Org <code>.github</code> Workflow Pattern</h2>
 
-  <p>Keep the required workflow, shared config, and any shared skills together in your org <code>.github</code> repository.</p>
-
-  <Terminal showCopy={true}>
-    <Code
-      code={`.github/
-|-- .github/workflows/warden.yml
-|-- warden.toml
-+-- .agents/skills/
-    +-- security-review/
-        |-- SKILL.md
-        |-- references/
-        +-- scripts/`}
-      lang="text"
-      theme="vitesse-black"
-    />
-  </Terminal>
-
-  <p>The workflow checks out both the target repository and the org <code>.github</code> repository, then points Warden at the shared config file.</p>
+  <p>Keep a canonical workflow in your org <code>.github</code> repository and have repos consume that convention.</p>
 
   <Terminal showCopy={true}>
     <Code
@@ -79,7 +62,7 @@ import { WARDEN_ACTION } from '../utils/version.js';
 
 on:
   pull_request:
-  merge_group:
+    types: [opened, synchronize, reopened]
 
 jobs:
   warden:
@@ -98,23 +81,13 @@ jobs:
           private-key: \${{ secrets.WARDEN_PRIVATE_KEY }}
           owner: \${{ github.repository_owner }}
 
-      - name: Checkout target repository
         uses: actions/checkout@v4
         with:
-          ref: \${{ github.event.pull_request.head.sha || github.sha }}
-          token: \${{ steps.app-token.outputs.token }}
-
-      - name: Checkout org GitHub repo
-        uses: actions/checkout@v4
-        with:
-          repository: \${{ github.repository_owner }}/.github
-          path: .warden-org
-          token: \${{ steps.app-token.outputs.token }}
+          ref: \${{ github.event.pull_request.head.sha }}
 
       - uses: ${WARDEN_ACTION}
         with:
-          github-token: \${{ steps.app-token.outputs.token }}
-          config-path: .warden-org/warden.toml`}
+          github-token: \${{ steps.app-token.outputs.token }}`}
       lang="yaml"
       theme="vitesse-black"
     />
@@ -130,15 +103,14 @@ jobs:
     <li>Require workflows to pass: select the workflow from step 3.</li>
   </ul>
 
-  <p>This triggers Warden on every targeted repo without maintaining a workflow copy or Warden config in each one.</p>
+  <p>This triggers Warden on every targeted repo without maintaining a workflow copy in each one.</p>
 
 
-  <p>Not every repository needs local Warden files on day one.</p>
+  <p>Not every repository needs to opt in on day one.</p>
   <ul>
-    <li>The org run uses <code>.warden-org/warden.toml</code> from the shared <code>.github</code> repository.</li>
-    <li><code>config-path</code> only changes which config file Warden loads. Repo-local skill discovery still uses the analyzed repository root.</li>
-    <li>If the shared config references shared local skills, use explicit workspace-relative paths such as <code>.warden-org/.agents/skills/security-review</code>, or use remote skills.</li>
-    <li>If a repository wants its own Warden run in addition, it can add its own repo-local workflow.</li>
+    <li>If <code>warden.toml</code> is missing, Warden now logs a warning and skips analysis.</li>
+    <li>This is intentional for org-wide rollout and avoids failing unrelated repositories.</li>
+    <li>Once a repo adds <code>warden.toml</code>, it is analyzed normally.</li>
   </ul>
 
   <h2>5. Failure Behavior</h2>
@@ -146,7 +118,7 @@ jobs:
   <p>Org-wide workflows still fail for real errors:</p>
   <ul>
     <li>Missing authentication or GitHub token.</li>
-    <li>Missing or invalid org <code>warden.toml</code> (parse/validation errors).</li>
+    <li>Invalid <code>warden.toml</code> (parse/validation errors).</li>
     <li>Action runtime failures.</li>
   </ul>
 </Base>

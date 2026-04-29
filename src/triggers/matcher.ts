@@ -181,7 +181,7 @@ export function matchTrigger(
     if (environment === 'local') {
       // Local mode runs all skills — skip event/action checks, fall through to path filters
     } else {
-      if (context.eventType !== 'pull_request' && context.eventType !== 'pull_request_target') {
+      if (context.eventType !== 'pull_request') {
         return false;
       }
       if (!trigger.actions?.includes(context.action)) {

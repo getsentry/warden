@@ -311,18 +311,6 @@ describe('runScheduleWorkflow', () => {
       expect(mockCreateOrUpdateIssue).toHaveBeenCalledTimes(1);
     });
 
-    it('fails when a non-default config-path is missing', async () => {
-      await expect(
-        runScheduleWorkflow(
-          mockOctokit,
-          createDefaultInputs({
-            configPath: 'org-root/warden.toml',
-          }),
-          NO_CONFIG_FIXTURES
-        )
-      ).rejects.toThrow('Configuration file not found');
-    });
-
     it('skips skill run when no files match trigger', async () => {
       mockBuildContext.mockResolvedValue(
         createScheduleContext({

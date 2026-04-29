@@ -31,7 +31,6 @@ vi.mock('../../output/renderer.js', () => ({
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { createSkillCheck, updateSkillCheck, failSkillCheck } from '../../output/github-checks.js';
 import { renderSkillReport } from '../../output/renderer.js';
-import { resolveSkillAsync } from '../../skills/loader.js';
 
 describe('executeTrigger', () => {
   // Suppress console output during tests
@@ -137,23 +136,6 @@ describe('executeTrigger', () => {
     expect(result.triggerName).toBe('test-trigger');
     expect(result.report).toBe(mockReport);
     expect(result.error).toBeUndefined();
-  });
-
-  it('resolves local skills from the repository root', async () => {
-    const mockReport = createReport();
-
-    vi.mocked(runSkillTask).mockImplementation(async (taskOptions) => {
-      await taskOptions.resolveSkill();
-      return { name: 'test-trigger', report: mockReport };
-    });
-    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
-    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
-
-    await executeTrigger(mockTrigger, mockDeps);
-
-    expect(resolveSkillAsync).toHaveBeenCalledWith('test-skill', '/test/path', {
-      remote: undefined,
-    });
   });
 
   it('handles skill resolution failure', async () => {

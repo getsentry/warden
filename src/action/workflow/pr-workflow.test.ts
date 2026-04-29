@@ -15,7 +15,6 @@ const FIXTURES_DIR = join(__dirname, '__fixtures__');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
-const MERGE_GROUP_EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/merge_group_checks_requested.json');
 
 // -----------------------------------------------------------------------------
 // Mocks - ONLY external boundaries: LLM calls
@@ -423,33 +422,6 @@ describe('runPRWorkflow', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(
         '::warning::No warden.toml found. Skipping analysis.'
       );
-    });
-
-    it('fails when a non-default config-path is missing', async () => {
-      await expect(
-        runPRWorkflow(
-          mockOctokit,
-          createDefaultInputs({
-            configPath: 'org-root/warden.toml',
-          }),
-          'pull_request',
-          EVENT_PAYLOAD_PATH,
-          NO_CONFIG_FIXTURES_DIR
-        )
-      ).rejects.toThrow('Configuration file not found');
-    });
-
-    it('exits cleanly for merge_group events when only PR triggers are configured', async () => {
-      await runPRWorkflow(
-        mockOctokit,
-        createDefaultInputs(),
-        'merge_group',
-        MERGE_GROUP_EVENT_PAYLOAD_PATH,
-        FIXTURES_DIR
-      );
-
-      expect(mockSetFailed).not.toHaveBeenCalled();
-      expect(mockRunSkillTask).not.toHaveBeenCalled();
     });
 
     it('fails when event payload is unreadable', async () => {
