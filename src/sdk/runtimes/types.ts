@@ -101,10 +101,8 @@ export interface FastModelRuntime {
   generateObjectWithTools<T>(request: FastModelGenerateObjectWithToolsRequest<T>): Promise<FastModelResult<T>>;
 }
 
-export interface RuntimeProvider {
+export interface Runtime {
   readonly name: RuntimeName;
-  readonly agent?: AgentRuntime;
-  readonly fastModel?: FastModelRuntime;
+  readonly agent: AgentRuntime;
+  readonly fastModel: FastModelRuntime;
 }
-
-export type Runtime = RuntimeProvider;

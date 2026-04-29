@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { parsePatch } from '../diff/parser.js';
 import { applyDiffToContent } from '../diff/apply.js';
 import type { Finding, UsageStats } from '../types/index.js';
-import { getFastModelRuntime } from './runtimes/index.js';
+import { getRuntime } from './runtimes/index.js';
 import type { RuntimeName } from './runtimes/index.js';
 import { aggregateUsage } from './usage.js';
 
@@ -157,7 +157,7 @@ async function runSemanticGate(
     finding.suggestedFix?.diff ?? '',
   ].join('\n');
 
-  const result = await getFastModelRuntime(runtime).generateObject({
+  const result = await getRuntime(runtime).fastModel.generateObject({
     apiKey,
     prompt,
     schema: SemanticFixVerdictSchema,

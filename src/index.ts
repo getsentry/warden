@@ -102,9 +102,6 @@ export {
   runSkill,
   SkillRunnerError,
   getRuntime,
-  getRuntimeProvider,
-  getAgentRuntime,
-  getFastModelRuntime,
   claudeRuntime,
   claudeAgentRuntime,
   claudeFastModelRuntime,
@@ -113,7 +110,6 @@ export {
 export type {
   SkillRunnerOptions,
   SkillRunnerCallbacks,
-  RuntimeProvider,
   Runtime,
   AgentRuntime,
   AgentRuntimeExecutionResult,

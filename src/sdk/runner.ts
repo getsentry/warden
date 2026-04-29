@@ -58,13 +58,10 @@ export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 export {
   claudeFastModelRuntime,
   claudeRuntime,
-  getAgentRuntime,
-  getFastModelRuntime,
   getRuntime,
-  getRuntimeProvider,
   claudeAgentRuntime,
 } from './runtimes/index.js';
-export type { Runtime, RuntimeName, RuntimeProvider } from './runtimes/index.js';
+export type { Runtime, RuntimeName } from './runtimes/index.js';
 export type {
   AgentRuntime,
   AgentRuntimeExecutionResult,

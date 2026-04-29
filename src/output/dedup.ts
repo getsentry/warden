@@ -3,7 +3,7 @@ import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
 import { findingLine } from '../types/index.js';
-import { getFastModelRuntime } from '../sdk/runtimes/index.js';
+import { getRuntime } from '../sdk/runtimes/index.js';
 import type { RuntimeName } from '../sdk/runtimes/index.js';
 import { applyMergeGroups } from '../sdk/extract.js';
 
@@ -471,7 +471,7 @@ Return ONLY the JSON array in this format:
 where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
 Return [] if none are duplicates.`;
 
-  const result = await getFastModelRuntime(options.runtime).generateObject({
+  const result = await getRuntime(options.runtime).fastModel.generateObject({
     apiKey,
     prompt,
     schema: DuplicateMatchesSchema,
@@ -780,7 +780,7 @@ Singletons (findings with no duplicates) should not appear in any group.
 
 Return ONLY the JSON array. Return [] if no findings share a root cause.`;
 
-  const result = await getFastModelRuntime(options.runtime).generateObject({
+  const result = await getRuntime(options.runtime).fastModel.generateObject({
     apiKey: options.apiKey,
     prompt,
     schema: ConsolidationGroupsSchema,

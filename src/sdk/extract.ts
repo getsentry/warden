@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { customAlphabet } from 'nanoid';
 import { FindingSchema, compareFindingPriority } from '../types/index.js';
 import type { Finding, Location, UsageStats } from '../types/index.js';
-import { getFastModelRuntime } from './runtimes/index.js';
+import { getRuntime } from './runtimes/index.js';
 import type { RuntimeName } from './runtimes/index.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
@@ -214,7 +214,7 @@ If no findings exist, return: {"findings": []}
 Model output:
 ${truncatedText}`;
 
-  const result = await getFastModelRuntime(runtime).generateObject({
+  const result = await getRuntime(runtime).fastModel.generateObject({
     apiKey,
     prompt: userContent,
     schema: z.object({ findings: z.array(z.unknown()) }),
@@ -488,7 +488,7 @@ ${findingDescriptions.join('\n')}
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
 Singletons should not appear. Return [] if no findings describe the same issue.`;
 
-  const result = await getFastModelRuntime(options?.runtime).generateObject({
+  const result = await getRuntime(options?.runtime).fastModel.generateObject({
     apiKey,
     prompt,
     schema: MergeGroupsSchema,

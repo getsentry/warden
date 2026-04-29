@@ -29,7 +29,7 @@ import type {
   FastModelResult,
   FastModelRuntime,
   FastModelTool,
-  RuntimeProvider,
+  Runtime,
 } from './types.js';
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
@@ -357,7 +357,7 @@ export const claudeFastModelRuntime: FastModelRuntime = {
   },
 };
 
-export const claudeRuntime: RuntimeProvider = {
+export const claudeRuntime: Runtime = {
   name: 'claude',
   agent: claudeAgentRuntime,
   fastModel: claudeFastModelRuntime,
