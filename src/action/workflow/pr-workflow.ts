@@ -61,7 +61,6 @@ import {
 interface InitResult {
   context: EventContext;
   config: WardenConfig;
-  skillRootsByName?: Record<string, string | undefined>;
   matchedTriggers: ResolvedTrigger[];
 }
 
@@ -182,7 +181,7 @@ async function initializeWorkflow(
     console.log('No triggers matched for this event');
   }
 
-  return { context, config, skillRootsByName, matchedTriggers };
+  return { context, config, matchedTriggers };
 }
 
 /**

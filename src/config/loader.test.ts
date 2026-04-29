@@ -1,9 +1,13 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   mergeWardenConfigs,
   ConfigLoadError,
   resolveSkillConfigs,
   buildSkillRootsByName,
+  loadLayeredWardenConfig,
 } from './loader.js';
 import { WardenConfigSchema, type SkillConfig, type WardenConfig } from './schema.js';
 
@@ -533,6 +537,21 @@ describe('mergeWardenConfigs', () => {
 });
 
 describe('buildSkillRootsByName', () => {
+  it('does not require baseSkillRoot when the base config only uses remote skills', () => {
+    const layered = {
+      config: {
+        version: 1 as const,
+        skills: [{ name: 'org-skill', remote: 'owner/repo' }],
+      },
+      baseConfig: {
+        version: 1 as const,
+        skills: [{ name: 'org-skill', remote: 'owner/repo' }],
+      },
+    };
+
+    expect(buildSkillRootsByName('/repo', layered)).toBeUndefined();
+  });
+
   it('requires baseSkillRoot when base config defines local skills', () => {
     const layered = {
       config: {
@@ -549,6 +568,27 @@ describe('buildSkillRootsByName', () => {
     expect(() => buildSkillRootsByName('/repo', layered)).toThrow(
       'base-skill-root is required when the base config defines local skills'
     );
+  });
+});
+
+describe('loadLayeredWardenConfig', () => {
+  it('rejects using the same file for the base and repo config', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-config-'));
+
+    try {
+      writeFileSync(join(tempDir, 'warden.toml'), 'version = 1\n');
+
+      expect(() => loadLayeredWardenConfig(tempDir, {
+        baseConfigPath: './warden.toml',
+        configPath: 'warden.toml',
+      })).toThrow(ConfigLoadError);
+      expect(() => loadLayeredWardenConfig(tempDir, {
+        baseConfigPath: './warden.toml',
+        configPath: 'warden.toml',
+      })).toThrow('base-config-path and config-path must point to different files');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

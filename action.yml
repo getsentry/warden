@@ -15,10 +15,10 @@ inputs:
     required: false
     default: ${{ github.token }}
   base-config-path:
-    description: 'Path to a base warden.toml config file to load before the repo config (relative to repo root)'
+    description: 'Path to the org-wide base warden.toml file to load before the repo config (relative to repo root)'
     required: false
   base-skill-root:
-    description: 'Path to a repo root containing local shared skills for the base config (relative to repo root)'
+    description: 'Path to the checked-out org repo root for local shared skills used by the base config (relative to repo root)'
     required: false
   config-path:
     description: 'Path to the repo-local warden.toml config file that overlays the base config (relative to repo root)'

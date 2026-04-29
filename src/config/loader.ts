@@ -218,8 +218,7 @@ export function loadLayeredWardenConfig(
   }
 
   if (normalize(baseConfigPath) === normalize(repoConfigPath)) {
-    const repoConfig = loadWardenConfigFile(repoConfigPath);
-    return { config: repoConfig, repoConfig };
+    throw new ConfigLoadError('base-config-path and config-path must point to different files');
   }
 
   const baseConfig = loadWardenConfigFile(baseConfigPath);

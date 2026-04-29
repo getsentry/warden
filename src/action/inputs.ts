@@ -129,6 +129,9 @@ export function validateInputs(inputs: ActionInputs): void {
   if (!inputs.githubToken) {
     throw new Error('GitHub token is required');
   }
+  if (inputs.baseSkillRoot && !inputs.baseConfigPath) {
+    throw new Error('base-skill-root requires base-config-path');
+  }
 }
 
 /**
