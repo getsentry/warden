@@ -786,6 +786,38 @@ describe('runPRWorkflow', () => {
   });
 
   describe('no triggers matched cleanup', () => {
+    it('requires Claude auth before cleanup fix evaluation', async () => {
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Unused import',
+          description: 'Remove unused import',
+          contentHash: 'hash1',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        },
+      ]);
+
+      await expect(
+        runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ anthropicApiKey: '', oauthToken: '' }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          NO_MATCH_FIXTURES_DIR
+        )
+      ).rejects.toThrow('setFailed');
+
+      expect(mockSetFailed).toHaveBeenCalledWith(
+        expect.stringContaining('Authentication not found')
+      );
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+    });
+
     it('resolves stale comments when no triggers match but Warden comments exist', async () => {
       // PR files are src/test.ts, but no-match fixture has paths: ["docs/**"]
       // so no triggers will match

@@ -669,7 +669,7 @@ async function finalizeWorkflow(
 async function cleanupOrphanedComments(
   octokit: Octokit,
   context: EventContext,
-  anthropicApiKey: string,
+  inputs: ActionInputs,
   fastModelOptions: FastModelWorkflowOptions
 ): Promise<void> {
   if (!context.pullRequest) {
@@ -694,11 +694,15 @@ async function cleanupOrphanedComments(
     return;
   }
 
+  if ((fastModelOptions.runtime ?? 'claude') === 'claude') {
+    ensureClaudeAuth(inputs);
+  }
+
   logAction(`No triggers matched, but found ${wardenComments.length} existing Warden comments. Running cleanup.`);
 
   const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck } =
     await evaluateFixesAndResolveStale(
-      octokit, context, existingComments, [], new Set(), true, anthropicApiKey, fastModelOptions
+      octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, fastModelOptions
     );
   const activeSpan = Sentry.getActiveSpan();
   activeSpan?.setAttribute('warden.feedback.auto_resolve.fix_eval_count', autoResolvedByFixEvaluation);
@@ -793,7 +797,7 @@ export async function runPRWorkflow(
         await cleanupOrphanedComments(
           octokit,
           context,
-          inputs.anthropicApiKey,
+          inputs,
           fastModelOptions
         );
         setOutput('findings-count', 0);
