@@ -4,7 +4,9 @@ import {
   processTaskResults,
   resolveCliDefaultFastModel,
   resolveCliDefaultModel,
+  resolveCliLogModel,
 } from './main.js';
+import { MODEL_DEFAULT_SENTINEL } from './output/index.js';
 import type { SkillReport } from '../types/index.js';
 
 function makeReport(overrides: Partial<SkillReport> = {}): SkillReport {
@@ -98,6 +100,33 @@ describe('resolveCliDefaultModel', () => {
     });
 
     expect(model).toBeUndefined();
+  });
+});
+
+describe('resolveCliLogModel', () => {
+  it('normalizes empty config defaults before recording the run model', () => {
+    const model = resolveCliLogModel(
+      {
+        defaults: {
+          agent: { model: '' },
+          model: 'legacy-model',
+        },
+      },
+      'cli-model'
+    );
+
+    expect(model).toBe('legacy-model');
+  });
+
+  it('uses the log sentinel when no explicit model is configured', () => {
+    const model = resolveCliLogModel({
+      defaults: {
+        agent: { model: '' },
+        model: '',
+      },
+    });
+
+    expect(model).toBe(MODEL_DEFAULT_SENTINEL);
   });
 });
 

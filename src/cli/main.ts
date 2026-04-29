@@ -531,6 +531,13 @@ export function resolveCliDefaultFastModel(
   return emptyToUndefined(config?.defaults?.fastModel?.model);
 }
 
+export function resolveCliLogModel(
+  config: Pick<WardenConfig, 'defaults'> | null | undefined,
+  cliModel?: string
+): string {
+  return resolveCliDefaultModel(config, cliModel) ?? MODEL_DEFAULT_SENTINEL;
+}
+
 /**
  * Process skill task results into reports and check for failures.
  * Exported for testing; callers inside main.ts use it directly.
@@ -1137,7 +1144,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Skill records are appended on each completion; the trailing summary
   // is appended in `outputResultsAndHandleFixes`.
   // Run-level model is the default (ignoring per-trigger overrides); per-skill models are on each report.
-  const defaultModel = config.defaults?.agent?.model ?? config.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'] ?? MODEL_DEFAULT_SENTINEL;
+  const defaultModel = resolveCliLogModel(config, options.model);
   const runId = generateRunId();
   const timestamp = new Date();
   const traceId = getTraceId();
