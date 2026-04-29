@@ -112,4 +112,9 @@ describe('extractJson', () => {
     const text = '{"a": 1} extra text {"b": 2}';
     expect(extractJson(text)).toBe('{"a": 1}');
   });
+
+  it('skips orphaned prefill before prose and valid JSON', () => {
+    const text = '{Here is the JSON:\n{"findings": []}\nDone.';
+    expect(extractJson(text)).toBe('{"findings": []}');
+  });
 });

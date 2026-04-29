@@ -73,40 +73,34 @@ export function extractJson(text: string): string | null {
     // Fall through to extraction
   }
 
-  // Find first { or [
-  const objStart = stripped.indexOf('{');
-  const arrStart = stripped.indexOf('[');
-  let start: number;
-  if (objStart === -1) {
-    start = arrStart;
-  } else if (arrStart === -1) {
-    start = objStart;
-  } else {
-    start = Math.min(objStart, arrStart);
-  }
-
-  if (start === -1) {
-    return null;
-  }
-
-  // Find each potential closer and try parsing - first valid JSON wins
-  const closer = stripped[start] === '{' ? '}' : ']';
-  let searchFrom = start;
-
-  while (true) {
-    const end = stripped.indexOf(closer, searchFrom + 1);
-    if (end === -1) {
-      return null;
+  // Try every object/array opener. Prefilled JSON calls can produce text like
+  // `{Here is the JSON:\n{"findings":[]}`, where the first opener is an orphan.
+  for (let start = 0; start < stripped.length; start++) {
+    const opener = stripped[start];
+    if (opener !== '{' && opener !== '[') {
+      continue;
     }
 
-    const candidate = stripped.slice(start, end + 1);
-    try {
-      JSON.parse(candidate);
-      return candidate;
-    } catch {
-      searchFrom = end;
+    const closer = opener === '{' ? '}' : ']';
+    let searchFrom = start;
+
+    while (true) {
+      const end = stripped.indexOf(closer, searchFrom + 1);
+      if (end === -1) {
+        break;
+      }
+
+      const candidate = stripped.slice(start, end + 1);
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        searchFrom = end;
+      }
     }
   }
+
+  return null;
 }
 
 /**
