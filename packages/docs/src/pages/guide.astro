@@ -26,7 +26,7 @@ const tocItems = [
 
       <p>Warden watches over your code by running <strong>skills</strong> against your changes. Skills are prompts that define what to look for: security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.</p>
 
-      <p class="org-callout"><strong>Rolling out Warden across your entire GitHub organization?</strong> Start with the <a href={`${base}/config#workflow`}>workflow configuration</a> for the global <code>.github</code> workflow pattern, optional shared <code>warden.toml</code> checkout, and organization-level secret setup.</p>
+      <p class="org-callout"><strong>Rolling out Warden across your entire GitHub organization?</strong> Start with the <a href={`${base}/config#workflow`}>workflow configuration</a> for the global <code>.github</code> workflow pattern, optional org-wide base <code>warden.toml</code>, and organization-level secret setup.</p>
     </Fragment>
     <DocsToc slot="toc" items={tocItems} />
 
@@ -287,7 +287,7 @@ Focus on issues in the changed code. For each issue found, report:
 
     <p>Add these as organization or repository secrets so all repos can use them. Organization-level secrets are recommended so you configure once.</p>
 
-    <p>For org-wide rollout guidance, including the global <code>.github</code> workflow pattern and optional shared <code>warden.toml</code> checkout, see the <a href={`${base}/config#workflow`}>workflow configuration</a>.</p>
+    <p>For org-wide rollout guidance, including the global <code>.github</code> workflow pattern and optional org-wide base <code>warden.toml</code>, see the <a href={`${base}/config#workflow`}>workflow configuration</a>.</p>
 
     <ol>
       <li>Go to <strong>Organization Settings → Secrets and variables → Actions</strong></li>

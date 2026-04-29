@@ -445,9 +445,9 @@ jobs:
     />
   </Terminal>
 
-  <h3>Global Workflow With Shared Config</h3>
+  <h3>Global Workflow With Layered Config</h3>
 
-  <p>A global workflow and a shared Warden config solve different problems. Put the workflow file in your org <code>.github</code> repository to run Warden everywhere, then add a second checkout if you also want one shared <code>warden.toml</code>.</p>
+  <p>A global workflow and an org-wide base config solve different problems. Put the workflow file in your org <code>.github</code> repository to run Warden everywhere, then add a second checkout only if you want one shared base <code>warden.toml</code> for the whole org.</p>
 
   <Terminal showCopy={true}>
     <Code
@@ -476,15 +476,20 @@ jobs:
       - uses: ${WARDEN_ACTION}
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}
-          config-path: .warden-org/warden.toml`}
+          base-config-path: .warden-org/warden.toml
+          base-skill-root: .warden-org`}
       lang="yaml"
       theme="vitesse-black"
     />
   </Terminal>
 
-  <p>The first checkout is the repository being reviewed. The second checkout only provides the shared <code>warden.toml</code>.</p>
+  <p>The first checkout is the repository being reviewed. The second checkout only provides the org-wide base <code>warden.toml</code>.</p>
 
-  <p><code>config-path</code> only changes which <code>warden.toml</code> file is loaded. Repo-local skills and path matching still resolve from the analyzed repository root.</p>
+  <p>If the target repo also has a root <code>warden.toml</code>, Warden loads that too and overlays it on top of the base config. Use one global workflow, not separate repo-local Warden workflows.</p>
+
+  <p><code>base-config-path</code> selects the shared base file. <code>base-skill-root</code> points at the checked-out org repo when that base config uses local shared skills. <code>config-path</code> selects the repo-local overlay file and still defaults to <code>warden.toml</code>. Repo-local skills and path matching continue to resolve from the analyzed repository root.</p>
+
+  <p>If the base config only uses remote skills, you can omit <code>base-skill-root</code>. If it defines local skill names, <code>base-skill-root</code> is required.</p>
 
   <h3>Action Inputs</h3>
 
@@ -493,8 +498,12 @@ jobs:
     <dd>GitHub token for posting comments. Default: <code>GITHUB_TOKEN</code></dd>
     <dt>anthropic-api-key</dt>
     <dd>Anthropic API key (falls back to <code>WARDEN_ANTHROPIC_API_KEY</code>)</dd>
+    <dt>base-config-path</dt>
+    <dd>Optional path to a base <code>warden.toml</code> that is loaded before the repo config.</dd>
+    <dt>base-skill-root</dt>
+    <dd>Optional repo root containing local shared skills used by the base config.</dd>
     <dt>config-path</dt>
-    <dd>Path to the <code>warden.toml</code> file to load. Default: <code>warden.toml</code></dd>
+    <dd>Path to the repo-local <code>warden.toml</code> overlay file. Default: <code>warden.toml</code></dd>
     <dt>fail-on</dt>
     <dd>Minimum severity to fail the check</dd>
     <dt>report-on</dt>

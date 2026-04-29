@@ -114,6 +114,25 @@ describe('parseActionInputs', () => {
       expect(inputs.parallel).toBe(4);
     });
   });
+
+  describe('config path handling', () => {
+    it('parses base-config-path when provided', () => {
+      process.env['INPUT_BASE_CONFIG_PATH'] = '.warden-org/warden.toml';
+      const inputs = parseActionInputs();
+      expect(inputs.baseConfigPath).toBe('.warden-org/warden.toml');
+    });
+
+    it('parses base-skill-root when provided', () => {
+      process.env['INPUT_BASE_SKILL_ROOT'] = '.warden-org';
+      const inputs = parseActionInputs();
+      expect(inputs.baseSkillRoot).toBe('.warden-org');
+    });
+
+    it('leaves baseConfigPath undefined when not set', () => {
+      const inputs = parseActionInputs();
+      expect(inputs.baseConfigPath).toBeUndefined();
+    });
+  });
 });
 
 describe('setupAuthEnv', () => {

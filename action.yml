@@ -14,8 +14,14 @@ inputs:
     description: 'GitHub token for API access (defaults to GITHUB_TOKEN)'
     required: false
     default: ${{ github.token }}
+  base-config-path:
+    description: 'Path to a base warden.toml config file to load before the repo config (relative to repo root)'
+    required: false
+  base-skill-root:
+    description: 'Path to a repo root containing local shared skills for the base config (relative to repo root)'
+    required: false
   config-path:
-    description: 'Path to warden.toml config file (relative to repo root)'
+    description: 'Path to the repo-local warden.toml config file that overlays the base config (relative to repo root)'
     required: false
     default: 'warden.toml'
   fail-on:
@@ -86,6 +92,8 @@ runs:
       env:
         INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_BASE_CONFIG_PATH: ${{ inputs.base-config-path }}
+        INPUT_BASE_SKILL_ROOT: ${{ inputs.base-skill-root }}
         INPUT_CONFIG_PATH: ${{ inputs.config-path }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_REPORT_ON: ${{ inputs.report-on }}

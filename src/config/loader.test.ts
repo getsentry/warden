@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSkillConfigs } from './loader.js';
+import {
+  mergeWardenConfigs,
+  ConfigLoadError,
+  resolveSkillConfigs,
+  buildSkillRootsByName,
+} from './loader.js';
 import { WardenConfigSchema, type SkillConfig, type WardenConfig } from './schema.js';
 
 describe('resolveSkillConfigs', () => {
@@ -446,6 +451,104 @@ describe('resolveSkillConfigs', () => {
       const [resolved] = resolveSkillConfigs(baseConfig);
       expect(resolved?.minConfidence).toBeUndefined();
     });
+  });
+});
+
+describe('mergeWardenConfigs', () => {
+  it('merges org defaults with repo overrides and appends skills', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        failOn: 'high',
+        ignorePaths: ['dist/**'],
+        chunking: {
+          filePatterns: [{ pattern: '**/*.lock', mode: 'skip' }],
+          coalesce: { enabled: true, maxGapLines: 20, maxChunkSize: 4000 },
+          maxContextFiles: 25,
+        },
+      },
+      skills: [{
+        name: 'org-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        reportOn: 'medium',
+        ignorePaths: ['coverage/**'],
+        chunking: {
+          filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
+          coalesce: { maxGapLines: 5, maxChunkSize: 2000, enabled: true },
+          maxContextFiles: 10,
+        },
+      },
+      skills: [{
+        name: 'repo-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const merged = mergeWardenConfigs(baseConfig, repoConfig);
+
+    expect(merged.defaults).toEqual({
+      failOn: 'high',
+      reportOn: 'medium',
+      ignorePaths: ['dist/**', 'coverage/**'],
+      chunking: {
+        filePatterns: [
+          { pattern: '**/*.lock', mode: 'skip' },
+          { pattern: '**/*.snap', mode: 'skip' },
+        ],
+        coalesce: { enabled: true, maxGapLines: 5, maxChunkSize: 2000 },
+        maxContextFiles: 10,
+      },
+    });
+    expect(merged.skills.map((skill) => skill.name)).toEqual(['org-skill', 'repo-skill']);
+  });
+
+  it('rejects duplicate skill names across layers', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'shared-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'shared-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    expect(() => mergeWardenConfigs(baseConfig, repoConfig)).toThrow(ConfigLoadError);
+    expect(() => mergeWardenConfigs(baseConfig, repoConfig)).toThrow(
+      'Duplicate skill names: shared-skill'
+    );
+  });
+});
+
+describe('buildSkillRootsByName', () => {
+  it('requires baseSkillRoot when base config defines local skills', () => {
+    const layered = {
+      config: {
+        version: 1 as const,
+        skills: [{ name: 'org-skill' }],
+      },
+      baseConfig: {
+        version: 1 as const,
+        skills: [{ name: 'org-skill' }],
+      },
+    };
+
+    expect(() => buildSkillRootsByName('/repo', layered)).toThrow(ConfigLoadError);
+    expect(() => buildSkillRootsByName('/repo', layered)).toThrow(
+      'base-skill-root is required when the base config defines local skills'
+    );
   });
 });
 

@@ -12,6 +12,7 @@ import type { ExistingComment } from '../../output/dedup.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const FIXTURES_DIR = join(__dirname, '__fixtures__');
+const BASE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'base-only');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
@@ -421,6 +422,72 @@ describe('runPRWorkflow', () => {
       // Should log a warning
       expect(consoleLogSpy).toHaveBeenCalledWith(
         '::warning::No warden.toml found. Skipping analysis.'
+      );
+    });
+
+    it('loads the base config when repo warden.toml is missing', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'org-skill', report: createSkillReport({ skill: 'org-skill' }) });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        BASE_ONLY_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
+      const [taskOptions] = mockRunSkillTask.mock.calls[0]!;
+      expect(taskOptions.displayName).toBe('org-skill');
+    });
+
+    it('merges the base config with the repo config when both exist', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).toHaveBeenCalledTimes(2);
+      expect(mockRunSkillTask.mock.calls.map(([taskOptions]) => taskOptions.displayName)).toEqual([
+        'org-skill',
+        'test-skill',
+      ]);
+    });
+
+    it('fails when an explicit base config is missing', async () => {
+      await expect(
+        runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ baseConfigPath: '.warden-org/missing.toml' }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        )
+      ).rejects.toThrow('Configuration file not found');
+    });
+
+    it('fails when the base config defines local skills without baseSkillRoot', async () => {
+      await expect(
+        runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ baseConfigPath: '.warden-org/warden.toml' }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        )
+      ).rejects.toThrow(
+        'base-skill-root is required when the base config defines local skills'
       );
     });
 

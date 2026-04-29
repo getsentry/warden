@@ -11,6 +11,7 @@ import type { SkillReport, Finding, EventContext } from '../../types/index.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const SCHEDULE_FIXTURES = join(__dirname, '__fixtures__/schedule');
+const SCHEDULE_BASE_ONLY_FIXTURES = join(__dirname, '__fixtures__/schedule-base-only');
 const SCHEDULE_MULTI_FIXTURES = join(__dirname, '__fixtures__/schedule-multi');
 const SCHEDULE_FIXPR_FIXTURES = join(__dirname, '__fixtures__/schedule-fixpr');
 const SCHEDULE_TITLE_FIXTURES = join(__dirname, '__fixtures__/schedule-title');
@@ -231,6 +232,67 @@ describe('runScheduleWorkflow', () => {
       expect(mockSetFailed).not.toHaveBeenCalled();
       expect(consoleLogSpy).toHaveBeenCalledWith(
         '::warning::No warden.toml found. Skipping analysis.'
+      );
+    });
+
+    it('loads the base config when repo warden.toml is missing', async () => {
+      mockRunSkill.mockResolvedValue(createSkillReport({ skill: 'org-skill' }));
+
+      await runScheduleWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        SCHEDULE_BASE_ONLY_FIXTURES
+      );
+
+      expect(mockRunSkill).toHaveBeenCalledTimes(1);
+      expect(mockResolveSkillAsync).toHaveBeenCalledWith(
+        'org-skill',
+        join(SCHEDULE_BASE_ONLY_FIXTURES, '.warden-org'),
+        { remote: undefined }
+      );
+    });
+
+    it('merges the base config with the repo config when both exist', async () => {
+      mockRunSkill.mockResolvedValue(createSkillReport());
+
+      await runScheduleWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        SCHEDULE_FIXTURES
+      );
+
+      expect(mockRunSkill).toHaveBeenCalledTimes(2);
+      expect(mockResolveSkillAsync.mock.calls).toEqual([
+        ['org-skill', join(SCHEDULE_FIXTURES, '.warden-org'), { remote: undefined }],
+        ['test-skill', SCHEDULE_FIXTURES, { remote: undefined }],
+      ]);
+    });
+
+    it('fails when an explicit base config is missing', async () => {
+      await expect(
+        runScheduleWorkflow(
+          mockOctokit,
+          createDefaultInputs({ baseConfigPath: '.warden-org/missing.toml' }),
+          SCHEDULE_FIXTURES
+        )
+      ).rejects.toThrow('Configuration file not found');
+    });
+
+    it('fails when the base config defines local skills without baseSkillRoot', async () => {
+      await expect(
+        runScheduleWorkflow(
+          mockOctokit,
+          createDefaultInputs({ baseConfigPath: '.warden-org/warden.toml' }),
+          SCHEDULE_FIXTURES
+        )
+      ).rejects.toThrow(
+        'base-skill-root is required when the base config defines local skills'
       );
     });
 

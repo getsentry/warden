@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { Sentry } from '../sentry.js';
 import {
@@ -7,6 +7,11 @@ import {
   type WardenConfig,
   type ScheduleConfig,
   type TriggerType,
+  type Defaults,
+  type ChunkingConfig,
+  type CoalesceConfig,
+  type RunnerConfig,
+  type LogsConfig,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -17,12 +22,40 @@ export class ConfigLoadError extends Error {
   }
 }
 
-export function loadWardenConfig(repoPath: string): WardenConfig {
+function parseConfigContent(content: string): WardenConfig {
+  let rawConfig: unknown;
+  try {
+    rawConfig = parseToml(content);
+  } catch (error) {
+    throw new ConfigLoadError('Failed to parse TOML configuration', { cause: error });
+  }
+
+  // Detect legacy [[triggers]] format and provide migration guidance
+  if (rawConfig && typeof rawConfig === 'object' && 'triggers' in rawConfig) {
+    throw new ConfigLoadError(
+      'Legacy [[triggers]] format detected. Migrate to [[skills]] format:\n\n' +
+      '  [[triggers]]               →  [[skills]]\n' +
+      '  name = "my-skill"              name = "my-skill"\n' +
+      '  event = "pull_request"     →  [[skills.triggers]]\n' +
+      '  skill = "my-skill"              type = "pull_request"\n' +
+      '  actions = [...]                 actions = [...]\n\n' +
+      'See the migration guide for details.'
+    );
+  }
+
+  const result = WardenConfigSchema.safeParse(rawConfig);
+  if (!result.success) {
+    const issues = result.error.issues.map(i => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    throw new ConfigLoadError(`Invalid configuration:\n${issues}`);
+  }
+
+  return result.data;
+}
+
+export function loadWardenConfigFile(configPath: string): WardenConfig {
   return Sentry.startSpan(
     { op: 'config.load', name: 'load config' },
     () => {
-      const configPath = join(repoPath, 'warden.toml');
-
       if (!existsSync(configPath)) {
         throw new ConfigLoadError(`Configuration file not found: ${configPath}`);
       }
@@ -34,35 +67,172 @@ export function loadWardenConfig(repoPath: string): WardenConfig {
         throw new ConfigLoadError(`Failed to read configuration file: ${configPath}`, { cause: error });
       }
 
-      let rawConfig: unknown;
-      try {
-        rawConfig = parseToml(content);
-      } catch (error) {
-        throw new ConfigLoadError('Failed to parse TOML configuration', { cause: error });
-      }
-
-      // Detect legacy [[triggers]] format and provide migration guidance
-      if (rawConfig && typeof rawConfig === 'object' && 'triggers' in rawConfig) {
-        throw new ConfigLoadError(
-          'Legacy [[triggers]] format detected. Migrate to [[skills]] format:\n\n' +
-          '  [[triggers]]               →  [[skills]]\n' +
-          '  name = "my-skill"              name = "my-skill"\n' +
-          '  event = "pull_request"     →  [[skills.triggers]]\n' +
-          '  skill = "my-skill"              type = "pull_request"\n' +
-          '  actions = [...]                 actions = [...]\n\n' +
-          'See the migration guide for details.'
-        );
-      }
-
-      const result = WardenConfigSchema.safeParse(rawConfig);
-      if (!result.success) {
-        const issues = result.error.issues.map(i => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
-        throw new ConfigLoadError(`Invalid configuration:\n${issues}`);
-      }
-
-      return result.data;
+      return parseConfigContent(content);
     },
   );
+}
+
+export function loadWardenConfig(configDir: string): WardenConfig {
+  return loadWardenConfigFile(join(configDir, 'warden.toml'));
+}
+
+function mergeArray<T>(base?: T[], overlay?: T[]): T[] | undefined {
+  const merged = [...(base ?? []), ...(overlay ?? [])];
+  return merged.length > 0 ? merged : undefined;
+}
+
+function mergeCoalesceConfig(
+  base?: CoalesceConfig,
+  overlay?: CoalesceConfig
+): CoalesceConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return { ...base, ...overlay };
+}
+
+function mergeChunkingConfig(
+  base?: ChunkingConfig,
+  overlay?: ChunkingConfig
+): ChunkingConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return {
+    ...base,
+    ...overlay,
+    filePatterns: mergeArray(base.filePatterns, overlay.filePatterns),
+    coalesce: mergeCoalesceConfig(base.coalesce, overlay.coalesce),
+  };
+}
+
+function mergeDefaults(base?: Defaults, overlay?: Defaults): Defaults | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return {
+    ...base,
+    ...overlay,
+    ignorePaths: mergeArray(base.ignorePaths, overlay.ignorePaths),
+    chunking: mergeChunkingConfig(base.chunking, overlay.chunking),
+  };
+}
+
+function mergeRunnerConfig(
+  base?: RunnerConfig,
+  overlay?: RunnerConfig
+): RunnerConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return { ...base, ...overlay };
+}
+
+function mergeLogsConfig(
+  base?: LogsConfig,
+  overlay?: LogsConfig
+): LogsConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return { ...base, ...overlay };
+}
+
+export function mergeWardenConfigs(base: WardenConfig, overlay: WardenConfig): WardenConfig {
+  const mergedConfig = {
+    version: 1 as const,
+    defaults: mergeDefaults(base.defaults, overlay.defaults),
+    skills: [...base.skills, ...overlay.skills],
+    runner: mergeRunnerConfig(base.runner, overlay.runner),
+    logs: mergeLogsConfig(base.logs, overlay.logs),
+  };
+
+  const result = WardenConfigSchema.safeParse(mergedConfig);
+  if (!result.success) {
+    const issues = result.error.issues.map(i => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    throw new ConfigLoadError(`Invalid merged configuration:\n${issues}`);
+  }
+
+  return result.data;
+}
+
+export interface LayeredConfigOptions {
+  baseConfigPath?: string;
+  configPath?: string;
+}
+
+export interface LoadedLayeredConfig {
+  config: WardenConfig;
+  baseConfig?: WardenConfig;
+  repoConfig?: WardenConfig;
+}
+
+export function buildSkillRootsByName(
+  repoPath: string,
+  layered: LoadedLayeredConfig,
+  baseSkillRoot?: string
+): Record<string, string | undefined> | undefined {
+  const roots: Record<string, string | undefined> = {};
+
+  if (layered.baseConfig) {
+    const localBaseSkills = layered.baseConfig.skills.filter((skill) => !skill.remote);
+    if (localBaseSkills.length > 0 && !baseSkillRoot) {
+      throw new ConfigLoadError(
+        'base-skill-root is required when the base config defines local skills'
+      );
+    }
+
+    if (baseSkillRoot) {
+      const resolvedBaseSkillRoot = join(repoPath, baseSkillRoot);
+      if (!existsSync(resolvedBaseSkillRoot)) {
+        throw new ConfigLoadError(`Skill root not found: ${resolvedBaseSkillRoot}`);
+      }
+      for (const skill of localBaseSkills) {
+        roots[skill.name] = resolvedBaseSkillRoot;
+      }
+    }
+  }
+
+  if (layered.repoConfig) {
+    for (const skill of layered.repoConfig.skills) {
+      if (!skill.remote) {
+        roots[skill.name] = repoPath;
+      }
+    }
+  }
+
+  return Object.keys(roots).length > 0 ? roots : undefined;
+}
+
+export function loadLayeredWardenConfig(
+  repoPath: string,
+  options: LayeredConfigOptions = {}
+): LoadedLayeredConfig {
+  const repoConfigPath = join(repoPath, options.configPath ?? 'warden.toml');
+  const baseConfigPath = options.baseConfigPath
+    ? join(repoPath, options.baseConfigPath)
+    : undefined;
+
+  if (baseConfigPath && !existsSync(baseConfigPath)) {
+    throw new ConfigLoadError(`Configuration file not found: ${baseConfigPath}`);
+  }
+
+  if (!baseConfigPath) {
+    const repoConfig = loadWardenConfigFile(repoConfigPath);
+    return { config: repoConfig, repoConfig };
+  }
+
+  if (normalize(baseConfigPath) === normalize(repoConfigPath)) {
+    const repoConfig = loadWardenConfigFile(repoConfigPath);
+    return { config: repoConfig, repoConfig };
+  }
+
+  const baseConfig = loadWardenConfigFile(baseConfigPath);
+  if (!existsSync(repoConfigPath)) {
+    return { config: baseConfig, baseConfig };
+  }
+
+  const repoConfig = loadWardenConfigFile(repoConfigPath);
+  return {
+    config: mergeWardenConfigs(baseConfig, repoConfig),
+    baseConfig,
+    repoConfig,
+  };
 }
 
 /**
@@ -81,6 +251,8 @@ export interface ResolvedTrigger {
   actions?: string[];
   /** Remote repository reference */
   remote?: string;
+  /** Repository root to use when resolving local skill names or paths */
+  skillRoot?: string;
   /** Path filters */
   filters: { paths?: string[]; ignorePaths?: string[] };
   // Flattened output fields (merged: trigger > skill > defaults)
@@ -126,7 +298,8 @@ function emptyToUndefined(value: string | undefined): string | undefined {
  */
 export function resolveSkillConfigs(
   config: WardenConfig,
-  cliModel?: string
+  cliModel?: string,
+  skillRootsByName?: Record<string, string | undefined>
 ): ResolvedTrigger[] {
   const defaults = config.defaults;
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
@@ -157,6 +330,7 @@ export function resolveSkillConfigs(
         skill: skill.name,
         type: '*',
         remote: skill.remote,
+        skillRoot: skillRootsByName?.[skill.name],
         filters,
         failOn: skill.failOn ?? defaults?.failOn,
         reportOn: skill.reportOn ?? defaults?.reportOn,
@@ -176,6 +350,7 @@ export function resolveSkillConfigs(
           type: trigger.type,
           actions: trigger.actions,
           remote: skill.remote,
+          skillRoot: skillRootsByName?.[skill.name],
           filters,
           // 3-level merge: trigger > skill > defaults
           failOn: trigger.failOn ?? skill.failOn ?? defaults?.failOn,

@@ -31,6 +31,7 @@ vi.mock('../../output/renderer.js', () => ({
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { createSkillCheck, updateSkillCheck, failSkillCheck } from '../../output/github-checks.js';
 import { renderSkillReport } from '../../output/renderer.js';
+import { resolveSkillAsync } from '../../skills/loader.js';
 
 describe('executeTrigger', () => {
   // Suppress console output during tests
@@ -42,7 +43,7 @@ describe('executeTrigger', () => {
 
   const mockOctokit = {} as Octokit;
 
-  const mockContext: EventContext = {
+const mockContext: EventContext = {
     eventType: 'pull_request',
     action: 'opened',
     repository: { owner: 'test-owner', name: 'test-repo', fullName: 'test-owner/test-repo', defaultBranch: 'main' },
@@ -89,6 +90,30 @@ describe('executeTrigger', () => {
   const createRenderResult = (): RenderResult => ({
     summaryComment: 'Summary',
     review: { event: 'COMMENT', body: 'Test review', comments: [] },
+  });
+
+  it('resolves local skills from trigger.skillRoot when provided', async () => {
+    const mockReport = createReport();
+
+    vi.mocked(resolveSkillAsync).mockResolvedValue({
+      name: 'test-skill',
+      description: 'Test skill',
+      prompt: 'Review code',
+    });
+    vi.mocked(runSkillTask).mockImplementation(async (taskOptions) => {
+      await taskOptions.resolveSkill();
+      return { name: 'test-trigger', report: mockReport };
+    });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    await executeTrigger({ ...mockTrigger, skillRoot: '/org/skills-root' }, mockDeps);
+
+    expect(resolveSkillAsync).toHaveBeenCalledWith(
+      'test-skill',
+      '/org/skills-root',
+      { remote: undefined }
+    );
   });
 
   it('executes a trigger successfully with findings', async () => {
