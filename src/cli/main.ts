@@ -695,11 +695,7 @@ async function runSkills(
     const fallbackFilters = defaultIgnorePaths?.length
       ? { ignorePaths: defaultIgnorePaths }
       : {};
-    skillsToRun = [{
-      skill: options.skill,
-      remote: match?.remote,
-      filters: match?.filters ?? fallbackFilters,
-    }];
+    skillsToRun = [{ skill: options.skill, remote: match?.remote, filters: match?.filters ?? fallbackFilters }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property and filters
     const resolvedTriggers = resolveSkillConfigs(config, options.model);

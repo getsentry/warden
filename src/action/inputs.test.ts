@@ -114,7 +114,6 @@ describe('parseActionInputs', () => {
       expect(inputs.parallel).toBe(4);
     });
   });
-
 });
 
 describe('setupAuthEnv', () => {

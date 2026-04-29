@@ -99,6 +99,7 @@ export function parseActionInputs(): ActionInputs {
 
   const requestChanges = parseBooleanInput(getInput('request-changes'));
   const failCheck = parseBooleanInput(getInput('fail-check'));
+
   return {
     anthropicApiKey,
     oauthToken,
