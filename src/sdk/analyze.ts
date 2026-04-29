@@ -9,7 +9,7 @@ import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
 import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
 import { getRuntime } from './runtimes/index.js';
-import type { AgentRuntimeResult } from './runtimes/index.js';
+import type { SkillRunResult } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
@@ -48,7 +48,7 @@ interface ParseHunkOutputResult {
  * 2. LLM fallback using haiku (handles malformed output gracefully)
  */
 async function parseHunkOutput(
-  result: AgentRuntimeResult,
+  result: SkillRunResult,
   filename: string,
   options: SkillRunnerOptions
 ): Promise<ParseHunkOutputResult> {
@@ -190,7 +190,7 @@ async function analyzeHunk(
             runtimeName === 'claude'
               ? { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable }
               : undefined;
-          const { result: resultMessage, authError } = await runtime.agent.execute({
+          const { result: resultMessage, authError } = await runtime.runSkill({
             systemPrompt,
             userPrompt,
             repoPath,

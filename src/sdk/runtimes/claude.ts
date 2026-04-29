@@ -19,17 +19,14 @@ import { Sentry } from '../../sentry.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
 import { emptyUsage, extractUsage } from '../usage.js';
 import type {
-  AgentRuntime,
-  AgentRuntimeExecutionResult,
-  AgentRuntimeRequest,
-  AgentRuntimeResult,
-  AgentRuntimeStatus,
-  FastModelGenerateObjectRequest,
-  FastModelGenerateObjectWithToolsRequest,
-  FastModelResult,
-  FastModelRuntime,
-  FastModelTool,
+  AuxiliaryRunRequest,
+  AuxiliaryRunResult,
+  AuxiliaryTool,
   Runtime,
+  SkillRunRequest,
+  SkillRunResponse,
+  SkillRunResult,
+  SkillRunStatus,
 } from './types.js';
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
@@ -42,19 +39,32 @@ interface TurnData {
   model: string;
 }
 
-interface ClaudeAgentProviderOptions {
+interface ClaudeProviderOptions {
   pathToClaudeCodeExecutable?: string;
 }
 
-function missingApiKeyResult<T>(): FastModelResult<T> {
+function getClaudeProviderOptions(providerOptions: unknown): ClaudeProviderOptions {
+  if (!providerOptions || typeof providerOptions !== 'object') {
+    return {};
+  }
+
+  const { pathToClaudeCodeExecutable } = providerOptions as { pathToClaudeCodeExecutable?: unknown };
+  return {
+    pathToClaudeCodeExecutable: typeof pathToClaudeCodeExecutable === 'string'
+      ? pathToClaudeCodeExecutable
+      : undefined,
+  };
+}
+
+function missingApiKeyResult<T>(): AuxiliaryRunResult<T> {
   return {
     success: false,
-    error: 'Anthropic API key required for Claude fast-model runtime',
+    error: 'Anthropic API key required for Claude auxiliary runtime',
     usage: emptyUsage(),
   };
 }
 
-function toAnthropicTool(tool: FastModelTool): Anthropic.Tool {
+function toAnthropicTool(tool: AuxiliaryTool): Anthropic.Tool {
   return {
     name: tool.name,
     description: tool.description ?? '',
@@ -67,7 +77,7 @@ function singleResponseModel(modelUsage: SDKResultMessage['modelUsage'] | undefi
   return models.length === 1 ? models[0] : undefined;
 }
 
-function statusFromClaudeSubtype(subtype: SDKResultMessage['subtype']): AgentRuntimeStatus {
+function statusFromClaudeSubtype(subtype: SDKResultMessage['subtype']): SkillRunStatus {
   switch (subtype) {
     case 'success':
       return 'success';
@@ -84,7 +94,7 @@ function statusFromClaudeSubtype(subtype: SDKResultMessage['subtype']): AgentRun
   }
 }
 
-function normalizeResult(result: SDKResultMessage): AgentRuntimeResult {
+function normalizeResult(result: SDKResultMessage): SkillRunResult {
   const errors = 'errors' in result ? result.errors : [];
   return {
     status: statusFromClaudeSubtype(result.subtype),
@@ -119,13 +129,13 @@ function appendClaudeStderr(error: unknown, stderr: string): unknown {
   return new Error(message);
 }
 
-export const claudeAgentRuntime: AgentRuntime<ClaudeAgentProviderOptions> = {
+export const claudeRuntime: Runtime = {
   name: 'claude',
 
-  async execute(request: AgentRuntimeRequest<ClaudeAgentProviderOptions>): Promise<AgentRuntimeExecutionResult> {
+  async runSkill(request: SkillRunRequest): Promise<SkillRunResponse> {
     const { systemPrompt, userPrompt, repoPath, options, skillName, providerOptions } = request;
     const { maxTurns = 50, model, abortController } = options;
-    const { pathToClaudeCodeExecutable } = providerOptions ?? {};
+    const { pathToClaudeCodeExecutable } = getClaudeProviderOptions(providerOptions);
     const modelId = model ?? 'unknown';
 
     return Sentry.startSpan(
@@ -318,15 +328,27 @@ export const claudeAgentRuntime: AgentRuntime<ClaudeAgentProviderOptions> = {
       },
     );
   },
-};
 
-export const claudeFastModelRuntime: FastModelRuntime = {
-  name: 'claude-fast-model',
-
-  async generateObject<T>(request: FastModelGenerateObjectRequest<T>) {
+  async runAuxiliary<T>(request: AuxiliaryRunRequest<T>): Promise<AuxiliaryRunResult<T>> {
     if (!request.apiKey) {
       return missingApiKeyResult();
     }
+
+    if (request.tools) {
+      return callHaikuWithTools({
+        apiKey: request.apiKey,
+        prompt: request.prompt,
+        schema: request.schema,
+        tools: request.tools.map(toAnthropicTool),
+        executeTool: request.executeTool,
+        model: request.model,
+        maxTokens: request.maxTokens,
+        maxIterations: request.maxIterations,
+        timeout: request.timeout,
+        maxRetries: request.maxRetries,
+      });
+    }
+
     return callHaiku({
       apiKey: request.apiKey,
       prompt: request.prompt,
@@ -337,28 +359,4 @@ export const claudeFastModelRuntime: FastModelRuntime = {
       maxRetries: request.maxRetries,
     });
   },
-
-  async generateObjectWithTools<T>(request: FastModelGenerateObjectWithToolsRequest<T>) {
-    if (!request.apiKey) {
-      return missingApiKeyResult();
-    }
-    return callHaikuWithTools({
-      apiKey: request.apiKey,
-      prompt: request.prompt,
-      schema: request.schema,
-      tools: request.tools.map(toAnthropicTool),
-      executeTool: request.executeTool,
-      model: request.model,
-      maxTokens: request.maxTokens,
-      maxIterations: request.maxIterations,
-      timeout: request.timeout,
-      maxRetries: request.maxRetries,
-    });
-  },
-};
-
-export const claudeRuntime: Runtime = {
-  name: 'claude',
-  agent: claudeAgentRuntime,
-  fastModel: claudeFastModelRuntime,
 };

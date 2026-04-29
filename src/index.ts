@@ -103,25 +103,21 @@ export {
   SkillRunnerError,
   getRuntime,
   claudeRuntime,
-  claudeAgentRuntime,
-  claudeFastModelRuntime,
 } from './sdk/runner.js';
 
 export type {
   SkillRunnerOptions,
   SkillRunnerCallbacks,
   Runtime,
-  AgentRuntime,
-  AgentRuntimeExecutionResult,
-  AgentRuntimeOptions,
-  AgentRuntimeRequest,
-  AgentRuntimeResult,
-  AgentRuntimeStatus,
-  FastModelGenerateObjectRequest,
-  FastModelGenerateObjectWithToolsRequest,
-  FastModelResult,
-  FastModelRuntime,
-  FastModelTool,
+  AuxiliaryRunRequest,
+  AuxiliaryRunResult,
+  AuxiliaryTask,
+  AuxiliaryTool,
+  SkillRunOptions,
+  SkillRunRequest,
+  SkillRunResponse,
+  SkillRunResult,
+  SkillRunStatus,
 } from './sdk/runner.js';
 
 // -----------------------------------------------------------------------------

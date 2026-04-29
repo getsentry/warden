@@ -157,7 +157,8 @@ async function runSemanticGate(
     finding.suggestedFix?.diff ?? '',
   ].join('\n');
 
-  const result = await getRuntime(runtime).fastModel.generateObject({
+  const result = await getRuntime(runtime).runAuxiliary({
+    task: 'fix_quality',
     apiKey,
     prompt,
     schema: SemanticFixVerdictSchema,

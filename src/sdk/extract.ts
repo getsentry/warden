@@ -17,7 +17,7 @@ export type ExtractFindingsResult =
   | { success: true; findings: unknown[]; usage?: UsageStats }
   | { success: false; error: string; preview: string; usage?: UsageStats };
 
-export interface FastModelCallOptions {
+export interface AuxiliaryCallOptions {
   apiKey?: string;
   runtime?: RuntimeName;
   model?: string;
@@ -174,14 +174,14 @@ export function truncateForLLMFallback(rawText: string, maxChars: number): strin
 
 /**
  * Extract findings from malformed output using LLM as a fallback.
- * Uses the configured fast-model runtime for lightweight, structured extraction.
+ * Uses the configured auxiliary runtime for lightweight, structured extraction.
  */
 export async function extractFindingsWithLLM(
   rawText: string,
-  apiKeyOrOptions?: string | FastModelCallOptions,
+  apiKeyOrOptions?: string | AuxiliaryCallOptions,
   maxRetries?: number
 ): Promise<ExtractFindingsResult> {
-  const options: FastModelCallOptions =
+  const options: AuxiliaryCallOptions =
     typeof apiKeyOrOptions === 'object'
       ? apiKeyOrOptions
       : { apiKey: apiKeyOrOptions, maxRetries };
@@ -214,7 +214,8 @@ If no findings exist, return: {"findings": []}
 Model output:
 ${truncatedText}`;
 
-  const result = await getRuntime(runtime).fastModel.generateObject({
+  const result = await getRuntime(runtime).runAuxiliary({
+    task: 'extraction',
     apiKey,
     prompt: userContent,
     schema: z.object({ findings: z.array(z.unknown()) }),
@@ -448,7 +449,7 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
 /**
  * Merge findings that describe the same issue across different code locations.
  *
- * Uses the configured fast-model runtime to identify groups of findings about
+ * Uses the configured auxiliary runtime to identify groups of findings about
  * the same root cause at different locations. For each group, the
  * highest-priority finding becomes the primary; other locations move to
  * `additionalLocations`.
@@ -459,7 +460,7 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
  */
 export async function mergeCrossLocationFindings(
   findings: Finding[],
-  options?: FastModelCallOptions & { repoPath?: string }
+  options?: AuxiliaryCallOptions & { repoPath?: string }
 ): Promise<MergeResult> {
   const apiKey = options?.apiKey;
   const repoPath = options?.repoPath ?? '.';
@@ -488,7 +489,8 @@ ${findingDescriptions.join('\n')}
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
 Singletons should not appear. Return [] if no findings describe the same issue.`;
 
-  const result = await getRuntime(options?.runtime).fastModel.generateObject({
+  const result = await getRuntime(options?.runtime).runAuxiliary({
+    task: 'consolidation',
     apiKey,
     prompt,
     schema: MergeGroupsSchema,

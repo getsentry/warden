@@ -471,7 +471,8 @@ Return ONLY the JSON array in this format:
 where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
 Return [] if none are duplicates.`;
 
-  const result = await getRuntime(options.runtime).fastModel.generateObject({
+  const result = await getRuntime(options.runtime).runAuxiliary({
+    task: 'deduplication',
     apiKey,
     prompt,
     schema: DuplicateMatchesSchema,
@@ -717,7 +718,7 @@ function findProximityClusters(findings: Finding[]): Finding[][] {
  *
  * 1. Hash dedup: remove exact duplicates (same path:line:contentHash)
  * 2. Proximity grouping: identify clusters of findings within 5 lines of each other
- * 3. LLM consolidation: ask the fast-model runtime to group findings by root cause (only when proximity matches exist)
+ * 3. LLM consolidation: ask the auxiliary runtime to group findings by root cause (only when proximity matches exist)
  *
  * For each group, keeps the highest-severity finding.
  */
@@ -780,7 +781,8 @@ Singletons (findings with no duplicates) should not appear in any group.
 
 Return ONLY the JSON array. Return [] if no findings share a root cause.`;
 
-  const result = await getRuntime(options.runtime).fastModel.generateObject({
+  const result = await getRuntime(options.runtime).runAuxiliary({
+    task: 'consolidation',
     apiKey: options.apiKey,
     prompt,
     schema: ConsolidationGroupsSchema,

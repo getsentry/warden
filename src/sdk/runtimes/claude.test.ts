@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { query, type SDKMessage, type SDKResultError, type SDKResultSuccess } from '@anthropic-ai/claude-agent-sdk';
-import { claudeAgentRuntime } from './claude.js';
+import { claudeRuntime } from './claude.js';
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: vi.fn(),
@@ -103,7 +103,7 @@ function failingStream(error: unknown): ReturnType<typeof query> {
   return stream as unknown as ReturnType<typeof query>;
 }
 
-describe('claudeAgentRuntime', () => {
+describe('claudeRuntime.runSkill', () => {
   beforeEach(() => {
     mockQuery.mockReset();
   });
@@ -115,7 +115,7 @@ describe('claudeAgentRuntime', () => {
       maxTurns: 3,
     };
 
-    const result = await claudeAgentRuntime.execute({
+    const result = await claudeRuntime.runSkill({
       systemPrompt: 'system',
       userPrompt: 'user',
       repoPath: '/repo',
@@ -166,7 +166,7 @@ describe('claudeAgentRuntime', () => {
       },
     ]));
 
-    const result = await claudeAgentRuntime.execute({
+    const result = await claudeRuntime.runSkill({
       systemPrompt: 'system',
       userPrompt: 'user',
       repoPath: '/repo',
@@ -187,7 +187,7 @@ describe('claudeAgentRuntime', () => {
 
     mockQuery.mockReturnValue(mockStream([message as SDKMessage]));
 
-    const result = await claudeAgentRuntime.execute({
+    const result = await claudeRuntime.runSkill({
       systemPrompt: 'system',
       userPrompt: 'user',
       repoPath: '/repo',
@@ -217,7 +217,7 @@ describe('claudeAgentRuntime', () => {
   ] as const)('maps Claude subtype %s to Warden status %s', async (subtype, status) => {
     mockQuery.mockReturnValue(mockStream([errorResult({ subtype })]));
 
-    const result = await claudeAgentRuntime.execute({
+    const result = await claudeRuntime.runSkill({
       systemPrompt: 'system',
       userPrompt: 'user',
       repoPath: '/repo',
@@ -239,7 +239,7 @@ describe('claudeAgentRuntime', () => {
 
     let caught: unknown;
     try {
-      await claudeAgentRuntime.execute({
+      await claudeRuntime.runSkill({
         systemPrompt: 'system',
         userPrompt: 'user',
         repoPath: '/repo',

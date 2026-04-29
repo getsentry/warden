@@ -1,7 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { ExistingComment } from '../../output/dedup.js';
-import { getRuntime, type FastModelTool, type RuntimeName } from '../../sdk/runtimes/index.js';
+import { getRuntime, type AuxiliaryTool, type RuntimeName } from '../../sdk/runtimes/index.js';
 import { emptyUsage } from '../../sdk/usage.js';
 import { FixJudgeVerdictSchema } from './types.js';
 import type { FixJudgeResult } from './types.js';
@@ -30,7 +30,7 @@ export interface FixJudgeRuntimeOptions {
   maxRetries?: number;
 }
 
-const TOOL_DEFINITIONS: FastModelTool[] = [
+const TOOL_DEFINITIONS: AuxiliaryTool[] = [
   {
     name: 'get_file_diff',
     description: 'Get the unified diff showing what changed in a file between the two commits.',
@@ -232,7 +232,8 @@ export async function evaluateFix(
   const prompt = buildPrompt(input);
   const executeTool = createToolExecutor(context);
 
-  const result = await getRuntime(runtimeOptions.runtime).fastModel.generateObjectWithTools({
+  const result = await getRuntime(runtimeOptions.runtime).runAuxiliary({
+    task: 'fix_evaluation',
     apiKey,
     prompt,
     schema: FixJudgeVerdictSchema,

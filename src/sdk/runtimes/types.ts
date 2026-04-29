@@ -1,16 +1,16 @@
 /**
- * Runtime contract for model-backed agents.
+ * Runtime contract for model-backed providers.
  *
  * Warden's analysis pipeline builds prompts, handles retry policy, parses
  * findings, and aggregates report data. Runtime interfaces are backend
  * capabilities underneath that pipeline. Claude is the only runtime today and
- * exposes both agent execution and fast-model calls.
+ * exposes both skill execution and auxiliary model tasks.
  *
  * Runtime implementations are responsible for backend-specific execution
  * details such as model identifiers, stream events, authentication side
  * channels, stderr/diagnostics, telemetry attributes, tool loops, and usage
  * normalization. Callers should be able to switch runtimes without changing
- * hunk parsing, auxiliary object generation, or report generation.
+ * hunk parsing, extraction repair, deduplication, fix gates, or reporting.
  */
 import { z } from 'zod';
 import type { UsageStats } from '../../types/index.js';
@@ -18,7 +18,7 @@ import type { UsageStats } from '../../types/index.js';
 export const RuntimeNameSchema = z.enum(['claude']);
 export type RuntimeName = z.infer<typeof RuntimeNameSchema>;
 
-export type AgentRuntimeStatus =
+export type SkillRunStatus =
   | 'success'
   | 'provider_error'
   | 'auth_error'
@@ -27,24 +27,24 @@ export type AgentRuntimeStatus =
   | 'aborted'
   | 'structured_output_error';
 
-export interface AgentRuntimeOptions {
+export interface SkillRunOptions {
   maxTurns?: number;
   model?: string;
   abortController?: AbortController;
 }
 
-export interface AgentRuntimeRequest<TProviderOptions = unknown> {
+export interface SkillRunRequest {
   systemPrompt: string;
   userPrompt: string;
   repoPath: string;
   skillName: string;
-  options: AgentRuntimeOptions;
+  options: SkillRunOptions;
   /** Provider-specific settings consumed only by the selected runtime adapter. */
-  providerOptions?: TProviderOptions;
+  providerOptions?: unknown;
 }
 
-export interface AgentRuntimeResult {
-  status: AgentRuntimeStatus;
+export interface SkillRunResult {
+  status: SkillRunStatus;
   text: string;
   errors: string[];
   usage: UsageStats;
@@ -56,30 +56,33 @@ export interface AgentRuntimeResult {
   numTurns?: number;
 }
 
-export interface AgentRuntimeExecutionResult {
-  result?: AgentRuntimeResult;
+export interface SkillRunResponse {
+  result?: SkillRunResult;
   /** Authentication error surfaced by the runtime, if available out-of-band. */
   authError?: string;
   /** Captured runtime stderr or diagnostics for clearer failures. */
   stderr?: string;
 }
 
-export interface AgentRuntime<TProviderOptions = unknown> {
-  readonly name: string;
-  execute(request: AgentRuntimeRequest<TProviderOptions>): Promise<AgentRuntimeExecutionResult>;
-}
-
-export interface FastModelTool {
+export interface AuxiliaryTool {
   name: string;
   description?: string;
   inputSchema: Record<string, unknown>;
 }
 
-export type FastModelResult<T> =
+export type AuxiliaryTask =
+  | 'extraction'
+  | 'deduplication'
+  | 'consolidation'
+  | 'fix_quality'
+  | 'fix_evaluation';
+
+export type AuxiliaryRunResult<T> =
   | { success: true; data: T; usage: UsageStats }
   | { success: false; error: string; usage: UsageStats };
 
-export interface FastModelGenerateObjectRequest<T> {
+interface AuxiliaryRunRequestBase<T> {
+  task: AuxiliaryTask;
   apiKey?: string;
   prompt: string;
   schema: z.ZodType<T>;
@@ -89,20 +92,22 @@ export interface FastModelGenerateObjectRequest<T> {
   maxRetries?: number;
 }
 
-export interface FastModelGenerateObjectWithToolsRequest<T> extends FastModelGenerateObjectRequest<T> {
-  tools: FastModelTool[];
+interface AuxiliaryRunRequestWithoutTools<T> extends AuxiliaryRunRequestBase<T> {
+  tools?: undefined;
+  executeTool?: undefined;
+  maxIterations?: undefined;
+}
+
+interface AuxiliaryRunRequestWithTools<T> extends AuxiliaryRunRequestBase<T> {
+  tools: AuxiliaryTool[];
   executeTool: (name: string, input: Record<string, unknown>) => Promise<string>;
   maxIterations?: number;
 }
 
-export interface FastModelRuntime {
-  readonly name: string;
-  generateObject<T>(request: FastModelGenerateObjectRequest<T>): Promise<FastModelResult<T>>;
-  generateObjectWithTools<T>(request: FastModelGenerateObjectWithToolsRequest<T>): Promise<FastModelResult<T>>;
-}
+export type AuxiliaryRunRequest<T> = AuxiliaryRunRequestWithoutTools<T> | AuxiliaryRunRequestWithTools<T>;
 
 export interface Runtime {
   readonly name: RuntimeName;
-  readonly agent: AgentRuntime;
-  readonly fastModel: FastModelRuntime;
+  runSkill(request: SkillRunRequest): Promise<SkillRunResponse>;
+  runAuxiliary<T>(request: AuxiliaryRunRequest<T>): Promise<AuxiliaryRunResult<T>>;
 }

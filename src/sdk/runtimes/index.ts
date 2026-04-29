@@ -5,21 +5,19 @@ const RUNTIMES: Partial<Record<RuntimeName, Runtime>> = {
   claude: claudeRuntime,
 };
 
-export { claudeAgentRuntime, claudeFastModelRuntime, claudeRuntime } from './claude.js';
+export { claudeRuntime } from './claude.js';
 export type {
-  AgentRuntime,
-  AgentRuntimeExecutionResult,
-  AgentRuntimeOptions,
-  AgentRuntimeRequest,
-  AgentRuntimeResult,
-  AgentRuntimeStatus,
-  FastModelGenerateObjectRequest,
-  FastModelGenerateObjectWithToolsRequest,
-  FastModelResult,
-  FastModelRuntime,
-  FastModelTool,
+  AuxiliaryRunRequest,
+  AuxiliaryRunResult,
+  AuxiliaryTask,
+  AuxiliaryTool,
   Runtime,
   RuntimeName,
+  SkillRunOptions,
+  SkillRunRequest,
+  SkillRunResponse,
+  SkillRunResult,
+  SkillRunStatus,
 } from './types.js';
 
 export function getRuntime(name: RuntimeName = 'claude'): Runtime {

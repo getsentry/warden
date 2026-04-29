@@ -56,24 +56,20 @@ export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 
 // Re-export runtime registry and adapter contracts
 export {
-  claudeFastModelRuntime,
   claudeRuntime,
   getRuntime,
-  claudeAgentRuntime,
 } from './runtimes/index.js';
 export type { Runtime, RuntimeName } from './runtimes/index.js';
 export type {
-  AgentRuntime,
-  AgentRuntimeExecutionResult,
-  AgentRuntimeOptions,
-  AgentRuntimeRequest,
-  AgentRuntimeResult,
-  AgentRuntimeStatus,
-  FastModelGenerateObjectRequest,
-  FastModelGenerateObjectWithToolsRequest,
-  FastModelResult,
-  FastModelRuntime,
-  FastModelTool,
+  AuxiliaryRunRequest,
+  AuxiliaryRunResult,
+  AuxiliaryTask,
+  AuxiliaryTool,
+  SkillRunOptions,
+  SkillRunRequest,
+  SkillRunResponse,
+  SkillRunResult,
+  SkillRunStatus,
 } from './runtimes/index.js';
 
 // Re-export types

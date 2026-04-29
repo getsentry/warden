@@ -1,33 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
-  claudeAgentRuntime,
-  claudeFastModelRuntime,
+  claudeRuntime,
   getRuntime,
 } from './index.js';
 
 describe('runtimes', () => {
-  it('exposes Claude as the default runtime with agent and fast-model capabilities', () => {
+  it('exposes Claude as the default runtime provider', () => {
     const runtime = getRuntime();
 
+    expect(runtime).toBe(claudeRuntime);
     expect(runtime.name).toBe('claude');
-    expect(runtime.agent).toBe(claudeAgentRuntime);
-    expect(runtime.fastModel).toBe(claudeFastModelRuntime);
+    expect(runtime.runSkill).toBeTypeOf('function');
+    expect(runtime.runAuxiliary).toBeTypeOf('function');
   });
 
   it('rejects unsupported runtimes explicitly', () => {
     expect(() => getRuntime('pi' as never)).toThrow('Unsupported runtime: pi');
   });
 
-  it('fails fast-model calls clearly when Claude auth is missing', async () => {
-    const result = await getRuntime().fastModel.generateObject({
+  it('fails auxiliary calls clearly when Claude auth is missing', async () => {
+    const result = await getRuntime().runAuxiliary({
+      task: 'extraction',
       prompt: 'Return {"ok": true}',
       schema: z.object({ ok: z.boolean() }),
     });
 
     expect(result).toEqual({
       success: false,
-      error: 'Anthropic API key required for Claude fast-model runtime',
+      error: 'Anthropic API key required for Claude auxiliary runtime',
       usage: {
         inputTokens: 0,
         outputTokens: 0,
