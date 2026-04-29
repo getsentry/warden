@@ -6,6 +6,7 @@ import {
   mergeWardenConfigs,
   ConfigLoadError,
   resolveSkillConfigs,
+  resolveLayeredSkillConfigs,
   buildSkillRootsByName,
   loadLayeredWardenConfig,
 } from './loader.js';
@@ -568,6 +569,60 @@ describe('buildSkillRootsByName', () => {
     expect(() => buildSkillRootsByName('/repo', layered)).toThrow(
       'base-skill-root is required when the base config defines local skills'
     );
+  });
+});
+
+describe('resolveLayeredSkillConfigs', () => {
+  it('keeps base defaults attached to base skills when repo config adds its own defaults', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        failOn: 'high',
+        batchDelayMs: 1000,
+        auxiliaryMaxRetries: 7,
+        chunking: { maxContextFiles: 25 },
+      },
+      skills: [{
+        name: 'org-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        failOn: 'low',
+        batchDelayMs: 10,
+        auxiliaryMaxRetries: 1,
+        chunking: { maxContextFiles: 5 },
+      },
+      skills: [{
+        name: 'repo-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const resolved = resolveLayeredSkillConfigs({
+      config: mergeWardenConfigs(baseConfig, repoConfig),
+      baseConfig,
+      repoConfig,
+    });
+
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]).toMatchObject({
+      name: 'org-skill',
+      failOn: 'high',
+      batchDelayMs: 1000,
+      auxiliaryMaxRetries: 7,
+      maxContextFiles: 25,
+    });
+    expect(resolved[1]).toMatchObject({
+      name: 'repo-skill',
+      failOn: 'low',
+      batchDelayMs: 10,
+      auxiliaryMaxRetries: 1,
+      maxContextFiles: 5,
+    });
   });
 });
 

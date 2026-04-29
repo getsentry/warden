@@ -501,9 +501,9 @@ jobs:
 
   <p>The first checkout is the repository being reviewed. The second checkout provides the org-wide base <code>warden.toml</code> and, if needed, local shared skills.</p>
 
-  <p>If the target repo also has a root <code>warden.toml</code>, Warden loads that too and overlays it on top of the base config. Use one global workflow, not separate repo-local Warden workflows.</p>
+  <p>If the target repo also has a root <code>warden.toml</code>, Warden loads that too in the same run. Repo-local config adds more skills and repo-local defaults for those repo-local skills, but it does not weaken org-enforced base skills. Use one global workflow, not separate repo-local Warden workflows.</p>
 
-  <p><code>base-config-path</code> selects the shared base file. <code>base-skill-root</code> points at the checked-out org repo when that base config uses local shared skills. <code>config-path</code> selects the repo-local overlay file and still defaults to <code>warden.toml</code>. Repo-local skills and path matching continue to resolve from the analyzed repository root.</p>
+  <p><code>base-config-path</code> selects the shared base file. <code>base-skill-root</code> points at the checked-out org repo when that base config uses local shared skills. <code>config-path</code> selects the repo-local extension file and still defaults to <code>warden.toml</code>. Repo-local skills and path matching continue to resolve from the analyzed repository root.</p>
 
   <p>If the base config only uses remote skills, you can omit <code>base-skill-root</code>. If it defines local skill names, <code>base-skill-root</code> is required.</p>
 
@@ -519,7 +519,7 @@ jobs:
     <dt>base-skill-root</dt>
     <dd>Optional repo root containing local shared skills used by the base config.</dd>
     <dt>config-path</dt>
-    <dd>Path to the repo-local <code>warden.toml</code> overlay file. Default: <code>warden.toml</code></dd>
+    <dd>Path to the repo-local <code>warden.toml</code> extension file. Default: <code>warden.toml</code></dd>
     <dt>fail-on</dt>
     <dd>Minimum severity to fail the check</dd>
     <dt>report-on</dt>

@@ -8,10 +8,11 @@ import type { Octokit } from '@octokit/rest';
 import {
   buildSkillRootsByName,
   loadLayeredWardenConfig,
-  resolveSkillConfigs,
+  resolveLayeredSkillConfigs,
   ConfigLoadError,
 } from '../../config/loader.js';
-import type { WardenConfig, ScheduleConfig } from '../../config/schema.js';
+import type { ResolvedTrigger } from '../../config/loader.js';
+import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
 import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
@@ -51,15 +52,16 @@ export async function runScheduleWorkflow(
   console.log(`Repo config path: ${inputs.configPath}`);
   logGroupEnd();
 
-  let config: WardenConfig;
+  let scheduleTriggers: ResolvedTrigger[];
   let skillRootsByName: Record<string, string | undefined> | undefined;
   try {
     const layered = loadLayeredWardenConfig(repoPath, {
       baseConfigPath: inputs.baseConfigPath,
       configPath: inputs.configPath,
     });
-    config = layered.config;
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
+    scheduleTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName)
+      .filter((t) => t.type === 'schedule');
   } catch (error) {
     if (
       error instanceof ConfigLoadError &&
@@ -85,9 +87,6 @@ export async function runScheduleWorkflow(
     throw error;
   }
 
-  // Find schedule triggers
-  const scheduleTriggers = resolveSkillConfigs(config, undefined, skillRootsByName)
-    .filter((t) => t.type === 'schedule');
   if (scheduleTriggers.length === 0) {
     console.log('No schedule triggers configured');
     setOutput('findings-count', 0);
@@ -172,8 +171,8 @@ export async function runScheduleWorkflow(
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
         maxTurns: resolved.maxTurns,
-        batchDelayMs: config.defaults?.batchDelayMs,
-        maxContextFiles: config.defaults?.chunking?.maxContextFiles,
+        batchDelayMs: resolved.batchDelayMs,
+        maxContextFiles: resolved.maxContextFiles,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);

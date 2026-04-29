@@ -22,7 +22,7 @@ export interface ActionInputs {
   baseConfigPath?: string;
   /** Optional repo root containing org-shared local skills for the base config */
   baseSkillRoot?: string;
-  /** Optional repo-local config that overlays the base config */
+  /** Optional repo-local config that extends the base config in the same run */
   configPath: string;
   failOn?: SeverityThreshold;
   reportOn?: SeverityThreshold;

@@ -69,12 +69,9 @@ const mockContext: EventContext = {
     filters: {},
   };
 
-  const mockConfig = { version: 1 as const, skills: [] };
-
   const mockDeps: TriggerExecutorDeps = {
     octokit: mockOctokit,
     context: mockContext,
-    config: mockConfig,
     anthropicApiKey: 'test-key',
     claudePath: '/test/claude',
     globalMaxFindings: 10,
@@ -113,6 +110,36 @@ const mockContext: EventContext = {
       'test-skill',
       '/org/skills-root',
       { remote: undefined }
+    );
+  });
+
+  it('uses trigger-level execution defaults instead of merged config defaults', async () => {
+    const mockReport = createReport();
+
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    await executeTrigger({
+      ...mockTrigger,
+      batchDelayMs: 250,
+      maxContextFiles: 12,
+      auxiliaryMaxRetries: 9,
+    }, {
+      ...mockDeps,
+    });
+
+    expect(runSkillTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runnerOptions: expect.objectContaining({
+          batchDelayMs: 250,
+          maxContextFiles: 12,
+          auxiliaryMaxRetries: 9,
+        }),
+      }),
+      expect.any(Number),
+      expect.anything(),
+      undefined
     );
   });
 

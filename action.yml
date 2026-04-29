@@ -21,7 +21,7 @@ inputs:
     description: 'Path to the checked-out org repo root for local shared skills used by the base config (relative to repo root)'
     required: false
   config-path:
-    description: 'Path to the repo-local warden.toml config file that overlays the base config (relative to repo root)'
+    description: 'Path to the repo-local warden.toml config file that extends the base config in the same run (relative to repo root)'
     required: false
     default: 'warden.toml'
   fail-on:

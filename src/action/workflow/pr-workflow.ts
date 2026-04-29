@@ -10,11 +10,10 @@ import { Sentry, logger, emitStaleResolutionMetric, setGlobalAttributes, emitRun
 import {
   buildSkillRootsByName,
   loadLayeredWardenConfig,
-  resolveSkillConfigs,
+  resolveLayeredSkillConfigs,
   ConfigLoadError,
 } from '../../config/loader.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
-import type { WardenConfig } from '../../config/schema.js';
 import { buildEventContext } from '../../event/context.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
 import { fetchExistingComments } from '../../output/dedup.js';
@@ -60,7 +59,8 @@ import {
 
 interface InitResult {
   context: EventContext;
-  config: WardenConfig;
+  runnerConcurrency?: number;
+  auxiliaryMaxRetries?: number;
   matchedTriggers: ResolvedTrigger[];
 }
 
@@ -146,15 +146,35 @@ async function initializeWorkflow(
   console.log(`Repo config path: ${inputs.configPath}`);
   logGroupEnd();
 
-  let config: WardenConfig;
+  let auxiliaryMaxRetries: number | undefined;
+  let runnerConcurrency: number | undefined;
   let skillRootsByName: Record<string, string | undefined> | undefined;
   try {
     const layered = loadLayeredWardenConfig(repoPath, {
       baseConfigPath: inputs.baseConfigPath,
       configPath: inputs.configPath,
     });
-    config = layered.config;
+    auxiliaryMaxRetries =
+      layered.baseConfig?.defaults?.auxiliaryMaxRetries ??
+      layered.repoConfig?.defaults?.auxiliaryMaxRetries;
+    runnerConcurrency =
+      layered.baseConfig?.runner?.concurrency ??
+      layered.repoConfig?.runner?.concurrency;
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
+    const resolvedTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName);
+    const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
+
+    if (matchedTriggers.length > 0) {
+      logGroup('Matched triggers');
+      for (const trigger of matchedTriggers) {
+        console.log(`- ${trigger.name}: ${trigger.skill}`);
+      }
+      logGroupEnd();
+    } else {
+      console.log('No triggers matched for this event');
+    }
+
+    return { context, runnerConcurrency, auxiliaryMaxRetries, matchedTriggers };
   } catch (error) {
     if (
       error instanceof ConfigLoadError &&
@@ -166,22 +186,6 @@ async function initializeWorkflow(
     }
     throw error;
   }
-
-  // Resolve skills into triggers and match
-  const resolvedTriggers = resolveSkillConfigs(config, undefined, skillRootsByName);
-  const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
-
-  if (matchedTriggers.length > 0) {
-    logGroup('Matched triggers');
-    for (const trigger of matchedTriggers) {
-      console.log(`- ${trigger.name}: ${trigger.skill}`);
-    }
-    logGroupEnd();
-  } else {
-    console.log('No triggers matched for this event');
-  }
-
-  return { context, config, matchedTriggers };
 }
 
 /**
@@ -266,10 +270,10 @@ async function executeAllTriggers(
   matchedTriggers: ResolvedTrigger[],
   octokit: Octokit,
   context: EventContext,
-  config: WardenConfig,
+  runnerConcurrency: number | undefined,
   inputs: ActionInputs
 ): Promise<TriggerResult[]> {
-  const concurrency = config.runner?.concurrency ?? inputs.parallel;
+  const concurrency = runnerConcurrency ?? inputs.parallel;
   const claudePath = await findClaudeCodeExecutable();
 
   // Global semaphore gates file-level work across all triggers.
@@ -283,7 +287,6 @@ async function executeAllTriggers(
       executeTrigger(trigger, {
         octokit,
         context,
-        config,
         anthropicApiKey: inputs.anthropicApiKey,
         claudePath,
         globalFailOn: inputs.failOn,
@@ -719,7 +722,7 @@ export async function runPRWorkflow(
         return;
       }
 
-      const { context, config, matchedTriggers } = initResult;
+      const { context, runnerConcurrency, auxiliaryMaxRetries, matchedTriggers } = initResult;
 
       // Set Sentry context after building event context
       if (context.pullRequest) {
@@ -747,7 +750,7 @@ export async function runPRWorkflow(
       });
 
       if (matchedTriggers.length === 0) {
-        await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey, config.defaults?.auxiliaryMaxRetries);
+        await cleanupOrphanedComments(octokit, context, inputs.anthropicApiKey, auxiliaryMaxRetries);
         setOutput('findings-count', 0);
         setOutput('high-count', 0);
         setOutput('summary', 'No triggers matched');
@@ -762,12 +765,12 @@ export async function runPRWorkflow(
 
       const results = await Sentry.startSpan(
         { op: 'workflow.execute', name: 'execute triggers' },
-        () => executeAllTriggers(matchedTriggers, octokit, context, config, inputs),
+        () => executeAllTriggers(matchedTriggers, octokit, context, runnerConcurrency, inputs),
       );
 
       const reviewPhase = await Sentry.startSpan(
         { op: 'workflow.review', name: 'post reviews' },
-        () => postReviewsAndTrackFailures(octokit, context, results, inputs, config.defaults?.auxiliaryMaxRetries),
+        () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryMaxRetries),
       );
 
       const triggerErrors = collectTriggerErrors(results);
@@ -783,7 +786,7 @@ export async function runPRWorkflow(
             octokit, context, reviewPhase.fetchedComments,
             allFindings, reviewPhase.activeWardenCommentIds,
             canResolveStale, inputs.anthropicApiKey,
-            config.defaults?.auxiliaryMaxRetries,
+            auxiliaryMaxRetries,
           );
           resolveSpan.setAttribute(
             'warden.feedback.auto_resolve.fix_eval_count',

@@ -9,7 +9,6 @@ import type { Octokit } from '@octokit/rest';
 import { Sentry } from '../../sentry.js';
 import { ActionFailedError } from '../workflow/base.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
-import type { WardenConfig } from '../../config/schema.js';
 import type { EventContext, SkillReport, SeverityThreshold, ConfidenceThreshold } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
 import type { OutputMode } from '../../cli/output/tty.js';
@@ -43,7 +42,6 @@ const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns
 export interface TriggerExecutorDeps {
   octokit: Octokit;
   context: EventContext;
-  config: WardenConfig;
   anthropicApiKey: string;
   claudePath: string;
   /** Global fail-on from action inputs (trigger-specific takes precedence) */
@@ -98,7 +96,7 @@ export async function executeTrigger(
     { op: 'trigger.execute', name: `execute ${trigger.name}` },
     async (span) => {
       span.setAttribute('skill.name', trigger.skill);
-      const { octokit, context, config, anthropicApiKey, claudePath } = deps;
+      const { octokit, context, anthropicApiKey, claudePath } = deps;
 
       logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
 
@@ -138,10 +136,10 @@ export async function executeTrigger(
             apiKey: anthropicApiKey,
             model: trigger.model,
             maxTurns: trigger.maxTurns,
-            batchDelayMs: config.defaults?.batchDelayMs,
-            maxContextFiles: config.defaults?.chunking?.maxContextFiles,
+            batchDelayMs: trigger.batchDelayMs,
+            maxContextFiles: trigger.maxContextFiles,
             pathToClaudeCodeExecutable: claudePath,
-            auxiliaryMaxRetries: config.defaults?.auxiliaryMaxRetries,
+            auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
           },
         };
 

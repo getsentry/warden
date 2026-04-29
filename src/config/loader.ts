@@ -269,6 +269,12 @@ export interface ResolvedTrigger {
   maxTurns?: number;
   /** Minimum confidence for findings (merged: trigger > skill > defaults) */
   minConfidence?: ConfidenceThreshold;
+  /** Batch delay to use for this trigger's skill execution */
+  batchDelayMs?: number;
+  /** Max number of context files to include in prompts for this trigger */
+  maxContextFiles?: number;
+  /** Max retries for auxiliary model calls during this trigger */
+  auxiliaryMaxRetries?: number;
   /** Schedule-specific configuration */
   schedule?: ScheduleConfig;
 }
@@ -340,6 +346,9 @@ export function resolveSkillConfigs(
         model: baseModel,
         maxTurns: skill.maxTurns ?? defaults?.maxTurns,
         minConfidence: skill.minConfidence ?? defaults?.minConfidence,
+        batchDelayMs: defaults?.batchDelayMs,
+        maxContextFiles: defaults?.chunking?.maxContextFiles,
+        auxiliaryMaxRetries: defaults?.auxiliaryMaxRetries,
       });
     } else {
       for (const trigger of skill.triggers) {
@@ -361,6 +370,9 @@ export function resolveSkillConfigs(
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? skill.maxTurns ?? defaults?.maxTurns,
           minConfidence: trigger.minConfidence ?? skill.minConfidence ?? defaults?.minConfidence,
+          batchDelayMs: defaults?.batchDelayMs,
+          maxContextFiles: defaults?.chunking?.maxContextFiles,
+          auxiliaryMaxRetries: defaults?.auxiliaryMaxRetries,
           schedule: trigger.schedule,
         });
       }
@@ -368,4 +380,27 @@ export function resolveSkillConfigs(
   }
 
   return result;
+}
+
+export function resolveLayeredSkillConfigs(
+  layered: LoadedLayeredConfig,
+  cliModel?: string,
+  skillRootsByName?: Record<string, string | undefined>
+): ResolvedTrigger[] {
+  if (layered.baseConfig && layered.repoConfig) {
+    return [
+      ...resolveSkillConfigs(layered.baseConfig, cliModel, skillRootsByName),
+      ...resolveSkillConfigs(layered.repoConfig, cliModel, skillRootsByName),
+    ];
+  }
+
+  if (layered.baseConfig) {
+    return resolveSkillConfigs(layered.baseConfig, cliModel, skillRootsByName);
+  }
+
+  if (layered.repoConfig) {
+    return resolveSkillConfigs(layered.repoConfig, cliModel, skillRootsByName);
+  }
+
+  return resolveSkillConfigs(layered.config, cliModel, skillRootsByName);
 }
