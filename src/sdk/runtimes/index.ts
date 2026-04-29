@@ -1,7 +1,7 @@
 import { claudeRuntime } from './claude.js';
-import type { AgentRuntime, FastModelRuntime, Runtime, RuntimeName } from './types.js';
+import type { AgentRuntime, FastModelRuntime, RuntimeName, RuntimeProvider } from './types.js';
 
-const RUNTIMES: Partial<Record<RuntimeName, Runtime>> = {
+const RUNTIME_PROVIDERS: Partial<Record<RuntimeName, RuntimeProvider>> = {
   claude: claudeRuntime,
 };
 
@@ -9,10 +9,10 @@ export { claudeAgentRuntime, claudeFastModelRuntime, claudeRuntime } from './cla
 export type {
   AgentRuntime,
   AgentRuntimeExecutionResult,
-  AgentRuntimeMessage,
-  AgentRuntimeMessageSubtype,
   AgentRuntimeOptions,
   AgentRuntimeRequest,
+  AgentRuntimeResult,
+  AgentRuntimeStatus,
   FastModelGenerateObjectRequest,
   FastModelGenerateObjectWithToolsRequest,
   FastModelResult,
@@ -20,20 +20,33 @@ export type {
   FastModelTool,
   Runtime,
   RuntimeName,
+  RuntimeProvider,
 } from './types.js';
 
-export function getRuntime(name: RuntimeName = 'claude'): Runtime {
-  const runtime = RUNTIMES[name];
-  if (!runtime) {
+export function getRuntimeProvider(name: RuntimeName = 'claude'): RuntimeProvider {
+  const provider = RUNTIME_PROVIDERS[name];
+  if (!provider) {
     throw new Error(`Unsupported runtime: ${name}`);
   }
-  return runtime;
+  return provider;
+}
+
+export function getRuntime(name: RuntimeName = 'claude'): RuntimeProvider {
+  return getRuntimeProvider(name);
 }
 
 export function getAgentRuntime(runtimeName: RuntimeName = 'claude'): AgentRuntime {
-  return getRuntime(runtimeName).agent;
+  const provider = getRuntimeProvider(runtimeName);
+  if (!provider.agent) {
+    throw new Error(`Runtime ${runtimeName} does not support agent execution`);
+  }
+  return provider.agent;
 }
 
 export function getFastModelRuntime(runtimeName: RuntimeName = 'claude'): FastModelRuntime {
-  return getRuntime(runtimeName).fastModel;
+  const provider = getRuntimeProvider(runtimeName);
+  if (!provider.fastModel) {
+    throw new Error(`Runtime ${runtimeName} does not support fast-model calls`);
+  }
+  return provider.fastModel;
 }

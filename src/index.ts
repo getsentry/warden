@@ -98,9 +98,35 @@ export type {
 // -----------------------------------------------------------------------------
 // SDK Runner
 // -----------------------------------------------------------------------------
-export { runSkill, SkillRunnerError } from './sdk/runner.js';
+export {
+  runSkill,
+  SkillRunnerError,
+  getRuntime,
+  getRuntimeProvider,
+  getAgentRuntime,
+  getFastModelRuntime,
+  claudeRuntime,
+  claudeAgentRuntime,
+  claudeFastModelRuntime,
+} from './sdk/runner.js';
 
-export type { SkillRunnerOptions, SkillRunnerCallbacks } from './sdk/runner.js';
+export type {
+  SkillRunnerOptions,
+  SkillRunnerCallbacks,
+  RuntimeProvider,
+  Runtime,
+  AgentRuntime,
+  AgentRuntimeExecutionResult,
+  AgentRuntimeOptions,
+  AgentRuntimeRequest,
+  AgentRuntimeResult,
+  AgentRuntimeStatus,
+  FastModelGenerateObjectRequest,
+  FastModelGenerateObjectWithToolsRequest,
+  FastModelResult,
+  FastModelRuntime,
+  FastModelTool,
+} from './sdk/runner.js';
 
 // -----------------------------------------------------------------------------
 // Skills

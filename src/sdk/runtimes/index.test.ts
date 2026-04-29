@@ -6,21 +6,23 @@ import {
   getAgentRuntime,
   getFastModelRuntime,
   getRuntime,
+  getRuntimeProvider,
 } from './index.js';
 
 describe('runtimes', () => {
-  it('exposes Claude as the default runtime with agent and fast-model capabilities', () => {
-    const runtime = getRuntime();
+  it('exposes Claude as the default runtime provider with agent and fast-model capabilities', () => {
+    const runtime = getRuntimeProvider();
 
     expect(runtime.name).toBe('claude');
     expect(runtime.agent).toBe(claudeAgentRuntime);
     expect(runtime.fastModel).toBe(claudeFastModelRuntime);
+    expect(getRuntime()).toBe(runtime);
     expect(getAgentRuntime()).toBe(claudeAgentRuntime);
     expect(getFastModelRuntime()).toBe(claudeFastModelRuntime);
   });
 
   it('rejects unsupported runtimes explicitly', () => {
-    expect(() => getRuntime('pi' as never)).toThrow('Unsupported runtime: pi');
+    expect(() => getRuntimeProvider('pi' as never)).toThrow('Unsupported runtime: pi');
   });
 
   it('fails fast-model calls clearly when Claude auth is missing', async () => {

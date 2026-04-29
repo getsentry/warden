@@ -227,7 +227,7 @@ ${truncatedText}`;
   if (!result.success) {
     return {
       success: false,
-      error: result.error,
+      error: `llm_extraction_failed: ${result.error}`,
       preview: rawText.slice(0, 200),
       usage: result.usage,
     };

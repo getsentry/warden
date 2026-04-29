@@ -11,7 +11,7 @@
  * - Claude receives read-only tools for hunk analysis.
  * - SDK errors remain classifiable by downstream retry/auth logic.
  * - Runtime results always contain valid `UsageStats`.
- * - Non-success SDK subtypes normalize to `isError: true`.
+ * - Claude-specific result subtypes normalize to Warden-owned statuses.
  */
 import type Anthropic from '@anthropic-ai/sdk';
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -21,15 +21,15 @@ import { emptyUsage, extractUsage } from '../usage.js';
 import type {
   AgentRuntime,
   AgentRuntimeExecutionResult,
-  AgentRuntimeMessage,
-  AgentRuntimeOptions,
   AgentRuntimeRequest,
+  AgentRuntimeResult,
+  AgentRuntimeStatus,
   FastModelGenerateObjectRequest,
   FastModelGenerateObjectWithToolsRequest,
   FastModelResult,
   FastModelRuntime,
   FastModelTool,
-  Runtime,
+  RuntimeProvider,
 } from './types.js';
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
@@ -42,7 +42,7 @@ interface TurnData {
   model: string;
 }
 
-interface ClaudeRuntimeOptions extends AgentRuntimeOptions {
+interface ClaudeAgentProviderOptions {
   pathToClaudeCodeExecutable?: string;
 }
 
@@ -67,12 +67,28 @@ function singleResponseModel(modelUsage: SDKResultMessage['modelUsage'] | undefi
   return models.length === 1 ? models[0] : undefined;
 }
 
-function normalizeResult(result: SDKResultMessage): AgentRuntimeMessage {
+function statusFromClaudeSubtype(subtype: SDKResultMessage['subtype']): AgentRuntimeStatus {
+  switch (subtype) {
+    case 'success':
+      return 'success';
+    case 'error_max_turns':
+      return 'turn_limit';
+    case 'error_max_budget_usd':
+      return 'budget_limit';
+    case 'error_max_structured_output_retries':
+      return 'structured_output_error';
+    case 'error_during_execution':
+      return 'provider_error';
+    default:
+      return 'provider_error';
+  }
+}
+
+function normalizeResult(result: SDKResultMessage): AgentRuntimeResult {
   const errors = 'errors' in result ? result.errors : [];
   return {
-    subtype: result.subtype,
-    isError: result.is_error || result.subtype !== 'success',
-    result: result.subtype === 'success' ? result.result : '',
+    status: statusFromClaudeSubtype(result.subtype),
+    text: result.subtype === 'success' ? result.result : '',
     errors,
     usage: extractUsage(result),
     responseId: result.uuid,
@@ -103,13 +119,13 @@ function appendClaudeStderr(error: unknown, stderr: string): unknown {
   return new Error(message);
 }
 
-export const claudeAgentRuntime: AgentRuntime = {
+export const claudeAgentRuntime: AgentRuntime<ClaudeAgentProviderOptions> = {
   name: 'claude',
 
-  async execute(request: AgentRuntimeRequest): Promise<AgentRuntimeExecutionResult> {
-    const { systemPrompt, userPrompt, repoPath, options, skillName } = request;
+  async execute(request: AgentRuntimeRequest<ClaudeAgentProviderOptions>): Promise<AgentRuntimeExecutionResult> {
+    const { systemPrompt, userPrompt, repoPath, options, skillName, providerOptions } = request;
     const { maxTurns = 50, model, abortController } = options;
-    const { pathToClaudeCodeExecutable } = options as ClaudeRuntimeOptions;
+    const { pathToClaudeCodeExecutable } = providerOptions ?? {};
     const modelId = model ?? 'unknown';
 
     return Sentry.startSpan(
@@ -341,7 +357,7 @@ export const claudeFastModelRuntime: FastModelRuntime = {
   },
 };
 
-export const claudeRuntime: Runtime = {
+export const claudeRuntime: RuntimeProvider = {
   name: 'claude',
   agent: claudeAgentRuntime,
   fastModel: claudeFastModelRuntime,

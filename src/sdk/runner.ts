@@ -61,16 +61,17 @@ export {
   getAgentRuntime,
   getFastModelRuntime,
   getRuntime,
+  getRuntimeProvider,
   claudeAgentRuntime,
 } from './runtimes/index.js';
-export type { Runtime, RuntimeName } from './runtimes/index.js';
+export type { Runtime, RuntimeName, RuntimeProvider } from './runtimes/index.js';
 export type {
   AgentRuntime,
   AgentRuntimeExecutionResult,
-  AgentRuntimeMessage,
-  AgentRuntimeMessageSubtype,
   AgentRuntimeOptions,
   AgentRuntimeRequest,
+  AgentRuntimeResult,
+  AgentRuntimeStatus,
   FastModelGenerateObjectRequest,
   FastModelGenerateObjectWithToolsRequest,
   FastModelResult,

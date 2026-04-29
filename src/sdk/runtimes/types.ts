@@ -18,12 +18,14 @@ import type { UsageStats } from '../../types/index.js';
 export const RuntimeNameSchema = z.enum(['claude']);
 export type RuntimeName = z.infer<typeof RuntimeNameSchema>;
 
-export type AgentRuntimeMessageSubtype =
+export type AgentRuntimeStatus =
   | 'success'
-  | 'error_during_execution'
-  | 'error_max_turns'
-  | 'error_max_budget_usd'
-  | 'error_max_structured_output_retries';
+  | 'provider_error'
+  | 'auth_error'
+  | 'turn_limit'
+  | 'budget_limit'
+  | 'aborted'
+  | 'structured_output_error';
 
 export interface AgentRuntimeOptions {
   maxTurns?: number;
@@ -31,18 +33,19 @@ export interface AgentRuntimeOptions {
   abortController?: AbortController;
 }
 
-export interface AgentRuntimeRequest {
+export interface AgentRuntimeRequest<TProviderOptions = unknown> {
   systemPrompt: string;
   userPrompt: string;
   repoPath: string;
   skillName: string;
   options: AgentRuntimeOptions;
+  /** Provider-specific settings consumed only by the selected runtime adapter. */
+  providerOptions?: TProviderOptions;
 }
 
-export interface AgentRuntimeMessage {
-  subtype: AgentRuntimeMessageSubtype;
-  isError: boolean;
-  result: string;
+export interface AgentRuntimeResult {
+  status: AgentRuntimeStatus;
+  text: string;
   errors: string[];
   usage: UsageStats;
   responseId?: string;
@@ -54,16 +57,16 @@ export interface AgentRuntimeMessage {
 }
 
 export interface AgentRuntimeExecutionResult {
-  result?: AgentRuntimeMessage;
+  result?: AgentRuntimeResult;
   /** Authentication error surfaced by the runtime, if available out-of-band. */
   authError?: string;
   /** Captured runtime stderr or diagnostics for clearer failures. */
   stderr?: string;
 }
 
-export interface AgentRuntime {
+export interface AgentRuntime<TProviderOptions = unknown> {
   readonly name: string;
-  execute(request: AgentRuntimeRequest): Promise<AgentRuntimeExecutionResult>;
+  execute(request: AgentRuntimeRequest<TProviderOptions>): Promise<AgentRuntimeExecutionResult>;
 }
 
 export interface FastModelTool {
@@ -98,8 +101,10 @@ export interface FastModelRuntime {
   generateObjectWithTools<T>(request: FastModelGenerateObjectWithToolsRequest<T>): Promise<FastModelResult<T>>;
 }
 
-export interface Runtime {
+export interface RuntimeProvider {
   readonly name: RuntimeName;
-  readonly agent: AgentRuntime;
-  readonly fastModel: FastModelRuntime;
+  readonly agent?: AgentRuntime;
+  readonly fastModel?: FastModelRuntime;
 }
+
+export type Runtime = RuntimeProvider;

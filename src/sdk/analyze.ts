@@ -9,7 +9,7 @@ import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
 import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
 import { getAgentRuntime } from './runtimes/index.js';
-import type { AgentRuntimeMessage } from './runtimes/index.js';
+import type { AgentRuntimeResult } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
   DEFAULT_FILE_CONCURRENCY,
@@ -48,24 +48,24 @@ interface ParseHunkOutputResult {
  * 2. LLM fallback using haiku (handles malformed output gracefully)
  */
 async function parseHunkOutput(
-  result: AgentRuntimeMessage,
+  result: AgentRuntimeResult,
   filename: string,
   options: SkillRunnerOptions
 ): Promise<ParseHunkOutputResult> {
-  if (result.subtype !== 'success') {
+  if (result.status !== 'success') {
     // SDK error - not an extraction failure, just no findings
     return { findings: [], extractionFailed: false, extractionMethod: 'none' };
   }
 
   // Tier 1: Try regex-based extraction first (fast)
-  const extracted = extractFindingsJson(result.result);
+  const extracted = extractFindingsJson(result.text);
 
   if (extracted.success) {
     return { findings: validateFindings(extracted.findings, filename), extractionFailed: false, extractionMethod: 'regex' };
   }
 
   // Tier 2: Try LLM fallback for malformed output
-  const fallback = await extractFindingsWithLLM(result.result, {
+  const fallback = await extractFindingsWithLLM(result.text, {
     apiKey: options.apiKey,
     runtime: options.runtime,
     model: options.fastModelModel,
@@ -185,12 +185,21 @@ async function analyzeHunk(
 
         try {
           const agentRuntime = getAgentRuntime(options.runtime);
+          const providerOptions =
+            (options.runtime ?? 'claude') === 'claude'
+              ? { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable }
+              : undefined;
           const { result: resultMessage, authError } = await agentRuntime.execute({
             systemPrompt,
             userPrompt,
             repoPath,
             skillName: skill.name,
-            options,
+            options: {
+              maxTurns: options.maxTurns,
+              model: options.model,
+              abortController: options.abortController,
+            },
+            providerOptions,
           });
 
           // Check for authentication errors from auth_status messages
@@ -221,7 +230,7 @@ async function analyzeHunk(
           accumulatedUsage.push(usage);
 
           // Check if the SDK returned an error result (e.g., max turns, budget exceeded)
-          const isError = resultMessage.isError || resultMessage.subtype !== 'success';
+          const isError = resultMessage.status !== 'success';
 
           if (isError) {
             // Extract error messages from SDK result
@@ -237,19 +246,19 @@ async function analyzeHunk(
             // SDK error - log and return failure with error details
             const errorSummary = errorMessages.length > 0
               ? sanitizeErrorMessage(errorMessages.join('; '))
-              : `SDK error: ${resultMessage.subtype}`;
+              : `Runtime error: ${resultMessage.status}`;
             if (callbacks?.onHunkFailed) {
-              callbacks.onHunkFailed(callbacks.lineRange, `SDK execution failed: ${errorSummary}`);
+              callbacks.onHunkFailed(callbacks.lineRange, `Runtime execution failed: ${errorSummary}`);
             } else {
-              console.error(`SDK execution failed: ${errorSummary}`);
+              console.error(`Runtime execution failed: ${errorSummary}`);
             }
             return {
               findings: [],
               usage: aggregateUsage(accumulatedUsage),
               failed: true,
               extractionFailed: false,
-              failureCode: resultMessage.subtype === 'error_max_turns' ? 'max_turns' : 'sdk_error',
-              failureMessage: `SDK execution failed: ${errorSummary}`,
+              failureCode: resultMessage.status === 'turn_limit' ? 'max_turns' : 'sdk_error',
+              failureMessage: `Runtime execution failed: ${errorSummary}`,
               attempts: attempt + 1,
             };
           }

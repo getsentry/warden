@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { mergeCrossLocationFindings, mergeGroupLocations } from './extract.js';
+import { extractFindingsWithLLM, mergeCrossLocationFindings, mergeGroupLocations } from './extract.js';
 import type { Finding } from '../types/index.js';
 
 // Mock callHaiku to avoid real API calls
@@ -26,6 +26,29 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
     ...overrides,
   };
 }
+
+describe('extractFindingsWithLLM', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('preserves the LLM extraction failure prefix for stable error classification', async () => {
+    mockCallHaiku.mockResolvedValue({
+      success: false,
+      error: 'Request timed out',
+      usage: { inputTokens: 10, outputTokens: 0, costUSD: 0.001 },
+    });
+
+    const result = await extractFindingsWithLLM('{ "findings": [', { apiKey: 'test-key' });
+
+    expect(result).toEqual({
+      success: false,
+      error: 'llm_extraction_failed: Request timed out',
+      preview: '{ "findings": [',
+      usage: { inputTokens: 10, outputTokens: 0, costUSD: 0.001 },
+    });
+  });
+});
 
 describe('mergeCrossLocationFindings', () => {
   let tempDir: string;

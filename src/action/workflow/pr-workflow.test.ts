@@ -16,6 +16,8 @@ const BASE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'base-only');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
 const RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'runtime-claude');
+const EMPTY_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-fast-model');
+const NO_MATCH_EMPTY_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-fast-model');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 
 // -----------------------------------------------------------------------------
@@ -319,6 +321,45 @@ describe('runPRWorkflow', () => {
       // No review posted since all findings were duplicates
       const createReview = vi.mocked(mockOctokit.pulls.createReview);
       expect(createReview).not.toHaveBeenCalled();
+    });
+
+    it('normalizes empty fast-model default before review deduplication', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          body: 'Existing issue',
+          path: 'src/test.ts',
+          line: 10,
+          isWarden: true,
+          title: 'Different finding',
+          description: 'Existing description',
+          contentHash: 'abc123',
+        },
+      ]);
+      mockDeduplicateFindings.mockResolvedValue({
+        newFindings: [finding],
+        duplicateActions: [],
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        EMPTY_FAST_MODEL_FIXTURES_DIR
+      );
+
+      expect(mockDeduplicateFindings).toHaveBeenCalledWith(
+        [finding],
+        expect.any(Array),
+        expect.objectContaining({
+          model: undefined,
+        })
+      );
     });
   });
 
@@ -859,6 +900,42 @@ describe('runPRWorkflow', () => {
       );
 
       // Should NOT run skill tasks (no triggers matched)
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+    });
+
+    it('normalizes empty fast-model default before cleanup fix evaluation', async () => {
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Unused import',
+          description: 'Remove unused import',
+          contentHash: 'hash1',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        },
+      ]);
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        NO_MATCH_EMPTY_FAST_MODEL_FIXTURES_DIR
+      );
+
+      expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(
+        mockOctokit,
+        expect.any(Array),
+        expect.any(Object),
+        [],
+        'test-api-key',
+        expect.objectContaining({
+          model: undefined,
+        })
+      );
       expect(mockRunSkillTask).not.toHaveBeenCalled();
     });
 

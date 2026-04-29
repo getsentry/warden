@@ -12,6 +12,7 @@ import {
   loadLayeredWardenConfig,
   resolveLayeredSkillConfigs,
   ConfigLoadError,
+  emptyToUndefined,
 } from '../../config/loader.js';
 import type {
   LayeredSkillRootsByName,
@@ -99,7 +100,7 @@ function resolveWorkflowFastModelOptions(layered: LoadedLayeredConfig): FastMode
         .map((config) => config?.defaults?.runtime)
         .find((value): value is RuntimeName => value !== undefined) ?? 'claude',
     model: configs
-      .map((config) => config?.defaults?.fastModel?.model)
+      .map((config) => emptyToUndefined(config?.defaults?.fastModel?.model))
       .find((value): value is string => value !== undefined),
     maxRetries: configs
       .map(

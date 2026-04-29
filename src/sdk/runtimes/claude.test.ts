@@ -113,7 +113,6 @@ describe('claudeAgentRuntime', () => {
     const options = {
       model: 'claude-test',
       maxTurns: 3,
-      pathToClaudeCodeExecutable: '/bin/claude',
     };
 
     const result = await claudeAgentRuntime.execute({
@@ -122,6 +121,7 @@ describe('claudeAgentRuntime', () => {
       repoPath: '/repo',
       skillName: 'test-skill',
       options,
+      providerOptions: { pathToClaudeCodeExecutable: '/bin/claude' },
     });
 
     expect(mockQuery).toHaveBeenCalledWith({
@@ -139,9 +139,8 @@ describe('claudeAgentRuntime', () => {
       }),
     });
     expect(result.result).toMatchObject({
-      subtype: 'success',
-      isError: false,
-      result: '{"findings":[]}',
+      status: 'success',
+      text: '{"findings":[]}',
       responseId: '00000000-0000-4000-8000-000000000001',
       responseModel: 'claude-test',
       sessionId: 'session-1',
@@ -197,9 +196,8 @@ describe('claudeAgentRuntime', () => {
     });
 
     expect(result.result).toMatchObject({
-      subtype: 'error_max_turns',
-      isError: true,
-      result: '',
+      status: 'turn_limit',
+      text: '',
       errors: ['too many turns'],
       usage: {
         inputTokens: 0,
@@ -209,6 +207,25 @@ describe('claudeAgentRuntime', () => {
         costUSD: 0,
       },
     });
+  });
+
+  it.each([
+    ['error_during_execution', 'provider_error'],
+    ['error_max_turns', 'turn_limit'],
+    ['error_max_budget_usd', 'budget_limit'],
+    ['error_max_structured_output_retries', 'structured_output_error'],
+  ] as const)('maps Claude subtype %s to Warden status %s', async (subtype, status) => {
+    mockQuery.mockReturnValue(mockStream([errorResult({ subtype })]));
+
+    const result = await claudeAgentRuntime.execute({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo',
+      skillName: 'test-skill',
+      options: {},
+    });
+
+    expect(result.result?.status).toBe(status);
   });
 
   it('preserves SDK error instances when appending stderr diagnostics', async () => {
