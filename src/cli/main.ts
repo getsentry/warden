@@ -490,6 +490,28 @@ interface ProcessedResults {
   failureReasons: string[];
 }
 
+type SkillRunnerOptionOverrides = Pick<
+  SkillRunnerOptions,
+  'model' | 'maxTurns' | 'runtime' | 'fastModelModel' | 'auxiliaryMaxRetries'
+>;
+
+export function mergeSkillRunnerOptions(
+  base: SkillRunnerOptions,
+  overrides: SkillRunnerOptionOverrides
+): SkillRunnerOptions {
+  const merged = { ...base };
+
+  if (overrides.model !== undefined) merged.model = overrides.model;
+  if (overrides.maxTurns !== undefined) merged.maxTurns = overrides.maxTurns;
+  if (overrides.runtime !== undefined) merged.runtime = overrides.runtime;
+  if (overrides.fastModelModel !== undefined) merged.fastModelModel = overrides.fastModelModel;
+  if (overrides.auxiliaryMaxRetries !== undefined) {
+    merged.auxiliaryMaxRetries = overrides.auxiliaryMaxRetries;
+  }
+
+  return merged;
+}
+
 /**
  * Process skill task results into reports and check for failures.
  * Exported for testing; callers inside main.ts use it directly.
@@ -774,10 +796,7 @@ async function runSkills(
       offline: options.offline,
     }),
     context: filterContextByPaths(context, filters),
-    runnerOptions: {
-      ...runnerOptions,
-      ...skillOptions,
-    },
+    runnerOptions: mergeSkillRunnerOptions(runnerOptions, skillOptions),
   }));
 
   // Open the run's JSONL log before launching skills so `warden runs
