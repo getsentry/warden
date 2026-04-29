@@ -15,6 +15,7 @@ import type { LayeredSkillRootsByName, ResolvedTrigger } from '../../config/load
 import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
+import { usesClaudeRuntime } from '../../sdk/providers/types.js';
 import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -25,6 +26,7 @@ import {
   setOutput,
   setFailed,
   ActionFailedError,
+  ensureClaudeAuth,
   logGroup,
   logGroupEnd,
   findClaudeCodeExecutable,
@@ -36,16 +38,6 @@ import {
 // -----------------------------------------------------------------------------
 // Main Schedule Workflow
 // -----------------------------------------------------------------------------
-
-function ensureClaudeAgentAuth(inputs: ActionInputs): void {
-  if (inputs.anthropicApiKey || inputs.oauthToken) {
-    return;
-  }
-  setFailed(
-    'Authentication not found. Provide an API key via anthropic-api-key input, ' +
-      'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
-  );
-}
 
 export async function runScheduleWorkflow(
   octokit: Octokit,
@@ -177,8 +169,8 @@ export async function runScheduleWorkflow(
         remote: resolved.remote,
       });
       const usesClaudeAgent = resolved.agentProvider === 'claude';
-      if (usesClaudeAgent) {
-        ensureClaudeAgentAuth(inputs);
+      if (usesClaudeRuntime(resolved)) {
+        ensureClaudeAuth(inputs);
       }
       const claudePath = usesClaudeAgent ? await findClaudeCodeExecutable() : undefined;
       const report = await runSkill(skill, context, {

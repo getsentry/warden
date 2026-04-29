@@ -15,6 +15,7 @@ const FIXTURES_DIR = join(__dirname, '__fixtures__');
 const BASE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'base-only');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
+const FAST_MODEL_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'fast-model-claude');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 
 // -----------------------------------------------------------------------------
@@ -67,10 +68,20 @@ vi.mock('../fix-evaluation/index.js', () => ({
 // Mock base utilities that call process.exit or need system access
 vi.mock('./base.js', async () => {
   const actual = await vi.importActual('./base.js');
+  const mockedSetFailed = vi.fn((msg: string): never => {
+    throw new Error(`setFailed: ${msg}`);
+  });
   return {
     ...actual,
-    setFailed: vi.fn((msg: string): never => {
-      throw new Error(`setFailed: ${msg}`);
+    setFailed: mockedSetFailed,
+    ensureClaudeAuth: vi.fn((inputs: ActionInputs): void => {
+      if (inputs.anthropicApiKey || inputs.oauthToken) {
+        return;
+      }
+      mockedSetFailed(
+        'Authentication not found. Provide an API key via anthropic-api-key input, ' +
+          'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
+      );
     }),
     findClaudeCodeExecutable: vi.fn(() => '/usr/local/bin/claude'),
     getAuthenticatedBotLogin: vi.fn(() => Promise.resolve('warden[bot]')),
@@ -351,6 +362,23 @@ describe('runPRWorkflow', () => {
   });
 
   describe('failure conditions', () => {
+    it('requires Claude auth when only the fast-model provider is Claude', async () => {
+      await expect(
+        runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ anthropicApiKey: '', oauthToken: '' }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FAST_MODEL_CLAUDE_FIXTURES_DIR
+        )
+      ).rejects.toThrow('setFailed');
+
+      expect(mockSetFailed).toHaveBeenCalledWith(
+        expect.stringContaining('Authentication not found')
+      );
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+    });
+
     it('fails when findings exceed fail-on threshold and failCheck is true', async () => {
       const finding = createFinding({ severity: 'high' });
       const report = createSkillReport({ findings: [finding] });

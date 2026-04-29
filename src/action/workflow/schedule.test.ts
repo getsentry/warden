@@ -16,6 +16,7 @@ const SCHEDULE_MULTI_FIXTURES = join(__dirname, '__fixtures__/schedule-multi');
 const SCHEDULE_FIXPR_FIXTURES = join(__dirname, '__fixtures__/schedule-fixpr');
 const SCHEDULE_TITLE_FIXTURES = join(__dirname, '__fixtures__/schedule-title');
 const NO_CONFIG_FIXTURES = join(__dirname, '__fixtures__/no-config');
+const FAST_MODEL_CLAUDE_FIXTURES = join(__dirname, '__fixtures__/fast-model-claude');
 // Reuse the base fixtures dir (has only pull_request triggers, no schedule)
 const PR_ONLY_FIXTURES = join(__dirname, '__fixtures__');
 
@@ -32,6 +33,15 @@ vi.mock('./base.js', async () => {
   return {
     ...actual,
     setFailed: mockedSetFailed,
+    ensureClaudeAuth: vi.fn((inputs: ActionInputs): void => {
+      if (inputs.anthropicApiKey || inputs.oauthToken) {
+        return;
+      }
+      mockedSetFailed(
+        'Authentication not found. Provide an API key via anthropic-api-key input, ' +
+          'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
+      );
+    }),
     findClaudeCodeExecutable: vi.fn(() => '/usr/local/bin/claude'),
     getDefaultBranchFromAPI: vi.fn(() => Promise.resolve('main')),
     // Override handleTriggerErrors to use the mocked setFailed
@@ -495,6 +505,21 @@ describe('runScheduleWorkflow', () => {
   // ---------------------------------------------------------------------------
 
   describe('failure and error handling', () => {
+    it('requires Claude auth when only the fast-model provider is Claude', async () => {
+      await expect(
+        runScheduleWorkflow(
+          mockOctokit,
+          createDefaultInputs({ anthropicApiKey: '', oauthToken: '' }),
+          FAST_MODEL_CLAUDE_FIXTURES
+        )
+      ).rejects.toThrow('setFailed');
+
+      expect(mockSetFailed).toHaveBeenCalledWith(
+        expect.stringContaining('Authentication not found')
+      );
+      expect(mockRunSkill).not.toHaveBeenCalled();
+    });
+
     it('fails when failOn threshold is met and failCheck is true', async () => {
       const finding = createFinding({ severity: 'high' });
       mockRunSkill.mockResolvedValue(createSkillReport({ findings: [finding] }));

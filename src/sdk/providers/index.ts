@@ -7,7 +7,8 @@ const PROVIDERS: Partial<Record<RuntimeProviderName, RuntimeProvider>> = {
 };
 
 export { claudeFastModelRuntime, claudeProvider } from './claude.js';
-export type { RuntimeProvider, RuntimeProviderName } from './types.js';
+export { usesClaudeRuntime } from './types.js';
+export type { RuntimeProvider, RuntimeProviderName, RuntimeProviderSelection } from './types.js';
 
 export function getRuntimeProvider(name: RuntimeProviderName = 'claude'): RuntimeProvider {
   const provider = PROVIDERS[name];

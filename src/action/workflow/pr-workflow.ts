@@ -37,7 +37,7 @@ import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
-import type { RuntimeProviderName } from '../../sdk/providers/types.js';
+import { usesClaudeRuntime, type RuntimeProviderName } from '../../sdk/providers/types.js';
 import {
   createCoreCheck,
   updateCoreCheck,
@@ -47,6 +47,7 @@ import {
 import {
   setOutput,
   setFailed,
+  ensureClaudeAuth,
   logGroup,
   logGroupEnd,
   findClaudeCodeExecutable,
@@ -107,16 +108,6 @@ function resolveWorkflowFastModelOptions(layered: LoadedLayeredConfig): FastMode
       )
       .find((value): value is number => value !== undefined),
   };
-}
-
-function ensureClaudeAgentAuth(inputs: ActionInputs): void {
-  if (inputs.anthropicApiKey || inputs.oauthToken) {
-    return;
-  }
-  setFailed(
-    'Authentication not found. Provide an API key via anthropic-api-key input, ' +
-      'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
-  );
 }
 
 // -----------------------------------------------------------------------------
@@ -318,8 +309,8 @@ async function executeAllTriggers(
 ): Promise<TriggerResult[]> {
   const concurrency = runnerConcurrency ?? inputs.parallel;
   const needsClaudeAgent = matchedTriggers.some((trigger) => trigger.agentProvider === 'claude');
-  if (needsClaudeAgent) {
-    ensureClaudeAgentAuth(inputs);
+  if (matchedTriggers.some(usesClaudeRuntime)) {
+    ensureClaudeAuth(inputs);
   }
   const claudePath = needsClaudeAgent ? await findClaudeCodeExecutable() : undefined;
 

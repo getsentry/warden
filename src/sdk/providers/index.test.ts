@@ -6,6 +6,7 @@ import {
   getAgentRuntime,
   getFastModelRuntime,
   getRuntimeProvider,
+  usesClaudeRuntime,
 } from './index.js';
 
 describe('runtime providers', () => {
@@ -21,6 +22,12 @@ describe('runtime providers', () => {
 
   it('rejects unsupported providers explicitly', () => {
     expect(() => getRuntimeProvider('pi')).toThrow('Unsupported runtime provider: pi');
+  });
+
+  it('detects Claude usage across agent and fast-model runtime selections', () => {
+    expect(usesClaudeRuntime({ agentProvider: 'claude', fastModelProvider: 'pi' })).toBe(true);
+    expect(usesClaudeRuntime({ agentProvider: 'pi', fastModelProvider: 'claude' })).toBe(true);
+    expect(usesClaudeRuntime({ agentProvider: 'pi', fastModelProvider: 'pi' })).toBe(false);
   });
 
   it('fails fast-model calls clearly when the provider is missing auth', async () => {

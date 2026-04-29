@@ -13,6 +13,7 @@ import { execFileNonInteractive } from '../../utils/exec.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { TriggerResult } from '../triggers/executor.js';
+import type { ActionInputs } from '../inputs.js';
 
 /**
  * Sentinel error thrown by setFailed() so the top-level catch handler
@@ -53,6 +54,16 @@ export function setOutput(name: string, value: string | number): void {
  */
 export function setFailed(message: string): never {
   throw new ActionFailedError(message);
+}
+
+export function ensureClaudeAuth(inputs: ActionInputs): void {
+  if (inputs.anthropicApiKey || inputs.oauthToken) {
+    return;
+  }
+  setFailed(
+    'Authentication not found. Provide an API key via anthropic-api-key input, ' +
+      'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
+  );
 }
 
 /**

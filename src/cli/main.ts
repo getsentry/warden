@@ -5,6 +5,7 @@ import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } f
 import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
+import { usesClaudeRuntime } from '../sdk/providers/types.js';
 import { mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
@@ -739,7 +740,7 @@ async function runSkills(
     return 0;
   }
 
-  if (skillsToRun.some((skill) => skill.agentProvider === 'claude')) {
+  if (skillsToRun.some(usesClaudeRuntime)) {
     try {
       verifyAuth({ apiKey });
     } catch (error: unknown) {
@@ -1061,7 +1062,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     reporter.debug('No API key found. Using Claude Code subscription auth.');
   }
 
-  if (triggersToRun.some((trigger) => trigger.agentProvider === 'claude')) {
+  if (triggersToRun.some(usesClaudeRuntime)) {
     try {
       verifyAuth({ apiKey });
     } catch (error: unknown) {

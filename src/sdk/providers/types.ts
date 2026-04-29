@@ -10,8 +10,17 @@ import type { AgentRuntime, FastModelRuntime } from '../runtimes/index.js';
 
 export type RuntimeProviderName = 'claude' | 'pi';
 
+export interface RuntimeProviderSelection {
+  readonly agentProvider?: RuntimeProviderName;
+  readonly fastModelProvider?: RuntimeProviderName;
+}
+
 export interface RuntimeProvider {
   readonly name: RuntimeProviderName;
   readonly agent?: AgentRuntime;
   readonly fastModel?: FastModelRuntime;
+}
+
+export function usesClaudeRuntime(selection: RuntimeProviderSelection): boolean {
+  return selection.agentProvider === 'claude' || selection.fastModelProvider === 'claude';
 }
