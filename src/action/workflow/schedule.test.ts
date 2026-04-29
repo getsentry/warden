@@ -274,6 +274,31 @@ describe('runScheduleWorkflow', () => {
       ]);
     });
 
+    it('passes auxiliaryMaxRetries through resolved schedule triggers', async () => {
+      mockRunSkill.mockResolvedValue(createSkillReport());
+      mockBuildContext.mockResolvedValue(createScheduleContext());
+
+      await runScheduleWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        SCHEDULE_FIXTURES
+      );
+
+      expect(mockRunSkill).toHaveBeenNthCalledWith(1,
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ auxiliaryMaxRetries: 7 })
+      );
+      expect(mockRunSkill).toHaveBeenNthCalledWith(2,
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ auxiliaryMaxRetries: 3 })
+      );
+    });
+
     it('fails when an explicit base config is missing', async () => {
       await expect(
         runScheduleWorkflow(

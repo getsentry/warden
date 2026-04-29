@@ -1,5 +1,8 @@
 version = 1
 
+[defaults]
+auxiliaryMaxRetries = 3
+
 [[skills]]
 name = "test-skill"
 paths = ["src/**/*.ts"]

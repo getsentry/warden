@@ -173,6 +173,7 @@ export async function runScheduleWorkflow(
         maxTurns: resolved.maxTurns,
         batchDelayMs: resolved.batchDelayMs,
         maxContextFiles: resolved.maxContextFiles,
+        auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);

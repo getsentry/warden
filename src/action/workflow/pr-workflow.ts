@@ -154,6 +154,9 @@ async function initializeWorkflow(
       baseConfigPath: inputs.baseConfigPath,
       configPath: inputs.configPath,
     });
+    // The org base config is an enforced baseline. Repo config extends the run
+    // with additional repo-local triggers, but does not override these
+    // action-level settings for the global workflow.
     auxiliaryMaxRetries =
       layered.baseConfig?.defaults?.auxiliaryMaxRetries ??
       layered.repoConfig?.defaults?.auxiliaryMaxRetries;
