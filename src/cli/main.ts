@@ -687,7 +687,7 @@ async function outputResultsAndHandleFixes(
  * If skillName is provided, runs only that skill.
  * Otherwise, runs skills from matched triggers in warden.toml.
  */
-async function runSkills(
+export async function runSkills(
   context: Awaited<ReturnType<typeof buildLocalEventContext>>,
   options: CLIOptions,
   reporter: Reporter
@@ -707,6 +707,20 @@ async function runSkills(
     repoPath = getRepoRoot(cwd);
   } catch {
     // Not in a git repo - that's fine for file mode
+  }
+
+  // Pre-flight: verify auth will work before starting analysis
+  try {
+    verifyAuth({ apiKey });
+  } catch (error: unknown) {
+    const message = (error as WardenAuthenticationError).message;
+    reporter.error(message);
+    emitEmptyRunLog(repoPath ?? cwd, options, {
+      code: 'auth_failed',
+      message,
+      timestamp: new Date().toISOString(),
+    });
+    return 1;
   }
 
   // Resolve config path
@@ -786,25 +800,12 @@ async function runSkills(
     return 0;
   }
 
-  try {
-    verifyAuth({ apiKey });
-  } catch (error: unknown) {
-    const message = (error as WardenAuthenticationError).message;
-    reporter.error(message);
-    emitEmptyRunLog(repoPath ?? cwd, options, {
-      code: 'auth_failed',
-      message,
-      timestamp: new Date().toISOString(),
-    });
-    return 1;
-  }
-
   // Build skill tasks
   // Model precedence: defaults.agent.model > defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
   // sdkModel is undefined when no model is explicitly configured (lets SDK use its default).
   // logModel records what was used for JSONL logs (sentinel when no explicit model).
   const sdkModel = defaultModel;
-  const logModel = sdkModel ?? MODEL_DEFAULT_SENTINEL;
+  const logModel = resolveCliLogModel(config, options.model);
   const runnerOptions: SkillRunnerOptions = {
     apiKey,
     model: sdkModel,
