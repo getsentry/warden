@@ -87,8 +87,6 @@ export interface ResolvedTrigger {
   actions?: string[];
   /** Remote repository reference */
   remote?: string;
-  /** Root used for resolving repo-local skill names and paths */
-  sourceRoot?: string;
   /** Path filters */
   filters: { paths?: string[]; ignorePaths?: string[] };
   // Flattened output fields (merged: trigger > skill > defaults)
@@ -134,8 +132,7 @@ function emptyToUndefined(value: string | undefined): string | undefined {
  */
 export function resolveSkillConfigs(
   config: WardenConfig,
-  cliModel?: string,
-  options?: { sourceRoot?: string }
+  cliModel?: string
 ): ResolvedTrigger[] {
   const defaults = config.defaults;
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
@@ -166,7 +163,6 @@ export function resolveSkillConfigs(
         skill: skill.name,
         type: '*',
         remote: skill.remote,
-        sourceRoot: options?.sourceRoot,
         filters,
         failOn: skill.failOn ?? defaults?.failOn,
         reportOn: skill.reportOn ?? defaults?.reportOn,
@@ -186,7 +182,6 @@ export function resolveSkillConfigs(
           type: trigger.type,
           actions: trigger.actions,
           remote: skill.remote,
-          sourceRoot: options?.sourceRoot,
           filters,
           // 3-level merge: trigger > skill > defaults
           failOn: trigger.failOn ?? skill.failOn ?? defaults?.failOn,

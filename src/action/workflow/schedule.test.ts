@@ -311,7 +311,7 @@ describe('runScheduleWorkflow', () => {
       expect(mockCreateOrUpdateIssue).toHaveBeenCalledTimes(1);
     });
 
-    it('loads config-path and resolves local skills from that Warden root', async () => {
+    it('loads config-path without changing local skill resolution root', async () => {
       await runScheduleWorkflow(
         mockOctokit,
         createDefaultInputs({
@@ -322,7 +322,7 @@ describe('runScheduleWorkflow', () => {
 
       expect(mockResolveSkillAsync).toHaveBeenCalledWith(
         'org-skill',
-        expect.stringContaining('org-root'),
+        PR_ONLY_FIXTURES,
         { remote: undefined }
       );
     });

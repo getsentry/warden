@@ -295,12 +295,6 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.filters.ignorePaths).toEqual(['*.test.ts']);
   });
 
-  it('attaches sourceRoot to resolved triggers', () => {
-    const [resolved] = resolveSkillConfigs(baseConfig, undefined, { sourceRoot: '/org/.github' });
-
-    expect(resolved?.sourceRoot).toBe('/org/.github');
-  });
-
   describe('ignorePaths merging', () => {
     it('uses defaults.ignorePaths when skill has none', () => {
       const config: WardenConfig = {

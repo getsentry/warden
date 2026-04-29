@@ -5,7 +5,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { Sentry, logger, emitStaleResolutionMetric, setGlobalAttributes, emitRunMetric } from '../../sentry.js';
 import { loadWardenConfigFile, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
@@ -137,7 +137,6 @@ async function initializeWorkflow(
   logGroupEnd();
 
   const configFullPath = resolve(repoPath, inputs.configPath);
-  const configRoot = dirname(configFullPath);
   let config: WardenConfig;
   try {
     config = loadWardenConfigFile(configFullPath);
@@ -150,7 +149,7 @@ async function initializeWorkflow(
   }
 
   // Resolve skills into triggers and match
-  const resolvedTriggers = resolveSkillConfigs(config, undefined, { sourceRoot: configRoot });
+  const resolvedTriggers = resolveSkillConfigs(config);
   const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
 
   if (matchedTriggers.length > 0) {

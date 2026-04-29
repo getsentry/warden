@@ -4,7 +4,7 @@
  * Handles schedule and workflow_dispatch events.
  */
 
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { loadWardenConfigFile, resolveSkillConfigs, ConfigLoadError } from '../../config/loader.js';
 import type { WardenConfig, ScheduleConfig } from '../../config/schema.js';
@@ -42,7 +42,6 @@ export async function runScheduleWorkflow(
   logGroupEnd();
 
   const configFullPath = resolve(repoPath, inputs.configPath);
-  const configRoot = dirname(configFullPath);
   let config: WardenConfig;
   try {
     config = loadWardenConfigFile(configFullPath);
@@ -68,7 +67,7 @@ export async function runScheduleWorkflow(
   }
 
   // Find schedule triggers
-  const scheduleTriggers = resolveSkillConfigs(config, undefined, { sourceRoot: configRoot }).filter((t) => t.type === 'schedule');
+  const scheduleTriggers = resolveSkillConfigs(config).filter((t) => t.type === 'schedule');
   if (scheduleTriggers.length === 0) {
     console.log('No schedule triggers configured');
     setOutput('findings-count', 0);
@@ -145,7 +144,7 @@ export async function runScheduleWorkflow(
       console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
 
       // Run skill
-      const skill = await resolveSkillAsync(resolved.skill, resolved.sourceRoot ?? repoPath, {
+      const skill = await resolveSkillAsync(resolved.skill, repoPath, {
         remote: resolved.remote,
       });
       const claudePath = await findClaudeCodeExecutable();

@@ -425,12 +425,7 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('loads config-path and resolves local skills from that Warden root', async () => {
-      mockRunSkillTask.mockImplementationOnce(async (taskOptions) => {
-        const skill = await taskOptions.resolveSkill();
-        return { name: taskOptions.name, report: createSkillReport({ skill: skill.name }) };
-      });
-
+    it('loads config-path without changing local skill resolution root', async () => {
       await runPRWorkflow(
         mockOctokit,
         createDefaultInputs({
@@ -441,12 +436,10 @@ describe('runPRWorkflow', () => {
         FIXTURES_DIR
       );
 
-      expect(mockRunSkillTask).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'org-skill' }),
-        expect.any(Number),
-        expect.any(Object),
-        expect.any(Semaphore)
-      );
+      const [taskOptions] = mockRunSkillTask.mock.calls[0] ?? [];
+      const skill = taskOptions ? await taskOptions.resolveSkill() : null;
+
+      expect(skill?.description).toBe('Repo-level test skill');
     });
 
     it('exits cleanly for merge_group events when only PR triggers are configured', async () => {

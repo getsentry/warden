@@ -139,12 +139,8 @@ describe('executeTrigger', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('resolves local skills from the trigger source root', async () => {
+  it('resolves local skills from the repository root', async () => {
     const mockReport = createReport();
-    const triggerWithSourceRoot: ResolvedTrigger = {
-      ...mockTrigger,
-      sourceRoot: '/org/.github',
-    };
 
     vi.mocked(runSkillTask).mockImplementation(async (taskOptions) => {
       await taskOptions.resolveSkill();
@@ -153,9 +149,9 @@ describe('executeTrigger', () => {
     vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
     vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
 
-    await executeTrigger(triggerWithSourceRoot, mockDeps);
+    await executeTrigger(mockTrigger, mockDeps);
 
-    expect(resolveSkillAsync).toHaveBeenCalledWith('test-skill', '/org/.github', {
+    expect(resolveSkillAsync).toHaveBeenCalledWith('test-skill', '/test/path', {
       remote: undefined,
     });
   });
