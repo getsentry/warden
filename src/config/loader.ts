@@ -12,7 +12,7 @@ import {
   type CoalesceConfig,
   type RunnerConfig,
   type LogsConfig,
-  type RuntimeProviderName,
+  type RuntimeName,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -281,10 +281,8 @@ export interface ResolvedTrigger {
   model?: string;
   /** Max agentic turns (merged: trigger > skill > defaults) */
   maxTurns?: number;
-  /** Provider for repo-aware skill execution. */
-  agentProvider?: RuntimeProviderName;
-  /** Provider for auxiliary structured model calls. */
-  fastModelProvider?: RuntimeProviderName;
+  /** Runtime backend for all model-backed execution. */
+  runtime?: RuntimeName;
   /** Model for auxiliary structured model calls. */
   fastModelModel?: string;
   /** Max retries for auxiliary structured model calls. */
@@ -330,8 +328,7 @@ export function resolveSkillConfigs(
   const defaults = config.defaults;
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
   const result: ResolvedTrigger[] = [];
-  const agentProvider = defaults?.agent?.provider ?? 'claude';
-  const fastModelProvider = defaults?.fastModel?.provider ?? 'claude';
+  const runtime = defaults?.runtime ?? 'claude';
   const fastModelModel = emptyToUndefined(defaults?.fastModel?.model);
   const auxiliaryMaxRetries = defaults?.fastModel?.maxRetries ?? defaults?.auxiliaryMaxRetries;
 
@@ -372,8 +369,7 @@ export function resolveSkillConfigs(
         failCheck: skill.failCheck ?? defaults?.failCheck,
         model: baseModel,
         maxTurns: baseMaxTurns,
-        agentProvider,
-        fastModelProvider,
+        runtime,
         fastModelModel,
         auxiliaryMaxRetries,
         minConfidence: skill.minConfidence ?? defaults?.minConfidence,
@@ -399,8 +395,7 @@ export function resolveSkillConfigs(
           failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
-          agentProvider,
-          fastModelProvider,
+          runtime,
           fastModelModel,
           auxiliaryMaxRetries,
           minConfidence: trigger.minConfidence ?? skill.minConfidence ?? defaults?.minConfidence,

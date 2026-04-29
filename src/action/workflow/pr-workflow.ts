@@ -37,7 +37,7 @@ import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
-import { usesClaudeRuntime, type RuntimeProviderName } from '../../sdk/providers/types.js';
+import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import {
   createCoreCheck,
   updateCoreCheck,
@@ -85,7 +85,7 @@ interface ReviewPhaseResult {
 }
 
 interface FastModelWorkflowOptions {
-  provider?: RuntimeProviderName;
+  runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
 }
@@ -94,10 +94,10 @@ function resolveWorkflowFastModelOptions(layered: LoadedLayeredConfig): FastMode
   const configs = [layered.baseConfig, layered.repoConfig, layered.config];
 
   return {
-    provider:
+    runtime:
       configs
-        .map((config) => config?.defaults?.fastModel?.provider)
-        .find((value): value is RuntimeProviderName => value !== undefined) ?? 'claude',
+        .map((config) => config?.defaults?.runtime)
+        .find((value): value is RuntimeName => value !== undefined) ?? 'claude',
     model: configs
       .map((config) => config?.defaults?.fastModel?.model)
       .find((value): value is string => value !== undefined),
@@ -179,7 +179,7 @@ async function initializeWorkflow(
   logGroupEnd();
 
   let runnerConcurrency: number | undefined;
-  let fastModelOptions: FastModelWorkflowOptions = { provider: 'claude' };
+  let fastModelOptions: FastModelWorkflowOptions = { runtime: 'claude' };
   let skillRootsByName: LayeredSkillRootsByName | undefined;
   try {
     const layered = loadLayeredWardenConfig(repoPath, {
@@ -308,11 +308,11 @@ async function executeAllTriggers(
   inputs: ActionInputs
 ): Promise<TriggerResult[]> {
   const concurrency = runnerConcurrency ?? inputs.parallel;
-  const needsClaudeAgent = matchedTriggers.some((trigger) => trigger.agentProvider === 'claude');
-  if (matchedTriggers.some(usesClaudeRuntime)) {
+  const usesClaudeRuntime = matchedTriggers.some((trigger) => (trigger.runtime ?? 'claude') === 'claude');
+  if (usesClaudeRuntime) {
     ensureClaudeAuth(inputs);
   }
-  const claudePath = needsClaudeAgent ? await findClaudeCodeExecutable() : undefined;
+  const claudePath = usesClaudeRuntime ? await findClaudeCodeExecutable() : undefined;
 
   // Global semaphore gates file-level work across all triggers.
   // All triggers launch immediately; the semaphore limits concurrent file analyses.
@@ -389,7 +389,7 @@ async function postReviewsAndTrackFailures(
           result,
           existingComments,
           apiKey: inputs.anthropicApiKey,
-          provider: fastModelOptions.provider,
+          runtime: fastModelOptions.runtime,
           model: fastModelOptions.model,
           maxRetries: fastModelOptions.maxRetries,
         },

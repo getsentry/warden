@@ -1,9 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { ExistingComment } from '../../output/dedup.js';
-import { getFastModelRuntime } from '../../sdk/providers/index.js';
-import type { RuntimeProviderName } from '../../sdk/providers/types.js';
-import type { FastModelTool } from '../../sdk/runtimes/index.js';
+import { getFastModelRuntime, type FastModelTool, type RuntimeName } from '../../sdk/runtimes/index.js';
 import { emptyUsage } from '../../sdk/usage.js';
 import { FixJudgeVerdictSchema } from './types.js';
 import type { FixJudgeResult } from './types.js';
@@ -27,7 +25,7 @@ export interface FixJudgeContext {
 }
 
 export interface FixJudgeRuntimeOptions {
-  provider?: RuntimeProviderName;
+  runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
 }
@@ -234,7 +232,7 @@ export async function evaluateFix(
   const prompt = buildPrompt(input);
   const executeTool = createToolExecutor(context);
 
-  const result = await getFastModelRuntime(runtimeOptions.provider).generateObjectWithTools({
+  const result = await getFastModelRuntime(runtimeOptions.runtime).generateObjectWithTools({
     apiKey,
     prompt,
     schema: FixJudgeVerdictSchema,

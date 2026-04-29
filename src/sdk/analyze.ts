@@ -8,7 +8,7 @@ import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } f
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
 import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
-import { getAgentRuntime } from './providers/index.js';
+import { getAgentRuntime } from './runtimes/index.js';
 import type { AgentRuntimeMessage } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
@@ -67,7 +67,7 @@ async function parseHunkOutput(
   // Tier 2: Try LLM fallback for malformed output
   const fallback = await extractFindingsWithLLM(result.result, {
     apiKey: options.apiKey,
-    provider: options.fastModelProvider,
+    runtime: options.runtime,
     model: options.fastModelModel,
     maxRetries: options.auxiliaryMaxRetries,
   });
@@ -184,8 +184,8 @@ async function analyzeHunk(
         }
 
         try {
-          const runtime = getAgentRuntime(options.agentProvider);
-          const { result: resultMessage, authError } = await runtime.execute({
+          const agentRuntime = getAgentRuntime(options.runtime);
+          const { result: resultMessage, authError } = await agentRuntime.execute({
             systemPrompt,
             userPrompt,
             repoPath,
@@ -776,7 +776,7 @@ export async function runSkill(
   const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
     apiKey: options.apiKey,
     repoPath: context.repoPath,
-    provider: options.fastModelProvider,
+    runtime: options.runtime,
     model: options.fastModelModel,
     maxRetries: options.auxiliaryMaxRetries,
   });
@@ -787,7 +787,7 @@ export async function runSkill(
   const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
     repoPath: context.repoPath,
     apiKey: options.apiKey,
-    provider: options.fastModelProvider,
+    runtime: options.runtime,
     model: options.fastModelModel,
     maxRetries: options.auxiliaryMaxRetries,
   });

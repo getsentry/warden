@@ -1,4 +1,11 @@
-export { claudeAgentRuntime } from './claude.js';
+import { claudeRuntime } from './claude.js';
+import type { AgentRuntime, FastModelRuntime, Runtime, RuntimeName } from './types.js';
+
+const RUNTIMES: Partial<Record<RuntimeName, Runtime>> = {
+  claude: claudeRuntime,
+};
+
+export { claudeAgentRuntime, claudeFastModelRuntime, claudeRuntime } from './claude.js';
 export type {
   AgentRuntime,
   AgentRuntimeExecutionResult,
@@ -11,4 +18,22 @@ export type {
   FastModelResult,
   FastModelRuntime,
   FastModelTool,
+  Runtime,
+  RuntimeName,
 } from './types.js';
+
+export function getRuntime(name: RuntimeName = 'claude'): Runtime {
+  const runtime = RUNTIMES[name];
+  if (!runtime) {
+    throw new Error(`Unsupported runtime: ${name}`);
+  }
+  return runtime;
+}
+
+export function getAgentRuntime(runtimeName: RuntimeName = 'claude'): AgentRuntime {
+  return getRuntime(runtimeName).agent;
+}
+
+export function getFastModelRuntime(runtimeName: RuntimeName = 'claude'): FastModelRuntime {
+  return getRuntime(runtimeName).fastModel;
+}

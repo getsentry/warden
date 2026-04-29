@@ -1,7 +1,7 @@
 version = 1
 
-[defaults.agent]
-provider = "pi"
+[defaults]
+runtime = "claude"
 
 [[skills]]
 name = "test-skill"

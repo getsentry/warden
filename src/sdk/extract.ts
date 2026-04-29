@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { customAlphabet } from 'nanoid';
 import { FindingSchema, compareFindingPriority } from '../types/index.js';
 import type { Finding, Location, UsageStats } from '../types/index.js';
-import { getFastModelRuntime } from './providers/index.js';
-import type { RuntimeProviderName } from './providers/types.js';
+import { getFastModelRuntime } from './runtimes/index.js';
+import type { RuntimeName } from './runtimes/index.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
@@ -19,7 +19,7 @@ export type ExtractFindingsResult =
 
 export interface FastModelCallOptions {
   apiKey?: string;
-  provider?: RuntimeProviderName;
+  runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
 }
@@ -185,7 +185,7 @@ export async function extractFindingsWithLLM(
     typeof apiKeyOrOptions === 'object'
       ? apiKeyOrOptions
       : { apiKey: apiKeyOrOptions, maxRetries };
-  const { apiKey, provider, model } = options;
+  const { apiKey, runtime, model } = options;
 
   if (!apiKey) {
     return {
@@ -214,7 +214,7 @@ If no findings exist, return: {"findings": []}
 Model output:
 ${truncatedText}`;
 
-  const result = await getFastModelRuntime(provider).generateObject({
+  const result = await getFastModelRuntime(runtime).generateObject({
     apiKey,
     prompt: userContent,
     schema: z.object({ findings: z.array(z.unknown()) }),
@@ -488,7 +488,7 @@ ${findingDescriptions.join('\n')}
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
 Singletons should not appear. Return [] if no findings describe the same issue.`;
 
-  const result = await getFastModelRuntime(options?.provider).generateObject({
+  const result = await getFastModelRuntime(options?.runtime).generateObject({
     apiKey,
     prompt,
     schema: MergeGroupsSchema,

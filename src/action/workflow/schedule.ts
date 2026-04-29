@@ -15,7 +15,6 @@ import type { LayeredSkillRootsByName, ResolvedTrigger } from '../../config/load
 import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
-import { usesClaudeRuntime } from '../../sdk/providers/types.js';
 import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -168,16 +167,15 @@ export async function runScheduleWorkflow(
       const skill = await resolveSkillAsync(resolved.skill, resolved.skillRoot ?? repoPath, {
         remote: resolved.remote,
       });
-      const usesClaudeAgent = resolved.agentProvider === 'claude';
-      if (usesClaudeRuntime(resolved)) {
+      const usesClaudeRuntime = (resolved.runtime ?? 'claude') === 'claude';
+      if (usesClaudeRuntime) {
         ensureClaudeAuth(inputs);
       }
-      const claudePath = usesClaudeAgent ? await findClaudeCodeExecutable() : undefined;
+      const claudePath = usesClaudeRuntime ? await findClaudeCodeExecutable() : undefined;
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
-        agentProvider: resolved.agentProvider,
-        fastModelProvider: resolved.fastModelProvider,
+        runtime: resolved.runtime,
         fastModelModel: resolved.fastModelModel,
         maxTurns: resolved.maxTurns,
         batchDelayMs: resolved.batchDelayMs,

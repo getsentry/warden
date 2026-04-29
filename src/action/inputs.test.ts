@@ -38,7 +38,7 @@ describe('parseActionInputs', () => {
       expect(inputs.anthropicApiKey).toBe('');
     });
 
-    it('allows missing Anthropic auth so non-Claude providers can run', () => {
+    it('allows missing Anthropic auth at input parsing time', () => {
       delete process.env['ANTHROPIC_API_KEY'];
       delete process.env['WARDEN_ANTHROPIC_API_KEY'];
       delete process.env['CLAUDE_CODE_OAUTH_TOKEN'];

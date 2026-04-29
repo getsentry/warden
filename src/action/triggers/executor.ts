@@ -135,8 +135,7 @@ export async function executeTrigger(
           runnerOptions: {
             apiKey: anthropicApiKey,
             model: trigger.model,
-            agentProvider: trigger.agentProvider,
-            fastModelProvider: trigger.fastModelProvider,
+            runtime: trigger.runtime,
             fastModelModel: trigger.fastModelModel,
             maxTurns: trigger.maxTurns,
             batchDelayMs: trigger.batchDelayMs,

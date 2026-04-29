@@ -3,8 +3,8 @@ import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
 import { findingLine } from '../types/index.js';
-import { getFastModelRuntime } from '../sdk/providers/index.js';
-import type { RuntimeProviderName } from '../sdk/providers/types.js';
+import { getFastModelRuntime } from '../sdk/runtimes/index.js';
+import type { RuntimeName } from '../sdk/runtimes/index.js';
 import { applyMergeGroups } from '../sdk/extract.js';
 
 /**
@@ -436,7 +436,7 @@ async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
   apiKey: string,
-  options: Pick<DeduplicateOptions, 'provider' | 'model' | 'maxRetries'> = {}
+  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'maxRetries'> = {}
 ): Promise<SemanticDuplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
     return { matches: new Map() };
@@ -471,7 +471,7 @@ Return ONLY the JSON array in this format:
 where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
 Return [] if none are duplicates.`;
 
-  const result = await getFastModelRuntime(options.provider).generateObject({
+  const result = await getFastModelRuntime(options.runtime).generateObject({
     apiKey,
     prompt,
     schema: DuplicateMatchesSchema,
@@ -501,10 +501,10 @@ Return [] if none are duplicates.`;
  * Options for deduplication.
  */
 export interface DeduplicateOptions {
-  /** Provider API key for LLM-based semantic deduplication */
+  /** Runtime API key for LLM-based semantic deduplication */
   apiKey?: string;
-  /** Provider for auxiliary structured model calls */
-  provider?: RuntimeProviderName;
+  /** Runtime for auxiliary structured model calls */
+  runtime?: RuntimeName;
   /** Model for auxiliary structured model calls */
   model?: string;
   /** Skip LLM deduplication and only use exact hash matching */
@@ -516,10 +516,10 @@ export interface DeduplicateOptions {
 }
 
 export interface ConsolidateOptions {
-  /** Provider API key for LLM-based consolidation */
+  /** Runtime API key for LLM-based consolidation */
   apiKey?: string;
-  /** Provider for auxiliary structured model calls */
-  provider?: RuntimeProviderName;
+  /** Runtime for auxiliary structured model calls */
+  runtime?: RuntimeName;
   /** Model for auxiliary structured model calls */
   model?: string;
   /** Skip LLM consolidation and only use exact hash matching */
@@ -780,7 +780,7 @@ Singletons (findings with no duplicates) should not appear in any group.
 
 Return ONLY the JSON array. Return [] if no findings share a root cause.`;
 
-  const result = await getFastModelRuntime(options.provider).generateObject({
+  const result = await getFastModelRuntime(options.runtime).generateObject({
     apiKey: options.apiKey,
     prompt,
     schema: ConsolidationGroupsSchema,

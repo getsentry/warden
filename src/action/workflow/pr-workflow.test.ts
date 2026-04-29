@@ -15,7 +15,7 @@ const FIXTURES_DIR = join(__dirname, '__fixtures__');
 const BASE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'base-only');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
-const FAST_MODEL_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'fast-model-claude');
+const RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'runtime-claude');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 
 // -----------------------------------------------------------------------------
@@ -362,14 +362,14 @@ describe('runPRWorkflow', () => {
   });
 
   describe('failure conditions', () => {
-    it('requires Claude auth when only the fast-model provider is Claude', async () => {
+    it('requires Claude auth when the runtime is Claude', async () => {
       await expect(
         runPRWorkflow(
           mockOctokit,
           createDefaultInputs({ anthropicApiKey: '', oauthToken: '' }),
           'pull_request',
           EVENT_PAYLOAD_PATH,
-          FAST_MODEL_CLAUDE_FIXTURES_DIR
+          RUNTIME_CLAUDE_FIXTURES_DIR
         )
       ).rejects.toThrow('setFailed');
 
@@ -723,7 +723,7 @@ describe('runPRWorkflow', () => {
         }),
         expect.any(Array),
         'test-api-key',
-        expect.objectContaining({ provider: 'claude' })
+        expect.objectContaining({ runtime: 'claude' })
       );
     });
 
@@ -823,7 +823,7 @@ describe('runPRWorkflow', () => {
         }),
         [],
         'test-api-key',
-        expect.objectContaining({ provider: 'claude' })
+        expect.objectContaining({ runtime: 'claude' })
       );
 
       // Should NOT run skill tasks (no triggers matched)

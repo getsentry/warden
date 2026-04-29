@@ -498,7 +498,7 @@ export async function runSkillTask(
         const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
           apiKey: runnerOptions.apiKey,
           repoPath: context.repoPath,
-          provider: runnerOptions.fastModelProvider,
+          runtime: runnerOptions.runtime,
           model: runnerOptions.fastModelModel,
           maxRetries: runnerOptions.auxiliaryMaxRetries,
         });
@@ -509,7 +509,7 @@ export async function runSkillTask(
         const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
           repoPath: context.repoPath,
           apiKey: runnerOptions.apiKey,
-          provider: runnerOptions.fastModelProvider,
+          runtime: runnerOptions.runtime,
           model: runnerOptions.fastModelModel,
           maxRetries: runnerOptions.auxiliaryMaxRetries,
         });

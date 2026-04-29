@@ -2,18 +2,20 @@
  * Runtime contract for model-backed agents.
  *
  * Warden's analysis pipeline builds prompts, handles retry policy, parses
- * findings, and aggregates report data. Runtime interfaces are provider
- * capabilities underneath that pipeline. Providers such as Claude or Pi can
- * expose an agent runtime, a fast-model runtime, or both.
+ * findings, and aggregates report data. Runtime interfaces are backend
+ * capabilities underneath that pipeline. Claude is the only runtime today and
+ * exposes both agent execution and fast-model calls.
  *
- * Runtime implementations are responsible for provider-specific execution
+ * Runtime implementations are responsible for backend-specific execution
  * details such as model identifiers, stream events, authentication side
  * channels, stderr/diagnostics, telemetry attributes, tool loops, and usage
- * normalization. Callers should be able to switch providers without changing
+ * normalization. Callers should be able to switch runtimes without changing
  * hunk parsing, auxiliary object generation, or report generation.
  */
 import type { z } from 'zod';
 import type { UsageStats } from '../../types/index.js';
+
+export type RuntimeName = 'claude';
 
 export type AgentRuntimeMessageSubtype =
   | 'success'
@@ -93,4 +95,10 @@ export interface FastModelRuntime {
   readonly name: string;
   generateObject<T>(request: FastModelGenerateObjectRequest<T>): Promise<FastModelResult<T>>;
   generateObjectWithTools<T>(request: FastModelGenerateObjectWithToolsRequest<T>): Promise<FastModelResult<T>>;
+}
+
+export interface Runtime {
+  readonly name: RuntimeName;
+  readonly agent: AgentRuntime;
+  readonly fastModel: FastModelRuntime;
 }

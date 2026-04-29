@@ -19,7 +19,7 @@ import {
 } from '../../output/dedup.js';
 import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
-import type { RuntimeProviderName } from '../../sdk/providers/types.js';
+import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
 
@@ -34,7 +34,7 @@ export interface ReviewPostingContext {
   result: TriggerResult;
   existingComments: ExistingComment[];
   apiKey: string;
-  provider?: RuntimeProviderName;
+  runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
 }
@@ -187,7 +187,7 @@ export async function postTriggerReview(
     if (findingsToPost.length > 1) {
       const consolidateResult = await consolidateBatchFindings(findingsToPost, {
         apiKey,
-        provider: ctx.provider,
+        runtime: ctx.runtime,
         model: ctx.model,
         hashOnly: !apiKey,
         maxRetries: ctx.maxRetries,
@@ -212,7 +212,7 @@ export async function postTriggerReview(
     if (existingComments.length > 0 && findingsToPost.length > 0) {
       dedupResult = await deduplicateFindings(findingsToPost, existingComments, {
         apiKey,
-        provider: ctx.provider,
+        runtime: ctx.runtime,
         model: ctx.model,
         currentSkill: result.report.skill,
         maxRetries: ctx.maxRetries,

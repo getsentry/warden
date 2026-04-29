@@ -16,7 +16,7 @@ const SCHEDULE_MULTI_FIXTURES = join(__dirname, '__fixtures__/schedule-multi');
 const SCHEDULE_FIXPR_FIXTURES = join(__dirname, '__fixtures__/schedule-fixpr');
 const SCHEDULE_TITLE_FIXTURES = join(__dirname, '__fixtures__/schedule-title');
 const NO_CONFIG_FIXTURES = join(__dirname, '__fixtures__/no-config');
-const FAST_MODEL_CLAUDE_FIXTURES = join(__dirname, '__fixtures__/fast-model-claude');
+const RUNTIME_CLAUDE_FIXTURES = join(__dirname, '__fixtures__/runtime-claude');
 // Reuse the base fixtures dir (has only pull_request triggers, no schedule)
 const PR_ONLY_FIXTURES = join(__dirname, '__fixtures__');
 
@@ -505,12 +505,12 @@ describe('runScheduleWorkflow', () => {
   // ---------------------------------------------------------------------------
 
   describe('failure and error handling', () => {
-    it('requires Claude auth when only the fast-model provider is Claude', async () => {
+    it('requires Claude auth when the runtime is Claude', async () => {
       await expect(
         runScheduleWorkflow(
           mockOctokit,
           createDefaultInputs({ anthropicApiKey: '', oauthToken: '' }),
-          FAST_MODEL_CLAUDE_FIXTURES
+          RUNTIME_CLAUDE_FIXTURES
         )
       ).rejects.toThrow('setFailed');
 

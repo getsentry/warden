@@ -5,7 +5,6 @@ import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } f
 import { loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
-import { usesClaudeRuntime } from '../sdk/providers/types.js';
 import { mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
@@ -479,8 +478,7 @@ interface SkillToRun {
   filters: { paths?: string[]; ignorePaths?: string[] };
   model?: string;
   maxTurns?: number;
-  agentProvider?: SkillRunnerOptions['agentProvider'];
-  fastModelProvider?: SkillRunnerOptions['fastModelProvider'];
+  runtime?: SkillRunnerOptions['runtime'];
   fastModelModel?: string;
   auxiliaryMaxRetries?: number;
 }
@@ -694,8 +692,7 @@ async function runSkills(
       filters: match?.filters ?? fallbackFilters,
       model: match?.model ?? config?.defaults?.agent?.model ?? config?.defaults?.model ?? options.model ?? process.env['WARDEN_MODEL'],
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
-      agentProvider: match?.agentProvider ?? config?.defaults?.agent?.provider ?? 'claude',
-      fastModelProvider: match?.fastModelProvider ?? config?.defaults?.fastModel?.provider ?? 'claude',
+      runtime: match?.runtime ?? config?.defaults?.runtime ?? 'claude',
       fastModelModel: match?.fastModelModel ?? config?.defaults?.fastModel?.model,
       auxiliaryMaxRetries: match?.auxiliaryMaxRetries ?? config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries,
     }];
@@ -717,8 +714,7 @@ async function runSkills(
         filters: t.filters,
         model: t.model,
         maxTurns: t.maxTurns,
-        agentProvider: t.agentProvider,
-        fastModelProvider: t.fastModelProvider,
+        runtime: t.runtime,
         fastModelModel: t.fastModelModel,
         auxiliaryMaxRetries: t.auxiliaryMaxRetries,
       }));
@@ -740,19 +736,17 @@ async function runSkills(
     return 0;
   }
 
-  if (skillsToRun.some(usesClaudeRuntime)) {
-    try {
-      verifyAuth({ apiKey });
-    } catch (error: unknown) {
-      const message = (error as WardenAuthenticationError).message;
-      reporter.error(message);
-      emitEmptyRunLog(repoPath ?? cwd, options, {
-        code: 'auth_failed',
-        message,
-        timestamp: new Date().toISOString(),
-      });
-      return 1;
-    }
+  try {
+    verifyAuth({ apiKey });
+  } catch (error: unknown) {
+    const message = (error as WardenAuthenticationError).message;
+    reporter.error(message);
+    emitEmptyRunLog(repoPath ?? cwd, options, {
+      code: 'auth_failed',
+      message,
+      timestamp: new Date().toISOString(),
+    });
+    return 1;
   }
 
   // Build skill tasks
@@ -764,8 +758,7 @@ async function runSkills(
   const runnerOptions: SkillRunnerOptions = {
     apiKey,
     model: sdkModel,
-    agentProvider: config?.defaults?.agent?.provider ?? 'claude',
-    fastModelProvider: config?.defaults?.fastModel?.provider ?? 'claude',
+    runtime: config?.defaults?.runtime ?? 'claude',
     fastModelModel: config?.defaults?.fastModel?.model,
     abortController,
     maxTurns: config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
@@ -1062,19 +1055,17 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     reporter.debug('No API key found. Using Claude Code subscription auth.');
   }
 
-  if (triggersToRun.some(usesClaudeRuntime)) {
-    try {
-      verifyAuth({ apiKey });
-    } catch (error: unknown) {
-      const message = (error as WardenAuthenticationError).message;
-      reporter.error(message);
-      emitEmptyRunLog(repoPath, options, {
-        code: 'auth_failed',
-        message,
-        timestamp: new Date().toISOString(),
-      });
-      return 1;
-    }
+  try {
+    verifyAuth({ apiKey });
+  } catch (error: unknown) {
+    const message = (error as WardenAuthenticationError).message;
+    reporter.error(message);
+    emitEmptyRunLog(repoPath, options, {
+      code: 'auth_failed',
+      message,
+      timestamp: new Date().toISOString(),
+    });
+    return 1;
   }
 
   // Build trigger tasks
@@ -1092,8 +1083,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     runnerOptions: {
       apiKey,
       model: trigger.model,
-      agentProvider: trigger.agentProvider,
-      fastModelProvider: trigger.fastModelProvider,
+      runtime: trigger.runtime,
       fastModelModel: trigger.fastModelModel,
       abortController,
       maxTurns: trigger.maxTurns,

@@ -65,7 +65,7 @@ function parseBooleanInput(value: string): boolean | undefined {
 
 /**
  * Parse action inputs from the GitHub Actions environment.
- * Provider-specific auth can be absent here; runtime setup validates it when needed.
+ * Runtime-specific auth can be absent here; runtime setup validates it when needed.
  */
 export function parseActionInputs(): ActionInputs {
   // Check for auth token: supports both API keys and OAuth tokens

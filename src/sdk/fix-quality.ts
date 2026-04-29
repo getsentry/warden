@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { parsePatch } from '../diff/parser.js';
 import { applyDiffToContent } from '../diff/apply.js';
 import type { Finding, UsageStats } from '../types/index.js';
-import { getFastModelRuntime } from './providers/index.js';
-import type { RuntimeProviderName } from './providers/types.js';
+import { getFastModelRuntime } from './runtimes/index.js';
+import type { RuntimeName } from './runtimes/index.js';
 import { aggregateUsage } from './usage.js';
 
 export interface FixQualityStats {
@@ -24,7 +24,7 @@ export interface SanitizeSuggestedFixesResult {
 interface SanitizeSuggestedFixesOptions {
   repoPath: string;
   apiKey?: string;
-  provider?: RuntimeProviderName;
+  runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
 }
@@ -132,7 +132,7 @@ async function runSemanticGate(
   patchedContent: string,
   options: SanitizeSuggestedFixesOptions
 ): Promise<{ verdict: 'pass' | 'fail' | 'unavailable'; usage?: UsageStats }> {
-  const { apiKey, provider, model, maxRetries } = options;
+  const { apiKey, runtime, model, maxRetries } = options;
   if (!apiKey) {
     return { verdict: 'unavailable' };
   }
@@ -157,7 +157,7 @@ async function runSemanticGate(
     finding.suggestedFix?.diff ?? '',
   ].join('\n');
 
-  const result = await getFastModelRuntime(provider).generateObject({
+  const result = await getFastModelRuntime(runtime).generateObject({
     apiKey,
     prompt,
     schema: SemanticFixVerdictSchema,

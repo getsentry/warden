@@ -1,11 +1,11 @@
 /**
- * Claude Code runtime adapter.
+ * Claude runtime adapter.
  *
- * This module is the only place where the main analysis runtime should know
- * about `@anthropic-ai/claude-agent-sdk`. It translates Warden's generic
- * `AgentRuntimeRequest` into a Claude Code SDK query, keeps Claude-specific
- * tool policy and process options local, emits Claude/OpenTelemetry spans, and
- * normalizes Claude result messages into the provider-neutral runtime result.
+ * This module is the only place where Warden's runtime layer should know about
+ * the Claude Agent SDK or Anthropic Messages API. It translates Warden's
+ * generic runtime requests into Claude calls, keeps Claude-specific tool policy
+ * and process options local, emits Claude/OpenTelemetry spans, and normalizes
+ * Claude result messages into the shared runtime result.
  *
  * Important invariants:
  * - Claude receives read-only tools for hunk analysis.
@@ -13,10 +13,24 @@
  * - Runtime results always contain valid `UsageStats`.
  * - Non-success SDK subtypes normalize to `isError: true`.
  */
+import type Anthropic from '@anthropic-ai/sdk';
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { Sentry } from '../../sentry.js';
-import { extractUsage } from '../usage.js';
-import type { AgentRuntime, AgentRuntimeExecutionResult, AgentRuntimeMessage, AgentRuntimeOptions, AgentRuntimeRequest } from './types.js';
+import { callHaiku, callHaikuWithTools } from '../haiku.js';
+import { emptyUsage, extractUsage } from '../usage.js';
+import type {
+  AgentRuntime,
+  AgentRuntimeExecutionResult,
+  AgentRuntimeMessage,
+  AgentRuntimeOptions,
+  AgentRuntimeRequest,
+  FastModelGenerateObjectRequest,
+  FastModelGenerateObjectWithToolsRequest,
+  FastModelResult,
+  FastModelRuntime,
+  FastModelTool,
+  Runtime,
+} from './types.js';
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
 interface TurnData {
@@ -30,6 +44,22 @@ interface TurnData {
 
 interface ClaudeRuntimeOptions extends AgentRuntimeOptions {
   pathToClaudeCodeExecutable?: string;
+}
+
+function missingApiKeyResult<T>(): FastModelResult<T> {
+  return {
+    success: false,
+    error: 'Anthropic API key required for Claude fast-model runtime',
+    usage: emptyUsage(),
+  };
+}
+
+function toAnthropicTool(tool: FastModelTool): Anthropic.Tool {
+  return {
+    name: tool.name,
+    description: tool.description ?? '',
+    input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
+  };
 }
 
 function singleResponseModel(modelUsage: SDKResultMessage['modelUsage'] | undefined): string | undefined {
@@ -272,4 +302,47 @@ export const claudeAgentRuntime: AgentRuntime = {
       },
     );
   },
+};
+
+export const claudeFastModelRuntime: FastModelRuntime = {
+  name: 'claude-fast-model',
+
+  async generateObject<T>(request: FastModelGenerateObjectRequest<T>) {
+    if (!request.apiKey) {
+      return missingApiKeyResult();
+    }
+    return callHaiku({
+      apiKey: request.apiKey,
+      prompt: request.prompt,
+      schema: request.schema,
+      model: request.model,
+      maxTokens: request.maxTokens,
+      timeout: request.timeout,
+      maxRetries: request.maxRetries,
+    });
+  },
+
+  async generateObjectWithTools<T>(request: FastModelGenerateObjectWithToolsRequest<T>) {
+    if (!request.apiKey) {
+      return missingApiKeyResult();
+    }
+    return callHaikuWithTools({
+      apiKey: request.apiKey,
+      prompt: request.prompt,
+      schema: request.schema,
+      tools: request.tools.map(toAnthropicTool),
+      executeTool: request.executeTool,
+      model: request.model,
+      maxTokens: request.maxTokens,
+      maxIterations: request.maxIterations,
+      timeout: request.timeout,
+      maxRetries: request.maxRetries,
+    });
+  },
+};
+
+export const claudeRuntime: Runtime = {
+  name: 'claude',
+  agent: claudeAgentRuntime,
+  fastModel: claudeFastModelRuntime,
 };
