@@ -11,7 +11,7 @@ import {
   resolveLayeredSkillConfigs,
   ConfigLoadError,
 } from '../../config/loader.js';
-import type { ResolvedTrigger } from '../../config/loader.js';
+import type { LayeredSkillRootsByName, ResolvedTrigger } from '../../config/loader.js';
 import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
@@ -53,7 +53,7 @@ export async function runScheduleWorkflow(
   logGroupEnd();
 
   let scheduleTriggers: ResolvedTrigger[];
-  let skillRootsByName: Record<string, string | undefined> | undefined;
+  let skillRootsByName: LayeredSkillRootsByName | undefined;
   try {
     const layered = loadLayeredWardenConfig(repoPath, {
       baseConfigPath: inputs.baseConfigPath,

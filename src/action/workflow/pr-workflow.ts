@@ -13,7 +13,7 @@ import {
   resolveLayeredSkillConfigs,
   ConfigLoadError,
 } from '../../config/loader.js';
-import type { ResolvedTrigger } from '../../config/loader.js';
+import type { LayeredSkillRootsByName, ResolvedTrigger } from '../../config/loader.js';
 import { buildEventContext } from '../../event/context.js';
 import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
 import { fetchExistingComments } from '../../output/dedup.js';
@@ -148,7 +148,7 @@ async function initializeWorkflow(
 
   let auxiliaryMaxRetries: number | undefined;
   let runnerConcurrency: number | undefined;
-  let skillRootsByName: Record<string, string | undefined> | undefined;
+  let skillRootsByName: LayeredSkillRootsByName | undefined;
   try {
     const layered = loadLayeredWardenConfig(repoPath, {
       baseConfigPath: inputs.baseConfigPath,

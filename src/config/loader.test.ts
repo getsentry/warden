@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -570,6 +570,37 @@ describe('buildSkillRootsByName', () => {
       'base-skill-root is required when the base config defines local skills'
     );
   });
+
+  it('keeps base and repo skill roots separate', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-roots-'));
+    const layered = {
+      config: {
+        version: 1 as const,
+        skills: [{ name: 'shared-skill' }],
+      },
+      baseConfig: {
+        version: 1 as const,
+        skills: [{ name: 'shared-skill' }],
+      },
+      repoConfig: {
+        version: 1 as const,
+        skills: [{ name: 'shared-skill' }],
+      },
+    };
+
+    try {
+      mkdirSync(join(tempDir, '.warden-org'));
+
+      const roots = buildSkillRootsByName(tempDir, layered, '.warden-org');
+
+      expect(roots).toEqual({
+        base: { 'shared-skill': join(tempDir, '.warden-org') },
+        repo: { 'shared-skill': tempDir },
+      });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('resolveLayeredSkillConfigs', () => {
@@ -623,6 +654,41 @@ describe('resolveLayeredSkillConfigs', () => {
       auxiliaryMaxRetries: 1,
       maxContextFiles: 5,
     });
+  });
+
+  it('uses layer-specific skill roots when both layers define the same skill name', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'shared-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'shared-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const resolved = resolveLayeredSkillConfigs(
+      {
+        config: { version: 1, skills: [] },
+        baseConfig,
+        repoConfig,
+      },
+      undefined,
+      {
+        base: { 'shared-skill': '/repo/.warden-org' },
+        repo: { 'shared-skill': '/repo' },
+      }
+    );
+
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]?.skillRoot).toBe('/repo/.warden-org');
+    expect(resolved[1]?.skillRoot).toBe('/repo');
   });
 });
 

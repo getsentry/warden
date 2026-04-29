@@ -162,12 +162,18 @@ export interface LoadedLayeredConfig {
   repoConfig?: WardenConfig;
 }
 
+export interface LayeredSkillRootsByName {
+  base?: Record<string, string | undefined>;
+  repo?: Record<string, string | undefined>;
+}
+
 export function buildSkillRootsByName(
   repoPath: string,
   layered: LoadedLayeredConfig,
   baseSkillRoot?: string
-): Record<string, string | undefined> | undefined {
-  const roots: Record<string, string | undefined> = {};
+): LayeredSkillRootsByName | undefined {
+  const baseRoots: Record<string, string | undefined> = {};
+  const repoRoots: Record<string, string | undefined> = {};
 
   if (layered.baseConfig) {
     const localBaseSkills = layered.baseConfig.skills.filter((skill) => !skill.remote);
@@ -183,7 +189,7 @@ export function buildSkillRootsByName(
         throw new ConfigLoadError(`Skill root not found: ${resolvedBaseSkillRoot}`);
       }
       for (const skill of localBaseSkills) {
-        roots[skill.name] = resolvedBaseSkillRoot;
+        baseRoots[skill.name] = resolvedBaseSkillRoot;
       }
     }
   }
@@ -191,12 +197,19 @@ export function buildSkillRootsByName(
   if (layered.repoConfig) {
     for (const skill of layered.repoConfig.skills) {
       if (!skill.remote) {
-        roots[skill.name] = repoPath;
+        repoRoots[skill.name] = repoPath;
       }
     }
   }
 
-  return Object.keys(roots).length > 0 ? roots : undefined;
+  const result: LayeredSkillRootsByName = {};
+  if (Object.keys(baseRoots).length > 0) {
+    result.base = baseRoots;
+  }
+  if (Object.keys(repoRoots).length > 0) {
+    result.repo = repoRoots;
+  }
+  return result.base || result.repo ? result : undefined;
 }
 
 export function loadLayeredWardenConfig(
@@ -385,22 +398,26 @@ export function resolveSkillConfigs(
 export function resolveLayeredSkillConfigs(
   layered: LoadedLayeredConfig,
   cliModel?: string,
-  skillRootsByName?: Record<string, string | undefined>
+  skillRootsByName?: LayeredSkillRootsByName
 ): ResolvedTrigger[] {
   if (layered.baseConfig && layered.repoConfig) {
     return [
-      ...resolveSkillConfigs(layered.baseConfig, cliModel, skillRootsByName),
-      ...resolveSkillConfigs(layered.repoConfig, cliModel, skillRootsByName),
+      ...resolveSkillConfigs(layered.baseConfig, cliModel, skillRootsByName?.base),
+      ...resolveSkillConfigs(layered.repoConfig, cliModel, skillRootsByName?.repo),
     ];
   }
 
   if (layered.baseConfig) {
-    return resolveSkillConfigs(layered.baseConfig, cliModel, skillRootsByName);
+    return resolveSkillConfigs(layered.baseConfig, cliModel, skillRootsByName?.base);
   }
 
   if (layered.repoConfig) {
-    return resolveSkillConfigs(layered.repoConfig, cliModel, skillRootsByName);
+    return resolveSkillConfigs(layered.repoConfig, cliModel, skillRootsByName?.repo);
   }
 
-  return resolveSkillConfigs(layered.config, cliModel, skillRootsByName);
+  return resolveSkillConfigs(
+    layered.config,
+    cliModel,
+    skillRootsByName?.repo ?? skillRootsByName?.base
+  );
 }
