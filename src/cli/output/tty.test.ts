@@ -8,6 +8,8 @@ describe('detectOutputMode', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env['NO_COLOR'];
+    delete process.env['FORCE_COLOR'];
     // Reset to non-TTY by default for predictable tests
     Object.defineProperty(process.stderr, 'isTTY', {
       value: false,
