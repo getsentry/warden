@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { mergeSkillRunnerOptions, processTaskResults } from './main.js';
+import {
+  mergeSkillRunnerOptions,
+  processTaskResults,
+  resolveCliDefaultFastModel,
+  resolveCliDefaultModel,
+} from './main.js';
 import type { SkillReport } from '../types/index.js';
 
 function makeReport(overrides: Partial<SkillReport> = {}): SkillReport {
@@ -67,6 +72,32 @@ describe('mergeSkillRunnerOptions', () => {
       maxTurns: 8,
       auxiliaryMaxRetries: 2,
     });
+  });
+});
+
+describe('resolveCliDefaultModel', () => {
+  it('normalizes empty config defaults before falling through', () => {
+    const model = resolveCliDefaultModel(
+      {
+        defaults: {
+          agent: { model: '' },
+          model: '',
+        },
+      },
+      'cli-model'
+    );
+
+    expect(model).toBe('cli-model');
+  });
+
+  it('normalizes empty fast-model defaults', () => {
+    const model = resolveCliDefaultFastModel({
+      defaults: {
+        fastModel: { model: '' },
+      },
+    });
+
+    expect(model).toBeUndefined();
   });
 });
 

@@ -302,7 +302,7 @@ export interface ResolvedTrigger {
  * GitHub Actions substitutes unconfigured secrets with empty strings,
  * so we need to treat '' as "not set" for optional config values.
  */
-function emptyToUndefined(value: string | undefined): string | undefined {
+export function emptyToUndefined(value: string | undefined): string | undefined {
   return value === '' ? undefined : value;
 }
 
