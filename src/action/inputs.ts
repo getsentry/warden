@@ -132,9 +132,16 @@ export function validateInputs(inputs: ActionInputs): void {
  * Sets appropriate env vars based on token type (API key vs OAuth).
  */
 export function setupAuthEnv(inputs: ActionInputs): void {
+  delete process.env['CLAUDE_CODE_OAUTH_TOKEN'];
+  delete process.env['WARDEN_ANTHROPIC_API_KEY'];
+  delete process.env['ANTHROPIC_API_KEY'];
+
   if (inputs.oauthToken) {
     process.env['CLAUDE_CODE_OAUTH_TOKEN'] = inputs.oauthToken;
-  } else if (inputs.anthropicApiKey) {
+    return;
+  }
+
+  if (inputs.anthropicApiKey) {
     process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
     process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
   }

@@ -171,6 +171,43 @@ describe('setupAuthEnv', () => {
     expect(process.env['ANTHROPIC_API_KEY']).toBeUndefined();
     expect(process.env['WARDEN_ANTHROPIC_API_KEY']).toBeUndefined();
   });
+
+  it('clears stale API key env vars for OAuth auth', () => {
+    process.env['ANTHROPIC_API_KEY'] = 'stale-api-key';
+    process.env['WARDEN_ANTHROPIC_API_KEY'] = 'stale-warden-key';
+
+    setupAuthEnv({
+      anthropicApiKey: '',
+      oauthToken: 'sk-ant-oat-oauth-token',
+      githubToken: 'test',
+      configPath: 'warden.toml',
+      maxFindings: 50,
+      parallel: 4,
+    });
+
+    expect(process.env['CLAUDE_CODE_OAUTH_TOKEN']).toBe('sk-ant-oat-oauth-token');
+    expect(process.env['ANTHROPIC_API_KEY']).toBeUndefined();
+    expect(process.env['WARDEN_ANTHROPIC_API_KEY']).toBeUndefined();
+  });
+
+  it('clears stale auth env vars when no auth is supplied', () => {
+    process.env['ANTHROPIC_API_KEY'] = 'stale-api-key';
+    process.env['WARDEN_ANTHROPIC_API_KEY'] = 'stale-warden-key';
+    process.env['CLAUDE_CODE_OAUTH_TOKEN'] = 'stale-oauth-token';
+
+    setupAuthEnv({
+      anthropicApiKey: '',
+      oauthToken: '',
+      githubToken: 'test',
+      configPath: 'warden.toml',
+      maxFindings: 50,
+      parallel: 4,
+    });
+
+    expect(process.env['CLAUDE_CODE_OAUTH_TOKEN']).toBeUndefined();
+    expect(process.env['ANTHROPIC_API_KEY']).toBeUndefined();
+    expect(process.env['WARDEN_ANTHROPIC_API_KEY']).toBeUndefined();
+  });
 });
 
 describe('validateInputs', () => {
