@@ -699,6 +699,37 @@ describe('resolveLayeredSkillConfigs', () => {
     });
   });
 
+  it('lets repo-defined skills inherit the base runtime when repo defaults omit it', () => {
+    const baseConfig = {
+      version: 1,
+      defaults: {
+        runtime: 'pi',
+      },
+      skills: [{
+        name: 'org-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    } as unknown as WardenConfig;
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'repo-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const resolved = resolveLayeredSkillConfigs({
+      config: { version: 1, skills: [] },
+      baseConfig,
+      repoConfig,
+    });
+
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]?.runtime).toBe('pi');
+    expect(resolved[1]?.runtime).toBe('pi');
+  });
+
   it('uses layer-specific skill roots when both layers define the same skill name', () => {
     const baseConfig: WardenConfig = {
       version: 1,
