@@ -220,8 +220,10 @@ export async function evaluateFix(
   runtimeOptionsOrMaxRetries?: number | FixJudgeRuntimeOptions
 ): Promise<FixJudgeResult> {
   const runtimeOptions: FixJudgeRuntimeOptions =
-    typeof runtimeOptionsOrMaxRetries === 'object'
+    runtimeOptionsOrMaxRetries !== null && typeof runtimeOptionsOrMaxRetries === 'object'
       ? runtimeOptionsOrMaxRetries
+      : runtimeOptionsOrMaxRetries == null
+        ? {}
       : { maxRetries: runtimeOptionsOrMaxRetries };
   const fallback: FixJudgeResult = {
     verdict: { status: 'not_attempted', reasoning: 'Evaluation failed' },

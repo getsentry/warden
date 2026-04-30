@@ -20,6 +20,7 @@ vi.mock('./github.js', () => ({
 
 import { evaluateFixAttempts } from './index.js';
 import { evaluateFix } from './judge.js';
+import type { FixJudgeRuntimeOptions } from './judge.js';
 import { fetchFollowUpChanges, fetchFileContent } from './github.js';
 
 const mockEvaluateFix = vi.mocked(evaluateFix);
@@ -111,6 +112,31 @@ describe('evaluateFixAttempts', () => {
 
     expect(result.skipped).toBe(1);
     expect(result.evaluated).toBe(0);
+  });
+
+  it('treats null runtime options as empty options', async () => {
+    const comment = createComment();
+    mockEvaluateFix.mockResolvedValue({
+      verdict: { status: 'not_attempted', reasoning: 'Unrelated changes' },
+      usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      usedFallback: false,
+    });
+
+    await evaluateFixAttempts(
+      mockOctokit,
+      [comment],
+      defaultContext,
+      [],
+      'api-key',
+      null as unknown as FixJudgeRuntimeOptions
+    );
+
+    expect(mockEvaluateFix).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'api-key',
+      {}
+    );
   });
 
   it('categorizes resolved verdicts into toResolve', async () => {

@@ -88,8 +88,10 @@ export async function evaluateFixAttempts(
   runtimeOptionsOrMaxRetries?: number | FixJudgeRuntimeOptions
 ): Promise<EvaluateFixAttemptsResult> {
   const runtimeOptions: FixJudgeRuntimeOptions =
-    typeof runtimeOptionsOrMaxRetries === 'object'
+    runtimeOptionsOrMaxRetries !== null && typeof runtimeOptionsOrMaxRetries === 'object'
       ? runtimeOptionsOrMaxRetries
+      : runtimeOptionsOrMaxRetries == null
+        ? {}
       : { maxRetries: runtimeOptionsOrMaxRetries };
   return Sentry.startSpan(
     {

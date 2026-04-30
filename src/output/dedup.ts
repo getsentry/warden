@@ -4,8 +4,8 @@ import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
 import { findingLine } from '../types/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
-import type { RuntimeName } from '../sdk/runtimes/index.js';
 import { applyMergeGroups } from '../sdk/extract.js';
+import type { AuxiliaryCallOptions } from '../sdk/extract.js';
 
 /**
  * Parsed marker data from a Warden comment.
@@ -501,32 +501,16 @@ Return [] if none are duplicates.`;
 /**
  * Options for deduplication.
  */
-export interface DeduplicateOptions {
-  /** Runtime API key for LLM-based semantic deduplication */
-  apiKey?: string;
-  /** Runtime for auxiliary structured model calls */
-  runtime?: RuntimeName;
-  /** Model for auxiliary structured model calls */
-  model?: string;
+export interface DeduplicateOptions extends AuxiliaryCallOptions {
   /** Skip LLM deduplication and only use exact hash matching */
   hashOnly?: boolean;
   /** Current skill name (for updating Warden comment attribution) */
   currentSkill?: string;
-  /** Max retries for auxiliary structured model calls */
-  maxRetries?: number;
 }
 
-export interface ConsolidateOptions {
-  /** Runtime API key for LLM-based consolidation */
-  apiKey?: string;
-  /** Runtime for auxiliary structured model calls */
-  runtime?: RuntimeName;
-  /** Model for auxiliary structured model calls */
-  model?: string;
+export interface ConsolidateOptions extends AuxiliaryCallOptions {
   /** Skip LLM consolidation and only use exact hash matching */
   hashOnly?: boolean;
-  /** Max retries for auxiliary structured model calls */
-  maxRetries?: number;
 }
 
 const ADD_REACTION_MUTATION = `
