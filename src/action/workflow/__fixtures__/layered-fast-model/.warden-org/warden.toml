@@ -1,0 +1,12 @@
+version = 1
+
+[defaults.fastModel]
+model = "org-fast-model"
+maxRetries = 7
+
+[[skills]]
+name = "org-skill"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]

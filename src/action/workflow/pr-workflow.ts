@@ -92,22 +92,22 @@ interface FastModelWorkflowOptions {
 }
 
 function resolveWorkflowFastModelOptions(layered: LoadedLayeredConfig): FastModelWorkflowOptions {
-  const configs = [layered.baseConfig, layered.repoConfig, layered.config];
+  const baseDefaults = layered.baseConfig?.defaults;
+  const repoDefaults = layered.repoConfig?.defaults ?? layered.config.defaults;
 
   return {
-    runtime:
-      configs
-        .map((config) => config?.defaults?.runtime)
-        .find((value): value is RuntimeName => value !== undefined) ?? 'claude',
-    model: configs
-      .map((config) => emptyToUndefined(config?.defaults?.fastModel?.model))
-      .find((value): value is string => value !== undefined),
-    maxRetries: configs
-      .map(
-        (config) =>
-          config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries
-      )
-      .find((value): value is number => value !== undefined),
+    // These workflow-scoped auxiliary calls are not tied to an individual
+    // trigger, so the org base config remains the enforced baseline and the
+    // repo layer only fills fields the base omits.
+    runtime: baseDefaults?.runtime ?? repoDefaults?.runtime ?? 'claude',
+    model:
+      emptyToUndefined(baseDefaults?.fastModel?.model) ??
+      emptyToUndefined(repoDefaults?.fastModel?.model),
+    maxRetries:
+      baseDefaults?.fastModel?.maxRetries ??
+      baseDefaults?.auxiliaryMaxRetries ??
+      repoDefaults?.fastModel?.maxRetries ??
+      repoDefaults?.auxiliaryMaxRetries,
   };
 }
 

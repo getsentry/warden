@@ -17,6 +17,7 @@ const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
 const RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'runtime-claude');
 const EMPTY_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-fast-model');
+const LAYERED_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-fast-model');
 const NO_MATCH_EMPTY_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-fast-model');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 
@@ -765,6 +766,53 @@ describe('runPRWorkflow', () => {
         expect.any(Array),
         'test-api-key',
         expect.objectContaining({ runtime: 'claude' })
+      );
+    });
+
+    it('keeps base fast-model defaults for workflow-level fix evaluation', async () => {
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/test.ts',
+          line: 10,
+          title: 'SQL injection',
+          description: 'User input in query',
+          contentHash: 'abc',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        },
+      ]);
+
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        LAYERED_FAST_MODEL_FIXTURES_DIR
+      );
+
+      expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(
+        mockOctokit,
+        expect.arrayContaining([expect.objectContaining({ isWarden: true })]),
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+          baseSha: 'base123sha456',
+          headSha: 'abc123def456',
+        }),
+        expect.any(Array),
+        'test-api-key',
+        expect.objectContaining({
+          runtime: 'claude',
+          model: 'org-fast-model',
+          maxRetries: 7,
+        })
       );
     });
 

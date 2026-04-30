@@ -1,0 +1,12 @@
+version = 1
+
+[defaults.fastModel]
+model = "repo-fast-model"
+maxRetries = 2
+
+[[skills]]
+name = "repo-skill"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
