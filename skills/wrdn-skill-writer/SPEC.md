@@ -19,7 +19,7 @@ Out of scope:
 
 - Generic prompt optimization unrelated to Warden skills.
 - General code review or product documentation work.
-- Authoring broad parent skills; use `wrdn-parent-skill-writer` for that.
+- Authoring broad Superwarden skills; use `wrdn-parent-skill-writer` for that.
 - Replacing the upstream `skill-writer` project as a general-purpose skill framework.
 
 ## Users And Trigger Context
@@ -58,7 +58,7 @@ Useful improvement sources:
 
 - positive examples: successful bundled skill additions and focused Warden skill refreshes
 - negative examples: vague trigger language, stale Warden schema references, or missing maintenance artifacts
-- commit logs/changelogs: changes to bundled skills, skill loading, config schema, and coordinator implementation
+- commit logs/changelogs: changes to bundled skills, skill loading, config schema, and Superwarden implementation
 - issue or PR feedback: reports that a bundled skill drifted, over-triggered, or missed important local conventions
 - eval results: future skill-authoring eval scenarios
 

@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve, relative, dirname, join } from 'node:path';
 import fg from 'fast-glob';
 import ignore, { type Ignore } from 'ignore';
@@ -20,6 +20,30 @@ export interface ExpandGlobOptions {
  */
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
+}
+
+function hasGlobCharacters(pattern: string): boolean {
+  return pattern.includes('*') || pattern.includes('?');
+}
+
+function expandDirectoryPattern(pattern: string, cwd: string): string {
+  if (hasGlobCharacters(pattern)) {
+    return pattern;
+  }
+
+  try {
+    if (!statSync(resolve(cwd, pattern)).isDirectory()) {
+      return pattern;
+    }
+  } catch {
+    return pattern;
+  }
+
+  const normalized = normalizePath(pattern).replace(/\/+$/, '');
+  if (normalized === '' || normalized === '.') {
+    return '**';
+  }
+  return `${normalized}/**`;
 }
 
 /**
@@ -154,9 +178,10 @@ export async function expandFileGlobs(
   // Resolve to absolute path to handle relative paths like '.' or 'src'
   const cwd = resolve(options.cwd ?? process.cwd());
   const useGitignore = options.gitignore ?? true;
+  const expandedPatterns = patterns.map((pattern) => expandDirectoryPattern(pattern, cwd));
 
   // Get all matching files first
-  const files = await fg(patterns, {
+  const files = await fg(expandedPatterns, {
     cwd,
     onlyFiles: true,
     absolute: true,

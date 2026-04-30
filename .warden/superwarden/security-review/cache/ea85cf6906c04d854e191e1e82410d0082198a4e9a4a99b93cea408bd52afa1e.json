@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "kind": "superwarden-plan-cache",
+  "plan": {
+    "version": 1,
+    "skill": "security-review",
+    "sourceHash": "978c5b0ca371a664992de0a8fd0978e6bb57f7e2516b4bcde271f24dc264cb59",
+    "coordinatorVersion": "1",
+    "synthesis": {
+      "phases": [
+        {
+          "id": "collect-inputs",
+          "status": "generated"
+        },
+        {
+          "id": "synthesize-tasks",
+          "status": "generated"
+        },
+        {
+          "id": "validate-coverage",
+          "status": "validated"
+        }
+      ]
+    },
+    "tasks": [
+      {
+        "id": "authorization-and-trust-boundaries",
+        "title": "Authorization and trust-boundary bypasses",
+        "scope": "Detect changed code that circumvents access controls, permission checks, or trust boundaries in Warden's config loading, skill loading, SDK execution, or GitHub Action handling.",
+        "prompt": "Review changed TypeScript code for authorization failures: missing permission checks before executing privileged operations, trust-boundary violations when loading remote skills or processing untrusted input, and role or capability checks that are skipped or incorrect. Focus on code paths that can be triggered by a lower-privilege user or untrusted repository to gain access to higher-privilege operations or Warden internals. Provide the attack vector, the boundary crossed, and the smallest fix.",
+        "evidenceRequirements": [
+          "Identify the changed lines that perform or skip authorization logic.",
+          "Demonstrate the control-flow path from attacker-influenced input to the privileged operation.",
+          "Show what asset, boundary, or capability is exposed without proper checks.",
+          "Include a concrete attack scenario (e.g., a pull request or GitHub event that triggers the bypass)."
+        ],
+        "outOfScope": [
+          "Generic naming conventions or access-modifier hygiene.",
+          "Speculative role-based access control designs not yet implemented.",
+          "Improvements to logging or audit trails without a changed-line exploit path."
+        ]
+      },
+      {
+        "id": "secret-and-credential-exposure",
+        "title": "Secret, token, and credential exposure",
+        "scope": "Detect changed code that reads, logs, exports, or renders secrets, tokens, environment variables, or credentials in plaintext or via unencrypted channels.",
+        "prompt": "Review changed TypeScript code for credential leaks: environment variables, API tokens, secrets, or private keys that are read from config or GitHub event data and then logged, returned in error messages, written to stdout, cached without encryption, or exposed in HTTP responses. Include changed lines that handle .env files, GitHub Actions secrets, or credential objects. Report the exposure vector (log, cache, output, network), the credential type, and how an attacker observes it.",
+        "evidenceRequirements": [
+          "Identify the exact changed line that reads the secret.",
+          "Show the changed line(s) that expose it (console.log, response body, cache write, etc.).",
+          "Trace the data flow from read to exposure.",
+          "Confirm the secret is not redacted, truncated, or encrypted before exposure.",
+          "Specify the observability boundary (filesystem, stdout, network, GitHub logs)."
+        ],
+        "outOfScope": [
+          "Requests to adopt secrets-management libraries without a changed-code leak.",
+          "Generic hardening of secret handling without demonstrating a new leak vector.",
+          "Dependency security advisories on transitive credential-handling libraries."
+        ]
+      },
+      {
+        "id": "filesystem-and-cache-safety",
+        "title": "Unsafe filesystem access, path traversal, symlink handling, and cache poisoning",
+        "scope": "Detect changed code that performs unsafe filesystem reads, writes, or cache operations vulnerable to path traversal, symlink attacks, race conditions, or poisoning via untrusted repository input.",
+        "prompt": "Review changed TypeScript code for filesystem vulnerabilities: path construction that does not sanitize user-controlled input (e.g., skill names, file paths from GitHub event data), symlink following that can escape the intended directory, cache reads or writes that trust untrusted data without integrity checks, and race conditions between stat and use. Check file operations under Warden's config, skill, cache, and output directories. Provide the attack path, the untrusted input, the traversal or poisoning vector, and the safe fix.",
+        "evidenceRequirements": [
+          "Show the changed line(s) that construct a file path using unsanitized input.",
+          "Identify the source of untrusted input (query parameter, GitHub event, config file, repository name).",
+          "Demonstrate the traversal path or symlink-following scenario (e.g., ../../../ or symlink to /etc/passwd).",
+          "For cache poisoning, show how malicious data is written and then trusted on subsequent reads.",
+          "Include the filesystem boundary that can be crossed (e.g., Warden home directory, system config)."
+        ],
+        "outOfScope": [
+          "Requests for atomic file operations or enhanced permissions checks without a changed-line vulnerability.",
+          "Generic file-permission audits or directory ownership checks.",
+          "Speculative hardening against filesystem attacks not triggerable by the changed code."
+        ]
+      },
+      {
+        "id": "command-execution-and-process-boundaries",
+        "title": "Command execution, shell argument handling, and process-spawning vulnerabilities",
+        "scope": "Detect changed code that spawns processes, constructs shell commands, or passes unsanitized arguments to tools in a way that allows injection or privilege-boundary violations.",
+        "prompt": "Review changed TypeScript code for command execution vulnerabilities: use of shell=true or eval with user input, unsanitized arguments to execFile or spawn, template-string interpolation in command construction, and arguments derived from GitHub event data, skill configuration, or repository names. Check for escaped quotes, special characters, or newlines that can break out of intended argument boundaries. Provide the injection vector, the command being constructed, the untrusted input, and the safe fix (typically array-based argument passing).",
+        "evidenceRequirements": [
+          "Show the changed line(s) that spawn a process or construct a command.",
+          "Identify the source of untrusted input and how it flows into the command.",
+          "Demonstrate the injection payload (e.g., a repository name or skill argument that injects shell syntax).",
+          "Confirm whether shell=true or string concatenation is used.",
+          "Show what command or privilege boundary can be crossed with the injected input."
+        ],
+        "outOfScope": [
+          "Requests to add input validation without a changed-code injection path.",
+          "General tool-usage hygiene or argument-formatting suggestions.",
+          "Dependency advisories on tool binaries without a changed-line exploit."
+        ]
+      },
+      {
+        "id": "remote-skill-loading-and-repository-input",
+        "title": "Remote skill loading, cache integrity, and untrusted repository input",
+        "scope": "Detect changed code that loads skills from remote repositories, downloads skill code, or processes repository metadata without integrity verification or trust validation.",
+        "prompt": "Review changed TypeScript code for remote-skill and repository vulnerabilities: fetching skill code from a repository without verifying a commit hash or signature, using repository names or branches from untrusted sources (GitHub event, user input) to construct fetch URLs, loading and executing cached skill code without re-validating its source, and trusting repository metadata (name, description, topics) as input to Warden operations. Include changes to skill-caching logic, repository cloning, and metadata parsing. Provide the attack vector (MITM, repository hijacking, cache poisoning), the trust assumption violated, and the fix.",
+        "evidenceRequirements": [
+          "Identify the changed line(s) that fetch or load remote skill code.",
+          "Show how the repository URL or ref is constructed and whether it includes untrusted input.",
+          "Demonstrate the cache-bypass or re-validation gap (e.g., code is cached but not re-verified on use).",
+          "Specify the attack scenario (e.g., a renamed repository, a hijacked GitHub account, or a forked repository with malicious code).",
+          "Show what code or configuration is executed as a result of the loaded skill."
+        ],
+        "outOfScope": [
+          "Recommendations for cryptographic signing without a changed-code loading vulnerability.",
+          "Requests to cache skills differently without a trust or integrity issue in the changed code.",
+          "Generic repository security posture or branch-protection suggestions."
+        ]
+      },
+      {
+        "id": "github-event-and-workflow-data-handling",
+        "title": "GitHub event, pull request, and workflow data handling",
+        "scope": "Detect changed code that processes GitHub event data, pull request content, or workflow variables without proper validation, allowing data to be used in commands, skill selection, or output rendering.",
+        "prompt": "Review changed TypeScript code that reads GitHub event context (github.event, github.event.pull_request, github.repository, github.head_ref, etc.) and uses it in downstream operations: constructing skill names, repository URLs, file paths, command arguments, or output messages. Check for missing validation of branch names, commit SHAs, repository names, pull request titles, and file contents. Include changes to how event data is passed to skills or rendered in logs. Provide the injection or traversal path, the GitHub event field being misused, and the safe handling.",
+        "evidenceRequirements": [
+          "Show the changed line(s) that read the GitHub event field.",
+          "Identify the downstream operation (command construction, skill invocation, output rendering, file path).",
+          "Demonstrate the untrusted value (e.g., a malicious branch name, PR title with shell syntax, or forged commit SHA).",
+          "Trace the data flow and show how validation is missing or insufficient.",
+          "Specify the impact (e.g., command injection, skill selection bypass, or log poisoning)."
+        ],
+        "outOfScope": [
+          "Requests for additional GitHub event logging or telemetry.",
+          "Generic suggestions to validate all input without a changed-code usage of event data.",
+          "GitHub Actions security best practices unrelated to the changed code."
+        ]
+      },
+      {
+        "id": "prompt-injection-and-warden-behavior-leakage",
+        "title": "Prompt-injection paths that alter Warden behavior or leak sensitive context",
+        "scope": "Detect changed code that constructs prompts or skill inputs from untrusted sources (GitHub event, repository content, user input) without proper escaping, allowing prompt injection or context leakage.",
+        "prompt": "Review changed TypeScript code that builds prompts, skill initialPrompt, or LLM inputs from untrusted data: repository names, pull request titles, commit messages, file contents, or GitHub Actions secrets. Check for missing escaping or quoting when embedding user-controlled text into prompts. Include changes to how context is passed to skills or rendered in output. Provide the injection payload, the altered behavior or leaked context, and the safe fix (e.g., structured input, escaping, or context isolation).",
+        "evidenceRequirements": [
+          "Show the changed line(s) that construct the prompt or LLM input.",
+          "Identify the untrusted source (PR title, commit message, skill config, GitHub variable).",
+          "Demonstrate an injection payload (e.g., a prompt fragment that breaks out of the intended instruction).",
+          "Show what behavior is altered or what context is leaked (e.g., sensitive Warden config, skill logic, or past results).",
+          "Confirm that escaping, quoting, or structural separation is missing."
+        ],
+        "outOfScope": [
+          "Generic LLM safety or jailbreak mitigation without a changed-code prompt-injection path.",
+          "Requests to add input sanitization without a demonstrable injection in the changed code.",
+          "Speculative concerns about prompt-model behavior alignment."
+        ]
+      }
+    ]
+  },
+  "childSkills": {},
+  "updatedAt": "2026-04-30T20:28:52.493Z"
+}

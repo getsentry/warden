@@ -44,7 +44,7 @@ const LOGO = `
 \\ \\/  \\/ / _\` | '__/ _\` |/ _ \\ '_ \\
  \\  /\\  / (_| | | | (_| |  __/ | | |
   \\/  \\/ \\__,_|_|  \\__,_|\\___|_| |_|
-`.trimStart();
+`.replace(/^\n/, '');
 
 /**
  * Callbacks for skill runner progress reporting.
@@ -178,6 +178,9 @@ export class Reporter {
       outputTokens: acc.outputTokens + u.outputTokens,
       cacheReadInputTokens: (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
       cacheCreationInputTokens: (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
+      cacheCreation5mInputTokens: (acc.cacheCreation5mInputTokens ?? 0) + (u.cacheCreation5mInputTokens ?? 0),
+      cacheCreation1hInputTokens: (acc.cacheCreation1hInputTokens ?? 0) + (u.cacheCreation1hInputTokens ?? 0),
+      webSearchRequests: (acc.webSearchRequests ?? 0) + (u.webSearchRequests ?? 0),
       costUSD: acc.costUSD + u.costUSD,
     }));
   }

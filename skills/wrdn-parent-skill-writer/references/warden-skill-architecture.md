@@ -1,6 +1,6 @@
 # Warden Skill Architecture
 
-Open this file when choosing where a coordinated parent skill should live or what files it must ship.
+Open this file when choosing where a Superwarden skill should live or what files it must ship.
 
 ## Skill Roots
 
@@ -11,40 +11,47 @@ Use the repository's established split:
   - installed into `.agents/skills/` by `warden init`
 - `.agents/skills/<name>/`
   - repo-local skills that are not part of the shipped Warden package
+- `.warden/superwarden/<name>/`
+  - repo-local Superwarden skills
+  - synthesized plans and child skills stay under this tree
+  - do not install generated Superwarden child skills into `.agents/skills/`
 
-For coordinated parent skills that Warden itself will ship or depend on, default to `skills/<name>/`.
+For repo-local Superwarden skills, default to `.warden/superwarden/<name>/`.
 
-## Required Artifacts For Bundled Parent Skills
+For bundled authoring helpers that Warden itself will ship, default to `skills/<name>/`.
 
-Bundled coordinated parent skills should normally include:
+## Required Artifacts For Superwarden Skills
+
+Superwarden skills should normally include:
 
 - `SKILL.md`
 - `SPEC.md`
 - `SOURCES.md`
+- `warden.yaml`
 - `references/` files for concern maps, examples, or lookup rules
 
-Add `scripts/` only when there is a deterministic parent-skill maintenance workflow that cannot be expressed cleanly in prose.
+Add `scripts/` only when there is a deterministic Superwarden maintenance workflow that cannot be expressed cleanly in prose.
 
-## Parent-Skill Role
+## Superwarden Skill Role
 
-The parent skill should provide:
+The Superwarden skill should provide:
 
 - broad problem framing
 - concern boundaries
 - coverage dimensions
 - evidence expectations
 - exclusions
-- enough direction that downstream focused skills or coordinator synthesis can stay honest
+- enough direction that downstream focused child skills or Superwarden synthesis can stay honest
 
-The parent skill should not provide:
+The Superwarden skill should not provide:
 
 - a generic "review everything" prompt
 - a full implementation of every child skill
-- runtime caching or orchestration rules that belong in code
+- runtime caching or orchestration rules that belong in code or `specs/superwarden.md`
 
 ## Validation Checklist
 
 - Directory name matches `name` in frontmatter.
 - Every referenced bundled file exists.
-- The parent skill is broad but still structured.
+- The Superwarden skill is broad but still structured.
 - Concern boundaries are explicit and reviewable.

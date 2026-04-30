@@ -47,6 +47,12 @@ export {
   generateShortId,
 } from './extract.js';
 export type { ExtractFindingsResult, MergeResult } from './extract.js';
+export { parseJsonFromOutput } from './json-output.js';
+export type {
+  JsonOutputRepairOptions,
+  ParseJsonFromOutputOptions,
+  ParseJsonFromOutputResult,
+} from './json-output.js';
 
 // Re-export file preparation
 export { prepareFiles } from './prepare.js';

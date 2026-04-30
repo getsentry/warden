@@ -102,6 +102,13 @@ describe('extractJson', () => {
     expect(extractJson(text)).toBe('{"value": 42}');
   });
 
+  it('extracts fenced JSON when a JSON string contains markdown fences', () => {
+    const text = 'Now I have enough context.\n```json\n{"skillBody":"Use this example: ```ts\\nconst x = 1;\\n```","specMd":"# Spec"}\n```';
+    expect(extractJson(text)).toBe(
+      '{"skillBody":"Use this example: ```ts\\nconst x = 1;\\n```","specMd":"# Spec"}'
+    );
+  });
+
   it('handles JSON with escaped quotes in strings', () => {
     const text = '{"reasoning": "The \\"fix\\" was incomplete"}';
     expect(extractJson(text)).toBe('{"reasoning": "The \\"fix\\" was incomplete"}');

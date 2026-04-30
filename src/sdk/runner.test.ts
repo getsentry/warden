@@ -106,6 +106,15 @@ describe('extractFindingsJson', () => {
     expect(result).toEqual({ success: true, findings: [] });
   });
 
+  it('extracts fenced findings when a JSON string contains markdown fences', () => {
+    const text = '```json\n{"findings":[{"id":"test-1","description":"Example: ```ts\\nconst x = 1;\\n```"}]}\n```';
+    const result = extractFindingsJson(text);
+    expect(result).toEqual({
+      success: true,
+      findings: [{ id: 'test-1', description: 'Example: ```ts\nconst x = 1;\n```' }],
+    });
+  });
+
   it('extracts findings with prose before JSON', () => {
     const text = 'Based on my analysis, here are the findings:\n\n{"findings": [{"id": "bug-1"}]}';
     const result = extractFindingsJson(text);
@@ -784,6 +793,9 @@ describe('aggregateUsage', () => {
       outputTokens: 0,
       cacheReadInputTokens: 0,
       cacheCreationInputTokens: 0,
+      cacheCreation5mInputTokens: 0,
+      cacheCreation1hInputTokens: 0,
+      webSearchRequests: 0,
       costUSD: 0,
     });
   });
@@ -794,6 +806,9 @@ describe('aggregateUsage', () => {
       outputTokens: 50,
       cacheReadInputTokens: 10,
       cacheCreationInputTokens: 5,
+      cacheCreation5mInputTokens: 0,
+      cacheCreation1hInputTokens: 0,
+      webSearchRequests: 0,
       costUSD: 0.01,
     };
     const result = aggregateUsage([usage]);
@@ -830,6 +845,9 @@ describe('aggregateUsage', () => {
       outputTokens: 225,
       cacheReadInputTokens: 45,
       cacheCreationInputTokens: 22,
+      cacheCreation5mInputTokens: 0,
+      cacheCreation1hInputTokens: 0,
+      webSearchRequests: 0,
       costUSD: 0.045,
     });
   });
@@ -854,6 +872,9 @@ describe('aggregateUsage', () => {
       outputTokens: 150,
       cacheReadInputTokens: 20,
       cacheCreationInputTokens: 0,
+      cacheCreation5mInputTokens: 0,
+      cacheCreation1hInputTokens: 0,
+      webSearchRequests: 0,
       costUSD: 0.03,
     });
   });

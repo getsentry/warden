@@ -45,6 +45,18 @@ export const CLIOptionsSchema = z.object({
   offline: z.boolean().default(false),
   /** Stop after first finding */
   failFast: z.boolean().default(false),
+  /** Show the synthesized Superwarden plan */
+  showPlan: z.boolean().default(false),
+  /** Regenerate a Superwarden plan even when a cached plan exists */
+  regenerate: z.boolean().default(false),
+  /** Export a Superwarden plan JSON artifact to this path */
+  exportPath: z.string().optional(),
+  /** Initial prompt for creating a new Superwarden skill */
+  initialPrompt: z.string().optional(),
+  /** File containing the initial prompt for creating a new Superwarden skill */
+  promptFile: z.string().optional(),
+  /** Description for a new Superwarden skill */
+  description: z.string().optional(),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -67,7 +79,7 @@ export interface RunsOptions {
 }
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'synthesize';
   options: CLIOptions;
   setupAppOptions?: SetupAppOptions;
   runsOptions?: RunsOptions;
@@ -86,6 +98,8 @@ Commands:
   init                 Initialize warden.toml and GitHub workflow
   add [skill]          Add a skill trigger to warden.toml
   sync [remote]        Update cached remote skills to latest
+  synth [skill]        Create or synthesize a Superwarden skill
+  synthesize [skill]   Alias for synth
   setup-app            Create a GitHub App for Warden via manifest flow
   runs [list]          List saved sessions (default)
   runs show <files...> Show results from a saved session
@@ -136,6 +150,15 @@ Add Options:
 Run Options:
   --offline            Use cached remote skills without network access
 
+Synth Options:
+  --show-plan          Show the Superwarden plan
+  --regenerate         Ignore cached Superwarden plan and synthesize a new one
+  --export <path>      Export the Superwarden plan JSON to a file
+  --initial-prompt <text>
+                       Create a missing Superwarden skill from this prompt
+  --prompt-file <path> Create a missing Superwarden skill from a prompt file
+  --description <text> Description for a newly created Superwarden skill
+
 Setup-app Options:
   --org <name>         Create under organization (default: personal)
   --port <number>      Local server port (default: 3000)
@@ -165,6 +188,8 @@ Examples:
   warden --fail-on high                   # Fail if high+ severity findings
   warden --offline                        # Use cached skills only
   warden sync                             # Update all unpinned remote skills
+  warden synth security-review --show-plan
+                                          # Show a generated Superwarden plan
   warden setup-app                        # Create GitHub App interactively
   warden setup-app --org myorg            # Create app under organization
 `;
@@ -295,6 +320,12 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       remote: { type: 'string' },
       offline: { type: 'boolean', default: false },
       'fail-fast': { type: 'boolean', short: 'x', default: false },
+      'show-plan': { type: 'boolean', default: false },
+      regenerate: { type: 'boolean', default: false },
+      export: { type: 'string' },
+      'initial-prompt': { type: 'string' },
+      'prompt-file': { type: 'string' },
+      description: { type: 'string' },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
       staged: { type: 'boolean', default: false },
@@ -335,7 +366,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
   }
 
   // Filter out known commands from positionals.
-  const commands = ['run', 'help', 'init', 'add', 'version', 'setup-app', 'sync', 'runs'];
+  const commands = ['run', 'help', 'init', 'add', 'version', 'setup-app', 'sync', 'runs', 'synth', 'synthesize'];
   const targets = positionals.filter((p) => !commands.includes(p));
 
   // Handle explicit help command
@@ -396,6 +427,35 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       options: CLIOptionsSchema.parse({
         remote: remoteArg,
         quiet: values.quiet,
+        color: resolveColorOption(values),
+      }),
+    };
+  }
+
+  // Handle synth command
+  const synthIndex = positionals.findIndex((positional) => positional === 'synth' || positional === 'synthesize');
+  if (synthIndex !== -1) {
+    const skillArg = values.skill ?? positionals[synthIndex + 1];
+
+    return {
+      command: 'synthesize',
+      options: CLIOptionsSchema.parse({
+        skill: skillArg,
+        config: values.config,
+        model: values.model,
+        json: values.json,
+        showPlan: values['show-plan'],
+        regenerate: values.regenerate,
+        exportPath: values.export,
+        initialPrompt: values['initial-prompt'],
+        promptFile: values['prompt-file'],
+        description: values.description,
+        remote: values.remote,
+        offline: values.offline,
+        quiet: values.quiet,
+        verbose: verboseCount,
+        debug: values.debug,
+        log: values.log,
         color: resolveColorOption(values),
       }),
     };

@@ -36,7 +36,9 @@ pnpm-debug.log*
 coverage/
 
 # Warden artifacts (logs, sessions, etc.)
-.warden/
+.warden/*
+!.warden/superwarden/
+!.warden/superwarden/**
 
 # Temporary files
 *.tmp

@@ -41,6 +41,34 @@ interface ModelPricingRecord {
   outputPerMTok: number;
   cacheReadPerMTok: number;
   cacheWritePerMTok: number;
+  cacheWrite1hPerMTok: number;
+  webSearchPer1K: number;
+}
+
+const PRICE_FALLBACKS: Record<string, string> = {
+  // Some upstream records can appear before the price fields are populated.
+  // Fill those known same-price variants from the closest canonical model.
+  'claude-opus-4-6': 'claude-opus-4-5',
+  'claude-sonnet-4-6': 'claude-sonnet-4-5',
+};
+
+function hasPrice(record: ModelPricingRecord | undefined): boolean {
+  return record !== undefined && (
+    record.inputPerMTok > 0 ||
+    record.outputPerMTok > 0 ||
+    record.cacheReadPerMTok > 0 ||
+    record.cacheWritePerMTok > 0 ||
+    record.cacheWrite1hPerMTok > 0
+  );
+}
+
+function fillPricingFallbacks(pricing: Record<string, ModelPricingRecord>): void {
+  for (const [target, source] of Object.entries(PRICE_FALLBACKS)) {
+    if (hasPrice(pricing[target]) || !hasPrice(pricing[source])) {
+      continue;
+    }
+    pricing[target] = { ...pricing[source]! };
+  }
 }
 
 async function main() {
@@ -71,8 +99,12 @@ async function main() {
       outputPerMTok: basePrice(p.output_mtok),
       cacheReadPerMTok: basePrice(p.cache_read_mtok),
       cacheWritePerMTok: basePrice(p.cache_write_mtok),
+      cacheWrite1hPerMTok: basePrice(p.input_mtok) * 2,
+      webSearchPer1K: 10,
     };
   }
+
+  fillPricingFallbacks(pricing);
 
   const { writeFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');

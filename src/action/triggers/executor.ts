@@ -27,6 +27,7 @@ import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
 import { SkillRunnerError } from '../../sdk/errors.js';
 import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
+import { coordinatorExecutionUnavailableMessage } from '../../coordinator/plan.js';
 
 /** Log-mode output for CI: no TTY, no color. */
 const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns: 120 };
@@ -124,6 +125,10 @@ export async function executeTrigger(
       const failCheck = trigger.failCheck ?? deps.globalFailCheck;
 
       try {
+        if (trigger.mode === 'coordinator') {
+          throw new Error(coordinatorExecutionUnavailableMessage(trigger.skill));
+        }
+
         const taskOptions: SkillTaskOptions = {
           name: trigger.name,
           displayName: trigger.skill,

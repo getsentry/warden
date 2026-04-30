@@ -1,0 +1,40 @@
+version: 1
+kind: superwarden-skill
+name: security-review
+mode: coordinator
+initialPrompt: |-
+  Review changed TypeScript code for security vulnerabilities.
+
+  Prioritize issues that create real exploitability in Warden's runtime, CLI, GitHub Action, config loading, skill loading, SDK execution, output rendering, or filesystem behavior.
+
+  Focus on authorization and trust-boundary bypasses, secret exposure, unsafe filesystem access, command execution boundaries, remote skill loading, GitHub event handling, and prompt-injection paths that can alter Warden behavior or leak sensitive context.
+
+  Report only findings that are provable from the changed code and anchored to changed lines. Include the attack path, affected boundary, realistic impact, and the smallest safe fix.
+
+  Do not report generic code style, speculative hardening, dependency freshness, or issues that require unrealistic control of local developer machines.
+sourceFiles:
+  - warden.yaml
+  - SKILL.md
+  - SPEC.md
+  - SOURCES.md
+outputFiles:
+  - cache/<plan-hash>.json
+  - cache/<plan-hash>/skills/<task-id>/SKILL.md
+  - cache/<plan-hash>/skills/<task-id>/SPEC.md
+  - cache/<plan-hash>/skills/<task-id>/SOURCES.md
+coverage:
+  - authorization and trust boundaries
+  - secrets and credentials
+  - filesystem and cache safety
+  - command and process execution
+  - remote skills and repository input
+  - GitHub event handling
+  - prompt injection against Warden behavior
+instructions:
+  - Synthesize the parent plan through a deep Superwarden planning pass, not a shallow category split.
+  - Preserve every explicit coverage item from this metadata in at least one task.
+  - Generate each child skill through its own deep synthesis run.
+  - Generate child skills that pass skill-writer structural validation, including matching task-id names, trigger-rich descriptions, and complete SPEC.md sections.
+  - Require each child skill to inspect repo-local source and use public prior art when external behavior affects correctness.
+  - Do not send repository code, secrets, private file paths, or proprietary details to web tools.
+  - Represent missing repository, technology, deployment, or threat-model context inside task instructions until live inquiry tools exist.

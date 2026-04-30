@@ -11,6 +11,19 @@ interface ModelPricing {
   outputPerToken: number;
   cacheReadPerToken: number;
   cacheCreationPerToken: number;
+  cacheCreation1hPerToken: number;
+  webSearchPerRequest: number;
+}
+
+export interface UsageCostBreakdown {
+  freshInputUSD: number;
+  outputUSD: number;
+  cacheReadUSD: number;
+  cacheCreationUSD: number;
+  cacheCreation5mUSD: number;
+  cacheCreation1hUSD: number;
+  webSearchUSD: number;
+  totalUSD: number;
 }
 
 /**
@@ -25,9 +38,122 @@ const MODEL_PRICING: Record<string, ModelPricing> = Object.fromEntries(
       outputPerToken: p.outputPerMTok / 1_000_000,
       cacheReadPerToken: p.cacheReadPerMTok / 1_000_000,
       cacheCreationPerToken: p.cacheWritePerMTok / 1_000_000,
+      cacheCreation1hPerToken: p.cacheWrite1hPerMTok / 1_000_000,
+      webSearchPerRequest: p.webSearchPer1K / 1_000,
     },
   ]),
 );
+
+const MODEL_ALIASES: Record<string, string> = {
+  'claude-sonnet-4': 'claude-sonnet-4-0',
+  'claude-4-sonnet': 'claude-sonnet-4-0',
+  'claude-sonnet-4-6': 'claude-sonnet-4-5',
+  'claude-opus-4': 'claude-opus-4-0',
+  'claude-4-opus': 'claude-opus-4-0',
+  'claude-opus-4-6': 'claude-opus-4-5',
+};
+
+function hasModelPricing(pricing: ModelPricing | undefined): pricing is ModelPricing {
+  return pricing !== undefined && (
+    pricing.inputPerToken > 0 ||
+    pricing.outputPerToken > 0 ||
+    pricing.cacheReadPerToken > 0 ||
+    pricing.cacheCreationPerToken > 0 ||
+    pricing.cacheCreation1hPerToken > 0
+  );
+}
+
+function lookupModelPricing(model: string): ModelPricing | undefined {
+  const pricing = MODEL_PRICING[model];
+  return hasModelPricing(pricing) ? pricing : undefined;
+}
+
+function normalizeModelId(model: string): string {
+  const undated = model.replace(/-\d{8}$/, '');
+  if (lookupModelPricing(undated)) return undated;
+  return MODEL_ALIASES[undated] ?? undated;
+}
+
+function applyLongContextPricing(model: string, pricing: ModelPricing, inputTokens: number): ModelPricing {
+  const canonical = normalizeModelId(model);
+  const sonnetLongContext =
+    inputTokens > 200_000 &&
+    (canonical === 'claude-sonnet-4-0' || canonical === 'claude-sonnet-4-5');
+  if (!sonnetLongContext) {
+    return pricing;
+  }
+
+  const inputPerToken = pricing.inputPerToken * 2;
+  return {
+    ...pricing,
+    inputPerToken,
+    outputPerToken: pricing.outputPerToken * 1.5,
+    cacheReadPerToken: inputPerToken * 0.1,
+    cacheCreationPerToken: inputPerToken * 1.25,
+    cacheCreation1hPerToken: inputPerToken * 2,
+  };
+}
+
+function getModelPricing(model: string, inputTokens = 0): ModelPricing | undefined {
+  const exact = lookupModelPricing(model);
+  if (exact) return applyLongContextPricing(model, exact, inputTokens);
+
+  const canonical = normalizeModelId(model);
+  const pricing = lookupModelPricing(canonical) ?? lookupModelPricing(`${canonical}-latest`);
+  return pricing ? applyLongContextPricing(model, pricing, inputTokens) : undefined;
+}
+
+export function estimateUsageCostBreakdown(
+  model: string | undefined,
+  usage: UsageStats,
+): UsageCostBreakdown | undefined {
+  if (!model) return undefined;
+  const cacheReadInputTokens = usage.cacheReadInputTokens ?? 0;
+  const cacheCreation5mInputTokens = usage.cacheCreation5mInputTokens ?? 0;
+  const cacheCreation1hInputTokens = usage.cacheCreation1hInputTokens ?? 0;
+  const cacheCreationInputTokens = Math.max(
+    usage.cacheCreationInputTokens ?? 0,
+    cacheCreation5mInputTokens + cacheCreation1hInputTokens,
+  );
+  const cacheCreationInputTokensByTier = cacheCreation5mInputTokens + cacheCreation1hInputTokens;
+  const uncategorizedCacheCreationInputTokens = Math.max(
+    0,
+    cacheCreationInputTokens - cacheCreationInputTokensByTier,
+  );
+  const freshInputTokens = Math.max(
+    0,
+    usage.inputTokens - cacheReadInputTokens - cacheCreationInputTokens,
+  );
+  const webSearchRequests = usage.webSearchRequests ?? 0;
+  const pricing = getModelPricing(model, usage.inputTokens);
+  if (!pricing) return undefined;
+
+  const freshInputUSD = freshInputTokens * pricing.inputPerToken;
+  const outputUSD = usage.outputTokens * pricing.outputPerToken;
+  const cacheReadUSD = cacheReadInputTokens * pricing.cacheReadPerToken;
+  const cacheCreationUSD = uncategorizedCacheCreationInputTokens * pricing.cacheCreationPerToken;
+  const cacheCreation5mUSD = cacheCreation5mInputTokens * pricing.cacheCreationPerToken;
+  const cacheCreation1hUSD = cacheCreation1hInputTokens * pricing.cacheCreation1hPerToken;
+  const webSearchUSD = webSearchRequests * pricing.webSearchPerRequest;
+
+  return {
+    freshInputUSD,
+    outputUSD,
+    cacheReadUSD,
+    cacheCreationUSD,
+    cacheCreation5mUSD,
+    cacheCreation1hUSD,
+    webSearchUSD,
+    totalUSD:
+      freshInputUSD +
+      outputUSD +
+      cacheReadUSD +
+      cacheCreationUSD +
+      cacheCreation5mUSD +
+      cacheCreation1hUSD +
+      webSearchUSD,
+  };
+}
 
 /**
  * Usage shape returned by the Anthropic Messages API.
@@ -37,6 +163,13 @@ interface ApiUsage {
   output_tokens: number;
   cache_read_input_tokens?: number | null;
   cache_creation_input_tokens?: number | null;
+  cache_creation?: {
+    ephemeral_1h_input_tokens?: number | null;
+    ephemeral_5m_input_tokens?: number | null;
+  } | null;
+  server_tool_use?: {
+    web_search_requests?: number | null;
+  } | null;
 }
 
 /**
@@ -49,14 +182,26 @@ interface ApiUsage {
  * being subsets of that total.
  */
 export function apiUsageToStats(model: string, usage: ApiUsage): UsageStats {
-  const pricing = MODEL_PRICING[model];
-
   const outputTokens = usage.output_tokens;
   const cacheReadInputTokens = usage.cache_read_input_tokens ?? 0;
-  const cacheCreationInputTokens = usage.cache_creation_input_tokens ?? 0;
+  const rawCacheCreationInputTokens = usage.cache_creation_input_tokens ?? 0;
+  const tieredCacheCreation5mInputTokens = usage.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+  const cacheCreation1hInputTokens = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+  const hasTieredCacheCreation = usage.cache_creation !== undefined && usage.cache_creation !== null;
+  const tieredCacheCreationInputTokens = tieredCacheCreation5mInputTokens + cacheCreation1hInputTokens;
+  const cacheCreationInputTokens = Math.max(rawCacheCreationInputTokens, tieredCacheCreationInputTokens);
+  const cacheCreation5mInputTokens = hasTieredCacheCreation
+    ? tieredCacheCreation5mInputTokens
+    : rawCacheCreationInputTokens;
+  const uncategorizedCacheCreationInputTokens = Math.max(
+    0,
+    cacheCreationInputTokens - cacheCreation5mInputTokens - cacheCreation1hInputTokens,
+  );
+  const webSearchRequests = usage.server_tool_use?.web_search_requests ?? 0;
 
   // inputTokens is the total: raw API input_tokens + cache subsets.
   const inputTokens = usage.input_tokens + cacheReadInputTokens + cacheCreationInputTokens;
+  const pricing = getModelPricing(model, inputTokens);
 
   // Cost: deduct cache subsets from total to get the non-cached portion,
   // then charge each category at its respective rate.
@@ -67,7 +212,9 @@ export function apiUsageToStats(model: string, usage: ApiUsage): UsageStats {
       freshInputTokens * pricing.inputPerToken +
       outputTokens * pricing.outputPerToken +
       cacheReadInputTokens * pricing.cacheReadPerToken +
-      cacheCreationInputTokens * pricing.cacheCreationPerToken;
+      (cacheCreation5mInputTokens + uncategorizedCacheCreationInputTokens) * pricing.cacheCreationPerToken +
+      cacheCreation1hInputTokens * pricing.cacheCreation1hPerToken +
+      webSearchRequests * pricing.webSearchPerRequest;
   }
 
   return {
@@ -75,6 +222,9 @@ export function apiUsageToStats(model: string, usage: ApiUsage): UsageStats {
     outputTokens,
     cacheReadInputTokens,
     cacheCreationInputTokens,
+    cacheCreation5mInputTokens: cacheCreation5mInputTokens + uncategorizedCacheCreationInputTokens,
+    cacheCreation1hInputTokens,
+    webSearchRequests,
     costUSD,
   };
 }

@@ -148,6 +148,9 @@ export const UsageStatsSchema = z.object({
   outputTokens: z.number().int().nonnegative(),
   cacheReadInputTokens: z.number().int().nonnegative().optional(),
   cacheCreationInputTokens: z.number().int().nonnegative().optional(),
+  cacheCreation5mInputTokens: z.number().int().nonnegative().optional(),
+  cacheCreation1hInputTokens: z.number().int().nonnegative().optional(),
+  webSearchRequests: z.number().int().nonnegative().optional(),
   costUSD: z.number().nonnegative(),
 });
 export type UsageStats = z.infer<typeof UsageStatsSchema>;

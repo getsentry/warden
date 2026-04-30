@@ -154,6 +154,74 @@ describe('claudeRuntime.runSkill', () => {
     });
   });
 
+  it('computes run cost from streamed assistant turns instead of cumulative SDK cost', async () => {
+    mockQuery.mockReturnValue(mockStream([
+      {
+        type: 'assistant',
+        message: {
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-haiku-4-5-20251001',
+          content: [{ type: 'text', text: '{"findings":[]}' }],
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          usage: {
+            input_tokens: 1000,
+            output_tokens: 500,
+            cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 100 },
+            cache_creation_input_tokens: 100,
+            cache_read_input_tokens: 200,
+            server_tool_use: { web_fetch_requests: 0, web_search_requests: 2 },
+            service_tier: 'standard',
+          },
+        },
+        parent_tool_use_id: null,
+        uuid: '00000000-0000-4000-8000-000000000011',
+        session_id: 'session-1',
+      } as unknown as SDKMessage,
+      successResult({ total_cost_usd: 99 }),
+    ]));
+
+    const result = await claudeRuntime.runSkill({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo',
+      skillName: 'test-skill',
+      options: {},
+    });
+
+    expect(result.result?.responseModel).toBe('claude-haiku-4-5-20251001');
+    expect(result.result?.usage).toMatchObject({
+      inputTokens: 1300,
+      outputTokens: 500,
+      cacheReadInputTokens: 200,
+      cacheCreationInputTokens: 100,
+    });
+    expect(result.result?.usage.costUSD).toBeCloseTo(0.023645, 6);
+  });
+
+  it('allows read-only web tools when a skill explicitly opts in', async () => {
+    mockQuery.mockReturnValue(mockStream([successResult()]));
+
+    await claudeRuntime.runSkill({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo',
+      skillName: 'superwarden-child',
+      tools: { allowed: ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'] },
+      options: {},
+    });
+
+    expect(mockQuery).toHaveBeenCalledWith({
+      prompt: 'user',
+      options: expect.objectContaining({
+        allowedTools: ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'],
+        disallowedTools: ['Write', 'Edit', 'Bash', 'Task', 'TodoWrite'],
+      }),
+    });
+  });
+
   it('surfaces auth status errors', async () => {
     mockQuery.mockReturnValue(mockStream([
       {

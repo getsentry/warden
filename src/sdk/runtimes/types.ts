@@ -13,6 +13,7 @@
  * hunk parsing, extraction repair, deduplication, fix gates, or reporting.
  */
 import { z } from 'zod';
+import type { ToolConfig } from '../../config/schema.js';
 import type { UsageStats } from '../../types/index.js';
 
 export const RuntimeNameSchema = z.enum(['claude']);
@@ -39,6 +40,7 @@ export interface SkillRunRequest {
   repoPath: string;
   skillName: string;
   options: SkillRunOptions;
+  tools?: ToolConfig;
   /** Provider-specific settings consumed only by the selected runtime adapter. */
   providerOptions?: unknown;
 }
@@ -71,6 +73,7 @@ export interface AuxiliaryTool {
 }
 
 export type AuxiliaryTask =
+  | 'superwarden_synthesis'
   | 'extraction'
   | 'deduplication'
   | 'consolidation'

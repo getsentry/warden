@@ -690,7 +690,16 @@ describe('parseJsonlReports', () => {
         filename: 'src/api.ts',
         findings: 1,
         durationMs: 2100,
-        usage: { inputTokens: 1800, outputTokens: 700, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0.015 },
+        usage: {
+          inputTokens: 1800,
+          outputTokens: 700,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          cacheCreation5mInputTokens: 0,
+          cacheCreation1hInputTokens: 0,
+          webSearchRequests: 0,
+          costUSD: 0.015,
+        },
       },
     ]);
     expect(result.reports[0]!.usage?.inputTokens).toBe(1800);

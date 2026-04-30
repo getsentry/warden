@@ -109,6 +109,22 @@ describe('expandFileGlobs', () => {
     expect(files.some(f => f.includes('src/nested.ts'))).toBe(true);
   });
 
+  it('expands a directory target recursively', async () => {
+    const srcDir = join(tempDir, 'src');
+    const nestedDir = join(srcDir, 'nested');
+    mkdirSync(nestedDir, { recursive: true });
+    writeFileSync(join(srcDir, 'index.ts'), 'index');
+    writeFileSync(join(nestedDir, 'helper.ts'), 'helper');
+    writeFileSync(join(tempDir, 'root.ts'), 'root');
+
+    const files = await expandFileGlobs(['src'], tempDir);
+
+    expect(files).toHaveLength(2);
+    expect(files.some(f => f.includes('src/index.ts'))).toBe(true);
+    expect(files.some(f => f.includes('src/nested/helper.ts'))).toBe(true);
+    expect(files.some(f => f.endsWith('root.ts'))).toBe(false);
+  });
+
   it('handles specific file path', async () => {
     const filePath = join(tempDir, 'specific.ts');
     writeFileSync(filePath, 'content');

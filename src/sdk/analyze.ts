@@ -41,6 +41,22 @@ interface ParseHunkOutputResult {
   extractionUsage?: UsageStats;
 }
 
+function notifyHunkFailed(
+  callbacks: HunkAnalysisCallbacks | undefined,
+  lineRange: string,
+  message: string,
+): void {
+  if (callbacks) {
+    callbacks.onHunkFailed?.(lineRange, message);
+    return;
+  }
+  console.error(message);
+}
+
+function isAbortRequested(error: unknown, abortController?: AbortController): boolean {
+  return (abortController?.signal.aborted ?? false) || classifyError(error).code === 'aborted';
+}
+
 /**
  * Parse findings from a hunk analysis result.
  * Uses a two-tier extraction strategy:
@@ -169,9 +185,7 @@ async function analyzeHunk(
       for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
         // Check for abort before each attempt
         if (abortController?.signal.aborted) {
-          if (callbacks?.onHunkFailed) {
-            callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted');
-          }
+          callbacks?.onHunkFailed?.(callbacks.lineRange, 'Analysis aborted');
           return {
             findings: [],
             usage: aggregateUsage(accumulatedUsage),
@@ -195,6 +209,7 @@ async function analyzeHunk(
             userPrompt,
             repoPath,
             skillName: skill.name,
+            tools: skill.tools,
             options: {
               maxTurns: options.maxTurns,
               model: options.model,
@@ -210,11 +225,7 @@ async function analyzeHunk(
           }
 
           if (!resultMessage) {
-            if (callbacks?.onHunkFailed) {
-              callbacks.onHunkFailed(callbacks.lineRange, 'SDK returned no result');
-            } else {
-              console.error('SDK returned no result');
-            }
+            notifyHunkFailed(callbacks, callbacks?.lineRange ?? lineRange, 'SDK returned no result');
             return {
               findings: [],
               usage: aggregateUsage(accumulatedUsage),
@@ -248,11 +259,7 @@ async function analyzeHunk(
             const errorSummary = errorMessages.length > 0
               ? sanitizeErrorMessage(errorMessages.join('; '))
               : `Runtime error: ${resultMessage.status}`;
-            if (callbacks?.onHunkFailed) {
-              callbacks.onHunkFailed(callbacks.lineRange, `Runtime execution failed: ${errorSummary}`);
-            } else {
-              console.error(`Runtime execution failed: ${errorSummary}`);
-            }
+            notifyHunkFailed(callbacks, callbacks?.lineRange ?? lineRange, `Runtime execution failed: ${errorSummary}`);
             return {
               findings: [],
               usage: aggregateUsage(accumulatedUsage),
@@ -319,6 +326,19 @@ async function analyzeHunk(
         } catch (error) {
           lastError = error;
 
+          if (isAbortRequested(error, abortController)) {
+            callbacks?.onHunkFailed?.(callbacks.lineRange, 'Analysis aborted');
+            return {
+              findings: [],
+              usage: aggregateUsage(accumulatedUsage),
+              failed: true,
+              extractionFailed: false,
+              failureCode: 'aborted',
+              failureMessage: 'Analysis aborted',
+              attempts: attempt + 1,
+            };
+          }
+
           // Re-throw authentication errors (they shouldn't be retried)
           if (error instanceof WardenAuthenticationError) {
             throw error;
@@ -370,9 +390,7 @@ async function analyzeHunk(
             await sleep(delayMs, abortController?.signal);
           } catch {
             // Aborted during sleep
-            if (callbacks?.onHunkFailed) {
-              callbacks.onHunkFailed(callbacks.lineRange, 'Analysis aborted during retry delay');
-            }
+            callbacks?.onHunkFailed?.(callbacks.lineRange, 'Analysis aborted during retry delay');
             return {
               findings: [],
               usage: aggregateUsage(accumulatedUsage),
@@ -391,11 +409,7 @@ async function analyzeHunk(
 
       // Log the final error
       if (lastError) {
-        if (callbacks?.onHunkFailed) {
-          callbacks.onHunkFailed(callbacks.lineRange, `All retry attempts failed: ${finalError}`);
-        } else {
-          console.error('All retry attempts failed');
-        }
+        notifyHunkFailed(callbacks, callbacks?.lineRange ?? lineRange, `All retry attempts failed: ${finalError}`);
       }
 
       // Also notify via callback if verbose
@@ -503,7 +517,7 @@ export async function analyzeFile(
         // Use else-if so a future change that violates this invariant doesn't
         // silently double-count (one hunk → two hunkFailures entries +
         // failedHunks AND failedExtractions both incremented).
-        if (result.failed) {
+        if (result.failed && result.failureCode !== 'aborted') {
           failedHunks++;
           hunkFailures.push({
             type: 'analysis',

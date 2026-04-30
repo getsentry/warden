@@ -29,6 +29,8 @@ function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     staged: false,
     offline: false,
     failFast: false,
+    showPlan: false,
+    regenerate: false,
     ...overrides,
   };
 }
@@ -126,9 +128,13 @@ describe('init command', () => {
       await runInit(createOptions({ force: true }), reporter);
 
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'warden', 'SPEC.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SPEC.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-skill-writer', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-skill-writer', 'SPEC.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-parent-skill-writer', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-parent-skill-writer', 'SPEC.md'))).toBe(true);
     });
 
     it('copies warden skill references with --force', async () => {

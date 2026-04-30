@@ -19,6 +19,10 @@ interface ApiResponseUsage {
   output_tokens: number;
   cache_read_input_tokens?: number | null;
   cache_creation_input_tokens?: number | null;
+  cache_creation?: {
+    ephemeral_1h_input_tokens?: number | null;
+    ephemeral_5m_input_tokens?: number | null;
+  } | null;
 }
 
 /**
@@ -35,7 +39,11 @@ export function setGenAiResponseAttrs(
   responseText?: string
 ): void {
   const cacheRead = usage.cache_read_input_tokens ?? 0;
-  const cacheWrite = usage.cache_creation_input_tokens ?? 0;
+  const rawCacheWrite = usage.cache_creation_input_tokens ?? 0;
+  const tieredCacheWrite =
+    (usage.cache_creation?.ephemeral_5m_input_tokens ?? 0) +
+    (usage.cache_creation?.ephemeral_1h_input_tokens ?? 0);
+  const cacheWrite = Math.max(rawCacheWrite, tieredCacheWrite);
   const totalInput = usage.input_tokens + cacheRead + cacheWrite;
   span.setAttribute('gen_ai.usage.input_tokens', totalInput);
   span.setAttribute('gen_ai.usage.output_tokens', usage.output_tokens);
@@ -51,19 +59,11 @@ export function setGenAiResponseAttrs(
 }
 
 /**
- * Strip markdown code fences from text.
- */
-function stripCodeFences(text: string): string {
-  const match = text.match(/```[\w+#-]*\s*([\s\S]*?)```/);
-  return match?.[1]?.trim() ?? text;
-}
-
-/**
  * Extract the first JSON object or array from LLM text.
  * Handles markdown code fences and prose before/after JSON.
  */
 export function extractJson(text: string): string | null {
-  const stripped = stripCodeFences(text).trim();
+  const stripped = text.trim();
 
   // Try parsing the whole thing first (common case: clean JSON output)
   try {
@@ -73,29 +73,64 @@ export function extractJson(text: string): string | null {
     // Fall through to extraction
   }
 
-  // Try every object/array opener. Prefilled JSON calls can produce text like
-  // `{Here is the JSON:\n{"findings":[]}`, where the first opener is an orphan.
+  // Try every object/array opener. This handles prose, fenced JSON, orphaned
+  // prefill, and markdown fences embedded inside JSON string values.
   for (let start = 0; start < stripped.length; start++) {
     const opener = stripped[start];
     if (opener !== '{' && opener !== '[') {
       continue;
     }
 
-    const closer = opener === '{' ? '}' : ']';
-    let searchFrom = start;
+    const stack = [opener === '{' ? '}' : ']'];
+    let inString = false;
+    let escape = false;
 
-    while (true) {
-      const end = stripped.indexOf(closer, searchFrom + 1);
-      if (end === -1) {
-        break;
+    for (let i = start + 1; i < stripped.length; i++) {
+      const char = stripped[i];
+
+      if (escape) {
+        escape = false;
+        continue;
       }
 
-      const candidate = stripped.slice(start, end + 1);
-      try {
-        JSON.parse(candidate);
-        return candidate;
-      } catch {
-        searchFrom = end;
+      if (char === '\\' && inString) {
+        escape = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) {
+        continue;
+      }
+
+      if (char === '{') {
+        stack.push('}');
+        continue;
+      }
+      if (char === '[') {
+        stack.push(']');
+        continue;
+      }
+
+      const expectedCloser = stack[stack.length - 1];
+      if (char === '}' || char === ']') {
+        if (char !== expectedCloser) {
+          break;
+        }
+        stack.pop();
+        if (stack.length === 0) {
+          const candidate = stripped.slice(start, i + 1);
+          try {
+            JSON.parse(candidate);
+            return candidate;
+          } catch {
+            break;
+          }
+        }
       }
     }
   }
@@ -271,6 +306,10 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         output_tokens: 0,
         cache_read_input_tokens: 0,
         cache_creation_input_tokens: 0,
+        cache_creation: {
+          ephemeral_5m_input_tokens: 0,
+          ephemeral_1h_input_tokens: 0,
+        },
       };
 
       function setFinalSpanAttrs(stopReason?: string | null, responseText?: string): void {
@@ -300,6 +339,10 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         cumulativeUsage.output_tokens += response.usage.output_tokens;
         cumulativeUsage.cache_read_input_tokens += response.usage.cache_read_input_tokens ?? 0;
         cumulativeUsage.cache_creation_input_tokens += response.usage.cache_creation_input_tokens ?? 0;
+        cumulativeUsage.cache_creation.ephemeral_5m_input_tokens +=
+          response.usage.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+        cumulativeUsage.cache_creation.ephemeral_1h_input_tokens +=
+          response.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
 
         // Handle tool use
         if (response.stop_reason === 'tool_use') {

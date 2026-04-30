@@ -1,6 +1,6 @@
 # Transformed Examples
 
-Open this file when you need concrete examples of good parent-skill authoring.
+Open this file when you need concrete examples of good Superwarden authoring.
 
 ## Contents
 
@@ -10,16 +10,16 @@ Open this file when you need concrete examples of good parent-skill authoring.
 
 ## Happy Path
 
-Good parent skill description:
+Good Superwarden skill description:
 
 ```md
 ---
 name: security-review
-description: Review changed code for security vulnerabilities across authorization, tenant boundaries, injection, data exposure, and secret handling. Use when asked for a broad Warden security review skill that will guide deeper focused checks.
+description: Review changed code for security vulnerabilities across authorization, tenant boundaries, injection, data exposure, and secret handling. Use when asked for a broad Superwarden security review skill that will synthesize into deeper focused checks.
 ---
 ```
 
-Good parent-skill shape:
+Good Superwarden shape:
 
 - `SKILL.md` stays broad but names concern areas explicitly
 - `SPEC.md` documents required coverage dimensions
@@ -29,12 +29,12 @@ Good parent-skill shape:
 Why it works:
 
 - broad domain, explicit concern map
-- enough structure for downstream decomposition
+- enough structure for Superwarden decomposition
 - no attempt to be a generic catch-all review
 
 ## Secure Or Robust Variant
 
-Better parent-skill structure:
+Better Superwarden structure:
 
 - top-level skill names:
   - authorization and access control
@@ -47,13 +47,13 @@ Better parent-skill structure:
 
 Use this variant when:
 
-- the parent skill will eventually drive coordinator decomposition
+- the Superwarden skill will eventually drive child-skill synthesis
 - the domain spans multiple security or reliability concern boundaries
 - false positives are likely without explicit exclusions
 
 ## Anti-Pattern And Correction
 
-Bad parent skill:
+Bad Superwarden skill:
 
 ```md
 ---
@@ -73,7 +73,7 @@ Corrected version:
 ```md
 ---
 name: security-review
-description: Review changed code for security vulnerabilities across authorization, tenant boundaries, injection, data exposure, and secret handling. Use when asked for a broad Warden security review skill that should guide deeper focused checks.
+description: Review changed code for security vulnerabilities across authorization, tenant boundaries, injection, data exposure, and secret handling. Use when asked for a broad Superwarden security review skill that should synthesize into deeper focused checks.
 ---
 ```
 
@@ -81,4 +81,4 @@ Corrected maintenance shape:
 
 - `SPEC.md` lists required coverage dimensions and exclusions
 - `SOURCES.md` ties the concern map back to evidence and implementation
-- references show how to keep the parent skill broad without becoming vague
+- references show how to keep the Superwarden skill broad without becoming vague

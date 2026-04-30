@@ -1,16 +1,16 @@
-# Parent Skill Contract
+# Superwarden Skill Contract
 
-Open this file when creating or updating a broad coordinated parent skill.
+Open this file when creating or updating a broad Superwarden skill.
 
 ## Goal
 
-A parent skill is the "fat" higher-level skill that gives the right direction and context to downstream focused skills or future coordinator decomposition.
+A Superwarden skill is the "fat" higher-level skill that gives the right direction and context to downstream focused child skills or future Superwarden decomposition.
 
 It should be broad enough to define the domain, but structured enough that the concern areas are explicit.
 
-## Required Parent-Skill Qualities
+## Required Superwarden Qualities
 
-The parent skill must define:
+The Superwarden skill must define:
 
 - what broad domain it owns
 - which concern areas must be covered
@@ -19,6 +19,8 @@ The parent skill must define:
 - how downstream work should avoid collapsing into generic review
 
 ## Artifact Expectations
+
+Repo-local Superwarden skills live under `.warden/superwarden/<name>/`. Bundled authoring helpers may still live under `skills/`, but generated Superwarden artifacts must not be written to `.agents/skills/`.
 
 ### `SKILL.md`
 
@@ -66,11 +68,11 @@ Bad concern mapping:
 
 ## Handoff Rules
 
-The parent skill should hand off cleanly to focused skill authoring by making these visible:
+The Superwarden skill should hand off cleanly to focused skill authoring by making these visible:
 
 - concern name
 - scope boundary
 - evidence expectations
 - out-of-scope exclusions
 
-If those are missing, the parent skill is not ready.
+If those are missing, the Superwarden skill is not ready.

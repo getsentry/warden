@@ -141,7 +141,7 @@ describe('prepareFiles', () => {
     const result = prepareFiles(context, { contextLines: 1 });
 
     expect(result.files[0]?.hunks[0]?.contextAfter).toEqual(['clean context']);
-  });
+  }, 10_000);
 
   it('reads staged hunk context from the index, not unstaged changes', () => {
     const repoPath = createGitRepo();

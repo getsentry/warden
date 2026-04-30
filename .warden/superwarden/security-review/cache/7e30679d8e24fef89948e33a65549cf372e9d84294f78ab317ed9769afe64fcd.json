@@ -1,0 +1,339 @@
+{
+  "version": 1,
+  "kind": "superwarden-plan-cache",
+  "plan": {
+    "version": 1,
+    "skill": "security-review",
+    "sourceHash": "96e5d9f3ca25befa490e3e7b6c84993bd338ce54bbeaa0c419449eaad4f0eeda",
+    "coordinatorVersion": "1",
+    "synthesis": {
+      "phases": [
+        {
+          "id": "collect-inputs",
+          "status": "generated"
+        },
+        {
+          "id": "assess-source-depth",
+          "status": "generated"
+        },
+        {
+          "id": "identify-research-needs",
+          "status": "generated"
+        },
+        {
+          "id": "synthesize-tasks",
+          "status": "generated"
+        },
+        {
+          "id": "validate-coverage",
+          "status": "validated"
+        }
+      ],
+      "externalSources": [
+        {
+          "title": "OWASP Authorization Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html",
+          "reason": "Informed authorization and trust boundary analysis patterns for multi-layer CLI, SDK, and Action runtime contexts"
+        },
+        {
+          "title": "Node.js Security Best Practices",
+          "url": "https://nodejs.org/en/docs/guides/security/",
+          "reason": "Informed command execution, filesystem operation, and process spawning security expectations for TypeScript runtime environments"
+        },
+        {
+          "title": "GitHub Actions Security Hardening",
+          "url": "https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+          "reason": "Informed GitHub event handling, workflow data validation, and Action runtime trust boundary requirements"
+        },
+        {
+          "title": "OWASP Prompt Injection",
+          "url": "https://owasp.org/www-community/attacks/Prompt_Injection",
+          "reason": "Informed LLM behavior manipulation attack surface analysis for Warden's skill loading, config parsing, and output rendering contexts"
+        }
+      ],
+      "missingInputs": []
+    },
+    "tasks": [
+      {
+        "id": "authorization-trust-boundaries",
+        "title": "Authorization and trust boundary bypasses",
+        "scope": "Identify authorization failures, privilege escalation, and trust boundary violations in Warden's runtime, CLI, SDK, GitHub Action, skill loading, and tool permission enforcement.",
+        "prompt": "You are conducting a focused security investigation of authorization and trust boundary enforcement in changed TypeScript code within Warden's runtime ecosystem.\n\nContext: Warden operates across multiple trust boundaries: local developer CLI execution, GitHub Action workflow environments, remote skill loading, SDK execution contexts, and tool permission boundaries for filesystem, network, and process operations. Authorization failures may allow untrusted inputs to bypass permission checks, escalate privileges, or execute operations outside their intended scope.\n\nYour investigation must:\n\n1. Inspect all changed TypeScript files for authorization checks, permission boundaries, trust-level enforcement, and access control logic.\n\n2. Trace data flow from untrusted sources (GitHub event payloads, repository files, remote skill definitions, user-supplied config, environment variables) through permission checks to sensitive operations (filesystem writes, command execution, credential access, skill loading, tool invocation).\n\n3. Identify missing, incomplete, or bypassable authorization checks where:\n   - GitHub workflow inputs can trigger privileged operations without validation\n   - Remote skills can escape their permission sandbox\n   - SDK callers can bypass tool permission boundaries\n   - Config loading trusts user-controlled paths or content without verification\n   - Skill loading bypasses cache integrity or origin validation\n   - Tool execution permissions can be elevated through argument injection or context manipulation\n\n4. Research current Node.js security guidance, GitHub Actions security hardening best practices, and authorization bypass patterns using public documentation only. Do not send repository code, secrets, file paths, or proprietary logic to web search or fetch tools.\n\n5. For each finding, provide:\n   - Exact changed line numbers where the authorization failure exists\n   - The trust boundary being violated (CLI vs Action, local vs remote, user vs system, skill sandbox vs host runtime)\n   - Concrete attack path showing how an attacker with realistic access (PR author, workflow caller, malicious skill author) can exploit the bypass\n   - Realistic impact (arbitrary file read/write, command execution, credential theft, privilege escalation)\n   - Smallest safe fix with concrete code guidance\n\n6. When evidence is insufficient (missing caller context, unclear permission model, unknown deployment configuration), withhold the finding and state what information is needed. Do not report speculative risks.\n\n7. Exclude:\n   - Generic hardening suggestions without a concrete bypass path\n   - Theoretical attacks requiring full control of a trusted developer's local machine\n   - Authorization issues in unchanged code unless the change introduces new exploitability\n   - Code style or architectural preferences\n\nReturn findings in Warden's normal JSON schema with changed-line anchoring. If no authorization vulnerabilities are found in changed lines with sufficient evidence, return an empty findings array.",
+        "evidenceRequirements": [
+          "Exact line numbers in changed TypeScript files where authorization checks are missing, incomplete, or bypassable",
+          "Concrete data-flow trace from untrusted input source to sensitive operation showing the bypass path",
+          "Identification of the specific trust boundary violated (CLI/Action, local/remote, user/system, sandbox/host)",
+          "Realistic attack scenario with attacker capability assumptions (PR author, workflow caller, malicious skill author)",
+          "Reference to current public security guidance (Node.js security docs, GitHub Actions hardening, OWASP authorization patterns) when external behavior affects exploitability",
+          "Smallest safe fix anchored to changed lines with concrete code guidance"
+        ],
+        "outOfScope": [
+          "Generic hardening advice without concrete bypass paths",
+          "Authorization issues in unchanged code unless new exploitability is introduced",
+          "Attacks requiring unrealistic control of trusted local developer machines",
+          "Code style, architecture preferences, or speculative future risks",
+          "Dependency version recommendations without changed-code exploit paths"
+        ]
+      },
+      {
+        "id": "secrets-credentials",
+        "title": "Secret, token, and credential exposure",
+        "scope": "Detect secret leakage, credential exposure, token mishandling, and environment variable disclosure in Warden's config loading, output rendering, logging, GitHub Action integration, and SDK execution.",
+        "prompt": "You are conducting a focused security investigation of secret and credential exposure in changed TypeScript code within Warden's runtime ecosystem.\n\nContext: Warden handles secrets and credentials across multiple contexts: GitHub Action environment variables, local developer credentials, API tokens for remote skills, SDK execution contexts, config files, logs, and rendered output (JSONL, markdown, terminal). Exposure may occur through logging, error messages, config file writes, Action outputs, cache files, or prompt context leakage.\n\nYour investigation must:\n\n1. Inspect all changed TypeScript files for secret handling, credential storage, environment variable access, token processing, logging statements, error messages, output rendering, and config serialization.\n\n2. Trace data flow from secret sources (process.env, GitHub secrets, credential files, API tokens, user-supplied config) through processing logic to output sinks (console logs, file writes, Action outputs, error messages, rendered markdown, JSONL findings, LLM prompts).\n\n3. Identify exposure paths where:\n   - Secrets appear in logs, error messages, or debug output\n   - Credentials are written to world-readable cache files or config artifacts\n   - GitHub Action outputs leak tokens or environment variables\n   - API tokens are included in LLM prompts or skill context\n   - Environment variables are serialized into rendered findings or reports\n   - Error handling exposes credentials in stack traces or diagnostic messages\n   - Config loading writes secrets to disk without permission restrictions\n\n4. Research current Node.js environment variable handling, GitHub Actions secrets best practices, and credential exposure patterns using public documentation only. Do not send repository code, actual secrets, file paths, or proprietary logic to web search or fetch tools.\n\n5. For each finding, provide:\n   - Exact changed line numbers where the exposure occurs\n   - The secret source (environment variable name pattern, credential type, token context)\n   - The exposure sink (log statement, file write, Action output, error message, rendered output)\n   - Concrete triggering conditions (error path, debug mode, config option, workflow input)\n   - Realistic impact (token theft, credential leakage, environment disclosure)\n   - Smallest safe fix with concrete redaction or access control guidance\n\n6. When evidence is insufficient (unclear output destination, missing sink confirmation, unknown deployment configuration), withhold the finding and state what information is needed. Do not report speculative leakage.\n\n7. Exclude:\n   - Generic secrets management advice without concrete exposure paths\n   - Credential issues in unchanged code unless the change introduces new exposure\n   - Theoretical leakage requiring interception of trusted internal communication\n   - Dependency credential handling without changed-code exploit paths\n\nReturn findings in Warden's normal JSON schema with changed-line anchoring. If no credential exposure vulnerabilities are found in changed lines with sufficient evidence, return an empty findings array.",
+        "evidenceRequirements": [
+          "Exact line numbers in changed TypeScript files where secrets are logged, written, rendered, or otherwise exposed",
+          "Concrete data-flow trace from secret source (environment variable, credential file, API token) to exposure sink (log, file, output, error message)",
+          "Identification of triggering conditions (error path, debug flag, workflow input, config option)",
+          "Secret type and exposure mechanism (token in log, credential in cache file, environment variable in Action output)",
+          "Reference to current public security guidance (Node.js environment handling, GitHub Actions secrets, secure logging) when external behavior affects exploitability",
+          "Smallest safe fix anchored to changed lines with redaction or access control guidance"
+        ],
+        "outOfScope": [
+          "Generic secrets management recommendations without concrete exposure paths",
+          "Credential issues in unchanged code unless new exposure is introduced",
+          "Theoretical interception of trusted internal channels",
+          "Code style, dependency freshness, or architectural preferences",
+          "Speculative leakage without confirmed output sink"
+        ]
+      },
+      {
+        "id": "filesystem-cache-safety",
+        "title": "Filesystem and cache safety vulnerabilities",
+        "scope": "Detect path traversal, symlink attacks, cache poisoning, unintended file writes, unsafe reads, and temporary file handling in Warden's config loading, skill caching, output writing, and SDK filesystem operations.",
+        "prompt": "You are conducting a focused security investigation of filesystem and cache safety in changed TypeScript code within Warden's runtime ecosystem.\n\nContext: Warden performs filesystem operations across multiple contexts: config file loading, skill artifact caching, output file writing, remote skill downloads, temporary file creation, and SDK filesystem tool execution. Vulnerabilities may allow path traversal, symlink attacks, cache poisoning, arbitrary file writes, or unintended reads.\n\nYour investigation must:\n\n1. Inspect all changed TypeScript files for filesystem operations: file reads, writes, deletions, directory creation, path resolution, symlink handling, cache lookups, temporary file usage, and archive extraction.\n\n2. Trace data flow from untrusted path sources (user-supplied config, GitHub event paths, remote skill URLs, repository file paths, workflow inputs, environment variables) through path validation and resolution to filesystem operations (fs.readFile, fs.writeFile, fs.mkdir, fs.symlink, cache storage).\n\n3. Identify unsafe patterns where:\n   - User-controlled paths bypass validation or normalization before filesystem operations\n   - Symlinks are followed during reads or writes without permission checks\n   - Cache keys are constructed from untrusted input allowing collision or poisoning\n   - Temporary files are created with predictable names or insecure permissions\n   - Remote skill downloads write to arbitrary paths\n   - Path traversal sequences (../, absolute paths, symlinks) escape intended directories\n   - Archive extraction (tar, zip) writes outside sandbox boundaries\n   - Config loading trusts paths from untrusted sources\n\n4. Research current Node.js filesystem security guidance, path traversal prevention, symlink attack mitigation, and secure temporary file handling using public documentation only. Do not send repository code, actual file paths, or proprietary logic to web search or fetch tools.\n\n5. For each finding, provide:\n   - Exact changed line numbers where the unsafe filesystem operation occurs\n   - The untrusted input source controlling the path or operation\n   - Concrete attack path showing how an attacker can trigger traversal, symlink abuse, or cache poisoning\n   - Realistic impact (arbitrary file read, arbitrary file write, cache poisoning, symlink race, permission bypass)\n   - Smallest safe fix with path validation, canonicalization, or permission enforcement guidance\n\n6. When evidence is insufficient (unclear path origin, missing validation context, unknown directory structure), withhold the finding and state what information is needed. Do not report speculative filesystem risks.\n\n7. Exclude:\n   - Generic filesystem hardening without concrete exploit paths\n   - Filesystem issues in unchanged code unless the change introduces new exploitability\n   - Attacks requiring full control of trusted local filesystem state\n   - Code style or architectural preferences\n\nReturn findings in Warden's normal JSON schema with changed-line anchoring. If no filesystem safety vulnerabilities are found in changed lines with sufficient evidence, return an empty findings array.",
+        "evidenceRequirements": [
+          "Exact line numbers in changed TypeScript files where unsafe filesystem operations occur (reads, writes, path resolution, symlink handling, cache access)",
+          "Concrete data-flow trace from untrusted path source to filesystem operation showing missing validation",
+          "Identification of attack vector (path traversal, symlink abuse, cache poisoning, predictable temp file, archive extraction)",
+          "Realistic attack scenario with path manipulation examples",
+          "Reference to current public security guidance (Node.js filesystem security, path traversal prevention, symlink mitigation) when external behavior affects exploitability",
+          "Smallest safe fix anchored to changed lines with path validation or canonicalization guidance"
+        ],
+        "outOfScope": [
+          "Generic filesystem hardening without concrete exploit paths",
+          "Filesystem issues in unchanged code unless new exploitability is introduced",
+          "Attacks requiring trusted local filesystem control",
+          "Code style, dependency updates, or architectural preferences",
+          "Speculative risks without confirmed path manipulation vectors"
+        ]
+      },
+      {
+        "id": "command-process-execution",
+        "title": "Command execution and process spawning vulnerabilities",
+        "scope": "Detect command injection, unsafe process spawning, shell argument handling failures, and tool permission boundary bypasses in Warden's SDK tool execution, CLI operations, and GitHub Action workflows.",
+        "prompt": "You are conducting a focused security investigation of command execution and process spawning safety in changed TypeScript code within Warden's runtime ecosystem.\n\nContext: Warden spawns processes and executes commands across multiple contexts: SDK tool invocation (Bash, Agent, remote sessions), CLI operations, GitHub Action workflow execution, skill artifact generation, and external tool integration. Vulnerabilities may allow command injection, argument injection, shell escape, or tool permission boundary bypasses.\n\nYour investigation must:\n\n1. Inspect all changed TypeScript files for process spawning operations: child_process.exec, child_process.spawn, shell command construction, argument array building, environment variable passing, and tool permission enforcement.\n\n2. Trace data flow from untrusted input sources (GitHub event data, repository files, user-supplied config, workflow inputs, skill parameters, environment variables) through command construction and argument handling to process execution.\n\n3. Identify unsafe patterns where:\n   - Untrusted input is concatenated into shell command strings\n   - Argument arrays are constructed without proper escaping or validation\n   - Shell metacharacters (;, |, &, $, `, \\n) are not sanitized before execution\n   - Environment variables are passed to spawned processes without filtering\n   - Tool permission boundaries can be bypassed through argument manipulation\n   - Skill execution context allows command injection through parameter values\n   - GitHub workflow data is used in commands without validation\n   - Path arguments enable execution of arbitrary binaries\n\n4. Research current Node.js child_process security guidance, command injection prevention, shell escape mitigation, and safe argument handling using public documentation only. Do not send repository code, actual commands, or proprietary logic to web search or fetch tools.\n\n5. For each finding, provide:\n   - Exact changed line numbers where the unsafe command execution occurs\n   - The untrusted input source controlling command or arguments\n   - Concrete attack payload demonstrating command injection or argument manipulation\n   - The execution context (CLI, Action, SDK tool, skill runtime)\n   - Realistic impact (arbitrary command execution, permission boundary bypass, environment manipulation)\n   - Smallest safe fix with argument array usage, input validation, or permission enforcement guidance\n\n6. When evidence is insufficient (unclear execution context, missing argument flow, unknown permission model), withhold the finding and state what information is needed. Do not report speculative injection risks.\n\n7. Exclude:\n   - Generic command execution hardening without concrete injection paths\n   - Command execution issues in unchanged code unless the change introduces new exploitability\n   - Attacks requiring trusted local command control or binary replacement\n   - Code style or architectural preferences\n\nReturn findings in Warden's normal JSON schema with changed-line anchoring. If no command execution vulnerabilities are found in changed lines with sufficient evidence, return an empty findings array.",
+        "evidenceRequirements": [
+          "Exact line numbers in changed TypeScript files where unsafe command execution or process spawning occurs",
+          "Concrete data-flow trace from untrusted input source to command construction showing missing sanitization",
+          "Concrete attack payload demonstrating command injection, argument injection, or shell escape",
+          "Identification of execution context (CLI, GitHub Action, SDK tool, skill runtime)",
+          "Reference to current public security guidance (Node.js child_process security, command injection prevention) when external behavior affects exploitability",
+          "Smallest safe fix anchored to changed lines with argument array usage or input validation guidance"
+        ],
+        "outOfScope": [
+          "Generic command execution hardening without concrete injection paths",
+          "Command execution issues in unchanged code unless new exploitability is introduced",
+          "Attacks requiring trusted binary replacement or local command control",
+          "Code style, dependency updates, or architectural preferences",
+          "Speculative injection without confirmed untrusted input flow"
+        ]
+      },
+      {
+        "id": "remote-skills-repository-input",
+        "title": "Remote skill loading and untrusted repository input handling",
+        "scope": "Detect cache poisoning, origin validation bypasses, skill artifact tampering, and unsafe repository input processing in Warden's remote skill loading, GitHub repository integration, and skill execution contexts.",
+        "prompt": "You are conducting a focused security investigation of remote skill loading and repository input handling safety in changed TypeScript code within Warden's runtime ecosystem.\n\nContext: Warden loads skills from remote sources (GitHub repositories, HTTP URLs, local filesystem), processes repository content (files, pull request diffs, workflow data), and caches skill artifacts. Vulnerabilities may allow cache poisoning, origin validation bypasses, skill artifact tampering, or unsafe processing of untrusted repository content.\n\nYour investigation must:\n\n1. Inspect all changed TypeScript files for remote skill loading logic, cache key construction, origin validation, artifact integrity checks, repository file processing, GitHub API data handling, and skill execution sandboxing.\n\n2. Trace data flow from untrusted sources (remote skill URLs, GitHub repository files, pull request content, workflow event data, user-supplied skill paths) through validation, caching, and loading to skill execution contexts.\n\n3. Identify unsafe patterns where:\n   - Remote skill URLs bypass origin validation or allowlist checks\n   - Cache keys can be poisoned through collision or manipulation\n   - Skill artifact integrity is not verified before execution\n   - Repository file content is processed without sanitization\n   - GitHub event data controls skill loading behavior without validation\n   - Skill parameters or config allow path traversal or arbitrary file inclusion\n   - Downloaded artifacts are executed without signature or checksum verification\n   - Repository input (markdown, code, config) is rendered or executed without escaping\n\n4. Research current remote code loading security guidance, cache poisoning prevention, content integrity verification, and safe repository content processing using public documentation only. Do not send repository code, actual URLs, or proprietary logic to web search or fetch tools.\n\n5. For each finding, provide:\n   - Exact changed line numbers where the unsafe loading or processing occurs\n   - The untrusted input source controlling skill origin, cache behavior, or repository content\n   - Concrete attack scenario showing cache poisoning, origin bypass, or artifact tampering\n   - The affected boundary (remote vs local, trusted vs untrusted repository, skill sandbox)\n   - Realistic impact (arbitrary skill execution, cache poisoning, repository content injection)\n   - Smallest safe fix with origin validation, integrity checking, or input sanitization guidance\n\n6. When evidence is insufficient (unclear cache mechanism, missing origin policy, unknown execution context), withhold the finding and state what information is needed. Do not report speculative remote loading risks.\n\n7. Exclude:\n   - Generic remote loading hardening without concrete bypass paths\n   - Remote skill issues in unchanged code unless the change introduces new exploitability\n   - Attacks requiring compromise of trusted remote skill repositories\n   - Code style or architectural preferences\n\nReturn findings in Warden's normal JSON schema with changed-line anchoring. If no remote skill or repository input vulnerabilities are found in changed lines with sufficient evidence, return an empty findings array.",
+        "evidenceRequirements": [
+          "Exact line numbers in changed TypeScript files where unsafe remote skill loading, caching, or repository input processing occurs",
+          "Concrete data-flow trace from untrusted source (remote URL, repository file, GitHub event) to skill execution or cache storage",
+          "Concrete attack scenario demonstrating cache poisoning, origin bypass, artifact tampering, or unsafe repository content processing",
+          "Identification of affected trust boundary (remote vs local, trusted vs untrusted repository)",
+          "Reference to current public security guidance (remote code loading, cache poisoning prevention, integrity verification) when external behavior affects exploitability",
+          "Smallest safe fix anchored to changed lines with origin validation, integrity checking, or sanitization guidance"
+        ],
+        "outOfScope": [
+          "Generic remote loading hardening without concrete bypass paths",
+          "Remote skill issues in unchanged code unless new exploitability is introduced",
+          "Attacks requiring compromise of trusted remote repositories",
+          "Code style, dependency updates, or architectural preferences",
+          "Speculative risks without confirmed origin bypass or cache poisoning vectors"
+        ]
+      },
+      {
+        "id": "github-event-workflow-handling",
+        "title": "GitHub event and workflow data handling vulnerabilities",
+        "scope": "Detect unsafe processing of GitHub event payloads, workflow inputs, pull request data, and Action context in Warden's GitHub Action integration, event handling, and workflow orchestration.",
+        "prompt": "You are conducting a focused security investigation of GitHub event and workflow data handling safety in changed TypeScript code within Warden's GitHub Action integration.\n\nContext: Warden processes GitHub event payloads (pull_request, push, workflow_dispatch), workflow inputs, pull request metadata, commit data, and Action context variables. Vulnerabilities may allow injection through event data, unsafe workflow input processing, or Action context manipulation affecting Warden's execution behavior.\n\nYour investigation must:\n\n1. Inspect all changed TypeScript files for GitHub event handling, workflow input processing, Action context variable access, pull request data parsing, commit message handling, and event-driven execution logic.\n\n2. Trace data flow from GitHub event sources (github.event, workflow inputs, pull request metadata, commit messages, branch names, user-supplied labels) through validation and processing to Warden operations (file filtering, skill selection, output generation, command execution).\n\n3. Identify unsafe patterns where:\n   - GitHub event payload fields control execution paths without validation\n   - Workflow inputs are used in commands, file paths, or config without sanitization\n   - Pull request titles, descriptions, or commit messages are processed unsafely\n   - Branch names or tag names control behavior without validation\n   - Action context variables (github.actor, github.repository) are trusted without verification\n   - Event-driven file filtering bypasses permission or path validation\n   - User-supplied labels or metadata affect Warden's security behavior\n\n4. Research current GitHub Actions security hardening guidance, event payload validation, and workflow input sanitization using public documentation only. Do not send repository code, actual event payloads, or proprietary logic to web search or fetch tools.\n\n5. For each finding, provide:\n   - Exact changed line numbers where unsafe GitHub event or workflow data processing occurs\n   - The event payload field or workflow input controlling behavior\n   - Concrete attack scenario with malicious event payload or workflow input\n   - The affected Warden operation (file filtering, skill execution, command construction, output generation)\n   - Realistic impact (execution control, path traversal, injection, permission bypass)\n   - Smallest safe fix with input validation or sanitization guidance\n\n6. When evidence is insufficient (unclear event handling context, missing workflow integration, unknown Action runtime), withhold the finding and state what information is needed. Do not report speculative GitHub integration risks.\n\n7. Exclude:\n   - Generic GitHub Actions hardening without concrete injection paths\n   - GitHub event handling issues in unchanged code unless the change introduces new exploitability\n   - Attacks requiring compromise of GitHub itself or trusted repository maintainers\n   - Code style or architectural preferences\n\nReturn findings in Warden's normal JSON schema with changed-line anchoring. If no GitHub event or workflow handling vulnerabilities are found in changed lines with sufficient evidence, return an empty findings array.",
+        "evidenceRequirements": [
+          "Exact line numbers in changed TypeScript files where GitHub event payloads, workflow inputs, or Action context are processed unsafely",
+          "Concrete data-flow trace from GitHub event source to Warden operation showing missing validation",
+          "Concrete attack scenario with malicious event payload, workflow input, or Action context value",
+          "Identification of affected Warden operation (file filtering, skill selection, command execution)",
+          "Reference to current GitHub Actions security hardening guidance when external behavior affects exploitability",
+          "Smallest safe fix anchored to changed lines with input validation or sanitization guidance"
+        ],
+        "outOfScope": [
+          "Generic GitHub Actions hardening without concrete injection paths",
+          "GitHub event handling issues in unchanged code unless new exploitability is introduced",
+          "Attacks requiring GitHub platform compromise or trusted maintainer accounts",
+          "Code style, dependency updates, or architectural preferences",
+          "Speculative risks without confirmed event data flow to unsafe operations"
+        ]
+      },
+      {
+        "id": "prompt-injection-llm-behavior",
+        "title": "Prompt injection and LLM behavior manipulation",
+        "scope": "Detect prompt injection paths, context leakage, skill behavior manipulation, and unsafe LLM output processing in Warden's config loading, skill execution, output rendering, and SDK prompt construction.",
+        "prompt": "You are conducting a focused security investigation of prompt injection and LLM behavior manipulation in changed TypeScript code within Warden's runtime ecosystem.\n\nContext: Warden constructs prompts for LLM execution across multiple contexts: skill prompts, config-driven instructions, repository content inclusion, output rendering, user-supplied guidance, and SDK prompt building. Vulnerabilities may allow attackers to inject malicious instructions, leak sensitive context, manipulate skill behavior, or cause unsafe LLM output processing.\n\nYour investigation must:\n\n1. Inspect all changed TypeScript files for prompt construction, LLM context building, user input inclusion in prompts, repository content embedding, config-driven prompt modification, skill instruction loading, and LLM output processing.\n\n2. Trace data flow from untrusted prompt sources (repository files, pull request content, user-supplied config, skill parameters, GitHub event data, commit messages) through prompt construction to LLM execution and output handling.\n\n3. Identify unsafe patterns where:\n   - Repository file content is included in prompts without sanitization or delimiters\n   - User-supplied config or skill parameters can inject prompt instructions\n   - Pull request descriptions or commit messages control LLM behavior\n   - Skill prompts lack separation between instructions and user-controlled content\n   - LLM outputs are executed, rendered, or processed without validation\n   - Sensitive context (credentials, file paths, internal state) can be leaked through prompt manipulation\n   - Config loading allows prompt override without integrity checks\n   - Output rendering trusts LLM-generated content in unsafe contexts (markdown, shell commands, file paths)\n\n4. Research current prompt injection attack patterns, LLM security guidance, context isolation techniques, and safe output handling using public documentation only (OWASP, AI security research). Do not send repository code, actual prompts, or proprietary logic to web search or fetch tools.\n\n5. For each finding, provide:\n   - Exact changed line numbers where unsafe prompt construction or LLM output handling occurs\n   - The untrusted input source controlling prompt content or LLM behavior\n   - Concrete prompt injection payload demonstrating behavior manipulation or context leakage\n   - The affected execution context (skill runtime, config loading, output rendering)\n   - Realistic impact (skill behavior manipulation, context leakage, unsafe output execution)\n   - Smallest safe fix with input sanitization, prompt delimiters, or output validation guidance\n\n6. When evidence is insufficient (unclear prompt flow, missing LLM execution context, unknown output handling), withhold the finding and state what information is needed. Do not report speculative prompt injection risks.\n\n7. Exclude:\n   - Generic LLM security advice without concrete injection paths\n   - Prompt injection issues in unchanged code unless the change introduces new exploitability\n   - Theoretical attacks requiring LLM model compromise or complete trust boundary elimination\n   - Code style or architectural preferences\n\nReturn findings in Warden's normal JSON schema with changed-line anchoring. If no prompt injection or LLM behavior manipulation vulnerabilities are found in changed lines with sufficient evidence, return an empty findings array.",
+        "evidenceRequirements": [
+          "Exact line numbers in changed TypeScript files where prompts are constructed unsafely or LLM outputs are processed without validation",
+          "Concrete data-flow trace from untrusted input source to prompt construction or LLM output handling",
+          "Concrete prompt injection payload demonstrating behavior manipulation, instruction override, or context leakage",
+          "Identification of affected execution context (skill runtime, config loading, output rendering, SDK prompt building)",
+          "Reference to current prompt injection attack research and LLM security guidance (OWASP, public AI security resources) when external behavior affects exploitability",
+          "Smallest safe fix anchored to changed lines with input sanitization, prompt delimiter, or output validation guidance"
+        ],
+        "outOfScope": [
+          "Generic LLM security recommendations without concrete injection paths",
+          "Prompt injection issues in unchanged code unless new exploitability is introduced",
+          "Attacks requiring LLM model compromise or fundamental trust model elimination",
+          "Code style, dependency updates, or architectural preferences",
+          "Speculative risks without confirmed prompt construction or output processing flow"
+        ]
+      }
+    ]
+  },
+  "parent": {
+    "durationMs": 131857,
+    "usage": {
+      "inputTokens": 14452,
+      "outputTokens": 8810,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 14450,
+      "cacheCreation5mInputTokens": 14450,
+      "cacheCreation1hInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.1863435
+    },
+    "responseModel": "claude-sonnet-4-5-20250929",
+    "numTurns": 1
+  },
+  "childSkills": {
+    "authorization-trust-boundaries": {
+      "version": 2,
+      "parentSkill": "security-review",
+      "taskId": "authorization-trust-boundaries",
+      "taskHash": "75891382497352f8216517edecdb3214e21156567a62ae5deeabdfee8c9b6cdc",
+      "sourceHash": "96e5d9f3ca25befa490e3e7b6c84993bd338ce54bbeaa0c419449eaad4f0eeda",
+      "coordinatorVersion": "1",
+      "name": "authorization-trust-boundaries",
+      "bytes": 27485,
+      "durationMs": 227478,
+      "usage": {
+        "inputTokens": 1751875,
+        "outputTokens": 9562,
+        "cacheReadInputTokens": 1435807,
+        "cacheCreationInputTokens": 315894,
+        "cacheCreation5mInputTokens": 315894,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.7592965999999994
+      },
+      "externalSources": [
+        {
+          "title": "Node.js Permissions Documentation",
+          "url": "https://nodejs.org/api/permissions.html",
+          "reason": "Informed Node.js permission model expectations (--allow-child-process, --allow-fs-read, --allow-fs-write) for runtime authorization enforcement in Warden's SDK and CLI execution contexts."
+        },
+        {
+          "title": "5 Node.js Permission Model Changes Every API Developer Should Know in 2026",
+          "url": "https://dev.to/1xapi/5-nodejs-permission-model-changes-every-api-developer-should-know-in-2026-3hh8",
+          "reason": "Provided 2026-current guidance on Node.js permission model evolution, minimal-permission defaults, and defense-in-depth for compromised dependencies."
+        },
+        {
+          "title": "Security Best Practices | Node.js Documentation",
+          "url": "https://nodejs.org/learn/getting-started/security-best-practices",
+          "reason": "Informed child_process security best practices (spawn vs exec, argument arrays, shell injection prevention) for command execution authorization checks."
+        },
+        {
+          "title": "What's coming to our GitHub Actions 2026 security roadmap",
+          "url": "https://github.blog/news-insights/product-news/whats-coming-to-our-github-actions-2026-security-roadmap/",
+          "reason": "Provided 2026 GitHub Actions security roadmap context for workflow input validation, scoped secrets, SHA pinning, and execution policy enforcement."
+        },
+        {
+          "title": "How to secure GitHub Actions workflows: 4 tips to handle untrusted input and tighten permissions",
+          "url": "https://github.blog/security/supply-chain-security/four-tips-to-keep-your-github-actions-workflows-secure/",
+          "reason": "Informed GitHub Actions expression injection prevention, intermediate environment variable pattern for untrusted PR/issue input, and authorization boundary best practices."
+        },
+        {
+          "title": "Authorization - OWASP Cheat Sheet Series",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html",
+          "reason": "Informed trust boundary definition (user types, resources, operations), authorization bypass patterns (user-controlled keys, IDOR), and server-side enforcement requirements for Warden's multi-context authorization model."
+        },
+        {
+          "title": "Testing for Privilege Escalation - OWASP",
+          "url": "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/05-Authorization_Testing/03-Testing_for_Privilege_Escalation",
+          "reason": "Informed vertical privilege escalation (acquiring admin/system privileges) vs horizontal privilege escalation (accessing peer resources) patterns relevant to Warden's CLI vs Action and local vs remote skill trust boundaries."
+        }
+      ],
+      "missingInputs": [
+        "Complete call-graph analysis to determine whether config path inputs (base-config-path, config-path) flow from untrusted GitHub Action workflow inputs or trusted repository warden.toml files",
+        "Skill loader implementation (src/skills/loader.ts) to confirm whether remote skill ToolConfig can override runtime tool permission defaults",
+        "GitHub event payload usage patterns in src/action/ to identify whether PR titles, branch names, or issue bodies are interpolated into shell commands or file paths",
+        "Deployment configuration documentation: whether Warden GitHub Action runs with Node.js permission flags (--allow-child-process=false, --allow-fs-write=<allowlist>) or unrestricted mode",
+        "Historical context on whether older Warden code (pre-2026) followed different authorization patterns that might inform backward-compatibility risks"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 26,
+      "generatedAt": "2026-04-30T22:31:40.979Z"
+    },
+    "secrets-credentials": {
+      "version": 2,
+      "parentSkill": "security-review",
+      "taskId": "secrets-credentials",
+      "taskHash": "572c700594a49272a4c0652cacf68b1dc27076a6c0dea04eda4000d02d7dc451",
+      "sourceHash": "96e5d9f3ca25befa490e3e7b6c84993bd338ce54bbeaa0c419449eaad4f0eeda",
+      "coordinatorVersion": "1",
+      "name": "secrets-credentials",
+      "bytes": 27335,
+      "durationMs": 192089,
+      "usage": {
+        "inputTokens": 1437167,
+        "outputTokens": 9010,
+        "cacheReadInputTokens": 1023390,
+        "cacheCreationInputTokens": 396091,
+        "cacheCreation5mInputTokens": 396091,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.9805662500000003
+      },
+      "externalSources": [
+        {
+          "title": "Using secrets in GitHub Actions - GitHub Docs",
+          "url": "https://docs.github.com/actions/security-guides/using-secrets-in-github-actions",
+          "reason": "Informed GitHub Actions automatic secret masking, output sanitization, structured data avoidance, and credential scoping best practices for detecting Action output exposure paths."
+        },
+        {
+          "title": "Secure use reference - GitHub Docs",
+          "url": "https://docs.github.com/en/actions/reference/security/secure-use",
+          "reason": "Informed GitHub Actions security best practices including secret masking with ::add-mask::, least privilege credentials, and runtime redaction requirements."
+        },
+        {
+          "title": "Are environment variables still safe for secrets in 2026? - Security Boulevard",
+          "url": "https://securityboulevard.com/2025/12/are-environment-variables-still-safe-for-secrets-in-2026/",
+          "reason": "Informed Node.js environment variable security risks including credential exposure through logging, error messages, and process inspection, and recommended secrets manager patterns."
+        },
+        {
+          "title": "Do not use secrets in environment variables and here's how to do it better",
+          "url": "https://www.nodejs-security.com/blog/do-not-use-secrets-in-environment-variables-and-here-is-how-to-do-it-better",
+          "reason": "Informed Node.js credential exposure patterns through environment variables, including unexpected error logs, debug output, and exception crash reports containing sensitive information."
+        }
+      ],
+      "missingInputs": [],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 24,
+      "generatedAt": "2026-04-30T22:51:55.808Z"
+    }
+  },
+  "updatedAt": "2026-04-30T22:51:55.809Z"
+}

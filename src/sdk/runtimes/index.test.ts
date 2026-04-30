@@ -34,6 +34,9 @@ describe('runtimes', () => {
         outputTokens: 0,
         cacheReadInputTokens: 0,
         cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
         costUSD: 0,
       },
     });

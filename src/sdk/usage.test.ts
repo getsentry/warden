@@ -23,6 +23,9 @@ describe('extractUsage', () => {
       outputTokens: 5,
       cacheReadInputTokens: 2,
       cacheCreationInputTokens: 3,
+      cacheCreation5mInputTokens: 3,
+      cacheCreation1hInputTokens: 0,
+      webSearchRequests: 0,
       costUSD: 0.01,
     });
   });
@@ -33,7 +36,34 @@ describe('extractUsage', () => {
       outputTokens: 0,
       cacheReadInputTokens: 0,
       cacheCreationInputTokens: 0,
+      cacheCreation5mInputTokens: 0,
+      cacheCreation1hInputTokens: 0,
+      webSearchRequests: 0,
       costUSD: 0,
+    });
+  });
+
+  it('counts tiered cache writes when the aggregate cache field is absent', () => {
+    expect(extractUsage({
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_read_input_tokens: 2,
+        cache_creation: {
+          ephemeral_5m_input_tokens: 3,
+          ephemeral_1h_input_tokens: 4,
+        },
+      },
+      total_cost_usd: 0.01,
+    })).toEqual({
+      inputTokens: 19,
+      outputTokens: 5,
+      cacheReadInputTokens: 2,
+      cacheCreationInputTokens: 7,
+      cacheCreation5mInputTokens: 3,
+      cacheCreation1hInputTokens: 4,
+      webSearchRequests: 0,
+      costUSD: 0.01,
     });
   });
 });
@@ -60,7 +90,16 @@ describe('aggregateAuxiliaryUsage', () => {
     ]);
 
     expect(result).toEqual({
-      extraction: { inputTokens: 300, outputTokens: 130, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0.003 },
+      extraction: {
+        inputTokens: 300,
+        outputTokens: 130,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.003,
+      },
     });
   });
 
@@ -84,6 +123,37 @@ describe('aggregateAuxiliaryUsage', () => {
 
     expect(result!['extraction']!.cacheReadInputTokens).toBe(30);
     expect(result!['extraction']!.cacheCreationInputTokens).toBe(15);
+  });
+
+  it('merges cache tiers and web search fields', () => {
+    const result = aggregateAuxiliaryUsage([
+      {
+        agent: 'extraction',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheCreation5mInputTokens: 5,
+          cacheCreation1hInputTokens: 7,
+          webSearchRequests: 2,
+          costUSD: 0.001,
+        },
+      },
+      {
+        agent: 'extraction',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheCreation5mInputTokens: 3,
+          cacheCreation1hInputTokens: 4,
+          webSearchRequests: 1,
+          costUSD: 0.001,
+        },
+      },
+    ]);
+
+    expect(result!['extraction']!.cacheCreation5mInputTokens).toBe(8);
+    expect(result!['extraction']!.cacheCreation1hInputTokens).toBe(11);
+    expect(result!['extraction']!.webSearchRequests).toBe(3);
   });
 });
 
@@ -119,7 +189,16 @@ describe('mergeAuxiliaryUsage', () => {
     const result = mergeAuxiliaryUsage(a, b);
 
     expect(result).toEqual({
-      extraction: { inputTokens: 300, outputTokens: 130, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0.003 },
+      extraction: {
+        inputTokens: 300,
+        outputTokens: 130,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.003,
+      },
     });
   });
 });

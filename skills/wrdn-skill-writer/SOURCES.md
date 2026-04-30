@@ -28,11 +28,11 @@
 - Ship a Warden-owned wrapper skill instead of depending on a gitignored dotagents install at runtime.
 - Keep the skill in `skills/` so bundled-skill installation picks it up automatically.
 - Keep the wrapper narrow and Warden-specific instead of forking the full upstream `skill-writer` behavior.
-- Separate full-skill authoring from coordinator parent-skill authoring.
+- Separate full-skill authoring from Superwarden authoring.
 
 ## Open Gaps
 
-- Add repo-owned full-skill examples that reflect future coordinator child skills once those exist.
+- Add repo-owned full-skill examples that reflect Superwarden child skills once those exist.
 - Add repo-owned validation tooling if upstream validator drift becomes painful.
 - Add skill-authoring eval cases once the runtime path exists.
 

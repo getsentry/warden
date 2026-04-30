@@ -1,0 +1,639 @@
+{
+  "version": 1,
+  "kind": "superwarden-plan-cache",
+  "plan": {
+    "version": 1,
+    "skill": "find-bugs",
+    "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+    "coordinatorVersion": "1",
+    "synthesis": {
+      "phases": [
+        {
+          "id": "collect-inputs",
+          "status": "generated"
+        },
+        {
+          "id": "assess-source-depth",
+          "status": "generated"
+        },
+        {
+          "id": "identify-research-needs",
+          "status": "generated"
+        },
+        {
+          "id": "synthesize-tasks",
+          "status": "generated"
+        },
+        {
+          "id": "validate-coverage",
+          "status": "validated"
+        }
+      ],
+      "externalSources": [
+        {
+          "title": "TypeScript strict null checking and undefined handling patterns",
+          "url": "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+          "reason": "Informs null/undefined control-flow analysis task for detecting missing guards before property access or method invocation in TypeScript"
+        },
+        {
+          "title": "Node.js async patterns and promise error handling",
+          "url": "https://nodejs.org/en/docs/guides/dont-block-the-event-loop/",
+          "reason": "Informs async control-flow task for detecting unhandled rejections, race conditions, and event-loop blocking in TypeScript Node.js projects"
+        },
+        {
+          "title": "OWASP validation and sanitization guidance",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html",
+          "reason": "Informs input validation task for detecting missing sanitization, type coercion bugs, and injection vectors in user-supplied data paths"
+        },
+        {
+          "title": "Common TypeScript type narrowing pitfalls",
+          "url": "https://github.com/microsoft/TypeScript/wiki/FAQ#common-bugs-that-arent-bugs",
+          "reason": "Informs type system misuse task for detecting unsound type assertions, incorrect narrowing, and type system escape hatches that hide runtime errors"
+        }
+      ],
+      "missingInputs": [
+        "Specific deployment environment (serverless, containerized, edge) affects async initialization and error boundary analysis",
+        "Threat model boundaries (trusted input sources, authentication gates) affect input validation priority",
+        "Runtime configuration schema affects environment variable parsing and validation coverage"
+      ]
+    },
+    "tasks": [
+      {
+        "id": "null-undefined-control-flow",
+        "title": "Null and undefined control-flow errors",
+        "scope": "Detect missing null/undefined guards before property access, method calls, or array indexing that can cause runtime TypeErrors.",
+        "prompt": "You are analyzing TypeScript code for null and undefined control-flow errors that cause runtime failures. Find logical errors where code accesses properties, calls methods, or indexes into collections without verifying the target is not null or undefined. Inspect changed hunks and trace data flow from sources (function parameters, object properties, array elements, API responses, configuration values) to sinks (property access with dot or bracket notation, method invocation, array indexing, destructuring). Check whether TypeScript strict null checks are enabled in tsconfig.json; if disabled, this is itself evidence of missing compile-time protection. For each potentially unsafe access, trace backward to confirm whether a type guard, explicit null check, optional chaining, nullish coalescing, or early return protects the access. When a guard exists, verify it covers all code paths and does not rely on incorrect type narrowing (such as truthiness checks that treat empty string or zero as null). When analyzing optional chaining or nullish coalescing, confirm the fallback behavior is correct for the use case; silent undefined propagation can hide bugs. Use public TypeScript narrowing documentation at https://www.typescriptlang.org/docs/handbook/2/narrowing.html to understand current narrowing behavior for typeof, instanceof, in, and user-defined type guards. Do not assume library functions perform null checks unless their type signatures require non-nullable inputs. If repository context is missing (such as whether a function parameter can be null in practice despite a non-nullable type annotation), note this in the finding rationale but do not report it as a bug unless the code itself contains contradictory evidence (such as defensive null checks in some callers but not others). Report findings only when you have concrete evidence: the changed line contains an unsafe access, data-flow analysis shows a nullable source reaches that access, and no guard exists on all paths. Each finding must cite the changed line number, the nullable source, the unsafe operation, and the missing guard. Do not report findings for intentional non-null assertions (exclamation mark operator) unless surrounding code suggests the assertion is incorrect. Do not report style issues, missing comments, or broader architectural concerns.",
+        "evidenceRequirements": [
+          "Changed line number containing the property access, method call, or array index",
+          "Data-flow trace showing the nullable or undefined source (parameter, property, return value, or expression)",
+          "Concrete evidence that no null/undefined guard exists on all paths to the unsafe operation",
+          "TypeScript strict null check configuration status from tsconfig.json or inline compiler directives",
+          "Reference to public TypeScript narrowing documentation when analyzing guard correctness"
+        ],
+        "outOfScope": [
+          "Style preferences for guard syntax (if vs optional chaining vs early return)",
+          "Nullable values that are intentionally propagated with correct optional chaining",
+          "Non-null assertions that are correct based on surrounding invariants",
+          "Missing null checks in unchanged code unless directly relevant to understanding a changed-line bug"
+        ]
+      },
+      {
+        "id": "async-control-flow-errors",
+        "title": "Async and promise control-flow errors",
+        "scope": "Detect unhandled promise rejections, missing await keywords, race conditions, and async initialization errors that cause silent failures or incorrect ordering.",
+        "prompt": "You are analyzing TypeScript code for asynchronous control-flow errors that cause silent failures, incorrect ordering, or unhandled rejections. Find logical errors in async/await usage, promise chains, parallel execution, and async initialization. Inspect changed hunks for: (1) promises returned from functions but not awaited or caught by callers, (2) async functions whose rejections are not handled with try/catch or .catch(), (3) missing await keywords where sequential ordering is required, (4) race conditions from concurrent operations that assume ordering (such as parallel writes to shared state or concurrent file operations without locking), (5) async initialization in constructors or top-level code that can fail silently, (6) event-loop blocking operations (synchronous I/O, CPU-intensive loops) inside async functions. For each issue, trace the async operation to confirm whether a handler exists. Check whether the repository uses a global unhandled rejection handler or process-level event listeners; if present, note this as mitigation but still report missing local handlers when local recovery is needed. Use public Node.js async guidance at https://nodejs.org/en/docs/guides/dont-block-the-event-loop/ to understand event-loop blocking and async patterns. When analyzing promise chains, verify that .then() and .catch() are used correctly and that errors propagate to a final handler. When analyzing Promise.all or Promise.race, confirm error handling covers partial failures. If deployment environment is unknown, note in the finding rationale how serverless or edge environments might amplify the impact (such as cold-start failures or request timeouts). Do not assume frameworks provide automatic rejection handling unless their documentation explicitly guarantees it. Report findings only when you have concrete evidence: the changed line introduces or modifies an async operation, data-flow or control-flow analysis shows the operation can reject or block, and no appropriate handler or await exists. Each finding must cite the changed line number, the async operation, the missing handler or await, and the potential runtime impact (silent failure, incorrect ordering, timeout, or crash). Do not report style preferences for async syntax, missing comments, or architectural concerns about async boundaries.",
+        "evidenceRequirements": [
+          "Changed line number containing the async operation, promise creation, or missing await",
+          "Control-flow or data-flow trace showing the unhandled rejection path or missing await consequence",
+          "Evidence that no try/catch, .catch(), or process-level handler covers the rejection",
+          "Description of the runtime impact (silent failure, incorrect ordering, timeout, or process crash)",
+          "Reference to public Node.js or framework async documentation when analyzing framework-provided error boundaries"
+        ],
+        "outOfScope": [
+          "Style preferences for promise vs async/await syntax",
+          "Architectural concerns about async boundaries or callback-based APIs",
+          "Unhandled rejections in unchanged code unless directly relevant to understanding a changed-line bug",
+          "Performance optimization suggestions for async operations"
+        ]
+      },
+      {
+        "id": "input-validation-errors",
+        "title": "Input validation and sanitization errors",
+        "scope": "Detect missing or incorrect validation of user-supplied data, environment variables, configuration, and external API responses that can cause injection, type coercion bugs, or runtime errors.",
+        "prompt": "You are analyzing TypeScript code for input validation and sanitization errors. Find logical errors where untrusted or external data flows into security-sensitive or error-prone operations without validation. Inspect changed hunks for data flows from sources (HTTP request parameters, headers, body; command-line arguments; environment variables; configuration files; database query results; external API responses; file contents) to sinks (SQL queries, shell commands, file paths, eval or Function constructors, HTML rendering, regular expressions, JSON.parse, parseInt/parseFloat, array indexing, object property access with bracket notation). For each flow, check whether validation exists: type checks, format checks (regex, schema validation), range checks, allow-list checks, sanitization (escaping, encoding), or explicit error handling for parse failures. When validation exists, verify it is correct: check for type coercion bugs (such as == vs ===, truthy checks that accept unexpected values), incomplete escaping, regex denial-of-service patterns, or missing checks for edge cases (empty string, negative numbers, special characters, very large inputs). Use public OWASP input validation guidance at https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html to assess validation completeness for injection-sensitive sinks. Trace data flow across function boundaries; if a helper function performs validation, confirm the caller uses it for all inputs of that type. If a schema validation library (such as zod, joi, ajv) is used, confirm the schema matches the sink requirements and that validation errors are handled. If threat model or authentication boundaries are unknown, note in the finding rationale which inputs might be trusted in some deployments; still report missing validation unless the code contains evidence that the input source is always trusted (such as hardcoded values or results from a trusted internal API with documented contracts). Do not assume TypeScript types provide runtime validation; type annotations are compile-time only. Report findings only when you have concrete evidence: the changed line introduces or modifies a data flow from an untrusted source to a sensitive sink, and validation is missing or incorrect. Each finding must cite the changed line number, the untrusted source, the sensitive sink, the missing or incorrect validation, and the potential impact (injection, crash, incorrect behavior). Do not report style issues, missing comments, or architectural concerns about input handling.",
+        "evidenceRequirements": [
+          "Changed line number containing the data flow from untrusted source to sensitive sink",
+          "Identification of the untrusted source (request parameter, environment variable, external API response, etc.)",
+          "Identification of the sensitive sink (SQL query, shell command, file path, eval, parse operation, etc.)",
+          "Concrete evidence that validation is missing or incorrect (no type check, no sanitization, incorrect escaping, etc.)",
+          "Description of the potential impact (SQL injection, command injection, path traversal, crash, type coercion bug, etc.)",
+          "Reference to public OWASP or framework validation guidance when analyzing injection sinks"
+        ],
+        "outOfScope": [
+          "Style preferences for validation syntax or library choice",
+          "Missing validation in unchanged code unless directly relevant to understanding a changed-line bug",
+          "Architectural concerns about validation layer placement or centralization",
+          "Performance impact of validation operations"
+        ]
+      },
+      {
+        "id": "error-handling-logic-errors",
+        "title": "Error handling and recovery logic errors",
+        "scope": "Detect incorrect error handling that swallows errors, returns wrong error types, fails to clean up resources, or allows invalid state after errors.",
+        "prompt": "You are analyzing TypeScript code for error handling and recovery logic errors. Find logical errors in try/catch blocks, error propagation, error type checking, resource cleanup, and state recovery after errors. Inspect changed hunks for: (1) empty catch blocks or catch blocks that log but do not propagate or recover, (2) incorrect error type checks (such as catching all errors but only handling specific types, or using string matching on error messages instead of error codes or types), (3) missing finally blocks or cleanup code for resources (file handles, database connections, timers, event listeners), (4) state mutations before error-prone operations without rollback or compensation, (5) re-throwing errors with lost context (such as throw new Error without wrapping the original error), (6) returning success values or default values from catch blocks when callers expect errors to propagate. For each issue, trace control flow to confirm whether the error can propagate correctly and whether resources are cleaned up on all paths (success, error, early return). Check whether the repository uses a standard error class hierarchy or error codes; if so, verify error handling respects those conventions. If the codebase uses a framework with automatic error boundaries (such as Express error middleware), confirm changed code integrates correctly with those boundaries. Trace error propagation across function boundaries; if a function catches and logs an error but does not re-throw or return an error value, confirm callers can detect the failure. For resource cleanup, check whether the repository uses RAII patterns, async cleanup hooks, or manual cleanup; verify the chosen pattern is used consistently. If deployment or framework context is missing, note in the finding rationale how missing error boundaries might affect impact; still report errors that prevent callers from detecting failures or that leak resources. Report findings only when you have concrete evidence: the changed line introduces or modifies error handling, control-flow analysis shows the error is swallowed or resources are not cleaned up, and the behavior contradicts reasonable caller expectations or framework contracts. Each finding must cite the changed line number, the error handling issue, the affected control-flow paths, and the potential impact (silent failure, resource leak, invalid state, lost error context). Do not report style preferences for error handling syntax, missing comments, or architectural concerns about error propagation strategies.",
+        "evidenceRequirements": [
+          "Changed line number containing the error handling code (try/catch/finally, error check, or cleanup code)",
+          "Control-flow trace showing the error swallowing, missing cleanup, or incorrect propagation",
+          "Evidence that the behavior contradicts caller expectations or framework error-handling contracts",
+          "Description of the potential impact (silent failure, resource leak, invalid state, lost context)",
+          "Reference to repository error class conventions or framework error boundaries when analyzing integration"
+        ],
+        "outOfScope": [
+          "Style preferences for error handling patterns (throw vs return error values)",
+          "Missing error handling in unchanged code unless directly relevant to understanding a changed-line bug",
+          "Architectural concerns about error boundary placement or centralized error logging",
+          "Error message wording or localization"
+        ]
+      },
+      {
+        "id": "type-system-misuse",
+        "title": "Type system misuse and unsound type assertions",
+        "scope": "Detect use of unsafe type assertions, incorrect type narrowing, type system escape hatches (any, as, non-null assertions) that hide runtime type errors.",
+        "prompt": "You are analyzing TypeScript code for type system misuse that hides runtime type errors. Find logical errors in type assertions, type guards, type casting, and use of TypeScript escape hatches (any, unknown, as, non-null assertions). Inspect changed hunks for: (1) type assertions (as, angle-bracket syntax) that are not justified by runtime evidence or control flow, (2) non-null assertions (exclamation mark operator) that assume a value is non-null without guards, (3) use of any type that disables type checking for values that flow into type-sensitive operations, (4) incorrect type guards that do not actually narrow types correctly (such as typeof checks that do not cover all union members, or user-defined type guards with incorrect return types), (5) type casting that widens types unsafely (such as casting a specific error type to unknown and losing type information), (6) reliance on TypeScript types for runtime validation without runtime checks. For each issue, trace data flow to confirm whether the asserted type matches runtime reality. Check whether the repository has a linting rule or convention that restricts type assertions; if so, verify the changed code complies. Use public TypeScript FAQ at https://github.com/microsoft/TypeScript/wiki/FAQ#common-bugs-that-arent-bugs to understand common type system pitfalls and unsound patterns. When analyzing type guards, verify the guard function checks all properties required to distinguish union members and that the return type is a valid type predicate. When analyzing any usage, trace the any-typed value to confirm it does not flow into operations that assume a specific type. If the repository uses strict TypeScript compiler options, check tsconfig.json to confirm; if strict mode is disabled, note this as evidence of reduced type safety but only report specific misuse in changed code. Do not assume type assertions are incorrect just because they use as syntax; report only when surrounding code or data flow contradicts the assertion. Report findings only when you have concrete evidence: the changed line contains a type assertion or escape hatch, data-flow or control-flow analysis shows the assertion is incorrect or unsafe, and the code lacks runtime checks to validate the assumption. Each finding must cite the changed line number, the type assertion or escape hatch, the data-flow evidence that contradicts the assertion, and the potential runtime impact (type error, incorrect behavior, crash). Do not report style preferences for type syntax, missing comments, or architectural concerns about type design.",
+        "evidenceRequirements": [
+          "Changed line number containing the type assertion, non-null assertion, any usage, or type guard",
+          "Data-flow or control-flow trace showing the asserted type does not match runtime reality",
+          "Concrete evidence that no runtime check validates the type assumption",
+          "Description of the potential runtime impact (TypeError, incorrect behavior, crash)",
+          "Reference to public TypeScript FAQ or handbook when analyzing type narrowing correctness"
+        ],
+        "outOfScope": [
+          "Style preferences for type syntax (interface vs type alias, etc.)",
+          "Use of any or type assertions in unchanged code unless directly relevant to understanding a changed-line bug",
+          "Architectural concerns about type design or type hierarchy",
+          "Missing strict compiler options unless directly causing a bug in changed code"
+        ]
+      },
+      {
+        "id": "state-mutation-consistency",
+        "title": "State mutation and consistency errors",
+        "scope": "Detect inconsistent state updates, mutation of shared state without synchronization, incorrect ordering of state changes, and stale closure references.",
+        "prompt": "You are analyzing TypeScript code for state mutation and consistency errors. Find logical errors in object mutation, class property updates, shared state modification, and closure references that cause incorrect state, race conditions, or stale data. Inspect changed hunks for: (1) partial state updates that leave objects in inconsistent states (such as updating one property but not related properties, or updating derived state without recalculating it), (2) mutation of shared state (module-level variables, class static properties, singleton instances) without synchronization or locking, (3) incorrect ordering of state changes that violates invariants (such as setting a flag before the operation completes, or clearing a cache before writing new data), (4) stale closure references where a callback or event handler captures a variable value that later changes, (5) mutation of objects that are assumed to be immutable by other code (such as function parameters, cached objects, or objects returned from functions), (6) missing deep cloning when creating defensive copies. For each issue, trace state flow to confirm whether the mutation can cause observable inconsistency or race conditions. Check whether the repository uses immutability patterns (such as Object.freeze, readonly types, immutable libraries); if so, verify changed code respects those patterns. Check whether the repository uses state management libraries (such as Redux, MobX) with specific mutation rules; if so, verify changed code follows those rules. For shared state, confirm whether concurrent access is possible (such as multiple async operations, event handlers, or timers); if so, verify synchronization exists. For closures, trace variable references to confirm whether the captured value is stable or whether the closure should use a snapshot. If the repository architecture or concurrency model is unknown, note in the finding rationale how concurrent access might occur; still report inconsistent updates that violate obvious invariants. Report findings only when you have concrete evidence: the changed line mutates state, control-flow or data-flow analysis shows the mutation can cause inconsistency or staleness, and no synchronization or ordering constraint prevents the issue. Each finding must cite the changed line number, the state mutation, the inconsistency or race condition, and the potential impact (incorrect behavior, corrupted data, race condition). Do not report style preferences for immutability patterns, missing comments, or architectural concerns about state management design.",
+        "evidenceRequirements": [
+          "Changed line number containing the state mutation or closure reference",
+          "Data-flow or control-flow trace showing the inconsistency, race condition, or stale reference",
+          "Evidence that no synchronization, ordering constraint, or immutability pattern prevents the issue",
+          "Description of the potential impact (incorrect behavior, corrupted state, race condition, stale data)",
+          "Reference to repository immutability conventions or state management library rules when analyzing violations"
+        ],
+        "outOfScope": [
+          "Style preferences for immutability patterns (spread vs Object.assign vs libraries)",
+          "State mutations in unchanged code unless directly relevant to understanding a changed-line bug",
+          "Architectural concerns about state management strategy or global state usage",
+          "Performance impact of immutability or cloning"
+        ]
+      },
+      {
+        "id": "resource-lifecycle-errors",
+        "title": "Resource lifecycle and cleanup errors",
+        "scope": "Detect resource leaks, missing cleanup for file handles, timers, event listeners, database connections, and child processes.",
+        "prompt": "You are analyzing TypeScript code for resource lifecycle and cleanup errors. Find logical errors in resource acquisition, usage, and cleanup that cause leaks, handle exhaustion, or zombie processes. Inspect changed hunks for: (1) file handles opened without close calls on all paths (success, error, early return), (2) timers (setTimeout, setInterval) started without clearTimeout or clearInterval, (3) event listeners added without removeEventListener or off calls, (4) database connections or HTTP clients opened without close or destroy calls, (5) child processes spawned without exit handlers or kill calls, (6) streams created without end, destroy, or error handlers, (7) AbortController signals created but not used to cancel pending operations, (8) missing cleanup in React useEffect or similar lifecycle hooks. For each issue, trace control flow to confirm whether cleanup exists on all paths, including error paths and early returns. Check whether the repository uses RAII patterns, automatic cleanup hooks (such as try/finally, AsyncDisposable, Symbol.dispose), or manual cleanup conventions; verify changed code follows those patterns. For event listeners and streams, confirm cleanup is idempotent (removing a listener multiple times is safe). For timers, confirm they are cleared before the component or module unloads. For child processes, confirm exit and error events are handled to prevent zombies. If framework lifecycle hooks are used (such as React useEffect, Angular ngOnDestroy), verify cleanup logic is returned or registered. If deployment or runtime environment is unknown, note in the finding rationale how long-lived processes (servers, daemons) vs short-lived processes (CLI scripts, serverless functions) affect leak impact; still report missing cleanup that can cause resource exhaustion. Report findings only when you have concrete evidence: the changed line acquires a resource, control-flow analysis shows cleanup is missing on some path, and the resource type requires explicit cleanup. Each finding must cite the changed line number, the resource type, the missing cleanup path, and the potential impact (leak, handle exhaustion, zombie process). Do not report style preferences for cleanup patterns, missing comments, or architectural concerns about resource management design.",
+        "evidenceRequirements": [
+          "Changed line number containing the resource acquisition (file open, timer start, event listener add, connection open, etc.)",
+          "Control-flow trace showing the missing cleanup path (success, error, or early return)",
+          "Evidence that the resource type requires explicit cleanup and no cleanup exists on all paths",
+          "Description of the potential impact (resource leak, handle exhaustion, zombie process, memory leak)",
+          "Reference to repository cleanup conventions or framework lifecycle hooks when analyzing integration"
+        ],
+        "outOfScope": [
+          "Style preferences for cleanup patterns (finally vs defer vs automatic disposal)",
+          "Missing cleanup in unchanged code unless directly relevant to understanding a changed-line bug",
+          "Architectural concerns about resource management strategy or centralized cleanup",
+          "Performance impact of cleanup operations"
+        ]
+      }
+    ]
+  },
+  "parent": {
+    "durationMs": 133052,
+    "usage": {
+      "inputTokens": 13524,
+      "outputTokens": 7133,
+      "cacheReadInputTokens": 9655,
+      "cacheCreationInputTokens": 3867,
+      "cacheCreation5mInputTokens": 3867,
+      "cacheCreation1hInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.12439875
+    },
+    "responseModel": "claude-sonnet-4-5-20250929",
+    "numTurns": 1
+  },
+  "childSkills": {
+    "null-undefined-control-flow": {
+      "version": 2,
+      "parentSkill": "find-bugs",
+      "taskId": "null-undefined-control-flow",
+      "taskHash": "b6709adb2c7288e2d77ca236b525a9c5cf8d65b0f14e73fab5d816c28d181d18",
+      "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+      "coordinatorVersion": "1",
+      "name": "null-undefined-control-flow",
+      "bytes": 40770,
+      "durationMs": 297378,
+      "usage": {
+        "inputTokens": 1014507,
+        "outputTokens": 13437,
+        "cacheReadInputTokens": 899960,
+        "cacheCreationInputTokens": 113906,
+        "cacheCreation5mInputTokens": 113906,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 0.9006135000000002
+      },
+      "externalSources": [
+        {
+          "title": "TypeScript Narrowing Handbook",
+          "url": "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+          "reason": "Primary reference for TypeScript narrowing mechanisms (typeof guards, truthiness narrowing with falsy value edge cases, equality narrowing, in operator, instanceof, type predicates, discriminated unions, control flow analysis) and common narrowing bugs (incorrect truthiness checks on numbers/strings, extracted boolean narrowing, typeof null). Used to validate guard correctness and identify incorrect narrowing patterns in changed code."
+        },
+        {
+          "title": "TypeScript FAQ - Common Bugs That Aren't Bugs",
+          "url": "https://github.com/microsoft/TypeScript/wiki/FAQ#common-bugs-that-arent-bugs",
+          "reason": "Secondary reference for known type system pitfalls and unsound patterns that may appear to be bugs but are TypeScript design decisions (e.g., type assertions, any escape hatches). Used to distinguish intentional type system escape hatches from actual null/undefined control-flow errors."
+        }
+      ],
+      "missingInputs": [
+        "Specific TypeScript version in use (affects narrowing behavior for template literals, const assertions, and control flow analysis; checked package.json during runtime if needed)",
+        "Framework context (React, Express, Next.js) with framework-specific null handling patterns (retrieved via WebFetch when analyzing framework APIs)",
+        "Deployment environment (serverless vs long-running server) affects severity calibration (timeout vs crash) but does not block finding detection"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 26,
+      "generatedAt": "2026-04-30T22:43:12.080Z"
+    },
+    "async-control-flow-errors": {
+      "version": 2,
+      "parentSkill": "find-bugs",
+      "taskId": "async-control-flow-errors",
+      "taskHash": "4b0a402fd148894a4bd36ed5794be809f2a72f57ecc3f25fab8b470ac0452b2f",
+      "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+      "coordinatorVersion": "1",
+      "name": "async-control-flow-errors",
+      "bytes": 36436,
+      "durationMs": 294951,
+      "usage": {
+        "inputTokens": 1623186,
+        "outputTokens": 13328,
+        "cacheReadInputTokens": 1400848,
+        "cacheCreationInputTokens": 213987,
+        "cacheCreation5mInputTokens": 213987,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.4476786500000003
+      },
+      "externalSources": [
+        {
+          "title": "How to Fix 'UnhandledPromiseRejectionWarning' in Node.js",
+          "url": "https://oneuptime.com/blog/post/2026-01-25-fix-unhandled-promise-rejection-warning/view",
+          "reason": "2026 guidance on unhandled promise rejections, Node.js 15+ crash behavior, best practices for .catch() and try/catch patterns"
+        },
+        {
+          "title": "Unhandled Promise Rejections in Node.js | www.thecodebarbarian.com",
+          "url": "https://thecodebarbarian.com/unhandled-promise-rejections-in-node.js.html",
+          "reason": "Detailed explanation of unhandled rejection event handling, microtask timing, and global handler patterns"
+        },
+        {
+          "title": "The One Error You Keep Ignoring in Node.js: processTicksAndRejections and Beyond",
+          "url": "https://dev-aditya.medium.com/the-one-error-you-keep-ignoring-in-node-js-processticksandrejections-and-beyond-ea6f2dea4657",
+          "reason": "Explains processTicksAndRejections timing, microtask vs macrotask behavior affecting unhandled rejection detection"
+        },
+        {
+          "title": "Handling Errors in Promise.all - JavaScript - GeeksforGeeks",
+          "url": "https://www.geeksforgeeks.org/how-to-handle-errors-in-promise-all/",
+          "reason": "Promise.all rejection behavior (rejects on first failure, discards fulfilled results) and error handling patterns"
+        },
+        {
+          "title": "Promise.all() - JavaScript - MDN Web Docs",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all",
+          "reason": "Canonical reference for Promise.all semantics, rejection short-circuiting, and Promise.allSettled alternative"
+        },
+        {
+          "title": "JavaScript Promises: race, all, allSettled, and then - LogRocket Blog",
+          "url": "https://blog.logrocket.com/js-promises",
+          "reason": "Comparison of Promise combinators (all vs allSettled vs race) for partial failure handling and timeout patterns"
+        },
+        {
+          "title": "The Proper Way to Write Async Constructors in JavaScript - DEV Community",
+          "url": "https://dev.to/somedood/the-proper-way-to-write-async-constructors-in-javascript-1o8c",
+          "reason": "Explains why async constructors don't work and static factory pattern best practice for async initialization"
+        },
+        {
+          "title": "Async Constructor Pattern in JavaScript | @qwtel",
+          "url": "https://qwtel.com/posts/software/async-constructor-pattern/",
+          "reason": "Static factory method pattern for async initialization, avoiding race conditions and partial initialization"
+        },
+        {
+          "title": "Mastering Async JS: Can You await in a Constructor? (2026 Insights & Solutions)",
+          "url": "https://codegive.com/blog/js_await_in_constructor.php",
+          "reason": "2026 guidance on async constructor anti-patterns, lazy initialization pattern, and initialization method approach"
+        },
+        {
+          "title": "How to Write an Async Class Constructor in TypeScript or JavaScript | Better Programming",
+          "url": "https://betterprogramming.pub/how-to-write-an-async-class-constructor-in-typescript-javascript-7d7e8325c35e",
+          "reason": "TypeScript-specific async constructor patterns, private constructor with static factory, and initialization guards"
+        }
+      ],
+      "missingInputs": [
+        "Specific deployment environment (serverless, containerized, edge) affects async initialization error severity and timeout amplification",
+        "Complete framework async boundary documentation for all used frameworks (may require targeted web search during execution)",
+        "Runtime concurrency model for complex event-driven architectures (affects race condition detection confidence)"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 35,
+      "generatedAt": "2026-04-30T22:48:11.285Z"
+    },
+    "input-validation-errors": {
+      "version": 2,
+      "parentSkill": "find-bugs",
+      "taskId": "input-validation-errors",
+      "taskHash": "e2c944513ae1fba3376302733e9cc7f257673ae694be77af888edf0c0068f299",
+      "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+      "coordinatorVersion": "1",
+      "name": "input-validation-errors",
+      "bytes": 31225,
+      "durationMs": 217707,
+      "usage": {
+        "inputTokens": 1050641,
+        "outputTokens": 9617,
+        "cacheReadInputTokens": 845174,
+        "cacheCreationInputTokens": 205337,
+        "cacheCreation5mInputTokens": 205337,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.1682109500000002
+      },
+      "externalSources": [
+        {
+          "title": "OWASP Input Validation Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html",
+          "reason": "Defines core input validation principles (allow-list vs deny-list, type/format/range validation), common pitfalls (type coercion, incomplete escaping, regex DoS), and injection-sensitive sink validation patterns (SQL, shell, HTML, path traversal) required to assess validation completeness and correctness in TypeScript code."
+        },
+        {
+          "title": "TypeScript Handbook: Narrowing",
+          "url": "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+          "reason": "Informs analysis of TypeScript type guards, type narrowing correctness, and compile-time vs runtime validation boundaries. Required to understand when TypeScript strict mode provides compile-time safety and when runtime validation is still needed for untrusted external inputs."
+        }
+      ],
+      "missingInputs": [
+        "Deployment environment authentication boundaries (which inputs are trusted in production vs staging vs local development)",
+        "Framework middleware configuration (Express validators, Fastify schemas, NestJS pipes) that may perform validation not visible in changed hunks",
+        "Custom validation helper function conventions used across the repository that are not covered by standard library pattern recognition"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 24,
+      "generatedAt": "2026-04-30T22:51:53.098Z"
+    },
+    "error-handling-logic-errors": {
+      "version": 2,
+      "parentSkill": "find-bugs",
+      "taskId": "error-handling-logic-errors",
+      "taskHash": "189fe5255087aecd9674c8b7b5815405fffe4393e29d857e589a389509bb0807",
+      "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+      "coordinatorVersion": "1",
+      "name": "error-handling-logic-errors",
+      "bytes": 37798,
+      "durationMs": 313440,
+      "usage": {
+        "inputTokens": 1409026,
+        "outputTokens": 12318,
+        "cacheReadInputTokens": 1240125,
+        "cacheCreationInputTokens": 164677,
+        "cacheCreation5mInputTokens": 164677,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.18701825
+      },
+      "externalSources": [
+        {
+          "title": "TypeScript try...catch statement (MDN)",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch",
+          "reason": "Authoritative reference for try/catch/finally semantics, catch variable type (unknown in TypeScript strict mode), and control-flow behavior. Used to understand catch variable type narrowing requirements and finally block execution guarantees."
+        },
+        {
+          "title": "Exception Handling | TypeScript Deep Dive",
+          "url": "https://basarat.gitbook.io/typescript/type-system/exceptions",
+          "reason": "Community best practices for TypeScript error handling, including type safety in catch blocks, custom error classes, and type narrowing patterns. Used to understand strict mode catch variable behavior and error wrapping patterns."
+        },
+        {
+          "title": "JavaScript's New Superpower: Explicit Resource Management (V8)",
+          "url": "https://v8.dev/features/explicit-resource-management",
+          "reason": "Authoritative documentation for ECMAScript explicit resource management (Symbol.dispose, Symbol.asyncDispose, using and await using keywords). Used to understand modern RAII patterns for resource cleanup in JavaScript/TypeScript, though not yet adopted in Warden repository."
+        },
+        {
+          "title": "Understanding Active Handles in Node.js: Complete Guide with 2026 Best Practices",
+          "url": "https://copyprogramming.com/howto/what-are-active-handles-in-node-js",
+          "reason": "Node.js resource cleanup patterns for file handles, database connections, timers, event listeners, and child processes. Used to understand which resources require explicit cleanup and how long-lived vs short-lived processes affect leak impact."
+        },
+        {
+          "title": "A guide to async/await in TypeScript (LogRocket Blog)",
+          "url": "https://blog.logrocket.com/async-await-typescript/",
+          "reason": "TypeScript async error propagation patterns, including try/catch with async/await, error re-throwing, and Result type pattern. Used to understand async error handling expectations and propagation across function boundaries."
+        }
+      ],
+      "missingInputs": [
+        "Deployment environment (short-lived CLI script vs long-lived server): affects resource leak severity and whether leaks are tolerable. Currently inferred as 'both' for Warden (CLI and library), so findings note deployment ambiguity when reporting resource leaks.",
+        "Framework error boundary contracts (Express error middleware, React error boundaries): affects error propagation expectations. Currently no framework detected in repository source, so findings assume manual error propagation is required.",
+        "Function error handling contracts (JSDoc, explicit return types like Promise<Result>): affects caller expectation inference. Currently inferred from call sites and function signatures; findings reduce confidence when contracts are undocumented."
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 27,
+      "generatedAt": "2026-04-30T22:57:10.748Z"
+    },
+    "type-system-misuse": {
+      "version": 2,
+      "parentSkill": "find-bugs",
+      "taskId": "type-system-misuse",
+      "taskHash": "5edb1e642e36fdde79a6d9d76611fdceaa77f3a9918317a6d3fb2e28486204c5",
+      "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+      "coordinatorVersion": "1",
+      "name": "type-system-misuse",
+      "bytes": 28793,
+      "durationMs": 238485,
+      "usage": {
+        "inputTokens": 1243082,
+        "outputTokens": 10044,
+        "cacheReadInputTokens": 1091223,
+        "cacheCreationInputTokens": 148930,
+        "cacheCreation5mInputTokens": 148930,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.0453014
+      },
+      "externalSources": [
+        {
+          "title": "TypeScript Handbook - Narrowing",
+          "url": "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+          "reason": "Authoritative documentation for type narrowing behavior, control-flow analysis, and type guard semantics in TypeScript. Used to validate correctness of type guard implementations and understand when type assertions are safe."
+        },
+        {
+          "title": "TypeScript FAQ - Common Bugs That Aren't Bugs",
+          "url": "https://github.com/microsoft/TypeScript/wiki/FAQ#common-bugs-that-arent-bugs",
+          "reason": "Authoritative source for common type system pitfalls and patterns that appear unsound but are intentional TypeScript behavior. Used to avoid false positives on legitimate TypeScript patterns."
+        },
+        {
+          "title": "Avoid Using Type Assertions in TypeScript",
+          "url": "https://www.allthingstypescript.dev/p/avoid-using-type-assertions-in-typescript",
+          "reason": "Current guidance on type assertion anti-patterns and best practices. Informs severity calibration and remediation suggestions for unsafe type assertions."
+        },
+        {
+          "title": "Stop Using TypeScript's Exclamation Mark",
+          "url": "https://medium.com/@michalstefanow.marek/stop-using-typescripts-exclamation-mark-d0b1281c8e3d",
+          "reason": "2026 best practices discouraging non-null assertion operator overuse. Highlights runtime safety concerns and lack of runtime protection with the ! operator."
+        },
+        {
+          "title": "TypeScript's Exclamation Mark: A Shortcut That Can Save or Ruin Your Code",
+          "url": "https://www.syncfusion.com/blogs/post/exclamation-mark-in-ts",
+          "reason": "Analysis of non-null assertion operator trade-offs between compile-time convenience and runtime safety. Informs confidence calibration for non-null assertion findings."
+        },
+        {
+          "title": "When TypeScript's Type Assertions Work and When They Just Silence the Compiler",
+          "url": "https://medium.com/@AlexanderObregon/when-typescripts-type-assertions-work-and-when-they-just-silence-the-compiler-8db7a171d772",
+          "reason": "Explains the compile-time-only nature of type assertions and how they can mask runtime type errors. Used to articulate finding descriptions and runtime impact."
+        }
+      ],
+      "missingInputs": [],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 29,
+      "generatedAt": "2026-04-30T23:01:13.870Z"
+    },
+    "state-mutation-consistency": {
+      "version": 2,
+      "parentSkill": "find-bugs",
+      "taskId": "state-mutation-consistency",
+      "taskHash": "b9258d4132dcf983074e47efbf6c57fe8858dfcb216f2cdde90c28e900f7b8e8",
+      "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+      "coordinatorVersion": "1",
+      "name": "state-mutation-consistency",
+      "bytes": 33541,
+      "durationMs": 3580123,
+      "usage": {
+        "inputTokens": 1287122,
+        "outputTokens": 10278,
+        "cacheReadInputTokens": 910603,
+        "cacheCreationInputTokens": 375939,
+        "cacheCreation5mInputTokens": 375939,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.8388621499999995
+      },
+      "externalSources": [
+        {
+          "title": "How to avoid race conditions with asynchronous javascript",
+          "url": "https://www.lorenzweiss.de/race_conditions_explained/",
+          "reason": "Explains JavaScript async race conditions, sequential execution, blocking/mutual exclusion, and atomic operations for preventing race conditions in TypeScript applications"
+        },
+        {
+          "title": "How to Fix Stale Closure Issues in React Hooks",
+          "url": "https://oneuptime.com/blog/post/2026-01-24-fix-stale-closure-issues-react-hooks/view",
+          "reason": "2026 best practices for React stale closures: functional setState, dependency arrays, useRef, and useEffectEvent patterns"
+        },
+        {
+          "title": "Understanding React's useEffectEvent: A Complete Guide to Solving Stale Closures",
+          "url": "https://peterkellner.net/2026/01/09/understanding-react-useeffectevent-vs-useeffect/",
+          "reason": "React 19.2+ useEffectEvent hook for reading latest values without dependency array re-runs, addressing stale closure problems"
+        },
+        {
+          "title": "Be Aware of Stale Closures when Using React Hooks",
+          "url": "https://dmitripavlutin.com/react-hooks-stale-closures/",
+          "reason": "Comprehensive explanation of stale closures in React hooks with examples and remediation patterns"
+        },
+        {
+          "title": "JavaScript's Object.freeze and TypeScript's Readonly",
+          "url": "https://www.dalejefferson.com/articles/2019-06-12-object-freeze-typescript-readonly/",
+          "reason": "Explains Object.freeze (runtime immutability) vs TypeScript readonly (compile-time types), and combining both approaches"
+        },
+        {
+          "title": "TypeScript Readonly vs Object.freeze",
+          "url": "https://www.webdevtutor.net/blog/typescript-readonly-vs-objectfreeze",
+          "reason": "Clarifies readonly provides compile-time checks while Object.freeze enforces runtime immutability, and their performance trade-offs"
+        },
+        {
+          "title": "Creating Immutable Objects Safely in TypeScript",
+          "url": "https://medium.com/suyeonme/creating-immutable-objects-safely-in-typescript-df8016ef6d4e",
+          "reason": "Deep immutability patterns: const assertions, recursive Object.freeze, DeepReadonly types, and immutability library usage"
+        },
+        {
+          "title": "Invariant in TypeScript - GeeksforGeeks",
+          "url": "https://www.geeksforgeeks.org/typescript/invariant-in-typescript/",
+          "reason": "Invariant pattern for runtime validation of state consistency and preventing unexpected behavior in TypeScript applications"
+        },
+        {
+          "title": "How to Build Type-Safe State Machines in TypeScript",
+          "url": "https://oneuptime.com/blog/post/2026-01-30-typescript-type-safe-state-machines/view",
+          "reason": "Discriminated unions and state machine patterns for ensuring valid state transitions and preventing ordering violations"
+        }
+      ],
+      "missingInputs": [
+        "Specific React version in use (18.x vs 19.x) affects useEffectEvent availability; inferred from package.json but version ranges may vary",
+        "Domain-specific state machine invariants for ordering violation detection; can only detect obvious violations without explicit guards",
+        "Worker thread usage for true parallelism detection; current Node.js concurrency assumes single-threaded event loop",
+        "Production incident data for severity calibration; unknown which state mutation bugs have caused real-world impact in Warden deployments"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 28,
+      "generatedAt": "2026-05-01T00:00:57.599Z"
+    },
+    "resource-lifecycle-errors": {
+      "version": 2,
+      "parentSkill": "find-bugs",
+      "taskId": "resource-lifecycle-errors",
+      "taskHash": "0d8c5004af0f0e0c7fbf4320ec46e25a0e98bc7a2b3445565038ae510f6b7e3f",
+      "sourceHash": "251e32158adbf086ab9d9a1b4f8299b71cb35c9242fcbc9191c10671e9e1a9ea",
+      "coordinatorVersion": "1",
+      "name": "resource-lifecycle-errors",
+      "bytes": 30968,
+      "durationMs": 238067,
+      "usage": {
+        "inputTokens": 1205662,
+        "outputTokens": 10823,
+        "cacheReadInputTokens": 993777,
+        "cacheCreationInputTokens": 198965,
+        "cacheCreation5mInputTokens": 198965,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.2453568500000003
+      },
+      "externalSources": [
+        {
+          "title": "TC39 Explicit Resource Management",
+          "url": "https://tc39.es/proposal-explicit-resource-management/",
+          "reason": "Authoritative specification for Symbol.dispose, Symbol.asyncDispose, and using keyword for modern resource cleanup patterns in JavaScript/TypeScript"
+        },
+        {
+          "title": "JavaScript's New Superpower: Explicit Resource Management · V8",
+          "url": "https://v8.dev/features/explicit-resource-management",
+          "reason": "V8 implementation details for AsyncDisposableStack, DisposableStack, and modern disposal patterns with browser/Node.js support status"
+        },
+        {
+          "title": "Symbol.asyncDispose - MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/asyncDispose",
+          "reason": "Official MDN documentation for AsyncDisposable interface and async cleanup method signatures"
+        },
+        {
+          "title": "Understanding React's useEffect cleanup function - LogRocket",
+          "url": "https://blog.logrocket.com/understanding-react-useeffect-cleanup-function/",
+          "reason": "React useEffect cleanup patterns for preventing memory leaks from timers, subscriptions, and event listeners"
+        },
+        {
+          "title": "Preventing Memory Leaks in React with useEffect Hooks",
+          "url": "https://www.c-sharpcorner.com/article/preventing-memory-leaks-in-react-with-useeffect-hooks/",
+          "reason": "Common causes of React memory leaks and cleanup function best practices for useEffect hooks"
+        },
+        {
+          "title": "Events - Node.js Documentation",
+          "url": "https://nodejs.org/api/events.html",
+          "reason": "Official Node.js EventEmitter documentation for removeListener, removeAllListeners, and memory leak prevention"
+        },
+        {
+          "title": "Do not make these mistakes with EventEmitter in Node.js",
+          "url": "https://medium.com/@dmytro.menshykov/do-not-make-this-mistakes-with-eventemitter-in-node-js-df678acc71b2",
+          "reason": "Best practices for EventEmitter cleanup, removeListener vs removeAllListeners usage, and memory leak prevention"
+        },
+        {
+          "title": "Node.js Process Lifecycle - NodeBook",
+          "url": "https://www.thenodebook.com/node-arch/node-process-lifecycle",
+          "reason": "Process cleanup steps including draining, closing database connections, and graceful shutdown patterns for long-lived Node.js processes"
+        }
+      ],
+      "missingInputs": [
+        "Custom disposal utilities or RAII patterns specific to this repository beyond standard try-finally and framework lifecycle hooks",
+        "Framework-specific lifecycle hooks beyond React (Angular ngOnDestroy, Vue beforeUnmount, Svelte onDestroy) if repository uses these frameworks",
+        "Deployment environment specifics (long-lived server vs short-lived CLI) for accurate severity calibration when repository contains both"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 30,
+      "generatedAt": "2026-05-01T00:05:00.027Z"
+    }
+  },
+  "updatedAt": "2026-05-01T00:05:00.027Z"
+}

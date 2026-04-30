@@ -8,16 +8,18 @@
  * Claude result messages into the shared runtime result.
  *
  * Important invariants:
- * - Claude receives read-only tools for hunk analysis.
+ * - Claude receives only read-only tools for hunk analysis.
  * - SDK errors remain classifiable by downstream retry/auth logic.
  * - Runtime results always contain valid `UsageStats`.
  * - Claude-specific result subtypes normalize to Warden-owned statuses.
  */
 import type Anthropic from '@anthropic-ai/sdk';
 import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
-import { emptyUsage, extractUsage } from '../usage.js';
+import { apiUsageToStats } from '../pricing.js';
+import { aggregateUsage, emptyUsage, estimateTokens, extractUsage } from '../usage.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -36,12 +38,20 @@ interface TurnData {
   outputTokens: number;
   cacheRead: number;
   cacheWrite: number;
+  cacheWrite5m: number;
+  cacheWrite1h: number;
+  webSearchRequests: number;
   model: string;
 }
 
 interface ClaudeProviderOptions {
   pathToClaudeCodeExecutable?: string;
 }
+
+const DEFAULT_READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
+const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
+const MUTATING_TOOLS = ['Write', 'Edit', 'Bash'] as const;
+const CLAUDE_AGENT_TOOLS = ['Task', 'TodoWrite'] as const;
 
 function getClaudeProviderOptions(providerOptions: unknown): ClaudeProviderOptions {
   if (!providerOptions || typeof providerOptions !== 'object') {
@@ -61,6 +71,21 @@ function missingApiKeyResult<T>(): AuxiliaryRunResult<T> {
     success: false,
     error: 'Anthropic API key required for Claude auxiliary runtime',
     usage: emptyUsage(),
+  };
+}
+
+function resolveClaudeSkillTools(tools: ToolConfig | undefined): {
+  allowedTools: string[];
+  disallowedTools: string[];
+} {
+  const denied = new Set(tools?.denied ?? []);
+  const requested = tools?.allowed ?? DEFAULT_READ_ONLY_TOOLS;
+  const allowedTools = READ_ONLY_TOOLS.filter((tool) => requested.includes(tool) && !denied.has(tool));
+  const disallowedReadOnlyTools = READ_ONLY_TOOLS.filter((tool) => !allowedTools.includes(tool));
+
+  return {
+    allowedTools,
+    disallowedTools: [...MUTATING_TOOLS, ...disallowedReadOnlyTools, ...CLAUDE_AGENT_TOOLS],
   };
 }
 
@@ -94,15 +119,68 @@ function statusFromClaudeSubtype(subtype: SDKResultMessage['subtype']): SkillRun
   }
 }
 
-function normalizeResult(result: SDKResultMessage): SkillRunResult {
+function turnUsageToStats(turn: TurnData) {
+  return apiUsageToStats(turn.model, {
+    input_tokens: turn.inputTokens,
+    output_tokens: turn.outputTokens,
+    cache_read_input_tokens: turn.cacheRead,
+    cache_creation_input_tokens: turn.cacheWrite,
+    cache_creation: {
+      ephemeral_5m_input_tokens: turn.cacheWrite5m,
+      ephemeral_1h_input_tokens: turn.cacheWrite1h,
+    },
+    server_tool_use: {
+      web_search_requests: turn.webSearchRequests,
+    },
+  });
+}
+
+function reconcileStreamedUsage(args: {
+  result: SDKResultMessage;
+  streamedUsage?: ReturnType<typeof turnUsageToStats>;
+  responseModel?: string;
+}): ReturnType<typeof turnUsageToStats> | undefined {
+  const { result, streamedUsage, responseModel } = args;
+  if (!streamedUsage) {
+    return undefined;
+  }
+
+  const resultUsage = extractUsage(result);
+  const resultTextTokens = result.subtype === 'success'
+    ? estimateTokens(result.result.length)
+    : 0;
+  const outputTokens = Math.max(
+    streamedUsage.outputTokens,
+    resultUsage.outputTokens,
+    resultTextTokens,
+  );
+  const missingOutputTokens = outputTokens - streamedUsage.outputTokens;
+  if (missingOutputTokens <= 0 || !responseModel) {
+    return streamedUsage;
+  }
+
+  return aggregateUsage([
+    streamedUsage,
+    apiUsageToStats(responseModel, {
+      input_tokens: 0,
+      output_tokens: missingOutputTokens,
+    }),
+  ]);
+}
+
+function normalizeResult(
+  result: SDKResultMessage,
+  usage?: ReturnType<typeof turnUsageToStats>,
+  responseModel?: string,
+): SkillRunResult {
   const errors = 'errors' in result ? result.errors : [];
   return {
     status: statusFromClaudeSubtype(result.subtype),
     text: result.subtype === 'success' ? result.result : '',
     errors,
-    usage: extractUsage(result),
+    usage: usage ?? extractUsage(result),
     responseId: result.uuid,
-    responseModel: singleResponseModel(result.modelUsage),
+    responseModel: responseModel ?? singleResponseModel(result.modelUsage),
     sessionId: result.session_id,
     durationMs: result.duration_ms,
     durationApiMs: result.duration_api_ms,
@@ -133,9 +211,10 @@ export const claudeRuntime: Runtime = {
   name: 'claude',
 
   async runSkill(request: SkillRunRequest): Promise<SkillRunResponse> {
-    const { systemPrompt, userPrompt, repoPath, options, skillName, providerOptions } = request;
+    const { systemPrompt, userPrompt, repoPath, options, skillName, providerOptions, tools } = request;
     const { maxTurns = 50, model, abortController } = options;
     const { pathToClaudeCodeExecutable } = getClaudeProviderOptions(providerOptions);
+    const skillTools = resolveClaudeSkillTools(tools);
     const modelId = model ?? 'unknown';
 
     return Sentry.startSpan(
@@ -164,10 +243,10 @@ export const claudeRuntime: Runtime = {
             maxTurns,
             cwd: repoPath,
             systemPrompt,
-            // Only allow read-only tools - context is already provided in the prompt.
-            allowedTools: ['Read', 'Grep', 'Glob'],
+            // Only allow read-only tools. Skills may opt into read-only web tools.
+            allowedTools: skillTools.allowedTools,
             // Explicitly block modification/side-effect tools as defense-in-depth.
-            disallowedTools: ['Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
+            disallowedTools: skillTools.disallowedTools,
             permissionMode: 'bypassPermissions',
             // Prevent SDK from writing session .jsonl files and polluting Claude Code's session index.
             persistSession: false,
@@ -187,6 +266,8 @@ export const claudeRuntime: Runtime = {
         // child spans (gen_ai.chat + gen_ai.execute_tool) under the invoke_agent span.
         let turnCount = 0;
         let pendingTurn: TurnData | null = null;
+        const turnUsages: ReturnType<typeof turnUsageToStats>[] = [];
+        const responseModels = new Set<string>();
         const pendingToolProgress = new Map<string, number>();
 
         function flushPendingTurn(): void {
@@ -196,6 +277,8 @@ export const claudeRuntime: Runtime = {
           const toolProgress = new Map(pendingToolProgress);
           pendingTurn = null;
           pendingToolProgress.clear();
+          turnUsages.push(turnUsageToStats(turn));
+          responseModels.add(turn.model);
 
           try {
             const totalInput = turn.inputTokens + turn.cacheRead + turn.cacheWrite;
@@ -245,6 +328,8 @@ export const claudeRuntime: Runtime = {
             if (message.type === 'assistant') {
               flushPendingTurn();
               const msg = message.message;
+              const cacheWrite5m = msg.usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+              const cacheWrite1h = msg.usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0;
               const toolUses = msg.content
                 .filter((block): block is typeof block & { type: 'tool_use' } => block.type === 'tool_use')
                 .map(({ id, name }) => ({ id, name }));
@@ -253,7 +338,10 @@ export const claudeRuntime: Runtime = {
                 inputTokens: msg.usage?.input_tokens ?? 0,
                 outputTokens: msg.usage?.output_tokens ?? 0,
                 cacheRead: msg.usage?.cache_read_input_tokens ?? 0,
-                cacheWrite: msg.usage?.cache_creation_input_tokens ?? 0,
+                cacheWrite: Math.max(msg.usage?.cache_creation_input_tokens ?? 0, cacheWrite5m + cacheWrite1h),
+                cacheWrite5m,
+                cacheWrite1h,
+                webSearchRequests: msg.usage?.server_tool_use?.web_search_requests ?? 0,
                 model: msg.model,
               };
             } else if (message.type === 'tool_progress') {
@@ -281,7 +369,9 @@ export const claudeRuntime: Runtime = {
             const inputTokens = usage.input_tokens ?? 0;
             const outputTokens = usage.output_tokens ?? 0;
             const cacheRead = usage.cache_read_input_tokens ?? 0;
-            const cacheWrite = usage.cache_creation_input_tokens ?? 0;
+            const cacheWrite5m = usage.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+            const cacheWrite1h = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+            const cacheWrite = Math.max(usage.cache_creation_input_tokens ?? 0, cacheWrite5m + cacheWrite1h);
             const totalInputTokens = inputTokens + cacheRead + cacheWrite;
             span.setAttribute('gen_ai.usage.input_tokens', totalInputTokens);
             span.setAttribute('gen_ai.usage.output_tokens', outputTokens);
@@ -320,8 +410,20 @@ export const claudeRuntime: Runtime = {
         }
 
         const stderr = stderrChunks.join('').trim() || undefined;
+        const streamedUsage = turnUsages.length > 0 ? aggregateUsage(turnUsages) : undefined;
+        const responseModel = responseModels.size === 1 ? [...responseModels][0] : undefined;
         return {
-          result: resultMessage ? normalizeResult(resultMessage) : undefined,
+          result: resultMessage
+            ? normalizeResult(
+              resultMessage,
+              reconcileStreamedUsage({
+                result: resultMessage,
+                streamedUsage,
+                responseModel,
+              }),
+              responseModel,
+            )
+            : undefined,
           authError,
           stderr,
         };

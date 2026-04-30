@@ -13,6 +13,7 @@ import {
   type RunnerConfig,
   type LogsConfig,
   type RuntimeName,
+  type SkillExecutionMode,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -264,6 +265,8 @@ export interface ResolvedTrigger {
   actions?: string[];
   /** Remote repository reference */
   remote?: string;
+  /** Execution strategy. Undefined means normal direct skill execution. */
+  mode?: SkillExecutionMode;
   /** Repository root to use when resolving local skill names or paths */
   skillRoot?: string;
   /** Path filters */
@@ -359,6 +362,7 @@ export function resolveSkillConfigs(
         skill: skill.name,
         type: '*',
         remote: skill.remote,
+        mode: skill.mode,
         skillRoot: skillRootsByName?.[skill.name],
         filters,
         failOn: skill.failOn ?? defaults?.failOn,
@@ -384,6 +388,7 @@ export function resolveSkillConfigs(
           type: trigger.type,
           actions: trigger.actions,
           remote: skill.remote,
+          mode: skill.mode,
           skillRoot: skillRootsByName?.[skill.name],
           filters,
           // 3-level merge: trigger > skill > defaults

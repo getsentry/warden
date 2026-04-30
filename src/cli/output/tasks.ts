@@ -303,6 +303,15 @@ export async function runSkillTask(
                   if (usage.cacheCreationInputTokens) {
                     current.usage.cacheCreationInputTokens = (current.usage.cacheCreationInputTokens ?? 0) + usage.cacheCreationInputTokens;
                   }
+                  if (usage.cacheCreation5mInputTokens) {
+                    current.usage.cacheCreation5mInputTokens = (current.usage.cacheCreation5mInputTokens ?? 0) + usage.cacheCreation5mInputTokens;
+                  }
+                  if (usage.cacheCreation1hInputTokens) {
+                    current.usage.cacheCreation1hInputTokens = (current.usage.cacheCreation1hInputTokens ?? 0) + usage.cacheCreation1hInputTokens;
+                  }
+                  if (usage.webSearchRequests) {
+                    current.usage.webSearchRequests = (current.usage.webSearchRequests ?? 0) + usage.webSearchRequests;
+                  }
                 } else {
                   current.usage = { ...usage };
                 }
@@ -437,7 +446,12 @@ export async function runSkillTask(
         // failed — a silent zero-findings run otherwise.
         const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
 
-        if (totalHunks > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
+        if (
+          totalHunks > 0
+          && totalAttemptFailures === totalHunks
+          && allFindings.length === 0
+          && !(runnerOptions.abortController?.signal.aborted ?? false)
+        ) {
           const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
           const errorMessage =
             `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +

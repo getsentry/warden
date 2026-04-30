@@ -3,6 +3,7 @@ export { type OutputMode, detectOutputMode, timestamp } from './tty.js';
 export { Reporter, type SkillRunnerCallbacks } from './reporter.js';
 export {
   pluralize,
+  formatBytes,
   formatDuration,
   formatElapsed,
   formatSeverityBadge,

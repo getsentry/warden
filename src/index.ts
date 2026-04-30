@@ -103,6 +103,7 @@ export {
   SkillRunnerError,
   getRuntime,
   claudeRuntime,
+  parseJsonFromOutput,
 } from './sdk/runner.js';
 
 export type {
@@ -118,6 +119,9 @@ export type {
   SkillRunResponse,
   SkillRunResult,
   SkillRunStatus,
+  JsonOutputRepairOptions,
+  ParseJsonFromOutputOptions,
+  ParseJsonFromOutputResult,
 } from './sdk/runner.js';
 
 // -----------------------------------------------------------------------------
@@ -130,6 +134,31 @@ export {
 } from './skills/index.js';
 
 export type { AgentDefinition } from './skills/index.js';
+
+// -----------------------------------------------------------------------------
+// Superwarden
+// -----------------------------------------------------------------------------
+export {
+  createSuperwardenSkill,
+  getSuperwardenSkillRoot,
+  getSuperwardenPlanCachePath,
+  SuperwardenMetadataSchema,
+  SuperwardenPlanError,
+  SuperwardenPlanSchema,
+  ensureSuperwardenChildSkillsRoot,
+  resetSuperwardenChildSkillsRoot,
+  synthesizeSuperwardenChildSkill,
+  synthesizeSuperwardenPlan,
+  writeSuperwardenChildSkills,
+} from './coordinator/index.js';
+
+export type {
+  SuperwardenChildSkillArtifact,
+  SuperwardenMetadata,
+  SuperwardenPlan,
+  SuperwardenSynthesisResult,
+  WriteSuperwardenChildSkillsResult,
+} from './coordinator/index.js';
 
 // -----------------------------------------------------------------------------
 // Event Context

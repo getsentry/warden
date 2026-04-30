@@ -345,6 +345,48 @@ describe('parseCliArgs', () => {
     expect(result.options.remote).toBe('getsentry/skills');
   });
 
+  it('parses synthesize command with plan options', () => {
+    const result = parseCliArgs([
+      'synthesize',
+      'security-review',
+      '--show-plan',
+      '--regenerate',
+      '--export',
+      'plan.json',
+    ]);
+    expect(result.command).toBe('synthesize');
+    expect(result.options.skill).toBe('security-review');
+    expect(result.options.showPlan).toBe(true);
+    expect(result.options.regenerate).toBe(true);
+    expect(result.options.exportPath).toBe('plan.json');
+  });
+
+  it('parses synth as an alias for synthesize', () => {
+    const result = parseCliArgs([
+      'synth',
+      'security-review',
+      '--show-plan',
+    ]);
+    expect(result.command).toBe('synthesize');
+    expect(result.options.skill).toBe('security-review');
+    expect(result.options.showPlan).toBe(true);
+  });
+
+  it('parses synthesize command with Superwarden creation options', () => {
+    const result = parseCliArgs([
+      'synthesize',
+      'security-review',
+      '--initial-prompt',
+      'Review authz boundaries.',
+      '--description',
+      'Security review',
+    ]);
+    expect(result.command).toBe('synthesize');
+    expect(result.options.skill).toBe('security-review');
+    expect(result.options.initialPrompt).toBe('Review authz boundaries.');
+    expect(result.options.description).toBe('Security review');
+  });
+
   it('parses runs list command', () => {
     const result = parseCliArgs(['runs', 'list']);
     expect(result.command).toBe('runs');

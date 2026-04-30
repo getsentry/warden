@@ -19,6 +19,7 @@ vitest*.config.ts
 # Development/CI files
 .github/
 .agents/
+.warden/
 .claude/
 .dex/
 .context/
@@ -46,7 +47,7 @@ bin/
 AGENTS.md
 CLAUDE.md
 CONTRIBUTING.md
-SPEC.md
+/SPEC.md
 docs/
 packages/
 assets/

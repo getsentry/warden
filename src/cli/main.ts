@@ -1,15 +1,15 @@
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
-import type { WardenConfig } from '../config/schema.js';
+import type { SkillDefinition, SkillExecutionMode, WardenConfig } from '../config/schema.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
-import type { SkillReport, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
@@ -24,7 +24,11 @@ import {
   runSkillTasks,
   runSkillTasksWithInk,
   pluralize,
+  formatBytes,
+  formatCost,
+  formatDuration,
   MODEL_DEFAULT_SENTINEL,
+  truncate,
   writeJsonlContent,
   renderJsonlString,
   renderJsonlChunkLine,
@@ -50,6 +54,20 @@ import { runAdd } from './commands/add.js';
 import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
+import { runSynthesize } from './commands/synthesize.js';
+import {
+  collectCoordinatorSource,
+  synthesizeCoordinatorPlan,
+  type CoordinatorPlan,
+} from '../coordinator/plan.js';
+import {
+  ensureCoordinatorChildSkillsRoot,
+  resetCoordinatorChildSkillsRoot,
+  synthesizeCoordinatorChildSkill,
+  type CoordinatorChildSkillArtifact,
+} from '../coordinator/child-skills.js';
+import { getSuperwardenCacheDir, superwardenSkillExists } from '../coordinator/superwarden.js';
+import { getRuntime } from '../sdk/runtimes/index.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -476,12 +494,25 @@ function finalizeRunLog(
 interface SkillToRun {
   skill: string;
   remote?: string;
+  mode?: SkillExecutionMode;
   filters: { paths?: string[]; ignorePaths?: string[] };
   model?: string;
   maxTurns?: number;
   runtime?: SkillRunnerOptions['runtime'];
   fastModelModel?: string;
   auxiliaryMaxRetries?: number;
+}
+
+export interface RunSkillSpec {
+  name: string;
+  displayName?: string;
+  skill: string;
+  remote?: string;
+  mode?: SkillExecutionMode;
+  failOn?: SeverityThreshold;
+  minConfidence?: ConfidenceThreshold;
+  context: Awaited<ReturnType<typeof buildLocalEventContext>>;
+  runnerOptions: SkillRunnerOptions;
 }
 
 interface ProcessedResults {
@@ -511,6 +542,246 @@ export function mergeSkillRunnerOptions(
   }
 
   return merged;
+}
+
+export function inferExplicitSkillExecutionMode(args: {
+  configuredMode?: SkillExecutionMode;
+  repoPath?: string;
+  skillName: string;
+}): SkillExecutionMode | undefined {
+  return args.configuredMode
+    ?? (args.repoPath && superwardenSkillExists(args.repoPath, args.skillName) ? 'coordinator' : undefined);
+}
+
+function fileSize(path: string): number | undefined {
+  try {
+    return statSync(path).size;
+  } catch {
+    return undefined;
+  }
+}
+
+function formatRelativePath(path: string | undefined, repoRoot: string): string {
+  if (!path) return 'unknown';
+  const rel = relative(repoRoot, path);
+  if (!rel || rel.startsWith('..')) return path;
+  return rel;
+}
+
+function formatSuperwardenPlanStats(args: {
+  bytes?: number;
+  sources?: number;
+  durationMs?: number;
+}): string {
+  const parts = [
+    args.bytes === undefined ? undefined : formatBytes(args.bytes),
+    args.durationMs === undefined ? undefined : formatDuration(args.durationMs),
+    args.sources === undefined ? undefined : `${args.sources} ${pluralize(args.sources, 'source')}`,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? `  [${parts.join(' · ')}]` : '';
+}
+
+function formatGeneratedTaskStats(artifact: CoordinatorChildSkillArtifact): string {
+  const parts = [
+    formatDuration(artifact.durationMs),
+    artifact.usage ? formatCost(artifact.usage.costUSD) : undefined,
+    artifact.externalSources.length > 0
+      ? `${artifact.externalSources.length} ${pluralize(artifact.externalSources.length, 'source')}`
+      : undefined,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? `  [${parts.join(' · ')}]` : '';
+}
+
+function renderSuperwardenPreparedTask(
+  reporter: Reporter,
+  artifact: CoordinatorChildSkillArtifact,
+  task: CoordinatorPlan['tasks'][number],
+): void {
+  const status = artifact.source === 'cache' ? 'cached' : 'generated';
+  const stats = artifact.source === 'generated' ? formatGeneratedTaskStats(artifact) : '';
+  reporter.success(`${artifact.taskId}  [${status}]${stats}`);
+  reporter.dim(`  ${truncate(task.scope, 100)}`);
+}
+
+function renderSkillRunHeader(args: {
+  reporter: Reporter;
+  skill: SkillDefinition;
+  repoPath?: string;
+  runtimeName: string;
+  model?: string;
+}): void {
+  const { reporter, skill, repoPath, runtimeName, model } = args;
+  const source = skill.rootDir && repoPath
+    ? formatRelativePath(skill.rootDir, repoPath)
+    : skill.rootDir;
+
+  reporter.blank();
+  reporter.text(`  Skill    ${skill.name}`);
+  if (source) {
+    reporter.text(`  Source   ${source}`);
+  }
+  reporter.text(`  Model    ${model ?? 'default'} [${runtimeName}]`);
+  reporter.blank();
+}
+
+async function createDirectSkillTask(args: {
+  spec: RunSkillSpec;
+  repoPath?: string;
+  options: CLIOptions;
+  reporter: Reporter;
+  renderHeader?: boolean;
+}): Promise<SkillTaskOptions> {
+  const { spec, repoPath, options, reporter, renderHeader } = args;
+  const skill = await resolveSkillAsync(spec.skill, repoPath, {
+    remote: spec.remote,
+    offline: options.offline,
+  });
+  if (renderHeader && !options.json) {
+    renderSkillRunHeader({
+      reporter,
+      skill,
+      repoPath,
+      runtimeName: spec.runnerOptions.runtime ?? 'claude',
+      model: spec.runnerOptions.model,
+    });
+  }
+  return {
+    name: spec.name,
+    displayName: spec.displayName,
+    failOn: spec.failOn,
+    minConfidence: spec.minConfidence,
+    resolveSkill: async () => skill,
+    context: spec.context,
+    runnerOptions: spec.runnerOptions,
+  };
+}
+
+async function createSuperwardenSkillTasks(args: {
+  spec: RunSkillSpec;
+  repoPath: string;
+  options: CLIOptions;
+  reporter: Reporter;
+}): Promise<SkillTaskOptions[]> {
+  const { spec, repoPath, options, reporter } = args;
+  const parentSkill = await resolveSkillAsync(spec.skill, repoPath, {
+    remote: spec.remote,
+    offline: options.offline,
+  });
+  const source = collectCoordinatorSource(parentSkill);
+  const runtimeName = spec.runnerOptions.runtime ?? 'claude';
+  const runtime = getRuntime(runtimeName);
+
+  if (!options.json) {
+    reporter.blank();
+    reporter.text(`  Skill    ${parentSkill.name}`);
+    reporter.text(`  Model    ${spec.runnerOptions.model ?? 'default'} [${runtimeName}]`);
+    reporter.blank();
+    reporter.bold('PLAN');
+  }
+
+  const planStartedAt = Date.now();
+  const planResult = await synthesizeCoordinatorPlan({
+    skill: parentSkill,
+    runtime,
+    apiKey: spec.runnerOptions.apiKey,
+    model: spec.runnerOptions.model,
+    maxRetries: spec.runnerOptions.auxiliaryMaxRetries,
+    regenerate: options.regenerate,
+    abortController,
+    cacheDir: getSuperwardenCacheDir(repoPath, parentSkill.name),
+    repoPath,
+    repairModel: spec.runnerOptions.fastModelModel,
+    repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
+  });
+  const planDurationMs = Date.now() - planStartedAt;
+  if (!options.json) {
+    const stats = formatSuperwardenPlanStats({
+      bytes: fileSize(planResult.cachePath),
+      durationMs: planResult.source === 'generated' ? planResult.durationMs ?? planDurationMs : undefined,
+      sources: planResult.plan.synthesis.externalSources?.length ?? 0,
+    });
+    reporter.success(`${planResult.source === 'cache' ? 'Loaded' : 'Synthesized'} plan with ${planResult.plan.tasks.length} ${pluralize(planResult.plan.tasks.length, 'task')}${stats}`);
+    reporter.blank();
+    reporter.bold('TASKS');
+  }
+
+  const regenerateChildSkills = options.regenerate || planResult.source === 'generated';
+  const childRoot = regenerateChildSkills
+    ? resetCoordinatorChildSkillsRoot(planResult.cachePath)
+    : ensureCoordinatorChildSkillsRoot(planResult.cachePath);
+  const artifacts: CoordinatorChildSkillArtifact[] = [];
+  for (const [index, task] of planResult.plan.tasks.entries()) {
+    if (!options.json && !reporter.mode.isTTY) {
+      reporter.step(`${task.id} [${index + 1}/${planResult.plan.tasks.length}]`);
+    }
+    const artifact = await synthesizeCoordinatorChildSkill({
+      plan: planResult.plan,
+      task,
+      source,
+      cachePath: planResult.cachePath,
+      rootDir: childRoot,
+      runtime,
+      repoPath,
+      model: spec.runnerOptions.model,
+      apiKey: spec.runnerOptions.apiKey,
+      repairModel: spec.runnerOptions.fastModelModel,
+      repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
+      abortController,
+      regenerate: regenerateChildSkills,
+    });
+    artifacts.push(artifact);
+    if (!options.json) {
+      renderSuperwardenPreparedTask(reporter, artifact, task);
+    }
+  }
+
+  if (!options.json) {
+    reporter.blank();
+  }
+
+  return artifacts.map((artifact) => ({
+    name: `${spec.name}/${artifact.taskId}`,
+    displayName: `${spec.displayName ?? spec.skill}/${artifact.taskId}`,
+    failOn: spec.failOn,
+    minConfidence: spec.minConfidence,
+    resolveSkill: () => resolveSkillAsync(artifact.path, repoPath, {
+      offline: options.offline,
+    }),
+    context: spec.context,
+    runnerOptions: spec.runnerOptions,
+  }));
+}
+
+export async function createSkillTasks(args: {
+  specs: RunSkillSpec[];
+  repoPath?: string;
+  options: CLIOptions;
+  reporter: Reporter;
+}): Promise<SkillTaskOptions[]> {
+  const tasks: SkillTaskOptions[] = [];
+  const singleDirectSkill = args.specs.length === 1 && args.specs[0]?.mode !== 'coordinator';
+  for (const spec of args.specs) {
+    if (spec.mode !== 'coordinator') {
+      tasks.push(await createDirectSkillTask({
+        spec,
+        repoPath: args.repoPath,
+        options: args.options,
+        reporter: args.reporter,
+        renderHeader: singleDirectSkill,
+      }));
+      continue;
+    }
+    if (!args.repoPath) {
+      throw new Error(`Superwarden skill ${spec.skill} requires a git repository`);
+    }
+    tasks.push(...await createSuperwardenSkillTasks({
+      spec,
+      repoPath: args.repoPath,
+      options: args.options,
+      reporter: args.reporter,
+    }));
+  }
+  return tasks;
 }
 
 export function resolveCliDefaultModel(
@@ -745,6 +1016,11 @@ export async function runSkills(
     const match = config
       ? resolveSkillConfigs(config, options.model).find((t) => t.skill === options.skill)
       : undefined;
+    const inferredMode = inferExplicitSkillExecutionMode({
+      configuredMode: match?.mode,
+      repoPath,
+      skillName: options.skill,
+    });
     // Fall back to global defaults when the skill isn't in the config
     const defaultIgnorePaths = config?.defaults?.ignorePaths;
     const fallbackFilters = defaultIgnorePaths?.length
@@ -753,6 +1029,7 @@ export async function runSkills(
     skillsToRun = [{
       skill: options.skill,
       remote: match?.remote,
+      mode: inferredMode,
       filters: match?.filters ?? fallbackFilters,
       model: match?.model ?? defaultModel,
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
@@ -775,6 +1052,7 @@ export async function runSkills(
       .map((t) => ({
         skill: t.skill,
         remote: t.remote,
+        mode: t.mode,
         filters: t.filters,
         model: t.model,
         maxTurns: t.maxTurns,
@@ -817,16 +1095,33 @@ export async function runSkills(
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
     auxiliaryMaxRetries: config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries,
   };
-  const tasks: SkillTaskOptions[] = skillsToRun.map(({ skill, remote, filters, ...skillOptions }) => ({
+  const specs: RunSkillSpec[] = skillsToRun.map(({ skill, remote, filters, mode, ...skillOptions }) => ({
     name: skill,
+    skill,
+    remote,
+    mode,
     failOn: options.failOn,
-    resolveSkill: () => resolveSkillAsync(skill, repoPath, {
-      remote,
-      offline: options.offline,
-    }),
     context: filterContextByPaths(context, filters),
     runnerOptions: mergeSkillRunnerOptions(runnerOptions, skillOptions),
   }));
+  let tasks: SkillTaskOptions[];
+  try {
+    tasks = await createSkillTasks({
+      specs,
+      repoPath,
+      options,
+      reporter,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reporter.error(message);
+    emitEmptyRunLog(repoPath ?? cwd, options, {
+      code: 'unknown',
+      message,
+      timestamp: new Date().toISOString(),
+    });
+    return 1;
+  }
 
   // Open the run's JSONL log before launching skills so `warden runs
   // follow <runId>` works from a second terminal while the run is live.
@@ -1118,15 +1413,14 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Build trigger tasks
   const effectiveMinConfidence = options.minConfidence ?? config.defaults?.minConfidence ?? 'medium';
-  const tasks: SkillTaskOptions[] = triggersToRun.map((trigger) => ({
+  const specs: RunSkillSpec[] = triggersToRun.map((trigger) => ({
     name: trigger.name,
     displayName: trigger.skill,
+    skill: trigger.skill,
+    remote: trigger.remote,
+    mode: trigger.mode,
     failOn: trigger.failOn ?? options.failOn,
     minConfidence: trigger.minConfidence ?? effectiveMinConfidence,
-    resolveSkill: () => resolveSkillAsync(trigger.skill, repoPath, {
-      remote: trigger.remote,
-      offline: options.offline,
-    }),
     context: filterContextByPaths(context, trigger.filters),
     runnerOptions: {
       apiKey,
@@ -1139,6 +1433,24 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
     },
   }));
+  let tasks: SkillTaskOptions[];
+  try {
+    tasks = await createSkillTasks({
+      specs,
+      repoPath,
+      options,
+      reporter,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reporter.error(message);
+    emitEmptyRunLog(repoPath, options, {
+      code: 'unknown',
+      message,
+      timestamp: new Date().toISOString(),
+    });
+    return 1;
+  }
 
   // Initialize the run's JSONL log up front so a second terminal can
   // `warden runs follow <runId>` while skills are still running.
@@ -1356,6 +1668,8 @@ export async function main(): Promise<void> {
             process.exit(1);
           }
           return runRuns(runsOptions, options, reporter);
+        case 'synthesize':
+          return runSynthesize(options, reporter, { abortController, interrupted });
         default:
           return runCommand(options, reporter);
       }

@@ -775,6 +775,56 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(result.report!.failedExtractions).toBe(1);
     expect(result.report!.findings).toEqual([]);
   });
+
+  it('does not convert user interruption into all_hunks_failed', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const hunkFailures: HunkFailure[] = [
+      { type: 'analysis', filename: 'a.ts', lineRange: '1-10', code: 'aborted', message: 'Analysis aborted' },
+    ];
+    const controller = new AbortController();
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+
+    vi.spyOn(sdkRunner, 'analyzeFile').mockImplementation(async () => {
+      controller.abort();
+      return {
+        filename: 'a.ts',
+        findings: [],
+        usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+        failedHunks: 1,
+        failedExtractions: 0,
+        hunkFailures,
+      };
+    });
+
+    const options: SkillTaskOptions = {
+      name: 'interrupted-skill',
+      resolveSkill: async () =>
+        ({ name: 'interrupted-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: { abortController: controller },
+    };
+
+    const onSkillError = vi.fn();
+    const result = await runSkillTask(options, 1, { ...noopCallbacks(), onSkillError });
+
+    expect(result.error).toBeUndefined();
+    expect(result.report).toBeDefined();
+    expect(result.report!.error).toBeUndefined();
+    expect(result.report!.failedHunks).toBe(1);
+    expect(result.report!.hunkFailures).toEqual(hunkFailures);
+    expect(onSkillError).not.toHaveBeenCalled();
+  });
 });
 
 describe('runSkillTask skipped path', () => {

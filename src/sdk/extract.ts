@@ -70,13 +70,7 @@ export function extractBalancedJson(text: string, startIndex: number): string | 
  * Handles markdown code fences, prose before JSON, and nested objects.
  */
 export function extractFindingsJson(rawText: string): ExtractFindingsResult {
-  let text = rawText.trim();
-
-  // Strip markdown code fences if present (handles any language tag: ```json, ```typescript, ```c++, etc.)
-  const codeBlockMatch = text.match(/```[\w+#-]*\s*([\s\S]*?)```/);
-  if (codeBlockMatch?.[1]) {
-    text = codeBlockMatch[1].trim();
-  }
+  const text = rawText.trim();
 
   // Find the start of the findings JSON object
   const findingsMatch = text.match(FINDINGS_JSON_START);

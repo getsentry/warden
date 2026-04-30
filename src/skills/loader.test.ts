@@ -121,6 +121,7 @@ describe('SKILL_DIRECTORIES', () => {
     expect(SKILL_DIRECTORIES).toEqual([
       '.agents/skills',
       '.claude/skills',
+      '.warden/superwarden',
       '.warden/skills',
     ]);
   });

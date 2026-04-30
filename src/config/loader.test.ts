@@ -38,6 +38,21 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.model).toBeUndefined();
   });
 
+  it('preserves Superwarden coordinator mode on resolved triggers', () => {
+    const config: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'security-review',
+        mode: 'coordinator',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.mode).toBe('coordinator');
+  });
+
   it('applies defaults when skill has no config', () => {
     const config: WardenConfig = {
       ...baseConfig,

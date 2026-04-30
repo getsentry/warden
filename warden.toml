@@ -9,6 +9,16 @@ reportOn = "medium"
 ignorePaths = ["dist/**", "evals/**"]
 
 [[skills]]
+name = "security-review"
+# Superwarden skill. Warden expands coordinator skills into synthesized tasks.
+mode = "coordinator"
+paths = ["src/**/*.ts"]
+ignorePaths = ["src/**/*.test.ts"]
+
+[[skills.triggers]]
+type = "local"
+
+[[skills]]
 name = "find-warden-bugs"
 paths = ["src/**/*.ts"]
 ignorePaths = ["src/**/*.test.ts"]

@@ -48,6 +48,9 @@ export function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
     outputTokens: 0,
     cacheReadInputTokens: 0,
     cacheCreationInputTokens: 0,
+    cacheCreation5mInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+    webSearchRequests: 0,
     costUSD: 0,
   };
 
@@ -56,6 +59,9 @@ export function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
     acc.outputTokens += r.usage?.outputTokens ?? 0;
     acc.cacheReadInputTokens = (acc.cacheReadInputTokens ?? 0) + (r.usage?.cacheReadInputTokens ?? 0);
     acc.cacheCreationInputTokens = (acc.cacheCreationInputTokens ?? 0) + (r.usage?.cacheCreationInputTokens ?? 0);
+    acc.cacheCreation5mInputTokens = (acc.cacheCreation5mInputTokens ?? 0) + (r.usage?.cacheCreation5mInputTokens ?? 0);
+    acc.cacheCreation1hInputTokens = (acc.cacheCreation1hInputTokens ?? 0) + (r.usage?.cacheCreation1hInputTokens ?? 0);
+    acc.webSearchRequests = (acc.webSearchRequests ?? 0) + (r.usage?.webSearchRequests ?? 0);
     acc.costUSD += r.usage?.costUSD ?? 0;
     return acc;
   }, seed);

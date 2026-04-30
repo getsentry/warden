@@ -20,6 +20,7 @@ import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../trigger
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { filterFindings } from '../../types/index.js';
 import type { SkillReport } from '../../types/index.js';
+import { coordinatorExecutionUnavailableMessage } from '../../coordinator/plan.js';
 import type { ActionInputs } from '../inputs.js';
 import {
   setOutput,
@@ -140,6 +141,10 @@ export async function runScheduleWorkflow(
     logGroup(`Running trigger: ${resolved.name} (skill: ${resolved.skill})`);
 
     try {
+      if (resolved.mode === 'coordinator') {
+        throw new Error(coordinatorExecutionUnavailableMessage(resolved.skill));
+      }
+
       // Build context from paths filter
       const patterns = resolved.filters?.paths ?? ['**/*'];
       const ignorePatterns = resolved.filters?.ignorePaths;
