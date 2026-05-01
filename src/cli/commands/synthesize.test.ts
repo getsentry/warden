@@ -197,7 +197,7 @@ Use WebSearch or WebFetch for public prior art.
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Skill    security-review'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Model    synth-model [claude]'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('PLAN'));
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Synthesizing Superwarden plan...'));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Review security issues.'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('TASKS  1 task'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringMatching(/authz\s+\[generated\]/));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Find authorization issues.'));
@@ -281,6 +281,7 @@ Use WebSearch or WebFetch for public prior art.
       regenerate: false,
       rootDir: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash', 'skills'),
     }));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Review security issues.'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringMatching(/authz\s+\[cached\]/));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('warden src/file.ts --skill security-review'));
     const output = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
@@ -356,6 +357,47 @@ Use WebSearch or WebFetch for public prior art.
     expect(stderr).not.toContain('TRY IT');
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
+  });
+
+  it('with --show-plan --json, returns only the plan JSON without generating child skills', async () => {
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    mockSynthesizeCoordinatorPlan.mockResolvedValue({
+      source: 'cache',
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      plan: {
+        version: 1,
+        skill: 'security-review',
+        sourceHash: 'hash',
+        coordinatorVersion: COORDINATOR_VERSION,
+        synthesis: {
+          phases: [{ id: 'collect-inputs', status: 'cached' }],
+        },
+        tasks: [{
+          id: 'authz',
+          title: 'Authorization',
+          scope: 'Find authorization issues in changed TypeScript code.',
+          prompt: 'Review authorization issues.',
+          evidenceRequirements: ['Trace the permission boundary.'],
+          outOfScope: ['Generic style comments.'],
+        }],
+      },
+    });
+
+    const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
+    const exitCode = await runSynthesize(
+      createOptions({ skill: 'security-review', showPlan: true, json: true }),
+      reporter,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockSynthesizeCoordinatorChildSkill).not.toHaveBeenCalled();
+    expect(mockReviewCoordinatorChildSkills).not.toHaveBeenCalled();
+    const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
+    expect(JSON.parse(output)).toMatchObject({
+      skill: 'security-review',
+      tasks: [{ id: 'authz' }],
+    });
+    stdoutSpy.mockRestore();
   });
 
   it('reports Ctrl-C as interrupted instead of a synthesis failure', async () => {
@@ -480,7 +522,7 @@ Use WebSearch or WebFetch for public prior art.
     const skillContent = readFileSync(join(root, 'SKILL.md'), 'utf-8');
     expect(skillContent).toContain('Review changed code for secret exposure.');
     expect(skillContent).toContain(
-      'description: "Review changed code for secret exposure. Use when asked to synthesize, run, or review with the brand-new-security Superwarden skill."',
+      'description: "Review changed code for secret exposure."',
     );
     expect(readFileSync(join(root, 'warden.yaml'), 'utf-8')).toContain('kind: superwarden-skill');
     expect(readFileSync(join(root, 'SPEC.md'), 'utf-8')).toContain('Superwarden skill');

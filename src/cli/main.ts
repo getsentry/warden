@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import chalk from 'chalk';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
@@ -57,21 +57,10 @@ import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
 import { runSynthesize } from './commands/synthesize.js';
-import { runWithLiveStatus } from './output/live-status.js';
-import {
-  collectCoordinatorSource,
-  getCoordinatorPlanCachePath,
-  synthesizeCoordinatorPlan,
-  type CoordinatorPlan,
-} from '../coordinator/plan.js';
-import {
-  ensureCoordinatorChildSkillsRoot,
-  resetCoordinatorChildSkillsRoot,
-  synthesizeCoordinatorChildSkill,
-  type CoordinatorChildSkillArtifact,
-} from '../coordinator/child-skills.js';
-import { getSuperwardenCacheDir, superwardenSkillExists } from '../coordinator/superwarden.js';
-import { getRuntime } from '../sdk/runtimes/index.js';
+import type { CoordinatorPlan } from '../coordinator/plan.js';
+import type { CoordinatorChildSkillArtifact } from '../coordinator/child-skills.js';
+import { superwardenSkillExists } from '../coordinator/superwarden.js';
+import { formatRelativePath, prepareSuperwardenArtifacts } from './superwarden.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -109,9 +98,6 @@ function loadEnvFiles(dir: string): void {
   }
 }
 
-/**
- * Create a Reporter instance from CLI options.
- */
 function createReporter(options: CLIOptions): Reporter {
   const detected = detectOutputMode(options.color);
   const outputMode = options.log ? { ...detected, isTTY: false } : detected;
@@ -119,13 +105,11 @@ function createReporter(options: CLIOptions): Reporter {
   return new Reporter(outputMode, verbosity);
 }
 
+/** Resolve the directory Warden should treat as the invocation root. */
 export function resolveInvocationCwd(baseCwd: string, cliCwd: string | undefined): string {
   return cliCwd ? resolve(baseCwd, cliCwd) : baseCwd;
 }
 
-/**
- * Resolve the config file path based on CLI options and repo root.
- */
 function resolveConfigPath(options: CLIOptions, repoPath: string): string {
   const cwd = process.cwd();
   return options.config ? resolve(cwd, options.config) : resolve(repoPath, 'warden.toml');
@@ -496,9 +480,6 @@ function finalizeRunLog(
   return wrote;
 }
 
-/**
- * Result of processing skill task results.
- */
 interface SkillToRun {
   skill: string;
   remote?: string;
@@ -536,6 +517,7 @@ type SkillRunnerOptionOverrides = Pick<
   'model' | 'maxTurns' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries'
 >;
 
+/** Apply per-skill runner overrides on top of the shared execution defaults. */
 export function mergeSkillRunnerOptions(
   base: SkillRunnerOptions,
   overrides: SkillRunnerOptionOverrides
@@ -554,6 +536,7 @@ export function mergeSkillRunnerOptions(
   return merged;
 }
 
+/** Infer coordinator mode for explicit repo-local Superwarden skills when config is silent. */
 export function inferExplicitSkillExecutionMode(args: {
   configuredMode?: SkillExecutionMode;
   repoPath?: string;
@@ -561,21 +544,6 @@ export function inferExplicitSkillExecutionMode(args: {
 }): SkillExecutionMode | undefined {
   return args.configuredMode
     ?? (args.repoPath && superwardenSkillExists(args.repoPath, args.skillName) ? 'coordinator' : undefined);
-}
-
-function fileSize(path: string): number | undefined {
-  try {
-    return statSync(path).size;
-  } catch {
-    return undefined;
-  }
-}
-
-function formatRelativePath(path: string | undefined, repoRoot: string): string {
-  if (!path) return 'unknown';
-  const rel = relative(repoRoot, path);
-  if (!rel || rel.startsWith('..')) return path;
-  return rel;
 }
 
 function formatSuperwardenPlanStats(args: {
@@ -682,20 +650,8 @@ async function createSuperwardenSkillTasks(args: {
     offline: options.offline,
   });
   const synthesisModel = spec.runnerOptions.synthesisModel;
-  const source = collectCoordinatorSource(parentSkill);
   const runtimeName = spec.runnerOptions.runtime ?? 'claude';
-  const runtime = getRuntime(runtimeName);
-  const cacheDir = getSuperwardenCacheDir(repoPath, parentSkill.name);
-  const planCachePath = getCoordinatorPlanCachePath({
-    skillName: parentSkill.name,
-    sourceHash: source.hash,
-    model: synthesisModel,
-    cacheDir,
-  });
-  const planCacheHit = existsSync(planCachePath);
-  const planMessage = planCacheHit && !options.regenerate
-    ? 'Validating cached Superwarden plan...'
-    : 'Synthesizing Superwarden plan...';
+  const planMessage = parentSkill.description || parentSkill.name;
 
   if (!options.json) {
     reporter.blank();
@@ -703,86 +659,50 @@ async function createSuperwardenSkillTasks(args: {
     reporter.text(`  Model    ${synthesisModel ?? 'default'} [${runtimeName}]`);
     reporter.blank();
     reporter.bold('PLAN');
-    if (!reporter.mode.isTTY) {
-      reporter.step(planMessage);
-    }
   }
 
-  const planStartedAt = Date.now();
-  const runPlanSynthesis = () => synthesizeCoordinatorPlan({
+  const prepared = await prepareSuperwardenArtifacts({
     skill: parentSkill,
-    runtime,
-    apiKey: spec.runnerOptions.apiKey,
-    model: synthesisModel,
-    maxRetries: spec.runnerOptions.auxiliaryMaxRetries,
-    regenerate: options.regenerate,
-    abortController,
-    cacheDir,
     repoPath,
+    mode: reporter.mode,
+    verbosity: reporter.verbosity,
+    json: options.json,
+    runtimeName,
+    model: synthesisModel,
+    apiKey: spec.runnerOptions.apiKey,
     repairModel: spec.runnerOptions.auxiliaryModel,
     repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
-  });
-  const planResult = options.json
-    ? await runPlanSynthesis()
-    : await runWithLiveStatus({
-      mode: reporter.mode,
-      verbosity: reporter.verbosity,
-      message: planMessage,
-      detail: !planCacheHit || options.regenerate
-        ? 'This can take a minute. Warden will cache the validated plan and tasks.'
-        : undefined,
-      task: runPlanSynthesis,
-    });
-  const planDurationMs = Date.now() - planStartedAt;
-  if (!options.json) {
-    const stats = formatSuperwardenPlanStats({
-      bytes: fileSize(planResult.cachePath),
-      durationMs: planResult.source === 'generated' ? planResult.durationMs ?? planDurationMs : undefined,
-      sources: planResult.plan.synthesis.externalSources?.length ?? 0,
-    });
-    reporter.success(`${planResult.source === 'cache' ? 'Loaded' : 'Synthesized'} plan with ${planResult.plan.tasks.length} ${pluralize(planResult.plan.tasks.length, 'task')}${stats}`);
-    reporter.blank();
-    renderTaskCountHeading(reporter, planResult.plan.tasks.length);
-  }
-
-  const regenerateChildSkills = options.regenerate || planResult.source === 'generated';
-  const childRoot = regenerateChildSkills
-    ? resetCoordinatorChildSkillsRoot(planResult.cachePath)
-    : ensureCoordinatorChildSkillsRoot(planResult.cachePath);
-  const artifacts: CoordinatorChildSkillArtifact[] = [];
-  for (const [index, task] of planResult.plan.tasks.entries()) {
-    const childMessage = `${task.id} [${index + 1}/${planResult.plan.tasks.length}]`;
-    if (!options.json && !reporter.mode.isTTY) {
-      reporter.step(childMessage);
-    }
-    const runChildSynthesis = () => synthesizeCoordinatorChildSkill({
-      plan: planResult.plan,
-      task,
-      source,
-      cachePath: planResult.cachePath,
-      rootDir: childRoot,
-      runtime,
-      repoPath,
-      model: synthesisModel,
-      apiKey: spec.runnerOptions.apiKey,
-      repairModel: spec.runnerOptions.auxiliaryModel,
-      repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
-      abortController,
-      regenerate: regenerateChildSkills,
-    });
-    const artifact = options.json
-      ? await runChildSynthesis()
-      : await runWithLiveStatus({
-        mode: reporter.mode,
-        verbosity: reporter.verbosity,
-        message: childMessage,
-        task: runChildSynthesis,
+    regenerate: options.regenerate,
+    abortController,
+    planMessage,
+    onNonTTYPlanStep: (message) => reporter.step(message),
+    onPlanReady: ({ planResult, planBytes, planDurationMs }) => {
+      if (options.json) {
+        return;
+      }
+      const stats = formatSuperwardenPlanStats({
+        bytes: planBytes,
+        durationMs: planResult.source === 'generated' ? planResult.durationMs ?? planDurationMs : undefined,
+        sources: planResult.plan.synthesis.externalSources?.length ?? 0,
       });
-    artifacts.push(artifact);
-    if (!options.json) {
+      reporter.success(`${planResult.source === 'cache' ? 'Loaded' : 'Synthesized'} plan with ${planResult.plan.tasks.length} ${pluralize(planResult.plan.tasks.length, 'task')}${stats}`);
+    },
+    onBeforeChildTasks: ({ planResult }) => {
+      if (options.json) {
+        return;
+      }
+      reporter.blank();
+      renderTaskCountHeading(reporter, planResult.plan.tasks.length);
+    },
+    onNonTTYChildStep: (message) => reporter.step(message),
+    onChildArtifact: ({ artifact, task }) => {
+      if (options.json) {
+        return;
+      }
       renderSuperwardenPreparedTask(reporter, artifact, task);
-    }
-  }
+    },
+  });
+  const artifacts = prepared.childArtifacts;
 
   if (!options.json) {
     reporter.blank();
@@ -801,6 +721,7 @@ async function createSuperwardenSkillTasks(args: {
   }));
 }
 
+/** Expand configured skills into runnable direct tasks or Superwarden child tasks. */
 export async function createSkillTasks(args: {
   specs: RunSkillSpec[];
   repoPath?: string;
@@ -833,6 +754,7 @@ export async function createSkillTasks(args: {
   return tasks;
 }
 
+/** Resolve the default analysis model from config, CLI overrides, or environment. */
 export function resolveCliDefaultModel(
   config: Pick<WardenConfig, 'defaults'> | null | undefined,
   cliModel?: string
@@ -845,12 +767,14 @@ export function resolveCliDefaultModel(
   );
 }
 
+/** Resolve the default auxiliary model used for helper and repair passes. */
 export function resolveCliDefaultAuxiliaryModel(
   config: Pick<WardenConfig, 'defaults'> | null | undefined
 ): string | undefined {
   return emptyToUndefined(config?.defaults?.auxiliary?.model);
 }
 
+/** Resolve the default synthesis model, falling back to the auxiliary lane when unset. */
 export function resolveCliDefaultSynthesisModel(
   config: Pick<WardenConfig, 'defaults'> | null | undefined
 ): string | undefined {
@@ -860,6 +784,7 @@ export function resolveCliDefaultSynthesisModel(
   );
 }
 
+/** Resolve the model label recorded in JSONL output, including the default sentinel. */
 export function resolveCliLogModel(
   config: Pick<WardenConfig, 'defaults'> | null | undefined,
   cliModel?: string
@@ -907,9 +832,6 @@ export function processTaskResults(
   return { reports, filteredReports, hasFailure, failureReasons };
 }
 
-/**
- * Output results and handle fixes. Returns exit code.
- */
 async function outputResultsAndHandleFixes(
   processed: ProcessedResults,
   options: CLIOptions,
@@ -1011,11 +933,7 @@ async function outputResultsAndHandleFixes(
   return 0;
 }
 
-/**
- * Run skills on a context and output results.
- * If skillName is provided, runs only that skill.
- * Otherwise, runs skills from matched triggers in warden.toml.
- */
+/** Run one or more skills against an already constructed review context. */
 export async function runSkills(
   context: Awaited<ReturnType<typeof buildLocalEventContext>>,
   options: CLIOptions,
@@ -1235,9 +1153,6 @@ export async function runSkills(
   return outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
 }
 
-/**
- * Run in file mode: analyze specific files.
- */
 async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
 
@@ -1287,9 +1202,6 @@ function parseGitRef(ref: string): { base: string; head: string } {
   return { base: ref, head: 'HEAD' };
 }
 
-/**
- * Run in git ref mode: analyze changes from a git ref.
- */
 async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
   let repoPath: string;
@@ -1349,9 +1261,6 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
   return runSkills(context, options, reporter);
 }
 
-/**
- * Run in config mode: use warden.toml triggers.
- */
 async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
   let repoPath: string;
@@ -1568,10 +1477,6 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   return outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
 }
 
-/**
- * Run in direct skill mode: run a specific skill on current branch changes.
- * Used when --skill is specified without targets.
- */
 async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
   let repoPath: string;
@@ -1675,6 +1580,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
   return runFileMode(filePatterns, options, reporter);
 }
 
+/** Parse CLI input, dispatch the selected command, and perform shutdown cleanup. */
 export async function main(): Promise<void> {
   const { command, options, helpTarget, setupAppOptions, runsOptions } = parseCliArgs();
 

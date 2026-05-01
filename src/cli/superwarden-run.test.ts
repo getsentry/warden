@@ -190,7 +190,8 @@ describe('Superwarden run task expansion', () => {
     }
 
     expect(mockRunWithLiveStatus).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'Validating cached Superwarden plan...',
+      message: 'Security review.',
+      detail: expect.stringContaining('Validating cached Superwarden plan...'),
     }));
     expect(mockRunWithLiveStatus).toHaveBeenCalledWith(expect.objectContaining({
       message: 'authz [1/1]',

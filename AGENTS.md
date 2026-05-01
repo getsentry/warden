@@ -85,6 +85,15 @@ All of `dist/` is gitignored. The ncc action bundle (`dist/action/`) is built an
 pnpm lint && pnpm build && pnpm test
 ```
 
+## Policies
+
+Repo-wide defaults live under `policies/`.
+
+- `policies/code-comments.md`:
+  Exported functions need brief JSDoc.
+  Comments explain non-obvious intent, invariants, or tradeoffs.
+  Remove stale or obvious comments when behavior changes.
+
 ## Task Management
 
 Use `/dex` to break down complex work, track progress across sessions, and coordinate multi-step implementations.

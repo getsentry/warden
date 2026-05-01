@@ -220,6 +220,15 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
 };
 
+const SHARED_COMMAND_OPTIONS: HelpOptionId[] = [
+  'quiet',
+  'verbose',
+  'debug',
+  'log',
+  'color',
+  'help',
+];
+
 const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
   run: {
     summary: 'Analyze files, git refs, or current branch changes',
@@ -247,12 +256,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'staged',
       'git',
       'offline',
-      'quiet',
-      'verbose',
-      'debug',
-      'log',
-      'color',
-      'help',
+      ...SHARED_COMMAND_OPTIONS,
     ],
     examples: [
       'warden src/auth.ts',
@@ -265,7 +269,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     summary: 'Initialize Warden configuration',
     description: 'Create a starter warden.toml and GitHub workflow in the current repository.',
     usage: ['warden init [options]'],
-    options: ['cwd', 'force', 'quiet', 'color', 'help'],
+    options: ['cwd', 'force', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden init',
       'warden init --force',
@@ -278,7 +282,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     arguments: [
       { label: 'skill', description: 'Skill name to add' },
     ],
-    options: ['cwd', 'list', 'remote', 'force', 'quiet', 'color', 'help'],
+    options: ['cwd', 'list', 'remote', 'force', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden add',
       'warden add security-review',
@@ -292,7 +296,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     arguments: [
       { label: 'remote', description: 'Remote repository reference to sync' },
     ],
-    options: ['cwd', 'remote', 'quiet', 'color', 'help'],
+    options: ['cwd', 'remote', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden sync',
       'warden sync getsentry/skills',
@@ -320,12 +324,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'prompt',
       'remote',
       'offline',
-      'quiet',
-      'verbose',
-      'debug',
-      'log',
-      'color',
-      'help',
+      ...SHARED_COMMAND_OPTIONS,
     ],
     examples: [
       'warden synth security-review --show-plan',
@@ -337,7 +336,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     summary: 'Create a GitHub App via manifest flow',
     description: 'Walk through the GitHub App manifest flow and print the credentials to install.',
     usage: ['warden setup-app [options]'],
-    options: ['cwd', 'org', 'port', 'timeout', 'name', 'noOpen', 'quiet', 'color', 'help'],
+    options: ['cwd', 'org', 'port', 'timeout', 'name', 'noOpen', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden setup-app',
       'warden setup-app --org my-org --port 8080',
@@ -352,7 +351,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden runs follow [run] [options]',
       'warden runs gc [options]',
     ],
-    options: ['cwd', 'follow', 'all', 'json', 'quiet', 'verbose', 'debug', 'log', 'color', 'help'],
+    options: ['cwd', 'follow', 'all', 'json', ...SHARED_COMMAND_OPTIONS],
     subcommands: [
       { label: 'list', summary: 'List saved runs' },
       { label: 'show <files...>', summary: 'Show results from saved logs or run IDs' },
@@ -369,7 +368,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     summary: 'List saved runs',
     description: 'List saved run logs in reverse chronological order.',
     usage: ['warden runs [list] [options]'],
-    options: ['cwd', 'all', 'json', 'quiet', 'verbose', 'debug', 'log', 'color', 'help'],
+    options: ['cwd', 'all', 'json', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden runs',
       'warden runs list --all',
@@ -382,7 +381,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     arguments: [
       { label: 'files...', description: 'JSONL paths or short run IDs' },
     ],
-    options: ['cwd', 'json', 'reportOn', 'minConfidence', 'quiet', 'verbose', 'debug', 'log', 'color', 'help'],
+    options: ['cwd', 'json', 'reportOn', 'minConfidence', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden runs show deadbeef',
       'warden runs show .warden/logs/a1b2c3d4-2026-04-25T13-00-00-000Z.jsonl',
@@ -398,7 +397,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     arguments: [
       { label: 'run', description: 'Optional short run ID or JSONL path' },
     ],
-    options: ['cwd', 'json', 'quiet', 'verbose', 'debug', 'log', 'color', 'help'],
+    options: ['cwd', 'json', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden runs follow',
       'warden runs --follow deadbeef',
@@ -408,7 +407,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     summary: 'Remove expired session logs',
     description: 'Delete saved run logs that are older than the configured retention window.',
     usage: ['warden runs gc [options]'],
-    options: ['cwd', 'json', 'quiet', 'verbose', 'debug', 'log', 'color', 'help'],
+    options: ['cwd', 'json', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden runs gc',
     ],

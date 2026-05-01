@@ -208,7 +208,7 @@ Return only JSON with this exact shape:
   "parentSkill": "${plan.skill}",
   "taskId": "${task.id}",
   "name": "${childName}",
-  "description": "Third-person one-line description with trigger language. Use when ...",
+  "description": "Focused one-line description of this child skill.",
   "skillBody": "Markdown body for SKILL.md. Do not include YAML frontmatter.",
   "specMd": "Complete SPEC.md markdown.",
   "sourcesMd": "Complete SOURCES.md markdown.",
@@ -529,6 +529,7 @@ function loadCachedChildSkill(args: {
   };
 }
 
+/** Recreate the child-skill output directory when cached artifacts must be discarded. */
 export function resetCoordinatorChildSkillsRoot(cachePath: string): string {
   const rootDir = getCoordinatorChildSkillsRoot(cachePath);
   rmSync(rootDir, { recursive: true, force: true });
@@ -536,12 +537,14 @@ export function resetCoordinatorChildSkillsRoot(cachePath: string): string {
   return rootDir;
 }
 
+/** Ensure the child-skill output directory exists before reading or writing artifacts. */
 export function ensureCoordinatorChildSkillsRoot(cachePath: string): string {
   const rootDir = getCoordinatorChildSkillsRoot(cachePath);
   mkdirSync(rootDir, { recursive: true });
   return rootDir;
 }
 
+/** Synthesize one runnable child skill for a single Superwarden task. */
 export async function synthesizeCoordinatorChildSkill(args: {
   plan: CoordinatorPlan;
   task: CoordinatorTask;
@@ -632,6 +635,7 @@ export async function synthesizeCoordinatorChildSkill(args: {
   }
 }
 
+/** Review a generated child-skill set for overlap, exclusions, and cleanup work. */
 export async function reviewCoordinatorChildSkills(args: {
   plan: CoordinatorPlan;
   source: CoordinatorSource;
@@ -689,10 +693,12 @@ export async function reviewCoordinatorChildSkills(args: {
   }
 }
 
+/** Return the directory that stores runnable child skills for one cached plan. */
 export function getCoordinatorChildSkillsRoot(cachePath: string): string {
   return join(dirname(cachePath), basename(cachePath, '.json'), 'skills');
 }
 
+/** Preserve the old API shape while forcing callers onto per-task synthesis. */
 export function writeCoordinatorChildSkills(args: {
   plan: CoordinatorPlan;
   cachePath: string;
@@ -703,6 +709,7 @@ export function writeCoordinatorChildSkills(args: {
   );
 }
 
+/** Aggregate generated child artifacts into one summary object for CLI reporting. */
 export function buildCoordinatorChildSkillsResult(
   rootDir: string,
   artifacts: CoordinatorChildSkillArtifact[],

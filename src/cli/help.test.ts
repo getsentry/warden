@@ -22,6 +22,14 @@ describe('renderHelp', () => {
     expect(output).not.toContain('--org <name>');
   });
 
+  it('renders shared output flags on non-run commands that accept them', () => {
+    const output = renderHelp('init');
+
+    expect(output).toContain('-v, --verbose');
+    expect(output).toContain('--debug');
+    expect(output).toContain('--log');
+  });
+
   it('renders runs show help with subcommand-specific options', () => {
     const output = renderHelp('runs:show');
 

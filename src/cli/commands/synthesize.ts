@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import chalk from 'chalk';
 import { emptyToUndefined, loadWardenConfigFile } from '../../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../../config/schema.js';
@@ -10,6 +10,7 @@ import type { Reporter } from '../output/reporter.js';
 import { Verbosity } from '../output/verbosity.js';
 import { formatBytes, formatCost, formatDuration, formatTokens, pluralize, truncate } from '../output/formatters.js';
 import { runWithLiveStatus } from '../output/live-status.js';
+import { fileSize, formatRelativePath, prepareSuperwardenArtifacts } from '../superwarden.js';
 import { getAnthropicApiKey } from '../../utils/index.js';
 import { aggregateUsage } from '../../sdk/usage.js';
 import { getRuntime } from '../../sdk/runtimes/index.js';
@@ -18,41 +19,16 @@ import { getRepoRoot } from '../git.js';
 import { promptLine, promptMultiline } from '../input.js';
 import {
   CoordinatorPlanError,
-  collectCoordinatorSource,
-  getCoordinatorPlanCachePath,
-  synthesizeCoordinatorPlan,
   type CoordinatorPlan,
 } from '../../coordinator/plan.js';
 import {
-  buildCoordinatorChildSkillsResult,
   CoordinatorChildSkillError,
-  ensureCoordinatorChildSkillsRoot,
   reviewCoordinatorChildSkills,
-  resetCoordinatorChildSkillsRoot,
-  synthesizeCoordinatorChildSkill,
   type CoordinatorChildSkillArtifact,
   type CoordinatorChildSkillCleanupReview,
   type WriteCoordinatorChildSkillsResult,
 } from '../../coordinator/child-skills.js';
-import {
-  createSuperwardenSkill,
-  getSuperwardenCacheDir,
-} from '../../coordinator/superwarden.js';
-
-function formatRelativePath(path: string | undefined, repoRoot: string): string {
-  if (!path) return 'unknown';
-  const rel = relative(repoRoot, path);
-  if (!rel || rel.startsWith('..')) return path;
-  return rel;
-}
-
-function fileSize(path: string): number | undefined {
-  try {
-    return statSync(path).size;
-  } catch {
-    return undefined;
-  }
-}
+import { createSuperwardenSkill } from '../../coordinator/superwarden.js';
 
 function renderSuperwardenHeader(args: {
   reporter: Reporter;
@@ -506,6 +482,7 @@ async function resolveSkillOrCreateSuperwarden(args: {
   return { skill, created: true, initialPromptLength: initialPrompt.length };
 }
 
+/** Synthesize or inspect a repo-local Superwarden parent skill and its task artifacts. */
 export async function runSynthesize(
   options: CLIOptions,
   reporter: Reporter,
@@ -561,21 +538,11 @@ export async function runSynthesize(
 
   const apiKey = getAnthropicApiKey();
   const runtimeName = config?.defaults?.runtime ?? 'claude';
-  const runtime = getRuntime(runtimeName);
   const model = resolveSynthesisModel(config, options);
   const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
   const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
 
   try {
-    const source = collectCoordinatorSource(skill);
-    const cachePath = getCoordinatorPlanCachePath({
-      skillName: skill.name,
-      sourceHash: source.hash,
-      model,
-      cacheDir: getSuperwardenCacheDir(repoRoot, skill.name),
-    });
-    const cacheHit = existsSync(cachePath);
-
     if (!options.json) {
       if (resolved.created) {
         reporter.blank();
@@ -599,49 +566,61 @@ export async function runSynthesize(
         });
       }
       reporter.bold('PLAN');
-      if (!reporter.mode.isTTY) {
-        reporter.step(cacheHit && !options.regenerate
-          ? 'Validating cached Superwarden plan...'
-          : 'Synthesizing Superwarden plan...');
-      }
     }
 
-    const synthesisMessage = cacheHit && !options.regenerate
-      ? 'Validating cached Superwarden plan...'
-      : 'Synthesizing Superwarden plan...';
-    const synthesisStartedAt = performance.now();
-    const runSynthesis = () => synthesizeCoordinatorPlan({
+    const prepared = await prepareSuperwardenArtifacts({
       skill,
-      runtime,
-      apiKey,
-      model,
-      maxRetries,
-      regenerate: options.regenerate,
-      abortController: state?.abortController,
-      cacheDir: getSuperwardenCacheDir(repoRoot, skill.name),
       repoPath: repoRoot,
+      mode: reporter.mode,
+      verbosity: reporter.verbosity,
+      json: options.json,
+      runtimeName,
+      model,
+      apiKey,
       repairModel,
       repairMaxRetries: maxRetries,
+      regenerate: options.regenerate,
+      abortController: state?.abortController,
+      showPlanOnly: options.showPlan,
+      planMessage: skill.description || skill.name,
+      onNonTTYPlanStep: (message) => reporter.step(message),
+      onPlanReady: ({ planResult, planBytes, planDurationMs }) => {
+        if (options.json) {
+          return;
+        }
+        renderPlanReady(
+          reporter,
+          planResult.plan,
+          planResult.source,
+          planResult.source === 'cache' ? undefined : planResult.durationMs ?? planDurationMs,
+          planBytes,
+          planResult.usage,
+          planResult.numTurns,
+        );
+      },
+      onBeforeChildTasks: ({ planResult }) => {
+        if (options.json) {
+          return;
+        }
+        reporter.blank();
+        renderTasksHeading(reporter, planResult.plan.tasks.length);
+      },
+      childMessage: ({ task, index, total }) => `${task.id} ${chalk.dim(`[${index + 1}/${total}]`)}`,
+      onNonTTYChildStep: (message) => reporter.step(message),
+      onChildArtifact: ({ artifact, task }) => {
+        if (options.json) {
+          return;
+        }
+        renderChildSkillArtifact({ reporter, artifact, task });
+      },
     });
-    const result = options.json
-      ? await runSynthesis()
-      : await runWithLiveStatus({
-        mode: reporter.mode,
-        verbosity: reporter.verbosity,
-        message: synthesisMessage,
-        detail: !cacheHit || options.regenerate
-          ? 'This can take a minute. Warden will cache the validated plan and tasks.'
-          : undefined,
-        task: runSynthesis,
-    });
-    const synthesisDurationMs = performance.now() - synthesisStartedAt;
-    const planBytes = fileSize(result.cachePath);
+    const preparedChildSkills = prepared.childSkills;
 
     if (options.exportPath) {
       const exportPath = resolve(process.cwd(), options.exportPath);
       const exportStartedAt = performance.now();
       mkdirSync(dirname(exportPath), { recursive: true });
-      writeFileSync(exportPath, `${JSON.stringify(result.plan, null, 2)}\n`, 'utf-8');
+      writeFileSync(exportPath, `${JSON.stringify(prepared.planResult.plan, null, 2)}\n`, 'utf-8');
       const exportDurationMs = performance.now() - exportStartedAt;
       const exportBytes = fileSize(exportPath);
       reporter.success(
@@ -650,112 +629,47 @@ export async function runSynthesize(
       );
     }
 
-    if (!options.json) {
-      renderPlanReady(
-        reporter,
-        result.plan,
-        result.source,
-        result.source === 'cache' ? undefined : result.durationMs ?? synthesisDurationMs,
-        planBytes,
-        result.usage,
-        result.numTurns,
-      );
-    }
-
-    if (options.showPlan && !options.json) {
-      reporter.blank();
-      process.stdout.write(`${renderPlanInspection({
-        plan: result.plan,
-        source: result.source,
-        cachePath: result.cachePath,
-        repoRoot,
-        bytes: planBytes,
-        durationMs: result.source === 'cache' ? undefined : result.durationMs ?? synthesisDurationMs,
-        usage: result.usage,
-        turns: result.numTurns,
-        reporter,
-      })}\n`);
+    if (options.showPlan) {
+      if (!options.json) {
+        reporter.blank();
+        process.stdout.write(`${renderPlanInspection({
+          plan: prepared.planResult.plan,
+          source: prepared.planResult.source,
+          cachePath: prepared.planResult.cachePath,
+          repoRoot,
+          bytes: prepared.planBytes,
+          durationMs: prepared.planResult.source === 'cache'
+            ? undefined
+            : prepared.planResult.durationMs ?? prepared.planDurationMs,
+          usage: prepared.planResult.usage,
+          turns: prepared.planResult.numTurns,
+          reporter,
+        })}\n`);
+      } else {
+        process.stdout.write(`${JSON.stringify(prepared.planResult.plan, null, 2)}\n`);
+      }
       return 0;
     }
 
-    const childStartedAt = performance.now();
-    const regenerateChildSkills = options.regenerate || result.source === 'generated';
-    const childRoot = regenerateChildSkills
-      ? resetCoordinatorChildSkillsRoot(result.cachePath)
-      : ensureCoordinatorChildSkillsRoot(result.cachePath);
-    const childArtifacts: CoordinatorChildSkillArtifact[] = [];
     if (!options.json) {
-      reporter.blank();
-      renderTasksHeading(reporter, result.plan.tasks.length);
-    }
-    for (const [index, task] of result.plan.tasks.entries()) {
-      const childMessage = `${task.id} ${chalk.dim(`[${index + 1}/${result.plan.tasks.length}]`)}`;
-      if (!options.json && !reporter.mode.isTTY) {
-        reporter.step(childMessage);
+      if (!prepared.childRoot || !preparedChildSkills) {
+        throw new CoordinatorPlanError(`Missing child skill artifacts for ${skill.name}`);
       }
-      const artifact = options.json
-        ? await synthesizeCoordinatorChildSkill({
-          plan: result.plan,
-          task,
-          source,
-          cachePath: result.cachePath,
-          rootDir: childRoot,
-          runtime,
-          repoPath: repoRoot,
-          model,
-          apiKey,
-          repairModel,
-          repairMaxRetries: maxRetries,
-          abortController: state?.abortController,
-          regenerate: regenerateChildSkills,
-        })
-        : await runWithLiveStatus({
-          mode: reporter.mode,
-          verbosity: reporter.verbosity,
-          message: childMessage,
-          task: () => synthesizeCoordinatorChildSkill({
-            plan: result.plan,
-            task,
-            source,
-            cachePath: result.cachePath,
-            rootDir: childRoot,
-            runtime,
-            repoPath: repoRoot,
-            model,
-            apiKey,
-            repairModel,
-            repairMaxRetries: maxRetries,
-            abortController: state?.abortController,
-            regenerate: regenerateChildSkills,
-          }),
-        });
-      childArtifacts.push(artifact);
-      if (!options.json) {
-        renderChildSkillArtifact({ reporter, artifact, task });
-      }
-    }
-    const childSkills = buildCoordinatorChildSkillsResult(
-      childRoot,
-      childArtifacts,
-      performance.now() - childStartedAt,
-    );
-
-    const reviewCleanup = () => reviewCoordinatorChildSkills({
-      plan: result.plan,
-      source,
-      artifacts: childArtifacts,
-      rootDir: childRoot,
-      runtime,
-      repoPath: repoRoot,
-      model,
-      apiKey,
-      repairModel,
-      repairMaxRetries: maxRetries,
-      abortController: state?.abortController,
-    });
-    const cleanupReview = options.json
-      ? await reviewCleanup()
-      : await runWithLiveStatus({
+      const childRoot = prepared.childRoot;
+      const reviewCleanup = () => reviewCoordinatorChildSkills({
+        plan: prepared.planResult.plan,
+        source: prepared.source,
+        artifacts: prepared.childArtifacts,
+        rootDir: childRoot,
+        runtime: getRuntime(runtimeName),
+        repoPath: repoRoot,
+        model,
+        apiKey,
+        repairModel,
+        repairMaxRetries: maxRetries,
+        abortController: state?.abortController,
+      });
+      const cleanupReview = await runWithLiveStatus({
         mode: reporter.mode,
         verbosity: reporter.verbosity,
         message: 'Reviewing generated child skills...',
@@ -763,14 +677,13 @@ export async function runSynthesize(
         task: reviewCleanup,
       });
 
-    if (!options.json) {
-      renderChildSkillSummary({ reporter, childSkills });
+      renderChildSkillSummary({ reporter, childSkills: preparedChildSkills });
       renderCleanupReview({ reporter, review: cleanupReview });
       renderTryIt(reporter, skill.name);
     }
 
     if (options.json) {
-      process.stdout.write(`${JSON.stringify(result.plan, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify(prepared.planResult.plan, null, 2)}\n`);
       return 0;
     }
 

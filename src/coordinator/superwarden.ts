@@ -4,54 +4,76 @@ import type { SkillDefinition } from '../config/schema.js';
 import { COORDINATOR_METADATA_FILE } from './plan.js';
 
 export const SUPERWARDEN_DIR = '.warden/superwarden';
+const SUPERWARDEN_DESCRIPTION_MAX_LENGTH = 88;
 
 function safePathSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '-');
 }
 
 function firstSentence(value: string): string {
-  const sentence = value.trim().split(/(?<=[.!?])\s+/)[0] ?? value.trim();
-  return sentence.length > 160 ? `${sentence.slice(0, 157)}...` : sentence;
+  return value.trim().split(/(?<=[.!?])\s+/)[0] ?? value.trim();
 }
 
 function frontmatterValue(value: string): string {
   return value.replace(/\s+/g, ' ').trim().replace(/"/g, '\\"');
 }
 
-function hasTriggerPhrase(value: string): boolean {
-  return /\b(use when|use for|use to|trigger|invoke)\b/i.test(value);
+function normalizeOneLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function ensureSentenceEnding(value: string): string {
+  const trimmed = value.trim().replace(/[,;:]+$/, '');
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function firstClause(value: string): string {
+  return value.split(/[,;:]\s+/)[0] ?? value;
 }
 
 function superwardenDescription(name: string, initialPrompt: string): string {
-  const base = firstSentence(initialPrompt) || `Superwarden ${name} skill.`;
-  const triggerDescription = hasTriggerPhrase(base)
-    ? base
-    : `${/[.!?]$/.test(base) ? base : `${base}.`} Use when asked to synthesize, run, or review with the ${name} Superwarden skill.`;
-  return triggerDescription.length > 1000
-    ? `${triggerDescription.slice(0, 997)}...`
-    : triggerDescription;
+  const fallback = `Superwarden ${name}.`;
+  const sentence = normalizeOneLine(firstSentence(initialPrompt));
+  if (!sentence) {
+    return fallback;
+  }
+
+  let description = sentence;
+  if (description.length > SUPERWARDEN_DESCRIPTION_MAX_LENGTH && /[,;:]\s+/.test(description)) {
+    description = firstClause(description);
+  }
+  description = ensureSentenceEnding(description);
+  if (description.length > SUPERWARDEN_DESCRIPTION_MAX_LENGTH) {
+    description = `${description.slice(0, SUPERWARDEN_DESCRIPTION_MAX_LENGTH - 3).trimEnd()}...`;
+  }
+  return description;
 }
 
 function yamlBlock(value: string, indent = '  '): string {
   return value.split('\n').map((line) => `${indent}${line}`).join('\n');
 }
 
+/** Return the repo-local root that stores Superwarden parent skills and caches. */
 export function getSuperwardenRoot(repoRoot: string): string {
   return join(repoRoot, SUPERWARDEN_DIR);
 }
 
+/** Return the directory for one named Superwarden parent skill. */
 export function getSuperwardenSkillRoot(repoRoot: string, skillName: string): string {
   return join(getSuperwardenRoot(repoRoot), safePathSegment(skillName));
 }
 
+/** Return the cache directory that holds synthesized plans and child skills. */
 export function getSuperwardenCacheDir(repoRoot: string, skillName: string): string {
   return join(getSuperwardenSkillRoot(repoRoot, skillName), 'cache');
 }
 
+/** Check whether a repo-local Superwarden parent skill already exists. */
 export function superwardenSkillExists(repoRoot: string, skillName: string): boolean {
   return existsSync(join(getSuperwardenSkillRoot(repoRoot, skillName), 'SKILL.md'));
 }
 
+/** Create the repo-local scaffold for a new Superwarden parent skill. */
 export function createSuperwardenSkill(args: {
   repoRoot: string;
   name: string;
@@ -99,7 +121,7 @@ instructions:
   - Synthesize the parent plan through a deep Superwarden planning pass, not a shallow category split.
   - Preserve every explicit coverage item from this metadata in at least one task.
   - Generate each child skill through its own deep synthesis run.
-  - Generate child skills that pass skill-writer structural validation, including matching task-id names, trigger-rich descriptions, and complete SPEC.md sections.
+  - Generate child skills that pass skill-writer structural validation, including matching task-id names, focused one-line descriptions, and complete SPEC.md sections.
   - Require each child skill to inspect repo-local source and use public prior art when external behavior affects correctness.
   - Do not send repository code, secrets, private file paths, or proprietary details to web tools.
   - Represent missing repository, technology, deployment, or threat-model context inside task instructions until live inquiry tools exist.
