@@ -262,6 +262,7 @@ export async function prepareSuperwardenArtifacts(
         getLabel: ({ childMessage }) => childMessage,
         task: ({ task }) => runChildSynthesis(task),
         getDoneDetail: (artifact) => artifact.source === 'cache' ? '[cached]' : undefined,
+        showRunningDuration: () => true,
         showDoneDuration: (artifact) => artifact.source !== 'cache',
         shouldAbort: () => args.abortController?.signal.aborted ?? false,
       });

@@ -2,6 +2,9 @@
 
 Reference for Warden's output formats.
 
+For terminal UX design principles, shared row-state semantics, and Ink
+implementation guidance, also see `specs/terminal-output.md`.
+
 ---
 
 ## 1. Reporter Modes

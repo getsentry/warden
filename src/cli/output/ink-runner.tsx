@@ -9,6 +9,7 @@
  * rerender() calls from producing duplicate output lines.
  *
  * Reporter spec: specs/reporters.md
+ * Terminal output design guide: specs/terminal-output.md
  */
 
 import React, { useState, useEffect } from 'react';

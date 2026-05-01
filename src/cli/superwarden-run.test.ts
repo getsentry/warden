@@ -294,6 +294,10 @@ describe('Superwarden run task expansion', () => {
     expect(parallelCall?.getDoneDetail?.({
       source: 'cache',
     } as never, parallelCall.items[0], 0)).toBe('[cached]');
+    expect(parallelCall?.showRunningDuration?.(
+      parallelCall.items[0],
+      0,
+    )).toBe(true);
     expect(parallelCall?.showDoneDuration?.({
       source: 'cache',
     } as never, parallelCall.items[0], 0)).toBe(false);

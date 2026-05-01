@@ -1,3 +1,9 @@
+/**
+ * Shared transient status renderers for command-level CLI orchestration.
+ *
+ * Terminal output design guide: `specs/terminal-output.md`
+ */
+
 import React, { useEffect, useState } from 'react';
 import { render, Box, Text } from 'ink';
 import type { OutputMode } from './tty.js';
@@ -51,11 +57,17 @@ interface LiveStatusListItemState {
   label: string;
   status: 'pending' | 'running' | 'done' | 'error';
   detail?: string;
+  startedAt?: number;
   durationMs?: number;
+  showRunningDuration?: boolean;
   error?: string;
 }
 
-function LiveStatusListItem({ item }: { item: LiveStatusListItemState }): React.ReactElement {
+function LiveStatusListItem(args: {
+  item: LiveStatusListItemState;
+  now: number;
+}): React.ReactElement {
+  const { item, now } = args;
   if (item.status === 'done') {
     return (
       <Text>
@@ -81,6 +93,9 @@ function LiveStatusListItem({ item }: { item: LiveStatusListItemState }): React.
       <Box>
         <Spinner />
         <Text> {item.label}</Text>
+        {item.showRunningDuration && item.startedAt !== undefined
+          ? <Text dimColor> [{formatDuration(Math.max(0, now - item.startedAt))}]</Text>
+          : null}
       </Box>
     );
   }
@@ -92,7 +107,22 @@ function LiveStatusListItem({ item }: { item: LiveStatusListItemState }): React.
   );
 }
 
-function LiveStatusList({ items }: { items: LiveStatusListItemState[] }): React.ReactElement {
+/** Render the transient list UI used for concurrent synth progress. */
+export function LiveStatusList({ items }: { items: LiveStatusListItemState[] }): React.ReactElement {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const hasRunningItems = items.some((item) => item.status === 'running' && item.showRunningDuration);
+    if (!hasRunningItems) {
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 250);
+    return () => clearInterval(timer);
+  }, [items]);
+
   const completed = items.filter((item) => item.status === 'done' || item.status === 'error');
   const running = items.filter((item) => item.status === 'running');
   const pending = items.filter((item) => item.status === 'pending');
@@ -100,13 +130,13 @@ function LiveStatusList({ items }: { items: LiveStatusListItemState[] }): React.
   return (
     <Box flexDirection="column">
       {completed.map((item, index) => (
-        <LiveStatusListItem key={`done:${index}:${item.label}`} item={item} />
+        <LiveStatusListItem key={`done:${index}:${item.label}`} item={item} now={now} />
       ))}
       {running.map((item, index) => (
-        <LiveStatusListItem key={`running:${index}:${item.label}`} item={item} />
+        <LiveStatusListItem key={`running:${index}:${item.label}`} item={item} now={now} />
       ))}
       {pending.map((item, index) => (
-        <LiveStatusListItem key={`pending:${index}:${item.label}`} item={item} />
+        <LiveStatusListItem key={`pending:${index}:${item.label}`} item={item} now={now} />
       ))}
     </Box>
   );
@@ -150,6 +180,7 @@ export async function runWithLiveStatusList<TItem, TResult>(args: {
   getLabel: (item: TItem, index: number) => string;
   task: (item: TItem, index: number) => Promise<TResult>;
   getDoneDetail?: (result: TResult, item: TItem, index: number) => string | undefined;
+  showRunningDuration?: (item: TItem, index: number) => boolean;
   showDoneDuration?: (result: TResult, item: TItem, index: number) => boolean;
   shouldAbort?: () => boolean;
 }): Promise<TResult[]> {
@@ -188,10 +219,12 @@ export async function runWithLiveStatusList<TItem, TResult>(args: {
       const itemState = itemStates[index];
       if (itemState) {
         itemState.status = 'running';
+        itemState.startedAt = Date.now();
+        itemState.showRunningDuration = args.showRunningDuration?.(item, index) ?? false;
         updateUI();
       }
 
-      const startedAt = Date.now();
+      const startedAt = itemState?.startedAt ?? Date.now();
       try {
         const result = await args.task(item, index);
         if (itemState) {
