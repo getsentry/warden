@@ -55,8 +55,10 @@ import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
 import { runSynthesize } from './commands/synthesize.js';
+import { runWithLiveStatus } from './output/live-status.js';
 import {
   collectCoordinatorSource,
+  getCoordinatorPlanCachePath,
   synthesizeCoordinatorPlan,
   type CoordinatorPlan,
 } from '../coordinator/plan.js';
@@ -670,6 +672,17 @@ async function createSuperwardenSkillTasks(args: {
   const source = collectCoordinatorSource(parentSkill);
   const runtimeName = spec.runnerOptions.runtime ?? 'claude';
   const runtime = getRuntime(runtimeName);
+  const cacheDir = getSuperwardenCacheDir(repoPath, parentSkill.name);
+  const planCachePath = getCoordinatorPlanCachePath({
+    skillName: parentSkill.name,
+    sourceHash: source.hash,
+    model: spec.runnerOptions.model,
+    cacheDir,
+  });
+  const planCacheHit = existsSync(planCachePath);
+  const planMessage = planCacheHit && !options.regenerate
+    ? 'Validating cached Superwarden plan...'
+    : 'Synthesizing Superwarden plan...';
 
   if (!options.json) {
     reporter.blank();
@@ -677,10 +690,13 @@ async function createSuperwardenSkillTasks(args: {
     reporter.text(`  Model    ${spec.runnerOptions.model ?? 'default'} [${runtimeName}]`);
     reporter.blank();
     reporter.bold('PLAN');
+    if (!reporter.mode.isTTY) {
+      reporter.step(planMessage);
+    }
   }
 
   const planStartedAt = Date.now();
-  const planResult = await synthesizeCoordinatorPlan({
+  const runPlanSynthesis = () => synthesizeCoordinatorPlan({
     skill: parentSkill,
     runtime,
     apiKey: spec.runnerOptions.apiKey,
@@ -688,11 +704,22 @@ async function createSuperwardenSkillTasks(args: {
     maxRetries: spec.runnerOptions.auxiliaryMaxRetries,
     regenerate: options.regenerate,
     abortController,
-    cacheDir: getSuperwardenCacheDir(repoPath, parentSkill.name),
+    cacheDir,
     repoPath,
     repairModel: spec.runnerOptions.fastModelModel,
     repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
   });
+  const planResult = options.json
+    ? await runPlanSynthesis()
+    : await runWithLiveStatus({
+      mode: reporter.mode,
+      verbosity: reporter.verbosity,
+      message: planMessage,
+      detail: !planCacheHit || options.regenerate
+        ? 'This can take a minute. Warden will cache the validated plan and tasks.'
+        : undefined,
+      task: runPlanSynthesis,
+    });
   const planDurationMs = Date.now() - planStartedAt;
   if (!options.json) {
     const stats = formatSuperwardenPlanStats({
@@ -711,10 +738,11 @@ async function createSuperwardenSkillTasks(args: {
     : ensureCoordinatorChildSkillsRoot(planResult.cachePath);
   const artifacts: CoordinatorChildSkillArtifact[] = [];
   for (const [index, task] of planResult.plan.tasks.entries()) {
+    const childMessage = `${task.id} [${index + 1}/${planResult.plan.tasks.length}]`;
     if (!options.json && !reporter.mode.isTTY) {
-      reporter.step(`${task.id} [${index + 1}/${planResult.plan.tasks.length}]`);
+      reporter.step(childMessage);
     }
-    const artifact = await synthesizeCoordinatorChildSkill({
+    const runChildSynthesis = () => synthesizeCoordinatorChildSkill({
       plan: planResult.plan,
       task,
       source,
@@ -729,6 +757,14 @@ async function createSuperwardenSkillTasks(args: {
       abortController,
       regenerate: regenerateChildSkills,
     });
+    const artifact = options.json
+      ? await runChildSynthesis()
+      : await runWithLiveStatus({
+        mode: reporter.mode,
+        verbosity: reporter.verbosity,
+        message: childMessage,
+        task: runChildSynthesis,
+      });
     artifacts.push(artifact);
     if (!options.json) {
       renderSuperwardenPreparedTask(reporter, artifact, task);
