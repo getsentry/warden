@@ -62,16 +62,12 @@ function yamlBlock(value: string, indent = '  '): string {
   return value.split('\n').map((line) => `${indent}${line}`).join('\n');
 }
 
-export function getSynthesizedSkillsRoot(repoRoot: string): string {
+function getSynthesizedSkillsRoot(repoRoot: string): string {
   return join(repoRoot, SYNTHESIZED_SKILLS_DIR);
 }
 
 export function getSynthesizedSkillRoot(repoRoot: string, skillName: string): string {
   return join(getSynthesizedSkillsRoot(repoRoot), safePathSegment(skillName));
-}
-
-export function getLegacySynthesizedSkillRoot(repoRoot: string, skillName: string): string {
-  return join(repoRoot, '.warden', 'superwarden', safePathSegment(skillName));
 }
 
 export function synthesizedSkillDefinitionExists(repoRoot: string, skillName: string): boolean {
@@ -100,10 +96,6 @@ export function loadSynthesizedSkillDefinition(rootDir: string): {
   }
 
   return { content, data: validation.data };
-}
-
-export function readSynthesizedSkillDefinition(rootDir: string): SynthesizedSkillDefinition {
-  return loadSynthesizedSkillDefinition(rootDir).data;
 }
 
 export function buildSynthesizedSkillDefinition(rootDir: string): SkillDefinition {
@@ -139,8 +131,4 @@ export function clearSynthesizedSkillArtifacts(rootDir: string): void {
     rmSync(join(rootDir, name), { force: true });
   }
   rmSync(join(rootDir, 'references'), { recursive: true, force: true });
-}
-
-export function removeLegacySynthesizedSkillArtifacts(repoRoot: string, skillName: string): void {
-  rmSync(getLegacySynthesizedSkillRoot(repoRoot, skillName), { recursive: true, force: true });
 }

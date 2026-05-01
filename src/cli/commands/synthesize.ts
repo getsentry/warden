@@ -8,6 +8,7 @@ import type { CLIOptions } from '../args.js';
 import type { Reporter } from '../output/reporter.js';
 import { Verbosity } from '../output/verbosity.js';
 import { formatBytes, formatCost, formatDuration, formatTokens } from '../output/formatters.js';
+import { runWithLiveStatus } from '../output/live-status.js';
 import { getAnthropicApiKey } from '../../utils/index.js';
 import { promptLine, promptMultiline } from '../input.js';
 import { getRepoRoot } from '../git.js';
@@ -16,7 +17,6 @@ import {
   createSynthesizedSkillDefinition,
   getSynthesizedSkillRoot,
   inferSynthesizedSkillDescription,
-  removeLegacySynthesizedSkillArtifacts,
   synthesizedSkillDefinitionExists,
 } from '../../synth/definition.js';
 import {
@@ -98,6 +98,22 @@ function renderTryIt(reporter: Reporter, skillName: string): void {
   reporter.blank();
   reporter.bold('TRY IT');
   reporter.text(`  warden src/file.ts --skill ${skillName}`);
+}
+
+function outlineStatusMessage(skill: SkillDefinition): string {
+  return skill.description || `Shape ${skill.name}`;
+}
+
+function outlineStatusDetail(): string {
+  return 'Build the internal outline and track split.';
+}
+
+function skillStatusMessage(skill: SkillDefinition): string {
+  return `Generate ${skill.name}`;
+}
+
+function skillStatusDetail(): string {
+  return 'Write the router, checklist, and track references.';
 }
 
 function readPromptFile(path: string): string {
@@ -232,8 +248,6 @@ export async function runSynthesize(
   });
   const { skill } = resolved;
 
-  removeLegacySynthesizedSkillArtifacts(repoRoot, skill.name);
-
   const runtimeName = config?.defaults?.runtime ?? 'claude';
   const runtime = getRuntime(runtimeName);
   const model = resolveSynthesisModel(config, options);
@@ -262,17 +276,23 @@ export async function runSynthesize(
       reporter.bold('OUTLINE');
     }
 
-    const outlineResult = await synthesizeSynthOutline({
-      skill,
-      runtime,
-      apiKey: getAnthropicApiKey(),
-      model,
-      previousOutline: undefined,
-      regenerate: options.regenerate,
-      abortController: state?.abortController,
-      repoPath: repoRoot,
-      repairModel,
-      repairMaxRetries: maxRetries,
+    const outlineResult = await runWithLiveStatus({
+      mode: reporter.mode,
+      verbosity: reporter.verbosity,
+      message: outlineStatusMessage(skill),
+      detail: outlineStatusDetail(),
+      task: () => synthesizeSynthOutline({
+        skill,
+        runtime,
+        apiKey: getAnthropicApiKey(),
+        model,
+        previousOutline: undefined,
+        regenerate: options.regenerate,
+        abortController: state?.abortController,
+        repoPath: repoRoot,
+        repairModel,
+        repairMaxRetries: maxRetries,
+      }),
     });
 
     const outlineStats = formatStats({
@@ -294,23 +314,29 @@ export async function runSynthesize(
       reporter.bold('SKILL');
     }
 
-    const artifact = await synthesizeGeneratedSkill({
-      outline: outlineResult.outline,
-      source: collectSynthSource(skill),
-      rootDir: (() => {
-        if (!skill.rootDir) {
-          throw new SynthesizedSkillError(`Synthesized skill ${skill.name} is missing a root directory`);
-        }
-        return skill.rootDir;
-      })(),
-      runtime,
-      repoPath: repoRoot,
-      model,
-      apiKey: getAnthropicApiKey(),
-      repairModel,
-      repairMaxRetries: maxRetries,
-      abortController: state?.abortController,
-      regenerate: options.regenerate || outlineResult.source === 'generated',
+    const artifact = await runWithLiveStatus({
+      mode: reporter.mode,
+      verbosity: reporter.verbosity,
+      message: skillStatusMessage(skill),
+      detail: skillStatusDetail(),
+      task: () => synthesizeGeneratedSkill({
+        outline: outlineResult.outline,
+        source: collectSynthSource(skill),
+        rootDir: (() => {
+          if (!skill.rootDir) {
+            throw new SynthesizedSkillError(`Synthesized skill ${skill.name} is missing a root directory`);
+          }
+          return skill.rootDir;
+        })(),
+        runtime,
+        repoPath: repoRoot,
+        model,
+        apiKey: getAnthropicApiKey(),
+        repairModel,
+        repairMaxRetries: maxRetries,
+        abortController: state?.abortController,
+        regenerate: options.regenerate || outlineResult.source === 'generated',
+      }),
     });
 
     if (!options.json) {

@@ -94,6 +94,7 @@ export async function promptMultiline(intro: string, options: PromptMultilineOpt
       }
       lines.push(line);
     }
+    process.stderr.write('\n');
     return lines.join('\n').trim();
   } catch {
     throw new UserAbortError();
