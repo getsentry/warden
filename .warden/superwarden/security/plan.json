@@ -1,0 +1,754 @@
+{
+  "version": 1,
+  "kind": "superwarden-plan-cache",
+  "plan": {
+    "version": 1,
+    "skill": "security",
+    "sourceHash": "5db0469e922468a16143b0d6a97322e4aebab71c9f36ef5ddf6b3032d62091b0",
+    "coordinatorVersion": "2",
+    "synthesis": {
+      "phases": [
+        {
+          "id": "collect-inputs",
+          "status": "generated"
+        },
+        {
+          "id": "assess-source-depth",
+          "status": "generated"
+        },
+        {
+          "id": "identify-research-needs",
+          "status": "generated"
+        },
+        {
+          "id": "synthesize-tasks",
+          "status": "generated"
+        },
+        {
+          "id": "validate-coverage",
+          "status": "validated"
+        }
+      ],
+      "externalSources": [
+        {
+          "title": "OWASP Top 10 2021",
+          "url": "https://owasp.org/www-project-top-ten/",
+          "reason": "Current vulnerability classification framework for web applications and services"
+        },
+        {
+          "title": "CWE Top 25 Most Dangerous Software Weaknesses",
+          "url": "https://cwe.mitre.org/top25/",
+          "reason": "Industry-standard vulnerability taxonomy for severity and priority guidance"
+        },
+        {
+          "title": "NIST National Vulnerability Database",
+          "url": "https://nvd.nist.gov/",
+          "reason": "Public vulnerability disclosure patterns and remediation guidance for dependency and runtime risks"
+        }
+      ],
+      "missingInputs": [
+        "Specific technology stack and runtime environment in use",
+        "Deployment architecture and infrastructure configuration",
+        "Authentication and authorization model",
+        "Data sensitivity classification and regulatory requirements",
+        "Network boundary and trust model"
+      ]
+    },
+    "tasks": [
+      {
+        "id": "injection-vulnerabilities",
+        "title": "Injection vulnerabilities",
+        "scope": "Detect SQL injection, command injection, code injection, and template injection vulnerabilities in user-controlled input flows.",
+        "prompt": "Inspect changed code for user-controlled inputs flowing into SQL queries, shell commands, eval constructs, template engines, or dynamic code execution without proper sanitization or parameterization. Trace data flow from entry points through processing layers to execution sinks. Research current framework-specific injection defense patterns using public documentation when framework usage is detected. Require concrete evidence linking changed lines to unsafe sink usage. Exclude findings when sanitization, parameterization, or framework protections are correctly applied. Do not report findings from other vulnerability classes. When repository technology stack is unclear, inspect import statements, dependency manifests, and runtime configuration to infer the environment before assessing defenses. Do not send repository code or file paths to web tools.",
+        "evidenceRequirements": [
+          "Changed line range showing user input entering an unsafe sink",
+          "Data flow path from input source to execution point",
+          "Public framework or library documentation demonstrating unsafe usage pattern when framework-specific",
+          "Absence of parameterization, prepared statements, or escape functions at the sink"
+        ],
+        "outOfScope": [
+          "Authentication and authorization bypass (owned by access-control-vulnerabilities)",
+          "Cryptographic implementation flaws (owned by cryptographic-vulnerabilities)",
+          "Dependency vulnerabilities in third-party packages (owned by dependency-vulnerabilities)",
+          "Secrets and credentials exposure (owned by secrets-exposure)",
+          "Resource exhaustion or denial-of-service conditions (owned by resource-handling-vulnerabilities)",
+          "Style, formatting, or code quality issues unrelated to injection risk"
+        ]
+      },
+      {
+        "id": "access-control-vulnerabilities",
+        "title": "Access control vulnerabilities",
+        "scope": "Detect broken authentication, authorization bypass, privilege escalation, and insecure direct object references.",
+        "prompt": "Inspect changed code for missing authentication checks, inadequate authorization validation, privilege escalation paths, and insecure direct object references. Trace request flows from entry points through permission checks to protected resources. Research current framework authentication and authorization patterns using public documentation when framework usage is detected. Require concrete evidence linking changed lines to bypassed or missing access controls. Exclude findings when proper role checks, ownership validation, or framework guard mechanisms are correctly applied. Do not report injection, cryptographic, or resource handling issues. When repository access control model is unclear, inspect middleware, decorators, route guards, and configuration to infer the protection strategy before reporting gaps. Do not send repository code or file paths to web tools.",
+        "evidenceRequirements": [
+          "Changed line range showing protected resource access without authentication or authorization check",
+          "Control flow path demonstrating bypass or missing validation",
+          "Public framework or library documentation showing expected access control pattern when framework-specific",
+          "Absence of role validation, ownership check, or permission enforcement at the access point"
+        ],
+        "outOfScope": [
+          "Injection vulnerabilities in input handling (owned by injection-vulnerabilities)",
+          "Cryptographic implementation flaws (owned by cryptographic-vulnerabilities)",
+          "Dependency vulnerabilities in third-party packages (owned by dependency-vulnerabilities)",
+          "Secrets and credentials exposure (owned by secrets-exposure)",
+          "Resource exhaustion or denial-of-service conditions (owned by resource-handling-vulnerabilities)",
+          "Logging or monitoring gaps unrelated to access control enforcement"
+        ]
+      },
+      {
+        "id": "cryptographic-vulnerabilities",
+        "title": "Cryptographic vulnerabilities",
+        "scope": "Detect weak cryptographic algorithms, insecure random number generation, hardcoded keys, improper certificate validation, and insecure protocol usage.",
+        "prompt": "Inspect changed code for usage of weak hashing algorithms, insecure encryption modes, predictable random number generators, hardcoded cryptographic keys, disabled certificate validation, and deprecated TLS versions. Trace cryptographic operations from initialization through usage. Research current cryptographic best practices and deprecated algorithm lists using public security guidance when specific libraries or protocols are detected. Require concrete evidence linking changed lines to insecure cryptographic choices. Exclude findings when modern algorithms, secure modes, proper key management, and strong randomness sources are used. Do not report injection, access control, or dependency issues. When repository cryptographic requirements are unclear, inspect security configuration, library choices, and protocol negotiation to infer the threat model before flagging outdated practices. Do not send repository code or file paths to web tools.",
+        "evidenceRequirements": [
+          "Changed line range showing weak algorithm, insecure mode, or hardcoded key usage",
+          "Public security guidance or standards document identifying the algorithm or practice as insecure",
+          "Absence of modern replacement or secure configuration at the usage site",
+          "Cryptographic operation context showing sensitive data protection or authentication reliance"
+        ],
+        "outOfScope": [
+          "Injection vulnerabilities in input handling (owned by injection-vulnerabilities)",
+          "Authentication and authorization bypass (owned by access-control-vulnerabilities)",
+          "Dependency vulnerabilities in third-party packages (owned by dependency-vulnerabilities)",
+          "Secrets and credentials exposure in source or configuration (owned by secrets-exposure)",
+          "Resource exhaustion or denial-of-service conditions (owned by resource-handling-vulnerabilities)",
+          "Performance optimization or algorithm efficiency unrelated to security"
+        ]
+      },
+      {
+        "id": "secrets-exposure",
+        "title": "Secrets exposure",
+        "scope": "Detect hardcoded credentials, API keys, tokens, and sensitive configuration in source code, configuration files, and logs.",
+        "prompt": "Inspect changed code and configuration for hardcoded passwords, API keys, tokens, private keys, database credentials, and other secrets committed to source control or logged in plaintext. Scan string literals, configuration values, environment variable defaults, and logging statements. Research current secret management patterns and tool usage using public documentation when secret stores or environment injection systems are detected. Require concrete evidence linking changed lines to exposed secret values. Exclude findings when secrets are properly externalized through environment variables, secret stores, or encrypted vaults. Do not report injection, access control, or cryptographic algorithm issues. When repository secret management strategy is unclear, inspect configuration loading, environment variable usage, and deployment scripts to infer the approach before reporting exposure. Do not send detected secret values or repository code to web tools.",
+        "evidenceRequirements": [
+          "Changed line range showing hardcoded credential, key, or token pattern",
+          "Pattern match or entropy analysis indicating high-confidence secret detection",
+          "Public documentation or tool guidance showing proper externalization pattern when applicable",
+          "Absence of secret store reference, environment variable injection, or encrypted vault usage"
+        ],
+        "outOfScope": [
+          "Injection vulnerabilities in input handling (owned by injection-vulnerabilities)",
+          "Authentication and authorization logic flaws (owned by access-control-vulnerabilities)",
+          "Cryptographic algorithm or mode selection (owned by cryptographic-vulnerabilities)",
+          "Dependency vulnerabilities in third-party packages (owned by dependency-vulnerabilities)",
+          "Resource exhaustion or denial-of-service conditions (owned by resource-handling-vulnerabilities)",
+          "Non-sensitive configuration values, feature flags, or public constants"
+        ]
+      },
+      {
+        "id": "dependency-vulnerabilities",
+        "title": "Dependency vulnerabilities",
+        "scope": "Detect known vulnerabilities in third-party dependencies, outdated packages, and insecure dependency configuration.",
+        "prompt": "Inspect changed dependency manifests, lock files, and dependency installation configuration for packages with known CVEs, outdated versions with security patches, and insecure dependency sources. Cross-reference package names and versions against public vulnerability databases when specific dependencies are added or updated. Research current package security advisories and ecosystem-specific vulnerability disclosure channels using public sources. Require concrete evidence linking changed dependency versions to published CVEs or security advisories. Exclude findings when dependencies are current or patches are not yet available. Do not report application code vulnerabilities covered by other tasks. When repository dependency ecosystem is unclear, inspect manifest file formats and package manager configuration to identify the platform before querying vulnerability sources. Do not send repository code or file paths to web tools; use only public package names and versions.",
+        "evidenceRequirements": [
+          "Changed dependency manifest or lock file line showing package name and version",
+          "Public CVE identifier, security advisory, or vulnerability database entry for the specific version",
+          "Availability of patched version or documented mitigation",
+          "Severity classification from public vulnerability disclosure"
+        ],
+        "outOfScope": [
+          "Injection vulnerabilities in application code (owned by injection-vulnerabilities)",
+          "Authentication and authorization logic in application code (owned by access-control-vulnerabilities)",
+          "Cryptographic implementation in application code (owned by cryptographic-vulnerabilities)",
+          "Secrets exposure in application configuration (owned by secrets-exposure)",
+          "Resource handling in application code (owned by resource-handling-vulnerabilities)",
+          "Dependency update recommendations without published security impact",
+          "License compliance or supply chain provenance unrelated to vulnerability disclosure"
+        ]
+      },
+      {
+        "id": "resource-handling-vulnerabilities",
+        "title": "Resource handling vulnerabilities",
+        "scope": "Detect resource exhaustion, denial-of-service conditions, unbounded loops, memory leaks, and missing input size limits.",
+        "prompt": "Inspect changed code for unbounded resource consumption, missing request size limits, algorithmic complexity vulnerabilities, uncontrolled recursion, memory leaks, and file descriptor exhaustion. Trace resource allocation from input through processing to cleanup. Research current framework and runtime resource limit patterns using public documentation when specific platforms are detected. Require concrete evidence linking changed lines to resource exhaustion vectors. Exclude findings when proper limits, timeouts, pagination, and cleanup are implemented. Do not report injection, access control, or cryptographic issues. When repository deployment environment is unclear, inspect configuration, middleware, and runtime settings to infer resource constraints before reporting unbounded behavior. Do not send repository code or file paths to web tools.",
+        "evidenceRequirements": [
+          "Changed line range showing unbounded resource allocation, missing limit, or cleanup gap",
+          "Control flow or data flow path demonstrating exhaustion vector",
+          "Public framework or runtime documentation showing expected limit or protection pattern when applicable",
+          "Absence of size limits, timeouts, circuit breakers, or resource cleanup at the vulnerable point"
+        ],
+        "outOfScope": [
+          "Injection vulnerabilities in input handling (owned by injection-vulnerabilities)",
+          "Authentication and authorization bypass (owned by access-control-vulnerabilities)",
+          "Cryptographic implementation flaws (owned by cryptographic-vulnerabilities)",
+          "Secrets and credentials exposure (owned by secrets-exposure)",
+          "Dependency vulnerabilities in third-party packages (owned by dependency-vulnerabilities)",
+          "Performance optimization or efficiency improvements without security impact",
+          "Logging volume or monitoring overhead unrelated to resource exhaustion risk"
+        ]
+      }
+    ]
+  },
+  "parent": {
+    "durationMs": 57806,
+    "usage": {
+      "inputTokens": 13876,
+      "outputTokens": 3671,
+      "cacheReadInputTokens": 13874,
+      "cacheCreationInputTokens": 0,
+      "cacheCreation5mInputTokens": 0,
+      "cacheCreation1hInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.0592332
+    },
+    "responseModel": "claude-sonnet-4-5-20250929",
+    "numTurns": 1
+  },
+  "childSkills": {
+    "access-control-vulnerabilities": {
+      "version": 2,
+      "parentSkill": "security",
+      "taskId": "access-control-vulnerabilities",
+      "taskHash": "0647c676fe7e7084de842a4a550dbb837f238c58b3cf97421c564879e5d14010",
+      "sourceHash": "5db0469e922468a16143b0d6a97322e4aebab71c9f36ef5ddf6b3032d62091b0",
+      "coordinatorVersion": "2",
+      "name": "access-control-vulnerabilities",
+      "bytes": 40505,
+      "durationMs": 334959,
+      "usage": {
+        "inputTokens": 1412139,
+        "outputTokens": 13898,
+        "cacheReadInputTokens": 1237896,
+        "cacheCreationInputTokens": 174055,
+        "cacheCreation5mInputTokens": 174055,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.23310905
+      },
+      "externalSources": [
+        {
+          "title": "OWASP Top 10 2021 - A01: Broken Access Control",
+          "url": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/",
+          "reason": "Authoritative source for access control vulnerability classification, prevalence data (94% of tested apps), and common attack vectors. Defines broken access control as the #1 web application security risk."
+        },
+        {
+          "title": "OWASP Broken Access Control",
+          "url": "https://owasp.org/www-community/Broken_Access_Control",
+          "reason": "Comprehensive patterns for access control vulnerabilities including IDOR, privilege escalation, and force browsing. Provides vulnerability detection and prevention guidance."
+        },
+        {
+          "title": "OWASP Authorization Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html",
+          "reason": "Framework-agnostic authorization best practices, PDP/PEP pattern, and common authorization anti-patterns. Guides false-positive controls and remediation patterns."
+        },
+        {
+          "title": "CWE-639: Authorization Bypass Through User-Controlled Key",
+          "url": "https://cwe.mitre.org/data/definitions/639.html",
+          "reason": "Canonical definition of Insecure Direct Object Reference (IDOR) vulnerability. Provides weakness detection patterns and examples for IDOR prerequisite validation."
+        },
+        {
+          "title": "CWE-862: Missing Authorization",
+          "url": "https://cwe.mitre.org/data/definitions/862.html",
+          "reason": "Defines missing authorization weakness patterns. Used for severity calibration and vulnerability classification."
+        },
+        {
+          "title": "CWE-284: Improper Access Control",
+          "url": "https://cwe.mitre.org/data/definitions/284.html",
+          "reason": "Root taxonomy for access control weaknesses. Provides classification framework and related weaknesses mapping."
+        },
+        {
+          "title": "CWE-269: Improper Privilege Management",
+          "url": "https://cwe.mitre.org/data/definitions/269.html",
+          "reason": "Defines privilege escalation weakness patterns. Used for vertical escalation detection and severity calibration."
+        },
+        {
+          "title": "Next.js Authentication Guide",
+          "url": "https://nextjs.org/docs/app/guides/authentication",
+          "reason": "Official Next.js App Router authentication best practices including Data Access Layer pattern, middleware limitations, and Server Action security. Critical for framework-specific false-positive controls."
+        },
+        {
+          "title": "Next.js Authentication Best Practices 2025",
+          "url": "https://www.franciscomoretti.com/blog/modern-nextjs-authentication-best-practices",
+          "reason": "Updated guidance on Next.js authentication patterns, emphasizing that middleware is not safe as sole authentication layer and security checks must be in DAL."
+        },
+        {
+          "title": "Building authentication in Node.js applications: The complete guide for 2026",
+          "url": "https://workos.com/blog/nodejs-authentication-guide-2026",
+          "reason": "Current Node.js authentication patterns including JWT, session-based, and middleware approaches. Informs Express.js and TypeScript detection patterns."
+        },
+        {
+          "title": "Node.js and TypeScript Tutorial: Secure an Express API",
+          "url": "https://auth0.com/blog/node-js-and-typescript-tutorial-secure-an-express-api/",
+          "reason": "Express.js middleware-based authentication patterns and route protection. Provides secure pattern examples for remediation guidance."
+        },
+        {
+          "title": "FastAPI Security - First Steps",
+          "url": "https://fastapi.tiangolo.com/tutorial/security/first-steps/",
+          "reason": "Official FastAPI security documentation covering OAuth2, dependency injection for auth, and security dependencies. Defines framework-expected patterns for FastAPI detection."
+        },
+        {
+          "title": "Django REST Framework Authentication",
+          "url": "https://www.django-rest-framework.org/api-guide/authentication/",
+          "reason": "Official DRF authentication documentation covering authentication classes, permission classes, and object-level permissions. Defines framework-expected patterns for Django detection."
+        },
+        {
+          "title": "route-detect: Finding authentication and authorization bugs in web application routes",
+          "url": "https://redcanary.com/blog/testing-and-validation/route-detect-appsec-tool/",
+          "reason": "Static analysis tool for detecting missing authentication and authorization in routes using Semgrep. Provides anomaly detection patterns and route protection validation approaches."
+        },
+        {
+          "title": "CVE-2026-5652: Crafty Controller IDOR Vulnerability",
+          "url": "https://www.sentinelone.com/vulnerability-database/cve-2026-5652/",
+          "reason": "Real-world 2026 IDOR example demonstrating unauthorized user modification through API permissions bypass. Validates IDOR detection patterns."
+        },
+        {
+          "title": "CVE-2026-33030: Nginx UI Authorization Bypass",
+          "url": "https://www.sentinelone.com/vulnerability-database/cve-2026-33030/",
+          "reason": "Real-world 2026 IDOR example where missing user_id field allows cross-user resource access. Demonstrates horizontal privilege escalation pattern."
+        },
+        {
+          "title": "CVE-2026-3999: Privilege Escalation Vulnerability",
+          "url": "https://www.sentinelone.com/vulnerability-database/cve-2026-3999/",
+          "reason": "Real-world 2026 horizontal privilege escalation example. Validates privilege escalation detection patterns."
+        }
+      ],
+      "missingInputs": [
+        "Repository-specific access control model (middleware stack, authentication library, authorization approach) - will be discovered during runtime investigation using Read, Grep, Glob",
+        "Framework and technology stack (Express, Next.js, FastAPI, Django, Rails, etc.) - will be inferred from imports, manifests, and file structure during runtime investigation",
+        "Data sensitivity classification and regulatory requirements - affects severity calibration but not core detection logic",
+        "Deployment architecture (monolith, microservices, serverless) - affects authorization service integration patterns but not core detection",
+        "Existing authorization service integration (OPA, Casbin, Auth0 RBAC) - documented as open gap; detection patterns can be added when encountered"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 31,
+      "generatedAt": "2026-05-01T04:09:06.234Z"
+    },
+    "cryptographic-vulnerabilities": {
+      "version": 2,
+      "parentSkill": "security",
+      "taskId": "cryptographic-vulnerabilities",
+      "taskHash": "7f624295eb0b1a7bd3469b75db79ad81d6e880a435923b6fa60cfd1c7f5b1e52",
+      "sourceHash": "5db0469e922468a16143b0d6a97322e4aebab71c9f36ef5ddf6b3032d62091b0",
+      "coordinatorVersion": "2",
+      "name": "cryptographic-vulnerabilities",
+      "bytes": 49298,
+      "durationMs": 347623,
+      "usage": {
+        "inputTokens": 1173362,
+        "outputTokens": 17329,
+        "cacheReadInputTokens": 975359,
+        "cacheCreationInputTokens": 194968,
+        "cacheCreation5mInputTokens": 194968,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.2927777000000005
+      },
+      "externalSources": [
+        {
+          "title": "NIST SP 800-131A Rev. 2: Transitioning the Use of Cryptographic Algorithms and Key Lengths",
+          "url": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar2.pdf",
+          "reason": "Authoritative algorithm transition timelines: SHA-1 phaseout 2030, 3DES deprecation 2023, RSA/ECDSA migration 2035. Used to classify MD5, SHA-1, DES, 3DES as deprecated and determine severity levels."
+        },
+        {
+          "title": "NIST Retires SHA-1 Cryptographic Algorithm",
+          "url": "https://www.nist.gov/news-events/news/2022/12/nist-retires-sha-1-cryptographic-algorithm",
+          "reason": "Official NIST announcement: SHA-1 should be phased out by Dec 31, 2030, due to collision vulnerability. Used to justify high-severity findings for SHA-1 in digital signatures and integrity checks."
+        },
+        {
+          "title": "OWASP A04:2025 - Cryptographic Failures",
+          "url": "https://owasp.org/Top10/2025/A04_2025-Cryptographic_Failures/",
+          "reason": "Current OWASP Top 10 guidance on weak algorithms (MD5, SHA-1, RC4, DES), insecure modes (ECB, CBC), deprecated TLS (1.0, 1.1). Used to classify cryptographic weaknesses and calibrate severity."
+        },
+        {
+          "title": "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+          "url": "https://cwe.mitre.org/data/definitions/327.html",
+          "reason": "Industry-standard taxonomy for weak algorithm vulnerabilities. Used to classify findings and link to public vulnerability disclosure patterns."
+        },
+        {
+          "title": "CWE-326: Inadequate Encryption Strength",
+          "url": "https://cwe.mitre.org/data/definitions/326.html",
+          "reason": "Taxonomy for weak encryption (DES, short keys, weak ciphers). Used to classify weak symmetric cipher findings and justify remediation to AES-GCM."
+        },
+        {
+          "title": "CWE-321: Use of Hard-coded Cryptographic Key",
+          "url": "https://cwe.mitre.org/data/definitions/321.html",
+          "reason": "Taxonomy for hardcoded key vulnerabilities. Used to classify findings and recommend environment variable loading or secret store integration."
+        },
+        {
+          "title": "CWE-330: Use of Insufficiently Random Values",
+          "url": "https://cwe.mitre.org/data/definitions/330.html",
+          "reason": "Taxonomy for weak PRNG vulnerabilities (Math.random). Used to classify findings and recommend crypto.randomBytes or crypto.randomUUID."
+        },
+        {
+          "title": "CWE-295: Improper Certificate Validation",
+          "url": "https://cwe.mitre.org/data/definitions/295.html",
+          "reason": "Taxonomy for certificate validation bypass (rejectUnauthorized: false, hostname verification bypass). Used to classify TLS security findings."
+        },
+        {
+          "title": "RFC 8996: Deprecating TLS 1.0 and TLS 1.1",
+          "url": "https://datatracker.ietf.org/doc/html/rfc8996",
+          "reason": "Official deprecation of TLS 1.0 and 1.1 due to security weaknesses (POODLE, BEAST). Used to justify high-severity findings for deprecated protocol usage."
+        },
+        {
+          "title": "Node.js Crypto Module Documentation",
+          "url": "https://nodejs.org/api/crypto.html",
+          "reason": "Official Node.js documentation for crypto.createHash, crypto.randomBytes, crypto.createCipheriv. Used to identify safe vs. unsafe API usage patterns and validate repository cryptographic operations."
+        }
+      ],
+      "missingInputs": [
+        "Data sensitivity classification: which data requires cryptographic protection (PII, credentials, tokens) vs. non-sensitive data (public metadata, cache keys). Would improve severity calibration for hash function findings.",
+        "Deployment environment: cloud KMS usage (AWS KMS, GCP KMS), hardware security modules, secure enclaves. Would improve remediation recommendations for key management.",
+        "Regulatory requirements: FIPS 140-2/3, PCI DSS, HIPAA, GDPR cryptographic mandates. Would affect severity levels (critical for regulated data).",
+        "Threat model: whether attackers can intercept network traffic (affects TLS severity), extract keys from source code (affects hardcoded key severity), or access encrypted data at rest.",
+        "Algorithm purpose context: whether specific MD5/SHA-1 usage is for cryptographic (vulnerable) or non-cryptographic (acceptable) purposes. Skill must infer from variable names and data-flow analysis.",
+        "Post-quantum migration strategy: timeline for adopting ML-KEM, ML-DSA, SLH-DSA; hybrid crypto requirements; RSA/ECDSA sunset date. Would inform whether to flag RSA-2048+ or ECDSA P-256+ as weak."
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 24,
+      "generatedAt": "2026-05-01T04:09:18.757Z"
+    },
+    "injection-vulnerabilities": {
+      "version": 2,
+      "parentSkill": "security",
+      "taskId": "injection-vulnerabilities",
+      "taskHash": "d2d10fda4c3893dabeeade4773b68e5a4e2a70eee8217b410192cc25951d2ae1",
+      "sourceHash": "5db0469e922468a16143b0d6a97322e4aebab71c9f36ef5ddf6b3032d62091b0",
+      "coordinatorVersion": "2",
+      "name": "injection-vulnerabilities",
+      "bytes": 48818,
+      "durationMs": 356351,
+      "usage": {
+        "inputTokens": 1104561,
+        "outputTokens": 16758,
+        "cacheReadInputTokens": 882322,
+        "cacheCreationInputTokens": 221524,
+        "cacheCreation5mInputTokens": 221524,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.3489265999999998
+      },
+      "externalSources": [
+        {
+          "title": "OWASP Top 10:2025 - A05 Injection",
+          "url": "https://owasp.org/Top10/2025/A05_2025-Injection/",
+          "reason": "Current vulnerability classification framework for injection attacks (SQL, command, code, template). Provides severity ranking and industry-standard prevention guidance."
+        },
+        {
+          "title": "OWASP SQL Injection Prevention Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+          "reason": "Canonical guidance for SQL injection prevention via parameterized queries, prepared statements, and defense-in-depth. Informs safe pattern recognition and remediation recommendations."
+        },
+        {
+          "title": "OWASP Injection Prevention Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html",
+          "reason": "General injection prevention patterns covering SQL, command, code, and other injection classes. Provides defense-in-depth strategies and input validation guidance."
+        },
+        {
+          "title": "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')",
+          "url": "https://cwe.mitre.org/data/definitions/89.html",
+          "reason": "Industry-standard vulnerability definition for SQL injection, including attack patterns, exploitation prerequisites, and consequences. Used for severity classification."
+        },
+        {
+          "title": "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+          "url": "https://cwe.mitre.org/data/definitions/78.html",
+          "reason": "Industry-standard vulnerability definition for command injection. Informs shell metacharacter exploitation patterns and argument injection vectors."
+        },
+        {
+          "title": "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+          "url": "https://cwe.mitre.org/data/definitions/94.html",
+          "reason": "Industry-standard vulnerability definition for code injection via eval, Function constructor, and dynamic code execution. Used for classification and severity guidance."
+        },
+        {
+          "title": "Node.js Security Releases - April 2024 (CVE-2024-27980)",
+          "url": "https://nodejs.org/en/blog/vulnerability/april-2024-security-releases-2",
+          "reason": "Discloses Windows batch file injection vulnerability affecting spawn even without shell option. Informs argument validation requirements and platform-specific risks."
+        },
+        {
+          "title": "Node.js SQL Injection Guide: Examples and Prevention",
+          "url": "https://www.stackhawk.com/blog/node-js-sql-injection-guide-examples-and-prevention/",
+          "reason": "Node.js-specific SQL injection prevention patterns, including parameterized queries, ORM usage, and input validation for TypeScript/JavaScript ecosystem."
+        },
+        {
+          "title": "Parameterized Queries JavaScript Guide",
+          "url": "https://medium.com/@ajay.monga73/parameterized-queries-javascript-guide-how-to-prevent-sql-injection-with-parameterized-queries-18c5cbbfffe2",
+          "reason": "Detailed guidance on parameterized query implementation in Node.js. Informs safe pattern recognition and false-positive controls."
+        },
+        {
+          "title": "Secure JavaScript Coding Practices Against Command Injection Vulnerabilities",
+          "url": "https://www.nodejs-security.com/blog/secure-javascript-coding-practices-against-command-injection-vulnerabilities",
+          "reason": "Node.js command injection prevention best practices, including execFile vs exec, argument validation, and shell metacharacter risks."
+        },
+        {
+          "title": "Server-Side Template Injection - PortSwigger Web Security Academy",
+          "url": "https://portswigger.net/web-security/server-side-template-injection",
+          "reason": "Comprehensive SSTI exploitation patterns and prevention strategies. Informs template injection detection and remediation guidance."
+        },
+        {
+          "title": "Node.js Template Engines: Why Default Encoders Are Not Enough",
+          "url": "https://www.veracode.com/blog/secure-development/nodejs-template-engines-why-default-encoders-are-not-enough",
+          "reason": "Template engine security for Handlebars, EJS, Pug, including context-sensitive escaping limitations and safe configuration patterns."
+        },
+        {
+          "title": "PayloadsAllTheThings - Server Side Template Injection (JavaScript)",
+          "url": "https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Server%20Side%20Template%20Injection/JavaScript.md",
+          "reason": "SSTI exploitation payloads for JavaScript template engines. Informs exploitation example construction and severity assessment."
+        },
+        {
+          "title": "Prevent Dynamic Eval - Node.js Runtime Security",
+          "url": "https://www.nodejs-security.com/learn/nodejs-runtime-security/prevent-dynamic-eval",
+          "reason": "Code evaluation risks via eval, Function constructor, and alternatives (JSON.parse, object property access). Informs safe pattern recommendations."
+        },
+        {
+          "title": "Security Concerns for JavaScript Sandbox - Node.js vm Module",
+          "url": "https://snyk.io/blog/security-concerns-javascript-sandbox-node-js-vm-module/",
+          "reason": "vm module sandbox limitations and escape vectors. Informs code injection detection and remediation guidance for vm.runInContext usage."
+        }
+      ],
+      "missingInputs": [
+        "Technology stack: Whether application uses SQL database, NoSQL database, or no database; which database library (raw driver, Prisma, Sequelize, Knex, TypeORM, Drizzle, Mongoose); which template engine (Handlebars, EJS, Pug, Mustache, Nunjucks) if any.",
+        "Input trustworthiness model: Which input sources are considered trusted vs untrusted (CLI arguments, environment variables, file contents, HTTP request parameters, GitHub webhook payloads, LLM-generated outputs, repository metadata).",
+        "Framework defenses: Whether ORM parameterization, template engine auto-escaping, or input validation middleware is enabled by default or requires explicit configuration.",
+        "Deployment environment: Whether application runs with database access, shell execution permissions, network access; whether Windows deployment is supported (affects CVE-2024-27980 applicability).",
+        "Privilege model: Whether injection sinks are reachable by unauthenticated users, authenticated users with limited privileges, or only administrators; whether defense-in-depth controls (sandboxing, read-only database users, least privilege) are in place."
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 33,
+      "generatedAt": "2026-05-01T04:09:27.296Z"
+    },
+    "secrets-exposure": {
+      "version": 2,
+      "parentSkill": "security",
+      "taskId": "secrets-exposure",
+      "taskHash": "152405644e0fd929473e42b15ac01f06f69466f1705b52c3a4ca2cb5259620a6",
+      "sourceHash": "5db0469e922468a16143b0d6a97322e4aebab71c9f36ef5ddf6b3032d62091b0",
+      "coordinatorVersion": "2",
+      "name": "secrets-exposure",
+      "bytes": 44511,
+      "durationMs": 356587,
+      "usage": {
+        "inputTokens": 1255129,
+        "outputTokens": 15690,
+        "cacheReadInputTokens": 1017973,
+        "cacheCreationInputTokens": 232518,
+        "cacheCreation5mInputTokens": 232518,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.4265984
+      },
+      "externalSources": [
+        {
+          "title": "Gitleaks – Find Secrets, Stop Leaks, Secure Your Code",
+          "url": "https://gitleaks.org/",
+          "reason": "Open-source credential scanner with 150+ regex patterns, entropy analysis, and composite rules (v8.28.0+ supports proximity constraints). Used for pattern detection strategies and verification approaches. Informed detection layer design and false-positive controls."
+        },
+        {
+          "title": "GitHub - trufflesecurity/trufflehog: Find, verify, and analyze leaked credentials",
+          "url": "https://github.com/trufflesecurity/trufflehog",
+          "reason": "Detects 800+ secret types with credential verification via real API calls and Shannon entropy analysis (threshold > 3.0). Used for two-phase detection (pattern + entropy) and active secret validation guidance. Informed entropy analysis gap and verification recommendations."
+        },
+        {
+          "title": "Secrets Management - OWASP Cheat Sheet Series",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+          "reason": "Best practices for centralized secret managers (Vault, AWS Secrets Manager), encryption-at-rest, least privilege access, ephemeral secrets, and rotation. Used for remediation guidance, risk assessment calibration, and severity ladder design. Informed secret manager integration recommendations."
+        },
+        {
+          "title": "Do not use secrets in environment variables and here's how to do it better",
+          "url": "https://www.nodejs-security.com/blog/do-not-use-secrets-in-environment-variables-and-here-is-how-to-do-it-better",
+          "reason": "Node.js-specific security guidance on environment variable risks: child process inheritance, logging exposure, and secrets manager alternatives. Used for framework caveats, severity calibration, and remediation pattern hierarchy (env vars → secrets manager). Informed Node.js 2026 best practices."
+        },
+        {
+          "title": "CWE-798: Use of Hard-coded Credentials",
+          "url": "https://cwe.mitre.org/data/definitions/798.html",
+          "reason": "Canonical vulnerability classification for hardcoded secrets. Used for severity calibration, impact assessment, and alignment with industry-standard vulnerability taxonomy. Informed critical severity threshold for committed credentials."
+        }
+      ],
+      "missingInputs": [
+        "Technology stack beyond TypeScript/Node.js (e.g., Python, Go, Java, Ruby) — credential detection patterns are technology-agnostic but remediation examples assume Node.js",
+        "Deployment environment (local, GitHub Actions, GitLab CI, CircleCI, Jenkins, cloud provider) — affects severity calibration for environment variable usage vs. secrets manager integration",
+        "Data sensitivity classification — determines whether medium-severity findings (potential leaks) should be escalated based on regulatory requirements (PCI-DSS, HIPAA, SOC 2)",
+        "Secret rotation policy — without rotation requirements, cannot calibrate urgency for detected credentials (immediate vs. next cycle)",
+        "Existing secrets management infrastructure (HashiCorp Vault, AWS Secrets Manager, Doppler, etc.) — affects remediation recommendations and detection of proper externalization"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 28,
+      "generatedAt": "2026-05-01T04:09:27.560Z"
+    },
+    "dependency-vulnerabilities": {
+      "version": 2,
+      "parentSkill": "security",
+      "taskId": "dependency-vulnerabilities",
+      "taskHash": "bb44f2c604598bde318176b7e93748a2b25fac2277ac60eea625dfa5514ae473",
+      "sourceHash": "5db0469e922468a16143b0d6a97322e4aebab71c9f36ef5ddf6b3032d62091b0",
+      "coordinatorVersion": "2",
+      "name": "dependency-vulnerabilities",
+      "bytes": 50440,
+      "durationMs": 373038,
+      "usage": {
+        "inputTokens": 1136628,
+        "outputTokens": 16712,
+        "cacheReadInputTokens": 871337,
+        "cacheCreationInputTokens": 260337,
+        "cacheCreation5mInputTokens": 260337,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.5032068500000004
+      },
+      "externalSources": [
+        {
+          "title": "GitHub Advisory Database",
+          "url": "https://github.com/advisories",
+          "reason": "Canonical source for CVE identifiers, GHSA IDs, CVSS scores, vulnerable version ranges, and patched versions across all ecosystems. Powers npm audit since 2023."
+        },
+        {
+          "title": "NIST National Vulnerability Database (NVD)",
+          "url": "https://nvd.nist.gov/",
+          "reason": "Authoritative CVE database with CVSS v3/v4 base scores, attack vectors, and exploitability metrics. Used for severity calibration and CVE validation."
+        },
+        {
+          "title": "OSV - Open Source Vulnerabilities",
+          "url": "https://osv.dev/",
+          "reason": "Aggregated vulnerability database covering npm, PyPI, RubyGems, Go, Rust, and other ecosystems. Provides JSON API and structured OSV schema for vulnerability data."
+        },
+        {
+          "title": "pnpm audit documentation",
+          "url": "https://pnpm.io/cli/audit/",
+          "reason": "Describes pnpm's vulnerability scanning using npm advisory database and lock file integrity verification. Confirms integrity hash format and verification behavior."
+        },
+        {
+          "title": "npm Security Risks 2026: Vulnerable Packages & Fixes",
+          "url": "https://blog.cyberdesserts.com/npm-security-vulnerabilities/",
+          "reason": "Current 2026 npm threat landscape including axios compromise, Shai-Hulud worm, and supply chain attack patterns. Informs supply chain risk detection."
+        },
+        {
+          "title": "GitHub Advisory Database now powers npm audit",
+          "url": "https://github.blog/security/supply-chain-security/github-advisory-database-now-powers-npm-audit/",
+          "reason": "Confirms npm audit queries GitHub Advisory Database directly. Explains integration between npm CLI and GitHub security advisories."
+        },
+        {
+          "title": "Snyk Vulnerability Database",
+          "url": "https://security.snyk.io/vuln/npm",
+          "reason": "Supplementary vulnerability database with npm-specific advisories. Used when GitHub Advisory Database or NVD lack details."
+        },
+        {
+          "title": "OWASP Top 10 2021",
+          "url": "https://owasp.org/www-project-top-ten/",
+          "reason": "Industry-standard vulnerability classification framework. A06:2021 – Vulnerable and Outdated Components directly addresses dependency vulnerabilities."
+        },
+        {
+          "title": "CWE Top 25 Most Dangerous Software Weaknesses",
+          "url": "https://cwe.mitre.org/top25/",
+          "reason": "Vulnerability taxonomy for severity and priority guidance. CWE-1035 (Using Components with Known Vulnerabilities) informs scope and impact assessment."
+        }
+      ],
+      "missingInputs": [
+        "Deployment environment context: Whether dependencies run in production, CI/CD, build-time only, or dev-time only. This affects exploitability assessment for dev dependencies and runtime-specific CVEs.",
+        "Acceptable CVSS threshold: Repository or organization policy on minimum CVSS score for reporting (currently assuming CVSS ≥7.0 for high severity, ≥4.0 for medium).",
+        "Monorepo workspace structure: If repository is a monorepo, workspace dependency graph and peer dependency relationships affect transitive vulnerability tracing.",
+        "Private package registry configuration: If repository uses private npm registries or mirrors, integrity verification and supply chain risk assessment may differ from public npm registry assumptions.",
+        "Platform-specific deployment targets: OS platform (Windows, Linux, macOS) and CPU architecture (x86, ARM) for filtering platform-specific CVEs.",
+        "Active exploitation prioritization policy: Whether to prioritize CVEs with active exploitation (CISA KEV) over high CVSS scores without exploitation evidence."
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 35,
+      "generatedAt": "2026-05-01T04:15:22.426Z"
+    },
+    "resource-handling-vulnerabilities": {
+      "version": 2,
+      "parentSkill": "security",
+      "taskId": "resource-handling-vulnerabilities",
+      "taskHash": "e0663378535952eea7254edbf193fd527c0d0a8527104a660c3b2fde457df1ee",
+      "sourceHash": "5db0469e922468a16143b0d6a97322e4aebab71c9f36ef5ddf6b3032d62091b0",
+      "coordinatorVersion": "2",
+      "name": "resource-handling-vulnerabilities",
+      "bytes": 52657,
+      "durationMs": 373436,
+      "usage": {
+        "inputTokens": 1021289,
+        "outputTokens": 16450,
+        "cacheReadInputTokens": 841875,
+        "cacheCreationInputTokens": 176475,
+        "cacheCreation5mInputTokens": 176475,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 1.1699107499999999
+      },
+      "externalSources": [
+        {
+          "title": "OWASP Denial of Service Cheat Sheet",
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html",
+          "reason": "Authoritative source for DoS attack patterns, mitigation strategies, and framework-agnostic guidance on resource exhaustion prevention."
+        },
+        {
+          "title": "OWASP API Security Top 10: Unrestricted Resource Consumption",
+          "url": "https://www.stackhawk.com/blog/understanding-and-protecting-against-api4-unrestricted-resource-consumption/",
+          "reason": "Defines API4 (unrestricted resource consumption) as critical API security risk, provides rate limiting and request size limit patterns."
+        },
+        {
+          "title": "CWE-400: Uncontrolled Resource Consumption",
+          "url": "https://cwe.mitre.org/data/definitions/400.html",
+          "reason": "Industry-standard vulnerability classification for resource exhaustion, used for severity and taxonomy alignment."
+        },
+        {
+          "title": "CWE-770: Allocation of Resources Without Limits or Throttling",
+          "url": "https://cwe.mitre.org/data/definitions/770.html",
+          "reason": "Specific weakness category for unbounded allocation, maps directly to vulnerability class 1 in child skill."
+        },
+        {
+          "title": "CVE-2026-39313: MCP-Framework Unbounded HTTP Body Allocation",
+          "url": "https://advisories.gitlab.com/npm/mcp-framework/CVE-2026-39313/",
+          "reason": "Real-world 2026 example of unbounded HTTP request body allocation causing memory exhaustion DoS, informs detection patterns and remediation."
+        },
+        {
+          "title": "CVE-2026-41680: Marked.js ReDoS Infinite Recursion",
+          "url": "https://radar.offseq.com/threat/cve-2026-41680-cwe-400-uncontrolled-resource-consu-1a65f320",
+          "reason": "Real-world 2026 ReDoS example with infinite recursion leading to memory exhaustion, informs algorithmic complexity and recursion detection."
+        },
+        {
+          "title": "CVE-2026-40192: Python-Pillow Unbounded GZIP Decompression",
+          "url": "https://radar.offseq.com/threat/cve-2026-40192-cwe-770-allocation-of-resources-wit-c6717f27",
+          "reason": "Real-world 2026 example of unbounded decompression causing memory exhaustion, informs input size limit and decompression bomb detection."
+        },
+        {
+          "title": "CVE-2026-33219: NATS-Server Unbounded Message Allocation",
+          "url": "https://radar.offseq.com/threat/cve-2026-33219-cwe-770-allocation-of-resources-wit-c95e60aa",
+          "reason": "Real-world 2026 example of unbounded message queue allocation, informs streaming data and message handling detection patterns."
+        },
+        {
+          "title": "Node.js Memory Leaks: Detection & Prevention (Better Stack)",
+          "url": "https://betterstack.com/community/guides/scaling-nodejs/high-performance-nodejs/nodejs-memory-leaks/",
+          "reason": "Node.js-specific memory leak patterns (event listeners, timers, closures), detection tools (clinic.js, heap snapshots), and cleanup best practices."
+        },
+        {
+          "title": "JavaScript Memory Leaks: Detection & Prevention (Reintech)",
+          "url": "https://reintech.io/blog/javascript-memory-leaks-detection-and-prevention",
+          "reason": "JavaScript memory leak patterns including event listener orphans, closure leaks, circular references, and WeakMap usage for automatic cleanup."
+        },
+        {
+          "title": "Express.js body-parser Size Limits and Security",
+          "url": "https://deepwiki.com/expressjs/body-parser/4.1-size-limits-and-security",
+          "reason": "Framework-specific documentation on Express body-parser default limits (100kb), parameterLimit (1000), depth limit (32), and security recommendations."
+        },
+        {
+          "title": "MDN Memory Management",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Memory_management",
+          "reason": "JavaScript garbage collection fundamentals, WeakRef, WeakMap usage, and cleanup patterns for preventing memory leaks."
+        },
+        {
+          "title": "MDN AsyncGenerator",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/AsyncGenerator",
+          "reason": "Async generator resource cleanup via return() method, try/finally pattern, and guaranteed cleanup for async iteration."
+        },
+        {
+          "title": "OWASP Regular Expression Denial of Service (ReDoS)",
+          "url": "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS",
+          "reason": "Authoritative source on ReDoS attack patterns, catastrophic backtracking, exponential time complexity, and mitigation strategies."
+        },
+        {
+          "title": "CVE-2026-35213: @hapi/content ReDoS in HTTP Header Parsing",
+          "url": "https://advisories.gitlab.com/pkg/npm/@hapi/content/CVE-2026-35213/",
+          "reason": "Real-world 2026 ReDoS vulnerability in HTTP header parsing, informs detection patterns for regex in request processing."
+        }
+      ],
+      "missingInputs": [
+        "Specific runtime environment and deployment architecture (container limits, serverless timeouts, cloud provider quotas) when not explicitly configured in repository",
+        "Framework version-specific default behaviors for resource limits when dependency manifests specify version ranges rather than exact versions",
+        "Organization-specific threat model and acceptable DoS risk tolerance (e.g., whether authenticated endpoints require same DoS protection as public endpoints)",
+        "Production workload characteristics and scaling policies that may provide implicit resource exhaustion protection not visible in source code"
+      ],
+      "responseModel": "claude-sonnet-4-5-20250929",
+      "numTurns": 27,
+      "generatedAt": "2026-05-01T04:15:35.448Z"
+    }
+  },
+  "updatedAt": "2026-05-01T04:15:35.448Z"
+}

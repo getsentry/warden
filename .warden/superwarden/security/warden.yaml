@@ -1,0 +1,27 @@
+version: 1
+kind: superwarden-skill
+name: security
+mode: coordinator
+initialPrompt: |-
+  Identify critical vulnerabilities in the codebase, focusing on the technology stack and runtime that we use.
+sourceFiles:
+  - warden.yaml
+  - SKILL.md
+  - SPEC.md
+  - SOURCES.md
+outputFiles:
+  - SKILL.md
+  - SPEC.md
+  - SOURCES.md
+  - plan.json
+  - tasks/<task-id>/SKILL.md
+  - tasks/<task-id>/SPEC.md
+  - tasks/<task-id>/SOURCES.md
+instructions:
+  - Synthesize the parent plan through a deep Superwarden planning pass, not a shallow category split.
+  - Preserve every explicit coverage item from this metadata in at least one task.
+  - Generate each child skill through its own deep synthesis run.
+  - Generate child skills that pass skill-writer structural validation, including matching task-id names, focused one-line descriptions, and complete SPEC.md sections.
+  - Require each child skill to inspect repo-local source and use public prior art when external behavior affects correctness.
+  - Do not send repository code, secrets, private file paths, or proprietary details to web tools.
+  - Represent missing repository, technology, deployment, or threat-model context inside task instructions until live inquiry tools exist.
