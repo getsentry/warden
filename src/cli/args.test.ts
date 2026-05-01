@@ -66,6 +66,13 @@ describe('parseCliArgs', () => {
     expect(result.options.config).toBe('./custom.toml');
   });
 
+  it('parses -C/--cwd option', () => {
+    const result = parseCliArgs(['-C', '../other-repo', 'synth', 'security-review']);
+    expect(result.command).toBe('synthesize');
+    expect(result.options.cwd).toBe('../other-repo');
+    expect(result.options.skill).toBe('security-review');
+  });
+
   it('parses --json flag', () => {
     const result = parseCliArgs(['--json']);
     expect(result.options.json).toBe(true);
@@ -376,14 +383,29 @@ describe('parseCliArgs', () => {
     const result = parseCliArgs([
       'synthesize',
       'security-review',
-      '--initial-prompt',
+      '-p',
       'Review authz boundaries.',
       '--description',
       'Security review',
     ]);
     expect(result.command).toBe('synthesize');
     expect(result.options.skill).toBe('security-review');
-    expect(result.options.initialPrompt).toBe('Review authz boundaries.');
+    expect(result.options.prompt).toBe('Review authz boundaries.');
+    expect(result.options.description).toBe('Security review');
+  });
+
+  it('parses synthesize command with prompt file shorthand', () => {
+    const result = parseCliArgs([
+      'synthesize',
+      'security-review',
+      '--prompt',
+      '@prompts/security.md',
+      '--description',
+      'Security review',
+    ]);
+    expect(result.command).toBe('synthesize');
+    expect(result.options.skill).toBe('security-review');
+    expect(result.options.prompt).toBe('@prompts/security.md');
     expect(result.options.description).toBe('Security review');
   });
 

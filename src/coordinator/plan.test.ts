@@ -65,6 +65,11 @@ function createRuntime(plan: CoordinatorPlan): Runtime {
         numTurns: 6,
       },
     })),
+    runSynthesis: vi.fn(async <T>() => ({
+      success: true as const,
+      data: plan as T,
+      usage: emptyUsage(),
+    })) as unknown as Runtime['runSynthesis'],
     runAuxiliary: vi.fn(async <T>() => ({
       success: true as const,
       data: plan as T,
@@ -128,16 +133,17 @@ coverage:
     expect(result.source).toBe('generated');
     expect(result.plan.tasks[0]?.id).toBe('authz');
     expect(existsSync(result.cachePath)).toBe(true);
-    expect(runtime.runAuxiliary).toHaveBeenCalledTimes(1);
-    expect(runtime.runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({
+    expect(runtime.runSynthesis).toHaveBeenCalledTimes(1);
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
+      task: 'superwarden_synthesis',
       maxTokens: SUPERWARDEN_SYNTHESIS_MAX_TOKENS,
       timeout: SUPERWARDEN_SYNTHESIS_TIMEOUT_MS,
       prompt: expect.stringContaining('agent-quality planning pass'),
     }));
-    expect(runtime.runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.stringContaining('online prior art'),
     }));
-    expect(runtime.runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.stringContaining('every item must map clearly'),
     }));
     expect(JSON.parse(readFileSync(result.cachePath, 'utf-8')).plan.tasks[0].id).toBe('authz');
@@ -161,6 +167,7 @@ coverage:
     expect(result.responseModel).toBe('agent-model');
     expect(result.numTurns).toBe(6);
     expect(runtime.runAuxiliary).not.toHaveBeenCalled();
+    expect(runtime.runSynthesis).not.toHaveBeenCalled();
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
       repoPath: tempDir,
       skillName: 'security-review:superwarden-plan',
@@ -214,6 +221,7 @@ initialPrompt: Create the security-review Superwarden skill.
     expect(result.source).toBe('cache');
     expect(result.plan.tasks[0]?.id).toBe('authz');
     expect(runtime.runAuxiliary).not.toHaveBeenCalled();
+    expect(runtime.runSynthesis).not.toHaveBeenCalled();
   });
 
   it('fails closed when the cached plan is invalid', async () => {
@@ -228,6 +236,7 @@ initialPrompt: Create the security-review Superwarden skill.
       'Cached Superwarden plan is invalid',
     );
     expect(runtime.runAuxiliary).not.toHaveBeenCalled();
+    expect(runtime.runSynthesis).not.toHaveBeenCalled();
   });
 
   it('regenerates when requested', async () => {
@@ -248,6 +257,6 @@ initialPrompt: Create the security-review Superwarden skill.
     expect(result.source).toBe('generated');
     expect(result.plan.tasks[0]?.id).toBe('data-exposure');
     expect(JSON.parse(readFileSync(cachePath, 'utf-8')).plan.tasks[0].id).toBe('data-exposure');
-    expect(runtime.runAuxiliary).toHaveBeenCalledTimes(1);
+    expect(runtime.runSynthesis).toHaveBeenCalledTimes(1);
   });
 });

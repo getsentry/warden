@@ -36,6 +36,7 @@ describe('parseJsonFromOutput', () => {
     const runtime: Runtime = {
       name: 'claude',
       runSkill: vi.fn(),
+      runSynthesis: vi.fn(),
       runAuxiliary: vi.fn(async <T>() => ({
         success: true as const,
         data: { value: 'fixed' } as T,

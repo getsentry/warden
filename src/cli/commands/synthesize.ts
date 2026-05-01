@@ -398,6 +398,16 @@ function readPromptFile(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf-8').trim();
 }
 
+function resolvePromptValue(prompt: string): string {
+  if (prompt.startsWith('@@')) {
+    return prompt.slice(1).trim();
+  }
+  if (prompt.startsWith('@')) {
+    return readPromptFile(prompt.slice(1));
+  }
+  return prompt.trim();
+}
+
 interface RunSynthesizeState {
   abortController?: AbortController;
   interrupted?: { value: boolean };
@@ -415,24 +425,19 @@ function isInterrupted(error: unknown, state: RunSynthesizeState | undefined): b
 
 function resolveSynthesisModel(
   config: WardenConfig | undefined,
-  skillConfig: WardenConfig['skills'][number] | undefined,
   options: CLIOptions,
 ): string | undefined {
   return (
-    emptyToUndefined(skillConfig?.model) ??
-    emptyToUndefined(config?.defaults?.agent?.model) ??
-    emptyToUndefined(config?.defaults?.model) ??
+    emptyToUndefined(config?.defaults?.synthesis?.model) ??
+    emptyToUndefined(config?.defaults?.auxiliary?.model) ??
     emptyToUndefined(options.model) ??
     emptyToUndefined(process.env['WARDEN_MODEL'])
   );
 }
 
 async function resolveInitialPrompt(options: CLIOptions, skillName: string): Promise<string | undefined> {
-  if (options.initialPrompt?.trim()) {
-    return options.initialPrompt.trim();
-  }
-  if (options.promptFile) {
-    return readPromptFile(options.promptFile);
+  if (options.prompt?.trim()) {
+    return resolvePromptValue(options.prompt);
   }
   if (process.stdin.isTTY) {
     return promptMultiline(
@@ -470,7 +475,7 @@ async function resolveSkillOrCreateSuperwarden(args: {
   const initialPrompt = await resolveInitialPrompt(options, skillName);
   if (!initialPrompt) {
     reporter.error(`Superwarden skill not found: ${skillName}`);
-    reporter.tip(`Run interactively, or pass --initial-prompt/--prompt-file to create .warden/superwarden/${skillName}`);
+    reporter.tip(`Run interactively, or pass --prompt/-p to create .warden/superwarden/${skillName}`);
     throw new CoordinatorPlanError(`Missing initial prompt for new Superwarden skill: ${skillName}`);
   }
 
@@ -549,9 +554,9 @@ export async function runSynthesize(
   const apiKey = getAnthropicApiKey();
   const runtimeName = config?.defaults?.runtime ?? 'claude';
   const runtime = getRuntime(runtimeName);
-  const model = resolveSynthesisModel(config, skillConfig, options);
-  const repairModel = emptyToUndefined(config?.defaults?.fastModel?.model);
-  const maxRetries = config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
+  const model = resolveSynthesisModel(config, options);
+  const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
+  const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
 
   try {
     const source = collectCoordinatorSource(skill);

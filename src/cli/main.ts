@@ -117,6 +117,10 @@ function createReporter(options: CLIOptions): Reporter {
   return new Reporter(outputMode, verbosity);
 }
 
+export function resolveInvocationCwd(baseCwd: string, cliCwd: string | undefined): string {
+  return cliCwd ? resolve(baseCwd, cliCwd) : baseCwd;
+}
+
 /**
  * Resolve the config file path based on CLI options and repo root.
  */
@@ -671,6 +675,7 @@ async function createSuperwardenSkillTasks(args: {
     remote: spec.remote,
     offline: options.offline,
   });
+  const synthesisModel = spec.runnerOptions.synthesisModel;
   const source = collectCoordinatorSource(parentSkill);
   const runtimeName = spec.runnerOptions.runtime ?? 'claude';
   const runtime = getRuntime(runtimeName);
@@ -678,7 +683,7 @@ async function createSuperwardenSkillTasks(args: {
   const planCachePath = getCoordinatorPlanCachePath({
     skillName: parentSkill.name,
     sourceHash: source.hash,
-    model: spec.runnerOptions.model,
+    model: synthesisModel,
     cacheDir,
   });
   const planCacheHit = existsSync(planCachePath);
@@ -689,7 +694,7 @@ async function createSuperwardenSkillTasks(args: {
   if (!options.json) {
     reporter.blank();
     reporter.text(`  Skill    ${parentSkill.name}`);
-    reporter.text(`  Model    ${spec.runnerOptions.model ?? 'default'} [${runtimeName}]`);
+    reporter.text(`  Model    ${synthesisModel ?? 'default'} [${runtimeName}]`);
     reporter.blank();
     reporter.bold('PLAN');
     if (!reporter.mode.isTTY) {
@@ -702,13 +707,13 @@ async function createSuperwardenSkillTasks(args: {
     skill: parentSkill,
     runtime,
     apiKey: spec.runnerOptions.apiKey,
-    model: spec.runnerOptions.model,
+    model: synthesisModel,
     maxRetries: spec.runnerOptions.auxiliaryMaxRetries,
     regenerate: options.regenerate,
     abortController,
     cacheDir,
     repoPath,
-    repairModel: spec.runnerOptions.fastModelModel,
+    repairModel: spec.runnerOptions.auxiliaryModel,
     repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
   });
   const planResult = options.json
@@ -752,9 +757,9 @@ async function createSuperwardenSkillTasks(args: {
       rootDir: childRoot,
       runtime,
       repoPath,
-      model: spec.runnerOptions.model,
+      model: synthesisModel,
       apiKey: spec.runnerOptions.apiKey,
-      repairModel: spec.runnerOptions.fastModelModel,
+      repairModel: spec.runnerOptions.auxiliaryModel,
       repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
       abortController,
       regenerate: regenerateChildSkills,
@@ -1677,6 +1682,20 @@ export async function main(): Promise<void> {
     process.exit(0);
   }
 
+  const reporter = createReporter(options);
+  const originalCwd = process.cwd();
+  const invocationCwd = resolveInvocationCwd(originalCwd, options.cwd);
+  if (invocationCwd !== originalCwd) {
+    try {
+      process.chdir(invocationCwd);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      reporter.error(`Unable to change to ${invocationCwd}: ${message}`);
+      process.exit(1);
+      return;
+    }
+  }
+
   // Load environment variables from .env files at CLI entry point.
   // Try repo root first, fall back to cwd if not in a git repo.
   const cwd = process.cwd();
@@ -1687,9 +1706,6 @@ export async function main(): Promise<void> {
     // Not in a git repo - use cwd
   }
   loadEnvFiles(envDir);
-
-  // Create reporter based on options
-  const reporter = createReporter(options);
 
   // Show header (unless JSON output or quiet)
   if (!options.json) {

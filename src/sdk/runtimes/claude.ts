@@ -67,10 +67,10 @@ function getClaudeProviderOptions(providerOptions: unknown): ClaudeProviderOptio
   };
 }
 
-function missingApiKeyResult<T>(): AuxiliaryRunResult<T> {
+function missingApiKeyResult<T>(kind: 'auxiliary' | 'synthesis'): AuxiliaryRunResult<T> {
   return {
     success: false,
-    error: 'Anthropic API key required for Claude auxiliary runtime',
+    error: `Anthropic API key required for Claude ${kind} runtime`,
     usage: emptyUsage(),
   };
 }
@@ -92,6 +92,7 @@ function resolveClaudeSkillTools(tools: ToolConfig | undefined): {
 
 async function runStructured<T>(
   request: {
+    kind: 'auxiliary' | 'synthesis';
     apiKey?: string;
     prompt: string;
     schema: SynthesisRunRequest<T>['schema'];
@@ -105,7 +106,7 @@ async function runStructured<T>(
   }
 ): Promise<AuxiliaryRunResult<T>> {
   if (!request.apiKey) {
-    return missingApiKeyResult();
+    return missingApiKeyResult(request.kind);
   }
 
   if (request.tools) {
@@ -477,10 +478,10 @@ export const claudeRuntime: Runtime = {
   },
 
   async runAuxiliary<T>(request: AuxiliaryRunRequest<T>): Promise<AuxiliaryRunResult<T>> {
-    return runStructured(request);
+    return runStructured({ kind: 'auxiliary', ...request });
   },
 
   async runSynthesis<T>(request: SynthesisRunRequest<T>): Promise<AuxiliaryRunResult<T>> {
-    return runStructured(request);
+    return runStructured({ kind: 'synthesis', ...request });
   },
 };

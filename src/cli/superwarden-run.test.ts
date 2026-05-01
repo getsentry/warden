@@ -12,6 +12,8 @@ import { Verbosity } from './output/verbosity.js';
 import { collectCoordinatorSource, COORDINATOR_PLAN_CACHE_KIND, COORDINATOR_PLAN_CACHE_SCHEMA_VERSION, COORDINATOR_VERSION, getCoordinatorPlanCachePath, type CoordinatorPlan } from '../coordinator/plan.js';
 import { getCoordinatorChildSkillsRoot } from '../coordinator/child-skills.js';
 import { getSuperwardenCacheDir } from '../coordinator/superwarden.js';
+import * as coordinatorPlanModule from '../coordinator/plan.js';
+import * as childSkillsModule from '../coordinator/child-skills.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import type { EventContext } from '../types/index.js';
 
@@ -193,6 +195,73 @@ describe('Superwarden run task expansion', () => {
     expect(mockRunWithLiveStatus).toHaveBeenCalledWith(expect.objectContaining({
       message: 'authz [1/1]',
     }));
+  });
+
+  it('uses synthesisModel for Superwarden plan and child synthesis', async () => {
+    const spec = await writeCachedSuperwardenFixture(tempDir);
+    spec.runnerOptions = {
+      model: 'claude-sonnet-4-5',
+      synthesisModel: 'claude-opus-4-5',
+      auxiliaryModel: 'claude-haiku-4-5',
+      auxiliaryMaxRetries: 7,
+    };
+
+    const parentSkill = await resolveSkillAsync('security-review', tempDir);
+    const source = collectCoordinatorSource(parentSkill);
+    const fixtureCachePath = getCoordinatorPlanCachePath({
+      skillName: parentSkill.name,
+      sourceHash: source.hash,
+      cacheDir: getSuperwardenCacheDir(tempDir, parentSkill.name),
+    });
+    const cachePath = getCoordinatorPlanCachePath({
+      skillName: parentSkill.name,
+      sourceHash: source.hash,
+      model: 'claude-opus-4-5',
+      cacheDir: getSuperwardenCacheDir(tempDir, parentSkill.name),
+    });
+    const cached = JSON.parse(readFileSync(fixtureCachePath, 'utf-8')) as { plan: CoordinatorPlan };
+    const planSpy = vi.spyOn(coordinatorPlanModule, 'synthesizeCoordinatorPlan').mockResolvedValue({
+      source: 'generated',
+      cachePath,
+      plan: cached.plan,
+    });
+    const childSpy = vi.spyOn(childSkillsModule, 'synthesizeCoordinatorChildSkill').mockResolvedValue({
+      source: 'generated',
+      taskId: 'authz',
+      name: 'authz',
+      path: join(tempDir, 'generated', 'authz'),
+      bytes: 1024,
+      durationMs: 2500,
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        costUSD: 0.001,
+      },
+      externalSources: [],
+      missingInputs: [],
+    });
+
+    await createSkillTasks({
+      specs: [spec],
+      repoPath: tempDir,
+      options: CLIOptionsSchema.parse({ quiet: true }),
+      reporter: new Reporter(detectOutputMode(false), Verbosity.Quiet),
+    });
+
+    expect(planSpy).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-opus-4-5',
+      repairModel: 'claude-haiku-4-5',
+      repairMaxRetries: 7,
+    }));
+    expect(childSpy).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-opus-4-5',
+      repairModel: 'claude-haiku-4-5',
+      repairMaxRetries: 7,
+    }));
+    planSpy.mockRestore();
+    childSpy.mockRestore();
   });
 
   it('infers coordinator mode for explicit repo-local Superwarden skills', () => {

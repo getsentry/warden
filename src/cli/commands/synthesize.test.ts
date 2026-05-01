@@ -90,13 +90,17 @@ describe('synthesize command', () => {
       join(tempDir, 'warden.toml'),
       `version = 1
 
-[defaults.fastModel]
-model = "fast-model"
+[defaults.auxiliary]
+model = "aux-model"
+maxRetries = 3
+
+[defaults.synthesis]
+model = "synth-model"
 
 [[skills]]
 name = "security-review"
 mode = "coordinator"
-model = "skill-model"
+model = "skill-agent-model"
 `,
       'utf-8',
     );
@@ -174,14 +178,16 @@ Use WebSearch or WebFetch for public prior art.
     expect(exitCode).toBe(0);
     expect(mockSynthesizeCoordinatorPlan).toHaveBeenCalledWith(expect.objectContaining({
       skill: expect.objectContaining({ name: 'security-review' }),
-      model: 'skill-model',
+      model: 'synth-model',
       regenerate: true,
+      repairModel: 'aux-model',
+      repairMaxRetries: 3,
       cacheDir: expect.stringContaining(join('.warden', 'superwarden', 'security-review', 'cache')),
     }));
     const stderr = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
     expect(stderr).not.toContain('\nSUPERWARDEN\n');
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Skill    security-review'));
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Model    skill-model [claude]'));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Model    synth-model [claude]'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('PLAN'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Synthesizing Superwarden plan...'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('TASKS'));
@@ -212,7 +218,9 @@ Use WebSearch or WebFetch for public prior art.
     expect(readFileSync(childSkillPath, 'utf-8')).toContain('Use WebSearch or WebFetch');
     expect(mockSynthesizeCoordinatorChildSkill).toHaveBeenCalledWith(expect.objectContaining({
       repoPath: expect.stringContaining('warden-synthesize-test-'),
-      model: 'skill-model',
+      model: 'synth-model',
+      repairModel: 'aux-model',
+      repairMaxRetries: 3,
       regenerate: true,
     }));
     stderrSpy.mockRestore();
@@ -451,7 +459,7 @@ Use WebSearch or WebFetch for public prior art.
     const exitCode = await runSynthesize(
       createOptions({
         skill: 'brand-new-security',
-        initialPrompt: 'Review changed code for secret exposure.',
+        prompt: 'Review changed code for secret exposure.',
         description: 'Review secret exposure.',
       }),
       reporter,
@@ -476,6 +484,47 @@ Use WebSearch or WebFetch for public prior art.
     expect(stderr.search(/Source\s+\.warden\/superwarden\/brand-new-security/)).toBeLessThan(
       stderr.search(/Prompt\s+40 chars/),
     );
+    stderrSpy.mockRestore();
+  });
+
+  it('creates a missing Superwarden skill from --prompt @file shorthand', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    writeFileSync(join(tempDir, 'prompt.md'), 'Review changed code for insecure secret storage.\n', 'utf-8');
+    mockSynthesizeCoordinatorPlan.mockResolvedValue({
+      source: 'generated',
+      cachePath: join(tempDir, '.warden', 'superwarden', 'file-backed-security', 'cache', 'hash.json'),
+      plan: {
+        version: 1,
+        skill: 'file-backed-security',
+        sourceHash: 'hash',
+        coordinatorVersion: '1',
+        synthesis: {
+          phases: [{ id: 'collect-inputs', status: 'generated' }],
+        },
+        tasks: [{
+          id: 'secrets',
+          title: 'Secret handling',
+          scope: 'Find secret storage issues.',
+          prompt: 'Review secret storage issues.',
+          evidenceRequirements: ['Trace where the secret is persisted.'],
+          outOfScope: [],
+        }],
+      },
+    });
+
+    const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
+    const exitCode = await runSynthesize(
+      createOptions({
+        skill: 'file-backed-security',
+        prompt: '@prompt.md',
+      }),
+      reporter,
+    );
+
+    expect(exitCode).toBe(0);
+    const root = join(tempDir, '.warden', 'superwarden', 'file-backed-security');
+    expect(readFileSync(join(root, 'SKILL.md'), 'utf-8')).toContain('Review changed code for insecure secret storage.');
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Created file-backed-security'));
     stderrSpy.mockRestore();
   });
 });

@@ -72,6 +72,7 @@ describe('Superwarden child skill synthesis', () => {
     const runtime: Runtime = {
       name: 'claude',
       runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
       runSkill: vi.fn(async () => ({
         result: {
           status: 'success' as const,
@@ -137,6 +138,7 @@ describe('Superwarden child skill synthesis', () => {
     const runtime: Runtime = {
       name: 'claude',
       runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
       runSkill: vi.fn(async () => ({
         result: {
           status: 'success' as const,
@@ -195,6 +197,7 @@ describe('Superwarden child skill synthesis', () => {
     const runtime: Runtime = {
       name: 'claude',
       runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
       runSkill: vi.fn(async () => ({
         stderr: 'diagnostic line from claude',
         result: {

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   mergeSkillRunnerOptions,
   processTaskResults,
+  resolveInvocationCwd,
   resolveCliDefaultAuxiliaryModel,
   resolveCliDefaultSynthesisModel,
   resolveCliDefaultModel,
@@ -259,5 +260,15 @@ describe('processTaskResults', () => {
 
     expect(processed.reports).toHaveLength(2);
     expect(processed.reports[0]!.error).toBeDefined();
+  });
+});
+
+describe('resolveInvocationCwd', () => {
+  it('uses the current working directory by default', () => {
+    expect(resolveInvocationCwd('/repo', undefined)).toBe('/repo');
+  });
+
+  it('resolves a relative cwd override from the original working directory', () => {
+    expect(resolveInvocationCwd('/launcher', '../repo')).toBe('/repo');
   });
 });

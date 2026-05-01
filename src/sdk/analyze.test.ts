@@ -130,6 +130,7 @@ describe('analyzeFile', () => {
       name: 'claude',
       runSkill,
       runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
     } as unknown as Runtime);
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const onRetry = vi.fn();

@@ -8,6 +8,7 @@ import { getVersion } from '../utils/index.js';
 export const CLIOptionsSchema = z.object({
   targets: z.array(z.string()).optional(),
   skill: z.string().optional(),
+  cwd: z.string().optional(),
   config: z.string().optional(),
   json: z.boolean().default(false),
   /** Write full run output to a JSONL file */
@@ -51,10 +52,8 @@ export const CLIOptionsSchema = z.object({
   regenerate: z.boolean().default(false),
   /** Export a Superwarden plan JSON artifact to this path */
   exportPath: z.string().optional(),
-  /** Initial prompt for creating a new Superwarden skill */
-  initialPrompt: z.string().optional(),
-  /** File containing the initial prompt for creating a new Superwarden skill */
-  promptFile: z.string().optional(),
+  /** Prompt for creating a new Superwarden skill. Prefix with @ to load from a file. */
+  prompt: z.string().optional(),
   /** Description for a new Superwarden skill */
   description: z.string().optional(),
 });
@@ -114,6 +113,7 @@ Targets:
   (none)               Analyze current branch changes against the default branch
 
 Options:
+  -C, --cwd <path>     Run as if invoked from this directory
   --skill <name>       Run only this skill (default: run all built-in skills)
   --config <path>      Path to warden.toml (default: ./warden.toml)
   -m, --model <model>  Model to use (fallback when not set in config)
@@ -154,9 +154,8 @@ Synth Options:
   --show-plan          Show the Superwarden plan
   --regenerate         Ignore cached Superwarden plan and synthesize a new one
   --export <path>      Export the Superwarden plan JSON to a file
-  --initial-prompt <text>
-                       Create a missing Superwarden skill from this prompt
-  --prompt-file <path> Create a missing Superwarden skill from a prompt file
+  -p, --prompt <value> Create a missing Superwarden skill from prompt text
+                       Prefix with @ to read the prompt from a file
   --description <text> Description for a newly created Superwarden skill
 
 Setup-app Options:
@@ -187,6 +186,8 @@ Examples:
   warden --json                           # Output as JSON
   warden --fail-on high                   # Fail if high+ severity findings
   warden --offline                        # Use cached skills only
+  warden -C ../other-repo synth security-review
+                                          # Run synth against another repo
   warden sync                             # Update all unpinned remote skills
   warden synth security-review --show-plan
                                           # Show a generated Superwarden plan
@@ -306,6 +307,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
   const { values, positionals } = parseArgs({
     args: filteredArgv,
     options: {
+      cwd: { type: 'string', short: 'C' },
       skill: { type: 'string' },
       config: { type: 'string' },
       model: { type: 'string', short: 'm' },
@@ -323,8 +325,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'show-plan': { type: 'boolean', default: false },
       regenerate: { type: 'boolean', default: false },
       export: { type: 'string' },
-      'initial-prompt': { type: 'string' },
-      'prompt-file': { type: 'string' },
+      prompt: { type: 'string', short: 'p' },
       description: { type: 'string' },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
@@ -390,6 +391,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     return {
       command: 'init',
       options: CLIOptionsSchema.parse({
+        cwd: values.cwd,
         force: values.force,
         quiet: values.quiet,
         color: resolveColorOption(values),
@@ -406,6 +408,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     return {
       command: 'add',
       options: CLIOptionsSchema.parse({
+        cwd: values.cwd,
         skill: values.skill ?? skillArg,
         list: values.list,
         remote: values.remote,
@@ -425,6 +428,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     return {
       command: 'sync',
       options: CLIOptionsSchema.parse({
+        cwd: values.cwd,
         remote: remoteArg,
         quiet: values.quiet,
         color: resolveColorOption(values),
@@ -440,6 +444,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     return {
       command: 'synthesize',
       options: CLIOptionsSchema.parse({
+        cwd: values.cwd,
         skill: skillArg,
         config: values.config,
         model: values.model,
@@ -447,8 +452,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         showPlan: values['show-plan'],
         regenerate: values.regenerate,
         exportPath: values.export,
-        initialPrompt: values['initial-prompt'],
-        promptFile: values['prompt-file'],
+        prompt: values.prompt,
         description: values.description,
         remote: values.remote,
         offline: values.offline,
@@ -476,6 +480,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     return {
       command: 'setup-app',
       options: CLIOptionsSchema.parse({
+        cwd: values.cwd,
         quiet: values.quiet,
         color: resolveColorOption(values),
       }),
@@ -524,6 +529,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     return {
       command: 'runs',
       options: CLIOptionsSchema.parse({
+        cwd: values.cwd,
         json: values.json,
         reportOn: values['report-on'] as SeverityThreshold | undefined,
         minConfidence: values['min-confidence'] as ConfidenceThreshold | undefined,
@@ -544,6 +550,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
   const rawOptions = {
     targets: targets.length > 0 ? targets : undefined,
     skill: values.skill,
+    cwd: values.cwd,
     config: values.config,
     model: values.model,
     json: values.json,

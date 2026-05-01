@@ -480,7 +480,7 @@ export async function synthesizeCoordinatorPlan(
     }
   }
 
-  const result = await runtime.runAuxiliary({
+  const result = await runtime.runSynthesis({
     task: 'superwarden_synthesis',
     apiKey,
     prompt: buildSynthesisPrompt(skill, source),

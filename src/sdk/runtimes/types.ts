@@ -73,13 +73,14 @@ export interface AuxiliaryTool {
 }
 
 export type AuxiliaryTask =
-  | 'superwarden_synthesis'
   | 'extraction'
   | 'deduplication'
   | 'fix_quality'
   | 'fix_evaluation';
 
-export type SynthesisTask = 'consolidation';
+export type SynthesisTask =
+  | 'consolidation'
+  | 'superwarden_synthesis';
 
 export type AuxiliaryRunResult<T> =
   | { success: true; data: T; usage: UsageStats }
