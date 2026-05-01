@@ -15,6 +15,9 @@
 version = 1                    # Required, must be 1
 
 [defaults]                     # Optional, inherited by all skills
+[defaults.agent]               # Optional, default analysis runtime settings
+[defaults.auxiliary]           # Optional, default helper model settings
+[defaults.synthesis]           # Optional, default synthesis model settings
 [[skills]]                     # Required, array of skill configs
 ```
 
@@ -22,15 +25,25 @@ version = 1                    # Required, must be 1
 
 ```toml
 [defaults]
-model = "claude-sonnet-4-20250514"    # Default model
-maxTurns = 50                         # Max agentic turns per hunk
+model = "claude-sonnet-4-5"           # Legacy default analysis model
+maxTurns = 50                         # Legacy default analysis turns
 defaultBranch = "main"                # Base branch for comparisons
-failOn = "high"                # Exit 1 if findings >= this severity
-reportOn = "medium"            # Show findings >= this severity
-maxFindings = 50               # Max findings to report (0 = unlimited)
-reportOnSuccess = false        # Post report even with no findings
-paths = ["src/**/*.ts"]        # Include only matching files
-ignorePaths = ["*.test.ts"]    # Exclude matching files
+failOn = "high"                       # Exit 1 if findings >= this severity
+reportOn = "medium"                   # Show findings >= this severity
+maxFindings = 50                      # Max findings to report (0 = unlimited)
+reportOnSuccess = false               # Post report even with no findings
+ignorePaths = ["*.test.ts"]           # Exclude matching files
+
+[defaults.agent]
+model = "claude-sonnet-4-5"           # Default repo-aware analysis model
+maxTurns = 50                         # Max agentic turns per hunk
+
+[defaults.auxiliary]
+model = "claude-haiku-4-5"            # Helper model for extraction and fix gates
+maxRetries = 5                        # Retries for auxiliary structured calls
+
+[defaults.synthesis]
+model = "claude-opus-4-5"             # Consolidation and Superwarden synthesis model
 
 [defaults.chunking]
 enabled = true                 # Enable hunk-based chunking
@@ -45,6 +58,8 @@ pattern = "*.config.*"         # Glob pattern
 mode = "whole-file"            # per-hunk | whole-file | skip
 ```
 
+`[defaults.synthesis].model` falls back to `[defaults.auxiliary].model` when omitted. Legacy `[defaults].model` and `[defaults].maxTurns` are still supported as analysis fallbacks.
+
 ## Skills Section
 
 ```toml
@@ -55,7 +70,7 @@ paths = ["src/**"]             # Include only matching files
 ignorePaths = ["**/*.test.ts"] # Exclude matching files
 
 # Optional overrides (inherit from defaults if not set)
-model = "claude-opus-4-20250514"
+model = "claude-opus-4-5"
 maxTurns = 100
 failOn = "high"
 reportOn = "medium"
@@ -114,7 +129,8 @@ Always skipped (cannot be overridden):
 ## Model Precedence (highest to lowest)
 
 1. Skill-level `model`
-2. `[defaults]` `model`
-3. CLI `--model` flag
-4. `WARDEN_MODEL` env var
-5. SDK default
+2. `[defaults.agent]` `model`
+3. `[defaults]` `model` (legacy fallback)
+4. CLI `--model` flag
+5. `WARDEN_MODEL` env var
+6. SDK default

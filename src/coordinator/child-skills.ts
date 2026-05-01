@@ -719,9 +719,7 @@ export function buildCoordinatorChildSkillsResult(
     rootDir,
     artifacts,
     bytes: artifacts.reduce((sum, artifact) => sum + artifact.bytes, 0),
-    durationMs: artifacts.length > 0
-      ? artifacts.reduce((sum, artifact) => sum + artifact.durationMs, 0)
-      : durationMs,
+    durationMs,
     usage: artifacts.length > 0
       ? aggregateUsage(artifacts.map((artifact) => artifact.usage))
       : emptyUsage(),

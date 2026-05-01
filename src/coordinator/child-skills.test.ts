@@ -99,7 +99,7 @@ describe('Superwarden child skill synthesis', () => {
       repoPath: tempDir,
       model: 'agent-model',
     });
-    const summary = buildCoordinatorChildSkillsResult(rootDir, [artifact], 1);
+    const summary = buildCoordinatorChildSkillsResult(rootDir, [artifact], 1_500);
 
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
       tools: { allowed: ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'] },
@@ -114,7 +114,7 @@ describe('Superwarden child skill synthesis', () => {
     expect(artifact.source).toBe('generated');
     expect(artifact.durationMs).toBe(12_000);
     expect(artifact.externalSources).toHaveLength(1);
-    expect(summary.durationMs).toBe(12_000);
+    expect(summary.durationMs).toBe(1_500);
     expect(summary.usage.inputTokens).toBe(1000);
   });
 

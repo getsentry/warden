@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLIOptionsSchema } from './args.js';
 import { createSkillTasks, inferExplicitSkillExecutionMode, type RunSkillSpec } from './main.js';
-import { runWithLiveStatus } from './output/live-status.js';
+import { runWithLiveStatus, runWithLiveStatusList } from './output/live-status.js';
 import { Reporter } from './output/reporter.js';
 import { detectOutputMode } from './output/tty.js';
 import { Verbosity } from './output/verbosity.js';
@@ -19,9 +19,14 @@ import type { EventContext } from '../types/index.js';
 
 vi.mock('./output/live-status.js', () => ({
   runWithLiveStatus: vi.fn(async <T>(args: { task: () => Promise<T> }) => args.task()),
+  runWithLiveStatusList: vi.fn(async <TItem, TResult>(args: {
+    items: TItem[];
+    task: (item: TItem, index: number) => Promise<TResult>;
+  }) => Promise.all(args.items.map((item, index) => args.task(item, index)))),
 }));
 
 const mockRunWithLiveStatus = vi.mocked(runWithLiveStatus);
+const mockRunWithLiveStatusList = vi.mocked(runWithLiveStatusList);
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -163,6 +168,7 @@ describe('Superwarden run task expansion', () => {
       specs: [spec],
       repoPath: tempDir,
       options: CLIOptionsSchema.parse({ quiet: true }),
+      parallel: 4,
       reporter: new Reporter(detectOutputMode(false), Verbosity.Quiet),
     });
 
@@ -183,6 +189,7 @@ describe('Superwarden run task expansion', () => {
         specs: [spec],
         repoPath: tempDir,
         options: CLIOptionsSchema.parse({}),
+        parallel: 4,
         reporter: new Reporter({ isTTY: true, supportsColor: false, columns: 80 }, Verbosity.Normal),
       });
     } finally {
@@ -194,8 +201,108 @@ describe('Superwarden run task expansion', () => {
       detail: expect.stringContaining('Validating cached Superwarden plan...'),
     }));
     expect(mockRunWithLiveStatus).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'authz [1/1]',
+      message: 'authz',
     }));
+  });
+
+  it('renders the active child tasks through the list live-status helper when synthesis runs in parallel', async () => {
+    const spec = await writeCachedSuperwardenFixture(tempDir);
+    const parentSkill = await resolveSkillAsync('security-review', tempDir);
+    const source = collectCoordinatorSource(parentSkill);
+    const cachePath = getCoordinatorPlanCachePath({
+      skillName: parentSkill.name,
+      sourceHash: source.hash,
+      cacheDir: getSuperwardenCacheDir(tempDir, parentSkill.name),
+    });
+    const planSpy = vi.spyOn(coordinatorPlanModule, 'synthesizeCoordinatorPlan').mockResolvedValue({
+      source: 'generated',
+      cachePath,
+      plan: {
+        version: 1,
+        skill: 'security-review',
+        sourceHash: source.hash,
+        coordinatorVersion: COORDINATOR_VERSION,
+        synthesis: {
+          phases: [{ id: 'collect-inputs', status: 'generated' }],
+          externalSources: [],
+        },
+        tasks: [
+          {
+            id: 'authz',
+            title: 'Authorization',
+            scope: 'Find authorization boundary issues.',
+            prompt: 'Review authorization boundaries.',
+            evidenceRequirements: ['Trace the permission boundary.'],
+            outOfScope: [],
+          },
+          {
+            id: 'injection',
+            title: 'Injection',
+            scope: 'Find injection issues.',
+            prompt: 'Review injection issues.',
+            evidenceRequirements: ['Trace the data flow.'],
+            outOfScope: [],
+          },
+        ],
+      },
+    });
+    let active = 0;
+    let maxActive = 0;
+    const childSpy = vi.spyOn(childSkillsModule, 'synthesizeCoordinatorChildSkill').mockImplementation(async (args) => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active--;
+      return {
+        source: 'generated',
+        taskId: args.task.id,
+        name: args.task.id,
+        path: join(tempDir, 'generated', args.task.id),
+        bytes: 1024,
+        durationMs: 10,
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          costUSD: 0.001,
+        },
+        externalSources: [],
+        missingInputs: [],
+      };
+    });
+
+    await createSkillTasks({
+      specs: [spec],
+      repoPath: tempDir,
+      options: CLIOptionsSchema.parse({ parallel: 2 }),
+      parallel: 2,
+      reporter: new Reporter({ isTTY: true, supportsColor: false, columns: 80 }, Verbosity.Normal),
+    });
+
+    expect(mockRunWithLiveStatusList).toHaveBeenCalledWith(expect.objectContaining({
+      concurrency: 2,
+      items: expect.arrayContaining([
+        expect.objectContaining({ childMessage: 'authz' }),
+        expect.objectContaining({ childMessage: 'injection' }),
+      ]),
+    }));
+    const parallelCall = mockRunWithLiveStatusList.mock.calls.at(-1)?.[0];
+    expect(parallelCall?.getDoneDetail?.({
+      source: 'cache',
+    } as never, parallelCall.items[0], 0)).toBe('[cached]');
+    expect(parallelCall?.showDoneDuration?.({
+      source: 'cache',
+    } as never, parallelCall.items[0], 0)).toBe(false);
+    expect(parallelCall?.getDoneDetail?.({
+      source: 'generated',
+    } as never, parallelCall.items[1], 1)).toBe('[generated]');
+    expect(parallelCall?.showDoneDuration?.({
+      source: 'generated',
+    } as never, parallelCall.items[1], 1)).toBe(true);
+    expect(maxActive).toBe(2);
+    childSpy.mockRestore();
+    planSpy.mockRestore();
   });
 
   it('shows the task count in the task section header', async () => {
@@ -207,6 +314,7 @@ describe('Superwarden run task expansion', () => {
         specs: [spec],
         repoPath: tempDir,
         options: CLIOptionsSchema.parse({}),
+        parallel: 4,
         reporter: new Reporter(detectOutputMode(false), Verbosity.Normal),
       });
       const output = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
@@ -266,6 +374,7 @@ describe('Superwarden run task expansion', () => {
       specs: [spec],
       repoPath: tempDir,
       options: CLIOptionsSchema.parse({ quiet: true }),
+      parallel: 4,
       reporter: new Reporter(detectOutputMode(false), Verbosity.Quiet),
     });
 

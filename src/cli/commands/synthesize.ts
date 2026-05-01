@@ -11,7 +11,7 @@ import { Verbosity } from '../output/verbosity.js';
 import { formatBytes, formatCost, formatDuration, formatTokens, pluralize, truncate } from '../output/formatters.js';
 import { runWithLiveStatus } from '../output/live-status.js';
 import { fileSize, formatRelativePath, prepareSuperwardenArtifacts } from '../superwarden.js';
-import { getAnthropicApiKey } from '../../utils/index.js';
+import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../../utils/index.js';
 import { aggregateUsage } from '../../sdk/usage.js';
 import { getRuntime } from '../../sdk/runtimes/index.js';
 import { resolveSkillAsync, SkillLoaderError } from '../../skills/loader.js';
@@ -328,8 +328,9 @@ function renderChildSkillArtifact(args: {
 function renderChildSkillSummary(args: {
   reporter: Reporter;
   childSkills: WriteCoordinatorChildSkillsResult;
+  durationMs?: number;
 }): void {
-  const { reporter, childSkills } = args;
+  const { reporter, childSkills, durationMs } = args;
   const generated = childSkills.artifacts.filter((artifact) => artifact.source === 'generated').length;
   const generatedArtifacts = childSkills.artifacts.filter((artifact) => artifact.source === 'generated');
   const generatedUsage = generatedArtifacts.length > 0
@@ -349,7 +350,7 @@ function renderChildSkillSummary(args: {
     reporter,
     'Synthesis',
     generatedArtifacts.length > 0
-      ? formatDuration(generatedArtifacts.reduce((sum, artifact) => sum + artifact.durationMs, 0))
+      ? formatDuration(durationMs ?? generatedArtifacts.reduce((sum, artifact) => sum + artifact.durationMs, 0))
       : undefined,
   );
   renderDetail(
@@ -541,6 +542,7 @@ export async function runSynthesize(
   const model = resolveSynthesisModel(config, options);
   const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
   const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
+  const parallel = options.parallel ?? config?.runner?.concurrency ?? DEFAULT_CONCURRENCY;
 
   try {
     if (!options.json) {
@@ -579,6 +581,7 @@ export async function runSynthesize(
       apiKey,
       repairModel,
       repairMaxRetries: maxRetries,
+      parallel,
       regenerate: options.regenerate,
       abortController: state?.abortController,
       showPlanOnly: options.showPlan,
@@ -605,7 +608,7 @@ export async function runSynthesize(
         reporter.blank();
         renderTasksHeading(reporter, planResult.plan.tasks.length);
       },
-      childMessage: ({ task, index, total }) => `${task.id} ${chalk.dim(`[${index + 1}/${total}]`)}`,
+      childMessage: ({ task }) => task.id,
       onNonTTYChildStep: (message) => reporter.step(message),
       onChildArtifact: ({ artifact, task }) => {
         if (options.json) {
@@ -677,7 +680,11 @@ export async function runSynthesize(
         task: reviewCleanup,
       });
 
-      renderChildSkillSummary({ reporter, childSkills: preparedChildSkills });
+      renderChildSkillSummary({
+        reporter,
+        childSkills: preparedChildSkills,
+        durationMs: prepared.childDurationMs,
+      });
       renderCleanupReview({ reporter, review: cleanupReview });
       renderTryIt(reporter, skill.name);
     }

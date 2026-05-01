@@ -20,7 +20,7 @@ export const CLIOptionsSchema = z.object({
   /** Only show findings at or above this confidence in output */
   minConfidence: ConfidenceThresholdSchema.optional(),
   help: z.boolean().default(false),
-  /** Max concurrent trigger/skill executions (default: 4) */
+  /** Max concurrent task or skill executions (default depends on command) */
   parallel: z.number().int().positive().optional(),
   /** Model to use for analysis (fallback when not set in config) */
   model: z.string().optional(),
@@ -392,6 +392,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         regenerate: Boolean(values.regenerate),
         exportPath: typeof values.export === 'string' ? values.export : undefined,
         prompt: typeof values.prompt === 'string' ? values.prompt : undefined,
+        parallel: typeof values.parallel === 'string' ? parseInt(values.parallel, 10) : undefined,
         remote: typeof values.remote === 'string' ? values.remote : undefined,
         offline: Boolean(values.offline),
       }),

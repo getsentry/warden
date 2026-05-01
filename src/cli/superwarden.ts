@@ -21,7 +21,8 @@ import {
 import { getSuperwardenCacheDir } from '../coordinator/superwarden.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import type { RuntimeName } from '../sdk/runtimes/index.js';
-import { runWithLiveStatus } from './output/live-status.js';
+import { DEFAULT_CONCURRENCY, runPool } from '../utils/index.js';
+import { runWithLiveStatus, runWithLiveStatusList } from './output/live-status.js';
 import type { OutputMode } from './output/tty.js';
 import type { Verbosity } from './output/verbosity.js';
 
@@ -59,6 +60,7 @@ export interface PreparedSuperwardenArtifacts {
   planBytes?: number;
   planDurationMs: number;
   childRoot?: string;
+  childDurationMs?: number;
   childArtifacts: CoordinatorChildSkillArtifact[];
   childSkills?: WriteCoordinatorChildSkillsResult;
 }
@@ -74,6 +76,7 @@ export interface PrepareSuperwardenArtifactsArgs {
   apiKey?: string;
   repairModel?: string;
   repairMaxRetries?: number;
+  parallel?: number;
   regenerate?: boolean;
   abortController?: AbortController;
   showPlanOnly?: boolean;
@@ -187,49 +190,97 @@ export async function prepareSuperwardenArtifacts(
     ? resetCoordinatorChildSkillsRoot(planResult.cachePath)
     : ensureCoordinatorChildSkillsRoot(planResult.cachePath);
   const childStartedAt = performance.now();
-  const childArtifacts: CoordinatorChildSkillArtifact[] = [];
-
-  for (const [index, task] of planResult.plan.tasks.entries()) {
-    const childMessage = args.childMessage?.({
+  const childTasks = planResult.plan.tasks.map((task, index) => ({
+    task,
+    index,
+    childMessage: args.childMessage?.({
       task,
       index,
       total: planResult.plan.tasks.length,
-    }) ?? `${task.id} [${index + 1}/${planResult.plan.tasks.length}]`;
-    if (!args.json && !args.mode.isTTY) {
-      args.onNonTTYChildStep?.(childMessage);
-    }
+    }) ?? task.id,
+  }));
+  const childConcurrency = Math.max(1, args.parallel ?? DEFAULT_CONCURRENCY);
+  const runChildSynthesis = async (
+    task: CoordinatorPlan['tasks'][number],
+  ): Promise<CoordinatorChildSkillArtifact> => synthesizeCoordinatorChildSkill({
+    plan: planResult.plan,
+    task,
+    source,
+    cachePath: planResult.cachePath,
+    rootDir: childRoot,
+    runtime,
+    repoPath: args.repoPath,
+    model: args.model,
+    apiKey: args.apiKey,
+    repairModel: args.repairModel,
+    repairMaxRetries: args.repairMaxRetries,
+    abortController: args.abortController,
+    regenerate: regenerateChildSkills,
+  });
 
-    const runChildSynthesis = () => synthesizeCoordinatorChildSkill({
-      plan: planResult.plan,
-      task,
-      source,
-      cachePath: planResult.cachePath,
-      rootDir: childRoot,
-      runtime,
-      repoPath: args.repoPath,
-      model: args.model,
-      apiKey: args.apiKey,
-      repairModel: args.repairModel,
-      repairMaxRetries: args.repairMaxRetries,
-      abortController: args.abortController,
-      regenerate: regenerateChildSkills,
-    });
-    const artifact = args.json
-      ? await runChildSynthesis()
-      : await runWithLiveStatus({
+  let childArtifacts: CoordinatorChildSkillArtifact[];
+  if (childConcurrency <= 1 || childTasks.length <= 1) {
+    childArtifacts = [];
+    for (const { task, index, childMessage } of childTasks) {
+      if (!args.json && !args.mode.isTTY) {
+        args.onNonTTYChildStep?.(childMessage);
+      }
+      const artifact = args.json
+        ? await runChildSynthesis(task)
+        : await runWithLiveStatus({
+          mode: args.mode,
+          verbosity: args.verbosity,
+          message: childMessage,
+          task: () => runChildSynthesis(task),
+        });
+      childArtifacts.push(artifact);
+      args.onChildArtifact?.({
+        artifact,
+        task,
+        index,
+        total: planResult.plan.tasks.length,
+      });
+    }
+  } else {
+    const synthesizeChildPool = () => runPool(
+      childTasks,
+      childConcurrency,
+      async ({ task, childMessage }) => {
+        if (!args.json && !args.mode.isTTY) {
+          args.onNonTTYChildStep?.(childMessage);
+        }
+        return runChildSynthesis(task);
+      },
+      { shouldAbort: () => args.abortController?.signal.aborted ?? false },
+    );
+    childArtifacts = args.json || !args.mode.isTTY
+      ? await synthesizeChildPool()
+      : await runWithLiveStatusList({
         mode: args.mode,
         verbosity: args.verbosity,
-        message: childMessage,
-        task: runChildSynthesis,
+        items: childTasks,
+        concurrency: childConcurrency,
+        getLabel: ({ childMessage }) => childMessage,
+        task: ({ task }) => runChildSynthesis(task),
+        getDoneDetail: (artifact) => artifact.source === 'cache' ? '[cached]' : '[generated]',
+        showDoneDuration: (artifact) => artifact.source !== 'cache',
+        shouldAbort: () => args.abortController?.signal.aborted ?? false,
       });
-    childArtifacts.push(artifact);
-    args.onChildArtifact?.({
-      artifact,
-      task,
-      index,
-      total: planResult.plan.tasks.length,
-    });
+
+    for (const [index, artifact] of childArtifacts.entries()) {
+      const childTask = childTasks[index];
+      if (!childTask) {
+        continue;
+      }
+      args.onChildArtifact?.({
+        artifact,
+        task: childTask.task,
+        index,
+        total: planResult.plan.tasks.length,
+      });
+    }
   }
+  const childDurationMs = performance.now() - childStartedAt;
 
   return {
     skill: args.skill,
@@ -241,11 +292,12 @@ export async function prepareSuperwardenArtifacts(
     planBytes,
     planDurationMs,
     childRoot,
+    childDurationMs,
     childArtifacts,
     childSkills: buildCoordinatorChildSkillsResult(
       childRoot,
       childArtifacts,
-      performance.now() - childStartedAt,
+      childDurationMs,
     ),
   };
 }

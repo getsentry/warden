@@ -17,6 +17,7 @@ describe('renderHelp', () => {
 
     expect(output).toContain('warden synth <skill> [options]');
     expect(output).toContain('-p, --prompt <value>');
+    expect(output).toContain('--parallel <n>');
     expect(output).toContain('--show-plan');
     expect(output).not.toContain('--description');
     expect(output).not.toContain('--org <name>');

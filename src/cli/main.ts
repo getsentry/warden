@@ -642,9 +642,10 @@ async function createSuperwardenSkillTasks(args: {
   spec: RunSkillSpec;
   repoPath: string;
   options: CLIOptions;
+  parallel: number;
   reporter: Reporter;
 }): Promise<SkillTaskOptions[]> {
-  const { spec, repoPath, options, reporter } = args;
+  const { spec, repoPath, options, parallel, reporter } = args;
   const parentSkill = await resolveSkillAsync(spec.skill, repoPath, {
     remote: spec.remote,
     offline: options.offline,
@@ -672,6 +673,7 @@ async function createSuperwardenSkillTasks(args: {
     apiKey: spec.runnerOptions.apiKey,
     repairModel: spec.runnerOptions.auxiliaryModel,
     repairMaxRetries: spec.runnerOptions.auxiliaryMaxRetries,
+    parallel,
     regenerate: options.regenerate,
     abortController,
     planMessage,
@@ -726,6 +728,7 @@ export async function createSkillTasks(args: {
   specs: RunSkillSpec[];
   repoPath?: string;
   options: CLIOptions;
+  parallel: number;
   reporter: Reporter;
 }): Promise<SkillTaskOptions[]> {
   const tasks: SkillTaskOptions[] = [];
@@ -748,6 +751,7 @@ export async function createSkillTasks(args: {
       spec,
       repoPath: args.repoPath,
       options: args.options,
+      parallel: args.parallel,
       reporter: args.reporter,
     }));
   }
@@ -1090,11 +1094,13 @@ export async function runSkills(
     runnerOptions: mergeSkillRunnerOptions(runnerOptions, skillOptions),
   }));
   let tasks: SkillTaskOptions[];
+  const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
   try {
     tasks = await createSkillTasks({
       specs,
       repoPath,
       options,
+      parallel: concurrency,
       reporter,
     });
   } catch (error) {
@@ -1132,7 +1138,6 @@ export async function runSkills(
   });
 
   // Run skills with Ink UI (TTY) or simple console output (non-TTY)
-  const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
   failFastController = options.failFast ? new AbortController() : undefined;
   const taskOptions = {
     mode: reporter.mode,
@@ -1411,11 +1416,13 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     },
   }));
   let tasks: SkillTaskOptions[];
+  const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
   try {
     tasks = await createSkillTasks({
       specs,
       repoPath,
       options,
+      parallel: concurrency,
       reporter,
     });
   } catch (error) {
@@ -1457,7 +1464,6 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   });
 
   // Run triggers with Ink UI (TTY) or simple console output (non-TTY)
-  const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
   failFastController = options.failFast ? new AbortController() : undefined;
   const taskOptions = {
     mode: reporter.mode,

@@ -122,7 +122,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   parallel: {
     label: '--parallel <n>',
-    description: 'Max concurrent trigger or skill executions',
+    description: 'Max concurrent task or skill executions',
   },
   failFast: {
     label: '-x, --fail-fast',
@@ -317,6 +317,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'cwd',
       'config',
       'model',
+      'parallel',
       'json',
       'showPlan',
       'regenerate',

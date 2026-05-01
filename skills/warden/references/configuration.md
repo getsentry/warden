@@ -5,6 +5,7 @@
 - Minimal Example
 - Skill Configuration
 - Common Patterns
+- Model Lanes
 - Model Precedence
 - Environment Variables
 - Troubleshooting
@@ -18,8 +19,8 @@ The `name` field references a skill you've created (via `warden add`) or defined
 ```toml
 version = 1
 
-[defaults]
-model = "claude-sonnet-4-20250514"
+[defaults.agent]
+model = "claude-sonnet-4-5"
 
 [[skills]]
 name = "my-skill"           # matches .agents/skills/my-skill/SKILL.md
@@ -57,7 +58,7 @@ actions = ["opened", "synchronize"]
 ```toml
 [[skills]]
 name = "my-skill"
-model = "claude-opus-4-20250514"
+model = "claude-opus-4-5"
 maxTurns = 100
 paths = ["src/auth/**", "src/payments/**"]
 failOn = "high"
@@ -77,20 +78,31 @@ ignorePaths = ["**/*.test.ts", "**/*.spec.ts"]
 
 **Whole-file analysis for configs:**
 ```toml
-[defaults.chunking.filePatterns]
+[[defaults.chunking.filePatterns]]
 pattern = "*.config.*"
 mode = "whole-file"
 ```
+
+## Model Lanes
+
+Warden uses different model lanes for different kinds of work:
+
+- Analysis: repo-aware skill execution uses `[[skills]].model`, then `[defaults.agent].model`, then legacy `[defaults].model`
+- Auxiliary: structured helper calls use `[defaults.auxiliary].model`
+- Synthesis: post-analysis consolidation and Superwarden synthesis use `[defaults.synthesis].model`
+
+If `[defaults.synthesis].model` is omitted, synthesis falls back to `[defaults.auxiliary].model`.
 
 ## Model Precedence
 
 From highest to lowest priority:
 
 1. Skill-level `model`
-2. `[defaults]` `model`
-3. CLI `--model` flag
-4. `WARDEN_MODEL` env var
-5. SDK default
+2. `[defaults.agent]` `model`
+3. `[defaults]` `model` (legacy fallback)
+4. CLI `--model` flag
+5. `WARDEN_MODEL` env var
+6. SDK default
 
 ## Environment Variables
 

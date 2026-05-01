@@ -145,6 +145,13 @@ describe('parseCliArgs', () => {
     expect(result.options.parallel).toBe(8);
   });
 
+  it('parses --parallel for synth', () => {
+    const result = parseCliArgs(['synth', 'security-review', '--parallel', '3']);
+    expect(result.command).toBe('synthesize');
+    expect(result.options.skill).toBe('security-review');
+    expect(result.options.parallel).toBe(3);
+  });
+
   it('does not set parallel when not provided', () => {
     const result = parseCliArgs([]);
     expect(result.options.parallel).toBeUndefined();

@@ -297,6 +297,82 @@ Use WebSearch or WebFetch for public prior art.
     stderrSpy.mockRestore();
   });
 
+  it('synthesizes child skills with bounded parallelism when --parallel is set', async () => {
+    mockSynthesizeCoordinatorPlan.mockResolvedValue({
+      source: 'generated',
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      plan: {
+        version: 1,
+        skill: 'security-review',
+        sourceHash: 'hash',
+        coordinatorVersion: COORDINATOR_VERSION,
+        synthesis: {
+          phases: [{ id: 'collect-inputs', status: 'generated' }],
+        },
+        tasks: [
+          {
+            id: 'authz',
+            title: 'Authorization',
+            scope: 'Find authorization issues.',
+            prompt: 'Review authorization issues.',
+            evidenceRequirements: ['Trace the permission boundary.'],
+            outOfScope: [],
+          },
+          {
+            id: 'injection',
+            title: 'Injection',
+            scope: 'Find injection issues.',
+            prompt: 'Review injection issues.',
+            evidenceRequirements: ['Trace the data flow.'],
+            outOfScope: [],
+          },
+          {
+            id: 'secrets',
+            title: 'Secrets',
+            scope: 'Find secret exposure issues.',
+            prompt: 'Review secret exposure issues.',
+            evidenceRequirements: ['Trace secret handling.'],
+            outOfScope: [],
+          },
+        ],
+      },
+    });
+
+    let active = 0;
+    let maxActive = 0;
+    mockSynthesizeCoordinatorChildSkill.mockImplementation(async (args) => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active--;
+      const taskDir = join(args.rootDir!, args.task.id);
+      mkdirSync(taskDir, { recursive: true });
+      writeFileSync(join(taskDir, 'SKILL.md'), '# Skill\n', 'utf-8');
+      writeFileSync(join(taskDir, 'SPEC.md'), '# Spec\n', 'utf-8');
+      writeFileSync(join(taskDir, 'SOURCES.md'), '# Sources\n', 'utf-8');
+      return {
+        source: 'generated',
+        taskId: args.task.id,
+        name: args.task.id,
+        path: taskDir,
+        bytes: 1024,
+        durationMs: 10,
+        usage: emptyUsage(),
+        externalSources: [],
+        missingInputs: [],
+      };
+    });
+
+    const exitCode = await runSynthesize(
+      createOptions({ skill: 'security-review', parallel: 2 }),
+      new Reporter(detectOutputMode(false), Verbosity.Quiet),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mockSynthesizeCoordinatorChildSkill).toHaveBeenCalledTimes(3);
+    expect(maxActive).toBe(2);
+  });
+
   it('shows a readable plan without synthesizing child skills', async () => {
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
