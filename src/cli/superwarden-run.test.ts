@@ -9,9 +9,9 @@ import { runWithLiveStatus, runWithLiveStatusList } from './output/live-status.j
 import { Reporter } from './output/reporter.js';
 import { detectOutputMode } from './output/tty.js';
 import { Verbosity } from './output/verbosity.js';
-import { collectCoordinatorSource, COORDINATOR_PLAN_CACHE_KIND, COORDINATOR_PLAN_CACHE_SCHEMA_VERSION, COORDINATOR_VERSION, getCoordinatorPlanCachePath, type CoordinatorPlan } from '../coordinator/plan.js';
+import { collectCoordinatorSource, COORDINATOR_PLAN_CACHE_KIND, COORDINATOR_PLAN_CACHE_SCHEMA_VERSION, COORDINATOR_VERSION, getCoordinatorPlanPath, type CoordinatorPlan } from '../coordinator/plan.js';
 import { getCoordinatorChildSkillsRoot } from '../coordinator/child-skills.js';
-import { getSuperwardenCacheDir } from '../coordinator/superwarden.js';
+import { getSuperwardenSkillRoot } from '../coordinator/superwarden.js';
 import * as coordinatorPlanModule from '../coordinator/plan.js';
 import * as childSkillsModule from '../coordinator/child-skills.js';
 import { resolveSkillAsync } from '../skills/loader.js';
@@ -81,10 +81,9 @@ Review security issues.
     },
     tasks: [task],
   };
-  const cachePath = getCoordinatorPlanCachePath({
+  const cachePath = getCoordinatorPlanPath({
     skillName: parentSkill.name,
-    sourceHash: source.hash,
-    cacheDir: getSuperwardenCacheDir(tempDir, parentSkill.name),
+    artifactRoot: getSuperwardenSkillRoot(tempDir, parentSkill.name),
   });
   const childRoot = getCoordinatorChildSkillsRoot(cachePath);
   const childDir = join(childRoot, task.id);
@@ -206,13 +205,13 @@ describe('Superwarden run task expansion', () => {
   });
 
   it('renders the active child tasks through the list live-status helper when synthesis runs in parallel', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const spec = await writeCachedSuperwardenFixture(tempDir);
     const parentSkill = await resolveSkillAsync('security-review', tempDir);
     const source = collectCoordinatorSource(parentSkill);
-    const cachePath = getCoordinatorPlanCachePath({
+    const cachePath = getCoordinatorPlanPath({
       skillName: parentSkill.name,
-      sourceHash: source.hash,
-      cacheDir: getSuperwardenCacheDir(tempDir, parentSkill.name),
+      artifactRoot: getSuperwardenSkillRoot(tempDir, parentSkill.name),
     });
     const planSpy = vi.spyOn(coordinatorPlanModule, 'synthesizeCoordinatorPlan').mockResolvedValue({
       source: 'generated',
@@ -272,13 +271,17 @@ describe('Superwarden run task expansion', () => {
       };
     });
 
-    await createSkillTasks({
-      specs: [spec],
-      repoPath: tempDir,
-      options: CLIOptionsSchema.parse({ parallel: 2 }),
-      parallel: 2,
-      reporter: new Reporter({ isTTY: true, supportsColor: false, columns: 80 }, Verbosity.Normal),
-    });
+    try {
+      await createSkillTasks({
+        specs: [spec],
+        repoPath: tempDir,
+        options: CLIOptionsSchema.parse({ parallel: 2 }),
+        parallel: 2,
+        reporter: new Reporter({ isTTY: true, supportsColor: false, columns: 80 }, Verbosity.Normal),
+      });
+    } finally {
+      stderrSpy.mockRestore();
+    }
 
     expect(mockRunWithLiveStatusList).toHaveBeenCalledWith(expect.objectContaining({
       concurrency: 2,
@@ -296,11 +299,14 @@ describe('Superwarden run task expansion', () => {
     } as never, parallelCall.items[0], 0)).toBe(false);
     expect(parallelCall?.getDoneDetail?.({
       source: 'generated',
-    } as never, parallelCall.items[1], 1)).toBe('[generated]');
+    } as never, parallelCall.items[1], 1)).toBeUndefined();
     expect(parallelCall?.showDoneDuration?.({
       source: 'generated',
     } as never, parallelCall.items[1], 1)).toBe(true);
     expect(maxActive).toBe(2);
+    const output = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    expect(output).not.toContain('Find authorization boundary issues.');
+    expect(output).not.toContain('Find injection issues.');
     childSpy.mockRestore();
     planSpy.mockRestore();
   });
@@ -334,17 +340,13 @@ describe('Superwarden run task expansion', () => {
     };
 
     const parentSkill = await resolveSkillAsync('security-review', tempDir);
-    const source = collectCoordinatorSource(parentSkill);
-    const fixtureCachePath = getCoordinatorPlanCachePath({
+    const fixtureCachePath = getCoordinatorPlanPath({
       skillName: parentSkill.name,
-      sourceHash: source.hash,
-      cacheDir: getSuperwardenCacheDir(tempDir, parentSkill.name),
+      artifactRoot: getSuperwardenSkillRoot(tempDir, parentSkill.name),
     });
-    const cachePath = getCoordinatorPlanCachePath({
+    const cachePath = getCoordinatorPlanPath({
       skillName: parentSkill.name,
-      sourceHash: source.hash,
-      model: 'claude-opus-4-5',
-      cacheDir: getSuperwardenCacheDir(tempDir, parentSkill.name),
+      artifactRoot: getSuperwardenSkillRoot(tempDir, parentSkill.name),
     });
     const cached = JSON.parse(readFileSync(fixtureCachePath, 'utf-8')) as { plan: CoordinatorPlan };
     const planSpy = vi.spyOn(coordinatorPlanModule, 'synthesizeCoordinatorPlan').mockResolvedValue({

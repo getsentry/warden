@@ -6,7 +6,6 @@ import type { Runtime } from '../sdk/runtimes/index.js';
 import { COORDINATOR_VERSION, type CoordinatorPlan, type CoordinatorSource } from './plan.js';
 import {
   buildCoordinatorChildSkillsResult,
-  reviewCoordinatorChildSkills,
   resetCoordinatorChildSkillsRoot,
   synthesizeCoordinatorChildSkill,
 } from './child-skills.js';
@@ -86,7 +85,7 @@ describe('Superwarden child skill synthesis', () => {
         },
       })),
     };
-    const cachePath = join(tempDir, 'cache', 'hash.json');
+    const cachePath = join(tempDir, 'plan.json');
     const rootDir = resetCoordinatorChildSkillsRoot(cachePath);
 
     const artifact = await synthesizeCoordinatorChildSkill({
@@ -152,7 +151,7 @@ describe('Superwarden child skill synthesis', () => {
         },
       })),
     };
-    const cachePath = join(tempDir, 'cache', 'hash.json');
+    const cachePath = join(tempDir, 'plan.json');
     const rootDir = resetCoordinatorChildSkillsRoot(cachePath);
 
     const generated = await synthesizeCoordinatorChildSkill({
@@ -212,7 +211,7 @@ describe('Superwarden child skill synthesis', () => {
         },
       })),
     };
-    const cachePath = join(tempDir, 'cache', 'hash.json');
+    const cachePath = join(tempDir, 'plan.json');
     const rootDir = resetCoordinatorChildSkillsRoot(cachePath);
 
     await expect(synthesizeCoordinatorChildSkill({
@@ -225,11 +224,12 @@ describe('Superwarden child skill synthesis', () => {
       repoPath: tempDir,
       model: 'agent-model',
     })).rejects.toThrow(
-      /Child skill synthesis failed for authz: Superwarden agent returned no JSON[\s\S]*Model: agent-model[\s\S]*Usage: 1,000 input \/ 500 output tokens[\s\S]*Claude Code stderr:[\s\S]*diagnostic line from claude[\s\S]*Raw output:[\s\S]*need more context/,
+      /Child skill synthesis failed for authz: Superwarden agent output failed validation or repair: repair_failed: no_json[\s\S]*Model: agent-model[\s\S]*Usage: 2,000 input \/ 1,000 output tokens[\s\S]*Claude Code stderr:[\s\S]*diagnostic line from claude[\s\S]*Raw output:[\s\S]*need more context/,
     );
+    expect(runtime.runAuxiliary).not.toHaveBeenCalled();
   });
 
-  it('tells child synthesis to exclude sibling task concerns and can review cleanup needs', async () => {
+  it('tells child synthesis to exclude sibling task concerns', async () => {
     const plan: CoordinatorPlan = {
       version: 1,
       skill: 'security-review',
@@ -273,61 +273,30 @@ describe('Superwarden child skill synthesis', () => {
       externalSources: [],
       missingInputs: [],
     };
-    const cleanupJson = {
-      version: 1,
-      parentSkill: 'security-review',
-      summary: 'One task still needs cleanup.',
-      cleanupItems: [{
-        targets: ['authz'],
-        issue: 'The skill scope could still absorb secret-handling work.',
-        cleanup: 'Call out the secrets task as an explicit non-goal in the scope section.',
-      }],
-    };
     const runtime: Runtime = {
       name: 'claude',
       runAuxiliary: vi.fn(),
       runSynthesis: vi.fn(),
-      runSkill: vi.fn()
-        .mockResolvedValueOnce({
-          result: {
-            status: 'success' as const,
-            text: JSON.stringify(childJson),
-            errors: [],
-            usage: emptyUsage(),
-            durationMs: 12_000,
-            responseModel: 'agent-model',
-            numTurns: 4,
-          },
-        })
-        .mockResolvedValueOnce({
-          result: {
-            status: 'success' as const,
-            text: JSON.stringify(cleanupJson),
-            errors: [],
-            usage: emptyUsage(),
-            durationMs: 4_000,
-            responseModel: 'agent-model',
-            numTurns: 2,
-          },
-        }),
+      runSkill: vi.fn().mockResolvedValue({
+        result: {
+          status: 'success' as const,
+          text: JSON.stringify(childJson),
+          errors: [],
+          usage: emptyUsage(),
+          durationMs: 12_000,
+          responseModel: 'agent-model',
+          numTurns: 4,
+        },
+      }),
     };
-    const cachePath = join(tempDir, 'cache', 'hash.json');
+    const cachePath = join(tempDir, 'plan.json');
     const rootDir = resetCoordinatorChildSkillsRoot(cachePath);
 
-    const artifact = await synthesizeCoordinatorChildSkill({
+    await synthesizeCoordinatorChildSkill({
       plan,
       task: plan.tasks[0]!,
       source,
       cachePath,
-      rootDir,
-      runtime,
-      repoPath: tempDir,
-      model: 'agent-model',
-    });
-    const review = await reviewCoordinatorChildSkills({
-      plan,
-      source,
-      artifacts: [artifact],
       rootDir,
       runtime,
       repoPath: tempDir,
@@ -343,10 +312,5 @@ describe('Superwarden child skill synthesis', () => {
     expect(runtime.runSkill).toHaveBeenNthCalledWith(1, expect.objectContaining({
       userPrompt: expect.stringContaining('Include an explicit "Do not cover"'),
     }));
-    expect(runtime.runSkill).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      skillName: 'security-review:superwarden-child-cleanup',
-      userPrompt: expect.stringContaining('find places where the parent plan carries too much child-skill detail'),
-    }));
-    expect(review.cleanupItems[0]?.targets).toEqual(['authz']);
   });
 });

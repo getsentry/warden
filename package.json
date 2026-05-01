@@ -14,8 +14,8 @@
     "build": "tsc",
     "build:action": "ncc build src/action/main.ts -o dist/action --no-source-map-register --license licenses.txt",
     "dev": "tsc --watch",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
+    "lint": "oxlint src",
+    "lint:fix": "oxlint --fix src",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:examples": "vitest run --config vitest.integration.config.ts",
@@ -31,7 +31,7 @@
   },
   "lint-staged": {
     "src/**/*.ts": [
-      "eslint --fix"
+      "oxlint --fix"
     ],
     "packages/docs/**/*.astro": [
       "pnpm -C packages/docs build"
@@ -72,17 +72,15 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.10",
     "@types/react": "^18.3.27",
     "@vercel/ncc": "^0.38.4",
-    "eslint": "^9.39.2",
     "ink-testing-library": "^4.0.0",
     "lint-staged": "^16.2.7",
+    "oxlint": "^1.62.0",
     "simple-git-hooks": "^2.13.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.54.0",
     "vitest": "^4.0.18"
   },
   "engines": {

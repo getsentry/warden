@@ -21,8 +21,10 @@ export {
   describeCoordinatorPlan,
   describeCoordinatorPlan as describeSuperwardenPlan,
   getCoordinatorCacheDir,
+  getCoordinatorPlanPath,
   getCoordinatorPlanCachePath,
   getCoordinatorPlanCachePath as getSuperwardenPlanCachePath,
+  getCoordinatorPlanPath as getSuperwardenPlanPath,
   synthesizeCoordinatorPlan,
   synthesizeCoordinatorPlan as synthesizeSuperwardenPlan,
 } from './plan.js';
@@ -30,7 +32,6 @@ export {
 export {
   SUPERWARDEN_DIR,
   createSuperwardenSkill,
-  getSuperwardenCacheDir,
   getSuperwardenRoot,
   getSuperwardenSkillRoot,
   superwardenSkillExists,

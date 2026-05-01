@@ -16,7 +16,7 @@ Example: `Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>`
 
 ## Architecture
 
-This is a pnpm workspace monorepo. Shared build tools (eslint, lint-staged, simple-git-hooks, typescript, vitest) live in the root `package.json`.
+This is a pnpm workspace monorepo. Shared build tools (oxlint, lint-staged, simple-git-hooks, typescript, vitest) live in the root `package.json`.
 
 ```
 packages/

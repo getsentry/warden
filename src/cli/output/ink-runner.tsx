@@ -173,8 +173,9 @@ function makeTerminalSkillState(
 }
 
 /** No-op callbacks for quiet mode. */
-// eslint-disable-next-line @typescript-eslint/no-empty-function
-const noop = () => {};
+const noop = (): void => {
+  return;
+};
 const noopCallbacks: SkillProgressCallbacks = {
   onSkillStart: noop,
   onSkillUpdate: noop,

@@ -9,11 +9,9 @@ import type { CLIOptions } from '../args.js';
 import type { Reporter } from '../output/reporter.js';
 import { Verbosity } from '../output/verbosity.js';
 import { formatBytes, formatCost, formatDuration, formatTokens, pluralize, truncate } from '../output/formatters.js';
-import { runWithLiveStatus } from '../output/live-status.js';
 import { fileSize, formatRelativePath, prepareSuperwardenArtifacts } from '../superwarden.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../../utils/index.js';
 import { aggregateUsage } from '../../sdk/usage.js';
-import { getRuntime } from '../../sdk/runtimes/index.js';
 import { resolveSkillAsync, SkillLoaderError } from '../../skills/loader.js';
 import { getRepoRoot } from '../git.js';
 import { promptLine, promptMultiline } from '../input.js';
@@ -23,9 +21,7 @@ import {
 } from '../../coordinator/plan.js';
 import {
   CoordinatorChildSkillError,
-  reviewCoordinatorChildSkills,
   type CoordinatorChildSkillArtifact,
-  type CoordinatorChildSkillCleanupReview,
   type WriteCoordinatorChildSkillsResult,
 } from '../../coordinator/child-skills.js';
 import { createSuperwardenSkill } from '../../coordinator/superwarden.js';
@@ -239,7 +235,7 @@ function renderPlanInspection(args: {
   lines.push(`  Skill    ${plan.skill}`);
   lines.push(`  Tasks    ${plan.tasks.length}`);
   lines.push(`  Source   ${source}`);
-  lines.push(`  Cache    ${formatRelativePath(cachePath, repoRoot)}`);
+  lines.push(`  Plan     ${formatRelativePath(cachePath, repoRoot)}`);
   lines.push(`  Hash     ${truncate(plan.sourceHash, 16)}`);
   lines.push(`  Version  ${plan.coordinatorVersion}${stats ? `  ${stats}` : ''}`);
   lines.push('');
@@ -310,8 +306,11 @@ function renderChildSkillArtifact(args: {
   task: CoordinatorPlan['tasks'][number];
 }): void {
   const { reporter, artifact, task } = args;
-  const sourceLabel = artifact.source === 'cache' ? 'cached' : 'generated';
-  reporter.success(`${artifact.taskId}  ${chalk.dim(`[${sourceLabel}]`)}`);
+  reporter.success(
+    artifact.source === 'cache'
+      ? `${artifact.taskId}  ${chalk.dim('[cached]')}`
+      : artifact.taskId,
+  );
   reporter.dim(`  ${truncate(task.scope, 100)}`);
   if (artifact.source === 'cache') {
     return;
@@ -368,20 +367,6 @@ function renderChildSkillSummary(args: {
 
 function renderTasksHeading(reporter: Reporter, taskCount: number): void {
   reporter.text(formatSectionCountHeading('TASKS', taskCount, 'task'));
-}
-
-function renderCleanupReview(args: {
-  reporter: Reporter;
-  review: CoordinatorChildSkillCleanupReview;
-}): void {
-  const { reporter, review } = args;
-  reporter.blank();
-  reporter.text(formatSectionCountHeading('CLEANUP', review.cleanupItems.length, 'cleanup item'));
-  reporter.dim(`  ${review.summary}`);
-  for (const item of review.cleanupItems) {
-    reporter.text(`  ${item.targets.join(', ')}  ${item.issue}`);
-    reporter.dim(`    ${item.cleanup}`);
-  }
 }
 
 function renderTryIt(reporter: Reporter, skillName: string): void {
@@ -658,34 +643,11 @@ export async function runSynthesize(
       if (!prepared.childRoot || !preparedChildSkills) {
         throw new CoordinatorPlanError(`Missing child skill artifacts for ${skill.name}`);
       }
-      const childRoot = prepared.childRoot;
-      const reviewCleanup = () => reviewCoordinatorChildSkills({
-        plan: prepared.planResult.plan,
-        source: prepared.source,
-        artifacts: prepared.childArtifacts,
-        rootDir: childRoot,
-        runtime: getRuntime(runtimeName),
-        repoPath: repoRoot,
-        model,
-        apiKey,
-        repairModel,
-        repairMaxRetries: maxRetries,
-        abortController: state?.abortController,
-      });
-      const cleanupReview = await runWithLiveStatus({
-        mode: reporter.mode,
-        verbosity: reporter.verbosity,
-        message: 'Reviewing generated child skills...',
-        detail: 'Checking task boundaries, explicit exclusions, and cleanup needs.',
-        task: reviewCleanup,
-      });
-
       renderChildSkillSummary({
         reporter,
         childSkills: preparedChildSkills,
         durationMs: prepared.childDurationMs,
       });
-      renderCleanupReview({ reporter, review: cleanupReview });
       renderTryIt(reporter, skill.name);
     }
 

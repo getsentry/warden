@@ -1,12 +1,14 @@
 import { performance } from 'node:perf_hooks';
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { ToolName } from '../config/schema.js';
 import type { UsageStats } from '../types/index.js';
-import { parseJsonFromOutput } from '../sdk/json-output.js';
+import { parseJsonFromOutput, type ParseJsonFromOutputResult } from '../sdk/json-output.js';
 import { aggregateUsage, emptyUsage } from '../sdk/usage.js';
 import type { Runtime, SkillRunResult } from '../sdk/runtimes/index.js';
 
 const SUPERWARDEN_AGENT_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
+const STRUCTURED_REPAIR_MAX_TURNS = 1;
+const STRUCTURED_REPAIR_MAX_CHARS = 60_000;
 
 export interface StructuredSuperwardenAgentResult<T> {
   data: T;
@@ -90,6 +92,111 @@ function resultFailureDetails(
   };
 }
 
+function truncateForRepair(output: string): string {
+  if (output.length <= STRUCTURED_REPAIR_MAX_CHARS) {
+    return output;
+  }
+  return `${output.slice(0, STRUCTURED_REPAIR_MAX_CHARS)}\n[... truncated]`;
+}
+
+function structuredRepairSystemPrompt(): string {
+  return `You repair model output into strict JSON for Warden.
+
+Return only valid JSON matching the provided JSON Schema. Do not include markdown, prose, code fences, or explanations. Preserve the original structured content whenever possible and do not invent extra fields.`;
+}
+
+function structuredRepairPrompt<T>(args: {
+  schema: z.ZodType<T>;
+  output: string;
+  reason: string;
+}): string {
+  return `Repair this model output into valid JSON that matches the provided JSON Schema.
+
+Rules:
+- Return JSON only.
+- Remove surrounding prose or markdown only when needed.
+- Preserve the original structured content as much as possible.
+- Do not invent extra fields.
+
+The local parser failed with:
+${args.reason}
+
+JSON Schema:
+${JSON.stringify(z.toJSONSchema(args.schema), null, 2)}
+
+Model output:
+${truncateForRepair(args.output)}`;
+}
+
+async function repairStructuredSuperwardenOutput<T>(args: {
+  runtime: Runtime;
+  repoPath: string;
+  skillName: string;
+  schema: z.ZodType<T>;
+  output: string;
+  reason: string;
+  model?: string;
+  abortController?: AbortController;
+}): Promise<ParseJsonFromOutputResult<T>> {
+  const response = await args.runtime.runSkill({
+    systemPrompt: structuredRepairSystemPrompt(),
+    userPrompt: structuredRepairPrompt({
+      schema: args.schema,
+      output: args.output,
+      reason: args.reason,
+    }),
+    repoPath: args.repoPath,
+    skillName: `${args.skillName}:structured-output-repair`,
+    tools: { allowed: [] },
+    options: {
+      model: args.model,
+      maxTurns: STRUCTURED_REPAIR_MAX_TURNS,
+      abortController: args.abortController,
+    },
+  });
+
+  if (response.authError) {
+    return {
+      success: false,
+      error: `repair_failed: ${response.authError}`,
+    };
+  }
+  if (!response.result) {
+    return {
+      success: false,
+      error: 'repair_failed: no_result',
+    };
+  }
+  if (response.result.status !== 'success') {
+    return {
+      success: false,
+      error: `repair_failed: ${formatRuntimeFailure(response.result)}`,
+      usage: response.result.usage,
+    };
+  }
+
+  const parsed = await parseJsonFromOutput({
+    output: response.result.text,
+    schema: args.schema,
+  });
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: `repair_failed: ${parsed.error}`,
+      json: parsed.json,
+      usage: response.result.usage,
+    };
+  }
+
+  return {
+    success: true,
+    data: parsed.data,
+    json: parsed.json,
+    repaired: true,
+    usage: response.result.usage,
+  };
+}
+
 export async function runStructuredSuperwardenAgent<T>(args: {
   runtime: Runtime;
   repoPath: string;
@@ -137,16 +244,52 @@ export async function runStructuredSuperwardenAgent<T>(args: {
     ));
   }
 
-  const parsed = await parseJsonFromOutput({
+  const repairUsages: UsageStats[] = [];
+  let parsed = await parseJsonFromOutput({
     output: response.result.text,
     schema: args.schema,
-    repair: args.repair ? {
-      runtime,
-      apiKey: args.repair.apiKey,
-      model: args.repair.model,
-      maxRetries: args.repair.maxRetries,
-    } : undefined,
   });
+  if (!parsed.success) {
+    const skillRepair = await repairStructuredSuperwardenOutput({
+      runtime,
+      repoPath: args.repoPath,
+      skillName: args.skillName,
+      schema: args.schema,
+      output: response.result.text,
+      reason: parsed.error,
+      model: args.repair?.model ?? args.model,
+      abortController: args.abortController,
+    });
+    if (skillRepair.usage) {
+      repairUsages.push(skillRepair.usage);
+    }
+    if (skillRepair.success) {
+      parsed = skillRepair;
+    } else if (args.repair?.apiKey) {
+      const auxiliaryRepair = await parseJsonFromOutput({
+        output: response.result.text,
+        schema: args.schema,
+        repair: {
+          runtime,
+          apiKey: args.repair.apiKey,
+          model: args.repair.model,
+          maxRetries: args.repair.maxRetries,
+        },
+      });
+      if (auxiliaryRepair.usage) {
+        repairUsages.push(auxiliaryRepair.usage);
+      }
+      parsed = auxiliaryRepair.success
+        ? auxiliaryRepair
+        : {
+          ...auxiliaryRepair,
+          error: `${skillRepair.error}; ${auxiliaryRepair.error}`,
+          json: auxiliaryRepair.json ?? skillRepair.json ?? parsed.json,
+        };
+    } else {
+      parsed = skillRepair;
+    }
+  }
 
   if (!parsed.success) {
     const label = parsed.error.startsWith('no_json')
@@ -160,17 +303,13 @@ export async function runStructuredSuperwardenAgent<T>(args: {
         {
           ...resultFailureDetails(response.result, response.stderr, startedAt),
           rawText: parsed.json ?? response.result.text,
-          usage: parsed.usage
-            ? aggregateUsage([response.result.usage ?? emptyUsage(), parsed.usage])
-            : response.result.usage,
+          usage: aggregateUsage([response.result.usage ?? emptyUsage(), ...repairUsages]),
         },
       ),
     );
   }
 
-  const usage = parsed.usage
-    ? aggregateUsage([response.result.usage ?? emptyUsage(), parsed.usage])
-    : response.result.usage ?? emptyUsage();
+  const usage = aggregateUsage([response.result.usage ?? emptyUsage(), ...repairUsages]);
 
   return {
     data: parsed.data,

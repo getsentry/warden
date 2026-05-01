@@ -8,7 +8,7 @@ import { Reporter } from '../output/reporter.js';
 import { detectOutputMode } from '../output/tty.js';
 import { Verbosity } from '../output/verbosity.js';
 import { COORDINATOR_VERSION, synthesizeCoordinatorPlan } from '../../coordinator/plan.js';
-import { reviewCoordinatorChildSkills, synthesizeCoordinatorChildSkill } from '../../coordinator/child-skills.js';
+import { synthesizeCoordinatorChildSkill } from '../../coordinator/child-skills.js';
 import { runSynthesize } from './synthesize.js';
 
 vi.mock('../../coordinator/plan.js', async () => {
@@ -24,13 +24,11 @@ vi.mock('../../coordinator/child-skills.js', async () => {
   return {
     ...actual,
     synthesizeCoordinatorChildSkill: vi.fn(),
-    reviewCoordinatorChildSkills: vi.fn(),
   };
 });
 
 const mockSynthesizeCoordinatorPlan = vi.mocked(synthesizeCoordinatorPlan);
 const mockSynthesizeCoordinatorChildSkill = vi.mocked(synthesizeCoordinatorChildSkill);
-const mockReviewCoordinatorChildSkills = vi.mocked(reviewCoordinatorChildSkills);
 
 function emptyUsage() {
   return {
@@ -135,12 +133,6 @@ Use WebSearch or WebFetch for public prior art.
         missingInputs: [],
       };
     });
-    mockReviewCoordinatorChildSkills.mockResolvedValue({
-      version: 1,
-      parentSkill: 'security-review',
-      summary: 'No cleanup changes suggested.',
-      cleanupItems: [],
-    });
   });
 
   afterEach(() => {
@@ -153,7 +145,7 @@ Use WebSearch or WebFetch for public prior art.
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
       plan: {
         version: 1,
         skill: 'security-review',
@@ -190,7 +182,7 @@ Use WebSearch or WebFetch for public prior art.
       regenerate: true,
       repairModel: 'aux-model',
       repairMaxRetries: 3,
-      cacheDir: expect.stringContaining(join('.warden', 'superwarden', 'security-review', 'cache')),
+      artifactRoot: expect.stringContaining(join('.warden', 'superwarden', 'security-review')),
     }));
     const stderr = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
     expect(stderr).not.toContain('\nSUPERWARDEN\n');
@@ -199,7 +191,7 @@ Use WebSearch or WebFetch for public prior art.
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('PLAN'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Review security issues.'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('TASKS  1 task'));
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringMatching(/authz\s+\[generated\]/));
+    expect(stderr).toContain('warden: authz');
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Find authorization issues.'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Artifact  1.0 KB'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Synthesis 12.0s'));
@@ -207,7 +199,7 @@ Use WebSearch or WebFetch for public prior art.
     expect(stderr).not.toContain('Cache     ');
     expect(stderr).not.toContain('Cost      ');
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Generated 1 task'));
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('CLEANUP  0 cleanup items'));
+    expect(stderr).not.toContain('CLEANUP');
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('warden src/file.ts --skill security-review'));
     expect(existsSync(join(tempDir, 'plan.json'))).toBe(true);
     expect(JSON.parse(readFileSync(join(tempDir, 'plan.json'), 'utf-8')).tasks[0].id).toBe('authz');
@@ -216,9 +208,7 @@ Use WebSearch or WebFetch for public prior art.
       '.warden',
       'superwarden',
       'security-review',
-      'cache',
-      'hash',
-      'skills',
+      'tasks',
       'authz',
       'SKILL.md',
     );
@@ -239,7 +229,7 @@ Use WebSearch or WebFetch for public prior art.
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'cache',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
       plan: {
         version: 1,
         skill: 'security-review',
@@ -279,14 +269,14 @@ Use WebSearch or WebFetch for public prior art.
     expect(exitCode).toBe(0);
     expect(mockSynthesizeCoordinatorChildSkill).toHaveBeenCalledWith(expect.objectContaining({
       regenerate: false,
-      rootDir: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash', 'skills'),
+      rootDir: join(tempDir, '.warden', 'superwarden', 'security-review', 'tasks'),
     }));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Review security issues.'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringMatching(/authz\s+\[cached\]/));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('warden src/file.ts --skill security-review'));
     const output = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
     expect(output).toContain('TASKS  1 task');
-    expect(output).toContain('CLEANUP  0 cleanup items');
+    expect(output).not.toContain('CLEANUP');
     expect(output).not.toContain('Cache: reuse validated child skills when inputs match');
     expect(output).not.toContain('Prepared 1 task');
     expect(output).not.toContain('Cached    1');
@@ -297,10 +287,47 @@ Use WebSearch or WebFetch for public prior art.
     stderrSpy.mockRestore();
   });
 
+  it('does not run or render the review pass after task synthesis', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockSynthesizeCoordinatorPlan.mockResolvedValue({
+      source: 'generated',
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
+      plan: {
+        version: 1,
+        skill: 'security-review',
+        sourceHash: 'hash',
+        coordinatorVersion: COORDINATOR_VERSION,
+        synthesis: {
+          phases: [{ id: 'collect-inputs', status: 'generated' }],
+        },
+        tasks: [{
+          id: 'authz',
+          title: 'Authorization',
+          scope: 'Find authorization issues.',
+          prompt: 'Review authorization issues.',
+          evidenceRequirements: ['Trace the permission boundary.'],
+          outOfScope: [],
+        }],
+      },
+    });
+
+    const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
+    const exitCode = await runSynthesize(
+      createOptions({ skill: 'security-review', regenerate: true }),
+      reporter,
+    );
+
+    expect(exitCode).toBe(0);
+    const output = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    expect(output).not.toContain('CLEANUP');
+    expect(output).not.toContain('Reviewing task skill cleanup');
+    stderrSpy.mockRestore();
+  });
+
   it('synthesizes child skills with bounded parallelism when --parallel is set', async () => {
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
       plan: {
         version: 1,
         skill: 'security-review',
@@ -378,7 +405,7 @@ Use WebSearch or WebFetch for public prior art.
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'cache',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
       plan: {
         version: 1,
         skill: 'security-review',
@@ -439,7 +466,7 @@ Use WebSearch or WebFetch for public prior art.
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'cache',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
       plan: {
         version: 1,
         skill: 'security-review',
@@ -467,7 +494,6 @@ Use WebSearch or WebFetch for public prior art.
 
     expect(exitCode).toBe(0);
     expect(mockSynthesizeCoordinatorChildSkill).not.toHaveBeenCalled();
-    expect(mockReviewCoordinatorChildSkills).not.toHaveBeenCalled();
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(JSON.parse(output)).toMatchObject({
       skill: 'security-review',
@@ -480,7 +506,7 @@ Use WebSearch or WebFetch for public prior art.
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
       plan: {
         version: 1,
         skill: 'security-review',
@@ -525,7 +551,7 @@ Use WebSearch or WebFetch for public prior art.
     writeLocalSkill(tempDir, 'ad-hoc-security');
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'ad-hoc-security', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'ad-hoc-security', 'plan.json'),
       plan: {
         version: 1,
         skill: 'ad-hoc-security',
@@ -555,7 +581,7 @@ Use WebSearch or WebFetch for public prior art.
     expect(mockSynthesizeCoordinatorPlan).toHaveBeenCalledWith(expect.objectContaining({
       skill: expect.objectContaining({ name: 'ad-hoc-security' }),
       model: undefined,
-      cacheDir: expect.stringContaining(join('.warden', 'superwarden', 'ad-hoc-security', 'cache')),
+      artifactRoot: expect.stringContaining(join('.warden', 'superwarden', 'ad-hoc-security')),
     }));
     stderrSpy.mockRestore();
   });
@@ -564,7 +590,7 @@ Use WebSearch or WebFetch for public prior art.
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'brand-new-security', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'brand-new-security', 'plan.json'),
       plan: {
         version: 1,
         skill: 'brand-new-security',
@@ -604,9 +630,9 @@ Use WebSearch or WebFetch for public prior art.
     expect(readFileSync(join(root, 'SPEC.md'), 'utf-8')).toContain('Superwarden skill');
     expect(mockSynthesizeCoordinatorPlan).toHaveBeenCalledWith(expect.objectContaining({
       skill: expect.objectContaining({ name: 'brand-new-security' }),
-      cacheDir: expect.stringContaining(join('.warden', 'superwarden', 'brand-new-security', 'cache')),
+      artifactRoot: expect.stringContaining(join('.warden', 'superwarden', 'brand-new-security')),
     }));
-    expect(existsSync(join(root, 'cache', 'hash', 'skills', 'secrets', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(root, 'tasks', 'secrets', 'SKILL.md'))).toBe(true);
     const stderr = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
     expect(stderr).toContain('NEW SUPERWARDEN SKILL');
     expect(stderr).toContain('Created brand-new-security');
@@ -624,7 +650,7 @@ Use WebSearch or WebFetch for public prior art.
     writeFileSync(join(tempDir, 'prompt.md'), 'Review changed code for insecure secret storage.\n', 'utf-8');
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
-      cachePath: join(tempDir, '.warden', 'superwarden', 'file-backed-security', 'cache', 'hash.json'),
+      cachePath: join(tempDir, '.warden', 'superwarden', 'file-backed-security', 'plan.json'),
       plan: {
         version: 1,
         skill: 'file-backed-security',

@@ -31,23 +31,41 @@ function globToRegex(pattern: string): RegExp {
     return cached;
   }
 
-  // Use placeholders to avoid replacement conflicts
-  let regexPattern = pattern
-    // First, replace glob patterns with placeholders
-    .replace(/\*\*\//g, '\0GLOBSTAR_SLASH\0')
-    .replace(/\*\*/g, '\0GLOBSTAR\0')
-    .replace(/\*/g, '\0STAR\0')
-    .replace(/\?/g, '\0QUESTION\0');
+  let regexPattern = '';
 
-  // Escape regex special characters
-  regexPattern = regexPattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  for (let index = 0; index < pattern.length; index++) {
+    const char = pattern[index];
+    const nextChar = pattern[index + 1];
+    const nextNextChar = pattern[index + 2];
 
-  // Replace placeholders with regex patterns
-  regexPattern = regexPattern
-    .replace(/\0GLOBSTAR_SLASH\0/g, '(?:.*/)?')  // **/ matches zero or more directories
-    .replace(/\0GLOBSTAR\0/g, '.*')               // ** matches anything
-    .replace(/\0STAR\0/g, '[^/]*')                // * matches anything except /
-    .replace(/\0QUESTION\0/g, '[^/]');            // ? matches single char except /
+    if (char === undefined) {
+      break;
+    }
+
+    if (char === '*' && nextChar === '*' && nextNextChar === '/') {
+      regexPattern += '(?:.*/)?';
+      index += 2;
+      continue;
+    }
+
+    if (char === '*' && nextChar === '*') {
+      regexPattern += '.*';
+      index += 1;
+      continue;
+    }
+
+    if (char === '*') {
+      regexPattern += '[^/]*';
+      continue;
+    }
+
+    if (char === '?') {
+      regexPattern += '[^/]';
+      continue;
+    }
+
+    regexPattern += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
 
   const regex = new RegExp(`^${regexPattern}$`);
 

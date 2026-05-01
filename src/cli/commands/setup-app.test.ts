@@ -26,11 +26,6 @@ vi.mock('../git.js', () => ({
   getGitHubRepoUrl: () => 'https://github.com/test/repo',
 }));
 
-// We need fine-grained control over the callback server mock, so we build it
-// per-test in a factory that the mock delegates to.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let serverFactory: () => any;
-
 vi.mock('./setup-app/server.js', () => ({
   startCallbackServer: (..._args: unknown[]) => serverFactory(),
 }));
@@ -76,6 +71,12 @@ function createMockServerHandle() {
     close,
   };
 }
+
+type MockServerHandle = ReturnType<typeof createMockServerHandle>['handle'];
+
+// We need fine-grained control over the callback server mock, so we build it
+// per-test in a factory that the mock delegates to.
+let serverFactory: () => MockServerHandle;
 
 describe('runSetupApp', () => {
   beforeEach(() => {

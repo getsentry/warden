@@ -229,7 +229,7 @@ export class BoxRenderer {
    * Strip ANSI escape codes from a string for length calculation.
    */
   private stripAnsi(str: string): string {
-    // eslint-disable-next-line no-control-regex
+    // oxlint-disable-next-line no-control-regex
     return str.replace(/\x1b\[[0-9;]*m/g, '');
   }
 }

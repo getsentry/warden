@@ -4,6 +4,8 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -66,6 +68,9 @@ export type CoordinatorPlan = z.infer<typeof CoordinatorPlanSchema>;
 export const CoordinatorPlanCacheRecordSchema = z.object({
   version: z.literal(COORDINATOR_PLAN_CACHE_SCHEMA_VERSION),
   kind: z.literal(COORDINATOR_PLAN_CACHE_KIND),
+  identity: z.object({
+    requestedModel: z.string().min(1).optional(),
+  }).strict().optional(),
   plan: CoordinatorPlanSchema,
   parent: z.object({
     durationMs: z.number().nonnegative().optional(),
@@ -123,7 +128,7 @@ export interface SynthesizeCoordinatorPlanOptions {
   maxRetries?: number;
   regenerate?: boolean;
   abortController?: AbortController;
-  cacheDir?: string;
+  artifactRoot?: string;
   repoPath?: string;
   maxTurns?: number;
   repairModel?: string;
@@ -242,7 +247,7 @@ export function getCoordinatorCacheDir(): string {
   return join(root, 'superwarden-plans');
 }
 
-function coordinatorCacheKey(args: {
+function legacyCoordinatorCacheKey(args: {
   skillName: string;
   sourceHash: string;
   model?: string;
@@ -257,46 +262,78 @@ function coordinatorCacheKey(args: {
   }));
 }
 
-export function getCoordinatorPlanCachePath(args: {
+function getLegacyCoordinatorPlanCachePath(args: {
   skillName: string;
   sourceHash: string;
   model?: string;
-  cacheDir?: string;
+  artifactRoot?: string;
 }): string {
-  if (args.cacheDir) {
-    return join(args.cacheDir, `${coordinatorCacheKey(args)}.json`);
+  if (args.artifactRoot) {
+    return join(args.artifactRoot, 'cache', `${legacyCoordinatorCacheKey(args)}.json`);
   }
   const safeName = args.skillName.replace(/[^a-zA-Z0-9._-]/g, '-');
-  return join(getCoordinatorCacheDir(), `${safeName}-${coordinatorCacheKey(args)}.json`);
+  return join(getCoordinatorCacheDir(), `${safeName}-${legacyCoordinatorCacheKey(args)}.json`);
 }
 
-function parseCachedPlan(cachePath: string, skillName: string, sourceHash: string): CoordinatorPlan {
+export function getCoordinatorPlanPath(args: {
+  skillName: string;
+  artifactRoot?: string;
+}): string {
+  if (args.artifactRoot) {
+    return join(args.artifactRoot, 'plan.json');
+  }
+  const safeName = args.skillName.replace(/[^a-zA-Z0-9._-]/g, '-');
+  return join(getCoordinatorCacheDir(), safeName, 'plan.json');
+}
+
+export const getCoordinatorPlanCachePath = getCoordinatorPlanPath;
+
+function validateCacheIdentity(
+  record: CoordinatorPlanCacheRecord,
+  model: string | undefined,
+): void {
+  if (record.identity?.requestedModel !== model) {
+    throw new CoordinatorPlanError(
+      `Superwarden plan model mismatch. Expected ${model ?? 'default'}, got ${record.identity?.requestedModel ?? 'default'}. Regenerate the plan.`,
+    );
+  }
+}
+
+function parseCachedPlan(
+  cachePath: string,
+  skillName: string,
+  sourceHash: string,
+  model?: string,
+) : CoordinatorPlan | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(cachePath, 'utf-8'));
-  } catch (error) {
-    throw new CoordinatorPlanError(
-      `Cached Superwarden plan is unreadable: ${cachePath}. Regenerate the plan.`,
-      { cause: error },
-    );
+  } catch {
+    return undefined;
   }
 
   const cacheValidation = CoordinatorPlanCacheRecordSchema.safeParse(parsed);
   if (cacheValidation.success) {
-    validatePlanIdentity(cacheValidation.data.plan, skillName, sourceHash);
-    return cacheValidation.data.plan;
+    try {
+      validatePlanIdentity(cacheValidation.data.plan, skillName, sourceHash);
+      validateCacheIdentity(cacheValidation.data, model);
+      return cacheValidation.data.plan;
+    } catch {
+      return undefined;
+    }
   }
 
   const validation = CoordinatorPlanSchema.safeParse(parsed);
-  if (!validation.success) {
-    throw new CoordinatorPlanError(
-      `Cached Superwarden plan is invalid: ${validation.error.message}. Regenerate the plan.`,
-      { cause: validation.error },
-    );
+  if (validation.success) {
+    try {
+      validatePlanIdentity(validation.data, skillName, sourceHash);
+      return validation.data;
+    } catch {
+      return undefined;
+    }
   }
 
-  validatePlanIdentity(validation.data, skillName, sourceHash);
-  return validation.data;
+  return undefined;
 }
 
 function validatePlanIdentity(plan: CoordinatorPlan, skillName: string, sourceHash: string): void {
@@ -338,13 +375,19 @@ Rules:
 - Task ids must be lowercase kebab-case.
 - If the source material contains explicit coverage items, every item must map clearly to at least one task id, title, scope, or prompt. Do not silently drop or vaguely merge named coverage areas.
 - The parent plan is a lean decomposition artifact, not the final child skill. Keep it lighter than the eventual child skills.
+- Treat each task more like a concise spec stub than a finished runtime skill: make ownership, boundaries, and evidence expectations obvious without turning the parent plan into a long investigation manual.
 - Prompts must be self-contained, focused, and preserve the Superwarden skill's intent, but they should only carry the core constraints, evidence requirements, scope boundaries, and missing-context handling needed to synthesize the child skill.
+- Keep each task prompt concise and imperative. It should define the investigation goal, the non-negotiable constraints, and any boundary rules that the child skill must preserve.
+- Do not put trigger-language, user-request phrasing, or long "when to use" guidance into parent task prompts. That belongs in the generated child skill description and body.
+- Do not include repository-local file paths, line numbers, function names, or overly specific examples in the parent task unless the parent source explicitly requires them to preserve intent.
 - Do not try to encode every false-positive control, remediation pattern, framework caveat, or long-form investigation rubric in the parent plan. Those belong in the individual child skills.
 - Each prompt must describe an independent agent-quality investigation for that concern, including repo-local source inspection, data-flow tracing, relevant prior-art research, and current public documentation when those would affect correctness.
 - Each prompt must state how to handle missing repository, technology, deployment, or threat-model context without inventing facts.
 - Evidence requirements must force concrete verification, changed-line anchoring, source material, and public prior-art references when used.
 - Out-of-scope exclusions must prevent generic style or unrelated-review findings.
 - After choosing the task set, write each task's outOfScope so it explicitly excludes sibling task concerns when overlap would otherwise be likely. Prefer exclusions that name the sibling task id or concern directly.
+- When one code path could create chained risks across tasks, assign one primary owning task for the reportable issue and make the other tasks exclude that ownership boundary instead of competing for the same finding.
+- Boundary rules should be written from this task's perspective: say what this task owns and what it must not report. Do not turn parent tasks into cross-referencing review commentary about how every sibling should be rewritten.
 - If ${COORDINATOR_METADATA_FILE} is present, treat it as the Superwarden skill's initial prompt and metadata contract.
 - If the source material is too thin for a safe decomposition, make that explicit inside task prompts and evidence requirements. Do not silently invent coverage areas.
 - Do not ask follow-up questions or return prose. If context is missing, still return valid JSON and put that context in synthesis.missingInputs.
@@ -409,11 +452,17 @@ Do not send repository code, secrets, private file paths, or proprietary details
 Return only the strict JSON object requested by the user prompt. Never return prose or follow-up questions.`;
 }
 
-function writePlan(cachePath: string, plan: CoordinatorPlan, parent?: CoordinatorPlanCacheRecord['parent']): void {
+function writePlan(
+  cachePath: string,
+  plan: CoordinatorPlan,
+  parent?: CoordinatorPlanCacheRecord['parent'],
+  model?: string,
+): void {
   mkdirSync(dirname(cachePath), { recursive: true });
   const record: CoordinatorPlanCacheRecord = {
     version: COORDINATOR_PLAN_CACHE_SCHEMA_VERSION,
     kind: COORDINATOR_PLAN_CACHE_KIND,
+    identity: model ? { requestedModel: model } : undefined,
     plan,
     parent,
     childSkills: {},
@@ -422,22 +471,148 @@ function writePlan(cachePath: string, plan: CoordinatorPlan, parent?: Coordinato
   writeFileSync(cachePath, `${JSON.stringify(record, null, 2)}\n`, 'utf-8');
 }
 
+function getLegacyCoordinatorChildSkillsRoot(cachePath: string): string {
+  return join(dirname(cachePath), basename(cachePath, '.json'), 'skills');
+}
+
+function getStableCoordinatorChildSkillsRoot(cachePath: string): string {
+  return join(dirname(cachePath), 'tasks');
+}
+
+function moveIfMissing(sourcePath: string, destinationPath: string): void {
+  if (existsSync(destinationPath) || !existsSync(sourcePath)) {
+    return;
+  }
+
+  mkdirSync(dirname(destinationPath), { recursive: true });
+  renameSync(sourcePath, destinationPath);
+}
+
+function migrateCoordinatorArtifacts(args: {
+  cachePath: string;
+  legacyCachePath: string;
+  artifactRoot?: string;
+}): void {
+  const stableChildRoot = getStableCoordinatorChildSkillsRoot(args.cachePath);
+
+  if (args.artifactRoot) {
+    moveIfMissing(
+      join(args.artifactRoot, 'cache', 'plan.json'),
+      args.cachePath,
+    );
+    moveIfMissing(
+      join(args.artifactRoot, 'cache', 'skills'),
+      stableChildRoot,
+    );
+  }
+
+  moveIfMissing(args.legacyCachePath, args.cachePath);
+  moveIfMissing(join(dirname(args.cachePath), 'skills'), stableChildRoot);
+
+  const legacyChildRoot = getLegacyCoordinatorChildSkillsRoot(args.legacyCachePath);
+  if (existsSync(legacyChildRoot) && !existsSync(stableChildRoot)) {
+    mkdirSync(dirname(stableChildRoot), { recursive: true });
+    renameSync(legacyChildRoot, stableChildRoot);
+    rmSync(dirname(legacyChildRoot), { recursive: true, force: true });
+  }
+}
+
+function pruneLegacyCoordinatorCacheLayout(rootDir: string): void {
+  if (!existsSync(rootDir)) {
+    return;
+  }
+
+  for (const entry of readdirSync(rootDir, { withFileTypes: true })) {
+    if (entry.isFile() && /^[a-z0-9._-]+-[a-f0-9]{64}\.json$/.test(entry.name)) {
+      rmSync(join(rootDir, entry.name), { force: true });
+      continue;
+    }
+
+    if (entry.isDirectory() && /^[a-z0-9._-]+-[a-f0-9]{64}$/.test(entry.name)) {
+      rmSync(join(rootDir, entry.name), { recursive: true, force: true });
+    }
+  }
+}
+
+function pruneLegacyRepoLocalCoordinatorLayout(artifactRoot: string): void {
+  const legacyRoot = join(artifactRoot, 'cache');
+  if (!existsSync(legacyRoot)) {
+    return;
+  }
+
+  rmSync(join(legacyRoot, 'plan.json'), { force: true });
+  rmSync(join(legacyRoot, 'skills'), { recursive: true, force: true });
+
+  for (const entry of readdirSync(legacyRoot, { withFileTypes: true })) {
+    if (entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name)) {
+      rmSync(join(legacyRoot, entry.name), { force: true });
+      continue;
+    }
+
+    if (entry.isDirectory() && /^[a-f0-9]{64}$/.test(entry.name)) {
+      rmSync(join(legacyRoot, entry.name), { recursive: true, force: true });
+    }
+  }
+
+  if (readdirSync(legacyRoot).length === 0) {
+    rmSync(legacyRoot, { recursive: true, force: true });
+  }
+}
+
+function pruneLegacyCoordinatorArtifacts(args: {
+  cachePath: string;
+  artifactRoot?: string;
+}): void {
+  pruneLegacyCoordinatorCacheLayout(dirname(args.cachePath));
+  if (args.artifactRoot) {
+    pruneLegacyRepoLocalCoordinatorLayout(args.artifactRoot);
+  }
+}
+
+function resolveLegacyCoordinatorCachePath(args: {
+  skillName: string;
+  sourceHash: string;
+  model?: string;
+  artifactRoot?: string;
+}): string {
+  return getLegacyCoordinatorPlanCachePath({
+    skillName: args.skillName,
+    sourceHash: args.sourceHash,
+    model: args.model,
+    artifactRoot: args.artifactRoot,
+  });
+}
+
 export async function synthesizeCoordinatorPlan(
   options: SynthesizeCoordinatorPlanOptions,
 ): Promise<CoordinatorSynthesisResult> {
   const { skill, apiKey, model, maxRetries, regenerate = false } = options;
   const runtime = options.runtime ?? getRuntime(options.runtimeName ?? 'claude');
   const source = collectCoordinatorSource(skill);
-  const cachePath = getCoordinatorPlanCachePath({
+  const cachePath = getCoordinatorPlanPath({
     skillName: skill.name,
-    sourceHash: source.hash,
-    model,
-    cacheDir: options.cacheDir,
+    artifactRoot: options.artifactRoot,
+  });
+  migrateCoordinatorArtifacts({
+    cachePath,
+    legacyCachePath: resolveLegacyCoordinatorCachePath({
+      skillName: skill.name,
+      sourceHash: source.hash,
+      model,
+      artifactRoot: options.artifactRoot,
+    }),
+    artifactRoot: options.artifactRoot,
+  });
+  pruneLegacyCoordinatorArtifacts({
+    cachePath,
+    artifactRoot: options.artifactRoot,
   });
 
   if (existsSync(cachePath) && !regenerate) {
-    const plan = parseCachedPlan(cachePath, skill.name, source.hash);
-    return { plan, source: 'cache', cachePath };
+    const plan = parseCachedPlan(cachePath, skill.name, source.hash, model);
+    if (plan) {
+      return { plan, source: 'cache', cachePath };
+    }
   }
 
   if (options.repoPath) {
@@ -465,7 +640,7 @@ export async function synthesizeCoordinatorPlan(
         durationMs: result.durationMs,
         responseModel: result.responseModel,
         numTurns: result.numTurns,
-      });
+      }, model);
 
       return {
         plan: result.data,
@@ -502,7 +677,7 @@ export async function synthesizeCoordinatorPlan(
   validatePlanIdentity(result.data, skill.name, source.hash);
   writePlan(cachePath, result.data, {
     usage: result.usage,
-  });
+  }, model);
 
   return {
     plan: result.data,

@@ -8,7 +8,7 @@ Superwarden is Warden's system for broad review skills that synthesize into focu
 - Initial prompt: the human-authored prompt in `warden.yaml.initialPrompt`. It is the seed intent, not a regeneration transcript.
 - Superwarden plan: the cached JSON plan produced by `warden synth <name>` or `warden synthesize <name>`.
 - Task: the user-facing CLI term for one focused unit of Superwarden work.
-- Child skill: a focused normal Warden skill generated from one Superwarden plan task and stored under the plan cache.
+- Child skill: a focused normal Warden skill generated from one Superwarden plan task and stored as a child of the parent Superwarden skill.
 - Coordinator mode: the current config value, `mode = "coordinator"`, used to mark a skill as a Superwarden skill until the public config vocabulary changes.
 
 ## Layout
@@ -19,23 +19,21 @@ Superwarden is Warden's system for broad review skills that synthesize into focu
 ├── SPEC.md
 ├── SOURCES.md
 ├── warden.yaml
-└── cache/
-    ├── <plan-hash>.json
-    └── <plan-hash>/
-        └── skills/
-            └── <task-id>/
-                ├── SKILL.md
-                ├── SPEC.md
-                └── SOURCES.md
+├── plan.json
+└── tasks/
+    └── <task-id>/
+        ├── SKILL.md
+        ├── SPEC.md
+        └── SOURCES.md
 ```
 
 Superwarden artifacts are repo-local and intentionally separate from `.agents/skills/` so normal coding harness skill discovery is not disturbed.
 
 ## Synthesis
 
-`warden synth [skill]` resolves an existing Superwarden skill or creates one when the skill is missing and an initial prompt is provided interactively, with `--initial-prompt`, or with `--prompt-file`. `warden synthesize` remains an alias.
+`warden synth [skill]` resolves an existing Superwarden skill or creates one when the skill is missing and an initial prompt is provided interactively or with `--prompt`. `warden synthesize` remains an alias. `--prompt @path/to/file.md` loads the prompt from a file.
 
-Synthesis reads `SKILL.md`, `warden.yaml`, `SPEC.md`, `SOURCES.md`, and markdown files under `references/`. The source hash, model, Warden version, and Superwarden plan schema version determine the cache key. The parent cache JSON stores the Superwarden plan plus synthesis metadata for the parent and child skills.
+Synthesis reads `SKILL.md`, `warden.yaml`, `SPEC.md`, `SOURCES.md`, and markdown files under `references/`. The plan path is stable per Superwarden skill, while the cached contents inside `plan.json` are validated against the current source hash, requested synthesis model, and Superwarden plan version before reuse. The parent plan record stores the Superwarden plan plus synthesis metadata for the parent and child skills.
 
 Superwarden synthesis is a sequence of agent-quality synthesis runs, not a cheap splitter. The parent plan synthesis must:
 
@@ -47,14 +45,14 @@ Superwarden synthesis is a sequence of agent-quality synthesis runs, not a cheap
 - require online prior art or current public documentation when external framework, runtime, vulnerability, or ecosystem behavior affects the answer
 - prohibit sending repository code, secrets, private file paths, or proprietary details to web tools
 
-After the parent plan is generated, each child task gets its own full synthesis run. Child synthesis must inspect relevant local source and public prior art, then write `SKILL.md`, `SPEC.md`, and `SOURCES.md` for that child. The child skill `name` must match the task directory name so normal skill validation works against cache-local task artifacts. The parent cache record stores each child task hash, source hash, generation duration, token usage, cost, response model, turn count, artifact size, and external source count so repeated runs can reuse validated child artifacts without hiding the cost of the original synthesis.
+After the parent plan is generated, each child task gets its own full synthesis run. Child synthesis must inspect relevant local source and public prior art, then write `SKILL.md`, `SPEC.md`, and `SOURCES.md` for that child. The child skill `name` must match the task directory name so normal skill validation works against repo-local task artifacts. The parent plan record stores each child task hash, source hash, generation duration, token usage, cost, response model, turn count, artifact size, and external source count so repeated runs can reuse validated child artifacts without hiding the cost of the original synthesis.
 
 CLI output should show parent synthesis first, then one progress/result row per task synthesis or cache load. Generated tasks should show artifact size, generation duration, token usage, cost, source count, and turn count. Cached tasks should be visually marked as cached without implying a new duration or new token usage.
 
-After a plan is loaded or generated, Warden writes child skills under that plan's repo-local cache directory. The parent Superwarden skill can be run like a normal skill, including when it is only present under `.warden/superwarden/<name>/` and not configured in `warden.toml`:
+After a plan is loaded or generated, Warden writes child skills under that parent skill's repo-local `tasks/` directory. The parent Superwarden skill can be run like a normal skill, including when it is only present under `.warden/superwarden/<name>/` and not configured in `warden.toml`:
 
 ```bash
-pnpm cli src/file.ts --skill <name>
+warden src/file.ts --skill <name>
 ```
 
 ## Runtime Status

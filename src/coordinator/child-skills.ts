@@ -23,20 +23,6 @@ type CoordinatorTask = CoordinatorPlan['tasks'][number];
 type CoordinatorExternalSource = z.infer<typeof CoordinatorExternalSourceSchema>;
 const COORDINATOR_CHILD_SYNTHESIS_SCHEMA_VERSION = 2;
 
-const CoordinatorChildSkillCleanupItemSchema = z.object({
-  targets: z.array(z.string().min(1)).min(1),
-  issue: z.string().min(1),
-  cleanup: z.string().min(1),
-}).strict();
-
-export const CoordinatorChildSkillCleanupReviewSchema = z.object({
-  version: z.literal(1),
-  parentSkill: z.string().min(1),
-  summary: z.string().min(1),
-  cleanupItems: z.array(CoordinatorChildSkillCleanupItemSchema).default([]),
-}).strict();
-export type CoordinatorChildSkillCleanupReview = z.infer<typeof CoordinatorChildSkillCleanupReviewSchema>;
-
 const CoordinatorChildSkillSynthesisSchema = z.object({
   version: z.literal(1),
   parentSkill: z.string().min(1),
@@ -273,7 +259,7 @@ ${JSON.stringify(task, null, 2)}
 Sibling tasks that this child skill must not absorb unless needed only to explain a boundary:
 ${formatSiblingTasks(plan, task)}
 
-Parent plan cache:
+Parent plan record:
 ${cacheFileName}
 
 Parent Superwarden plan:
@@ -282,72 +268,6 @@ ${JSON.stringify(plan, null, 2)}
 Parent source material:
 
 ${sourceBlocks(source)}`;
-}
-
-function childCleanupReviewSystemPrompt(): string {
-  return `You review a generated Superwarden child-skill set and identify cleanup work.
-
-Use Read, Grep, and Glob to inspect the generated child skill artifacts, the parent plan, and the parent source material. You are not rewriting files in this pass. You are determining where scope, overlap, exclusions, or detail balance need cleanup.
-
-Do not send repository code, secrets, private file paths, or proprietary details to web tools. Prefer local inspection for this review.
-
-Return only strict JSON. Never return prose, markdown, or a follow-up question.`;
-}
-
-function buildChildCleanupReviewPrompt(args: {
-  plan: CoordinatorPlan;
-  source: CoordinatorSource;
-  artifacts: CoordinatorChildSkillArtifact[];
-  rootDir: string;
-}): string {
-  const artifactList = args.artifacts
-    .map((artifact) => `- ${artifact.taskId}: ${artifact.path}`)
-    .join('\n');
-
-  return `Review the generated Superwarden child skills and determine what needs cleanup.
-
-This is a review pass, not a rewrite pass.
-
-Review goals:
-- find overlapping task scopes that are likely to produce duplicate findings
-- find child skills that do not explicitly say what they should not cover, especially sibling task concerns
-- find places where the parent plan carries too much child-skill detail instead of just core constraints, evidence requirements, and boundaries
-- find cleanup work needed to sharpen task ownership, exclusions, or prompt balance
-
-Rules:
-- do not rewrite files
-- prefer concrete cleanup actions over vague criticism
-- if nothing needs cleanup, say so in summary and return an empty cleanupItems array
-- use "plan" as a target when the parent plan itself needs cleanup
-- use task ids as targets for child-skill cleanup
-- when overlap involves multiple tasks, include all affected task ids in targets
-
-Return only JSON with this exact shape:
-{
-  "version": 1,
-  "parentSkill": "${args.plan.skill}",
-  "summary": "One-line summary of whether cleanup is needed.",
-  "cleanupItems": [
-    {
-      "targets": ["plan"],
-      "issue": "What is wrong or unclear.",
-      "cleanup": "Concrete cleanup action."
-    }
-  ]
-}
-
-Parent plan:
-${JSON.stringify(args.plan, null, 2)}
-
-Generated child skill root:
-${args.rootDir}
-
-Generated child skills:
-${artifactList}
-
-Parent source material:
-
-${sourceBlocks(args.source)}`;
 }
 
 function writeChildSkillArtifact(args: {
@@ -479,6 +399,7 @@ function writeCachedChildSkill(args: {
     `${JSON.stringify({
       version: COORDINATOR_PLAN_CACHE_SCHEMA_VERSION,
       kind: COORDINATOR_PLAN_CACHE_KIND,
+      identity: record['identity'],
       plan,
       parent: record['parent'],
       childSkills,
@@ -635,67 +556,9 @@ export async function synthesizeCoordinatorChildSkill(args: {
   }
 }
 
-/** Review a generated child-skill set for overlap, exclusions, and cleanup work. */
-export async function reviewCoordinatorChildSkills(args: {
-  plan: CoordinatorPlan;
-  source: CoordinatorSource;
-  artifacts: CoordinatorChildSkillArtifact[];
-  rootDir: string;
-  runtime: Runtime;
-  repoPath: string;
-  model?: string;
-  maxTurns?: number;
-  abortController?: AbortController;
-  apiKey?: string;
-  repairModel?: string;
-  repairMaxRetries?: number;
-}): Promise<CoordinatorChildSkillCleanupReview> {
-  try {
-    const result = await runStructuredSuperwardenAgent({
-      runtime: args.runtime,
-      repoPath: args.repoPath,
-      skillName: `${args.plan.skill}:superwarden-child-cleanup`,
-      systemPrompt: childCleanupReviewSystemPrompt(),
-      userPrompt: buildChildCleanupReviewPrompt({
-        plan: args.plan,
-        source: args.source,
-        artifacts: args.artifacts,
-        rootDir: args.rootDir,
-      }),
-      schema: CoordinatorChildSkillCleanupReviewSchema,
-      model: args.model,
-      maxTurns: args.maxTurns ?? SUPERWARDEN_SYNTHESIS_MAX_TURNS,
-      abortController: args.abortController,
-      repair: {
-        apiKey: args.apiKey,
-        model: args.repairModel,
-        maxRetries: args.repairMaxRetries,
-      },
-    });
-
-    if (result.data.parentSkill !== args.plan.skill) {
-      throw new CoordinatorChildSkillError(
-        `Child skill cleanup review identity mismatch for ${args.plan.skill}`,
-      );
-    }
-    return result.data;
-  } catch (error) {
-    if (error instanceof CoordinatorChildSkillError) {
-      throw error;
-    }
-    if (error instanceof StructuredSuperwardenAgentError) {
-      throw new CoordinatorChildSkillError(
-        `Child skill cleanup review failed for ${args.plan.skill}: ${error.message}`,
-        { cause: error },
-      );
-    }
-    throw error;
-  }
-}
-
-/** Return the directory that stores runnable child skills for one cached plan. */
+/** Return the directory that stores runnable child skills for one plan record. */
 export function getCoordinatorChildSkillsRoot(cachePath: string): string {
-  return join(dirname(cachePath), basename(cachePath, '.json'), 'skills');
+  return join(dirname(cachePath), 'tasks');
 }
 
 /** Preserve the old API shape while forcing callers onto per-task synthesis. */

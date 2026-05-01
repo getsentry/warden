@@ -579,9 +579,12 @@ function renderSuperwardenPreparedTask(
   artifact: CoordinatorChildSkillArtifact,
   task: CoordinatorPlan['tasks'][number],
 ): void {
-  const status = artifact.source === 'cache' ? 'cached' : 'generated';
   const stats = artifact.source === 'generated' ? formatGeneratedTaskStats(artifact) : '';
-  reporter.success(`${artifact.taskId}  [${status}]${stats}`);
+  reporter.success(
+    artifact.source === 'cache'
+      ? `${artifact.taskId}  [cached]`
+      : `${artifact.taskId}${stats}`,
+  );
   reporter.dim(`  ${truncate(task.scope, 100)}`);
 }
 

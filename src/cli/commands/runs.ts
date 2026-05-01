@@ -73,7 +73,7 @@ function resolveFileArg(arg: string, logDir: string): string[] {
   }
 }
 
-// eslint-disable-next-line no-control-regex
+// oxlint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 /**

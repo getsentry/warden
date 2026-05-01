@@ -12,13 +12,13 @@ import {
 } from '../coordinator/child-skills.js';
 import {
   collectCoordinatorSource,
-  getCoordinatorPlanCachePath,
+  getCoordinatorPlanPath,
   synthesizeCoordinatorPlan,
   type CoordinatorPlan,
   type CoordinatorSource,
   type CoordinatorSynthesisResult,
 } from '../coordinator/plan.js';
-import { getSuperwardenCacheDir } from '../coordinator/superwarden.js';
+import { getSuperwardenSkillRoot } from '../coordinator/superwarden.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import type { RuntimeName } from '../sdk/runtimes/index.js';
 import { DEFAULT_CONCURRENCY, runPool } from '../utils/index.js';
@@ -53,7 +53,7 @@ export function superwardenPlanStatusDetail(cacheHit: boolean, regenerate: boole
 export interface PreparedSuperwardenArtifacts {
   skill: SkillDefinition;
   source: CoordinatorSource;
-  cacheDir: string;
+  artifactRoot: string;
   planCachePath: string;
   planCacheHit: boolean;
   planResult: CoordinatorSynthesisResult;
@@ -117,12 +117,10 @@ export async function prepareSuperwardenArtifacts(
   const source = collectCoordinatorSource(args.skill);
   const runtimeName: RuntimeName = args.runtimeName ?? 'claude';
   const runtime = getRuntime(runtimeName);
-  const cacheDir = getSuperwardenCacheDir(args.repoPath, args.skill.name);
-  const planCachePath = getCoordinatorPlanCachePath({
+  const artifactRoot = args.skill.rootDir ?? getSuperwardenSkillRoot(args.repoPath, args.skill.name);
+  const planCachePath = getCoordinatorPlanPath({
     skillName: args.skill.name,
-    sourceHash: source.hash,
-    model: args.model,
-    cacheDir,
+    artifactRoot,
   });
   const planCacheHit = existsSync(planCachePath);
   const planMessage = args.planMessage ?? args.skill.description ?? args.skill.name;
@@ -138,11 +136,11 @@ export async function prepareSuperwardenArtifacts(
     apiKey: args.apiKey,
     model: args.model,
     maxRetries: args.repairMaxRetries,
-    regenerate: args.regenerate,
-    abortController: args.abortController,
-    cacheDir,
-    repoPath: args.repoPath,
-    repairModel: args.repairModel,
+      regenerate: args.regenerate,
+      abortController: args.abortController,
+      artifactRoot,
+      repoPath: args.repoPath,
+      repairModel: args.repairModel,
     repairMaxRetries: args.repairMaxRetries,
   });
   const planResult = args.json
@@ -173,7 +171,7 @@ export async function prepareSuperwardenArtifacts(
     return {
       skill: args.skill,
       source,
-      cacheDir,
+      artifactRoot,
       planCachePath,
       planCacheHit,
       planResult,
@@ -242,6 +240,7 @@ export async function prepareSuperwardenArtifacts(
       });
     }
   } else {
+    const renderArtifactsAfterParallelRun = args.json || !args.mode.isTTY;
     const synthesizeChildPool = () => runPool(
       childTasks,
       childConcurrency,
@@ -262,22 +261,24 @@ export async function prepareSuperwardenArtifacts(
         concurrency: childConcurrency,
         getLabel: ({ childMessage }) => childMessage,
         task: ({ task }) => runChildSynthesis(task),
-        getDoneDetail: (artifact) => artifact.source === 'cache' ? '[cached]' : '[generated]',
+        getDoneDetail: (artifact) => artifact.source === 'cache' ? '[cached]' : undefined,
         showDoneDuration: (artifact) => artifact.source !== 'cache',
         shouldAbort: () => args.abortController?.signal.aborted ?? false,
       });
 
-    for (const [index, artifact] of childArtifacts.entries()) {
-      const childTask = childTasks[index];
-      if (!childTask) {
-        continue;
+    if (renderArtifactsAfterParallelRun) {
+      for (const [index, artifact] of childArtifacts.entries()) {
+        const childTask = childTasks[index];
+        if (!childTask) {
+          continue;
+        }
+        args.onChildArtifact?.({
+          artifact,
+          task: childTask.task,
+          index,
+          total: planResult.plan.tasks.length,
+        });
       }
-      args.onChildArtifact?.({
-        artifact,
-        task: childTask.task,
-        index,
-        total: planResult.plan.tasks.length,
-      });
     }
   }
   const childDurationMs = performance.now() - childStartedAt;
@@ -285,7 +286,7 @@ export async function prepareSuperwardenArtifacts(
   return {
     skill: args.skill,
     source,
-    cacheDir,
+    artifactRoot,
     planCachePath,
     planCacheHit,
     planResult,
