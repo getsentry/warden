@@ -7,7 +7,12 @@ import type { CLIOptions } from '../args.js';
 import { Reporter } from '../output/reporter.js';
 import { detectOutputMode } from '../output/tty.js';
 import { Verbosity } from '../output/verbosity.js';
-import { COORDINATOR_VERSION, synthesizeCoordinatorPlan } from '../../coordinator/plan.js';
+import {
+  COORDINATOR_PLAN_SCHEMA_VERSION,
+  COORDINATOR_VERSION,
+  synthesizeCoordinatorPlan,
+  type CoordinatorPlan,
+} from '../../coordinator/plan.js';
 import { synthesizeCoordinatorChildSkill } from '../../coordinator/child-skills.js';
 import { runSynthesize } from './synthesize.js';
 
@@ -37,6 +42,51 @@ function emptyUsage() {
     cacheReadInputTokens: 0,
     cacheCreationInputTokens: 0,
     costUSD: 0.01,
+  };
+}
+
+function createTask(
+  id: string,
+  title: string,
+  goal: string,
+  overrides: Partial<CoordinatorPlan['tasks'][number]> = {},
+): CoordinatorPlan['tasks'][number] {
+  return {
+    id,
+    title,
+    goal,
+    rationale: `${title} is a distinct investigation track for this parent skill.`,
+    sourceSignals: [`${title} boundary in the repository`],
+    owns: [goal],
+    excludes: [],
+    evidenceFocus: [`Trace concrete evidence for ${id}.`],
+    childResearchHints: [],
+    ...overrides,
+  };
+}
+
+function createPlan(
+  skill: string,
+  tasks: CoordinatorPlan['tasks'],
+  overrides: Partial<CoordinatorPlan> = {},
+): CoordinatorPlan {
+  return {
+    version: COORDINATOR_PLAN_SCHEMA_VERSION,
+    skill,
+    sourceHash: 'hash',
+    coordinatorVersion: COORDINATOR_VERSION,
+    scopeProfile: {
+      kind: 'repository',
+      subject: 'Security review for repository runtime and workflow boundaries',
+      localContextUsed: true,
+      observedContext: ['Node.js and TypeScript runtime', 'Workflow permission boundaries'],
+      unresolvedContext: [],
+    },
+    synthesis: {
+      phases: [{ id: 'collect-inputs', status: 'generated' }],
+    },
+    tasks,
+    ...overrides,
   };
 }
 
@@ -146,23 +196,9 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
       cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'security-review',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'generated' }],
-        },
-        tasks: [{
-          id: 'authz',
-          title: 'Authorization',
-          scope: 'Find authorization issues.',
-          prompt: 'Review authorization issues.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: [],
-        }],
-      },
+      plan: createPlan('security-review', [
+        createTask('authz', 'Authorization', 'Find authorization issues.'),
+      ]),
     });
 
     const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -230,23 +266,15 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'cache',
       cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'security-review',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'cached' }],
+      plan: createPlan(
+        'security-review',
+        [createTask('authz', 'Authorization', 'Find authorization issues.')],
+        {
+          synthesis: {
+            phases: [{ id: 'collect-inputs', status: 'cached' }],
+          },
         },
-        tasks: [{
-          id: 'authz',
-          title: 'Authorization',
-          scope: 'Find authorization issues.',
-          prompt: 'Review authorization issues.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: [],
-        }],
-      },
+      ),
     });
     mockSynthesizeCoordinatorChildSkill.mockImplementationOnce(async (args) => ({
       source: 'cache',
@@ -292,23 +320,9 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
       cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'security-review',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'generated' }],
-        },
-        tasks: [{
-          id: 'authz',
-          title: 'Authorization',
-          scope: 'Find authorization issues.',
-          prompt: 'Review authorization issues.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: [],
-        }],
-      },
+      plan: createPlan('security-review', [
+        createTask('authz', 'Authorization', 'Find authorization issues.'),
+      ]),
     });
 
     const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -328,41 +342,11 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
       cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'security-review',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'generated' }],
-        },
-        tasks: [
-          {
-            id: 'authz',
-            title: 'Authorization',
-            scope: 'Find authorization issues.',
-            prompt: 'Review authorization issues.',
-            evidenceRequirements: ['Trace the permission boundary.'],
-            outOfScope: [],
-          },
-          {
-            id: 'injection',
-            title: 'Injection',
-            scope: 'Find injection issues.',
-            prompt: 'Review injection issues.',
-            evidenceRequirements: ['Trace the data flow.'],
-            outOfScope: [],
-          },
-          {
-            id: 'secrets',
-            title: 'Secrets',
-            scope: 'Find secret exposure issues.',
-            prompt: 'Review secret exposure issues.',
-            evidenceRequirements: ['Trace secret handling.'],
-            outOfScope: [],
-          },
-        ],
-      },
+      plan: createPlan('security-review', [
+        createTask('authz', 'Authorization', 'Find authorization issues.'),
+        createTask('injection', 'Injection', 'Find injection issues.'),
+        createTask('secrets', 'Secrets', 'Find secret exposure issues.'),
+      ]),
     });
 
     let active = 0;
@@ -406,32 +390,38 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'cache',
       cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'security-review',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [
-            { id: 'collect-inputs', status: 'generated' },
-            { id: 'validate-coverage', status: 'validated' },
-          ],
-          externalSources: [{
-            title: 'GitHub Actions security hardening',
-            url: 'https://example.com/actions-security',
-            reason: 'Explains pull request trust boundaries.',
-          }],
-          missingInputs: ['Whether fork pull requests run with repository secrets.'],
+      plan: createPlan(
+        'security-review',
+        [
+          createTask('authz', 'Authorization', 'Find authorization issues in changed TypeScript code.', {
+            excludes: ['Generic style comments.'],
+            evidenceFocus: ['Trace the permission boundary.'],
+          }),
+        ],
+        {
+          scopeProfile: {
+            kind: 'repository',
+            subject: 'Security review for repository runtime and workflow boundaries',
+            localContextUsed: true,
+            observedContext: [
+              'Node.js and TypeScript runtime',
+              'GitHub Actions workflow permissions',
+            ],
+            unresolvedContext: ['Whether fork pull requests run with repository secrets.'],
+          },
+          synthesis: {
+            phases: [
+              { id: 'collect-inputs', status: 'generated' },
+              { id: 'validate-coverage', status: 'validated' },
+            ],
+            externalSources: [{
+              title: 'GitHub Actions security hardening',
+              url: 'https://example.com/actions-security',
+              reason: 'Explains pull request trust boundaries.',
+            }],
+          },
         },
-        tasks: [{
-          id: 'authz',
-          title: 'Authorization',
-          scope: 'Find authorization issues in changed TypeScript code.',
-          prompt: 'Review authorization issues.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: ['Generic style comments.'],
-        }],
-      },
+      ),
     });
 
     const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -444,14 +434,15 @@ Use WebSearch or WebFetch for public prior art.
     expect(mockSynthesizeCoordinatorChildSkill).not.toHaveBeenCalled();
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(output).toContain('SUPERWARDEN PLAN');
+    expect(output).toContain('SCOPE');
     expect(output).toContain('TASKS  1 task');
     expect(output).toContain('authz');
     expect(output).toContain('Authorization');
     expect(output).toContain('Find authorization issues in changed TypeScript code.');
     expect(output).toContain('SOURCES');
     expect(output).toContain('GitHub Actions security hardening');
-    expect(output).toContain('MISSING INPUTS');
-    expect(output).toContain('Whether fork pull requests run with repository secrets.');
+    expect(output).toContain('Open      1 unresolved');
+    expect(output).not.toContain('Whether fork pull requests run with repository secrets.');
     expect(output.trim().startsWith('{')).toBe(false);
     expect(output).not.toContain('"tasks"');
     expect(output).not.toContain('"version"');
@@ -467,23 +458,20 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'cache',
       cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'security-review',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'cached' }],
+      plan: createPlan(
+        'security-review',
+        [
+          createTask('authz', 'Authorization', 'Find authorization issues in changed TypeScript code.', {
+            excludes: ['Generic style comments.'],
+            evidenceFocus: ['Trace the permission boundary.'],
+          }),
+        ],
+        {
+          synthesis: {
+            phases: [{ id: 'collect-inputs', status: 'cached' }],
+          },
         },
-        tasks: [{
-          id: 'authz',
-          title: 'Authorization',
-          scope: 'Find authorization issues in changed TypeScript code.',
-          prompt: 'Review authorization issues.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: ['Generic style comments.'],
-        }],
-      },
+      ),
     });
 
     const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -507,23 +495,9 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
       cachePath: join(tempDir, '.warden', 'superwarden', 'security-review', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'security-review',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'generated' }],
-        },
-        tasks: [{
-          id: 'authz',
-          title: 'Authorization',
-          scope: 'Find authorization issues.',
-          prompt: 'Review authorization issues.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: [],
-        }],
-      },
+      plan: createPlan('security-review', [
+        createTask('authz', 'Authorization', 'Find authorization issues.'),
+      ]),
     });
     mockSynthesizeCoordinatorChildSkill.mockRejectedValueOnce(
       new Error('Child skill synthesis failed for authz: Superwarden agent returned no result'),
@@ -552,23 +526,9 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
       cachePath: join(tempDir, '.warden', 'superwarden', 'ad-hoc-security', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'ad-hoc-security',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'generated' }],
-        },
-        tasks: [{
-          id: 'authz',
-          title: 'Authorization',
-          scope: 'Find authorization issues.',
-          prompt: 'Review authorization issues.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: [],
-        }],
-      },
+      plan: createPlan('ad-hoc-security', [
+        createTask('authz', 'Authorization', 'Find authorization issues.'),
+      ]),
     });
 
     const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -591,23 +551,11 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
       cachePath: join(tempDir, '.warden', 'superwarden', 'brand-new-security', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'brand-new-security',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'generated' }],
-        },
-        tasks: [{
-          id: 'secrets',
-          title: 'Secret handling',
-          scope: 'Find secret exposure issues.',
-          prompt: 'Review secret handling issues.',
-          evidenceRequirements: ['Trace where the secret can be exposed.'],
-          outOfScope: [],
-        }],
-      },
+      plan: createPlan('brand-new-security', [
+        createTask('secrets', 'Secret handling', 'Find secret exposure issues.', {
+          evidenceFocus: ['Trace where the secret can be exposed.'],
+        }),
+      ]),
     });
 
     const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -651,23 +599,11 @@ Use WebSearch or WebFetch for public prior art.
     mockSynthesizeCoordinatorPlan.mockResolvedValue({
       source: 'generated',
       cachePath: join(tempDir, '.warden', 'superwarden', 'file-backed-security', 'plan.json'),
-      plan: {
-        version: 1,
-        skill: 'file-backed-security',
-        sourceHash: 'hash',
-        coordinatorVersion: COORDINATOR_VERSION,
-        synthesis: {
-          phases: [{ id: 'collect-inputs', status: 'generated' }],
-        },
-        tasks: [{
-          id: 'secrets',
-          title: 'Secret handling',
-          scope: 'Find secret storage issues.',
-          prompt: 'Review secret storage issues.',
-          evidenceRequirements: ['Trace where the secret is persisted.'],
-          outOfScope: [],
-        }],
-      },
+      plan: createPlan('file-backed-security', [
+        createTask('secrets', 'Secret handling', 'Find secret storage issues.', {
+          evidenceFocus: ['Trace where the secret is persisted.'],
+        }),
+      ]),
     });
 
     const reporter = new Reporter(detectOutputMode(false), Verbosity.Normal);

@@ -586,7 +586,7 @@ function renderSuperwardenPreparedTask(
       ? `${artifact.taskId}  [cached]`
       : `${artifact.taskId}${stats}`,
   );
-  reporter.dim(`  ${truncate(task.scope, 100)}`);
+  reporter.dim(`  ${truncate(task.goal, 100)}`);
 }
 
 function renderSkillRunHeader(args: {

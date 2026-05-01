@@ -20,10 +20,10 @@ import { UsageStatsSchema, type UsageStats } from '../types/index.js';
 import { runStructuredSuperwardenAgent, StructuredSuperwardenAgentError } from './agentic.js';
 import { collectCoordinatorPlanFeedbackFiles } from './feedback.js';
 
-export const COORDINATOR_PLAN_SCHEMA_VERSION = 1;
+export const COORDINATOR_PLAN_SCHEMA_VERSION = 2;
 export const COORDINATOR_PLAN_CACHE_SCHEMA_VERSION = 1;
 export const COORDINATOR_PLAN_CACHE_KIND = 'superwarden-plan-cache';
-export const COORDINATOR_VERSION = '2';
+export const COORDINATOR_VERSION = '3';
 export const COORDINATOR_METADATA_FILE = 'warden.yaml';
 export const SUPERWARDEN_SYNTHESIS_MAX_TOKENS = 64000;
 export const SUPERWARDEN_SYNTHESIS_TIMEOUT_MS = 180_000;
@@ -42,13 +42,39 @@ export const CoordinatorPhaseSchema = z.object({
   status: CoordinatorPhaseStatusSchema,
 }).strict();
 
+export const CoordinatorScopeProfileSchema = z.object({
+  kind: z.enum(['domain', 'ecosystem', 'repository', 'product']),
+  subject: z.string().min(1),
+  localContextUsed: z.boolean(),
+  observedContext: z.array(z.string().min(1)).min(1),
+  unresolvedContext: z.array(z.string().min(1)).default([]),
+}).strict().superRefine((value, ctx) => {
+  if (value.kind === 'repository' && !value.localContextUsed) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'repository scope requires localContextUsed to be true',
+      path: ['localContextUsed'],
+    });
+  }
+  if (value.localContextUsed && value.observedContext.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'observedContext is required when localContextUsed is true',
+      path: ['observedContext'],
+    });
+  }
+});
+
 export const CoordinatorTaskSchema = z.object({
   id: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
   title: z.string().min(1),
-  scope: z.string().min(1),
-  prompt: z.string().min(1),
-  evidenceRequirements: z.array(z.string().min(1)).min(1),
-  outOfScope: z.array(z.string().min(1)).default([]),
+  goal: z.string().min(1),
+  rationale: z.string().min(1),
+  sourceSignals: z.array(z.string().min(1)).min(1),
+  owns: z.array(z.string().min(1)).min(1),
+  excludes: z.array(z.string().min(1)).default([]),
+  evidenceFocus: z.array(z.string().min(1)).min(1),
+  childResearchHints: z.array(z.string().min(1)).default([]),
 }).strict();
 
 export const CoordinatorPlanSchema = z.object({
@@ -56,10 +82,10 @@ export const CoordinatorPlanSchema = z.object({
   skill: z.string().min(1),
   sourceHash: z.string().min(1),
   coordinatorVersion: z.string().min(1),
+  scopeProfile: CoordinatorScopeProfileSchema,
   synthesis: z.object({
     phases: z.array(CoordinatorPhaseSchema).min(1),
     externalSources: z.array(CoordinatorExternalSourceSchema).optional(),
-    missingInputs: z.array(z.string().min(1)).optional(),
   }).strict(),
   tasks: z.array(CoordinatorTaskSchema).min(1),
 }).strict();
@@ -365,7 +391,7 @@ function renderPreviousPlanContinuity(previousPlan: CoordinatorPlan | undefined)
   const previousTasks = previousPlan.tasks.map((task) => ({
     id: task.id,
     title: task.title,
-    scope: task.scope,
+    goal: task.goal,
   }));
 
   return `
@@ -392,7 +418,7 @@ function buildSynthesisPrompt(
 
   return `You are Warden's native Superwarden plan synthesizer.
 
-Create a strict JSON Superwarden plan for one broad Superwarden skill. Treat this like an agent-quality planning pass and skill-writer quality synthesis pass, not a shallow topic split.
+Create a strict JSON Superwarden plan for one broad Superwarden skill. This parent artifact exists only to shape the right child tasks. It is a decomposition record, not a runnable child skill.
 
 Rules:
 - Return only a JSON object. No markdown, prose, or code fences.
@@ -400,28 +426,36 @@ Rules:
 - Use skill "${skill.name}".
 - Use sourceHash "${source.hash}" exactly.
 - Use coordinatorVersion "${COORDINATOR_VERSION}" exactly.
+- First determine what kind of parent skill this is: domain, ecosystem, repository, or product.
+- The plan must preserve the context that justified the decomposition. Do not inspect local source and then throw that context away.
 - Split by analysis concern, not file type, severity, or implementation phase.
 - Prefer 3 to 8 focused tasks.
-- Each task must have an id, title, scope, prompt, evidenceRequirements, and outOfScope.
+- Each task must have an id, title, goal, rationale, sourceSignals, owns, excludes, evidenceFocus, and childResearchHints.
 - Task ids must be lowercase kebab-case.
-- If the source material contains explicit coverage items, every item must map clearly to at least one task id, title, scope, or prompt. Do not silently drop or vaguely merge named coverage areas.
-- The parent plan is a lean decomposition artifact, not the final child skill. Keep it lighter than the eventual child skills.
-- Treat each task more like a concise spec stub than a finished runtime skill: make ownership, boundaries, and evidence expectations obvious without turning the parent plan into a long investigation manual.
-- Prompts must be self-contained, focused, and preserve the Superwarden skill's intent, but they should only carry the core constraints, evidence requirements, scope boundaries, and missing-context handling needed to synthesize the child skill.
-- Keep each task prompt concise and imperative. It should define the investigation goal, the non-negotiable constraints, and any boundary rules that the child skill must preserve.
-- Do not put trigger-language, user-request phrasing, or long "when to use" guidance into parent task prompts. That belongs in the generated child skill description and body.
-- Do not include repository-local file paths, line numbers, function names, or overly specific examples in the parent task unless the parent source explicitly requires them to preserve intent.
-- Do not try to encode every false-positive control, remediation pattern, framework caveat, or long-form investigation rubric in the parent plan. Those belong in the individual child skills.
-- Each prompt must describe an independent agent-quality investigation for that concern, including repo-local source inspection, data-flow tracing, relevant prior-art research, and current public documentation when those would affect correctness.
-- Each prompt must state how to handle missing repository, technology, deployment, or threat-model context without inventing facts.
-- Evidence requirements must force concrete verification, changed-line anchoring, source material, and public prior-art references when used.
-- Out-of-scope exclusions must prevent generic style or unrelated-review findings.
-- After choosing the task set, write each task's outOfScope so it explicitly excludes sibling task concerns when overlap would otherwise be likely. Prefer exclusions that name the sibling task id or concern directly.
-- When one code path could create chained risks across tasks, assign one primary owning task for the reportable issue and make the other tasks exclude that ownership boundary instead of competing for the same finding.
-- Boundary rules should be written from this task's perspective: say what this task owns and what it must not report. Do not turn parent tasks into cross-referencing review commentary about how every sibling should be rewritten.
+- The parent plan should stay lean. Do not write mini child skills here.
+- If the source material contains explicit coverage items, every item must map clearly to at least one task id, title, goal, rationale, or owns entry. Do not silently drop or vaguely merge named coverage areas.
+- scopeProfile.subject should describe the parent skill being decomposed, not the repo name alone.
+- scopeProfile.observedContext should capture the concrete context that shaped the task split:
+  - for repository or product skills, include the stack, runtime, notable trust boundaries, and important repo-local surfaces you actually observed
+  - for domain or ecosystem skills, include the supplied source material, intended platform, and any explicit coverage boundaries
+- scopeProfile.unresolvedContext is only for context that would materially improve decomposition and was not inferable from the provided sources.
+- Do not list obvious context as unresolved when it is already visible in the source material.
+- Treat each task as a concise blueprint for child synthesis:
+  - goal: the one-line investigation objective
+  - rationale: why this task exists for this parent skill
+  - sourceSignals: the context signals that justified this task
+  - owns: the primary concerns this task is responsible for
+  - excludes: the sibling concerns or boundaries this task must not absorb
+  - evidenceFocus: what concrete evidence the child skill must require
+  - childResearchHints: public docs, runtime topics, or prior-art areas the child skill may need to consult
+- Keep task fields short and specific. If a field starts reading like a long prompt, you are adding child-skill bloat to the parent.
+- Do not put trigger-language, user-request phrasing, runtime instructions, remediation playbooks, or long false-positive controls into the parent plan.
+- Do not include repository-local file paths, line numbers, function names, or brittle examples in the parent plan unless the parent source explicitly requires them.
+- When one code path could create chained risks across tasks, assign one primary owning task and make the other tasks exclude that ownership boundary instead of competing for the same finding.
+- Boundary rules should be written from this task's perspective: say what this task owns and what it must not report.
 - If ${COORDINATOR_METADATA_FILE} is present, treat it as the Superwarden skill's initial prompt and metadata contract.
-- If the source material is too thin for a safe decomposition, make that explicit inside task prompts and evidence requirements. Do not silently invent coverage areas.
-- Do not ask follow-up questions or return prose. If context is missing, still return valid JSON and put that context in synthesis.missingInputs.
+- If the source material is too thin for a safe decomposition, make that explicit inside scopeProfile.unresolvedContext, rationale, or evidenceFocus. Do not silently invent coverage areas.
+- Do not ask follow-up questions or return prose. If context is missing, still return valid JSON and record it in scopeProfile.unresolvedContext or the relevant task fields.
 - Keep all generated task instructions executable by Warden's normal hunk analysis model: tasks must be focused, inspectable, and able to return an empty findings array when evidence is insufficient.
 - Do not rely on Claude Code Task delegation, hidden subagents, or side-effect tools.
 ${previousPlan ? '- Preserve prior task ids when the same concerns still exist. Task id continuity matters for feedback, cached child skills, and committed artifacts.' : ''}
@@ -432,6 +466,17 @@ JSON shape:
   "skill": "${skill.name}",
   "sourceHash": "${source.hash}",
   "coordinatorVersion": "${COORDINATOR_VERSION}",
+  "scopeProfile": {
+    "kind": "repository",
+    "subject": "Security review for this repo's CLI and runtime surfaces",
+    "localContextUsed": true,
+    "observedContext": [
+      "Node.js and TypeScript runtime",
+      "CLI orchestration and subprocess execution",
+      "GitHub workflow and token boundaries"
+    ],
+    "unresolvedContext": ["Production deployment boundary, if it materially affects decomposition"]
+  },
   "synthesis": {
     "phases": [
       {"id": "collect-inputs", "status": "generated"},
@@ -442,29 +487,29 @@ JSON shape:
     ],
     "externalSources": [
       {"title": "Public source title", "url": "https://example.com/source", "reason": "Why this source informed the decomposition"}
-    ],
-    "missingInputs": ["Context that would improve synthesis, if any"]
+    ]
   },
   "tasks": [
     {
       "id": "example-task",
       "title": "Example task",
-      "scope": "One-sentence scope.",
-      "prompt": "Focused task instructions for an independent deep investigation.",
-      "evidenceRequirements": ["concrete evidence requirement with source or prior-art expectations"],
-      "outOfScope": ["explicit exclusion"]
+      "goal": "One-line investigation objective.",
+      "rationale": "Why this task exists for this parent skill.",
+      "sourceSignals": ["Observed context or source signal that justified this task"],
+      "owns": ["Primary concern this task is responsible for"],
+      "excludes": ["Sibling concern or boundary this task must not report"],
+      "evidenceFocus": ["Concrete evidence the child skill must require"],
+      "childResearchHints": ["Public runtime or ecosystem topic the child skill may need to consult"]
     }
   ]
 }
 
 Quality bar:
-- The Superwarden plan should read like the parent skill was decomposed by an expert who understood the supplied SPEC, SOURCES, references, and initial prompt.
-- Child tasks should be specific enough that separate executions produce distinct findings and avoid duplicate reports.
-- Child tasks should make scope boundaries obvious, including what belongs to sibling tasks instead.
-- Child tasks should require relevant source material, such as changed code, nearby callers, configuration, runtime contracts, and references bundled with the skill.
-- Child tasks should instruct agents to find online prior art when current external behavior matters, such as framework security guidance, runtime tool permission behavior, vulnerability classes, or ecosystem conventions.
-- Child tasks should prohibit sending repository code, secrets, private file paths, or proprietary details to web tools.
-- Child tasks should withhold findings when evidence is incomplete; missing information is not itself a finding unless the parent skill explicitly asks for missing controls.
+- The plan should read like the parent skill was decomposed by someone who understood the supplied intent and preserved the context that drove task selection.
+- The task set should be specific enough that separate child executions produce distinct findings and avoid duplicate reports.
+- The plan should make ownership boundaries obvious without turning task entries into long runtime prompts.
+- Repository or product plans must reflect the local context actually observed. Domain or ecosystem plans must say they are generic and stay aligned with the supplied scope.
+- Child skills should be able to synthesize from these blueprints without needing the parent to carry long instructions or repo-local trivia.
 
 Skill description:
 ${skill.description}

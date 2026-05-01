@@ -91,12 +91,14 @@ function formatSiblingTasks(plan: CoordinatorPlan, task: CoordinatorTask): strin
   }
   return siblings
     .map((sibling) => {
-      const exclusions = sibling.outOfScope.length > 0
-        ? sibling.outOfScope.join('; ')
+      const exclusions = sibling.excludes.length > 0
+        ? sibling.excludes.join('; ')
         : 'none recorded';
+      const ownedConcerns = sibling.owns.join('; ');
       return [
         `- ${sibling.id}: ${sibling.title}`,
-        `  Scope: ${sibling.scope}`,
+        `  Goal: ${sibling.goal}`,
+        `  Owns: ${ownedConcerns}`,
         `  Existing exclusions: ${exclusions}`,
       ].join('\n');
     })
@@ -185,8 +187,8 @@ This is not a template fill. Perform a complete child skill synthesis pass:
 - represent missing context explicitly instead of inventing facts
 - do not ask follow-up questions; put any missing context in missingInputs and still return valid JSON
 - apply the skill-writer security-review quality bar: vulnerability prerequisites, exploitable dataflow examples, false-positive controls, severity/confidence calibration, concrete remediation patterns, and framework/runtime caveats
-- keep the parent plan lean; expand nuance inside this child skill instead of assuming the parent task prompt already carried it all
-- explicitly state what this child skill must not cover, using sibling tasks and parent out-of-scope items as hard boundaries
+- keep the parent plan lean; expand nuance inside this child skill instead of assuming the parent task blueprint already carried it all
+- explicitly state what this child skill must not cover, using sibling task ownership and exclusions as hard boundaries
 
 Return only JSON with this exact shape:
 {
@@ -212,7 +214,7 @@ Required SKILL.md body contents:
 - Require changed-line anchoring and concrete evidence.
 - Require normal Warden findings behavior: report only concrete findings accepted by Warden's existing report schema, and return no findings when evidence is insufficient. Do not invent a custom output schema.
 - Include false-positive controls, exploitability prerequisites, confidence/severity calibration, and remediation expectations.
-- Preserve the task scope, evidence requirements, and out-of-scope exclusions.
+- Preserve the task goal, ownership, exclusions, evidence focus, and relevant context from the parent blueprint.
 - Include an explicit "Do not cover" or equivalent out-of-scope subsection that names sibling tasks or their concerns when they are not owned by this child skill.
 - Keep SKILL.md concise and runtime-focused. Put source inventory, coverage matrix, maintenance notes, and long rationale in SPEC.md or SOURCES.md instead of repeating it in SKILL.md.
 
@@ -255,6 +257,9 @@ Record this Superwarden synthesis pass.
 
 Task:
 ${JSON.stringify(task, null, 2)}
+
+Parent scope profile:
+${JSON.stringify(plan.scopeProfile, null, 2)}
 
 Sibling tasks that this child skill must not absorb unless needed only to explain a boundary:
 ${formatSiblingTasks(plan, task)}

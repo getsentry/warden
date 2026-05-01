@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Runtime } from '../sdk/runtimes/index.js';
-import { COORDINATOR_VERSION, type CoordinatorPlan, type CoordinatorSource } from './plan.js';
+import {
+  COORDINATOR_PLAN_SCHEMA_VERSION,
+  COORDINATOR_VERSION,
+  type CoordinatorPlan,
+  type CoordinatorSource,
+} from './plan.js';
 import {
   buildCoordinatorChildSkillsResult,
   resetCoordinatorChildSkillsRoot,
@@ -22,20 +27,30 @@ function emptyUsage() {
 
 function createPlan(): CoordinatorPlan {
   return {
-    version: 1,
+    version: COORDINATOR_PLAN_SCHEMA_VERSION,
     skill: 'security-review',
     sourceHash: 'hash',
     coordinatorVersion: COORDINATOR_VERSION,
+    scopeProfile: {
+      kind: 'repository',
+      subject: 'Security review for runtime and workflow boundaries',
+      localContextUsed: true,
+      observedContext: ['Node.js and TypeScript runtime', 'Workflow permission boundaries'],
+      unresolvedContext: [],
+    },
     synthesis: {
       phases: [{ id: 'collect-inputs', status: 'generated' }],
     },
     tasks: [{
       id: 'authz',
       title: 'Authorization',
-      scope: 'Find authorization failures.',
-      prompt: 'Review authorization boundaries.',
-      evidenceRequirements: ['Trace the permission boundary.'],
-      outOfScope: ['Style issues'],
+      goal: 'Find authorization failures.',
+      rationale: 'This repo gates privileged actions and workflow execution.',
+      sourceSignals: ['Workflow permission boundaries', 'Privileged runtime operations'],
+      owns: ['Authorization boundary failures'],
+      excludes: ['Style issues'],
+      evidenceFocus: ['Trace the permission boundary.'],
+      childResearchHints: ['Framework authorization guidance'],
     }],
   };
 }
@@ -231,10 +246,17 @@ describe('Superwarden child skill synthesis', () => {
 
   it('tells child synthesis to exclude sibling task concerns', async () => {
     const plan: CoordinatorPlan = {
-      version: 1,
+      version: COORDINATOR_PLAN_SCHEMA_VERSION,
       skill: 'security-review',
       sourceHash: 'hash',
       coordinatorVersion: COORDINATOR_VERSION,
+      scopeProfile: {
+        kind: 'repository',
+        subject: 'Security review for runtime and workflow boundaries',
+        localContextUsed: true,
+        observedContext: ['Node.js and TypeScript runtime', 'Workflow permission boundaries'],
+        unresolvedContext: [],
+      },
       synthesis: {
         phases: [{ id: 'collect-inputs', status: 'generated' }],
       },
@@ -242,18 +264,24 @@ describe('Superwarden child skill synthesis', () => {
         {
           id: 'authz',
           title: 'Authorization',
-          scope: 'Find authorization failures.',
-          prompt: 'Review authorization boundaries.',
-          evidenceRequirements: ['Trace the permission boundary.'],
-          outOfScope: ['Style issues'],
+          goal: 'Find authorization failures.',
+          rationale: 'This repo gates privileged actions and workflow execution.',
+          sourceSignals: ['Workflow permission boundaries', 'Privileged runtime operations'],
+          owns: ['Authorization boundary failures'],
+          excludes: ['Style issues'],
+          evidenceFocus: ['Trace the permission boundary.'],
+          childResearchHints: ['Framework authorization guidance'],
         },
         {
           id: 'secrets',
           title: 'Secret handling',
-          scope: 'Find secret exposure issues.',
-          prompt: 'Review secret handling paths.',
-          evidenceRequirements: ['Trace where secrets are persisted or exposed.'],
-          outOfScope: ['Authorization-only issues'],
+          goal: 'Find secret exposure issues.',
+          rationale: 'This repo brokers credentials and workflow secrets.',
+          sourceSignals: ['Secret handling paths', 'Workflow token usage'],
+          owns: ['Secret exposure and credential leakage'],
+          excludes: ['Authorization-only issues'],
+          evidenceFocus: ['Trace where secrets are persisted or exposed.'],
+          childResearchHints: ['Secret management guidance'],
         },
       ],
     };
@@ -310,7 +338,7 @@ describe('Superwarden child skill synthesis', () => {
       userPrompt: expect.stringContaining('- secrets: Secret handling'),
     }));
     expect(runtime.runSkill).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      userPrompt: expect.stringContaining('Include an explicit "Do not cover"'),
+      userPrompt: expect.stringContaining('Parent scope profile'),
     }));
   });
 });

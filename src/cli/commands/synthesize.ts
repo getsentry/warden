@@ -167,18 +167,6 @@ function wrapText(
   return lines;
 }
 
-function wrapMultilineText(text: string, width: number, indent: string): string[] {
-  const lines: string[] = [];
-  for (const paragraph of text.trim().split(/\n{2,}/)) {
-    if (lines.length > 0) lines.push('');
-    const paragraphLines = paragraph.split('\n');
-    for (const line of paragraphLines) {
-      lines.push(...wrapText(line, width, indent));
-    }
-  }
-  return lines;
-}
-
 function renderPlanList(lines: string[], items: string[], width: number, indent: string): void {
   if (items.length === 0) return;
   for (const item of items) {
@@ -222,7 +210,6 @@ function renderPlanInspection(args: {
     ...plan.synthesis.phases.map((phase) => phase.id.length),
   );
   const sourceCount = plan.synthesis.externalSources?.length ?? 0;
-  const missingInputs = plan.synthesis.missingInputs ?? [];
   const stats = formatPlanStats({
     bytes,
     durationMs,
@@ -248,35 +235,74 @@ function renderPlanInspection(args: {
     lines.push('');
   }
 
+  lines.push(chalk.bold('SCOPE'));
+  lines.push(`  Kind      ${plan.scopeProfile.kind}`);
+  lines.push(`  Subject   ${plan.scopeProfile.subject}`);
+  lines.push(`  Context   ${plan.scopeProfile.observedContext.length} observed`);
+  if (plan.scopeProfile.unresolvedContext.length > 0) {
+    lines.push(`  Open      ${plan.scopeProfile.unresolvedContext.length} unresolved`);
+  }
+  if (verbose) {
+    lines.push('');
+    lines.push('  Observed context');
+    renderPlanList(lines, plan.scopeProfile.observedContext, width, '    ');
+    if (plan.scopeProfile.unresolvedContext.length > 0) {
+      lines.push('');
+      lines.push('  Unresolved context');
+      renderPlanList(lines, plan.scopeProfile.unresolvedContext, width, '    ');
+    }
+  }
+  lines.push('');
+
   lines.push(formatSectionCountHeading('TASKS', plan.tasks.length, 'task'));
   for (const [index, task] of plan.tasks.entries()) {
     if (index > 0) lines.push('');
     lines.push(`  ${index + 1}. ${chalk.bold(task.id)}`);
     lines.push(`     ${task.title}`);
-    lines.push(...wrapText(task.scope, width, '     '));
+    lines.push(...wrapText(task.goal, width, '     '));
     lines.push('');
     lines.push(
-      `     Evidence  ${task.evidenceRequirements.length} ` +
-      `${task.evidenceRequirements.length === 1 ? 'requirement' : 'requirements'}`
+      `     Owns      ${task.owns.length} ` +
+      `${task.owns.length === 1 ? 'concern' : 'concerns'}`
     );
     lines.push(
-      `     Excludes  ${task.outOfScope.length} ` +
-      `${task.outOfScope.length === 1 ? 'rule' : 'rules'}`
+      `     Excludes  ${task.excludes.length} ` +
+      `${task.excludes.length === 1 ? 'boundary' : 'boundaries'}`
     );
-    if (verbose && task.evidenceRequirements.length > 0) {
+    lines.push(
+      `     Evidence  ${task.evidenceFocus.length} ` +
+      `${task.evidenceFocus.length === 1 ? 'focus' : 'focus areas'}`
+    );
+    if (verbose) {
       lines.push('');
-      lines.push('     Evidence requirements');
-      renderPlanList(lines, task.evidenceRequirements, width, '       ');
+      lines.push('     Rationale');
+      lines.push(...wrapText(task.rationale, width, '       '));
+      lines.push('');
+      lines.push('     Source signals');
+      renderPlanList(lines, task.sourceSignals, width, '       ');
+      lines.push('');
+      lines.push('     Owns');
+      renderPlanList(lines, task.owns, width, '       ');
+      if (task.excludes.length > 0) {
+        lines.push('');
+        lines.push('     Excludes');
+        renderPlanList(lines, task.excludes, width, '       ');
+      }
+      lines.push('');
+      lines.push('     Evidence focus');
+      renderPlanList(lines, task.evidenceFocus, width, '       ');
+      if (task.childResearchHints.length > 0) {
+        lines.push('');
+        lines.push('     Child research hints');
+        renderPlanList(lines, task.childResearchHints, width, '       ');
+      }
     }
-    if (verbose && task.outOfScope.length > 0) {
+    if (debug) {
       lines.push('');
-      lines.push('     Out of scope');
-      renderPlanList(lines, task.outOfScope, width, '       ');
-    }
-    if (debug && task.prompt.trim()) {
-      lines.push('');
-      lines.push('     Prompt');
-      lines.push(...wrapMultilineText(task.prompt, width, '       '));
+      lines.push(
+        `     Scope kind  ${plan.scopeProfile.kind} · ` +
+        `${plan.scopeProfile.localContextUsed ? 'local context used' : 'no local context'}`
+      );
     }
   }
 
@@ -289,12 +315,6 @@ function renderPlanInspection(args: {
       lines.push(`    ${chalk.dim(sourceItem.url)}`);
       lines.push(...wrapText(sourceItem.reason, width, '    '));
     }
-  }
-
-  if (missingInputs.length > 0) {
-    lines.push('');
-    lines.push(chalk.bold('MISSING INPUTS'));
-    renderPlanList(lines, missingInputs, width, '  ');
   }
 
   return lines.join('\n');
@@ -311,7 +331,7 @@ function renderChildSkillArtifact(args: {
       ? `${artifact.taskId}  ${chalk.dim('[cached]')}`
       : artifact.taskId,
   );
-  reporter.dim(`  ${truncate(task.scope, 100)}`);
+  reporter.dim(`  ${truncate(task.goal, 100)}`);
   if (artifact.source === 'cache') {
     return;
   }

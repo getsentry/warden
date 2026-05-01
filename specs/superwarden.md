@@ -45,9 +45,9 @@ Superwarden synthesis is a sequence of agent-quality synthesis runs, not a cheap
 
 - preserve the parent skill's intent from the initial prompt, spec, sources, and references
 - assess whether the source material is sufficient for safe decomposition
-- identify missing repository, technology, deployment, or threat-model context inside the generated task prompts when live inquiry is not available
-- produce focused child task definitions with independent deep-analysis instructions
-- require repo-local source inspection, data-flow tracing, changed-line anchoring, and concrete evidence
+- record what kind of parent skill is being decomposed and what context actually justified the task split
+- record unresolved repository, technology, deployment, or threat-model context explicitly when live inquiry is not available
+- produce focused child task blueprints with clear ownership, exclusions, and evidence focus
 - require online prior art or current public documentation when external framework, runtime, vulnerability, or ecosystem behavior affects the answer
 - prohibit sending repository code, secrets, private file paths, or proprietary details to web tools
 
@@ -77,4 +77,4 @@ warden src/file.ts --skill <name>
 
 Normal local `warden` runs expand `mode = "coordinator"` Superwarden skills into cached or synthesized child task skills, then execute those child skills through the standard Warden run path. Non-local entry points that do not yet support coordinator execution must fail closed with an entry-point-specific message.
 
-Live user inquiry during synthesis is not part of the current runtime contract. Until the synthesizer has a user-input tool, missing inputs must be represented explicitly in the plan and child skill instructions rather than invented.
+Live user inquiry during synthesis is not part of the current runtime contract. Until the synthesizer has a user-input tool, unresolved context must be represented explicitly in the plan and child skill artifacts rather than invented.

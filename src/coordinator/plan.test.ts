@@ -34,10 +34,20 @@ function sha256(value: string): string {
 
 function createPlan(skill: SkillDefinition, sourceHash: string): CoordinatorPlan {
   return {
-    version: 1,
+    version: COORDINATOR_PLAN_SCHEMA_VERSION,
     skill: skill.name,
     sourceHash,
     coordinatorVersion: COORDINATOR_VERSION,
+    scopeProfile: {
+      kind: 'repository',
+      subject: 'Security review for the repository runtime and workflow boundaries',
+      localContextUsed: true,
+      observedContext: [
+        'Node.js and TypeScript runtime',
+        'CLI and workflow execution surfaces',
+      ],
+      unresolvedContext: [],
+    },
     synthesis: {
       phases: [
         { id: 'collect-inputs', status: 'generated' },
@@ -49,10 +59,13 @@ function createPlan(skill: SkillDefinition, sourceHash: string): CoordinatorPlan
       {
         id: 'authz',
         title: 'Authorization',
-        scope: 'Find missing authorization checks.',
-        prompt: 'Review changed code for authorization boundary failures.',
-        evidenceRequirements: ['Trace the caller identity and permission boundary.'],
-        outOfScope: ['Style issues'],
+        goal: 'Find missing authorization checks.',
+        rationale: 'This repo gates privileged workflows and runtime actions.',
+        sourceSignals: ['Workflow permission boundaries', 'Privileged runtime operations'],
+        owns: ['Authorization boundary failures'],
+        excludes: ['Generic style issues'],
+        evidenceFocus: ['Trace the caller identity and permission boundary.'],
+        childResearchHints: ['Framework authorization guidance'],
       },
     ],
   };
@@ -146,28 +159,28 @@ coverage:
       task: 'superwarden_synthesis',
       maxTokens: SUPERWARDEN_SYNTHESIS_MAX_TOKENS,
       timeout: SUPERWARDEN_SYNTHESIS_TIMEOUT_MS,
-      prompt: expect.stringContaining('agent-quality planning pass'),
+      prompt: expect.stringContaining('decomposition record, not a runnable child skill'),
     }));
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('online prior art'),
+      prompt: expect.stringContaining('childResearchHints'),
     }));
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.stringContaining('every item must map clearly'),
     }));
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('The parent plan is a lean decomposition artifact'),
+      prompt: expect.stringContaining('The parent plan should stay lean'),
     }));
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('explicitly excludes sibling task concerns'),
+      prompt: expect.stringContaining('sourceSignals'),
     }));
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('Treat each task more like a concise spec stub'),
+      prompt: expect.stringContaining('scopeProfile.observedContext'),
     }));
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.stringContaining('Do not put trigger-language, user-request phrasing'),
     }));
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('assign one primary owning task for the reportable issue'),
+      prompt: expect.stringContaining('assign one primary owning task'),
     }));
     expect(JSON.parse(readFileSync(result.cachePath, 'utf-8')).plan.tasks[0].id).toBe('authz');
   });

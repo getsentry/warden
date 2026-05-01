@@ -18,7 +18,11 @@ import {
   writeCoordinatorFeedbackLessons,
   type CoordinatorFeedbackRecord,
 } from '../../coordinator/feedback.js';
-import { COORDINATOR_VERSION, type CoordinatorPlan } from '../../coordinator/plan.js';
+import {
+  COORDINATOR_PLAN_SCHEMA_VERSION,
+  COORDINATOR_VERSION,
+  type CoordinatorPlan,
+} from '../../coordinator/plan.js';
 import { getSuperwardenSkillRoot } from '../../coordinator/superwarden.js';
 
 vi.mock('../superwarden.js', async () => {
@@ -59,10 +63,17 @@ function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
 
 function createPlan(): CoordinatorPlan {
   return {
-    version: 1,
+    version: COORDINATOR_PLAN_SCHEMA_VERSION,
     skill: 'security',
     sourceHash: 'hash',
     coordinatorVersion: COORDINATOR_VERSION,
+    scopeProfile: {
+      kind: 'repository',
+      subject: 'Security review for runtime and workflow boundaries',
+      localContextUsed: true,
+      observedContext: ['Node.js and TypeScript runtime', 'Workflow permission boundaries'],
+      unresolvedContext: [],
+    },
     synthesis: {
       phases: [{ id: 'collect-inputs', status: 'cached' }],
     },
@@ -70,18 +81,24 @@ function createPlan(): CoordinatorPlan {
       {
         id: 'authz',
         title: 'Authorization',
-        scope: 'Find missing authorization checks.',
-        prompt: 'Review authorization boundaries.',
-        evidenceRequirements: ['Trace the permission boundary.'],
-        outOfScope: [],
+        goal: 'Find missing authorization checks.',
+        rationale: 'This repo gates privileged actions and workflow execution.',
+        sourceSignals: ['Workflow permission boundaries', 'Privileged runtime operations'],
+        owns: ['Authorization boundary failures'],
+        excludes: [],
+        evidenceFocus: ['Trace the permission boundary.'],
+        childResearchHints: ['Framework authorization guidance'],
       },
       {
         id: 'injection',
         title: 'Injection',
-        scope: 'Find unsafe command execution.',
-        prompt: 'Review command execution.',
-        evidenceRequirements: ['Trace untrusted input into command execution.'],
-        outOfScope: [],
+        goal: 'Find unsafe command execution.',
+        rationale: 'This repo shells out and brokers external tool execution.',
+        sourceSignals: ['Subprocess execution surfaces', 'Tool invocation boundaries'],
+        owns: ['Command execution and shell injection'],
+        excludes: [],
+        evidenceFocus: ['Trace untrusted input into command execution.'],
+        childResearchHints: ['Node subprocess security guidance'],
       },
     ],
   };

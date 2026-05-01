@@ -9,7 +9,15 @@ import { runWithLiveStatus, runWithLiveStatusList } from './output/live-status.j
 import { Reporter } from './output/reporter.js';
 import { detectOutputMode } from './output/tty.js';
 import { Verbosity } from './output/verbosity.js';
-import { collectCoordinatorSource, COORDINATOR_PLAN_CACHE_KIND, COORDINATOR_PLAN_CACHE_SCHEMA_VERSION, COORDINATOR_VERSION, getCoordinatorPlanPath, type CoordinatorPlan } from '../coordinator/plan.js';
+import {
+  collectCoordinatorSource,
+  COORDINATOR_PLAN_CACHE_KIND,
+  COORDINATOR_PLAN_CACHE_SCHEMA_VERSION,
+  COORDINATOR_PLAN_SCHEMA_VERSION,
+  COORDINATOR_VERSION,
+  getCoordinatorPlanPath,
+  type CoordinatorPlan,
+} from '../coordinator/plan.js';
 import { getCoordinatorChildSkillsRoot } from '../coordinator/child-skills.js';
 import { getSuperwardenSkillRoot } from '../coordinator/superwarden.js';
 import * as coordinatorPlanModule from '../coordinator/plan.js';
@@ -45,6 +53,26 @@ function childTaskHash(plan: CoordinatorPlan, task: CoordinatorPlan['tasks'][num
   }));
 }
 
+function createTask(
+  id: string,
+  title: string,
+  goal: string,
+  overrides: Partial<CoordinatorPlan['tasks'][number]> = {},
+): CoordinatorPlan['tasks'][number] {
+  return {
+    id,
+    title,
+    goal,
+    rationale: `${title} is a distinct investigation track for this parent skill.`,
+    sourceSignals: [`${title} boundary in the repository`],
+    owns: [goal],
+    excludes: [],
+    evidenceFocus: [`Trace concrete evidence for ${id}.`],
+    childResearchHints: [],
+    ...overrides,
+  };
+}
+
 async function writeCachedSuperwardenFixture(tempDir: string): Promise<RunSkillSpec> {
   const parentRoot = join(tempDir, '.warden', 'superwarden', 'security-review');
   mkdirSync(parentRoot, { recursive: true });
@@ -62,19 +90,19 @@ Review security issues.
 
   const parentSkill = await resolveSkillAsync('security-review', tempDir);
   const source = collectCoordinatorSource(parentSkill);
-  const task = {
-    id: 'authz',
-    title: 'Authorization',
-    scope: 'Find authorization boundary issues.',
-    prompt: 'Review authorization boundaries.',
-    evidenceRequirements: ['Trace the permission boundary.'],
-    outOfScope: [],
-  };
+  const task = createTask('authz', 'Authorization', 'Find authorization boundary issues.');
   const plan: CoordinatorPlan = {
-    version: 1,
+    version: COORDINATOR_PLAN_SCHEMA_VERSION,
     skill: 'security-review',
     sourceHash: source.hash,
     coordinatorVersion: COORDINATOR_VERSION,
+    scopeProfile: {
+      kind: 'repository',
+      subject: 'Security review for repository runtime and workflow boundaries',
+      localContextUsed: true,
+      observedContext: ['Node.js and TypeScript runtime', 'Workflow permission boundaries'],
+      unresolvedContext: [],
+    },
     synthesis: {
       phases: [{ id: 'collect-inputs', status: 'cached' }],
       externalSources: [],
@@ -217,31 +245,24 @@ describe('Superwarden run task expansion', () => {
       source: 'generated',
       cachePath,
       plan: {
-        version: 1,
+        version: COORDINATOR_PLAN_SCHEMA_VERSION,
         skill: 'security-review',
         sourceHash: source.hash,
         coordinatorVersion: COORDINATOR_VERSION,
+        scopeProfile: {
+          kind: 'repository',
+          subject: 'Security review for repository runtime and workflow boundaries',
+          localContextUsed: true,
+          observedContext: ['Node.js and TypeScript runtime', 'Workflow permission boundaries'],
+          unresolvedContext: [],
+        },
         synthesis: {
           phases: [{ id: 'collect-inputs', status: 'generated' }],
           externalSources: [],
         },
         tasks: [
-          {
-            id: 'authz',
-            title: 'Authorization',
-            scope: 'Find authorization boundary issues.',
-            prompt: 'Review authorization boundaries.',
-            evidenceRequirements: ['Trace the permission boundary.'],
-            outOfScope: [],
-          },
-          {
-            id: 'injection',
-            title: 'Injection',
-            scope: 'Find injection issues.',
-            prompt: 'Review injection issues.',
-            evidenceRequirements: ['Trace the data flow.'],
-            outOfScope: [],
-          },
+          createTask('authz', 'Authorization', 'Find authorization boundary issues.'),
+          createTask('injection', 'Injection', 'Find injection issues.'),
         ],
       },
     });
