@@ -20,7 +20,7 @@ import { runStructuredSuperwardenAgent, StructuredSuperwardenAgentError } from '
 export const COORDINATOR_PLAN_SCHEMA_VERSION = 1;
 export const COORDINATOR_PLAN_CACHE_SCHEMA_VERSION = 1;
 export const COORDINATOR_PLAN_CACHE_KIND = 'superwarden-plan-cache';
-export const COORDINATOR_VERSION = '1';
+export const COORDINATOR_VERSION = '2';
 export const COORDINATOR_METADATA_FILE = 'warden.yaml';
 export const SUPERWARDEN_SYNTHESIS_MAX_TOKENS = 64000;
 export const SUPERWARDEN_SYNTHESIS_TIMEOUT_MS = 180_000;
@@ -337,11 +337,14 @@ Rules:
 - Each task must have an id, title, scope, prompt, evidenceRequirements, and outOfScope.
 - Task ids must be lowercase kebab-case.
 - If the source material contains explicit coverage items, every item must map clearly to at least one task id, title, scope, or prompt. Do not silently drop or vaguely merge named coverage areas.
-- Prompts must be self-contained, focused, and preserve the Superwarden skill's intent.
+- The parent plan is a lean decomposition artifact, not the final child skill. Keep it lighter than the eventual child skills.
+- Prompts must be self-contained, focused, and preserve the Superwarden skill's intent, but they should only carry the core constraints, evidence requirements, scope boundaries, and missing-context handling needed to synthesize the child skill.
+- Do not try to encode every false-positive control, remediation pattern, framework caveat, or long-form investigation rubric in the parent plan. Those belong in the individual child skills.
 - Each prompt must describe an independent agent-quality investigation for that concern, including repo-local source inspection, data-flow tracing, relevant prior-art research, and current public documentation when those would affect correctness.
 - Each prompt must state how to handle missing repository, technology, deployment, or threat-model context without inventing facts.
 - Evidence requirements must force concrete verification, changed-line anchoring, source material, and public prior-art references when used.
 - Out-of-scope exclusions must prevent generic style or unrelated-review findings.
+- After choosing the task set, write each task's outOfScope so it explicitly excludes sibling task concerns when overlap would otherwise be likely. Prefer exclusions that name the sibling task id or concern directly.
 - If ${COORDINATOR_METADATA_FILE} is present, treat it as the Superwarden skill's initial prompt and metadata contract.
 - If the source material is too thin for a safe decomposition, make that explicit inside task prompts and evidence requirements. Do not silently invent coverage areas.
 - Do not ask follow-up questions or return prose. If context is missing, still return valid JSON and put that context in synthesis.missingInputs.
@@ -382,6 +385,7 @@ JSON shape:
 Quality bar:
 - The Superwarden plan should read like the parent skill was decomposed by an expert who understood the supplied SPEC, SOURCES, references, and initial prompt.
 - Child tasks should be specific enough that separate executions produce distinct findings and avoid duplicate reports.
+- Child tasks should make scope boundaries obvious, including what belongs to sibling tasks instead.
 - Child tasks should require relevant source material, such as changed code, nearby callers, configuration, runtime contracts, and references bundled with the skill.
 - Child tasks should instruct agents to find online prior art when current external behavior matters, such as framework security guidance, runtime tool permission behavior, vulnerability classes, or ecosystem conventions.
 - Child tasks should prohibit sending repository code, secrets, private file paths, or proprietary details to web tools.

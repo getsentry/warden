@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import chalk from 'chalk';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
@@ -601,6 +602,10 @@ function formatGeneratedTaskStats(artifact: CoordinatorChildSkillArtifact): stri
   return parts.length > 0 ? `  [${parts.join(' · ')}]` : '';
 }
 
+function renderTaskCountHeading(reporter: Reporter, taskCount: number): void {
+  reporter.text(chalk.bold('TASKS') + chalk.cyan(`  ${taskCount} ${pluralize(taskCount, 'task')}`));
+}
+
 function renderSuperwardenPreparedTask(
   reporter: Reporter,
   artifact: CoordinatorChildSkillArtifact,
@@ -737,7 +742,7 @@ async function createSuperwardenSkillTasks(args: {
     });
     reporter.success(`${planResult.source === 'cache' ? 'Loaded' : 'Synthesized'} plan with ${planResult.plan.tasks.length} ${pluralize(planResult.plan.tasks.length, 'task')}${stats}`);
     reporter.blank();
-    reporter.bold('TASKS');
+    renderTaskCountHeading(reporter, planResult.plan.tasks.length);
   }
 
   const regenerateChildSkills = options.regenerate || planResult.source === 'generated';

@@ -8,7 +8,7 @@ import type { UsageStats } from '../../types/index.js';
 import type { CLIOptions } from '../args.js';
 import type { Reporter } from '../output/reporter.js';
 import { Verbosity } from '../output/verbosity.js';
-import { formatBytes, formatCost, formatDuration, formatTokens, truncate } from '../output/formatters.js';
+import { formatBytes, formatCost, formatDuration, formatTokens, pluralize, truncate } from '../output/formatters.js';
 import { runWithLiveStatus } from '../output/live-status.js';
 import { getAnthropicApiKey } from '../../utils/index.js';
 import { aggregateUsage } from '../../sdk/usage.js';
@@ -27,9 +27,11 @@ import {
   buildCoordinatorChildSkillsResult,
   CoordinatorChildSkillError,
   ensureCoordinatorChildSkillsRoot,
+  reviewCoordinatorChildSkills,
   resetCoordinatorChildSkillsRoot,
   synthesizeCoordinatorChildSkill,
   type CoordinatorChildSkillArtifact,
+  type CoordinatorChildSkillCleanupReview,
   type WriteCoordinatorChildSkillsResult,
 } from '../../coordinator/child-skills.js';
 import {
@@ -213,6 +215,10 @@ function renderPlanList(lines: string[], items: string[], width: number, indent:
   }
 }
 
+function formatSectionCountHeading(label: string, count: number, noun: string): string {
+  return chalk.bold(label) + chalk.cyan(`  ${count} ${pluralize(count, noun)}`);
+}
+
 function renderPlanInspection(args: {
   plan: CoordinatorPlan;
   source: 'cache' | 'generated';
@@ -270,7 +276,7 @@ function renderPlanInspection(args: {
     lines.push('');
   }
 
-  lines.push(chalk.bold('TASKS'));
+  lines.push(formatSectionCountHeading('TASKS', plan.tasks.length, 'task'));
   for (const [index, task] of plan.tasks.entries()) {
     if (index > 0) lines.push('');
     lines.push(`  ${index + 1}. ${chalk.bold(task.id)}`);
@@ -346,9 +352,8 @@ function renderChildSkillArtifact(args: {
 function renderChildSkillSummary(args: {
   reporter: Reporter;
   childSkills: WriteCoordinatorChildSkillsResult;
-  skillName: string;
 }): void {
-  const { reporter, childSkills, skillName } = args;
+  const { reporter, childSkills } = args;
   const generated = childSkills.artifacts.filter((artifact) => artifact.source === 'generated').length;
   const generatedArtifacts = childSkills.artifacts.filter((artifact) => artifact.source === 'generated');
   const generatedUsage = generatedArtifacts.length > 0
@@ -382,10 +387,30 @@ function renderChildSkillSummary(args: {
       : undefined,
     turns: generatedArtifacts.reduce((sum, artifact) => sum + (artifact.numTurns ?? 0), 0) || undefined,
   }));
+}
 
+function renderTasksHeading(reporter: Reporter, taskCount: number): void {
+  reporter.text(formatSectionCountHeading('TASKS', taskCount, 'task'));
+}
+
+function renderCleanupReview(args: {
+  reporter: Reporter;
+  review: CoordinatorChildSkillCleanupReview;
+}): void {
+  const { reporter, review } = args;
+  reporter.blank();
+  reporter.text(formatSectionCountHeading('CLEANUP', review.cleanupItems.length, 'cleanup item'));
+  reporter.dim(`  ${review.summary}`);
+  for (const item of review.cleanupItems) {
+    reporter.text(`  ${item.targets.join(', ')}  ${item.issue}`);
+    reporter.dim(`    ${item.cleanup}`);
+  }
+}
+
+function renderTryIt(reporter: Reporter, skillName: string): void {
   reporter.blank();
   reporter.bold('TRY IT');
-  reporter.text(`  pnpm cli src/file.ts --skill ${skillName}`);
+  reporter.text(`  warden src/file.ts --skill ${skillName}`);
 }
 
 function readPromptFile(path: string): string {
@@ -661,7 +686,7 @@ export async function runSynthesize(
     const childArtifacts: CoordinatorChildSkillArtifact[] = [];
     if (!options.json) {
       reporter.blank();
-      reporter.bold('TASKS');
+      renderTasksHeading(reporter, result.plan.tasks.length);
     }
     for (const [index, task] of result.plan.tasks.entries()) {
       const childMessage = `${task.id} ${chalk.dim(`[${index + 1}/${result.plan.tasks.length}]`)}`;
@@ -715,8 +740,33 @@ export async function runSynthesize(
       performance.now() - childStartedAt,
     );
 
+    const reviewCleanup = () => reviewCoordinatorChildSkills({
+      plan: result.plan,
+      source,
+      artifacts: childArtifacts,
+      rootDir: childRoot,
+      runtime,
+      repoPath: repoRoot,
+      model,
+      apiKey,
+      repairModel,
+      repairMaxRetries: maxRetries,
+      abortController: state?.abortController,
+    });
+    const cleanupReview = options.json
+      ? await reviewCleanup()
+      : await runWithLiveStatus({
+        mode: reporter.mode,
+        verbosity: reporter.verbosity,
+        message: 'Reviewing generated child skills...',
+        detail: 'Checking task boundaries, explicit exclusions, and cleanup needs.',
+        task: reviewCleanup,
+      });
+
     if (!options.json) {
-      renderChildSkillSummary({ reporter, childSkills, skillName: skill.name });
+      renderChildSkillSummary({ reporter, childSkills });
+      renderCleanupReview({ reporter, review: cleanupReview });
+      renderTryIt(reporter, skill.name);
     }
 
     if (options.json) {

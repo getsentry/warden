@@ -146,6 +146,12 @@ coverage:
     expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.stringContaining('every item must map clearly'),
     }));
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('The parent plan is a lean decomposition artifact'),
+    }));
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('explicitly excludes sibling task concerns'),
+    }));
     expect(JSON.parse(readFileSync(result.cachePath, 'utf-8')).plan.tasks[0].id).toBe('authz');
   });
 

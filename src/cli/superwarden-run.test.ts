@@ -197,6 +197,24 @@ describe('Superwarden run task expansion', () => {
     }));
   });
 
+  it('shows the task count in the task section header', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const spec = await writeCachedSuperwardenFixture(tempDir);
+
+    try {
+      await createSkillTasks({
+        specs: [spec],
+        repoPath: tempDir,
+        options: CLIOptionsSchema.parse({}),
+        reporter: new Reporter(detectOutputMode(false), Verbosity.Normal),
+      });
+      const output = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
+      expect(output).toContain('TASKS  1 task');
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
   it('uses synthesisModel for Superwarden plan and child synthesis', async () => {
     const spec = await writeCachedSuperwardenFixture(tempDir);
     spec.runnerOptions = {

@@ -23,6 +23,20 @@ type CoordinatorTask = CoordinatorPlan['tasks'][number];
 type CoordinatorExternalSource = z.infer<typeof CoordinatorExternalSourceSchema>;
 const COORDINATOR_CHILD_SYNTHESIS_SCHEMA_VERSION = 2;
 
+const CoordinatorChildSkillCleanupItemSchema = z.object({
+  targets: z.array(z.string().min(1)).min(1),
+  issue: z.string().min(1),
+  cleanup: z.string().min(1),
+}).strict();
+
+export const CoordinatorChildSkillCleanupReviewSchema = z.object({
+  version: z.literal(1),
+  parentSkill: z.string().min(1),
+  summary: z.string().min(1),
+  cleanupItems: z.array(CoordinatorChildSkillCleanupItemSchema).default([]),
+}).strict();
+export type CoordinatorChildSkillCleanupReview = z.infer<typeof CoordinatorChildSkillCleanupReviewSchema>;
+
 const CoordinatorChildSkillSynthesisSchema = z.object({
   version: z.literal(1),
   parentSkill: z.string().min(1),
@@ -82,6 +96,25 @@ export interface WriteCoordinatorChildSkillsResult {
   bytes: number;
   durationMs: number;
   usage: UsageStats;
+}
+
+function formatSiblingTasks(plan: CoordinatorPlan, task: CoordinatorTask): string {
+  const siblings = plan.tasks.filter((candidate) => candidate.id !== task.id);
+  if (siblings.length === 0) {
+    return '- none';
+  }
+  return siblings
+    .map((sibling) => {
+      const exclusions = sibling.outOfScope.length > 0
+        ? sibling.outOfScope.join('; ')
+        : 'none recorded';
+      return [
+        `- ${sibling.id}: ${sibling.title}`,
+        `  Scope: ${sibling.scope}`,
+        `  Existing exclusions: ${exclusions}`,
+      ].join('\n');
+    })
+    .join('\n');
 }
 
 export class CoordinatorChildSkillError extends Error {
@@ -166,6 +199,8 @@ This is not a template fill. Perform a complete child skill synthesis pass:
 - represent missing context explicitly instead of inventing facts
 - do not ask follow-up questions; put any missing context in missingInputs and still return valid JSON
 - apply the skill-writer security-review quality bar: vulnerability prerequisites, exploitable dataflow examples, false-positive controls, severity/confidence calibration, concrete remediation patterns, and framework/runtime caveats
+- keep the parent plan lean; expand nuance inside this child skill instead of assuming the parent task prompt already carried it all
+- explicitly state what this child skill must not cover, using sibling tasks and parent out-of-scope items as hard boundaries
 
 Return only JSON with this exact shape:
 {
@@ -192,6 +227,7 @@ Required SKILL.md body contents:
 - Require normal Warden findings behavior: report only concrete findings accepted by Warden's existing report schema, and return no findings when evidence is insufficient. Do not invent a custom output schema.
 - Include false-positive controls, exploitability prerequisites, confidence/severity calibration, and remediation expectations.
 - Preserve the task scope, evidence requirements, and out-of-scope exclusions.
+- Include an explicit "Do not cover" or equivalent out-of-scope subsection that names sibling tasks or their concerns when they are not owned by this child skill.
 - Keep SKILL.md concise and runtime-focused. Put source inventory, coverage matrix, maintenance notes, and long rationale in SPEC.md or SOURCES.md instead of repeating it in SKILL.md.
 
 Required SPEC.md structure:
@@ -234,6 +270,9 @@ Record this Superwarden synthesis pass.
 Task:
 ${JSON.stringify(task, null, 2)}
 
+Sibling tasks that this child skill must not absorb unless needed only to explain a boundary:
+${formatSiblingTasks(plan, task)}
+
 Parent plan cache:
 ${cacheFileName}
 
@@ -243,6 +282,72 @@ ${JSON.stringify(plan, null, 2)}
 Parent source material:
 
 ${sourceBlocks(source)}`;
+}
+
+function childCleanupReviewSystemPrompt(): string {
+  return `You review a generated Superwarden child-skill set and identify cleanup work.
+
+Use Read, Grep, and Glob to inspect the generated child skill artifacts, the parent plan, and the parent source material. You are not rewriting files in this pass. You are determining where scope, overlap, exclusions, or detail balance need cleanup.
+
+Do not send repository code, secrets, private file paths, or proprietary details to web tools. Prefer local inspection for this review.
+
+Return only strict JSON. Never return prose, markdown, or a follow-up question.`;
+}
+
+function buildChildCleanupReviewPrompt(args: {
+  plan: CoordinatorPlan;
+  source: CoordinatorSource;
+  artifacts: CoordinatorChildSkillArtifact[];
+  rootDir: string;
+}): string {
+  const artifactList = args.artifacts
+    .map((artifact) => `- ${artifact.taskId}: ${artifact.path}`)
+    .join('\n');
+
+  return `Review the generated Superwarden child skills and determine what needs cleanup.
+
+This is a review pass, not a rewrite pass.
+
+Review goals:
+- find overlapping task scopes that are likely to produce duplicate findings
+- find child skills that do not explicitly say what they should not cover, especially sibling task concerns
+- find places where the parent plan carries too much child-skill detail instead of just core constraints, evidence requirements, and boundaries
+- find cleanup work needed to sharpen task ownership, exclusions, or prompt balance
+
+Rules:
+- do not rewrite files
+- prefer concrete cleanup actions over vague criticism
+- if nothing needs cleanup, say so in summary and return an empty cleanupItems array
+- use "plan" as a target when the parent plan itself needs cleanup
+- use task ids as targets for child-skill cleanup
+- when overlap involves multiple tasks, include all affected task ids in targets
+
+Return only JSON with this exact shape:
+{
+  "version": 1,
+  "parentSkill": "${args.plan.skill}",
+  "summary": "One-line summary of whether cleanup is needed.",
+  "cleanupItems": [
+    {
+      "targets": ["plan"],
+      "issue": "What is wrong or unclear.",
+      "cleanup": "Concrete cleanup action."
+    }
+  ]
+}
+
+Parent plan:
+${JSON.stringify(args.plan, null, 2)}
+
+Generated child skill root:
+${args.rootDir}
+
+Generated child skills:
+${artifactList}
+
+Parent source material:
+
+${sourceBlocks(args.source)}`;
 }
 
 function writeChildSkillArtifact(args: {
@@ -520,6 +625,63 @@ export async function synthesizeCoordinatorChildSkill(args: {
     if (error instanceof StructuredSuperwardenAgentError) {
       throw new CoordinatorChildSkillError(
         `Child skill synthesis failed for ${task.id}: ${error.message}`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+}
+
+export async function reviewCoordinatorChildSkills(args: {
+  plan: CoordinatorPlan;
+  source: CoordinatorSource;
+  artifacts: CoordinatorChildSkillArtifact[];
+  rootDir: string;
+  runtime: Runtime;
+  repoPath: string;
+  model?: string;
+  maxTurns?: number;
+  abortController?: AbortController;
+  apiKey?: string;
+  repairModel?: string;
+  repairMaxRetries?: number;
+}): Promise<CoordinatorChildSkillCleanupReview> {
+  try {
+    const result = await runStructuredSuperwardenAgent({
+      runtime: args.runtime,
+      repoPath: args.repoPath,
+      skillName: `${args.plan.skill}:superwarden-child-cleanup`,
+      systemPrompt: childCleanupReviewSystemPrompt(),
+      userPrompt: buildChildCleanupReviewPrompt({
+        plan: args.plan,
+        source: args.source,
+        artifacts: args.artifacts,
+        rootDir: args.rootDir,
+      }),
+      schema: CoordinatorChildSkillCleanupReviewSchema,
+      model: args.model,
+      maxTurns: args.maxTurns ?? SUPERWARDEN_SYNTHESIS_MAX_TURNS,
+      abortController: args.abortController,
+      repair: {
+        apiKey: args.apiKey,
+        model: args.repairModel,
+        maxRetries: args.repairMaxRetries,
+      },
+    });
+
+    if (result.data.parentSkill !== args.plan.skill) {
+      throw new CoordinatorChildSkillError(
+        `Child skill cleanup review identity mismatch for ${args.plan.skill}`,
+      );
+    }
+    return result.data;
+  } catch (error) {
+    if (error instanceof CoordinatorChildSkillError) {
+      throw error;
+    }
+    if (error instanceof StructuredSuperwardenAgentError) {
+      throw new CoordinatorChildSkillError(
+        `Child skill cleanup review failed for ${args.plan.skill}: ${error.message}`,
         { cause: error },
       );
     }

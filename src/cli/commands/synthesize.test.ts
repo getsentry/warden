@@ -7,8 +7,8 @@ import type { CLIOptions } from '../args.js';
 import { Reporter } from '../output/reporter.js';
 import { detectOutputMode } from '../output/tty.js';
 import { Verbosity } from '../output/verbosity.js';
-import { synthesizeCoordinatorPlan } from '../../coordinator/plan.js';
-import { synthesizeCoordinatorChildSkill } from '../../coordinator/child-skills.js';
+import { COORDINATOR_VERSION, synthesizeCoordinatorPlan } from '../../coordinator/plan.js';
+import { reviewCoordinatorChildSkills, synthesizeCoordinatorChildSkill } from '../../coordinator/child-skills.js';
 import { runSynthesize } from './synthesize.js';
 
 vi.mock('../../coordinator/plan.js', async () => {
@@ -24,11 +24,13 @@ vi.mock('../../coordinator/child-skills.js', async () => {
   return {
     ...actual,
     synthesizeCoordinatorChildSkill: vi.fn(),
+    reviewCoordinatorChildSkills: vi.fn(),
   };
 });
 
 const mockSynthesizeCoordinatorPlan = vi.mocked(synthesizeCoordinatorPlan);
 const mockSynthesizeCoordinatorChildSkill = vi.mocked(synthesizeCoordinatorChildSkill);
+const mockReviewCoordinatorChildSkills = vi.mocked(reviewCoordinatorChildSkills);
 
 function emptyUsage() {
   return {
@@ -133,6 +135,12 @@ Use WebSearch or WebFetch for public prior art.
         missingInputs: [],
       };
     });
+    mockReviewCoordinatorChildSkills.mockResolvedValue({
+      version: 1,
+      parentSkill: 'security-review',
+      summary: 'No cleanup changes suggested.',
+      cleanupItems: [],
+    });
   });
 
   afterEach(() => {
@@ -150,7 +158,7 @@ Use WebSearch or WebFetch for public prior art.
         version: 1,
         skill: 'security-review',
         sourceHash: 'hash',
-        coordinatorVersion: '1',
+        coordinatorVersion: COORDINATOR_VERSION,
         synthesis: {
           phases: [{ id: 'collect-inputs', status: 'generated' }],
         },
@@ -190,7 +198,7 @@ Use WebSearch or WebFetch for public prior art.
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Model    synth-model [claude]'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('PLAN'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Synthesizing Superwarden plan...'));
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('TASKS'));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('TASKS  1 task'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringMatching(/authz\s+\[generated\]/));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Find authorization issues.'));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Artifact  1.0 KB'));
@@ -199,7 +207,8 @@ Use WebSearch or WebFetch for public prior art.
     expect(stderr).not.toContain('Cache     ');
     expect(stderr).not.toContain('Cost      ');
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Generated 1 task'));
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('pnpm cli src/file.ts --skill security-review'));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('CLEANUP  0 cleanup items'));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('warden src/file.ts --skill security-review'));
     expect(existsSync(join(tempDir, 'plan.json'))).toBe(true);
     expect(JSON.parse(readFileSync(join(tempDir, 'plan.json'), 'utf-8')).tasks[0].id).toBe('authz');
     const childSkillPath = join(
@@ -235,7 +244,7 @@ Use WebSearch or WebFetch for public prior art.
         version: 1,
         skill: 'security-review',
         sourceHash: 'hash',
-        coordinatorVersion: '1',
+        coordinatorVersion: COORDINATOR_VERSION,
         synthesis: {
           phases: [{ id: 'collect-inputs', status: 'cached' }],
         },
@@ -273,8 +282,10 @@ Use WebSearch or WebFetch for public prior art.
       rootDir: join(tempDir, '.warden', 'superwarden', 'security-review', 'cache', 'hash', 'skills'),
     }));
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringMatching(/authz\s+\[cached\]/));
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('pnpm cli src/file.ts --skill security-review'));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('warden src/file.ts --skill security-review'));
     const output = stderrSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    expect(output).toContain('TASKS  1 task');
+    expect(output).toContain('CLEANUP  0 cleanup items');
     expect(output).not.toContain('Cache: reuse validated child skills when inputs match');
     expect(output).not.toContain('Prepared 1 task');
     expect(output).not.toContain('Cached    1');
@@ -295,7 +306,7 @@ Use WebSearch or WebFetch for public prior art.
         version: 1,
         skill: 'security-review',
         sourceHash: 'hash',
-        coordinatorVersion: '1',
+        coordinatorVersion: COORDINATOR_VERSION,
         synthesis: {
           phases: [
             { id: 'collect-inputs', status: 'generated' },
@@ -329,7 +340,7 @@ Use WebSearch or WebFetch for public prior art.
     expect(mockSynthesizeCoordinatorChildSkill).not.toHaveBeenCalled();
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(output).toContain('SUPERWARDEN PLAN');
-    expect(output).toContain('TASKS');
+    expect(output).toContain('TASKS  1 task');
     expect(output).toContain('authz');
     expect(output).toContain('Authorization');
     expect(output).toContain('Find authorization issues in changed TypeScript code.');
@@ -356,7 +367,7 @@ Use WebSearch or WebFetch for public prior art.
         version: 1,
         skill: 'security-review',
         sourceHash: 'hash',
-        coordinatorVersion: '1',
+        coordinatorVersion: COORDINATOR_VERSION,
         synthesis: {
           phases: [{ id: 'collect-inputs', status: 'generated' }],
         },
@@ -401,7 +412,7 @@ Use WebSearch or WebFetch for public prior art.
         version: 1,
         skill: 'ad-hoc-security',
         sourceHash: 'hash',
-        coordinatorVersion: '1',
+        coordinatorVersion: COORDINATOR_VERSION,
         synthesis: {
           phases: [{ id: 'collect-inputs', status: 'generated' }],
         },
@@ -440,7 +451,7 @@ Use WebSearch or WebFetch for public prior art.
         version: 1,
         skill: 'brand-new-security',
         sourceHash: 'hash',
-        coordinatorVersion: '1',
+        coordinatorVersion: COORDINATOR_VERSION,
         synthesis: {
           phases: [{ id: 'collect-inputs', status: 'generated' }],
         },
@@ -500,7 +511,7 @@ Use WebSearch or WebFetch for public prior art.
         version: 1,
         skill: 'file-backed-security',
         sourceHash: 'hash',
-        coordinatorVersion: '1',
+        coordinatorVersion: COORDINATOR_VERSION,
         synthesis: {
           phases: [{ id: 'collect-inputs', status: 'generated' }],
         },
