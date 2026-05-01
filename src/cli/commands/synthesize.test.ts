@@ -460,14 +460,17 @@ Use WebSearch or WebFetch for public prior art.
       createOptions({
         skill: 'brand-new-security',
         prompt: 'Review changed code for secret exposure.',
-        description: 'Review secret exposure.',
       }),
       reporter,
     );
 
     expect(exitCode).toBe(0);
     const root = join(tempDir, '.warden', 'superwarden', 'brand-new-security');
-    expect(readFileSync(join(root, 'SKILL.md'), 'utf-8')).toContain('Review changed code for secret exposure.');
+    const skillContent = readFileSync(join(root, 'SKILL.md'), 'utf-8');
+    expect(skillContent).toContain('Review changed code for secret exposure.');
+    expect(skillContent).toContain(
+      'description: "Review changed code for secret exposure. Use when asked to synthesize, run, or review with the brand-new-security Superwarden skill."',
+    );
     expect(readFileSync(join(root, 'warden.yaml'), 'utf-8')).toContain('kind: superwarden-skill');
     expect(readFileSync(join(root, 'SPEC.md'), 'utf-8')).toContain('Superwarden skill');
     expect(mockSynthesizeCoordinatorPlan).toHaveBeenCalledWith(expect.objectContaining({

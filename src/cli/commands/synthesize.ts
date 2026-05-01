@@ -388,12 +388,6 @@ function renderChildSkillSummary(args: {
   reporter.text(`  pnpm cli src/file.ts --skill ${skillName}`);
 }
 
-function inferDescription(skillName: string, initialPrompt: string): string {
-  const firstLine = initialPrompt.trim().split('\n').find((line) => line.trim())?.trim();
-  if (!firstLine) return `Superwarden skill for ${skillName}.`;
-  return firstLine.length > 160 ? `${firstLine.slice(0, 157)}...` : firstLine;
-}
-
 function readPromptFile(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf-8').trim();
 }
@@ -479,21 +473,10 @@ async function resolveSkillOrCreateSuperwarden(args: {
     throw new CoordinatorPlanError(`Missing initial prompt for new Superwarden skill: ${skillName}`);
   }
 
-  const description = options.description?.trim()
-    || (process.stdin.isTTY
-      ? await promptLine(
-        `${chalk.bold('DESCRIPTION')}\n` +
-        `${chalk.dim('  Optional. Press Enter to use an inferred description.')}\n` +
-        `${chalk.cyan('>')} `
-      )
-      : undefined)
-    || inferDescription(skillName, initialPrompt);
-
   const skill = createSuperwardenSkill({
     repoRoot,
     name: skillName,
     initialPrompt,
-    description,
   });
   return { skill, created: true, initialPromptLength: initialPrompt.length };
 }

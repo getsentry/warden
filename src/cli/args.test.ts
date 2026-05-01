@@ -96,16 +96,36 @@ describe('parseCliArgs', () => {
   it('parses help command', () => {
     const result = parseCliArgs(['help']);
     expect(result.command).toBe('help');
+    expect(result.helpTarget).toBeUndefined();
   });
 
   it('parses --help flag', () => {
     const result = parseCliArgs(['--help']);
     expect(result.command).toBe('help');
+    expect(result.helpTarget).toBeUndefined();
   });
 
   it('parses -h flag', () => {
     const result = parseCliArgs(['-h']);
     expect(result.command).toBe('help');
+  });
+
+  it('resolves command-specific help via --help', () => {
+    const result = parseCliArgs(['synth', 'security-review', '--help']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('synthesize');
+  });
+
+  it('resolves explicit help targets', () => {
+    const result = parseCliArgs(['help', 'runs', 'show']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('runs:show');
+  });
+
+  it('treats run targets with --help as run help', () => {
+    const result = parseCliArgs(['src/auth.ts', '--help']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('run');
   });
 
   it('ignores run command for backward compat', () => {
@@ -385,13 +405,10 @@ describe('parseCliArgs', () => {
       'security-review',
       '-p',
       'Review authz boundaries.',
-      '--description',
-      'Security review',
     ]);
     expect(result.command).toBe('synthesize');
     expect(result.options.skill).toBe('security-review');
     expect(result.options.prompt).toBe('Review authz boundaries.');
-    expect(result.options.description).toBe('Security review');
   });
 
   it('parses synthesize command with prompt file shorthand', () => {
@@ -400,13 +417,10 @@ describe('parseCliArgs', () => {
       'security-review',
       '--prompt',
       '@prompts/security.md',
-      '--description',
-      'Security review',
     ]);
     expect(result.command).toBe('synthesize');
     expect(result.options.skill).toBe('security-review');
     expect(result.options.prompt).toBe('@prompts/security.md');
-    expect(result.options.description).toBe('Security review');
   });
 
   it('parses runs list command', () => {
@@ -466,6 +480,18 @@ describe('parseCliArgs', () => {
     const result = parseCliArgs(['runs', 'show', 'run.jsonl', '--quiet']);
     expect(result.command).toBe('runs');
     expect(result.options.quiet).toBe(true);
+  });
+
+  it('resolves runs show help for inferred show targets', () => {
+    const result = parseCliArgs(['runs', 'deadbeef', '--help']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('runs:show');
+  });
+
+  it('resolves runs follow help for flag form', () => {
+    const result = parseCliArgs(['runs', '--follow', '--help']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('runs:follow');
   });
 
   it('parses runs list command with --json flag', () => {

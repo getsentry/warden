@@ -22,8 +22,8 @@ function hasTriggerPhrase(value: string): boolean {
   return /\b(use when|use for|use to|trigger|invoke)\b/i.test(value);
 }
 
-function superwardenDescription(name: string, initialPrompt: string, description?: string): string {
-  const base = description?.trim() || firstSentence(initialPrompt) || `Superwarden ${name} skill.`;
+function superwardenDescription(name: string, initialPrompt: string): string {
+  const base = firstSentence(initialPrompt) || `Superwarden ${name} skill.`;
   const triggerDescription = hasTriggerPhrase(base)
     ? base
     : `${/[.!?]$/.test(base) ? base : `${base}.`} Use when asked to synthesize, run, or review with the ${name} Superwarden skill.`;
@@ -56,10 +56,9 @@ export function createSuperwardenSkill(args: {
   repoRoot: string;
   name: string;
   initialPrompt: string;
-  description?: string;
 }): SkillDefinition {
   const { repoRoot, name, initialPrompt } = args;
-  const description = superwardenDescription(name, initialPrompt, args.description);
+  const description = superwardenDescription(name, initialPrompt);
   const rootDir = getSuperwardenSkillRoot(repoRoot, name);
   mkdirSync(rootDir, { recursive: true });
 

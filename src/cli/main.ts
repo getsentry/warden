@@ -12,7 +12,8 @@ import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove 
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
-import { parseCliArgs, showHelp, showVersion, classifyTargets, type CLIOptions } from './args.js';
+import { parseCliArgs, showVersion, classifyTargets, type CLIOptions } from './args.js';
+import { showHelp } from './help.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, getHeadSha, refExists, getDefaultBranch } from './git.js';
 import { renderTerminalReport, filterReports } from './terminal.js';
@@ -1670,10 +1671,10 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
 }
 
 export async function main(): Promise<void> {
-  const { command, options, setupAppOptions, runsOptions } = parseCliArgs();
+  const { command, options, helpTarget, setupAppOptions, runsOptions } = parseCliArgs();
 
   if (command === 'help') {
-    showHelp();
+    showHelp(helpTarget);
     process.exit(0);
   }
 
