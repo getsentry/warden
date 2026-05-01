@@ -13,6 +13,7 @@ describe('runtimes', () => {
     expect(runtime.name).toBe('claude');
     expect(runtime.runSkill).toBeTypeOf('function');
     expect(runtime.runAuxiliary).toBeTypeOf('function');
+    expect(runtime.runSynthesis).toBeTypeOf('function');
   });
 
   it('rejects unsupported runtimes explicitly', () => {
@@ -37,6 +38,26 @@ describe('runtimes', () => {
         cacheCreation5mInputTokens: 0,
         cacheCreation1hInputTokens: 0,
         webSearchRequests: 0,
+        costUSD: 0,
+      },
+    });
+  });
+
+  it('fails synthesis calls clearly when Claude auth is missing', async () => {
+    const result = await getRuntime().runSynthesis({
+      task: 'consolidation',
+      prompt: 'Return []',
+      schema: z.array(z.array(z.number())),
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Anthropic API key required for Claude auxiliary runtime',
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
         costUSD: 0,
       },
     });

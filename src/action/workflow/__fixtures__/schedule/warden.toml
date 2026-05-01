@@ -3,6 +3,9 @@ version = 1
 [defaults]
 auxiliaryMaxRetries = 3
 
+[defaults.synthesis]
+model = "repo-synth-model"
+
 [[skills]]
 name = "test-skill"
 paths = ["src/**/*.ts"]

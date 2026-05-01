@@ -501,7 +501,8 @@ interface SkillToRun {
   model?: string;
   maxTurns?: number;
   runtime?: SkillRunnerOptions['runtime'];
-  fastModelModel?: string;
+  auxiliaryModel?: string;
+  synthesisModel?: string;
   auxiliaryMaxRetries?: number;
 }
 
@@ -526,7 +527,7 @@ interface ProcessedResults {
 
 type SkillRunnerOptionOverrides = Pick<
   SkillRunnerOptions,
-  'model' | 'maxTurns' | 'runtime' | 'fastModelModel' | 'auxiliaryMaxRetries'
+  'model' | 'maxTurns' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries'
 >;
 
 export function mergeSkillRunnerOptions(
@@ -538,7 +539,8 @@ export function mergeSkillRunnerOptions(
   if (overrides.model !== undefined) merged.model = overrides.model;
   if (overrides.maxTurns !== undefined) merged.maxTurns = overrides.maxTurns;
   if (overrides.runtime !== undefined) merged.runtime = overrides.runtime;
-  if (overrides.fastModelModel !== undefined) merged.fastModelModel = overrides.fastModelModel;
+  if (overrides.auxiliaryModel !== undefined) merged.auxiliaryModel = overrides.auxiliaryModel;
+  if (overrides.synthesisModel !== undefined) merged.synthesisModel = overrides.synthesisModel;
   if (overrides.auxiliaryMaxRetries !== undefined) {
     merged.auxiliaryMaxRetries = overrides.auxiliaryMaxRetries;
   }
@@ -832,10 +834,19 @@ export function resolveCliDefaultModel(
   );
 }
 
-export function resolveCliDefaultFastModel(
+export function resolveCliDefaultAuxiliaryModel(
   config: Pick<WardenConfig, 'defaults'> | null | undefined
 ): string | undefined {
-  return emptyToUndefined(config?.defaults?.fastModel?.model);
+  return emptyToUndefined(config?.defaults?.auxiliary?.model);
+}
+
+export function resolveCliDefaultSynthesisModel(
+  config: Pick<WardenConfig, 'defaults'> | null | undefined
+): string | undefined {
+  return (
+    emptyToUndefined(config?.defaults?.synthesis?.model) ??
+    resolveCliDefaultAuxiliaryModel(config)
+  );
 }
 
 export function resolveCliLogModel(
@@ -1043,7 +1054,8 @@ export async function runSkills(
     ? loadWardenConfig(dirname(configPath))
     : null;
   const defaultModel = resolveCliDefaultModel(config, options.model);
-  const defaultFastModelModel = resolveCliDefaultFastModel(config);
+  const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
+  const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
 
   // Determine which triggers/skills to run
   let skillsToRun: SkillToRun[];
@@ -1070,8 +1082,12 @@ export async function runSkills(
       model: match?.model ?? defaultModel,
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
       runtime: match?.runtime ?? config?.defaults?.runtime ?? 'claude',
-      fastModelModel: match?.fastModelModel ?? defaultFastModelModel,
-      auxiliaryMaxRetries: match?.auxiliaryMaxRetries ?? config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries,
+      auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
+      synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
+      auxiliaryMaxRetries:
+        match?.auxiliaryMaxRetries ??
+        config?.defaults?.auxiliary?.maxRetries ??
+        config?.defaults?.auxiliaryMaxRetries,
     }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property and filters
@@ -1093,7 +1109,8 @@ export async function runSkills(
         model: t.model,
         maxTurns: t.maxTurns,
         runtime: t.runtime,
-        fastModelModel: t.fastModelModel,
+        auxiliaryModel: t.auxiliaryModel,
+        synthesisModel: t.synthesisModel,
         auxiliaryMaxRetries: t.auxiliaryMaxRetries,
       }));
   } else {
@@ -1124,12 +1141,15 @@ export async function runSkills(
     apiKey,
     model: sdkModel,
     runtime: config?.defaults?.runtime ?? 'claude',
-    fastModelModel: defaultFastModelModel,
+    auxiliaryModel: defaultAuxiliaryModel,
+    synthesisModel: defaultSynthesisModel,
     abortController,
     maxTurns: config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
     batchDelayMs: config?.defaults?.batchDelayMs,
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
-    auxiliaryMaxRetries: config?.defaults?.fastModel?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries,
+    auxiliaryMaxRetries:
+      config?.defaults?.auxiliary?.maxRetries ??
+      config?.defaults?.auxiliaryMaxRetries,
   };
   const specs: RunSkillSpec[] = skillsToRun.map(({ skill, remote, filters, mode, ...skillOptions }) => ({
     name: skill,
@@ -1462,7 +1482,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       apiKey,
       model: trigger.model,
       runtime: trigger.runtime,
-      fastModelModel: trigger.fastModelModel,
+      auxiliaryModel: trigger.auxiliaryModel,
+      synthesisModel: trigger.synthesisModel,
       abortController,
       maxTurns: trigger.maxTurns,
       maxContextFiles: config.defaults?.chunking?.maxContextFiles,

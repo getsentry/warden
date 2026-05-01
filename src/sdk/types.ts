@@ -91,12 +91,14 @@ export interface SkillRunnerOptions {
   concurrency?: number;
   /** Delay in milliseconds between batch starts when parallel=true (default: 0) */
   batchDelayMs?: number;
-  /** Model to use for analysis (e.g., 'claude-sonnet-4-20250514'). Uses SDK default if not specified. */
+  /** Model to use for analysis (e.g., 'claude-sonnet-4-5'). Uses SDK default if not specified. */
   model?: string;
   /** Runtime backend for all model-backed execution. Defaults to Claude. */
   runtime?: RuntimeName;
   /** Model to use for auxiliary structured model calls. Uses runtime default if not specified. */
-  fastModelModel?: string;
+  auxiliaryModel?: string;
+  /** Model to use for post-analysis synthesis/consolidation. Falls back to auxiliaryModel when not specified. */
+  synthesisModel?: string;
   /** Progress callbacks */
   callbacks?: SkillRunnerCallbacks;
   /** Abort controller for cancellation on SIGINT */

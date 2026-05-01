@@ -10,6 +10,7 @@ import type { SkillDefinition } from '../../config/schema.js';
 import { Semaphore, runPool } from '../../utils/index.js';
 import { SkillRunnerError, WardenAuthenticationError } from '../../sdk/errors.js';
 import * as sdkRunner from '../../sdk/runner.js';
+import * as fixQuality from '../../sdk/fix-quality.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -873,6 +874,82 @@ describe('runSkillTask skipped path', () => {
     expect(report.skill).toBe('no-files-skill');
     expect(report.summary).toBe('No code changes to analyze');
     expect(result.report).toBe(report);
+  });
+});
+
+describe('runSkillTask model lanes', () => {
+  function noopCallbacks(): SkillProgressCallbacks {
+    return {
+      onSkillStart: () => undefined,
+      onSkillUpdate: () => undefined,
+      onFileUpdate: () => undefined,
+      onSkillComplete: () => undefined,
+      onSkillSkipped: () => undefined,
+      onSkillError: () => undefined,
+    };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('uses synthesisModel for consolidation and auxiliaryModel for auxiliary gates', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const finding = makeFinding();
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    } satisfies FileAnalysisResult);
+    const mergeSpy = vi.spyOn(sdkRunner, 'mergeCrossLocationFindings').mockResolvedValue({
+      findings: [finding],
+      mergedCount: 0,
+    });
+    const sanitizeSpy = vi.spyOn(fixQuality, 'sanitizeFindingsSuggestedFixes').mockResolvedValue({
+      findings: [finding],
+      stats: {
+        checked: 0,
+        strippedDeterministic: 0,
+        strippedSemantic: 0,
+        semanticUnavailable: 0,
+      },
+    });
+
+    const result = await runSkillTask({
+      name: 'lane-skill',
+      resolveSkill: async () =>
+        ({ name: 'lane-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: {
+        auxiliaryModel: 'claude-haiku-4-5',
+        synthesisModel: 'claude-opus-4-5',
+      },
+    }, 1, noopCallbacks());
+
+    expect(result.report?.error).toBeUndefined();
+    expect(mergeSpy).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-opus-4-5' })
+    );
+    expect(sanitizeSpy).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-haiku-4-5' })
+    );
   });
 });
 

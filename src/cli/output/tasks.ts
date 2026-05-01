@@ -513,7 +513,7 @@ export async function runSkillTask(
           apiKey: runnerOptions.apiKey,
           repoPath: context.repoPath,
           runtime: runnerOptions.runtime,
-          model: runnerOptions.fastModelModel,
+          model: runnerOptions.synthesisModel,
           maxRetries: runnerOptions.auxiliaryMaxRetries,
         });
         let mergedFindings = mergeResult.findings;
@@ -524,7 +524,7 @@ export async function runSkillTask(
           repoPath: context.repoPath,
           apiKey: runnerOptions.apiKey,
           runtime: runnerOptions.runtime,
-          model: runnerOptions.fastModelModel,
+          model: runnerOptions.auxiliaryModel,
           maxRetries: runnerOptions.auxiliaryMaxRetries,
         });
         mergedFindings = sanitized.findings;

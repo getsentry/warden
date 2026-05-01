@@ -67,7 +67,7 @@ import {
 interface InitResult {
   context: EventContext;
   runnerConcurrency?: number;
-  fastModelOptions: FastModelWorkflowOptions;
+  auxiliaryOptions: AuxiliaryWorkflowOptions;
   matchedTriggers: ResolvedTrigger[];
 }
 
@@ -85,13 +85,13 @@ interface ReviewPhaseResult {
   failureReasons: string[];
 }
 
-interface FastModelWorkflowOptions {
+interface AuxiliaryWorkflowOptions {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
 }
 
-function resolveWorkflowFastModelOptions(layered: LoadedLayeredConfig): FastModelWorkflowOptions {
+function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): AuxiliaryWorkflowOptions {
   const baseDefaults = layered.baseConfig?.defaults;
   const repoDefaults = layered.repoConfig?.defaults ?? layered.config.defaults;
 
@@ -101,12 +101,12 @@ function resolveWorkflowFastModelOptions(layered: LoadedLayeredConfig): FastMode
     // repo layer only fills fields the base omits.
     runtime: baseDefaults?.runtime ?? repoDefaults?.runtime ?? 'claude',
     model:
-      emptyToUndefined(baseDefaults?.fastModel?.model) ??
-      emptyToUndefined(repoDefaults?.fastModel?.model),
+      emptyToUndefined(baseDefaults?.auxiliary?.model) ??
+      emptyToUndefined(repoDefaults?.auxiliary?.model),
     maxRetries:
-      baseDefaults?.fastModel?.maxRetries ??
+      baseDefaults?.auxiliary?.maxRetries ??
       baseDefaults?.auxiliaryMaxRetries ??
-      repoDefaults?.fastModel?.maxRetries ??
+      repoDefaults?.auxiliary?.maxRetries ??
       repoDefaults?.auxiliaryMaxRetries,
   };
 }
@@ -180,7 +180,7 @@ async function initializeWorkflow(
   logGroupEnd();
 
   let runnerConcurrency: number | undefined;
-  let fastModelOptions: FastModelWorkflowOptions = { runtime: 'claude' };
+  let auxiliaryOptions: AuxiliaryWorkflowOptions = { runtime: 'claude' };
   let skillRootsByName: LayeredSkillRootsByName | undefined;
   try {
     const layered = loadLayeredWardenConfig(repoPath, {
@@ -194,7 +194,7 @@ async function initializeWorkflow(
       layered.baseConfig?.runner?.concurrency ??
       layered.repoConfig?.runner?.concurrency ??
       layered.config.runner?.concurrency;
-    fastModelOptions = resolveWorkflowFastModelOptions(layered);
+    auxiliaryOptions = resolveWorkflowAuxiliaryOptions(layered);
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
     const resolvedTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName);
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
@@ -209,7 +209,7 @@ async function initializeWorkflow(
       console.log('No triggers matched for this event');
     }
 
-    return { context, runnerConcurrency, fastModelOptions, matchedTriggers };
+    return { context, runnerConcurrency, auxiliaryOptions, matchedTriggers };
   } catch (error) {
     if (
       error instanceof ConfigLoadError &&
@@ -346,7 +346,7 @@ async function postReviewsAndTrackFailures(
   context: EventContext,
   results: TriggerResult[],
   inputs: ActionInputs,
-  fastModelOptions: FastModelWorkflowOptions
+  auxiliaryOptions: AuxiliaryWorkflowOptions
 ): Promise<ReviewPhaseResult> {
   // Fetch existing comments for deduplication (only for PRs)
   // Keep original list separate for stale detection (modified list includes newly posted comments)
@@ -390,9 +390,9 @@ async function postReviewsAndTrackFailures(
           result,
           existingComments,
           apiKey: inputs.anthropicApiKey,
-          runtime: fastModelOptions.runtime,
-          model: fastModelOptions.model,
-          maxRetries: fastModelOptions.maxRetries,
+          runtime: auxiliaryOptions.runtime,
+          model: auxiliaryOptions.model,
+          maxRetries: auxiliaryOptions.maxRetries,
         },
         { octokit, context }
       );
@@ -436,7 +436,7 @@ async function evaluateFixesAndResolveStale(
   activeWardenCommentIds: ReadonlySet<number>,
   canResolveStale: boolean,
   anthropicApiKey: string,
-  fastModelOptions: FastModelWorkflowOptions
+  auxiliaryOptions: AuxiliaryWorkflowOptions
 ): Promise<{
   allResolved: boolean;
   autoResolvedByFixEvaluation: number;
@@ -475,7 +475,7 @@ async function evaluateFixesAndResolveStale(
         },
         allFindings,
         anthropicApiKey,
-        fastModelOptions
+        auxiliaryOptions
       );
 
       // Log per-evaluation details
@@ -671,7 +671,7 @@ async function cleanupOrphanedComments(
   octokit: Octokit,
   context: EventContext,
   inputs: ActionInputs,
-  fastModelOptions: FastModelWorkflowOptions
+  auxiliaryOptions: AuxiliaryWorkflowOptions
 ): Promise<void> {
   if (!context.pullRequest) {
     return;
@@ -695,7 +695,7 @@ async function cleanupOrphanedComments(
     return;
   }
 
-  if ((fastModelOptions.runtime ?? 'claude') === 'claude') {
+  if ((auxiliaryOptions.runtime ?? 'claude') === 'claude') {
     ensureClaudeAuth(inputs);
   }
 
@@ -703,7 +703,7 @@ async function cleanupOrphanedComments(
 
   const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck } =
     await evaluateFixesAndResolveStale(
-      octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, fastModelOptions
+      octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, auxiliaryOptions
     );
   const activeSpan = Sentry.getActiveSpan();
   activeSpan?.setAttribute('warden.feedback.auto_resolve.fix_eval_count', autoResolvedByFixEvaluation);
@@ -767,7 +767,7 @@ export async function runPRWorkflow(
         return;
       }
 
-      const { context, runnerConcurrency, fastModelOptions, matchedTriggers } = initResult;
+      const { context, runnerConcurrency, auxiliaryOptions, matchedTriggers } = initResult;
 
       // Set Sentry context after building event context
       if (context.pullRequest) {
@@ -799,7 +799,7 @@ export async function runPRWorkflow(
           octokit,
           context,
           inputs,
-          fastModelOptions
+          auxiliaryOptions
         );
         setOutput('findings-count', 0);
         setOutput('high-count', 0);
@@ -820,7 +820,7 @@ export async function runPRWorkflow(
 
       const reviewPhase = await Sentry.startSpan(
         { op: 'workflow.review', name: 'post reviews' },
-        () => postReviewsAndTrackFailures(octokit, context, results, inputs, fastModelOptions),
+        () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions),
       );
 
       const triggerErrors = collectTriggerErrors(results);
@@ -836,7 +836,7 @@ export async function runPRWorkflow(
             octokit, context, reviewPhase.fetchedComments,
             allFindings, reviewPhase.activeWardenCommentIds,
             canResolveStale, inputs.anthropicApiKey,
-            fastModelOptions,
+            auxiliaryOptions,
           );
           resolveSpan.setAttribute(
             'warden.feedback.auto_resolve.fix_eval_count',

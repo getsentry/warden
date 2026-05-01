@@ -74,7 +74,8 @@ export {
   TriggerTypeSchema,
   RuntimeNameSchema,
   AgentRuntimeConfigSchema,
-  FastModelRuntimeConfigSchema,
+  AuxiliaryRuntimeConfigSchema,
+  SynthesisRuntimeConfigSchema,
   WardenConfigSchema,
   // Functions
   loadWardenConfig,
@@ -90,7 +91,8 @@ export type {
   TriggerType,
   RuntimeName,
   AgentRuntimeConfig,
-  FastModelRuntimeConfig,
+  AuxiliaryRuntimeConfig,
+  SynthesisRuntimeConfig,
   WardenConfig,
   ResolvedTrigger,
 } from './config/index.js';
@@ -114,6 +116,8 @@ export type {
   AuxiliaryRunResult,
   AuxiliaryTask,
   AuxiliaryTool,
+  SynthesisRunRequest,
+  SynthesisTask,
   SkillRunOptions,
   SkillRunRequest,
   SkillRunResponse,

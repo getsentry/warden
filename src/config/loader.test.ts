@@ -420,17 +420,19 @@ describe('resolveSkillConfigs', () => {
       const [resolved] = resolveSkillConfigs(baseConfig);
 
       expect(resolved?.runtime).toBe('claude');
-      expect(resolved?.fastModelModel).toBeUndefined();
+      expect(resolved?.auxiliaryModel).toBeUndefined();
+      expect(resolved?.synthesisModel).toBeUndefined();
       expect(resolved?.auxiliaryMaxRetries).toBeUndefined();
     });
 
-    it('uses one runtime with separate agent and fast-model options', () => {
+    it('uses one runtime with separate agent, auxiliary, and synthesis options', () => {
       const config: WardenConfig = {
         ...baseConfig,
         defaults: {
           runtime: 'claude',
           agent: { model: 'claude-main', maxTurns: 12 },
-          fastModel: { model: 'claude-haiku-4-5', maxRetries: 2 },
+          auxiliary: { model: 'claude-haiku-4-5', maxRetries: 2 },
+          synthesis: { model: 'claude-opus-4-5' },
           auxiliaryMaxRetries: 5,
         },
       };
@@ -440,8 +442,23 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.runtime).toBe('claude');
       expect(resolved?.model).toBe('claude-main');
       expect(resolved?.maxTurns).toBe(12);
-      expect(resolved?.fastModelModel).toBe('claude-haiku-4-5');
+      expect(resolved?.auxiliaryModel).toBe('claude-haiku-4-5');
+      expect(resolved?.synthesisModel).toBe('claude-opus-4-5');
       expect(resolved?.auxiliaryMaxRetries).toBe(2);
+    });
+
+    it('falls back to auxiliary model when synthesis model is unset', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          auxiliary: { model: 'claude-haiku-4-5' },
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+
+      expect(resolved?.auxiliaryModel).toBe('claude-haiku-4-5');
+      expect(resolved?.synthesisModel).toBe('claude-haiku-4-5');
     });
   });
 
@@ -803,13 +820,14 @@ describe('loadLayeredWardenConfig', () => {
 });
 
 describe('maxTurns config', () => {
-  it('accepts runtime, agent, and fastModel defaults', () => {
+  it('accepts runtime, agent, auxiliary, and synthesis defaults', () => {
     const config = {
       version: 1,
       defaults: {
         runtime: 'claude',
         agent: { model: 'claude-main', maxTurns: 25 },
-        fastModel: { model: 'claude-haiku-4-5', maxRetries: 2 },
+        auxiliary: { model: 'claude-haiku-4-5', maxRetries: 2 },
+        synthesis: { model: 'claude-opus-4-5' },
       },
       skills: [],
     };
@@ -817,7 +835,8 @@ describe('maxTurns config', () => {
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     expect(result.data?.defaults?.runtime).toBe('claude');
-    expect(result.data?.defaults?.fastModel?.model).toBe('claude-haiku-4-5');
+    expect(result.data?.defaults?.auxiliary?.model).toBe('claude-haiku-4-5');
+    expect(result.data?.defaults?.synthesis?.model).toBe('claude-opus-4-5');
   });
 
   it('rejects unknown runtimes', () => {
@@ -836,7 +855,7 @@ describe('maxTurns config', () => {
       version: 1,
       defaults: {
         agent: { provider: 'pi' },
-        fastModel: { provider: 'claude' },
+        auxiliary: { provider: 'claude' },
       },
       skills: [],
     };

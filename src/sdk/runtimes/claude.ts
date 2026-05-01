@@ -25,6 +25,7 @@ import type {
   AuxiliaryRunResult,
   AuxiliaryTool,
   Runtime,
+  SynthesisRunRequest,
   SkillRunRequest,
   SkillRunResponse,
   SkillRunResult,
@@ -87,6 +88,50 @@ function resolveClaudeSkillTools(tools: ToolConfig | undefined): {
     allowedTools,
     disallowedTools: [...MUTATING_TOOLS, ...disallowedReadOnlyTools, ...CLAUDE_AGENT_TOOLS],
   };
+}
+
+async function runStructured<T>(
+  request: {
+    apiKey?: string;
+    prompt: string;
+    schema: SynthesisRunRequest<T>['schema'];
+    model?: string;
+    maxTokens?: number;
+    timeout?: number;
+    maxRetries?: number;
+    tools?: AuxiliaryTool[];
+    executeTool?: (name: string, input: Record<string, unknown>) => Promise<string>;
+    maxIterations?: number;
+  }
+): Promise<AuxiliaryRunResult<T>> {
+  if (!request.apiKey) {
+    return missingApiKeyResult();
+  }
+
+  if (request.tools) {
+    return callHaikuWithTools({
+      apiKey: request.apiKey,
+      prompt: request.prompt,
+      schema: request.schema,
+      tools: request.tools.map(toAnthropicTool),
+      executeTool: request.executeTool ?? (async () => ''),
+      model: request.model,
+      maxTokens: request.maxTokens,
+      maxIterations: request.maxIterations,
+      timeout: request.timeout,
+      maxRetries: request.maxRetries,
+    });
+  }
+
+  return callHaiku({
+    apiKey: request.apiKey,
+    prompt: request.prompt,
+    schema: request.schema,
+    model: request.model,
+    maxTokens: request.maxTokens,
+    timeout: request.timeout,
+    maxRetries: request.maxRetries,
+  });
 }
 
 function toAnthropicTool(tool: AuxiliaryTool): Anthropic.Tool {
@@ -432,33 +477,10 @@ export const claudeRuntime: Runtime = {
   },
 
   async runAuxiliary<T>(request: AuxiliaryRunRequest<T>): Promise<AuxiliaryRunResult<T>> {
-    if (!request.apiKey) {
-      return missingApiKeyResult();
-    }
+    return runStructured(request);
+  },
 
-    if (request.tools) {
-      return callHaikuWithTools({
-        apiKey: request.apiKey,
-        prompt: request.prompt,
-        schema: request.schema,
-        tools: request.tools.map(toAnthropicTool),
-        executeTool: request.executeTool,
-        model: request.model,
-        maxTokens: request.maxTokens,
-        maxIterations: request.maxIterations,
-        timeout: request.timeout,
-        maxRetries: request.maxRetries,
-      });
-    }
-
-    return callHaiku({
-      apiKey: request.apiKey,
-      prompt: request.prompt,
-      schema: request.schema,
-      model: request.model,
-      maxTokens: request.maxTokens,
-      timeout: request.timeout,
-      maxRetries: request.maxRetries,
-    });
+  async runSynthesis<T>(request: SynthesisRunRequest<T>): Promise<AuxiliaryRunResult<T>> {
+    return runStructured(request);
   },
 };

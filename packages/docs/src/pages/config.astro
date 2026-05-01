@@ -175,6 +175,10 @@ maxFindings = 20`}
     <dd>Model for all skills</dd>
     <dt>maxTurns</dt>
     <dd>Max agentic turns per hunk. Default: 50</dd>
+    <dt>auxiliary</dt>
+    <dd>Model defaults for auxiliary structured calls such as extraction repair, review deduplication, and fix evaluation</dd>
+    <dt>synthesis</dt>
+    <dd>Model defaults for post-analysis synthesis/consolidation. Falls back to <code>defaults.auxiliary.model</code> when omitted</dd>
     <dt>defaultBranch</dt>
     <dd>Repository default branch (auto-detected)</dd>
     <dt>failOn</dt>
@@ -198,19 +202,26 @@ maxFindings = 20`}
   <Terminal showCopy={true}>
     <Code
       code={`[defaults]
-model = "claude-sonnet-4-20250514"
+model = "claude-sonnet-4-5"
 maxTurns = 30
 failOn = "high"
 reportOn = "medium"
 requestChanges = false
 failCheck = false
-ignorePaths = ["**/vendor/**", "**/node_modules/**"]`}
+ignorePaths = ["**/vendor/**", "**/node_modules/**"]
+
+[defaults.auxiliary]
+model = "claude-haiku-4-5"
+
+[defaults.synthesis]
+model = "claude-opus-4-5"`}
       lang="toml"
       theme="vitesse-black"
     />
   </Terminal>
 
   <p><strong>Model precedence:</strong> trigger &gt; skill &gt; defaults &gt; CLI flag (<code>-m</code>) &gt; env var (<code>WARDEN_MODEL</code>). Most specific wins.</p>
+  <p><strong>Synthesis fallback:</strong> <code>defaults.synthesis.model</code> falls back to <code>defaults.auxiliary.model</code> when not set.</p>
 
   <h2 id="chunking">Chunking</h2>
 

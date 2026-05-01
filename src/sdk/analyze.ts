@@ -84,7 +84,7 @@ async function parseHunkOutput(
   const fallback = await extractFindingsWithLLM(result.text, {
     apiKey: options.apiKey,
     runtime: options.runtime,
-    model: options.fastModelModel,
+    model: options.auxiliaryModel,
     maxRetries: options.auxiliaryMaxRetries,
   });
 
@@ -801,7 +801,7 @@ export async function runSkill(
     apiKey: options.apiKey,
     repoPath: context.repoPath,
     runtime: options.runtime,
-    model: options.fastModelModel,
+    model: options.synthesisModel,
     maxRetries: options.auxiliaryMaxRetries,
   });
   let mergedFindings = mergeResult.findings;
@@ -812,7 +812,7 @@ export async function runSkill(
     repoPath: context.repoPath,
     apiKey: options.apiKey,
     runtime: options.runtime,
-    model: options.fastModelModel,
+    model: options.auxiliaryModel,
     maxRetries: options.auxiliaryMaxRetries,
   });
   mergedFindings = sanitized.findings;

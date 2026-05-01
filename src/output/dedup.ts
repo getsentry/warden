@@ -766,7 +766,7 @@ Singletons (findings with no duplicates) should not appear in any group.
 Return ONLY the JSON array. Return [] if no findings share a root cause.`;
 
   const result = await getRuntime(options.runtime).runAuxiliary({
-    task: 'consolidation',
+    task: 'deduplication',
     apiKey: options.apiKey,
     prompt,
     schema: ConsolidationGroupsSchema,

@@ -483,7 +483,7 @@ ${findingDescriptions.join('\n')}
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
 Singletons should not appear. Return [] if no findings describe the same issue.`;
 
-  const result = await getRuntime(options?.runtime).runAuxiliary({
+  const result = await getRuntime(options?.runtime).runSynthesis({
     task: 'consolidation',
     apiKey,
     prompt,

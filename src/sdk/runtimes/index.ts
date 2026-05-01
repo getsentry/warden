@@ -13,6 +13,8 @@ export type {
   AuxiliaryTool,
   Runtime,
   RuntimeName,
+  SynthesisRunRequest,
+  SynthesisTask,
   SkillRunOptions,
   SkillRunRequest,
   SkillRunResponse,

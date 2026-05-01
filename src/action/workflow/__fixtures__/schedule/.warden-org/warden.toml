@@ -3,6 +3,9 @@ version = 1
 [defaults]
 auxiliaryMaxRetries = 7
 
+[defaults.synthesis]
+model = "org-synth-model"
+
 [[skills]]
 name = "org-skill"
 paths = ["src/**/*.ts"]

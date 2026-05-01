@@ -1,7 +1,7 @@
 version = 1
 
-[defaults.fastModel]
-model = "repo-fast-model"
+[defaults.auxiliary]
+model = "repo-aux-model"
 maxRetries = 2
 
 [[skills]]

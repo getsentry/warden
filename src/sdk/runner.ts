@@ -71,6 +71,8 @@ export type {
   AuxiliaryRunResult,
   AuxiliaryTask,
   AuxiliaryTool,
+  SynthesisRunRequest,
+  SynthesisTask,
   SkillRunOptions,
   SkillRunRequest,
   SkillRunResponse,

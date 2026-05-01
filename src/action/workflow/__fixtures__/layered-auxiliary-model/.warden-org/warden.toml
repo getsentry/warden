@@ -1,10 +1,11 @@
 version = 1
 
-[defaults.fastModel]
-model = ""
+[defaults.auxiliary]
+model = "org-aux-model"
+maxRetries = 7
 
 [[skills]]
-name = "test-skill"
+name = "org-skill"
 
 [[skills.triggers]]
 type = "pull_request"

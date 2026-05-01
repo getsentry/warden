@@ -1,6 +1,6 @@
 version = 1
 
-[defaults.fastModel]
+[defaults.auxiliary]
 model = ""
 
 [[skills]]

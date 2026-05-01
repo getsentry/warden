@@ -16,9 +16,9 @@ const BASE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'base-only');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
 const RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'runtime-claude');
-const EMPTY_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-fast-model');
-const LAYERED_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-fast-model');
-const NO_MATCH_EMPTY_FAST_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-fast-model');
+const EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-auxiliary-model');
+const LAYERED_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-auxiliary-model');
+const NO_MATCH_EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-auxiliary-model');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 
 // -----------------------------------------------------------------------------
@@ -324,7 +324,7 @@ describe('runPRWorkflow', () => {
       expect(createReview).not.toHaveBeenCalled();
     });
 
-    it('normalizes empty fast-model default before review deduplication', async () => {
+    it('normalizes empty auxiliary default before review deduplication', async () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });
 
@@ -351,7 +351,7 @@ describe('runPRWorkflow', () => {
         createDefaultInputs(),
         'pull_request',
         EVENT_PAYLOAD_PATH,
-        EMPTY_FAST_MODEL_FIXTURES_DIR
+        EMPTY_AUXILIARY_MODEL_FIXTURES_DIR
       );
 
       expect(mockDeduplicateFindings).toHaveBeenCalledWith(
@@ -769,7 +769,7 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('keeps base fast-model defaults for workflow-level fix evaluation', async () => {
+    it('keeps base auxiliary defaults for workflow-level fix evaluation', async () => {
       mockFetchExistingComments.mockResolvedValue([
         {
           id: 1,
@@ -794,7 +794,7 @@ describe('runPRWorkflow', () => {
         }),
         'pull_request',
         EVENT_PAYLOAD_PATH,
-        LAYERED_FAST_MODEL_FIXTURES_DIR
+        LAYERED_AUXILIARY_MODEL_FIXTURES_DIR
       );
 
       expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(
@@ -810,7 +810,7 @@ describe('runPRWorkflow', () => {
         'test-api-key',
         expect.objectContaining({
           runtime: 'claude',
-          model: 'org-fast-model',
+          model: 'org-aux-model',
           maxRetries: 7,
         })
       );
@@ -951,7 +951,7 @@ describe('runPRWorkflow', () => {
       expect(mockRunSkillTask).not.toHaveBeenCalled();
     });
 
-    it('normalizes empty fast-model default before cleanup fix evaluation', async () => {
+    it('normalizes empty auxiliary default before cleanup fix evaluation', async () => {
       mockFetchExistingComments.mockResolvedValue([
         {
           id: 1,
@@ -971,7 +971,7 @@ describe('runPRWorkflow', () => {
         createDefaultInputs(),
         'pull_request',
         EVENT_PAYLOAD_PATH,
-        NO_MATCH_EMPTY_FAST_MODEL_FIXTURES_DIR
+        NO_MATCH_EMPTY_AUXILIARY_MODEL_FIXTURES_DIR
       );
 
       expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(

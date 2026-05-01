@@ -287,7 +287,9 @@ export interface ResolvedTrigger {
   /** Runtime backend for all model-backed execution. */
   runtime?: RuntimeName;
   /** Model for auxiliary structured model calls. */
-  fastModelModel?: string;
+  auxiliaryModel?: string;
+  /** Model for post-analysis synthesis/consolidation. */
+  synthesisModel?: string;
   /** Max retries for auxiliary structured model calls. */
   auxiliaryMaxRetries?: number;
   /** Minimum confidence for findings (merged: trigger > skill > defaults) */
@@ -332,8 +334,13 @@ export function resolveSkillConfigs(
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
   const result: ResolvedTrigger[] = [];
   const runtime = defaults?.runtime ?? 'claude';
-  const fastModelModel = emptyToUndefined(defaults?.fastModel?.model);
-  const auxiliaryMaxRetries = defaults?.fastModel?.maxRetries ?? defaults?.auxiliaryMaxRetries;
+  const auxiliaryModel = emptyToUndefined(defaults?.auxiliary?.model);
+  const synthesisModel =
+    emptyToUndefined(defaults?.synthesis?.model) ??
+    auxiliaryModel;
+  const auxiliaryMaxRetries =
+    defaults?.auxiliary?.maxRetries ??
+    defaults?.auxiliaryMaxRetries;
 
   for (const skill of config.skills) {
     const baseModel =
@@ -374,7 +381,8 @@ export function resolveSkillConfigs(
         model: baseModel,
         maxTurns: baseMaxTurns,
         runtime,
-        fastModelModel,
+        auxiliaryModel,
+        synthesisModel,
         auxiliaryMaxRetries,
         minConfidence: skill.minConfidence ?? defaults?.minConfidence,
         batchDelayMs: defaults?.batchDelayMs,
@@ -401,7 +409,8 @@ export function resolveSkillConfigs(
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
           runtime,
-          fastModelModel,
+          auxiliaryModel,
+          synthesisModel,
           auxiliaryMaxRetries,
           minConfidence: trigger.minConfidence ?? skill.minConfidence ?? defaults?.minConfidence,
           batchDelayMs: defaults?.batchDelayMs,

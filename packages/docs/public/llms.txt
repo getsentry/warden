@@ -249,16 +249,23 @@ Default settings inherited by all skills. Individual skills can override any set
 
 ```toml
 [defaults]
-model = "claude-sonnet-4-20250514"
+model = "claude-sonnet-4-5"
 maxTurns = 30
 failOn = "high"
 reportOn = "medium"
 requestChanges = false
 failCheck = false
 ignorePaths = ["**/vendor/**", "**/node_modules/**"]
+
+[defaults.auxiliary]
+model = "claude-haiku-4-5"
+
+[defaults.synthesis]
+model = "claude-opus-4-5"
 ```
 
 Model precedence: trigger > skill > defaults > CLI flag (`-m`) > env var (`WARDEN_MODEL`). Most specific wins.
+Synthesis fallback: `defaults.synthesis.model` falls back to `defaults.auxiliary.model` when not set.
 
 ### Chunking
 
