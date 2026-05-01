@@ -297,6 +297,8 @@ export async function runSkillTasksWithInk(
   let interrupted = false;
   let failFastTriggered = false;
 
+  process.stderr.write(`${chalk.bold('SKILLS')}\n`);
+
   // Create Ink instance
   const { rerender, unmount, clear } = render(
     <SkillRunner skills={skillStates} warnings={[]} interrupted={false} failFastTriggered={false} />,
@@ -448,7 +450,6 @@ export async function runSkillTasksWithInk(
   clear();
   unmount();
 
-  process.stderr.write(`${chalk.bold('SKILLS')}\n`);
   printSkillSummary(skillStates);
 
   return results;

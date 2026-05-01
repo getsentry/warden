@@ -109,6 +109,9 @@ outputFiles:
   - SPEC.md
   - SOURCES.md
   - plan.json
+  - feedback/records.jsonl
+  - feedback/plan-lessons.md
+  - feedback/tasks/<task-id>/lessons.md
   - tasks/<task-id>/SKILL.md
   - tasks/<task-id>/SPEC.md
   - tasks/<task-id>/SOURCES.md
@@ -176,7 +179,8 @@ Useful improvement sources:
 
 - Generated plan records and child skill metadata.
 - Warden CLI run output and JSON logs from Superwarden synthesis.
-- User feedback on missing task coverage, false positives, and duplicate reports.
+- Distilled Superwarden feedback records and lesson files under \`feedback/\`.
+- User feedback on missing task coverage, false positives, duplicate reports, and task ownership drift.
 - Public security guidance used during parent or child synthesis.
 
 Data that must not be stored:
@@ -190,6 +194,7 @@ Data that must not be stored:
 - \`SPEC.md\` contains the maintenance contract for the parent Superwarden skill.
 - \`SOURCES.md\` contains source provenance, decisions, coverage, gaps, and changelog.
 - \`plan.json\` contains the validated plan and child synthesis metadata.
+- \`feedback/\` contains durable improvement records and distilled lessons that feed future synthesis.
 - \`tasks/<task-id>/\` contains runnable child skill artifacts.
 
 ## Evaluation
@@ -210,6 +215,7 @@ Data that must not be stored:
 - Update \`SKILL.md\` when the parent runtime prompt or trigger behavior changes.
 - Update \`${COORDINATOR_METADATA_FILE}\` when the initial prompt or generated artifact contract changes.
 - Update \`SOURCES.md\` when source provenance, coverage, decisions, gaps, or synthesis rationale changes.
+- Use \`warden improve <name> --from <run.jsonl>\` to store validated findings and regenerate lessons.
 - Regenerate cached plans and child skills after changing parent intent, runtime contract, or source files.
 `, 'utf-8');
 

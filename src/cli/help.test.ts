@@ -7,6 +7,7 @@ describe('renderHelp', () => {
 
     expect(output).toContain('Commands:');
     expect(output).toContain('Global Options:');
+    expect(output).toContain('improve <skill>');
     expect(output).toContain('synth <skill>');
     expect(output).not.toContain('Ignore cached Superwarden artifacts and synthesize again');
     expect(output).not.toContain('--org <name>');
@@ -21,6 +22,16 @@ describe('renderHelp', () => {
     expect(output).toContain('--show-plan');
     expect(output).not.toContain('--description');
     expect(output).not.toContain('--org <name>');
+  });
+
+  it('renders improve help with feedback import options only', () => {
+    const output = renderHelp('improve');
+
+    expect(output).toContain('warden improve <skill> --from <run.jsonl> [options]');
+    expect(output).toContain('--from <jsonl>');
+    expect(output).toContain('--parallel <n>');
+    expect(output).not.toContain('--prompt <value>');
+    expect(output).not.toContain('--show-plan');
   });
 
   it('renders shared output flags on non-run commands that accept them', () => {

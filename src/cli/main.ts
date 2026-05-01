@@ -53,6 +53,7 @@ import {
 import { UserAbortError } from './input.js';
 import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
+import { runImprove } from './commands/improve.js';
 import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
@@ -1656,6 +1657,8 @@ export async function main(): Promise<void> {
           return runSetupApp(setupAppOptions, reporter);
         case 'sync':
           return runSync(options, reporter);
+        case 'improve':
+          return runImprove(options, reporter, { abortController, interrupted });
         case 'runs':
           if (!runsOptions) {
             reporter.error('Missing runs options');

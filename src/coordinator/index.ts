@@ -52,6 +52,22 @@ export {
   writeCoordinatorChildSkills as writeSuperwardenChildSkills,
 } from './child-skills.js';
 
+export {
+  appendCoordinatorFeedbackRecords,
+  buildCoordinatorFeedbackFingerprint,
+  buildCoordinatorTaskSource,
+  collectCoordinatorPlanFeedbackFiles,
+  collectCoordinatorTaskFeedbackFiles,
+  CoordinatorFeedbackRecordSchema,
+  CoordinatorFeedbackVerdictSchema,
+  getCoordinatorFeedbackRecordsPath,
+  getCoordinatorFeedbackRoot,
+  getCoordinatorPlanLessonsPath,
+  getCoordinatorTaskLessonsPath,
+  loadCoordinatorFeedbackRecords,
+  writeCoordinatorFeedbackLessons,
+} from './feedback.js';
+
 export type {
   CoordinatorPlan,
   CoordinatorMetadata,
@@ -76,6 +92,12 @@ export type {
   CoordinatorChildSkillArtifact,
   WriteCoordinatorChildSkillsResult,
 } from './child-skills.js';
+
+export type {
+  CoordinatorFeedbackRecord,
+  CoordinatorFeedbackVerdict,
+  WriteCoordinatorFeedbackLessonsResult,
+} from './feedback.js';
 
 export type {
   CoordinatorChildSkillArtifact as SuperwardenChildSkillArtifact,

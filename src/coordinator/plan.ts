@@ -18,6 +18,7 @@ import type { Runtime, RuntimeName } from '../sdk/runtimes/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import { UsageStatsSchema, type UsageStats } from '../types/index.js';
 import { runStructuredSuperwardenAgent, StructuredSuperwardenAgentError } from './agentic.js';
+import { collectCoordinatorPlanFeedbackFiles } from './feedback.js';
 
 export const COORDINATOR_PLAN_SCHEMA_VERSION = 1;
 export const COORDINATOR_PLAN_CACHE_SCHEMA_VERSION = 1;
@@ -125,6 +126,7 @@ export interface SynthesizeCoordinatorPlanOptions {
   runtimeName?: RuntimeName;
   apiKey?: string;
   model?: string;
+  previousPlan?: CoordinatorPlan;
   maxRetries?: number;
   regenerate?: boolean;
   abortController?: AbortController;
@@ -227,6 +229,7 @@ export function collectCoordinatorSource(skill: SkillDefinition): CoordinatorSou
       }
     }
     files.push(...collectReferenceFiles(skill.rootDir));
+    files.push(...collectCoordinatorPlanFeedbackFiles(skill.rootDir));
   }
 
   const hashInput = JSON.stringify({
@@ -354,7 +357,35 @@ function validatePlanIdentity(plan: CoordinatorPlan, skillName: string, sourceHa
   }
 }
 
-function buildSynthesisPrompt(skill: SkillDefinition, source: CoordinatorSource): string {
+function renderPreviousPlanContinuity(previousPlan: CoordinatorPlan | undefined): string {
+  if (!previousPlan || previousPlan.tasks.length === 0) {
+    return '';
+  }
+
+  const previousTasks = previousPlan.tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    scope: task.scope,
+  }));
+
+  return `
+
+Existing task continuity:
+- Reuse an existing task id exactly when the same concern still exists after regeneration.
+- Only create a new task id when a concern is genuinely new.
+- If one previous task splits into multiple tasks, keep the previous id on the primary surviving concern and mint new ids only for the new sibling concerns.
+- If multiple previous tasks merge, keep the id of the task whose concern remains primary.
+- Do not rename tasks casually. Stable ids matter because feedback, cached child skills, and committed artifacts are keyed by task id.
+
+Previous task set:
+${JSON.stringify(previousTasks, null, 2)}`;
+}
+
+function buildSynthesisPrompt(
+  skill: SkillDefinition,
+  source: CoordinatorSource,
+  previousPlan?: CoordinatorPlan,
+): string {
   const sourceBlocks = source.files
     .map((file) => `## ${file.path}\n\n${file.content}`)
     .join('\n\n---\n\n');
@@ -393,6 +424,7 @@ Rules:
 - Do not ask follow-up questions or return prose. If context is missing, still return valid JSON and put that context in synthesis.missingInputs.
 - Keep all generated task instructions executable by Warden's normal hunk analysis model: tasks must be focused, inspectable, and able to return an empty findings array when evidence is insufficient.
 - Do not rely on Claude Code Task delegation, hidden subagents, or side-effect tools.
+${previousPlan ? '- Preserve prior task ids when the same concerns still exist. Task id continuity matters for feedback, cached child skills, and committed artifacts.' : ''}
 
 JSON shape:
 {
@@ -436,6 +468,8 @@ Quality bar:
 
 Skill description:
 ${skill.description}
+
+${renderPreviousPlanContinuity(previousPlan)}
 
 Source material:
 
@@ -622,7 +656,7 @@ export async function synthesizeCoordinatorPlan(
         repoPath: options.repoPath,
         skillName: `${skill.name}:superwarden-plan`,
         systemPrompt: buildSynthesisSystemPrompt(),
-        userPrompt: buildSynthesisPrompt(skill, source),
+        userPrompt: buildSynthesisPrompt(skill, source, options.previousPlan),
         schema: CoordinatorPlanSchema,
         model,
         maxTurns: options.maxTurns ?? SUPERWARDEN_SYNTHESIS_MAX_TURNS,
@@ -662,7 +696,7 @@ export async function synthesizeCoordinatorPlan(
   const result = await runtime.runSynthesis({
     task: 'superwarden_synthesis',
     apiKey,
-    prompt: buildSynthesisPrompt(skill, source),
+    prompt: buildSynthesisPrompt(skill, source, options.previousPlan),
     schema: CoordinatorPlanSchema,
     model,
     maxTokens: SUPERWARDEN_SYNTHESIS_MAX_TOKENS,

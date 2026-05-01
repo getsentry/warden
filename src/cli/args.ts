@@ -55,6 +55,8 @@ export const CLIOptionsSchema = z.object({
   exportPath: z.string().optional(),
   /** Prompt for creating a new Superwarden skill. Prefix with @ to load from a file. */
   prompt: z.string().optional(),
+  /** Import findings from one or more JSONL run logs for Superwarden improvement. */
+  from: z.array(z.string()).optional(),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -77,7 +79,7 @@ export interface RunsOptions {
 }
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'synthesize';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'synthesize' | 'improve';
   options: CLIOptions;
   helpTarget?: HelpTarget;
   setupAppOptions?: SetupAppOptions;
@@ -130,6 +132,8 @@ function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTa
     case 'synth':
     case 'synthesize':
       return 'synthesize';
+    case 'improve':
+      return 'improve';
     case 'setup-app':
       return 'setup-app';
     case 'runs':
@@ -288,6 +292,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       regenerate: { type: 'boolean', default: false },
       export: { type: 'string' },
       prompt: { type: 'string', short: 'p' },
+      from: { type: 'string', multiple: true },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
       staged: { type: 'boolean', default: false },
@@ -395,6 +400,22 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         parallel: typeof values.parallel === 'string' ? parseInt(values.parallel, 10) : undefined,
         remote: typeof values.remote === 'string' ? values.remote : undefined,
         offline: Boolean(values.offline),
+      }),
+    };
+  }
+
+  if (command === 'improve') {
+    return {
+      command: 'improve',
+      options: parseCliOptions({
+        ...sharedOptions(values, verboseCount),
+        skill: typeof values.skill === 'string' ? values.skill : rest[0],
+        config: typeof values.config === 'string' ? values.config : undefined,
+        model: typeof values.model === 'string' ? values.model : undefined,
+        parallel: typeof values.parallel === 'string' ? parseInt(values.parallel, 10) : undefined,
+        from: Array.isArray(values.from)
+          ? values.from.filter((value): value is string => typeof value === 'string')
+          : undefined,
       }),
     };
   }

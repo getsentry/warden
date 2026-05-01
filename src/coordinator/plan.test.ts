@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Runtime } from '../sdk/runtimes/index.js';
@@ -172,6 +172,30 @@ coverage:
     expect(JSON.parse(readFileSync(result.cachePath, 'utf-8')).plan.tasks[0].id).toBe('authz');
   });
 
+  it('passes previous task ids into synthesis when regenerating an existing plan', async () => {
+    const skill = createSkill();
+    const source = collectCoordinatorSource(skill);
+    const previousPlan = createPlan(skill, source.hash);
+    const runtime = createRuntime(previousPlan);
+
+    const result = await synthesizeCoordinatorPlan({
+      skill,
+      runtime,
+      previousPlan,
+    });
+
+    expect(result.source).toBe('generated');
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('Existing task continuity'),
+    }));
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('"id": "authz"'),
+    }));
+    expect(runtime.runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('Do not rename tasks casually'),
+    }));
+  });
+
   it('uses an agentic Superwarden synthesis run when repo context is available', async () => {
     const skill = createSkill();
     const source = collectCoordinatorSource(skill);
@@ -216,6 +240,20 @@ initialPrompt: Create a narrower security Superwarden skill.
 
     const updatedSource = collectCoordinatorSource(skill);
     expect(updatedSource.hash).not.toBe(firstSource.hash);
+  });
+
+  it('includes plan lessons in parent source identity but excludes task-local lessons', () => {
+    const skill = createSkill();
+    const planLessonsPath = join(skill.rootDir!, 'feedback', 'plan-lessons.md');
+    const taskLessonsPath = join(skill.rootDir!, 'feedback', 'tasks', 'authz', 'lessons.md');
+    mkdirSync(dirname(taskLessonsPath), { recursive: true });
+    writeFileSync(planLessonsPath, '# Plan Lessons\n\nTighten ownership.\n');
+    writeFileSync(taskLessonsPath, '# Task Lessons\n\nAvoid public routes.\n');
+
+    const source = collectCoordinatorSource(skill);
+
+    expect(source.files.map((file) => file.path)).toContain('feedback/plan-lessons.md');
+    expect(source.files.map((file) => file.path)).not.toContain('feedback/tasks/authz/lessons.md');
   });
 
   it('rejects Superwarden metadata for a different skill', () => {

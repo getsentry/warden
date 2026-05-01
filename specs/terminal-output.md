@@ -66,7 +66,7 @@ Design terminal output as three layers:
 1. Invocation context
    Examples: skill name, source path, model, repo path
 2. Progress sections
-   Examples: `PLAN`, `TASKS`, `FILES`, `TRY IT`
+   Examples: `PLAN`, `TASKS`, `SKILLS`, `FILES`, `TRY IT`
 3. Final payload or summary
    Examples: findings report, exported JSON, generated artifact inspection
 
@@ -115,6 +115,7 @@ Examples:
 
 - `FILES  12 files`
 - `TASKS  6 tasks`
+- `SKILLS`
 - `PLAN`
 
 Annotated example:

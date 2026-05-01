@@ -28,6 +28,7 @@ type HelpOptionId =
   | 'regenerate'
   | 'export'
   | 'prompt'
+  | 'from'
   | 'org'
   | 'port'
   | 'timeout'
@@ -41,6 +42,7 @@ export type HelpTarget =
   | 'init'
   | 'add'
   | 'sync'
+  | 'improve'
   | 'synthesize'
   | 'setup-app'
   | 'runs'
@@ -190,6 +192,11 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
     description: 'Create a missing Superwarden skill from prompt text',
     continuation: 'Prefix with @ to read the prompt from a file',
   },
+  from: {
+    label: '--from <jsonl>',
+    description: 'Import findings from a JSONL run log',
+    continuation: 'Repeat to import multiple logs',
+  },
   org: {
     label: '--org <name>',
     description: 'Create under an organization instead of a personal account',
@@ -300,6 +307,19 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     examples: [
       'warden sync',
       'warden sync getsentry/skills',
+    ],
+  },
+  improve: {
+    summary: 'Feed findings back into a Superwarden skill',
+    description: 'Import labeled findings from saved JSONL runs, distill lessons, and regenerate affected Superwarden artifacts.',
+    usage: ['warden improve <skill> --from <run.jsonl> [options]'],
+    arguments: [
+      { label: 'skill', description: 'Repo-local Superwarden skill name' },
+    ],
+    options: ['cwd', 'config', 'model', 'parallel', 'from', ...SHARED_COMMAND_OPTIONS],
+    examples: [
+      'warden improve security --from .warden/logs/a1b2c3d4-2026-04-25T13-00-00-000Z.jsonl',
+      'warden improve security --from run-a.jsonl --from run-b.jsonl',
     ],
   },
   synthesize: {
@@ -420,6 +440,7 @@ const ROOT_COMMANDS: { label: string; summary: string }[] = [
   { label: 'init', summary: 'Initialize Warden configuration' },
   { label: 'add [skill]', summary: 'Add a skill trigger to warden.toml' },
   { label: 'sync [remote]', summary: 'Update cached remote skills to latest' },
+  { label: 'improve <skill>', summary: 'Feed findings back into a Superwarden skill' },
   { label: 'synth <skill>', summary: 'Create or synthesize a Superwarden skill' },
   { label: 'runs', summary: 'Inspect saved sessions and run logs' },
   { label: 'setup-app', summary: 'Create a GitHub App via manifest flow' },
@@ -466,6 +487,7 @@ function renderRootHelp(): string {
     ...renderSection('Examples:', [
       '  warden src/auth.ts',
       '  warden HEAD~3 --skill security-review',
+      '  warden improve security --from .warden/logs/latest.jsonl',
       '  warden synth security-review --show-plan',
       '  warden help runs show',
     ]),

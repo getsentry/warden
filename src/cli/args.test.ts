@@ -122,6 +122,12 @@ describe('parseCliArgs', () => {
     expect(result.helpTarget).toBe('runs:show');
   });
 
+  it('resolves improve help via --help', () => {
+    const result = parseCliArgs(['improve', 'security', '--help']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('improve');
+  });
+
   it('treats run targets with --help as run help', () => {
     const result = parseCliArgs(['src/auth.ts', '--help']);
     expect(result.command).toBe('help');
@@ -150,6 +156,23 @@ describe('parseCliArgs', () => {
     expect(result.command).toBe('synthesize');
     expect(result.options.skill).toBe('security-review');
     expect(result.options.parallel).toBe(3);
+  });
+
+  it('parses improve with repeated --from inputs', () => {
+    const result = parseCliArgs([
+      'improve',
+      'security',
+      '--from',
+      'run-a.jsonl',
+      '--from',
+      'run-b.jsonl',
+      '--parallel',
+      '2',
+    ]);
+    expect(result.command).toBe('improve');
+    expect(result.options.skill).toBe('security');
+    expect(result.options.from).toEqual(['run-a.jsonl', 'run-b.jsonl']);
+    expect(result.options.parallel).toBe(2);
   });
 
   it('does not set parallel when not provided', () => {

@@ -19,6 +19,12 @@ Superwarden is Warden's system for broad review skills that synthesize into focu
 ├── SPEC.md
 ├── SOURCES.md
 ├── warden.yaml
+├── feedback/
+│   ├── records.jsonl
+│   ├── plan-lessons.md
+│   └── tasks/
+│       └── <task-id>/
+│           └── lessons.md
 ├── plan.json
 └── tasks/
     └── <task-id>/
@@ -33,7 +39,7 @@ Superwarden artifacts are repo-local and intentionally separate from `.agents/sk
 
 `warden synth [skill]` resolves an existing Superwarden skill or creates one when the skill is missing and an initial prompt is provided interactively or with `--prompt`. `warden synthesize` remains an alias. `--prompt @path/to/file.md` loads the prompt from a file.
 
-Synthesis reads `SKILL.md`, `warden.yaml`, `SPEC.md`, `SOURCES.md`, and markdown files under `references/`. The plan path is stable per Superwarden skill, while the cached contents inside `plan.json` are validated against the current source hash, requested synthesis model, and Superwarden plan version before reuse. The parent plan record stores the Superwarden plan plus synthesis metadata for the parent and child skills.
+Synthesis reads `SKILL.md`, `warden.yaml`, `SPEC.md`, `SOURCES.md`, markdown files under `references/`, and distilled plan lessons from `feedback/plan-lessons.md`. Child-task synthesis also reads `feedback/tasks/<task-id>/lessons.md` for the matching task. The plan path is stable per Superwarden skill, while the cached contents inside `plan.json` are validated against the current source hash, requested synthesis model, and Superwarden plan version before reuse. The parent plan record stores the Superwarden plan plus synthesis metadata for the parent and child skills.
 
 Superwarden synthesis is a sequence of agent-quality synthesis runs, not a cheap splitter. The parent plan synthesis must:
 
@@ -48,6 +54,18 @@ Superwarden synthesis is a sequence of agent-quality synthesis runs, not a cheap
 After the parent plan is generated, each child task gets its own full synthesis run. Child synthesis must inspect relevant local source and public prior art, then write `SKILL.md`, `SPEC.md`, and `SOURCES.md` for that child. The child skill `name` must match the task directory name so normal skill validation works against repo-local task artifacts. The parent plan record stores each child task hash, source hash, generation duration, token usage, cost, response model, turn count, artifact size, and external source count so repeated runs can reuse validated child artifacts without hiding the cost of the original synthesis.
 
 CLI output should show parent synthesis first, then one progress/result row per task synthesis or cache load. Generated tasks should show artifact size, generation duration, token usage, cost, source count, and turn count. Cached tasks should be visually marked as cached without implying a new duration or new token usage.
+
+## Improvement
+
+`warden improve <skill> --from <run.jsonl>` imports findings from saved Warden JSONL logs, lets a human label them as confirmed findings, false positives, duplicates, severity mistakes, or task-ownership mistakes, then stores the result under `feedback/records.jsonl`.
+
+Improvement feedback is durable repo-local memory, not ephemeral log data:
+
+- `feedback/records.jsonl` is append-only and stores labeled finding snapshots with run metadata.
+- `feedback/plan-lessons.md` distills plan-level feedback that should change task decomposition, ownership, or boundaries.
+- `feedback/tasks/<task-id>/lessons.md` distills task-local feedback that should change one child skill's precision, exclusions, or calibration.
+
+Plan-level lesson changes force a full parent-plan regeneration. Task-local lesson changes regenerate only the affected child skills while keeping the current plan.
 
 After a plan is loaded or generated, Warden writes child skills under that parent skill's repo-local `tasks/` directory. The parent Superwarden skill can be run like a normal skill, including when it is only present under `.warden/superwarden/<name>/` and not configured in `warden.toml`:
 
