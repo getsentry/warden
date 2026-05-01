@@ -137,7 +137,7 @@ Example:
 
 ```text
   Skill    security
-  Source   .warden/superwarden/security
+  Source   .warden/skills/security
   Model    default [claude]
 ```
 
@@ -230,7 +230,7 @@ Annotated example:
 
 ```text
 ⠧ Identify critical vulnerabilities in the codebase [11.8s]
-Synthesizing Superwarden plan... This can take a minute.
+Synthesizing outline from the skill definition. This can take a minute.
 ```
 
 - first line: active row with live elapsed timer
@@ -271,9 +271,9 @@ Use for one long-running operation with one primary status label.
 Reference example from `synth`:
 
 ```text
-PLAN
+OUTLINE
 ⠴ Identify authorization weaknesses in the changed code [6.2s]
-Validating cached Superwarden plan...
+Validating cached synthesized skill outline...
 ```
 
 Use this when:

@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupArtifacts } from './log-cleanup.js';
-import { runImprove } from './commands/improve.js';
 import { runSynthesize } from './commands/synthesize.js';
 import { main } from './main.js';
 
@@ -23,16 +22,11 @@ vi.mock('./commands/synthesize.js', () => ({
   runSynthesize: vi.fn(async () => 0),
 }));
 
-vi.mock('./commands/improve.js', () => ({
-  runImprove: vi.fn(async () => 0),
-}));
-
 vi.mock('./log-cleanup.js', () => ({
   cleanupArtifacts: vi.fn(async () => undefined),
 }));
 
 const runSynthesizeMock = vi.mocked(runSynthesize);
-const runImproveMock = vi.mocked(runImprove);
 const cleanupArtifactsMock = vi.mocked(cleanupArtifacts);
 
 describe('main --cwd', () => {
@@ -46,8 +40,6 @@ describe('main --cwd', () => {
     process.exit = vi.fn() as never;
     runSynthesizeMock.mockReset();
     runSynthesizeMock.mockResolvedValue(0);
-    runImproveMock.mockReset();
-    runImproveMock.mockResolvedValue(0);
     cleanupArtifactsMock.mockReset();
     cleanupArtifactsMock.mockResolvedValue(0);
   });
@@ -99,49 +91,6 @@ describe('main --cwd', () => {
     expect(cleanupArtifactsMock).toHaveBeenCalledWith(expect.objectContaining({
       dir: join(resolvedTargetDir, '.warden', 'logs'),
     }));
-    expect(process.exit).toHaveBeenCalledWith(0);
-  });
-
-  it('changes to the requested cwd before dispatching the improve command', async () => {
-    const launcherDir = join(tempDir, 'launcher');
-    const targetDir = join(tempDir, 'workspace');
-    mkdirSync(launcherDir, { recursive: true });
-    mkdirSync(targetDir, { recursive: true });
-    process.chdir(launcherDir);
-    const resolvedTargetDir = realpathSync(targetDir);
-
-    let invokedCwd: string | undefined;
-    runImproveMock.mockImplementationOnce(async () => {
-      invokedCwd = process.cwd();
-      return 0;
-    });
-
-    process.argv = [
-      'node',
-      'warden',
-      '-C',
-      '../workspace',
-      'improve',
-      'security',
-      '--from',
-      'run.jsonl',
-      '--quiet',
-    ];
-
-    await main();
-
-    expect(invokedCwd).toBe(resolvedTargetDir);
-    expect(process.cwd()).toBe(resolvedTargetDir);
-    expect(runImproveMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: '../workspace',
-        quiet: true,
-        skill: 'security',
-        from: ['run.jsonl'],
-      }),
-      expect.anything(),
-      expect.anything(),
-    );
     expect(process.exit).toHaveBeenCalledWith(0);
   });
 });

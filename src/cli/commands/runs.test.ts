@@ -45,7 +45,6 @@ function createDefaultOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     offline: false,
     failFast: false,
     log: false,
-    showPlan: false,
     regenerate: false,
     ...overrides,
   };

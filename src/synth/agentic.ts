@@ -6,11 +6,11 @@ import { parseJsonFromOutput, type ParseJsonFromOutputResult } from '../sdk/json
 import { aggregateUsage, emptyUsage } from '../sdk/usage.js';
 import type { Runtime, SkillRunResult } from '../sdk/runtimes/index.js';
 
-const SUPERWARDEN_AGENT_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
+const SYNTH_AGENT_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
 const STRUCTURED_REPAIR_MAX_TURNS = 1;
 const STRUCTURED_REPAIR_MAX_CHARS = 60_000;
 
-export interface StructuredSuperwardenAgentResult<T> {
+export interface StructuredSynthAgentResult<T> {
   data: T;
   usage: UsageStats;
   durationMs: number;
@@ -18,7 +18,7 @@ export interface StructuredSuperwardenAgentResult<T> {
   numTurns?: number;
 }
 
-interface StructuredSuperwardenAgentFailureDetails {
+interface StructuredSynthAgentFailureDetails {
   rawText?: string;
   stderr?: string;
   usage?: UsageStats;
@@ -27,10 +27,10 @@ interface StructuredSuperwardenAgentFailureDetails {
   numTurns?: number;
 }
 
-export class StructuredSuperwardenAgentError extends Error {
+export class StructuredSynthAgentError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
-    this.name = 'StructuredSuperwardenAgentError';
+    this.name = 'StructuredSynthAgentError';
   }
 }
 
@@ -48,7 +48,7 @@ function previewText(value: string | undefined, maxLength = 1200): string {
   return `${trimmed.slice(0, maxLength)}...`;
 }
 
-function formatAgentFailure(message: string, details: StructuredSuperwardenAgentFailureDetails): string {
+function formatAgentFailure(message: string, details: StructuredSynthAgentFailureDetails): string {
   const lines = [message];
   if (details.responseModel) {
     lines.push(`  Model: ${details.responseModel}`);
@@ -81,7 +81,7 @@ function resultFailureDetails(
   result: SkillRunResult | undefined,
   stderr: string | undefined,
   startedAt: number,
-): StructuredSuperwardenAgentFailureDetails {
+): StructuredSynthAgentFailureDetails {
   return {
     rawText: result?.text,
     stderr,
@@ -128,7 +128,7 @@ Model output:
 ${truncateForRepair(args.output)}`;
 }
 
-async function repairStructuredSuperwardenOutput<T>(args: {
+async function repairStructuredSynthOutput<T>(args: {
   runtime: Runtime;
   repoPath: string;
   skillName: string;
@@ -197,7 +197,7 @@ async function repairStructuredSuperwardenOutput<T>(args: {
   };
 }
 
-export async function runStructuredSuperwardenAgent<T>(args: {
+export async function runStructuredSynthAgent<T>(args: {
   runtime: Runtime;
   repoPath: string;
   skillName: string;
@@ -212,7 +212,7 @@ export async function runStructuredSuperwardenAgent<T>(args: {
     model?: string;
     maxRetries?: number;
   };
-}): Promise<StructuredSuperwardenAgentResult<T>> {
+}): Promise<StructuredSynthAgentResult<T>> {
   const startedAt = performance.now();
   const { runtime } = args;
   const response = await runtime.runSkill({
@@ -220,7 +220,7 @@ export async function runStructuredSuperwardenAgent<T>(args: {
     userPrompt: args.userPrompt,
     repoPath: args.repoPath,
     skillName: args.skillName,
-    tools: { allowed: SUPERWARDEN_AGENT_TOOLS },
+    tools: { allowed: SYNTH_AGENT_TOOLS },
     options: {
       model: args.model,
       maxTurns: args.maxTurns,
@@ -229,16 +229,16 @@ export async function runStructuredSuperwardenAgent<T>(args: {
   });
 
   if (response.authError) {
-    throw new StructuredSuperwardenAgentError(response.authError);
+    throw new StructuredSynthAgentError(response.authError);
   }
   if (!response.result) {
-    throw new StructuredSuperwardenAgentError(formatAgentFailure(
-      'Superwarden agent returned no result',
+    throw new StructuredSynthAgentError(formatAgentFailure(
+      'Synth agent returned no result',
       resultFailureDetails(undefined, response.stderr, startedAt),
     ));
   }
   if (response.result.status !== 'success') {
-    throw new StructuredSuperwardenAgentError(formatAgentFailure(
+    throw new StructuredSynthAgentError(formatAgentFailure(
       formatRuntimeFailure(response.result),
       resultFailureDetails(response.result, response.stderr, startedAt),
     ));
@@ -250,7 +250,7 @@ export async function runStructuredSuperwardenAgent<T>(args: {
     schema: args.schema,
   });
   if (!parsed.success) {
-    const skillRepair = await repairStructuredSuperwardenOutput({
+    const skillRepair = await repairStructuredSynthOutput({
       runtime,
       repoPath: args.repoPath,
       skillName: args.skillName,
@@ -293,11 +293,11 @@ export async function runStructuredSuperwardenAgent<T>(args: {
 
   if (!parsed.success) {
     const label = parsed.error.startsWith('no_json')
-      ? `Superwarden agent returned no JSON: ${parsed.error}`
+      ? `Synth agent returned no JSON: ${parsed.error}`
       : parsed.error.startsWith('invalid_json')
-        ? `Superwarden agent returned invalid JSON: ${parsed.error}`
-        : `Superwarden agent output failed validation or repair: ${parsed.error}`;
-    throw new StructuredSuperwardenAgentError(
+        ? `Synth agent returned invalid JSON: ${parsed.error}`
+        : `Synth agent output failed validation or repair: ${parsed.error}`;
+    throw new StructuredSynthAgentError(
       formatAgentFailure(
         label,
         {

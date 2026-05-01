@@ -208,7 +208,7 @@ describe('claudeRuntime.runSkill', () => {
       systemPrompt: 'system',
       userPrompt: 'user',
       repoPath: '/repo',
-      skillName: 'superwarden-child',
+      skillName: 'generated-skill-track',
       tools: { allowed: ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'] },
       options: {},
     });

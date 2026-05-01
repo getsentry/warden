@@ -15,7 +15,7 @@ describe('npm package contents', () => {
     expect(ignored.ignores('skills/warden/SPEC.md')).toBe(false);
     expect(ignored.ignores('skills/wrdn-skill-writer/SPEC.md')).toBe(false);
     expect(ignored.ignores('skills/wrdn-parent-skill-writer/SPEC.md')).toBe(false);
-    expect(ignored.ignores('.warden/superwarden/security-review/SKILL.md')).toBe(true);
-    expect(ignored.ignores('specs/superwarden.md')).toBe(true);
+    expect(ignored.ignores('.warden/skills/security/SKILL.md')).toBe(true);
+    expect(ignored.ignores('specs/synthesized-skills.md')).toBe(true);
   });
 });

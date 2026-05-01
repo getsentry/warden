@@ -33,10 +33,6 @@ export const SkillDefinitionSchema = z.object({
 });
 export type SkillDefinition = z.infer<typeof SkillDefinitionSchema>;
 
-/** "coordinator" is the current config marker for Superwarden skills. */
-export const SkillExecutionModeSchema = z.enum(['direct', 'coordinator']);
-export type SkillExecutionMode = z.infer<typeof SkillExecutionModeSchema>;
-
 // Schedule-specific configuration
 export const ScheduleConfigSchema = z.object({
   /** Title for the tracking issue (default: "Warden: {skillName}") */
@@ -116,8 +112,6 @@ export type SkillTrigger = z.infer<typeof SkillTriggerSchema>;
 // Skill configuration (top-level [[skills]])
 export const SkillConfigSchema = z.object({
   name: z.string().min(1),
-  /** Execution strategy. Use "coordinator" for Superwarden skills. Omit for normal direct skill execution. */
-  mode: SkillExecutionModeSchema.optional(),
   /** Path patterns to include */
   paths: z.array(z.string()).optional(),
   /** Path patterns to exclude */

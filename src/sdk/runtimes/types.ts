@@ -80,7 +80,7 @@ export type AuxiliaryTask =
 
 export type SynthesisTask =
   | 'consolidation'
-  | 'superwarden_synthesis';
+  | 'skill_synthesis';
 
 export type AuxiliaryRunResult<T> =
   | { success: true; data: T; usage: UsageStats }

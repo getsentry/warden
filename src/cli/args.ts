@@ -47,16 +47,10 @@ export const CLIOptionsSchema = z.object({
   offline: z.boolean().default(false),
   /** Stop after first finding */
   failFast: z.boolean().default(false),
-  /** Show the synthesized Superwarden plan */
-  showPlan: z.boolean().default(false),
-  /** Regenerate a Superwarden plan even when a cached plan exists */
+  /** Regenerate synthesized skill artifacts even when a cached outline exists */
   regenerate: z.boolean().default(false),
-  /** Export a Superwarden plan JSON artifact to this path */
-  exportPath: z.string().optional(),
-  /** Prompt for creating a new Superwarden skill. Prefix with @ to load from a file. */
+  /** Prompt for creating a new synthesized skill. Prefix with @ to load from a file. */
   prompt: z.string().optional(),
-  /** Import findings from one or more JSONL run logs for Superwarden improvement. */
-  from: z.array(z.string()).optional(),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -79,7 +73,7 @@ export interface RunsOptions {
 }
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'synthesize' | 'improve';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'synthesize';
   options: CLIOptions;
   helpTarget?: HelpTarget;
   setupAppOptions?: SetupAppOptions;
@@ -132,8 +126,6 @@ function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTa
     case 'synth':
     case 'synthesize':
       return 'synthesize';
-    case 'improve':
-      return 'improve';
     case 'setup-app':
       return 'setup-app';
     case 'runs':
@@ -288,11 +280,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       remote: { type: 'string' },
       offline: { type: 'boolean', default: false },
       'fail-fast': { type: 'boolean', short: 'x', default: false },
-      'show-plan': { type: 'boolean', default: false },
       regenerate: { type: 'boolean', default: false },
-      export: { type: 'string' },
       prompt: { type: 'string', short: 'p' },
-      from: { type: 'string', multiple: true },
       parallel: { type: 'string' },
       git: { type: 'boolean', default: false },
       staged: { type: 'boolean', default: false },
@@ -393,29 +382,10 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         config: typeof values.config === 'string' ? values.config : undefined,
         model: typeof values.model === 'string' ? values.model : undefined,
         json: Boolean(values.json),
-        showPlan: Boolean(values['show-plan']),
         regenerate: Boolean(values.regenerate),
-        exportPath: typeof values.export === 'string' ? values.export : undefined,
         prompt: typeof values.prompt === 'string' ? values.prompt : undefined,
-        parallel: typeof values.parallel === 'string' ? parseInt(values.parallel, 10) : undefined,
         remote: typeof values.remote === 'string' ? values.remote : undefined,
         offline: Boolean(values.offline),
-      }),
-    };
-  }
-
-  if (command === 'improve') {
-    return {
-      command: 'improve',
-      options: parseCliOptions({
-        ...sharedOptions(values, verboseCount),
-        skill: typeof values.skill === 'string' ? values.skill : rest[0],
-        config: typeof values.config === 'string' ? values.config : undefined,
-        model: typeof values.model === 'string' ? values.model : undefined,
-        parallel: typeof values.parallel === 'string' ? parseInt(values.parallel, 10) : undefined,
-        from: Array.isArray(values.from)
-          ? values.from.filter((value): value is string => typeof value === 'string')
-          : undefined,
       }),
     };
   }

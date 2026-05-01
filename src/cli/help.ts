@@ -24,11 +24,8 @@ type HelpOptionId =
   | 'force'
   | 'list'
   | 'remote'
-  | 'showPlan'
   | 'regenerate'
-  | 'export'
   | 'prompt'
-  | 'from'
   | 'org'
   | 'port'
   | 'timeout'
@@ -42,7 +39,6 @@ export type HelpTarget =
   | 'init'
   | 'add'
   | 'sync'
-  | 'improve'
   | 'synthesize'
   | 'setup-app'
   | 'runs'
@@ -175,27 +171,14 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
     label: '--remote <ref>',
     description: 'Remote repository reference',
   },
-  showPlan: {
-    label: '--show-plan',
-    description: 'Show the Superwarden plan without generating tasks',
-  },
   regenerate: {
     label: '--regenerate',
-    description: 'Ignore cached Superwarden artifacts and synthesize again',
-  },
-  export: {
-    label: '--export <path>',
-    description: 'Export the Superwarden plan JSON to a file',
+    description: 'Ignore cached synthesized skill artifacts and synthesize again',
   },
   prompt: {
     label: '-p, --prompt <value>',
-    description: 'Create a missing Superwarden skill from prompt text',
+    description: 'Create a missing synthesized skill from prompt text',
     continuation: 'Prefix with @ to read the prompt from a file',
-  },
-  from: {
-    label: '--from <jsonl>',
-    description: 'Import findings from a JSONL run log',
-    continuation: 'Repeat to import multiple logs',
   },
   org: {
     label: '--org <name>',
@@ -309,48 +292,30 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden sync getsentry/skills',
     ],
   },
-  improve: {
-    summary: 'Feed findings back into a Superwarden skill',
-    description: 'Import labeled findings from saved JSONL runs, distill lessons, and regenerate affected Superwarden artifacts.',
-    usage: ['warden improve <skill> --from <run.jsonl> [options]'],
-    arguments: [
-      { label: 'skill', description: 'Repo-local Superwarden skill name' },
-    ],
-    options: ['cwd', 'config', 'model', 'parallel', 'from', ...SHARED_COMMAND_OPTIONS],
-    examples: [
-      'warden improve security --from .warden/logs/a1b2c3d4-2026-04-25T13-00-00-000Z.jsonl',
-      'warden improve security --from run-a.jsonl --from run-b.jsonl',
-    ],
-  },
   synthesize: {
-    summary: 'Create or synthesize a Superwarden skill',
-    description: 'Inspect or generate repo-local Superwarden parent and child skill artifacts.',
+    summary: 'Generate a repo-local synthesized skill',
+    description: 'Create or refresh one generated skill under .warden/skills from a prompt-backed definition.',
     usage: [
       'warden synth <skill> [options]',
       'warden synthesize <skill> [options]',
     ],
     aliases: ['synth'],
     arguments: [
-      { label: 'skill', description: 'Superwarden skill name' },
+      { label: 'skill', description: 'Synthesized skill name' },
     ],
     options: [
       'cwd',
       'config',
       'model',
-      'parallel',
       'json',
-      'showPlan',
       'regenerate',
-      'export',
       'prompt',
-      'remote',
-      'offline',
       ...SHARED_COMMAND_OPTIONS,
     ],
     examples: [
-      'warden synth security-review --show-plan',
-      'warden synth security-review --regenerate',
-      'warden synth brand-new-skill -p @prompt.md',
+      'warden synth security --regenerate',
+      'warden synth security -p @prompt.md',
+      'warden synth sentry-security --json',
     ],
   },
   'setup-app': {
@@ -440,8 +405,7 @@ const ROOT_COMMANDS: { label: string; summary: string }[] = [
   { label: 'init', summary: 'Initialize Warden configuration' },
   { label: 'add [skill]', summary: 'Add a skill trigger to warden.toml' },
   { label: 'sync [remote]', summary: 'Update cached remote skills to latest' },
-  { label: 'improve <skill>', summary: 'Feed findings back into a Superwarden skill' },
-  { label: 'synth <skill>', summary: 'Create or synthesize a Superwarden skill' },
+  { label: 'synth <skill>', summary: 'Generate a repo-local synthesized skill' },
   { label: 'runs', summary: 'Inspect saved sessions and run logs' },
   { label: 'setup-app', summary: 'Create a GitHub App via manifest flow' },
   { label: 'help [command]', summary: 'Show help for a command' },
@@ -487,8 +451,7 @@ function renderRootHelp(): string {
     ...renderSection('Examples:', [
       '  warden src/auth.ts',
       '  warden HEAD~3 --skill security-review',
-      '  warden improve security --from .warden/logs/latest.jsonl',
-      '  warden synth security-review --show-plan',
+      '  warden synth security --regenerate',
       '  warden help runs show',
     ]),
   ];

@@ -28,10 +28,9 @@ const skillsCache = new Map<string, Map<string, LoadedSkill>>();
  * Conventional skill directories, checked in priority order.
  *
  * Skills are discovered from these directories in order:
- * 1. .agents/skills - Primary (recommended)
- * 2. .claude/skills - Backup (matches Claude Code convention)
- * 3. .warden/superwarden - Warden-owned Superwarden skills
- * 4. .warden/skills - Legacy Warden-owned skills
+ * 1. .warden/skills - Repo-local synthesized skills
+ * 2. .agents/skills - Primary authored skills
+ * 3. .claude/skills - Backup (matches Claude Code convention)
  *
  * Skills follow the agentskills.io specification:
  * - skill-name/SKILL.md (directory with SKILL.md inside - preferred)
@@ -40,10 +39,9 @@ const skillsCache = new Map<string, Map<string, LoadedSkill>>();
  * When a skill name exists in multiple directories, the first one found wins.
  */
 export const SKILL_DIRECTORIES = [
+  '.warden/skills',
   '.agents/skills',
   '.claude/skills',
-  '.warden/superwarden',
-  '.warden/skills',
 ] as const;
 
 /**
@@ -507,10 +505,9 @@ const AGENT_RESOLVE_CONFIG: ResolveConfig = {
  *    - Directory: load SKILL.md from it
  *    - File: load the .md file directly
  * 3. Conventional directories (if repoRoot provided)
+ *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
  *    - .agents/skills/{name}/SKILL.md or .agents/skills/{name}.md
  *    - .claude/skills/{name}/SKILL.md or .claude/skills/{name}.md
- *    - .warden/superwarden/{name}/SKILL.md or .warden/superwarden/{name}.md
- *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
  */
 export async function resolveSkillAsync(
   nameOrPath: string,
