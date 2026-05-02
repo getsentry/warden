@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,8 @@ import { runBuild } from './build.js';
 import { getRepoRoot } from '../git.js';
 import {
   buildGeneratedSkillDefinition,
+  createGeneratedSkillDefinition,
+  getGeneratedSkillRoot,
   generatedSkillDefinitionExists,
 } from '../../skill-builder/definition.js';
 import { buildSkillOutline } from '../../skill-builder/outline.js';
@@ -20,6 +22,7 @@ vi.mock('../git.js', () => ({
 }));
 
 vi.mock('../../skill-builder/definition.js', () => ({
+  GENERATED_SKILL_DEFINITION_FILE: 'warden.yaml',
   generatedSkillDefinitionExists: vi.fn(),
   buildGeneratedSkillDefinition: vi.fn(),
   createGeneratedSkillDefinition: vi.fn(),
@@ -81,6 +84,8 @@ describe('runBuild', () => {
   const getRepoRootMock = vi.mocked(getRepoRoot);
   const generatedSkillDefinitionExistsMock = vi.mocked(generatedSkillDefinitionExists);
   const buildGeneratedSkillDefinitionMock = vi.mocked(buildGeneratedSkillDefinition);
+  const createGeneratedSkillDefinitionMock = vi.mocked(createGeneratedSkillDefinition);
+  const getGeneratedSkillRootMock = vi.mocked(getGeneratedSkillRoot);
   const buildSkillOutlineMock = vi.mocked(buildSkillOutline);
   const buildGeneratedSkillMock = vi.mocked(buildGeneratedSkill);
   const getRuntimeMock = vi.mocked(getRuntime);
@@ -89,15 +94,23 @@ describe('runBuild', () => {
   let originalCwd: string;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     tempDir = mkdtempSync(join(tmpdir(), 'warden-build-test-'));
     originalCwd = process.cwd();
     process.chdir(tempDir);
 
     getRepoRootMock.mockReturnValue(tempDir);
+    getGeneratedSkillRootMock.mockReturnValue(join(tempDir, '.warden', 'skills', 'security'));
     generatedSkillDefinitionExistsMock.mockReturnValue(true);
     buildGeneratedSkillDefinitionMock.mockReturnValue({
       name: 'security',
       description: 'Generated security skill',
+      prompt: 'Find security issues.',
+      rootDir: join(tempDir, '.warden', 'skills', 'security'),
+    });
+    createGeneratedSkillDefinitionMock.mockReturnValue({
+      name: 'security',
+      description: 'security',
       prompt: 'Find security issues.',
       rootDir: join(tempDir, '.warden', 'skills', 'security'),
     });
@@ -197,5 +210,63 @@ describe('runBuild', () => {
     expect(output).toContain('SKILL');
     expect(output.indexOf('TRACKS  2 tracks')).toBeGreaterThan(output.indexOf('OUTLINE'));
     expect(output.indexOf('TRACKS  2 tracks')).toBeLessThan(output.indexOf('SKILL'));
+  });
+
+  it('loads an existing generated skill from an explicit root path', async () => {
+    const reporter = createTestReporter();
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const rootDir = join(tempDir, 'skills', 'security');
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), `version: 1
+kind: generated-skill
+name: security
+prompt: |-
+  Find security issues.
+`, 'utf-8');
+    buildGeneratedSkillDefinitionMock.mockReturnValueOnce({
+      name: 'security',
+      description: 'Generated security skill',
+      prompt: 'Find security issues.',
+      rootDir,
+    });
+
+    const exitCode = await runBuild(createOptions({ skill: './skills/security' }), reporter);
+
+    expect(exitCode).toBe(0);
+    expect(generatedSkillDefinitionExistsMock).not.toHaveBeenCalled();
+    expect(buildGeneratedSkillDefinitionMock).toHaveBeenCalledWith(rootDir);
+    expect(buildGeneratedSkillMock).toHaveBeenCalledWith(expect.objectContaining({
+      rootDir,
+    }));
+    const output = stderrSpy.mock.calls
+      .map((call) => call.map((part) => String(part)).join(' '))
+      .join('\n');
+    expect(output).toContain('warden src/file.ts --skill ./skills/security');
+  });
+
+  it('creates a generated skill at an explicit root path from the prompt', async () => {
+    const reporter = createTestReporter();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const rootDir = join(tempDir, 'skills', 'security');
+    createGeneratedSkillDefinitionMock.mockReturnValueOnce({
+      name: 'security',
+      description: 'security',
+      prompt: 'Find security issues.',
+      rootDir,
+    });
+
+    const exitCode = await runBuild(createOptions({
+      skill: './skills/security',
+      prompt: 'Find security issues.',
+    }), reporter);
+
+    expect(exitCode).toBe(0);
+    expect(generatedSkillDefinitionExistsMock).not.toHaveBeenCalled();
+    expect(createGeneratedSkillDefinitionMock).toHaveBeenCalledWith({
+      repoRoot: tempDir,
+      name: 'security',
+      prompt: 'Find security issues.',
+      rootDir,
+    });
   });
 });

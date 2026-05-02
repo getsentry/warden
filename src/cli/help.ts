@@ -294,12 +294,12 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
   },
   build: {
     summary: 'Build a repo-local generated skill',
-    description: 'Create or refresh one generated skill under .warden/skills from a prompt-backed definition.',
+    description: 'Create or refresh one generated skill by name under .warden/skills, or at an explicit skill root path.',
     usage: [
       'warden build <skill> [options]',
     ],
     arguments: [
-      { label: 'skill', description: 'Generated skill name' },
+      { label: 'skill', description: 'Generated skill name or skill root path' },
     ],
     options: [
       'cwd',
@@ -313,6 +313,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     examples: [
       'warden build security --regenerate',
       'warden build security -p @prompt.md',
+      'warden build ./skills/security -p @prompt.md',
       'warden build sentry-security --json',
     ],
   },

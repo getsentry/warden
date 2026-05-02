@@ -112,8 +112,9 @@ export function createGeneratedSkillDefinition(args: {
   repoRoot: string;
   name: string;
   prompt: string;
+  rootDir?: string;
 }): SkillDefinition {
-  const rootDir = getGeneratedSkillRoot(args.repoRoot, args.name);
+  const rootDir = args.rootDir ?? getGeneratedSkillRoot(args.repoRoot, args.name);
   mkdirSync(rootDir, { recursive: true });
 
   writeFileSync(join(rootDir, GENERATED_SKILL_DEFINITION_FILE), `version: 1

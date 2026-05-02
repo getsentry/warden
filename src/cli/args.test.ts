@@ -407,6 +407,18 @@ describe('parseCliArgs', () => {
     expect(result.options.prompt).toBe('@prompts/security.md');
   });
 
+  it('parses build command with a path target', () => {
+    const result = parseCliArgs([
+      'build',
+      './skills/security-review',
+      '--prompt',
+      '@prompts/security.md',
+    ]);
+    expect(result.command).toBe('build');
+    expect(result.options.skill).toBe('./skills/security-review');
+    expect(result.options.prompt).toBe('@prompts/security.md');
+  });
+
   it('parses runs list command', () => {
     const result = parseCliArgs(['runs', 'list']);
     expect(result.command).toBe('runs');

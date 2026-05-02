@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import chalk from 'chalk';
 import { emptyToUndefined, loadWardenConfigFile } from '../../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../../config/schema.js';
@@ -14,6 +14,7 @@ import { getRepoRoot } from '../git.js';
 import {
   buildGeneratedSkillDefinition,
   createGeneratedSkillDefinition,
+  GENERATED_SKILL_DEFINITION_FILE,
   getGeneratedSkillRoot,
   inferGeneratedSkillDescription,
   generatedSkillDefinitionExists,
@@ -144,6 +145,36 @@ function resolvePromptValue(prompt: string): string {
   return prompt.trim();
 }
 
+function isPathLikeTarget(value: string): boolean {
+  return (
+    isAbsolute(value) ||
+    value.startsWith('.') ||
+    value.includes('/') ||
+    value.includes('\\')
+  );
+}
+
+function resolveGeneratedSkillTarget(target: string, repoRoot: string): {
+  displayName: string;
+  isPath: boolean;
+  rootDir: string;
+} {
+  if (isPathLikeTarget(target)) {
+    const rootDir = resolve(repoRoot, target);
+    return {
+      displayName: target,
+      isPath: true,
+      rootDir,
+    };
+  }
+
+  return {
+    displayName: target,
+    isPath: false,
+    rootDir: getGeneratedSkillRoot(repoRoot, target),
+  };
+}
+
 function resolveSynthesisModel(
   config: WardenConfig | undefined,
   options: CLIOptions,
@@ -180,22 +211,28 @@ async function ensureSynthesizedSkill(args: {
   reporter: Reporter;
 }): Promise<{ skill: SkillDefinition; created: boolean; promptLength?: number }> {
   const { skillName, repoRoot, options, reporter } = args;
-  if (generatedSkillDefinitionExists(repoRoot, skillName)) {
-    const rootDir = getGeneratedSkillRoot(repoRoot, skillName);
-    return { skill: buildGeneratedSkillDefinition(rootDir), created: false };
+  const target = resolveGeneratedSkillTarget(skillName, repoRoot);
+  const definitionExists = target.isPath
+    ? existsSync(join(target.rootDir, GENERATED_SKILL_DEFINITION_FILE))
+    : generatedSkillDefinitionExists(repoRoot, skillName);
+
+  if (definitionExists) {
+    return { skill: buildGeneratedSkillDefinition(target.rootDir), created: false };
   }
 
   const prompt = await resolvePrompt(options, skillName);
   if (!prompt) {
-    reporter.error(`Generated skill not found: ${skillName}`);
-    reporter.tip(`Run interactively, or pass --prompt/-p to create .warden/skills/${skillName}`);
+    reporter.error(`Generated skill not found: ${target.displayName}`);
+    const createTarget = target.isPath ? target.displayName : `.warden/skills/${skillName}`;
+    reporter.tip(`Run interactively, or pass --prompt/-p to create ${createTarget}`);
     throw new SkillBuildOutlineError(`Missing prompt for new generated skill: ${skillName}`);
   }
 
   const skill = createGeneratedSkillDefinition({
     repoRoot,
-    name: skillName,
+    name: target.isPath ? basename(target.rootDir) : skillName,
     prompt,
+    rootDir: target.rootDir,
   });
   return { skill, created: true, promptLength: prompt.length };
 }
@@ -369,7 +406,7 @@ export async function runBuild(
           turns: artifact.numTurns,
         }));
       }
-      renderTryIt(reporter, skill.name);
+      renderTryIt(reporter, isPathLikeTarget(skillName) ? skillName : skill.name);
     } else {
       process.stdout.write(`${JSON.stringify({
         skill: {
