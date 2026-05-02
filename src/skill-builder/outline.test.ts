@@ -77,23 +77,22 @@ describe('skill build state', () => {
         numTurns: 1,
       },
       artifact: {
-        version: 3,
+        version: 4,
         sourceHash: 'source-hash',
         outlineHash: 'outline-hash',
         buildVersion: '1',
+        authoringProvider: {
+          name: 'skill-writer',
+          rootDir: '/tmp/skill-writer',
+          contentHash: 'provider-hash',
+        },
         name: 'security',
-        trackIds: ['auth-bypass'],
-        referenceManifest: [{
-          trackId: 'auth-bypass',
-          path: 'references/tracks/auth-bypass.md',
-          role: 'procedure',
-          openWhen: 'authentication checks are present',
-        }, {
-          trackId: 'auth-bypass',
-          path: 'references/examples/auth-bypass/core.md',
-          role: 'examples',
-          openWhen: 'the hunk needs concrete comparisons',
-        }],
+        fileManifest: [
+          { path: 'SKILL.md', bytes: 512 },
+          { path: 'references/auth-bypass.md', bytes: 512 },
+        ],
+        deterministicWarnings: [],
+        validationIssues: [],
         bytes: 1024,
         durationMs: 5000,
         usage: {

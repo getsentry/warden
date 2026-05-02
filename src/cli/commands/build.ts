@@ -127,7 +127,7 @@ function skillStatusMessage(skill: SkillDefinition): string {
 }
 
 function skillStatusDetail(): string {
-  return 'Write the router, checklist, and routed references.';
+  return 'Plan, write, and validate skill artifacts with the authoring provider.';
 }
 
 function readPromptFile(path: string): string {

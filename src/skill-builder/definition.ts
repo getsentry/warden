@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
@@ -127,8 +127,13 @@ ${yamlBlock(args.prompt.trim())}
 }
 
 export function clearGeneratedSkillArtifacts(rootDir: string): void {
-  for (const name of ['SKILL.md', 'SPEC.md', 'SOURCES.md', BUILD_STATE_FILE]) {
-    rmSync(join(rootDir, name), { force: true });
+  if (!existsSync(rootDir)) {
+    return;
   }
-  rmSync(join(rootDir, 'references'), { recursive: true, force: true });
+  for (const entry of readdirSync(rootDir, { withFileTypes: true })) {
+    if (entry.name === GENERATED_SKILL_DEFINITION_FILE) {
+      continue;
+    }
+    rmSync(join(rootDir, entry.name), { recursive: true, force: true });
+  }
 }

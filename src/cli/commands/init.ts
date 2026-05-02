@@ -23,7 +23,6 @@ import { getMajorVersion } from '../../utils/index.js';
 const INSTALLABLE_BUNDLED_SKILLS = new Set([
   'warden',
   'warden-sweep',
-  'wrdn-skill-writer',
 ]);
 
 /**

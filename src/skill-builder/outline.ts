@@ -134,7 +134,7 @@ Existing track continuity:
 - Only create a new track id when a concern is genuinely new.
 - If one previous track splits into multiple tracks, keep the previous id on the primary surviving concern and mint new ids only for the new sibling concerns.
 - If multiple previous tracks merge, keep the id of the track whose concern remains primary.
-- Do not rename tracks casually. Stable ids matter because generated references and future refinement fixtures are keyed by track id.
+- Do not rename tracks casually. Stable ids help compare authoring plans across regenerations.
 
 Previous track set:
 ${JSON.stringify(previousTracks, null, 2)}`;
@@ -147,7 +147,7 @@ function buildOutlinePrompt(
 ): string {
   return `You build the internal outline for one repo-local Warden skill.
 
-This outline exists only to shape one generated skill with a checklist index and deep per-track references. It is planning metadata, not a runnable skill.
+This outline exists only to give Warden context for a later authoring-provider run. It is planning metadata, not a runnable skill, and it does not prescribe the final artifact layout.
 
 Rules:
 - Return only a JSON object. No markdown, prose, or code fences.
@@ -171,7 +171,7 @@ Rules:
   - for domain or ecosystem skills, include the supplied source material, intended platform, and any explicit coverage boundaries
 - scopeProfile.unresolvedContext is only for context that would materially improve decomposition and was not inferable from the provided sources.
 - Do not list obvious context as unresolved when it is already visible in the source material.
-- Treat each track as a concise blueprint for generated reference material:
+- Treat each track as a concise analysis concern that the authoring provider may use, merge, split, or inline while producing the final skill:
   - goal: the one-line investigation objective
   - rationale: why this track exists for this skill
   - sourceSignals: the context signals that justified this track
@@ -179,7 +179,7 @@ Rules:
   - excludes: the sibling concerns or boundaries this track must not absorb
   - relevanceSignals: the file, hunk, or behavioral cues that should make the runtime skill pick this track
   - evidenceFocus: what concrete evidence the runtime skill must require
-  - checks: a short sequential checklist of concrete investigation steps or questions for this track
+  - checks: a short ordered task set of concrete investigation steps or questions for this track
   - safeCounterpatterns: concrete safe patterns, mitigations, or boundary conditions that should suppress weak findings
   - falsePositiveTraps: the common shallow misreads, sibling overlaps, or pattern-only claims that this track must avoid
   - researchHints: public docs, runtime topics, or prior-art areas the generated reference may need to consult
@@ -189,7 +189,7 @@ Rules:
 - Boundary rules should be written from this track's perspective: say what this track owns and what it must not report.
 - If the source material is too thin for a safe decomposition, make that explicit inside scopeProfile.unresolvedContext or the relevant track fields. Do not silently invent coverage areas.
 - Do not ask follow-up questions or return prose. If context is missing, still return valid JSON and record it in scopeProfile.unresolvedContext or the relevant track fields.
-- Keep all generated track instructions executable by Warden's normal hunk analysis model: tracks must be focused, inspectable, and able to return an empty findings array when evidence is insufficient.
+- Keep all track guidance compatible with Warden's normal hunk analysis model: concerns must be focused, inspectable, and able to return an empty findings array when evidence is insufficient.
 - If the skill is intentionally generic, keep it generic. Depth must come from concrete checks, relevance signals, safe counterpatterns, falsePositiveTraps, and researchHints, not fake repo specificity.
 
 JSON shape:
@@ -242,9 +242,9 @@ JSON shape:
 
 Quality bar:
 - The outline should fully accomplish the agenda implied by the prompt, metadata, and source material. Do not optimize for a preferred number of tracks.
-- The track set should be specific enough that one generated skill can route to distinct deep references and avoid duplicate reports.
+- The track set should be specific enough that one generated skill can route work clearly and avoid duplicate reports.
 - Each track should have the right amount of work for one coherent investigation track: not so broad that it becomes shallow, and not so narrow that the split becomes busywork.
-- The checks should be specific enough that the generated skill can follow them as a checklist without having to invent the structure again.
+- The checks should be specific enough that the authoring provider can turn them into executable runtime guidance without inventing the structure again.
 - The track set should give later build steps enough depth hooks to expand into strong references: relevanceSignals, safeCounterpatterns, falsePositiveTraps, and researchHints should be concrete instead of generic filler.
 - Repository or product skills must reflect the local context actually observed. Domain or ecosystem skills must say they are generic and stay aligned with the supplied scope.
 

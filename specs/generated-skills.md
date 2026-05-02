@@ -1,6 +1,6 @@
 # Generated Skills
 
-Warden can build one repo-local skill from a prompt-backed definition.
+Warden can build one repo-local skill from a prompt-backed definition. The builder is an authoring harness, not a fixed skill-template generator.
 
 ## Artifact Layout
 
@@ -9,17 +9,8 @@ Generated skills live under `.warden/skills/<name>/`.
 ```text
 .warden/skills/<name>/
 ├── warden.yaml
-├── SKILL.md
-├── SPEC.md
-├── SOURCES.md
 ├── build-state.json
-└── references/
-    ├── checklist.md
-    ├── tracks/
-    │   └── injection.md
-    └── examples/
-        └── xss/
-            └── rails.md
+└── <generated files chosen by the authoring provider>
 ```
 
 `warden.yaml` is the stable authored definition.
@@ -28,70 +19,83 @@ Generated skills live under `.warden/skills/<name>/`.
 - `name`
 - `prompt`
 
-`SKILL.md`, `SPEC.md`, `SOURCES.md`, and `references/` are generated artifacts.
+All other files are generated artifacts. The authoring provider decides whether the skill is inline, reference-backed, script-backed, or uses another valid Agent Skills layout.
 
-`build-state.json` is machine-owned continuity state. It stores the internal outline, cache identity, and generated artifact metadata.
+`build-state.json` is machine-owned continuity state. It stores cache identity, the internal outline, the authoring provider identity, generated file manifest, validation results, and usage metadata.
 
 ## Build Flow
 
 `warden build <name>`:
 
 1. Reads or creates `.warden/skills/<name>/warden.yaml`
-2. Synthesizes an internal outline
-3. Synthesizes one runnable skill plus routed reference files
-4. Writes the generated artifacts back into the same root
+2. Synthesizes internal Warden context for the build
+3. Resolves an authoring provider, defaulting to the vendored `src/internal-skills/skill-writer`
+4. Runs plan, implementation, and validation passes through that provider
+5. Writes the returned generated file map
+6. Stores provider/version/hash and validation metadata in build state
 
-The internal outline is planning metadata only. It is not a runnable skill and it is not a separate user-facing artifact.
+The internal outline is Warden context only. It is not a runnable skill and it does not prescribe the final artifact layout.
+
+## Authoring Provider
+
+The builder passes the full authoring skill directory to the agent and tells it to start from that skill's `SKILL.md`. Warden does not select individual authoring references by hand. By default, the provider is Warden's packaged internal skill. Set `WARDEN_SKILL_AUTHORING_ROOT` only when deliberately testing or swapping the internal provider.
+
+The vendored provider is internal runtime data, not an installable bundled skill, and Warden does not discover `skill-writer` from user skill directories. User-facing bundled skills stay under `skills/`.
+
+The provider returns a file map:
+
+```json
+{
+  "version": 1,
+  "name": "wrdn-example",
+  "files": [
+    {"path": "SKILL.md", "content": "..."}
+  ],
+  "summary": "...",
+  "validationNotes": [],
+  "missingInputs": [],
+  "externalSources": []
+}
+```
+
+Warden owns writing, cache invalidation, and validation. The provider owns authoring method, layout choice, depth gates, and source synthesis.
 
 ## Runtime Contract
 
 Generated skills are normal Warden skills.
 
 - `warden ... --skill <name>` resolves the generated `SKILL.md`
-- the runtime skill reads `references/checklist.md`
-- it opens only the routed reference files listed for the selected checklist tracks
-- it executes those tracks sequentially
-- it still uses normal changed-line anchoring and normal Warden findings
+- `SKILL.md` must be a usable runtime router
+- `SKILL.md` must define the core review approach: task set, routing cues, and evidence requirements
+- every runtime reference must have a direct "when to read" route from `SKILL.md`
+- findings still use normal changed-line anchoring and normal Warden reporting behavior
 
-There is no parent/child orchestration at run time.
+There is no required filename, track split, parent/child runtime orchestration, or fixed reference tree.
 
-## Prompt Shape
+## Validation
 
-The generated skill should behave as a router plus deep reference set:
+Warden runs deterministic validation and an authoring-provider validation pass.
 
-- `SKILL.md` stays short and directive
-- `references/checklist.md` is the compact track index
-- focused files under `references/` carry the depth
-- paths and subfolders should follow lookup need, not a rigid fixed tree
-- `SOURCES.md` stores provenance and build decisions, not runtime guidance
+Deterministic gates include:
 
-Depth should come from:
+- `SKILL.md` exists
+- frontmatter `name` matches the generated skill name
+- generated files do not overwrite `warden.yaml` or `build-state.json`
+- runtime references are routed from `SKILL.md`
+- long references include navigation or are split
+- stale provenance language is flagged
+- generated-template boilerplate is flagged
 
-- concrete ordered checks
-- relevance signals
-- evidence requirements
-- safe counterpatterns
-- false-positive traps
-- remediation patterns
-- transformed examples
-
-Reference layout rules:
-
-- treat `SKILL.md` as the router
-- every routed reference needs a direct open-when reason
-- split by lookup need rather than vague buckets
-- examples, framework notes, troubleshooting, and procedures may live in separate files when that improves lookup clarity
-- long references need `## Contents` or should be split further
-
-Avoid broad prose and avoid fake repo specificity when the prompt is intentionally generic.
+The provider validation pass can return a revised file map. Warden writes the revised files only after deterministic errors are resolved.
 
 ## Caching
 
-Outline and generated artifact reuse are keyed by:
+Generated artifact reuse is keyed by:
 
 - `warden.yaml`
 - requested build model
 - build version
-- generated artifact byte identity
+- authoring provider name and content hash
+- generated artifact file manifest
 
 `--regenerate` bypasses cached outline and generated artifact reuse.

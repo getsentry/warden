@@ -12,9 +12,12 @@ describe('npm package contents', () => {
     const ignored = ignore().add(npmIgnore);
 
     expect(ignored.ignores('SPEC.md')).toBe(true);
+    expect(ignored.ignores('src/skill-builder/skill.ts')).toBe(true);
+    expect(ignored.ignores('src/internal-skills/skill-writer/SKILL.md')).toBe(false);
     expect(ignored.ignores('skills/warden/SPEC.md')).toBe(false);
-    expect(ignored.ignores('skills/wrdn-skill-writer/SPEC.md')).toBe(false);
     expect(ignored.ignores('.warden/skills/security/SKILL.md')).toBe(true);
+    expect(ignored.ignores('.codex/config.toml')).toBe(true);
+    expect(ignored.ignores('superwarden-bench/README.md')).toBe(true);
     expect(ignored.ignores('specs/generated-skills.md')).toBe(true);
   });
 });

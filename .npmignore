@@ -1,5 +1,7 @@
-# Source files (dist/ is published)
-src/
+# Source files (dist/ is published). Internal skill assets are runtime data.
+src/*
+!src/internal-skills/
+!src/internal-skills/**
 
 # GitHub Action bundle (only needed for action, not npm)
 dist/action/
@@ -19,18 +21,20 @@ vitest*.config.ts
 # Development/CI files
 .github/
 .agents/
+.codex/
 .warden/
 .claude/
 .dex/
 .context/
 *.config.js
-tsconfig.json
+tsconfig*.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
 
 # Evals and dev scripts
 evals/
 /scripts/
+superwarden-bench/
 
 # Plugin/agent config (not needed by npm consumers)
 plugins/
