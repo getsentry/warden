@@ -7,6 +7,7 @@ export {
   execGitNonInteractive,
   GIT_NON_INTERACTIVE_ENV,
 } from './exec.js';
+export { isPathLike } from './path.js';
 export type { ExecOptions } from './exec.js';
 
 /** Default concurrency for parallel trigger/skill execution */

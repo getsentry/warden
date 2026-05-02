@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import chalk from 'chalk';
 import { emptyToUndefined, loadWardenConfigFile } from '../../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../../config/schema.js';
@@ -8,7 +8,7 @@ import type { CLIOptions } from '../args.js';
 import type { Reporter } from '../output/reporter.js';
 import { formatBytes, formatCost, formatDuration, formatTokens } from '../output/formatters.js';
 import { runWithLiveStatus } from '../output/live-status.js';
-import { getAnthropicApiKey } from '../../utils/index.js';
+import { getAnthropicApiKey, isPathLike } from '../../utils/index.js';
 import { promptLine, promptMultiline } from '../input.js';
 import { getRepoRoot } from '../git.js';
 import {
@@ -145,21 +145,12 @@ function resolvePromptValue(prompt: string): string {
   return prompt.trim();
 }
 
-function isPathLikeTarget(value: string): boolean {
-  return (
-    isAbsolute(value) ||
-    value.startsWith('.') ||
-    value.includes('/') ||
-    value.includes('\\')
-  );
-}
-
 function resolveGeneratedSkillTarget(target: string, repoRoot: string): {
   displayName: string;
   isPath: boolean;
   rootDir: string;
 } {
-  if (isPathLikeTarget(target)) {
+  if (isPathLike(target)) {
     const rootDir = resolve(repoRoot, target);
     return {
       displayName: target,
@@ -406,7 +397,7 @@ export async function runBuild(
           turns: artifact.numTurns,
         }));
       }
-      renderTryIt(reporter, isPathLikeTarget(skillName) ? skillName : skill.name);
+      renderTryIt(reporter, isPathLike(skillName) ? skillName : skill.name);
     } else {
       process.stdout.write(`${JSON.stringify({
         skill: {

@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { SkillDefinition, ToolName } from '../config/schema.js';
 import { ToolNameSchema } from '../config/schema.js';
+import { isPathLike } from '../utils/path.js';
 
 export class SkillLoaderError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -62,13 +63,6 @@ export const AGENT_DIRECTORIES = [
 
 /** Marker filename for agent definitions */
 export const AGENT_MARKER_FILE = 'AGENT.md';
-
-/**
- * Check if a string looks like a path (contains path separators or starts with .)
- */
-function isSkillPath(nameOrPath: string): boolean {
-  return nameOrPath.includes('/') || nameOrPath.includes('\\') || nameOrPath.startsWith('.');
-}
 
 /**
  * Resolve a skill path, handling absolute paths, tilde expansion, and relative paths.
@@ -447,7 +441,7 @@ async function resolveEntry(
   }
 
   // 2. Direct path resolution
-  if (isSkillPath(nameOrPath)) {
+  if (isPathLike(nameOrPath)) {
     const resolvedPath = resolveSkillPath(nameOrPath, repoRoot);
 
     const markerPath = join(resolvedPath, config.markerFile);
