@@ -147,22 +147,44 @@ export async function runWithLiveStatus<T>(args: {
   verbosity: Verbosity;
   message: string;
   detail?: string;
-  task: () => Promise<T>;
+  task: (controls: { setDetail: (detail: string | undefined) => void }) => Promise<T>;
 }): Promise<T> {
   if (!args.mode.isTTY || args.verbosity === Verbosity.Quiet) {
-    return args.task();
+    return args.task({ setDetail: () => undefined });
   }
 
   const startedAt = Date.now();
-  const { clear, unmount } = render(
-    <LiveStatus message={args.message} detail={args.detail} startedAt={startedAt} />,
+  let detail = args.detail;
+  const { rerender, clear, unmount } = render(
+    <LiveStatus message={args.message} detail={detail} startedAt={startedAt} />,
     { stdout: process.stderr },
   );
 
+  let updatePending = false;
+  let unmounted = false;
+  const updateUI = () => {
+    if (updatePending || unmounted) return;
+    updatePending = true;
+    setImmediate(() => {
+      updatePending = false;
+      if (unmounted) return;
+      rerender(<LiveStatus message={args.message} detail={detail} startedAt={startedAt} />);
+    });
+  };
+
   try {
-    return await args.task();
+    return await args.task({
+      setDetail: (nextDetail) => {
+        if (detail === nextDetail) {
+          return;
+        }
+        detail = nextDetail;
+        updateUI();
+      },
+    });
   } finally {
     await new Promise((resolve) => setImmediate(resolve));
+    unmounted = true;
     clear();
     unmount();
   }

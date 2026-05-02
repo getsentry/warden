@@ -710,6 +710,7 @@ export async function synthesizeGeneratedSkill(args: {
   apiKey?: string;
   repairModel?: string;
   repairMaxRetries?: number;
+  onStatus?: (message: string) => void;
 }): Promise<SynthesizedSkillArtifact> {
   const startedAt = performance.now();
   const statePath = join(args.rootDir, 'synthesis.json');
@@ -733,6 +734,7 @@ export async function synthesizeGeneratedSkill(args: {
       );
     }
 
+    args.onStatus?.('Writing router scaffold');
     const scaffold = await runStructuredSynthAgent({
       runtime: args.runtime,
       repoPath: args.repoPath,
@@ -765,7 +767,10 @@ export async function synthesizeGeneratedSkill(args: {
       responseModel?: string;
       numTurns?: number;
     }[] = [];
-    for (const track of args.outline.tracks) {
+    for (const [index, track] of args.outline.tracks.entries()) {
+      args.onStatus?.(
+        `Track ${index + 1}/${args.outline.tracks.length}: ${track.title}`,
+      );
       const result = await runStructuredSynthAgent({
         runtime: args.runtime,
         repoPath: args.repoPath,

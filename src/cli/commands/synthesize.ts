@@ -281,7 +281,7 @@ export async function runSynthesize(
       verbosity: reporter.verbosity,
       message: outlineStatusMessage(skill),
       detail: outlineStatusDetail(),
-      task: () => synthesizeSynthOutline({
+      task: ({ setDetail }) => synthesizeSynthOutline({
         skill,
         runtime,
         apiKey: getAnthropicApiKey(),
@@ -292,6 +292,7 @@ export async function runSynthesize(
         repoPath: repoRoot,
         repairModel,
         repairMaxRetries: maxRetries,
+        onStatus: setDetail,
       }),
     });
 
@@ -319,7 +320,7 @@ export async function runSynthesize(
       verbosity: reporter.verbosity,
       message: skillStatusMessage(skill),
       detail: skillStatusDetail(),
-      task: () => synthesizeGeneratedSkill({
+      task: ({ setDetail }) => synthesizeGeneratedSkill({
         outline: outlineResult.outline,
         source: collectSynthSource(skill),
         rootDir: (() => {
@@ -336,6 +337,7 @@ export async function runSynthesize(
         repairMaxRetries: maxRetries,
         abortController: state?.abortController,
         regenerate: options.regenerate || outlineResult.source === 'generated',
+        onStatus: setDetail,
       }),
     });
 

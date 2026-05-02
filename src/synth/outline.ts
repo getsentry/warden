@@ -161,6 +161,7 @@ export interface SynthesizeSynthOutlineOptions {
   maxTurns?: number;
   repairModel?: string;
   repairMaxRetries?: number;
+  onStatus?: (message: string) => void;
 }
 
 export class SynthOutlineError extends Error {
@@ -462,6 +463,7 @@ export async function synthesizeSynthOutline(
 
   if (options.repoPath) {
     try {
+      options.onStatus?.('Inspecting source material');
       const result = await runStructuredSynthAgent({
         runtime,
         repoPath: options.repoPath,
