@@ -7,6 +7,7 @@ import type { Runtime, RuntimeName } from '../sdk/runtimes/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import { UsageStatsSchema, type UsageStats } from '../types/index.js';
 import { runStructuredSynthAgent, StructuredSynthAgentError } from './agentic.js';
+import { SYNTH_REFERENCE_ROLES } from './skill-writer-guidance.js';
 import {
   SYNTHESIS_DEFINITION_FILE,
   loadSynthesizedSkillDefinition,
@@ -87,8 +88,10 @@ export const SynthOutlineSchema = z.object({
 
 export type SynthOutline = z.infer<typeof SynthOutlineSchema>;
 
+const SynthArtifactReferenceRoleSchema = z.enum(SYNTH_REFERENCE_ROLES);
+
 export const SynthArtifactStateSchema = z.object({
-  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  version: z.literal(3),
   sourceHash: z.string().min(1),
   outlineHash: z.string().min(1),
   synthesisVersion: z.string().min(1),
@@ -97,9 +100,9 @@ export const SynthArtifactStateSchema = z.object({
   referenceManifest: z.array(z.object({
     trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
     path: z.string().min(1),
-    role: z.string().min(1),
+    role: SynthArtifactReferenceRoleSchema,
     openWhen: z.string().min(1),
-  }).strict()).optional(),
+  }).strict()),
   bytes: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
   usage: UsageStatsSchema,

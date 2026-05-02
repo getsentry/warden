@@ -7,14 +7,14 @@ describe('renderHelp', () => {
 
     expect(output).toContain('Commands:');
     expect(output).toContain('Global Options:');
-    expect(output).toContain('synth <skill>');
+    expect(output).toContain('build <skill>');
     expect(output).not.toContain('--org <name>');
   });
 
-  it('renders synth help without unrelated command options', () => {
-    const output = renderHelp('synthesize');
+  it('renders build help without unrelated command options', () => {
+    const output = renderHelp('build');
 
-    expect(output).toContain('warden synth <skill> [options]');
+    expect(output).toContain('warden build <skill> [options]');
     expect(output).toContain('-p, --prompt <value>');
     expect(output).not.toContain('--description');
     expect(output).not.toContain('--org <name>');

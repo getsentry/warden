@@ -186,12 +186,12 @@ async function ensureSynthesizedSkill(args: {
   return { skill, created: true, promptLength: prompt.length };
 }
 
-interface RunSynthesizeState {
+interface RunBuildState {
   abortController?: AbortController;
   interrupted?: { value: boolean };
 }
 
-function isInterrupted(error: unknown, state: RunSynthesizeState | undefined): boolean {
+function isInterrupted(error: unknown, state: RunBuildState | undefined): boolean {
   if (state?.interrupted?.value || state?.abortController?.signal.aborted) {
     return true;
   }
@@ -201,10 +201,10 @@ function isInterrupted(error: unknown, state: RunSynthesizeState | undefined): b
   return error.name === 'AbortError' || /\b(aborted|cancelled|canceled|interrupted)\b/i.test(error.message);
 }
 
-export async function runSynthesize(
+export async function runBuild(
   options: CLIOptions,
   reporter: Reporter,
-  state?: RunSynthesizeState,
+  state?: RunBuildState,
 ): Promise<number> {
   let skillName = options.skill;
   if (!skillName) {
@@ -216,7 +216,7 @@ export async function runSynthesize(
       );
     }
     if (!skillName) {
-      reporter.error('Missing skill name. Usage: warden synth <skill>');
+      reporter.error('Missing skill name. Usage: warden build <skill>');
       return 1;
     }
   }

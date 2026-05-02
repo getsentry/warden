@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupArtifacts } from './log-cleanup.js';
-import { runSynthesize } from './commands/synthesize.js';
+import { runBuild } from './commands/build.js';
 import { main } from './main.js';
 
 vi.mock('../sentry.js', () => ({
@@ -18,15 +18,15 @@ vi.mock('../sentry.js', () => ({
   getTraceId: vi.fn(() => undefined),
 }));
 
-vi.mock('./commands/synthesize.js', () => ({
-  runSynthesize: vi.fn(async () => 0),
+vi.mock('./commands/build.js', () => ({
+  runBuild: vi.fn(async () => 0),
 }));
 
 vi.mock('./log-cleanup.js', () => ({
   cleanupArtifacts: vi.fn(async () => undefined),
 }));
 
-const runSynthesizeMock = vi.mocked(runSynthesize);
+const runBuildMock = vi.mocked(runBuild);
 const cleanupArtifactsMock = vi.mocked(cleanupArtifacts);
 
 describe('main --cwd', () => {
@@ -38,8 +38,8 @@ describe('main --cwd', () => {
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'warden-main-cwd-'));
     process.exit = vi.fn() as never;
-    runSynthesizeMock.mockReset();
-    runSynthesizeMock.mockResolvedValue(0);
+    runBuildMock.mockReset();
+    runBuildMock.mockResolvedValue(0);
     cleanupArtifactsMock.mockReset();
     cleanupArtifactsMock.mockResolvedValue(0);
   });
@@ -51,7 +51,7 @@ describe('main --cwd', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('changes to the requested cwd before dispatching the synth command', async () => {
+  it('changes to the requested cwd before dispatching the build command', async () => {
     const launcherDir = join(tempDir, 'launcher');
     const targetDir = join(tempDir, 'workspace');
     mkdirSync(launcherDir, { recursive: true });
@@ -60,7 +60,7 @@ describe('main --cwd', () => {
     const resolvedTargetDir = realpathSync(targetDir);
 
     let invokedCwd: string | undefined;
-    runSynthesizeMock.mockImplementationOnce(async () => {
+    runBuildMock.mockImplementationOnce(async () => {
       invokedCwd = process.cwd();
       return 0;
     });
@@ -70,7 +70,7 @@ describe('main --cwd', () => {
       'warden',
       '-C',
       '../workspace',
-      'synth',
+      'build',
       'security-review',
       '--quiet',
     ];
@@ -79,7 +79,7 @@ describe('main --cwd', () => {
 
     expect(invokedCwd).toBe(resolvedTargetDir);
     expect(process.cwd()).toBe(resolvedTargetDir);
-    expect(runSynthesizeMock).toHaveBeenCalledWith(
+    expect(runBuildMock).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '../workspace',
         quiet: true,

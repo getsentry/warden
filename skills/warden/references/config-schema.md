@@ -43,7 +43,7 @@ model = "claude-haiku-4-5"            # Helper model for extraction and fix gate
 maxRetries = 5                        # Retries for auxiliary structured calls
 
 [defaults.synthesis]
-model = "claude-opus-4-5"             # Consolidation and Superwarden synthesis model
+model = "claude-opus-4-5"             # Consolidation and synthesized-skill build model
 
 [defaults.chunking]
 enabled = true                 # Enable hunk-based chunking

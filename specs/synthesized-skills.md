@@ -1,6 +1,6 @@
 # Synthesized Skills
 
-Warden can synthesize one repo-local skill from a prompt-backed definition.
+Warden can build one repo-local skill from a prompt-backed definition.
 
 ## Artifact Layout
 
@@ -34,7 +34,7 @@ Generated skills live under `.warden/skills/<name>/`.
 
 ## Synthesis Flow
 
-`warden synth <name>`:
+`warden build <name>`:
 
 1. Reads or creates `.warden/skills/<name>/warden.yaml`
 2. Synthesizes an internal outline

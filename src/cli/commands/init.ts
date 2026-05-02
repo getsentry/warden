@@ -20,6 +20,12 @@ import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
 import { getMajorVersion } from '../../utils/index.js';
 
+const INSTALLABLE_BUNDLED_SKILLS = new Set([
+  'warden',
+  'warden-sweep',
+  'wrdn-skill-writer',
+]);
+
 /**
  * Render a section heading in the init output.
  */
@@ -186,6 +192,7 @@ function installBundledSkills(
     if (!entry.isDirectory()) continue;
 
     const skillName = entry.name;
+    if (!INSTALLABLE_BUNDLED_SKILLS.has(skillName)) continue;
 
     const src = join(bundledDir, skillName);
     const dest = join(targetDir, skillName);
@@ -223,7 +230,7 @@ function listBundledSkillNames(): string[] {
   const bundledDir = resolveBundledSkillsDir();
   if (!bundledDir) return [];
   return readdirSync(bundledDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
+    .filter((e) => e.isDirectory() && INSTALLABLE_BUNDLED_SKILLS.has(e.name))
     .map((e) => e.name);
 }
 

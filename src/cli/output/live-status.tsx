@@ -107,7 +107,7 @@ function LiveStatusListItem(args: {
   );
 }
 
-/** Render the transient list UI used for concurrent synth progress. */
+/** Render the transient list UI used for concurrent build progress. */
 export function LiveStatusList({ items }: { items: LiveStatusListItemState[] }): React.ReactElement {
   const [now, setNow] = useState(() => Date.now());
 

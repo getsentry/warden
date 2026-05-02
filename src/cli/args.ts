@@ -73,7 +73,7 @@ export interface RunsOptions {
 }
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'synthesize';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'build';
   options: CLIOptions;
   helpTarget?: HelpTarget;
   setupAppOptions?: SetupAppOptions;
@@ -123,9 +123,8 @@ function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTa
       return 'add';
     case 'sync':
       return 'sync';
-    case 'synth':
-    case 'synthesize':
-      return 'synthesize';
+    case 'build':
+      return 'build';
     case 'setup-app':
       return 'setup-app';
     case 'runs':
@@ -373,9 +372,9 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     };
   }
 
-  if (command === 'synth' || command === 'synthesize') {
+  if (command === 'build') {
     return {
-      command: 'synthesize',
+      command: 'build',
       options: parseCliOptions({
         ...sharedOptions(values, verboseCount),
         skill: typeof values.skill === 'string' ? values.skill : rest[0],

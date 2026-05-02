@@ -4,7 +4,7 @@ Design guide for Warden's terminal UX.
 
 This document is intentionally not a command catalog. It defines the shared
 principles, state semantics, and implementation constraints that should shape
-terminal output across `run`, `synth`, and future commands.
+terminal output across `run`, `build`, and future commands.
 
 Use `specs/reporters.md` for reporter behavior and event formats. Use this file
 when designing or reviewing terminal output itself.
@@ -268,7 +268,7 @@ Choose a loading pattern based on the shape of the work, not the command name.
 
 Use for one long-running operation with one primary status label.
 
-Reference example from `synth`:
+Reference example from `build`:
 
 ```text
 OUTLINE

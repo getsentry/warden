@@ -67,8 +67,8 @@ describe('parseCliArgs', () => {
   });
 
   it('parses -C/--cwd option', () => {
-    const result = parseCliArgs(['-C', '../other-repo', 'synth', 'security-review']);
-    expect(result.command).toBe('synthesize');
+    const result = parseCliArgs(['-C', '../other-repo', 'build', 'security-review']);
+    expect(result.command).toBe('build');
     expect(result.options.cwd).toBe('../other-repo');
     expect(result.options.skill).toBe('security-review');
   });
@@ -111,9 +111,9 @@ describe('parseCliArgs', () => {
   });
 
   it('resolves command-specific help via --help', () => {
-    const result = parseCliArgs(['synth', 'security-review', '--help']);
+    const result = parseCliArgs(['build', 'security-review', '--help']);
     expect(result.command).toBe('help');
-    expect(result.helpTarget).toBe('synthesize');
+    expect(result.helpTarget).toBe('build');
   });
 
   it('resolves explicit help targets', () => {
@@ -372,46 +372,37 @@ describe('parseCliArgs', () => {
     expect(result.options.remote).toBe('getsentry/skills');
   });
 
-  it('parses synthesize command with regenerate', () => {
+  it('parses build command with regenerate', () => {
     const result = parseCliArgs([
-      'synthesize',
+      'build',
       'security-review',
       '--regenerate',
     ]);
-    expect(result.command).toBe('synthesize');
+    expect(result.command).toBe('build');
     expect(result.options.skill).toBe('security-review');
     expect(result.options.regenerate).toBe(true);
   });
 
-  it('parses synth as an alias for synthesize', () => {
+  it('parses build command with prompt options', () => {
     const result = parseCliArgs([
-      'synth',
-      'security-review',
-    ]);
-    expect(result.command).toBe('synthesize');
-    expect(result.options.skill).toBe('security-review');
-  });
-
-  it('parses synthesize command with prompt options', () => {
-    const result = parseCliArgs([
-      'synthesize',
+      'build',
       'security-review',
       '-p',
       'Review authz boundaries.',
     ]);
-    expect(result.command).toBe('synthesize');
+    expect(result.command).toBe('build');
     expect(result.options.skill).toBe('security-review');
     expect(result.options.prompt).toBe('Review authz boundaries.');
   });
 
-  it('parses synthesize command with prompt file shorthand', () => {
+  it('parses build command with prompt file shorthand', () => {
     const result = parseCliArgs([
-      'synthesize',
+      'build',
       'security-review',
       '--prompt',
       '@prompts/security.md',
     ]);
-    expect(result.command).toBe('synthesize');
+    expect(result.command).toBe('build');
     expect(result.options.skill).toBe('security-review');
     expect(result.options.prompt).toBe('@prompts/security.md');
   });

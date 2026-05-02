@@ -132,8 +132,6 @@ describe('init command', () => {
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SPEC.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-skill-writer', 'SKILL.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-skill-writer', 'SPEC.md'))).toBe(true);
-      expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-parent-skill-writer', 'SKILL.md'))).toBe(true);
-      expect(existsSync(join(tempDir, '.agents', 'skills', 'wrdn-parent-skill-writer', 'SPEC.md'))).toBe(true);
     });
 
     it('copies warden skill references with --force', async () => {
@@ -166,9 +164,6 @@ describe('init command', () => {
       const writerDir = join(tempDir, '.agents', 'skills', 'wrdn-skill-writer');
       mkdirSync(writerDir, { recursive: true });
       writeFileSync(join(writerDir, 'SKILL.md'), 'custom writer');
-      const parentWriterDir = join(tempDir, '.agents', 'skills', 'wrdn-parent-skill-writer');
-      mkdirSync(parentWriterDir, { recursive: true });
-      writeFileSync(join(parentWriterDir, 'SKILL.md'), 'custom parent writer');
 
       const reporter = createMockReporter();
       await runInit(createOptions(), reporter);
@@ -200,7 +195,6 @@ describe('init command', () => {
       expect(toml).not.toContain('name = "warden"');
       expect(toml).not.toContain('name = "warden-sweep"');
       expect(toml).not.toContain('name = "wrdn-skill-writer"');
-      expect(toml).not.toContain('name = "wrdn-parent-skill-writer"');
     });
 
     it('skips skills in non-TTY mode without --force', async () => {

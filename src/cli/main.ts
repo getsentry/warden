@@ -51,7 +51,7 @@ import { runAdd } from './commands/add.js';
 import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
-import { runSynthesize } from './commands/synthesize.js';
+import { runBuild } from './commands/build.js';
 import { synthesizedSkillDefinitionExists } from '../synth/definition.js';
 
 /**
@@ -568,7 +568,7 @@ async function createDirectSkillTask(args: {
       synthesizedSkillDefinitionExists(repoPath, spec.skill)
     ) {
       throw new Error(
-        `Synthesized skill ${spec.skill} is missing generated artifacts. Run "warden synth ${spec.skill}" first.`,
+        `Synthesized skill ${spec.skill} is missing generated artifacts. Run "warden build ${spec.skill}" first.`,
       );
     }
     throw error;
@@ -1506,8 +1506,8 @@ export async function main(): Promise<void> {
             process.exit(1);
           }
           return runRuns(runsOptions, options, reporter);
-        case 'synthesize':
-          return runSynthesize(options, reporter, { abortController, interrupted });
+        case 'build':
+          return runBuild(options, reporter, { abortController, interrupted });
         default:
           return runCommand(options, reporter);
       }

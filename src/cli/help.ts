@@ -39,7 +39,7 @@ export type HelpTarget =
   | 'init'
   | 'add'
   | 'sync'
-  | 'synthesize'
+  | 'build'
   | 'setup-app'
   | 'runs'
   | 'runs:list'
@@ -173,7 +173,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   regenerate: {
     label: '--regenerate',
-    description: 'Ignore cached synthesized skill artifacts and synthesize again',
+    description: 'Ignore cached synthesized skill artifacts and build again',
   },
   prompt: {
     label: '-p, --prompt <value>',
@@ -292,14 +292,12 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden sync getsentry/skills',
     ],
   },
-  synthesize: {
-    summary: 'Generate a repo-local synthesized skill',
+  build: {
+    summary: 'Build a repo-local synthesized skill',
     description: 'Create or refresh one generated skill under .warden/skills from a prompt-backed definition.',
     usage: [
-      'warden synth <skill> [options]',
-      'warden synthesize <skill> [options]',
+      'warden build <skill> [options]',
     ],
-    aliases: ['synth'],
     arguments: [
       { label: 'skill', description: 'Synthesized skill name' },
     ],
@@ -313,9 +311,9 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       ...SHARED_COMMAND_OPTIONS,
     ],
     examples: [
-      'warden synth security --regenerate',
-      'warden synth security -p @prompt.md',
-      'warden synth sentry-security --json',
+      'warden build security --regenerate',
+      'warden build security -p @prompt.md',
+      'warden build sentry-security --json',
     ],
   },
   'setup-app': {
@@ -405,7 +403,7 @@ const ROOT_COMMANDS: { label: string; summary: string }[] = [
   { label: 'init', summary: 'Initialize Warden configuration' },
   { label: 'add [skill]', summary: 'Add a skill trigger to warden.toml' },
   { label: 'sync [remote]', summary: 'Update cached remote skills to latest' },
-  { label: 'synth <skill>', summary: 'Generate a repo-local synthesized skill' },
+  { label: 'build <skill>', summary: 'Build a repo-local synthesized skill' },
   { label: 'runs', summary: 'Inspect saved sessions and run logs' },
   { label: 'setup-app', summary: 'Create a GitHub App via manifest flow' },
   { label: 'help [command]', summary: 'Show help for a command' },
@@ -451,7 +449,7 @@ function renderRootHelp(): string {
     ...renderSection('Examples:', [
       '  warden src/auth.ts',
       '  warden HEAD~3 --skill security-review',
-      '  warden synth security --regenerate',
+      '  warden build security --regenerate',
       '  warden help runs show',
     ]),
   ];
