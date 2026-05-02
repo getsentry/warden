@@ -1,217 +1,39 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { z } from 'zod';
+import { existsSync } from 'node:fs';
+import { basename } from 'node:path';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Runtime, RuntimeName } from '../sdk/runtimes/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
-import { UsageStatsSchema, type UsageStats } from '../types/index.js';
 import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
-import { SKILL_BUILDER_REFERENCE_ROLES } from './skill-writer-guidance.js';
 import {
-  BUILD_STATE_FILE,
-  LEGACY_BUILD_STATE_FILE,
-  SYNTHESIS_DEFINITION_FILE,
+  GENERATED_SKILL_DEFINITION_FILE,
   loadGeneratedSkillDefinition,
 } from './definition.js';
+import {
+  outlineHash,
+  SKILL_BUILD_OUTLINE_SCHEMA_VERSION,
+  SKILL_BUILD_VERSION,
+  SkillBuildOutlineSchema,
+  type SkillBuildOutline,
+  type SkillBuildOutlineResult,
+  type SkillBuildSourceFile,
+  type SkillBuildSource,
+} from './outline-contract.js';
+import {
+  getBuildStatePath,
+  type SkillBuildState,
+  readSkillBuildState,
+  SKILL_BUILD_STATE_KIND,
+  SKILL_BUILD_STATE_SCHEMA_VERSION,
+  writeSkillBuildState,
+} from './outline-state.js';
 
-export const SKILL_BUILD_VERSION = '1';
-export const SKILL_BUILD_OUTLINE_SCHEMA_VERSION = 1;
-export const SKILL_BUILD_STATE_SCHEMA_VERSION = 1;
-export const SKILL_BUILD_STATE_KIND = 'skill-build-state';
+export { outlineHash, SKILL_BUILD_OUTLINE_SCHEMA_VERSION, SKILL_BUILD_VERSION, SkillBuildOutlineSchema } from './outline-contract.js';
+export type { SkillBuildOutline, SkillBuildOutlineResult, SkillBuildSource, SkillBuildSourceFile } from './outline-contract.js';
+
 export const SKILL_BUILD_MAX_TOKENS = 64_000;
 export const SKILL_BUILD_TIMEOUT_MS = 180_000;
 export const SKILL_BUILD_MAX_TURNS = 80;
-
-const OutlinePhaseStatusSchema = z.enum(['cached', 'generated', 'validated']);
-
-export const SkillBuildExternalSourceSchema = z.object({
-  title: z.string().min(1),
-  url: z.string().min(1),
-  reason: z.string().min(1),
-}).strict();
-
-export const SkillBuildPhaseSchema = z.object({
-  id: z.string().min(1),
-  status: OutlinePhaseStatusSchema,
-}).strict();
-
-export const SkillBuildScopeProfileSchema = z.object({
-  kind: z.enum(['domain', 'ecosystem', 'repository', 'product']),
-  subject: z.string().min(1),
-  localContextUsed: z.boolean(),
-  observedContext: z.array(z.string().min(1)).min(1),
-  unresolvedContext: z.array(z.string().min(1)).default([]),
-}).strict().superRefine((value, ctx) => {
-  if (value.kind === 'repository' && !value.localContextUsed) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'repository scope requires localContextUsed to be true',
-      path: ['localContextUsed'],
-    });
-  }
-  if (value.localContextUsed && value.observedContext.length === 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'observedContext is required when localContextUsed is true',
-      path: ['observedContext'],
-    });
-  }
-});
-
-export const SkillBuildTrackSchema = z.object({
-  id: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
-  title: z.string().min(1),
-  goal: z.string().min(1),
-  rationale: z.string().min(1),
-  sourceSignals: z.array(z.string().min(1)).min(1),
-  owns: z.array(z.string().min(1)).min(1),
-  excludes: z.array(z.string().min(1)).default([]),
-  relevanceSignals: z.array(z.string().min(1)).min(1),
-  evidenceFocus: z.array(z.string().min(1)).min(1),
-  checks: z.array(z.string().min(1)).min(1),
-  safeCounterpatterns: z.array(z.string().min(1)).min(1),
-  falsePositiveTraps: z.array(z.string().min(1)).min(1),
-  researchHints: z.array(z.string().min(1)).default([]),
-}).strict();
-
-export const SkillBuildOutlineSchema = z.object({
-  version: z.literal(SKILL_BUILD_OUTLINE_SCHEMA_VERSION),
-  skill: z.string().min(1),
-  sourceHash: z.string().min(1),
-  buildVersion: z.string().min(1),
-  scopeProfile: SkillBuildScopeProfileSchema,
-  build: z.object({
-    phases: z.array(SkillBuildPhaseSchema).min(1),
-    externalSources: z.array(SkillBuildExternalSourceSchema).optional(),
-  }).strict(),
-  tracks: z.array(SkillBuildTrackSchema).min(1),
-}).strict();
-
-export type SkillBuildOutline = z.infer<typeof SkillBuildOutlineSchema>;
-
-const LegacySkillBuildOutlineSchema = z.object({
-  version: z.literal(SKILL_BUILD_OUTLINE_SCHEMA_VERSION),
-  skill: z.string().min(1),
-  sourceHash: z.string().min(1),
-  synthesisVersion: z.string().min(1),
-  scopeProfile: SkillBuildScopeProfileSchema,
-  synthesis: z.object({
-    phases: z.array(SkillBuildPhaseSchema).min(1),
-    externalSources: z.array(SkillBuildExternalSourceSchema).optional(),
-  }).strict(),
-  tracks: z.array(SkillBuildTrackSchema).min(1),
-}).strict();
-
-const GeneratedSkillArtifactReferenceRoleSchema = z.enum(SKILL_BUILDER_REFERENCE_ROLES);
-
-export const GeneratedSkillArtifactStateSchema = z.object({
-  version: z.literal(3),
-  sourceHash: z.string().min(1),
-  outlineHash: z.string().min(1),
-  buildVersion: z.string().min(1),
-  name: z.string().min(1),
-  trackIds: z.array(z.string().min(1)).min(1),
-  referenceManifest: z.array(z.object({
-    trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
-    path: z.string().min(1),
-    role: GeneratedSkillArtifactReferenceRoleSchema,
-    openWhen: z.string().min(1),
-  }).strict()),
-  bytes: z.number().int().nonnegative(),
-  durationMs: z.number().nonnegative(),
-  usage: UsageStatsSchema,
-  externalSources: z.array(SkillBuildExternalSourceSchema),
-  missingInputs: z.array(z.string().min(1)),
-  responseModel: z.string().optional(),
-  numTurns: z.number().int().nonnegative().optional(),
-  generatedAt: z.string().min(1),
-}).strict();
-
-export type GeneratedSkillArtifactState = z.infer<typeof GeneratedSkillArtifactStateSchema>;
-
-const LegacyGeneratedSkillArtifactStateSchema = z.object({
-  version: z.literal(3),
-  sourceHash: z.string().min(1),
-  outlineHash: z.string().min(1),
-  synthesisVersion: z.string().min(1),
-  name: z.string().min(1),
-  trackIds: z.array(z.string().min(1)).min(1),
-  referenceManifest: z.array(z.object({
-    trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
-    path: z.string().min(1),
-    role: GeneratedSkillArtifactReferenceRoleSchema,
-    openWhen: z.string().min(1),
-  }).strict()),
-  bytes: z.number().int().nonnegative(),
-  durationMs: z.number().nonnegative(),
-  usage: UsageStatsSchema,
-  externalSources: z.array(SkillBuildExternalSourceSchema),
-  missingInputs: z.array(z.string().min(1)),
-  responseModel: z.string().optional(),
-  numTurns: z.number().int().nonnegative().optional(),
-  generatedAt: z.string().min(1),
-}).strict();
-
-export const SkillBuildStateSchema = z.object({
-  version: z.literal(SKILL_BUILD_STATE_SCHEMA_VERSION),
-  kind: z.literal(SKILL_BUILD_STATE_KIND),
-  identity: z.object({
-    requestedModel: z.string().min(1).optional(),
-  }).strict().optional(),
-  outline: SkillBuildOutlineSchema,
-  outlineRun: z.object({
-    durationMs: z.number().nonnegative().optional(),
-    usage: UsageStatsSchema.optional(),
-    responseModel: z.string().optional(),
-    numTurns: z.number().int().nonnegative().optional(),
-  }).strict().optional(),
-  artifact: GeneratedSkillArtifactStateSchema.optional(),
-  updatedAt: z.string().optional(),
-}).strict();
-
-export type SkillBuildState = z.infer<typeof SkillBuildStateSchema>;
-
-const ParsedSkillBuildStateSchema = z.object({
-  version: z.literal(SKILL_BUILD_STATE_SCHEMA_VERSION),
-  kind: z.literal(SKILL_BUILD_STATE_KIND),
-  identity: z.object({
-    requestedModel: z.string().min(1).optional(),
-  }).strict().optional(),
-  outline: z.union([SkillBuildOutlineSchema, LegacySkillBuildOutlineSchema]),
-  outlineRun: z.object({
-    durationMs: z.number().nonnegative().optional(),
-    usage: UsageStatsSchema.optional(),
-    responseModel: z.string().optional(),
-    numTurns: z.number().int().nonnegative().optional(),
-  }).strict().optional(),
-  artifact: z.union([GeneratedSkillArtifactStateSchema, LegacyGeneratedSkillArtifactStateSchema]).optional(),
-  updatedAt: z.string().optional(),
-}).strict();
-
-type ParsedSkillBuildState = z.infer<typeof ParsedSkillBuildStateSchema>;
-
-export interface SkillBuildSourceFile {
-  path: string;
-  content: string;
-}
-
-export interface SkillBuildSource {
-  hash: string;
-  files: SkillBuildSourceFile[];
-}
-
-export type SkillBuildOutlineSource = 'cache' | 'generated';
-
-export interface SkillBuildOutlineResult {
-  outline: SkillBuildOutline;
-  source: SkillBuildOutlineSource;
-  statePath: string;
-  usage?: UsageStats;
-  durationMs?: number;
-  responseModel?: string;
-  numTurns?: number;
-}
 
 export interface BuildSkillOutlineOptions {
   skill: SkillDefinition;
@@ -247,123 +69,15 @@ function sourceBlocks(source: SkillBuildSource): string {
     .join('\n\n---\n\n');
 }
 
-export function getBuildStatePath(rootDir: string): string {
-  return join(rootDir, BUILD_STATE_FILE);
-}
-
-function getLegacyBuildStatePath(rootDir: string): string {
-  return join(rootDir, LEGACY_BUILD_STATE_FILE);
-}
-
-export function resolveSkillBuildStatePath(rootDir: string): string {
-  const currentPath = getBuildStatePath(rootDir);
-  if (existsSync(currentPath)) {
-    return currentPath;
-  }
-  return getLegacyBuildStatePath(rootDir);
-}
-
-export function removeLegacySkillBuildState(rootDir: string): void {
-  rmSync(getLegacyBuildStatePath(rootDir), { force: true });
-}
-
-export function readSkillBuildState(path: string): SkillBuildState | undefined {
-  if (!existsSync(path)) {
-    return undefined;
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(path, 'utf-8'));
-  } catch {
-    return undefined;
-  }
-
-  const validation = ParsedSkillBuildStateSchema.safeParse(parsed);
-  if (!validation.success) {
-    return undefined;
-  }
-  return normalizeSkillBuildState(validation.data);
-}
-
-export function writeSkillBuildState(path: string, state: SkillBuildState): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
-}
-
-export function outlineHash(outline: SkillBuildOutline): string {
-  return sha256(JSON.stringify({
-    skill: outline.skill,
-    sourceHash: outline.sourceHash,
-    buildVersion: outline.buildVersion,
-    tracks: outline.tracks,
-    scopeProfile: outline.scopeProfile,
-  }));
-}
-
-function normalizeOutline(
-  outline: z.infer<typeof SkillBuildOutlineSchema> | z.infer<typeof LegacySkillBuildOutlineSchema>,
-): SkillBuildOutline {
-  if ('buildVersion' in outline) {
-    return outline;
-  }
-  return {
-    version: outline.version,
-    skill: outline.skill,
-    sourceHash: outline.sourceHash,
-    buildVersion: outline.synthesisVersion,
-    scopeProfile: outline.scopeProfile,
-    build: outline.synthesis,
-    tracks: outline.tracks,
-  };
-}
-
-function normalizeArtifact(
-  artifact: z.infer<typeof GeneratedSkillArtifactStateSchema> | z.infer<typeof LegacyGeneratedSkillArtifactStateSchema>,
-): GeneratedSkillArtifactState {
-  if ('buildVersion' in artifact) {
-    return artifact;
-  }
-  return {
-    version: artifact.version,
-    sourceHash: artifact.sourceHash,
-    outlineHash: artifact.outlineHash,
-    buildVersion: artifact.synthesisVersion,
-    name: artifact.name,
-    trackIds: artifact.trackIds,
-    referenceManifest: artifact.referenceManifest,
-    bytes: artifact.bytes,
-    durationMs: artifact.durationMs,
-    usage: artifact.usage,
-    externalSources: artifact.externalSources,
-    missingInputs: artifact.missingInputs,
-    responseModel: artifact.responseModel,
-    numTurns: artifact.numTurns,
-    generatedAt: artifact.generatedAt,
-  };
-}
-
-function normalizeSkillBuildState(state: ParsedSkillBuildState): SkillBuildState {
-  return {
-    version: state.version,
-    kind: state.kind,
-    identity: state.identity,
-    outline: normalizeOutline(state.outline),
-    outlineRun: state.outlineRun,
-    artifact: state.artifact ? normalizeArtifact(state.artifact) : undefined,
-    updatedAt: state.updatedAt,
-  };
-}
-
 export function collectSkillBuildSource(skill: SkillDefinition): SkillBuildSource {
   const files: SkillBuildSourceFile[] = [];
 
   if (skill.rootDir) {
     const { content } = loadGeneratedSkillDefinition(skill.rootDir);
-    files.push({ path: SYNTHESIS_DEFINITION_FILE, content });
+    files.push({ path: GENERATED_SKILL_DEFINITION_FILE, content });
   } else {
     files.push({
-      path: SYNTHESIS_DEFINITION_FILE,
+      path: GENERATED_SKILL_DEFINITION_FILE,
       content: `version: 1\nkind: generated-skill\nname: ${skill.name}\nprompt: ${JSON.stringify(skill.prompt)}\n`,
     });
   }
@@ -585,14 +299,13 @@ export async function buildSkillOutline(
   }
 
   const statePath = getBuildStatePath(rootDir);
-  const cachedStatePath = resolveSkillBuildStatePath(rootDir);
-  if (existsSync(cachedStatePath) && !regenerate) {
-    const state = parseCachedOutline(cachedStatePath, skill.name, source.hash, model);
+  if (existsSync(statePath) && !regenerate) {
+    const state = parseCachedOutline(statePath, skill.name, source.hash, model);
     if (state) {
       return {
         outline: state.outline,
         source: 'cache',
-        statePath: cachedStatePath,
+        statePath,
         usage: state.outlineRun?.usage,
         durationMs: state.outlineRun?.durationMs,
         responseModel: state.outlineRun?.responseModel,
@@ -622,7 +335,6 @@ export async function buildSkillOutline(
       });
 
       validateOutlineIdentity(result.data, skill.name, source.hash);
-      removeLegacySkillBuildState(rootDir);
       writeSkillBuildState(statePath, {
         version: SKILL_BUILD_STATE_SCHEMA_VERSION,
         kind: SKILL_BUILD_STATE_KIND,
@@ -670,7 +382,6 @@ export async function buildSkillOutline(
   }
 
   validateOutlineIdentity(result.data, skill.name, source.hash);
-  removeLegacySkillBuildState(rootDir);
   writeSkillBuildState(statePath, {
     version: SKILL_BUILD_STATE_SCHEMA_VERSION,
     kind: SKILL_BUILD_STATE_KIND,

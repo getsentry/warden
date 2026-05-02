@@ -14,11 +14,11 @@ describe('loadGeneratedSkillDefinition', () => {
     tempDirs.length = 0;
   });
 
-  it('normalizes legacy synthesized-skill definitions', () => {
+  it('loads generated skill definitions', () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'warden-skill-definition-'));
     tempDirs.push(rootDir);
     writeFileSync(join(rootDir, 'warden.yaml'), `version: 1
-kind: synthesized-skill
+kind: generated-skill
 name: security
 prompt: |-
   Find security issues.

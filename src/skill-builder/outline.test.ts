@@ -1,10 +1,16 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getBuildStatePath, readSkillBuildState, resolveSkillBuildStatePath } from './outline.js';
+import {
+  getBuildStatePath,
+  readSkillBuildState,
+  SKILL_BUILD_STATE_KIND,
+  SKILL_BUILD_STATE_SCHEMA_VERSION,
+  writeSkillBuildState,
+} from './outline-state.js';
 
-describe('resolveSkillBuildStatePath', () => {
+describe('skill build state', () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -14,31 +20,20 @@ describe('resolveSkillBuildStatePath', () => {
     tempDirs.length = 0;
   });
 
-  it('prefers build-state.json and falls back to legacy synthesis.json', () => {
+  it('writes and reads the current build-state contract', () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'warden-build-state-'));
     tempDirs.push(rootDir);
 
-    expect(resolveSkillBuildStatePath(rootDir)).toBe(join(rootDir, 'synthesis.json'));
-
-    writeFileSync(join(rootDir, 'synthesis.json'), '{}\n', 'utf-8');
-    expect(resolveSkillBuildStatePath(rootDir)).toBe(join(rootDir, 'synthesis.json'));
-
-    writeFileSync(getBuildStatePath(rootDir), '{}\n', 'utf-8');
-    expect(resolveSkillBuildStatePath(rootDir)).toBe(getBuildStatePath(rootDir));
-  });
-
-  it('normalizes legacy state fields on read', () => {
-    const rootDir = mkdtempSync(join(tmpdir(), 'warden-build-state-'));
-    tempDirs.push(rootDir);
-
-    writeFileSync(join(rootDir, 'synthesis.json'), `${JSON.stringify({
-      version: 1,
-      kind: 'skill-build-state',
+    const statePath = getBuildStatePath(rootDir);
+    writeSkillBuildState(statePath, {
+      version: SKILL_BUILD_STATE_SCHEMA_VERSION,
+      kind: SKILL_BUILD_STATE_KIND,
+      identity: { requestedModel: 'claude-sonnet-4-5' },
       outline: {
         version: 1,
         skill: 'security',
         sourceHash: 'source-hash',
-        synthesisVersion: '1',
+        buildVersion: '1',
         scopeProfile: {
           kind: 'domain',
           subject: 'Generic security review',
@@ -46,7 +41,7 @@ describe('resolveSkillBuildStatePath', () => {
           observedContext: ['Generic security review'],
           unresolvedContext: [],
         },
-        synthesis: {
+        build: {
           phases: [{ id: 'collect-inputs', status: 'generated' }],
           externalSources: [],
         },
@@ -66,11 +61,26 @@ describe('resolveSkillBuildStatePath', () => {
           researchHints: [],
         }],
       },
+      outlineRun: {
+        durationMs: 5000,
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          cacheCreation5mInputTokens: 0,
+          cacheCreation1hInputTokens: 0,
+          webSearchRequests: 0,
+          costUSD: 0.01,
+        },
+        responseModel: 'claude-sonnet-4-5',
+        numTurns: 1,
+      },
       artifact: {
         version: 3,
         sourceHash: 'source-hash',
         outlineHash: 'outline-hash',
-        synthesisVersion: '1',
+        buildVersion: '1',
         name: 'security',
         trackIds: ['auth-bypass'],
         referenceManifest: [{
@@ -78,6 +88,11 @@ describe('resolveSkillBuildStatePath', () => {
           path: 'references/tracks/auth-bypass.md',
           role: 'procedure',
           openWhen: 'authentication checks are present',
+        }, {
+          trackId: 'auth-bypass',
+          path: 'references/examples/auth-bypass/core.md',
+          role: 'examples',
+          openWhen: 'the hunk needs concrete comparisons',
         }],
         bytes: 1024,
         durationMs: 5000,
@@ -93,15 +108,24 @@ describe('resolveSkillBuildStatePath', () => {
         },
         externalSources: [],
         missingInputs: [],
+        responseModel: 'claude-sonnet-4-5',
+        numTurns: 2,
         generatedAt: '2026-05-01T00:00:00.000Z',
       },
       updatedAt: '2026-05-01T00:00:00.000Z',
-    }, null, 2)}\n`, 'utf-8');
+    });
 
-    const state = readSkillBuildState(join(rootDir, 'synthesis.json'));
-
-    expect(state?.outline.buildVersion).toBe('1');
-    expect(state?.outline.build.phases).toEqual([{ id: 'collect-inputs', status: 'generated' }]);
-    expect(state?.artifact?.buildVersion).toBe('1');
+    expect(readSkillBuildState(statePath)).toMatchObject({
+      version: 1,
+      kind: 'skill-build-state',
+      outline: {
+        skill: 'security',
+        buildVersion: '1',
+      },
+      artifact: {
+        name: 'security',
+        buildVersion: '1',
+      },
+    });
   });
 });
