@@ -557,13 +557,6 @@ export async function buildSkillOutline(
   };
 }
 
-export function describeSkillBuildOutline(outline: SkillBuildOutline): string {
-  const trackList = outline.tracks
-    .map((track) => `  - ${track.id}: ${track.title}`)
-    .join('\n');
-  return `${outline.skill}: ${outline.tracks.length} tracks\n${trackList}`;
-}
-
 export function defaultOutlineExportPath(skillName: string): string {
   return `${basename(skillName)}-outline.json`;
 }

@@ -6,7 +6,6 @@ import type { SkillDefinition, WardenConfig } from '../../config/schema.js';
 import type { UsageStats } from '../../types/index.js';
 import type { CLIOptions } from '../args.js';
 import type { Reporter } from '../output/reporter.js';
-import { Verbosity } from '../output/verbosity.js';
 import { formatBytes, formatCost, formatDuration, formatTokens } from '../output/formatters.js';
 import { runWithLiveStatus } from '../output/live-status.js';
 import { getAnthropicApiKey } from '../../utils/index.js';
@@ -21,7 +20,7 @@ import {
 } from '../../skill-builder/definition.js';
 import {
   collectSkillBuildSource,
-  describeSkillBuildOutline,
+  type SkillBuildOutline,
   SkillBuildOutlineError,
   buildSkillOutline,
 } from '../../skill-builder/outline.js';
@@ -98,6 +97,21 @@ function renderTryIt(reporter: Reporter, skillName: string): void {
   reporter.blank();
   reporter.bold('TRY IT');
   reporter.text(`  warden src/file.ts --skill ${skillName}`);
+}
+
+function renderTracks(reporter: Reporter, outline: SkillBuildOutline): void {
+  const count = outline.tracks.length;
+  const heading = reporter.mode.isTTY
+    ? `${chalk.bold('TRACKS')}${chalk.cyan(`  ${count} ${count === 1 ? 'track' : 'tracks'}`)}`
+    : `TRACKS  ${count} ${count === 1 ? 'track' : 'tracks'}`;
+  reporter.text(heading);
+  for (const track of outline.tracks) {
+    if (reporter.mode.isTTY) {
+      reporter.text(`  ${track.title}${chalk.dim(` (${track.id})`)}`);
+    } else {
+      reporter.text(`  ${track.title} (${track.id})`);
+    }
+  }
 }
 
 function outlineStatusMessage(skill: SkillDefinition): string {
@@ -308,9 +322,8 @@ export async function runBuild(
         `${outlineResult.source === 'cache' ? 'Loaded' : 'Synthesized'} outline with ${outlineResult.outline.tracks.length} ` +
         `${outlineResult.outline.tracks.length === 1 ? 'track' : 'tracks'}${outlineStats ? `  ${outlineStats}` : ''}`,
       );
-      if (reporter.verbosity >= Verbosity.Verbose) {
-        reporter.dim(describeSkillBuildOutline(outlineResult.outline));
-      }
+      reporter.blank();
+      renderTracks(reporter, outlineResult.outline);
       reporter.blank();
       reporter.bold('SKILL');
     }

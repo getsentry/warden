@@ -19,6 +19,15 @@ export const GeneratedSkillDefinitionSchema = z.object({
 
 export type GeneratedSkillDefinition = z.infer<typeof GeneratedSkillDefinitionSchema>;
 
+const ParsedGeneratedSkillDefinitionSchema = z.object({
+  version: z.literal(1),
+  kind: z.enum(['generated-skill', 'synthesized-skill']).optional(),
+  name: z.string().min(1),
+  prompt: z.string().min(1),
+  instructions: z.array(z.string().min(1)).optional(),
+  coverage: z.array(z.string().min(1)).optional(),
+}).passthrough();
+
 function safePathSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '-');
 }
@@ -89,13 +98,24 @@ export function loadGeneratedSkillDefinition(rootDir: string): {
   }
 
   const validation = GeneratedSkillDefinitionSchema.safeParse(parsed);
-  if (!validation.success) {
+  if (validation.success) {
+    return { content, data: validation.data };
+  }
+
+  const legacyValidation = ParsedGeneratedSkillDefinitionSchema.safeParse(parsed);
+  if (!legacyValidation.success) {
     throw new Error(`Generated skill definition is invalid: ${validation.error.message}`, {
       cause: validation.error,
     });
   }
 
-  return { content, data: validation.data };
+  return {
+    content,
+    data: {
+      ...legacyValidation.data,
+      kind: 'generated-skill',
+    },
+  };
 }
 
 export function buildGeneratedSkillDefinition(rootDir: string): SkillDefinition {
