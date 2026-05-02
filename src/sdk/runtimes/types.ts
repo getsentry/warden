@@ -80,7 +80,7 @@ export type AuxiliaryTask =
 
 export type SynthesisTask =
   | 'consolidation'
-  | 'skill_synthesis';
+  | 'skill_build';
 
 export type AuxiliaryRunResult<T> =
   | { success: true; data: T; usage: UsageStats }

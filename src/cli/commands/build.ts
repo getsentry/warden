@@ -313,7 +313,7 @@ export async function runBuild(
     const outlineStats = formatStats({
       durationMs: outlineResult.source === 'generated' ? outlineResult.durationMs : undefined,
       usage: outlineResult.usage,
-      sources: outlineResult.outline.synthesis.externalSources?.length ?? 0,
+      sources: outlineResult.outline.build.externalSources?.length ?? 0,
       turns: outlineResult.numTurns,
     });
 

@@ -32,7 +32,7 @@ Generated skills live under `.warden/skills/<name>/`.
 
 `build-state.json` is machine-owned continuity state. It stores the internal outline, cache identity, and generated artifact metadata.
 
-## Synthesis Flow
+## Build Flow
 
 `warden build <name>`:
 
@@ -63,7 +63,7 @@ The generated skill should behave as a router plus deep reference set:
 - `references/checklist.md` is the compact track index
 - focused files under `references/` carry the depth
 - paths and subfolders should follow lookup need, not a rigid fixed tree
-- `SOURCES.md` stores provenance and synthesis decisions, not runtime guidance
+- `SOURCES.md` stores provenance and build decisions, not runtime guidance
 
 Depth should come from:
 
@@ -90,8 +90,8 @@ Avoid broad prose and avoid fake repo specificity when the prompt is intentional
 Outline and generated artifact reuse are keyed by:
 
 - `warden.yaml`
-- requested synthesis model
-- synthesis version
+- requested build model
+- build version
 - generated artifact byte identity
 
 `--regenerate` bypasses cached outline and generated artifact reuse.

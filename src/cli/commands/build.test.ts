@@ -107,7 +107,7 @@ describe('runBuild', () => {
         version: 1,
         skill: 'security',
         sourceHash: 'source-hash',
-        synthesisVersion: '1',
+        buildVersion: '1',
         scopeProfile: {
           kind: 'domain',
           subject: 'Generic security review',
@@ -115,7 +115,7 @@ describe('runBuild', () => {
           observedContext: ['Generic security review'],
           unresolvedContext: [],
         },
-        synthesis: {
+        build: {
           phases: [{ id: 'outline', status: 'generated' }],
           externalSources: [],
         },

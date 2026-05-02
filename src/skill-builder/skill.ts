@@ -412,7 +412,7 @@ function requiresRepoInspection(outline: SkillBuildOutline): boolean {
     outline.scopeProfile.kind === 'product';
 }
 
-function defaultSynthesisMaxTurns(outline: SkillBuildOutline): number {
+function defaultBuildMaxTurns(outline: SkillBuildOutline): number {
   return requiresRepoInspection(outline)
     ? LOCAL_SKILL_BUILD_MAX_TURNS
     : GENERIC_SKILL_BUILD_MAX_TURNS;
@@ -429,7 +429,7 @@ function scaffoldSystemPrompt(outline: SkillBuildOutline): string {
     ? 'Use Read, Grep, and Glob to inspect only the repository context needed to frame the overall runtime skill, reference architecture, and evidence model.'
     : 'Do not inspect repository code just because a repo path is available. This skill is intentionally generic, so frame the runtime skill from the outline, bundled source material, and public prior art unless local repository context is explicitly required.';
 
-  return `You synthesize one generated Warden skill from an internal outline.
+  return `You build one generated Warden skill from an internal outline.
 
 ${repoInspectionGuidance} Use WebSearch or WebFetch for public prior art and current external documentation when framework, runtime, vulnerability, or ecosystem behavior affects the skill.
 
@@ -445,7 +445,7 @@ function trackSystemPrompt(outline: SkillBuildOutline): string {
     ? 'Use Read, Grep, and Glob only when the current track needs local repository details to sharpen investigation steps, safe counterpatterns, or false-positive controls.'
     : 'Do not inspect repository code just because a repo path is available. This track belongs to an intentionally generic skill, so write it from the outline, bundled source material, and public prior art unless local repository context is explicitly required.';
 
-  return `You synthesize one routed reference bundle for a generated Warden skill.
+  return `You build one routed reference bundle for a generated Warden skill.
 
 ${repoInspectionGuidance} Use WebSearch or WebFetch for public prior art and current external documentation when framework, runtime, vulnerability, or ecosystem behavior affects the track.
 
@@ -512,7 +512,7 @@ Return only JSON with this exact shape:
 }
 
 Required SKILL.md body contents:
-- State that this is a synthesized Warden skill for outline "${outline.skill}".
+- State that this is a generated Warden skill for outline "${outline.skill}".
 - Instruct the execution agent to read references/checklist.md before reporting findings.
 - Instruct the execution agent to open only the routed references listed for each selected track in references/checklist.md.
 - Instruct the execution agent to identify the relevant checklist tracks for the current file and hunk before doing deeper investigation.
@@ -554,7 +554,7 @@ Map each outline track id to the generated reference paths that own it.
 
 ## Depth Expansion Passes
 
-Show how this synthesis covered:
+Show how this build covered:
 - issue prerequisites
 - happy-path and failure-mode investigation logic
 - false-positive controls and safe counterpatterns
@@ -568,7 +568,7 @@ Use bullets for missing context and next retrieval or validation steps, or state
 
 ## Changelog
 
-Record this synthesis pass.
+Record this build pass.
 </instructions>`;
 }
 
@@ -754,7 +754,7 @@ function combineOutputs(args: {
     const track = args.tracks.find((item) => item.trackId === outlineTrack.id);
     if (!track) {
       throw new GeneratedSkillBuildError(
-        `Track "${outlineTrack.id}" was not synthesized for ${args.outline.skill}`,
+        `Track "${outlineTrack.id}" was not built for ${args.outline.skill}`,
       );
     }
     if (track.title !== outlineTrack.title) {
@@ -945,7 +945,7 @@ function loadCachedArtifact(args: {
   if (
     metadata.sourceHash !== args.source.hash ||
     metadata.outlineHash !== outlineHash(args.outline) ||
-    metadata.synthesisVersion !== args.outline.synthesisVersion ||
+    metadata.buildVersion !== args.outline.buildVersion ||
     JSON.stringify(metadata.trackIds) !== JSON.stringify(expectedTrackIds) ||
     JSON.stringify(parsedManifest.map((reference) => reference.path).sort()) !== JSON.stringify(referencePaths) ||
     metadata.bytes !== bytes
@@ -1067,7 +1067,7 @@ export async function buildGeneratedSkill(args: {
       }),
       schema: GeneratedSkillScaffoldSchema,
       model: args.model,
-      maxTurns: args.maxTurns ?? defaultSynthesisMaxTurns(args.outline),
+      maxTurns: args.maxTurns ?? defaultBuildMaxTurns(args.outline),
       abortController: args.abortController,
       repair: {
         apiKey: args.apiKey,
@@ -1105,7 +1105,7 @@ export async function buildGeneratedSkill(args: {
         schema: SkillBuildTrackReferenceSchema,
         model: args.model,
         maxTurns: Math.min(
-          args.maxTurns ?? defaultSynthesisMaxTurns(args.outline),
+          args.maxTurns ?? defaultBuildMaxTurns(args.outline),
           defaultTrackMaxTurns(args.outline),
         ),
         abortController: args.abortController,
@@ -1120,7 +1120,7 @@ export async function buildGeneratedSkill(args: {
         result.data.trackId !== track.id
       ) {
         throw new GeneratedSkillBuildError(
-          `Generated track synthesis identity mismatch for ${args.outline.skill}:${track.id}`,
+          `Generated track build identity mismatch for ${args.outline.skill}:${track.id}`,
         );
       }
       tracks.push(result.data);
@@ -1164,7 +1164,7 @@ export async function buildGeneratedSkill(args: {
         version: GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION,
         sourceHash: args.source.hash,
         outlineHash: outlineHash(args.outline),
-        synthesisVersion: args.outline.synthesisVersion,
+        buildVersion: args.outline.buildVersion,
         name: artifact.name,
         trackIds: args.outline.tracks.map((track) => track.id),
         referenceManifest,
@@ -1187,7 +1187,7 @@ export async function buildGeneratedSkill(args: {
     }
     if (error instanceof StructuredSkillBuilderAgentError) {
       throw new GeneratedSkillBuildError(
-        `Generated skill synthesis failed for ${args.outline.skill}: ${error.message}`,
+        `Generated skill build failed for ${args.outline.skill}: ${error.message}`,
         { cause: error },
       );
     }

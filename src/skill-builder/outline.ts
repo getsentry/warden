@@ -15,13 +15,13 @@ import {
   loadGeneratedSkillDefinition,
 } from './definition.js';
 
-export const SYNTHESIS_VERSION = '1';
+export const SKILL_BUILD_VERSION = '1';
 export const SKILL_BUILD_OUTLINE_SCHEMA_VERSION = 1;
 export const SKILL_BUILD_STATE_SCHEMA_VERSION = 1;
 export const SKILL_BUILD_STATE_KIND = 'skill-build-state';
-export const SYNTHESIS_MAX_TOKENS = 64_000;
-export const SYNTHESIS_TIMEOUT_MS = 180_000;
-export const SYNTHESIS_MAX_TURNS = 80;
+export const SKILL_BUILD_MAX_TOKENS = 64_000;
+export const SKILL_BUILD_TIMEOUT_MS = 180_000;
+export const SKILL_BUILD_MAX_TURNS = 80;
 
 const OutlinePhaseStatusSchema = z.enum(['cached', 'generated', 'validated']);
 
@@ -79,6 +79,21 @@ export const SkillBuildOutlineSchema = z.object({
   version: z.literal(SKILL_BUILD_OUTLINE_SCHEMA_VERSION),
   skill: z.string().min(1),
   sourceHash: z.string().min(1),
+  buildVersion: z.string().min(1),
+  scopeProfile: SkillBuildScopeProfileSchema,
+  build: z.object({
+    phases: z.array(SkillBuildPhaseSchema).min(1),
+    externalSources: z.array(SkillBuildExternalSourceSchema).optional(),
+  }).strict(),
+  tracks: z.array(SkillBuildTrackSchema).min(1),
+}).strict();
+
+export type SkillBuildOutline = z.infer<typeof SkillBuildOutlineSchema>;
+
+const LegacySkillBuildOutlineSchema = z.object({
+  version: z.literal(SKILL_BUILD_OUTLINE_SCHEMA_VERSION),
+  skill: z.string().min(1),
+  sourceHash: z.string().min(1),
   synthesisVersion: z.string().min(1),
   scopeProfile: SkillBuildScopeProfileSchema,
   synthesis: z.object({
@@ -88,11 +103,34 @@ export const SkillBuildOutlineSchema = z.object({
   tracks: z.array(SkillBuildTrackSchema).min(1),
 }).strict();
 
-export type SkillBuildOutline = z.infer<typeof SkillBuildOutlineSchema>;
-
 const GeneratedSkillArtifactReferenceRoleSchema = z.enum(SKILL_BUILDER_REFERENCE_ROLES);
 
 export const GeneratedSkillArtifactStateSchema = z.object({
+  version: z.literal(3),
+  sourceHash: z.string().min(1),
+  outlineHash: z.string().min(1),
+  buildVersion: z.string().min(1),
+  name: z.string().min(1),
+  trackIds: z.array(z.string().min(1)).min(1),
+  referenceManifest: z.array(z.object({
+    trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
+    path: z.string().min(1),
+    role: GeneratedSkillArtifactReferenceRoleSchema,
+    openWhen: z.string().min(1),
+  }).strict()),
+  bytes: z.number().int().nonnegative(),
+  durationMs: z.number().nonnegative(),
+  usage: UsageStatsSchema,
+  externalSources: z.array(SkillBuildExternalSourceSchema),
+  missingInputs: z.array(z.string().min(1)),
+  responseModel: z.string().optional(),
+  numTurns: z.number().int().nonnegative().optional(),
+  generatedAt: z.string().min(1),
+}).strict();
+
+export type GeneratedSkillArtifactState = z.infer<typeof GeneratedSkillArtifactStateSchema>;
+
+const LegacyGeneratedSkillArtifactStateSchema = z.object({
   version: z.literal(3),
   sourceHash: z.string().min(1),
   outlineHash: z.string().min(1),
@@ -115,8 +153,6 @@ export const GeneratedSkillArtifactStateSchema = z.object({
   generatedAt: z.string().min(1),
 }).strict();
 
-export type GeneratedSkillArtifactState = z.infer<typeof GeneratedSkillArtifactStateSchema>;
-
 export const SkillBuildStateSchema = z.object({
   version: z.literal(SKILL_BUILD_STATE_SCHEMA_VERSION),
   kind: z.literal(SKILL_BUILD_STATE_KIND),
@@ -135,6 +171,25 @@ export const SkillBuildStateSchema = z.object({
 }).strict();
 
 export type SkillBuildState = z.infer<typeof SkillBuildStateSchema>;
+
+const ParsedSkillBuildStateSchema = z.object({
+  version: z.literal(SKILL_BUILD_STATE_SCHEMA_VERSION),
+  kind: z.literal(SKILL_BUILD_STATE_KIND),
+  identity: z.object({
+    requestedModel: z.string().min(1).optional(),
+  }).strict().optional(),
+  outline: z.union([SkillBuildOutlineSchema, LegacySkillBuildOutlineSchema]),
+  outlineRun: z.object({
+    durationMs: z.number().nonnegative().optional(),
+    usage: UsageStatsSchema.optional(),
+    responseModel: z.string().optional(),
+    numTurns: z.number().int().nonnegative().optional(),
+  }).strict().optional(),
+  artifact: z.union([GeneratedSkillArtifactStateSchema, LegacyGeneratedSkillArtifactStateSchema]).optional(),
+  updatedAt: z.string().optional(),
+}).strict();
+
+type ParsedSkillBuildState = z.infer<typeof ParsedSkillBuildStateSchema>;
 
 export interface SkillBuildSourceFile {
   path: string;
@@ -224,8 +279,11 @@ export function readSkillBuildState(path: string): SkillBuildState | undefined {
     return undefined;
   }
 
-  const validation = SkillBuildStateSchema.safeParse(parsed);
-  return validation.success ? validation.data : undefined;
+  const validation = ParsedSkillBuildStateSchema.safeParse(parsed);
+  if (!validation.success) {
+    return undefined;
+  }
+  return normalizeSkillBuildState(validation.data);
 }
 
 export function writeSkillBuildState(path: string, state: SkillBuildState): void {
@@ -237,10 +295,64 @@ export function outlineHash(outline: SkillBuildOutline): string {
   return sha256(JSON.stringify({
     skill: outline.skill,
     sourceHash: outline.sourceHash,
-    synthesisVersion: outline.synthesisVersion,
+    buildVersion: outline.buildVersion,
     tracks: outline.tracks,
     scopeProfile: outline.scopeProfile,
   }));
+}
+
+function normalizeOutline(
+  outline: z.infer<typeof SkillBuildOutlineSchema> | z.infer<typeof LegacySkillBuildOutlineSchema>,
+): SkillBuildOutline {
+  if ('buildVersion' in outline) {
+    return outline;
+  }
+  return {
+    version: outline.version,
+    skill: outline.skill,
+    sourceHash: outline.sourceHash,
+    buildVersion: outline.synthesisVersion,
+    scopeProfile: outline.scopeProfile,
+    build: outline.synthesis,
+    tracks: outline.tracks,
+  };
+}
+
+function normalizeArtifact(
+  artifact: z.infer<typeof GeneratedSkillArtifactStateSchema> | z.infer<typeof LegacyGeneratedSkillArtifactStateSchema>,
+): GeneratedSkillArtifactState {
+  if ('buildVersion' in artifact) {
+    return artifact;
+  }
+  return {
+    version: artifact.version,
+    sourceHash: artifact.sourceHash,
+    outlineHash: artifact.outlineHash,
+    buildVersion: artifact.synthesisVersion,
+    name: artifact.name,
+    trackIds: artifact.trackIds,
+    referenceManifest: artifact.referenceManifest,
+    bytes: artifact.bytes,
+    durationMs: artifact.durationMs,
+    usage: artifact.usage,
+    externalSources: artifact.externalSources,
+    missingInputs: artifact.missingInputs,
+    responseModel: artifact.responseModel,
+    numTurns: artifact.numTurns,
+    generatedAt: artifact.generatedAt,
+  };
+}
+
+function normalizeSkillBuildState(state: ParsedSkillBuildState): SkillBuildState {
+  return {
+    version: state.version,
+    kind: state.kind,
+    identity: state.identity,
+    outline: normalizeOutline(state.outline),
+    outlineRun: state.outlineRun,
+    artifact: state.artifact ? normalizeArtifact(state.artifact) : undefined,
+    updatedAt: state.updatedAt,
+  };
 }
 
 export function collectSkillBuildSource(skill: SkillDefinition): SkillBuildSource {
@@ -275,7 +387,7 @@ function validateOutlineIdentity(outline: SkillBuildOutline, skillName: string, 
       `Generated skill outline source hash mismatch for ${skillName}. Regenerate the skill.`,
     );
   }
-  if (outline.synthesisVersion !== SYNTHESIS_VERSION) {
+  if (outline.buildVersion !== SKILL_BUILD_VERSION) {
     throw new SkillBuildOutlineError(
       `Generated skill outline version mismatch for ${skillName}. Regenerate the skill.`,
     );
@@ -319,7 +431,7 @@ function buildOutlinePrompt(
   source: SkillBuildSource,
   previousOutline?: SkillBuildOutline,
 ): string {
-  return `You synthesize the internal outline for one repo-local Warden skill.
+  return `You build the internal outline for one repo-local Warden skill.
 
 This outline exists only to shape one generated skill with a checklist index and deep per-track references. It is planning metadata, not a runnable skill.
 
@@ -328,7 +440,7 @@ Rules:
 - Use version ${SKILL_BUILD_OUTLINE_SCHEMA_VERSION}.
 - Use skill "${skill.name}".
 - Use sourceHash "${source.hash}" exactly.
-- Use synthesisVersion "${SYNTHESIS_VERSION}" exactly.
+- Use buildVersion "${SKILL_BUILD_VERSION}" exactly.
 - First determine what kind of skill this is: domain, ecosystem, repository, or product.
 - First determine the full agenda implied by the prompt, metadata contract, and source material. The track set exists only to accomplish that agenda completely.
 - Split by analysis concern, not file type, severity, or implementation phase.
@@ -371,7 +483,7 @@ JSON shape:
   "version": ${SKILL_BUILD_OUTLINE_SCHEMA_VERSION},
   "skill": "${skill.name}",
   "sourceHash": "${source.hash}",
-  "synthesisVersion": "${SYNTHESIS_VERSION}",
+  "buildVersion": "${SKILL_BUILD_VERSION}",
   "scopeProfile": {
     "kind": "repository",
     "subject": "Security review for this repo's CLI and runtime surfaces",
@@ -383,12 +495,12 @@ JSON shape:
     ],
     "unresolvedContext": ["Production deployment boundary, if it materially affects decomposition"]
   },
-  "synthesis": {
+  "build": {
     "phases": [
       {"id": "collect-inputs", "status": "generated"},
       {"id": "assess-source-depth", "status": "generated"},
       {"id": "identify-research-needs", "status": "generated"},
-      {"id": "synthesize-tracks", "status": "generated"},
+      {"id": "build-tracks", "status": "generated"},
       {"id": "validate-coverage", "status": "validated"}
     ],
     "externalSources": [
@@ -419,7 +531,7 @@ Quality bar:
 - The track set should be specific enough that one generated skill can route to distinct deep references and avoid duplicate reports.
 - Each track should have the right amount of work for one coherent investigation track: not so broad that it becomes shallow, and not so narrow that the split becomes busywork.
 - The checks should be specific enough that the generated skill can follow them as a checklist without having to invent the structure again.
-- The track set should give later synthesis enough depth hooks to expand into strong references: relevanceSignals, safeCounterpatterns, falsePositiveTraps, and researchHints should be concrete instead of generic filler.
+- The track set should give later build steps enough depth hooks to expand into strong references: relevanceSignals, safeCounterpatterns, falsePositiveTraps, and researchHints should be concrete instead of generic filler.
 - Repository or product skills must reflect the local context actually observed. Domain or ecosystem skills must say they are generic and stay aligned with the supplied scope.
 
 Skill description:
@@ -432,7 +544,7 @@ ${sourceBlocks(source)}`;
 }
 
 function buildOutlineSystemPrompt(): string {
-  return `You synthesize the internal outline for one generated Warden skill.
+  return `You build the internal outline for one generated Warden skill.
 
 Use Read, Grep, and Glob to inspect relevant repository source before deciding how to decompose the skill when local context is needed. Use WebSearch or WebFetch for public prior art and current external documentation when framework, runtime, vulnerability, or ecosystem behavior affects the outline.
 
@@ -500,7 +612,7 @@ export async function buildSkillOutline(
         userPrompt: buildOutlinePrompt(skill, source, options.previousOutline),
         schema: SkillBuildOutlineSchema,
         model,
-        maxTurns: options.maxTurns ?? SYNTHESIS_MAX_TURNS,
+        maxTurns: options.maxTurns ?? SKILL_BUILD_MAX_TURNS,
         abortController: options.abortController,
         repair: {
           apiKey,
@@ -536,25 +648,25 @@ export async function buildSkillOutline(
       };
     } catch (error) {
       if (error instanceof StructuredSkillBuilderAgentError) {
-        throw new SkillBuildOutlineError(`Skill outline synthesis failed: ${error.message}`, { cause: error });
+        throw new SkillBuildOutlineError(`Skill outline build failed: ${error.message}`, { cause: error });
       }
       throw error;
     }
   }
 
   const result = await runtime.runSynthesis({
-    task: 'skill_synthesis',
+    task: 'skill_build',
     apiKey,
     prompt: buildOutlinePrompt(skill, source, options.previousOutline),
     schema: SkillBuildOutlineSchema,
     model,
-    maxTokens: SYNTHESIS_MAX_TOKENS,
-    timeout: SYNTHESIS_TIMEOUT_MS,
+    maxTokens: SKILL_BUILD_MAX_TOKENS,
+    timeout: SKILL_BUILD_TIMEOUT_MS,
     maxRetries,
   });
 
   if (!result.success) {
-    throw new SkillBuildOutlineError(`Skill outline synthesis failed: ${result.error}`);
+    throw new SkillBuildOutlineError(`Skill outline build failed: ${result.error}`);
   }
 
   validateOutlineIdentity(result.data, skill.name, source.hash);
