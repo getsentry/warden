@@ -550,7 +550,7 @@ export async function analyzeFile(
           findings: result.findings,
           usage: result.usage,
           durationMs: hunkDurationMs,
-          failed: result.failed,
+          failed: result.failed && result.failureCode !== 'aborted',
           extractionFailed: result.extractionFailed,
           failureCode: result.failureCode,
           failureMessage: result.failureMessage,

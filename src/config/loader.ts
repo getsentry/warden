@@ -105,12 +105,21 @@ function mergeChunkingConfig(
   };
 }
 
+function mergeNestedConfig<T extends object>(base?: T, overlay?: T): T | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return { ...base, ...overlay };
+}
+
 function mergeDefaults(base?: Defaults, overlay?: Defaults): Defaults | undefined {
   if (!base) return overlay;
   if (!overlay) return base;
   return {
     ...base,
     ...overlay,
+    agent: mergeNestedConfig(base.agent, overlay.agent),
+    auxiliary: mergeNestedConfig(base.auxiliary, overlay.auxiliary),
+    synthesis: mergeNestedConfig(base.synthesis, overlay.synthesis),
     ignorePaths: mergeArray(base.ignorePaths, overlay.ignorePaths),
     chunking: mergeChunkingConfig(base.chunking, overlay.chunking),
   };

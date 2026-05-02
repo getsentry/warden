@@ -37,8 +37,8 @@ coverage/
 
 # Warden artifacts (logs, sessions, etc.)
 .warden/*
-!.warden/superwarden/
-!.warden/superwarden/**
+!.warden/skills/
+!.warden/skills/**
 
 # Temporary files
 *.tmp

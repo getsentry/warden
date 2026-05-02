@@ -573,6 +573,35 @@ describe('mergeWardenConfigs', () => {
     expect(merged.skills.map((skill) => skill.name)).toEqual(['org-skill', 'repo-skill']);
   });
 
+  it('deep-merges nested default model lanes across layers', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        agent: { model: 'agent-base', maxTurns: 20 },
+        auxiliary: { model: 'aux-base', maxRetries: 5 },
+        synthesis: { model: 'synth-base' },
+      },
+      skills: [],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        agent: { model: 'agent-repo' },
+        auxiliary: { model: 'aux-repo' },
+      },
+      skills: [],
+    };
+
+    const merged = mergeWardenConfigs(baseConfig, repoConfig);
+
+    expect(merged.defaults).toMatchObject({
+      agent: { model: 'agent-repo', maxTurns: 20 },
+      auxiliary: { model: 'aux-repo', maxRetries: 5 },
+      synthesis: { model: 'synth-base' },
+    });
+  });
+
   it('rejects duplicate skill names across layers', () => {
     const baseConfig: WardenConfig = {
       version: 1,

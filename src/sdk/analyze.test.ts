@@ -166,7 +166,7 @@ describe('analyzeFile', () => {
     expect(onRetry).not.toHaveBeenCalled();
     expect(onHunkFailed).toHaveBeenCalledWith('1', 'Analysis aborted');
     expect(onChunkComplete).toHaveBeenCalledWith(expect.objectContaining({
-      failed: true,
+      failed: false,
       failureCode: 'aborted',
       failureMessage: 'Analysis aborted',
     }));
