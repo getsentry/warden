@@ -50,7 +50,7 @@ function notifyHunkFailed(
     callbacks.onHunkFailed?.(lineRange, message);
     return;
   }
-  console.error(message);
+  console.error(`Hunk analysis failed for ${lineRange}.`);
 }
 
 function isAbortRequested(error: unknown, abortController?: AbortController): boolean {

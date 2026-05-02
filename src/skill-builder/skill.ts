@@ -299,7 +299,11 @@ export class GeneratedSkillBuildError extends Error {
 }
 
 function frontmatterValue(value: string): string {
-  return value.replace(/\s+/g, ' ').trim().replace(/"/g, '\\"');
+  return value
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
 }
 
 function byteLength(...contents: string[]): number {
