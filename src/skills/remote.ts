@@ -457,7 +457,7 @@ const REMOTE_SKILL_DIRECTORIES = [
   'skills',         // skills/ subdirectory
   '.agents/skills', // General agent skills (primary)
   '.claude/skills', // Claude Code skills
-  '.warden/skills', // Repo-local synthesized skills
+  '.warden/skills', // Repo-local generated skills
 ];
 
 /** Directories to search for agents in remote repositories */

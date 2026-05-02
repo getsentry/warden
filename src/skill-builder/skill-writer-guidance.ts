@@ -1,4 +1,4 @@
-export const SYNTH_REFERENCE_ROLES = [
+export const SKILL_BUILDER_REFERENCE_ROLES = [
   'procedure',
   'examples',
   'decision-guide',
@@ -6,9 +6,9 @@ export const SYNTH_REFERENCE_ROLES = [
   'troubleshooting',
 ] as const;
 
-export type SynthReferenceRole = (typeof SYNTH_REFERENCE_ROLES)[number];
+export type SkillBuilderReferenceRole = (typeof SKILL_BUILDER_REFERENCE_ROLES)[number];
 
-export const SYNTH_GENERIC_REFERENCE_BASENAMES = new Set([
+export const SKILL_BUILDER_GENERIC_REFERENCE_BASENAMES = new Set([
   'context.md',
   'misc.md',
   'notes.md',
@@ -18,7 +18,7 @@ export const SYNTH_GENERIC_REFERENCE_BASENAMES = new Set([
   'research.md',
 ]);
 
-export const SYNTH_REQUIRED_PROCEDURE_HEADINGS = [
+export const SKILL_BUILDER_REQUIRED_PROCEDURE_HEADINGS = [
   '## When To Use',
   '## Investigate In Order',
   '## Evidence To Require',
@@ -27,7 +27,7 @@ export const SYNTH_REQUIRED_PROCEDURE_HEADINGS = [
   '## Severity And Confidence',
 ] as const;
 
-export const SYNTH_REQUIRED_EXAMPLES_HEADINGS = [
+export const SKILL_BUILDER_REQUIRED_EXAMPLES_HEADINGS = [
   '## True Positives',
   '## Safe Lookalikes',
   '## Corrected Patterns',

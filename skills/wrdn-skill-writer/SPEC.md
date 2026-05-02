@@ -57,7 +57,7 @@ Useful improvement sources:
 
 - positive examples: successful bundled skill additions and focused Warden skill refreshes
 - negative examples: vague trigger language, stale Warden schema references, or missing maintenance artifacts
-- commit logs/changelogs: changes to bundled skills, skill loading, config schema, and synthesized-skill implementation
+- commit logs/changelogs: changes to bundled skills, skill loading, config schema, and generated-skill implementation
 - issue or PR feedback: reports that a bundled skill drifted, over-triggered, or missed important local conventions
 - eval results: future skill-authoring eval scenarios
 

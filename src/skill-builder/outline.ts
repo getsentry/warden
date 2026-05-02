@@ -6,35 +6,35 @@ import type { SkillDefinition } from '../config/schema.js';
 import type { Runtime, RuntimeName } from '../sdk/runtimes/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import { UsageStatsSchema, type UsageStats } from '../types/index.js';
-import { runStructuredSynthAgent, StructuredSynthAgentError } from './agentic.js';
-import { SYNTH_REFERENCE_ROLES } from './skill-writer-guidance.js';
+import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
+import { SKILL_BUILDER_REFERENCE_ROLES } from './skill-writer-guidance.js';
 import {
   SYNTHESIS_DEFINITION_FILE,
-  loadSynthesizedSkillDefinition,
+  loadGeneratedSkillDefinition,
 } from './definition.js';
 
 export const SYNTHESIS_VERSION = '1';
-export const SYNTH_OUTLINE_SCHEMA_VERSION = 1;
-export const SYNTH_STATE_SCHEMA_VERSION = 1;
-export const SYNTH_STATE_KIND = 'synthesized-skill-state';
+export const SKILL_BUILD_OUTLINE_SCHEMA_VERSION = 1;
+export const SKILL_BUILD_STATE_SCHEMA_VERSION = 1;
+export const SKILL_BUILD_STATE_KIND = 'skill-build-state';
 export const SYNTHESIS_MAX_TOKENS = 64_000;
 export const SYNTHESIS_TIMEOUT_MS = 180_000;
 export const SYNTHESIS_MAX_TURNS = 80;
 
 const OutlinePhaseStatusSchema = z.enum(['cached', 'generated', 'validated']);
 
-export const SynthExternalSourceSchema = z.object({
+export const SkillBuildExternalSourceSchema = z.object({
   title: z.string().min(1),
   url: z.string().min(1),
   reason: z.string().min(1),
 }).strict();
 
-export const SynthPhaseSchema = z.object({
+export const SkillBuildPhaseSchema = z.object({
   id: z.string().min(1),
   status: OutlinePhaseStatusSchema,
 }).strict();
 
-export const SynthScopeProfileSchema = z.object({
+export const SkillBuildScopeProfileSchema = z.object({
   kind: z.enum(['domain', 'ecosystem', 'repository', 'product']),
   subject: z.string().min(1),
   localContextUsed: z.boolean(),
@@ -57,7 +57,7 @@ export const SynthScopeProfileSchema = z.object({
   }
 });
 
-export const SynthTrackSchema = z.object({
+export const SkillBuildTrackSchema = z.object({
   id: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
   title: z.string().min(1),
   goal: z.string().min(1),
@@ -73,24 +73,24 @@ export const SynthTrackSchema = z.object({
   researchHints: z.array(z.string().min(1)).default([]),
 }).strict();
 
-export const SynthOutlineSchema = z.object({
-  version: z.literal(SYNTH_OUTLINE_SCHEMA_VERSION),
+export const SkillBuildOutlineSchema = z.object({
+  version: z.literal(SKILL_BUILD_OUTLINE_SCHEMA_VERSION),
   skill: z.string().min(1),
   sourceHash: z.string().min(1),
   synthesisVersion: z.string().min(1),
-  scopeProfile: SynthScopeProfileSchema,
+  scopeProfile: SkillBuildScopeProfileSchema,
   synthesis: z.object({
-    phases: z.array(SynthPhaseSchema).min(1),
-    externalSources: z.array(SynthExternalSourceSchema).optional(),
+    phases: z.array(SkillBuildPhaseSchema).min(1),
+    externalSources: z.array(SkillBuildExternalSourceSchema).optional(),
   }).strict(),
-  tracks: z.array(SynthTrackSchema).min(1),
+  tracks: z.array(SkillBuildTrackSchema).min(1),
 }).strict();
 
-export type SynthOutline = z.infer<typeof SynthOutlineSchema>;
+export type SkillBuildOutline = z.infer<typeof SkillBuildOutlineSchema>;
 
-const SynthArtifactReferenceRoleSchema = z.enum(SYNTH_REFERENCE_ROLES);
+const GeneratedSkillArtifactReferenceRoleSchema = z.enum(SKILL_BUILDER_REFERENCE_ROLES);
 
-export const SynthArtifactStateSchema = z.object({
+export const GeneratedSkillArtifactStateSchema = z.object({
   version: z.literal(3),
   sourceHash: z.string().min(1),
   outlineHash: z.string().min(1),
@@ -100,55 +100,55 @@ export const SynthArtifactStateSchema = z.object({
   referenceManifest: z.array(z.object({
     trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
     path: z.string().min(1),
-    role: SynthArtifactReferenceRoleSchema,
+    role: GeneratedSkillArtifactReferenceRoleSchema,
     openWhen: z.string().min(1),
   }).strict()),
   bytes: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
   usage: UsageStatsSchema,
-  externalSources: z.array(SynthExternalSourceSchema),
+  externalSources: z.array(SkillBuildExternalSourceSchema),
   missingInputs: z.array(z.string().min(1)),
   responseModel: z.string().optional(),
   numTurns: z.number().int().nonnegative().optional(),
   generatedAt: z.string().min(1),
 }).strict();
 
-export type SynthArtifactState = z.infer<typeof SynthArtifactStateSchema>;
+export type GeneratedSkillArtifactState = z.infer<typeof GeneratedSkillArtifactStateSchema>;
 
-export const SynthStateSchema = z.object({
-  version: z.literal(SYNTH_STATE_SCHEMA_VERSION),
-  kind: z.literal(SYNTH_STATE_KIND),
+export const SkillBuildStateSchema = z.object({
+  version: z.literal(SKILL_BUILD_STATE_SCHEMA_VERSION),
+  kind: z.literal(SKILL_BUILD_STATE_KIND),
   identity: z.object({
     requestedModel: z.string().min(1).optional(),
   }).strict().optional(),
-  outline: SynthOutlineSchema,
+  outline: SkillBuildOutlineSchema,
   outlineRun: z.object({
     durationMs: z.number().nonnegative().optional(),
     usage: UsageStatsSchema.optional(),
     responseModel: z.string().optional(),
     numTurns: z.number().int().nonnegative().optional(),
   }).strict().optional(),
-  artifact: SynthArtifactStateSchema.optional(),
+  artifact: GeneratedSkillArtifactStateSchema.optional(),
   updatedAt: z.string().optional(),
 }).strict();
 
-export type SynthState = z.infer<typeof SynthStateSchema>;
+export type SkillBuildState = z.infer<typeof SkillBuildStateSchema>;
 
-export interface SynthSourceFile {
+export interface SkillBuildSourceFile {
   path: string;
   content: string;
 }
 
-export interface SynthSource {
+export interface SkillBuildSource {
   hash: string;
-  files: SynthSourceFile[];
+  files: SkillBuildSourceFile[];
 }
 
-export type SynthOutlineSource = 'cache' | 'generated';
+export type SkillBuildOutlineSource = 'cache' | 'generated';
 
-export interface SynthOutlineResult {
-  outline: SynthOutline;
-  source: SynthOutlineSource;
+export interface SkillBuildOutlineResult {
+  outline: SkillBuildOutline;
+  source: SkillBuildOutlineSource;
   statePath: string;
   usage?: UsageStats;
   durationMs?: number;
@@ -156,13 +156,13 @@ export interface SynthOutlineResult {
   numTurns?: number;
 }
 
-export interface SynthesizeSynthOutlineOptions {
+export interface BuildSkillOutlineOptions {
   skill: SkillDefinition;
   runtime?: Runtime;
   runtimeName?: RuntimeName;
   apiKey?: string;
   model?: string;
-  previousOutline?: SynthOutline;
+  previousOutline?: SkillBuildOutline;
   maxRetries?: number;
   regenerate?: boolean;
   abortController?: AbortController;
@@ -173,10 +173,10 @@ export interface SynthesizeSynthOutlineOptions {
   onStatus?: (message: string) => void;
 }
 
-export class SynthOutlineError extends Error {
+export class SkillBuildOutlineError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
-    this.name = 'SynthOutlineError';
+    this.name = 'SkillBuildOutlineError';
   }
 }
 
@@ -184,7 +184,7 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function sourceBlocks(source: SynthSource): string {
+function sourceBlocks(source: SkillBuildSource): string {
   return source.files
     .map((file) => `## ${file.path}\n\n${file.content}`)
     .join('\n\n---\n\n');
@@ -194,7 +194,7 @@ export function getSynthesisStatePath(rootDir: string): string {
   return join(rootDir, 'synthesis.json');
 }
 
-export function readSynthState(path: string): SynthState | undefined {
+export function readSkillBuildState(path: string): SkillBuildState | undefined {
   if (!existsSync(path)) {
     return undefined;
   }
@@ -206,16 +206,16 @@ export function readSynthState(path: string): SynthState | undefined {
     return undefined;
   }
 
-  const validation = SynthStateSchema.safeParse(parsed);
+  const validation = SkillBuildStateSchema.safeParse(parsed);
   return validation.success ? validation.data : undefined;
 }
 
-export function writeSynthState(path: string, state: SynthState): void {
+export function writeSkillBuildState(path: string, state: SkillBuildState): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
 }
 
-export function outlineHash(outline: SynthOutline): string {
+export function outlineHash(outline: SkillBuildOutline): string {
   return sha256(JSON.stringify({
     skill: outline.skill,
     sourceHash: outline.sourceHash,
@@ -225,16 +225,16 @@ export function outlineHash(outline: SynthOutline): string {
   }));
 }
 
-export function collectSynthSource(skill: SkillDefinition): SynthSource {
-  const files: SynthSourceFile[] = [];
+export function collectSkillBuildSource(skill: SkillDefinition): SkillBuildSource {
+  const files: SkillBuildSourceFile[] = [];
 
   if (skill.rootDir) {
-    const { content } = loadSynthesizedSkillDefinition(skill.rootDir);
+    const { content } = loadGeneratedSkillDefinition(skill.rootDir);
     files.push({ path: SYNTHESIS_DEFINITION_FILE, content });
   } else {
     files.push({
       path: SYNTHESIS_DEFINITION_FILE,
-      content: `version: 1\nkind: synthesized-skill\nname: ${skill.name}\nprompt: ${JSON.stringify(skill.prompt)}\n`,
+      content: `version: 1\nkind: generated-skill\nname: ${skill.name}\nprompt: ${JSON.stringify(skill.prompt)}\n`,
     });
   }
 
@@ -246,33 +246,33 @@ export function collectSynthSource(skill: SkillDefinition): SynthSource {
   return { hash, files };
 }
 
-function validateOutlineIdentity(outline: SynthOutline, skillName: string, sourceHash: string): void {
+function validateOutlineIdentity(outline: SkillBuildOutline, skillName: string, sourceHash: string): void {
   if (outline.skill !== skillName) {
-    throw new SynthOutlineError(
-      `Synthesized skill outline mismatch: expected ${skillName}, got ${outline.skill}`,
+    throw new SkillBuildOutlineError(
+      `Generated skill outline mismatch: expected ${skillName}, got ${outline.skill}`,
     );
   }
   if (outline.sourceHash !== sourceHash) {
-    throw new SynthOutlineError(
-      `Synthesized skill outline source hash mismatch for ${skillName}. Regenerate the skill.`,
+    throw new SkillBuildOutlineError(
+      `Generated skill outline source hash mismatch for ${skillName}. Regenerate the skill.`,
     );
   }
   if (outline.synthesisVersion !== SYNTHESIS_VERSION) {
-    throw new SynthOutlineError(
-      `Synthesized skill outline version mismatch for ${skillName}. Regenerate the skill.`,
+    throw new SkillBuildOutlineError(
+      `Generated skill outline version mismatch for ${skillName}. Regenerate the skill.`,
     );
   }
 }
 
-function validateStateIdentity(state: SynthState, model: string | undefined): void {
+function validateStateIdentity(state: SkillBuildState, model: string | undefined): void {
   if (state.identity?.requestedModel !== model) {
-    throw new SynthOutlineError(
-      `Synthesized skill model mismatch. Expected ${model ?? 'default'}, got ${state.identity?.requestedModel ?? 'default'}. Regenerate the skill.`,
+    throw new SkillBuildOutlineError(
+      `Generated skill model mismatch. Expected ${model ?? 'default'}, got ${state.identity?.requestedModel ?? 'default'}. Regenerate the skill.`,
     );
   }
 }
 
-function renderPreviousOutlineContinuity(previousOutline: SynthOutline | undefined): string {
+function renderPreviousOutlineContinuity(previousOutline: SkillBuildOutline | undefined): string {
   if (!previousOutline || previousOutline.tracks.length === 0) {
     return '';
   }
@@ -298,8 +298,8 @@ ${JSON.stringify(previousTracks, null, 2)}`;
 
 function buildOutlinePrompt(
   skill: SkillDefinition,
-  source: SynthSource,
-  previousOutline?: SynthOutline,
+  source: SkillBuildSource,
+  previousOutline?: SkillBuildOutline,
 ): string {
   return `You synthesize the internal outline for one repo-local Warden skill.
 
@@ -307,7 +307,7 @@ This outline exists only to shape one generated skill with a checklist index and
 
 Rules:
 - Return only a JSON object. No markdown, prose, or code fences.
-- Use version ${SYNTH_OUTLINE_SCHEMA_VERSION}.
+- Use version ${SKILL_BUILD_OUTLINE_SCHEMA_VERSION}.
 - Use skill "${skill.name}".
 - Use sourceHash "${source.hash}" exactly.
 - Use synthesisVersion "${SYNTHESIS_VERSION}" exactly.
@@ -321,7 +321,7 @@ Rules:
 - Each track must have an id, title, goal, rationale, sourceSignals, owns, excludes, relevanceSignals, evidenceFocus, checks, safeCounterpatterns, falsePositiveTraps, and researchHints.
 - Track ids must be lowercase kebab-case.
 - The outline should stay lean. Do not write runnable prompts here.
-- scopeProfile.subject should describe the synthesized skill, not the repo name alone.
+- scopeProfile.subject should describe the generated skill, not the repo name alone.
 - scopeProfile.observedContext should capture the concrete context that shaped the track split:
   - for repository or product skills, include the stack, runtime, notable trust boundaries, and important repo-local surfaces you actually observed
   - for domain or ecosystem skills, include the supplied source material, intended platform, and any explicit coverage boundaries
@@ -350,7 +350,7 @@ Rules:
 
 JSON shape:
 {
-  "version": ${SYNTH_OUTLINE_SCHEMA_VERSION},
+  "version": ${SKILL_BUILD_OUTLINE_SCHEMA_VERSION},
   "skill": "${skill.name}",
   "sourceHash": "${source.hash}",
   "synthesisVersion": "${SYNTHESIS_VERSION}",
@@ -428,8 +428,8 @@ function parseCachedOutline(
   skillName: string,
   sourceHash: string,
   model?: string,
-): SynthState | undefined {
-  const state = readSynthState(statePath);
+): SkillBuildState | undefined {
+  const state = readSkillBuildState(statePath);
   if (!state) {
     return undefined;
   }
@@ -443,15 +443,15 @@ function parseCachedOutline(
   }
 }
 
-export async function synthesizeSynthOutline(
-  options: SynthesizeSynthOutlineOptions,
-): Promise<SynthOutlineResult> {
+export async function buildSkillOutline(
+  options: BuildSkillOutlineOptions,
+): Promise<SkillBuildOutlineResult> {
   const { skill, apiKey, model, maxRetries, regenerate = false } = options;
   const runtime = options.runtime ?? getRuntime(options.runtimeName ?? 'claude');
-  const source = collectSynthSource(skill);
+  const source = collectSkillBuildSource(skill);
   const rootDir = skill.rootDir;
   if (!rootDir) {
-    throw new SynthOutlineError(`Synthesized skill ${skill.name} is missing a root directory`);
+    throw new SkillBuildOutlineError(`Generated skill ${skill.name} is missing a root directory`);
   }
 
   const statePath = getSynthesisStatePath(rootDir);
@@ -473,13 +473,13 @@ export async function synthesizeSynthOutline(
   if (options.repoPath) {
     try {
       options.onStatus?.('Inspecting source material');
-      const result = await runStructuredSynthAgent({
+      const result = await runStructuredSkillBuilderAgent({
         runtime,
         repoPath: options.repoPath,
         skillName: `${skill.name}:skill-outline`,
         systemPrompt: buildOutlineSystemPrompt(),
         userPrompt: buildOutlinePrompt(skill, source, options.previousOutline),
-        schema: SynthOutlineSchema,
+        schema: SkillBuildOutlineSchema,
         model,
         maxTurns: options.maxTurns ?? SYNTHESIS_MAX_TURNS,
         abortController: options.abortController,
@@ -491,9 +491,9 @@ export async function synthesizeSynthOutline(
       });
 
       validateOutlineIdentity(result.data, skill.name, source.hash);
-      writeSynthState(statePath, {
-        version: SYNTH_STATE_SCHEMA_VERSION,
-        kind: SYNTH_STATE_KIND,
+      writeSkillBuildState(statePath, {
+        version: SKILL_BUILD_STATE_SCHEMA_VERSION,
+        kind: SKILL_BUILD_STATE_KIND,
         identity: model ? { requestedModel: model } : undefined,
         outline: result.data,
         outlineRun: {
@@ -515,8 +515,8 @@ export async function synthesizeSynthOutline(
         numTurns: result.numTurns,
       };
     } catch (error) {
-      if (error instanceof StructuredSynthAgentError) {
-        throw new SynthOutlineError(`Skill outline synthesis failed: ${error.message}`, { cause: error });
+      if (error instanceof StructuredSkillBuilderAgentError) {
+        throw new SkillBuildOutlineError(`Skill outline synthesis failed: ${error.message}`, { cause: error });
       }
       throw error;
     }
@@ -526,7 +526,7 @@ export async function synthesizeSynthOutline(
     task: 'skill_synthesis',
     apiKey,
     prompt: buildOutlinePrompt(skill, source, options.previousOutline),
-    schema: SynthOutlineSchema,
+    schema: SkillBuildOutlineSchema,
     model,
     maxTokens: SYNTHESIS_MAX_TOKENS,
     timeout: SYNTHESIS_TIMEOUT_MS,
@@ -534,13 +534,13 @@ export async function synthesizeSynthOutline(
   });
 
   if (!result.success) {
-    throw new SynthOutlineError(`Skill outline synthesis failed: ${result.error}`);
+    throw new SkillBuildOutlineError(`Skill outline synthesis failed: ${result.error}`);
   }
 
   validateOutlineIdentity(result.data, skill.name, source.hash);
-  writeSynthState(statePath, {
-    version: SYNTH_STATE_SCHEMA_VERSION,
-    kind: SYNTH_STATE_KIND,
+  writeSkillBuildState(statePath, {
+    version: SKILL_BUILD_STATE_SCHEMA_VERSION,
+    kind: SKILL_BUILD_STATE_KIND,
     identity: model ? { requestedModel: model } : undefined,
     outline: result.data,
     outlineRun: {
@@ -557,7 +557,7 @@ export async function synthesizeSynthOutline(
   };
 }
 
-export function describeSynthOutline(outline: SynthOutline): string {
+export function describeSkillBuildOutline(outline: SkillBuildOutline): string {
   const trackList = outline.tracks
     .map((track) => `  - ${track.id}: ${track.title}`)
     .join('\n');

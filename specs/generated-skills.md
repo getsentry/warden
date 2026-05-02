@@ -1,4 +1,4 @@
-# Synthesized Skills
+# Generated Skills
 
 Warden can build one repo-local skill from a prompt-backed definition.
 
@@ -24,7 +24,7 @@ Generated skills live under `.warden/skills/<name>/`.
 
 `warden.yaml` is the stable authored definition.
 
-- `kind: synthesized-skill`
+- `kind: generated-skill`
 - `name`
 - `prompt`
 

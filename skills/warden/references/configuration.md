@@ -89,7 +89,7 @@ Warden uses different model lanes for different kinds of work:
 
 - Analysis: repo-aware skill execution uses `[[skills]].model`, then `[defaults.agent].model`, then legacy `[defaults].model`
 - Auxiliary: structured helper calls use `[defaults.auxiliary].model`
-- Synthesis: post-analysis consolidation and synthesized-skill builds use `[defaults.synthesis].model`
+- Synthesis: post-analysis consolidation and generated-skill builds use `[defaults.synthesis].model`
 
 If `[defaults.synthesis].model` is omitted, synthesis falls back to `[defaults.auxiliary].model`.
 

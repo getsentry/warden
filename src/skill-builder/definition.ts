@@ -4,20 +4,20 @@ import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import type { SkillDefinition } from '../config/schema.js';
 
-export const SYNTHESIZED_SKILLS_DIR = '.warden/skills';
+export const GENERATED_SKILLS_DIR = '.warden/skills';
 export const SYNTHESIS_DEFINITION_FILE = 'warden.yaml';
 const DESCRIPTION_MAX_LENGTH = 88;
 
-export const SynthesizedSkillDefinitionSchema = z.object({
+export const GeneratedSkillDefinitionSchema = z.object({
   version: z.literal(1),
-  kind: z.literal('synthesized-skill'),
+  kind: z.literal('generated-skill'),
   name: z.string().min(1),
   prompt: z.string().min(1),
   instructions: z.array(z.string().min(1)).optional(),
   coverage: z.array(z.string().min(1)).optional(),
 }).passthrough();
 
-export type SynthesizedSkillDefinition = z.infer<typeof SynthesizedSkillDefinitionSchema>;
+export type GeneratedSkillDefinition = z.infer<typeof GeneratedSkillDefinitionSchema>;
 
 function safePathSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '-');
@@ -40,7 +40,7 @@ function firstClause(value: string): string {
   return value.split(/[,;:]\s+/)[0] ?? value;
 }
 
-export function inferSynthesizedSkillDescription(name: string, prompt: string): string {
+export function inferGeneratedSkillDescription(name: string, prompt: string): string {
   const fallback = `${name}.`;
   const sentence = normalizeOneLine(firstSentence(prompt));
   if (!sentence) {
@@ -62,21 +62,21 @@ function yamlBlock(value: string, indent = '  '): string {
   return value.split('\n').map((line) => `${indent}${line}`).join('\n');
 }
 
-function getSynthesizedSkillsRoot(repoRoot: string): string {
-  return join(repoRoot, SYNTHESIZED_SKILLS_DIR);
+function getGeneratedSkillsRoot(repoRoot: string): string {
+  return join(repoRoot, GENERATED_SKILLS_DIR);
 }
 
-export function getSynthesizedSkillRoot(repoRoot: string, skillName: string): string {
-  return join(getSynthesizedSkillsRoot(repoRoot), safePathSegment(skillName));
+export function getGeneratedSkillRoot(repoRoot: string, skillName: string): string {
+  return join(getGeneratedSkillsRoot(repoRoot), safePathSegment(skillName));
 }
 
-export function synthesizedSkillDefinitionExists(repoRoot: string, skillName: string): boolean {
-  return existsSync(join(getSynthesizedSkillRoot(repoRoot, skillName), SYNTHESIS_DEFINITION_FILE));
+export function generatedSkillDefinitionExists(repoRoot: string, skillName: string): boolean {
+  return existsSync(join(getGeneratedSkillRoot(repoRoot, skillName), SYNTHESIS_DEFINITION_FILE));
 }
 
-export function loadSynthesizedSkillDefinition(rootDir: string): {
+export function loadGeneratedSkillDefinition(rootDir: string): {
   content: string;
-  data: SynthesizedSkillDefinition;
+  data: GeneratedSkillDefinition;
 } {
   const definitionPath = join(rootDir, SYNTHESIS_DEFINITION_FILE);
   const content = readFileSync(definitionPath, 'utf-8');
@@ -85,12 +85,12 @@ export function loadSynthesizedSkillDefinition(rootDir: string): {
   try {
     parsed = parseYaml(content);
   } catch (error) {
-    throw new Error(`Synthesized skill definition is not valid YAML: ${definitionPath}`, { cause: error });
+    throw new Error(`Generated skill definition is not valid YAML: ${definitionPath}`, { cause: error });
   }
 
-  const validation = SynthesizedSkillDefinitionSchema.safeParse(parsed);
+  const validation = GeneratedSkillDefinitionSchema.safeParse(parsed);
   if (!validation.success) {
-    throw new Error(`Synthesized skill definition is invalid: ${validation.error.message}`, {
+    throw new Error(`Generated skill definition is invalid: ${validation.error.message}`, {
       cause: validation.error,
     });
   }
@@ -98,35 +98,35 @@ export function loadSynthesizedSkillDefinition(rootDir: string): {
   return { content, data: validation.data };
 }
 
-export function buildSynthesizedSkillDefinition(rootDir: string): SkillDefinition {
-  const { data } = loadSynthesizedSkillDefinition(rootDir);
+export function buildGeneratedSkillDefinition(rootDir: string): SkillDefinition {
+  const { data } = loadGeneratedSkillDefinition(rootDir);
   return {
     name: data.name,
-    description: inferSynthesizedSkillDescription(data.name, data.prompt),
+    description: inferGeneratedSkillDescription(data.name, data.prompt),
     prompt: data.prompt,
     rootDir,
   };
 }
 
-export function createSynthesizedSkillDefinition(args: {
+export function createGeneratedSkillDefinition(args: {
   repoRoot: string;
   name: string;
   prompt: string;
 }): SkillDefinition {
-  const rootDir = getSynthesizedSkillRoot(args.repoRoot, args.name);
+  const rootDir = getGeneratedSkillRoot(args.repoRoot, args.name);
   mkdirSync(rootDir, { recursive: true });
 
   writeFileSync(join(rootDir, SYNTHESIS_DEFINITION_FILE), `version: 1
-kind: synthesized-skill
+kind: generated-skill
 name: ${args.name}
 prompt: |-
 ${yamlBlock(args.prompt.trim())}
 `, 'utf-8');
 
-  return buildSynthesizedSkillDefinition(rootDir);
+  return buildGeneratedSkillDefinition(rootDir);
 }
 
-export function clearSynthesizedSkillArtifacts(rootDir: string): void {
+export function clearGeneratedSkillArtifacts(rootDir: string): void {
   for (const name of ['SKILL.md', 'SPEC.md', 'SOURCES.md', 'synthesis.json']) {
     rmSync(join(rootDir, name), { force: true });
   }

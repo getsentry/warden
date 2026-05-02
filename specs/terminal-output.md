@@ -273,7 +273,7 @@ Reference example from `build`:
 ```text
 OUTLINE
 ⠴ Identify authorization weaknesses in the changed code [6.2s]
-Validating cached synthesized skill outline...
+Validating cached generated skill outline...
 ```
 
 Use this when:

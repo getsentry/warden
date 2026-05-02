@@ -52,7 +52,7 @@ import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
 import { runBuild } from './commands/build.js';
-import { synthesizedSkillDefinitionExists } from '../synth/definition.js';
+import { generatedSkillDefinitionExists } from '../skill-builder/definition.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -565,10 +565,10 @@ async function createDirectSkillTask(args: {
     if (
       error instanceof SkillLoaderError &&
       repoPath &&
-      synthesizedSkillDefinitionExists(repoPath, spec.skill)
+      generatedSkillDefinitionExists(repoPath, spec.skill)
     ) {
       throw new Error(
-        `Synthesized skill ${spec.skill} is missing generated artifacts. Run "warden build ${spec.skill}" first.`,
+        `Generated skill ${spec.skill} is missing generated artifacts. Run "warden build ${spec.skill}" first.`,
       );
     }
     throw error;

@@ -5,35 +5,35 @@ import { z } from 'zod';
 import { aggregateUsage } from '../sdk/usage.js';
 import type { Runtime } from '../sdk/runtimes/index.js';
 import type { UsageStats } from '../types/index.js';
-import { runStructuredSynthAgent, StructuredSynthAgentError } from './agentic.js';
+import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
 import {
   SKILL_WRITER_REFERENCE_ROLE_GUIDANCE,
   SKILL_WRITER_ROUTER_GUIDANCE,
-  SYNTH_GENERIC_REFERENCE_BASENAMES,
-  SYNTH_REFERENCE_ROLES,
-  SYNTH_REQUIRED_EXAMPLES_HEADINGS,
-  SYNTH_REQUIRED_PROCEDURE_HEADINGS,
-  type SynthReferenceRole,
+  SKILL_BUILDER_GENERIC_REFERENCE_BASENAMES,
+  SKILL_BUILDER_REFERENCE_ROLES,
+  SKILL_BUILDER_REQUIRED_EXAMPLES_HEADINGS,
+  SKILL_BUILDER_REQUIRED_PROCEDURE_HEADINGS,
+  type SkillBuilderReferenceRole,
 } from './skill-writer-guidance.js';
 import {
-  clearSynthesizedSkillArtifacts,
+  clearGeneratedSkillArtifacts,
 } from './definition.js';
 import {
-  type SynthOutline,
-  type SynthSource,
+  type SkillBuildOutline,
+  type SkillBuildSource,
   outlineHash,
-  readSynthState,
-  writeSynthState,
+  readSkillBuildState,
+  writeSkillBuildState,
 } from './outline.js';
 
-const SYNTH_SKILL_SCHEMA_VERSION = 3;
-const GENERIC_SYNTH_MAX_TURNS = 8;
-const LOCAL_SYNTH_MAX_TURNS = 16;
+const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 3;
+const GENERIC_SKILL_BUILD_MAX_TURNS = 8;
+const LOCAL_SKILL_BUILD_MAX_TURNS = 16;
 const GENERIC_TRACK_MAX_TURNS = 4;
 const LOCAL_TRACK_MAX_TURNS = 8;
 const MAX_TRACK_REFERENCE_FILES = 6;
 
-interface SynthExternalSource {
+interface SkillBuildExternalSource {
   title: string;
   url: string;
   reason: string;
@@ -44,9 +44,9 @@ const REQUIRED_CHECKLIST_INDEX_HEADINGS = [
   '## Track Index',
 ] as const;
 
-const SynthReferenceRoleSchema = z.enum(SYNTH_REFERENCE_ROLES);
+const SkillBuilderReferenceRoleSchema = z.enum(SKILL_BUILDER_REFERENCE_ROLES);
 
-const REFERENCE_ROLE_ORDER: Record<SynthReferenceRole, number> = {
+const REFERENCE_ROLE_ORDER: Record<SkillBuilderReferenceRole, number> = {
   procedure: 0,
   'decision-guide': 1,
   'reference-table': 2,
@@ -58,16 +58,16 @@ function hasMarkdownHeading(markdown: string, heading: string): boolean {
   return markdown.includes(`${heading}\n`) || markdown.endsWith(heading);
 }
 
+function hasLevelTwoHeading(markdown: string): boolean {
+  return /^##\s+\S.+$/m.test(markdown);
+}
+
 function isValidChecklistIndexMarkdown(markdown: string): boolean {
   const trimmed = markdown.trim();
   if (!trimmed.startsWith('# ') || !trimmed.includes(' Checklist')) {
     return false;
   }
   return REQUIRED_CHECKLIST_INDEX_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
-}
-
-function referenceLineCount(markdown: string): number {
-  return markdown.split(/\r?\n/).length;
 }
 
 function isValidReferencePath(path: string): boolean {
@@ -81,7 +81,7 @@ function isValidReferencePath(path: string): boolean {
   if (!basename) {
     return false;
   }
-  return !SYNTH_GENERIC_REFERENCE_BASENAMES.has(basename);
+  return !SKILL_BUILDER_GENERIC_REFERENCE_BASENAMES.has(basename);
 }
 
 function validateProcedureReference(markdown: string): boolean {
@@ -89,7 +89,7 @@ function validateProcedureReference(markdown: string): boolean {
   if (!trimmed.startsWith('# ')) {
     return false;
   }
-  return SYNTH_REQUIRED_PROCEDURE_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
+  return SKILL_BUILDER_REQUIRED_PROCEDURE_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
 }
 
 function validateExamplesReference(markdown: string): boolean {
@@ -97,29 +97,26 @@ function validateExamplesReference(markdown: string): boolean {
   if (!trimmed.startsWith('# ')) {
     return false;
   }
-  return SYNTH_REQUIRED_EXAMPLES_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
+  return SKILL_BUILDER_REQUIRED_EXAMPLES_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
 }
 
-function minimumReferenceLength(role: SynthReferenceRole): number {
+function minimumReferenceLength(role: SkillBuilderReferenceRole): number {
   switch (role) {
     case 'procedure':
-      return 350;
-    case 'examples':
-      return 250;
-    default:
       return 180;
+    case 'examples':
+      return 140;
+    default:
+      return 100;
   }
 }
 
-function isValidReferenceMarkdown(markdown: string, role: SynthReferenceRole): boolean {
+function isValidReferenceMarkdown(markdown: string, role: SkillBuilderReferenceRole): boolean {
   const trimmed = markdown.trim();
   if (!trimmed.startsWith('# ') || !trimmed.includes('\n')) {
     return false;
   }
   if (trimmed.startsWith('references/')) {
-    return false;
-  }
-  if (referenceLineCount(trimmed) > 100 && !hasMarkdownHeading(trimmed, '## Contents')) {
     return false;
   }
 
@@ -129,27 +126,27 @@ function isValidReferenceMarkdown(markdown: string, role: SynthReferenceRole): b
     case 'examples':
       return validateExamplesReference(trimmed);
     default:
-      return hasMarkdownHeading(trimmed, '## ');
+      return hasLevelTwoHeading(trimmed);
   }
 }
 
-function invalidReferenceMarkdownMessage(role: SynthReferenceRole): string {
+function invalidReferenceMarkdownMessage(role: SkillBuilderReferenceRole): string {
   if (role === 'procedure') {
     return (
       'Procedure references must contain the required sections: ' +
-      `${SYNTH_REQUIRED_PROCEDURE_HEADINGS.join(', ')}`
+      `${SKILL_BUILDER_REQUIRED_PROCEDURE_HEADINGS.join(', ')}`
     );
   }
   if (role === 'examples') {
     return (
       'Examples references must contain the required sections: ' +
-      `${SYNTH_REQUIRED_EXAMPLES_HEADINGS.join(', ')}`
+      `${SKILL_BUILDER_REQUIRED_EXAMPLES_HEADINGS.join(', ')}`
     );
   }
   return 'Reference markdown must answer one focused lookup need with a real heading structure.';
 }
 
-function synthReferenceSort(a: { role: SynthReferenceRole; path: string }, b: { role: SynthReferenceRole; path: string }): number {
+function synthReferenceSort(a: { role: SkillBuilderReferenceRole; path: string }, b: { role: SkillBuilderReferenceRole; path: string }): number {
   const roleOrder = REFERENCE_ROLE_ORDER[a.role] - REFERENCE_ROLE_ORDER[b.role];
   if (roleOrder !== 0) {
     return roleOrder;
@@ -157,14 +154,14 @@ function synthReferenceSort(a: { role: SynthReferenceRole; path: string }, b: { 
   return a.path.localeCompare(b.path);
 }
 
-const SynthChecklistIndexMarkdownSchema = z.string()
+const GeneratedSkillChecklistIndexMarkdownSchema = z.string()
   .min(200, 'Checklist index markdown must contain the full checklist index, not a placeholder or path')
   .refine(
     (value) => isValidChecklistIndexMarkdown(value),
     'Checklist index markdown must contain ## How To Use This Checklist and ## Track Index',
   );
 
-const SynthReferenceFileSchema = z.object({
+const GeneratedSkillReferenceFileSchema = z.object({
   path: z.string()
     .min(1)
     .refine(
@@ -172,7 +169,7 @@ const SynthReferenceFileSchema = z.object({
       'Reference paths must live under references/, end in .md, and avoid vague names like notes.md or context.md',
     ),
   title: z.string().min(1),
-  role: SynthReferenceRoleSchema,
+  role: SkillBuilderReferenceRoleSchema,
   openWhen: z.string().min(1),
   markdown: z.string().min(1),
 }).strict().superRefine((value, ctx) => {
@@ -192,7 +189,7 @@ const SynthReferenceFileSchema = z.object({
   }
 });
 
-const SynthSkillScaffoldSchema = z.object({
+const GeneratedSkillScaffoldSchema = z.object({
   version: z.literal(1),
   skill: z.string().min(1),
   name: z.string().min(1),
@@ -208,12 +205,12 @@ const SynthSkillScaffoldSchema = z.object({
   missingInputs: z.array(z.string().min(1)).default([]),
 }).strict();
 
-const SynthTrackReferenceSchema = z.object({
+const SkillBuildTrackReferenceSchema = z.object({
   version: z.literal(1),
   skill: z.string().min(1),
   trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
   title: z.string().min(1),
-  references: z.array(SynthReferenceFileSchema).min(1).max(MAX_TRACK_REFERENCE_FILES),
+  references: z.array(GeneratedSkillReferenceFileSchema).min(1).max(MAX_TRACK_REFERENCE_FILES),
   externalSources: z.array(z.object({
     title: z.string().min(1),
     url: z.string().min(1),
@@ -252,21 +249,21 @@ const SynthTrackReferenceSchema = z.object({
   }
 });
 
-interface SynthReferenceFile {
+interface GeneratedSkillReferenceFile {
   path: string;
   title: string;
-  role: SynthReferenceRole;
+  role: SkillBuilderReferenceRole;
   openWhen: string;
   markdown: string;
 }
 
-interface SynthTrackBundle {
+interface SkillBuildTrackBundle {
   id: string;
   title: string;
-  references: SynthReferenceFile[];
+  references: GeneratedSkillReferenceFile[];
 }
 
-interface SynthSkillOutput {
+interface GeneratedSkillOutput {
   version: 1;
   skill: string;
   name: string;
@@ -275,29 +272,29 @@ interface SynthSkillOutput {
   specMd: string;
   sourcesMd: string;
   checklistMd: string;
-  trackBundles: SynthTrackBundle[];
-  externalSources: SynthExternalSource[];
+  trackBundles: SkillBuildTrackBundle[];
+  externalSources: SkillBuildExternalSource[];
   missingInputs: string[];
 }
 
-export interface SynthesizedSkillArtifact {
-  kind: 'synthesized-skill';
+export interface GeneratedSkillArtifact {
+  kind: 'generated-skill';
   source: 'cache' | 'generated';
   name: string;
   path: string;
   bytes: number;
   durationMs: number;
   usage: UsageStats;
-  externalSources: SynthExternalSource[];
+  externalSources: SkillBuildExternalSource[];
   missingInputs: string[];
   responseModel?: string;
   numTurns?: number;
 }
 
-export class SynthesizedSkillError extends Error {
+export class GeneratedSkillBuildError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
-    this.name = 'SynthesizedSkillError';
+    this.name = 'GeneratedSkillBuildError';
   }
 }
 
@@ -368,7 +365,7 @@ function artifactsLookValid(args: {
   rootDir: string;
   referenceManifest: {
     path: string;
-    role: SynthReferenceRole;
+    role: SkillBuilderReferenceRole;
   }[];
 }): boolean {
   try {
@@ -396,31 +393,31 @@ function artifactsLookValid(args: {
   }
 }
 
-function sourceBlocks(source: SynthSource): string {
+function sourceBlocks(source: SkillBuildSource): string {
   return source.files
     .map((file) => `<document path="${file.path}">\n${file.content}\n</document>`)
     .join('\n\n');
 }
 
-function requiresRepoInspection(outline: SynthOutline): boolean {
+function requiresRepoInspection(outline: SkillBuildOutline): boolean {
   return outline.scopeProfile.localContextUsed ||
     outline.scopeProfile.kind === 'repository' ||
     outline.scopeProfile.kind === 'product';
 }
 
-function defaultSynthesisMaxTurns(outline: SynthOutline): number {
+function defaultSynthesisMaxTurns(outline: SkillBuildOutline): number {
   return requiresRepoInspection(outline)
-    ? LOCAL_SYNTH_MAX_TURNS
-    : GENERIC_SYNTH_MAX_TURNS;
+    ? LOCAL_SKILL_BUILD_MAX_TURNS
+    : GENERIC_SKILL_BUILD_MAX_TURNS;
 }
 
-function defaultTrackMaxTurns(outline: SynthOutline): number {
+function defaultTrackMaxTurns(outline: SkillBuildOutline): number {
   return requiresRepoInspection(outline)
     ? LOCAL_TRACK_MAX_TURNS
     : GENERIC_TRACK_MAX_TURNS;
 }
 
-function scaffoldSystemPrompt(outline: SynthOutline): string {
+function scaffoldSystemPrompt(outline: SkillBuildOutline): string {
   const repoInspectionGuidance = requiresRepoInspection(outline)
     ? 'Use Read, Grep, and Glob to inspect only the repository context needed to frame the overall runtime skill, reference architecture, and evidence model.'
     : 'Do not inspect repository code just because a repo path is available. This skill is intentionally generic, so frame the runtime skill from the outline, bundled source material, and public prior art unless local repository context is explicitly required.';
@@ -436,7 +433,7 @@ ${SKILL_WRITER_ROUTER_GUIDANCE}
 Return only strict JSON. Never return prose, markdown, or a follow-up question. If context is missing, still return the JSON object and put the missing context in missingInputs.`;
 }
 
-function trackSystemPrompt(outline: SynthOutline): string {
+function trackSystemPrompt(outline: SkillBuildOutline): string {
   const repoInspectionGuidance = requiresRepoInspection(outline)
     ? 'Use Read, Grep, and Glob only when the current track needs local repository details to sharpen investigation steps, safe counterpatterns, or false-positive controls.'
     : 'Do not inspect repository code just because a repo path is available. This track belongs to an intentionally generic skill, so write it from the outline, bundled source material, and public prior art unless local repository context is explicitly required.';
@@ -454,8 +451,8 @@ Return only strict JSON. Never return prose, markdown, or a follow-up question. 
 }
 
 function buildScaffoldPrompt(args: {
-  outline: SynthOutline;
-  source: SynthSource;
+  outline: SkillBuildOutline;
+  source: SkillBuildSource;
 }): string {
   const { outline, source } = args;
   return `<outline>
@@ -569,14 +566,14 @@ Record this synthesis pass.
 }
 
 function buildTrackPrompt(args: {
-  outline: SynthOutline;
-  source: SynthSource;
+  outline: SkillBuildOutline;
+  source: SkillBuildSource;
   trackId: string;
 }): string {
   const track = args.outline.tracks.find((item) => item.id === args.trackId);
   if (!track) {
-    throw new SynthesizedSkillError(
-      `Unknown track "${args.trackId}" for synthesized skill ${args.outline.skill}`,
+    throw new GeneratedSkillBuildError(
+      `Unknown track "${args.trackId}" for generated skill ${args.outline.skill}`,
     );
   }
 
@@ -693,8 +690,8 @@ Keep every reference terse. Each file should answer one lookup need. Use extra r
 }
 
 function compileChecklistIndex(args: {
-  outline: SynthOutline;
-  trackBundles: SynthTrackBundle[];
+  outline: SkillBuildOutline;
+  trackBundles: SkillBuildTrackBundle[];
 }): string {
   const lines = [
     `# ${args.outline.skill} Checklist`,
@@ -716,7 +713,7 @@ function compileChecklistIndex(args: {
   for (const track of args.outline.tracks) {
     const bundle = args.trackBundles.find((item) => item.id === track.id);
     if (!bundle) {
-      throw new SynthesizedSkillError(
+      throw new GeneratedSkillBuildError(
         `Checklist compilation missing track bundle "${track.id}" for ${args.outline.skill}`,
       );
     }
@@ -732,9 +729,9 @@ function compileChecklistIndex(args: {
   }
 
   const compiled = lines.join('\n');
-  const validation = SynthChecklistIndexMarkdownSchema.safeParse(compiled);
+  const validation = GeneratedSkillChecklistIndexMarkdownSchema.safeParse(compiled);
   if (!validation.success) {
-    throw new SynthesizedSkillError(
+    throw new GeneratedSkillBuildError(
       `Compiled checklist index was invalid for ${args.outline.skill}: ${validation.error.message}`,
     );
   }
@@ -742,19 +739,19 @@ function compileChecklistIndex(args: {
 }
 
 function combineOutputs(args: {
-  outline: SynthOutline;
-  scaffold: z.infer<typeof SynthSkillScaffoldSchema>;
-  tracks: z.infer<typeof SynthTrackReferenceSchema>[];
-}): SynthSkillOutput {
-  const trackBundles: SynthTrackBundle[] = args.outline.tracks.map((outlineTrack) => {
+  outline: SkillBuildOutline;
+  scaffold: z.infer<typeof GeneratedSkillScaffoldSchema>;
+  tracks: z.infer<typeof SkillBuildTrackReferenceSchema>[];
+}): GeneratedSkillOutput {
+  const trackBundles: SkillBuildTrackBundle[] = args.outline.tracks.map((outlineTrack) => {
     const track = args.tracks.find((item) => item.trackId === outlineTrack.id);
     if (!track) {
-      throw new SynthesizedSkillError(
+      throw new GeneratedSkillBuildError(
         `Track "${outlineTrack.id}" was not synthesized for ${args.outline.skill}`,
       );
     }
     if (track.title !== outlineTrack.title) {
-      throw new SynthesizedSkillError(
+      throw new GeneratedSkillBuildError(
         `Track "${track.trackId}" title "${track.title}" must match outline title "${outlineTrack.title}" for ${args.outline.skill}`,
       );
     }
@@ -775,7 +772,7 @@ function combineOutputs(args: {
   for (const trackBundle of trackBundles) {
     for (const reference of trackBundle.references) {
       if (seenPaths.has(reference.path)) {
-        throw new SynthesizedSkillError(
+        throw new GeneratedSkillBuildError(
           `Generated reference path collision for ${args.outline.skill}: ${reference.path}`,
         );
       }
@@ -826,10 +823,10 @@ function summarizeTurns(turns: (number | undefined)[]): number | undefined {
   return values.reduce((sum, value) => sum + value, 0);
 }
 
-function flattenTrackReferences(trackBundles: SynthTrackBundle[]): {
+function flattenTrackReferences(trackBundles: SkillBuildTrackBundle[]): {
   trackId: string;
   path: string;
-  role: SynthReferenceRole;
+  role: SkillBuilderReferenceRole;
   openWhen: string;
   markdown: string;
 }[] {
@@ -866,18 +863,18 @@ function parseReferenceManifest(referenceManifest: {
 }[]): {
   trackId: string;
   path: string;
-  role: SynthReferenceRole;
+  role: SkillBuilderReferenceRole;
   openWhen: string;
 }[] | undefined {
   const parsed: {
     trackId: string;
     path: string;
-    role: SynthReferenceRole;
+    role: SkillBuilderReferenceRole;
     openWhen: string;
   }[] = [];
 
   for (const reference of referenceManifest) {
-    const role = SynthReferenceRoleSchema.safeParse(reference.role);
+    const role = SkillBuilderReferenceRoleSchema.safeParse(reference.role);
     if (!role.success) {
       return undefined;
     }
@@ -894,9 +891,9 @@ function parseReferenceManifest(referenceManifest: {
 
 function loadCachedArtifact(args: {
   rootDir: string;
-  outline: SynthOutline;
-  source: SynthSource;
-}): SynthesizedSkillArtifact | undefined {
+  outline: SkillBuildOutline;
+  source: SkillBuildSource;
+}): GeneratedSkillArtifact | undefined {
   if (
     !existsSync(join(args.rootDir, 'SKILL.md')) ||
     !existsSync(join(args.rootDir, 'SPEC.md')) ||
@@ -907,7 +904,7 @@ function loadCachedArtifact(args: {
     return undefined;
   }
 
-  const state = readSynthState(join(args.rootDir, 'synthesis.json'));
+  const state = readSkillBuildState(join(args.rootDir, 'synthesis.json'));
   const metadata = state?.artifact;
   const bytes = artifactByteLength(args.rootDir);
   const expectedTrackIds = args.outline.tracks.map((track) => track.id);
@@ -950,7 +947,7 @@ function loadCachedArtifact(args: {
   }
 
   return {
-    kind: 'synthesized-skill',
+    kind: 'generated-skill',
     source: 'cache',
     name: metadata.name,
     path: args.rootDir,
@@ -966,13 +963,13 @@ function loadCachedArtifact(args: {
 
 function writeGeneratedArtifact(args: {
   rootDir: string;
-  output: SynthSkillOutput;
+  output: GeneratedSkillOutput;
   durationMs: number;
   usage: UsageStats;
   responseModel?: string;
   numTurns?: number;
-}): SynthesizedSkillArtifact {
-  clearSynthesizedSkillArtifacts(args.rootDir);
+}): GeneratedSkillArtifact {
+  clearGeneratedSkillArtifacts(args.rootDir);
   mkdirSync(join(args.rootDir, 'references'), { recursive: true });
 
   const skillContent = `---
@@ -1000,7 +997,7 @@ ${args.output.skillBody.trim()}
   }
 
   return {
-    kind: 'synthesized-skill',
+    kind: 'generated-skill',
     source: 'generated',
     name: args.output.name,
     path: args.rootDir,
@@ -1014,9 +1011,9 @@ ${args.output.skillBody.trim()}
   };
 }
 
-export async function synthesizeGeneratedSkill(args: {
-  outline: SynthOutline;
-  source: SynthSource;
+export async function buildGeneratedSkill(args: {
+  outline: SkillBuildOutline;
+  source: SkillBuildSource;
   rootDir: string;
   runtime: Runtime;
   repoPath: string;
@@ -1028,7 +1025,7 @@ export async function synthesizeGeneratedSkill(args: {
   repairModel?: string;
   repairMaxRetries?: number;
   onStatus?: (message: string) => void;
-}): Promise<SynthesizedSkillArtifact> {
+}): Promise<GeneratedSkillArtifact> {
   const startedAt = performance.now();
   const statePath = join(args.rootDir, 'synthesis.json');
 
@@ -1044,15 +1041,15 @@ export async function synthesizeGeneratedSkill(args: {
       }
     }
 
-    const previousState = readSynthState(statePath);
+    const previousState = readSkillBuildState(statePath);
     if (!previousState) {
-      throw new SynthesizedSkillError(
-        `Missing synthesized skill outline state for ${args.outline.skill}`,
+      throw new GeneratedSkillBuildError(
+        `Missing generated skill outline state for ${args.outline.skill}`,
       );
     }
 
     args.onStatus?.('Writing router scaffold');
-    const scaffold = await runStructuredSynthAgent({
+    const scaffold = await runStructuredSkillBuilderAgent({
       runtime: args.runtime,
       repoPath: args.repoPath,
       skillName: `${args.outline.skill}:generated-skill`,
@@ -1061,7 +1058,7 @@ export async function synthesizeGeneratedSkill(args: {
         outline: args.outline,
         source: args.source,
       }),
-      schema: SynthSkillScaffoldSchema,
+      schema: GeneratedSkillScaffoldSchema,
       model: args.model,
       maxTurns: args.maxTurns ?? defaultSynthesisMaxTurns(args.outline),
       abortController: args.abortController,
@@ -1073,12 +1070,12 @@ export async function synthesizeGeneratedSkill(args: {
     });
 
     if (scaffold.data.skill !== args.outline.skill) {
-      throw new SynthesizedSkillError(
+      throw new GeneratedSkillBuildError(
         `Generated skill scaffold identity mismatch for ${args.outline.skill}`,
       );
     }
 
-    const tracks: z.infer<typeof SynthTrackReferenceSchema>[] = [];
+    const tracks: z.infer<typeof SkillBuildTrackReferenceSchema>[] = [];
     const trackResponses: {
       usage: UsageStats;
       responseModel?: string;
@@ -1088,7 +1085,7 @@ export async function synthesizeGeneratedSkill(args: {
       args.onStatus?.(
         `Track ${index + 1}/${args.outline.tracks.length}: ${track.title}`,
       );
-      const result = await runStructuredSynthAgent({
+      const result = await runStructuredSkillBuilderAgent({
         runtime: args.runtime,
         repoPath: args.repoPath,
         skillName: `${args.outline.skill}:track:${track.id}`,
@@ -1098,7 +1095,7 @@ export async function synthesizeGeneratedSkill(args: {
           source: args.source,
           trackId: track.id,
         }),
-        schema: SynthTrackReferenceSchema,
+        schema: SkillBuildTrackReferenceSchema,
         model: args.model,
         maxTurns: Math.min(
           args.maxTurns ?? defaultSynthesisMaxTurns(args.outline),
@@ -1115,7 +1112,7 @@ export async function synthesizeGeneratedSkill(args: {
         result.data.skill !== args.outline.skill ||
         result.data.trackId !== track.id
       ) {
-        throw new SynthesizedSkillError(
+        throw new GeneratedSkillBuildError(
           `Generated track synthesis identity mismatch for ${args.outline.skill}:${track.id}`,
         );
       }
@@ -1153,10 +1150,10 @@ export async function synthesizeGeneratedSkill(args: {
       ]),
     });
 
-    writeSynthState(statePath, {
+    writeSkillBuildState(statePath, {
       ...previousState,
       artifact: {
-        version: SYNTH_SKILL_SCHEMA_VERSION,
+        version: GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION,
         sourceHash: args.source.hash,
         outlineHash: outlineHash(args.outline),
         synthesisVersion: args.outline.synthesisVersion,
@@ -1177,11 +1174,11 @@ export async function synthesizeGeneratedSkill(args: {
 
     return artifact;
   } catch (error) {
-    if (error instanceof SynthesizedSkillError) {
+    if (error instanceof GeneratedSkillBuildError) {
       throw error;
     }
-    if (error instanceof StructuredSynthAgentError) {
-      throw new SynthesizedSkillError(
+    if (error instanceof StructuredSkillBuilderAgentError) {
+      throw new GeneratedSkillBuildError(
         `Generated skill synthesis failed for ${args.outline.skill}: ${error.message}`,
         { cause: error },
       );

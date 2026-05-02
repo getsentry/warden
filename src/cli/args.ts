@@ -47,9 +47,9 @@ export const CLIOptionsSchema = z.object({
   offline: z.boolean().default(false),
   /** Stop after first finding */
   failFast: z.boolean().default(false),
-  /** Regenerate synthesized skill artifacts even when a cached outline exists */
+  /** Regenerate generated skill artifacts even when a cached outline exists */
   regenerate: z.boolean().default(false),
-  /** Prompt for creating a new synthesized skill. Prefix with @ to load from a file. */
+  /** Prompt for creating a new generated skill. Prefix with @ to load from a file. */
   prompt: z.string().optional(),
 });
 

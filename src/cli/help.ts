@@ -173,11 +173,11 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   regenerate: {
     label: '--regenerate',
-    description: 'Ignore cached synthesized skill artifacts and build again',
+    description: 'Ignore cached generated skill artifacts and build again',
   },
   prompt: {
     label: '-p, --prompt <value>',
-    description: 'Create a missing synthesized skill from prompt text',
+    description: 'Create a missing generated skill from prompt text',
     continuation: 'Prefix with @ to read the prompt from a file',
   },
   org: {
@@ -293,13 +293,13 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     ],
   },
   build: {
-    summary: 'Build a repo-local synthesized skill',
+    summary: 'Build a repo-local generated skill',
     description: 'Create or refresh one generated skill under .warden/skills from a prompt-backed definition.',
     usage: [
       'warden build <skill> [options]',
     ],
     arguments: [
-      { label: 'skill', description: 'Synthesized skill name' },
+      { label: 'skill', description: 'Generated skill name' },
     ],
     options: [
       'cwd',
@@ -403,7 +403,7 @@ const ROOT_COMMANDS: { label: string; summary: string }[] = [
   { label: 'init', summary: 'Initialize Warden configuration' },
   { label: 'add [skill]', summary: 'Add a skill trigger to warden.toml' },
   { label: 'sync [remote]', summary: 'Update cached remote skills to latest' },
-  { label: 'build <skill>', summary: 'Build a repo-local synthesized skill' },
+  { label: 'build <skill>', summary: 'Build a repo-local generated skill' },
   { label: 'runs', summary: 'Inspect saved sessions and run logs' },
   { label: 'setup-app', summary: 'Create a GitHub App via manifest flow' },
   { label: 'help [command]', summary: 'Show help for a command' },

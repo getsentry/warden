@@ -30,7 +30,7 @@
 - Keep the wrapper narrow and Warden-specific instead of forking the full upstream `skill-writer` behavior.
 ## Open Gaps
 
-- Add repo-owned full-skill examples that reflect synthesized-skill reference layouts once those stabilize.
+- Add repo-owned full-skill examples that reflect generated-skill reference layouts once those stabilize.
 - Add repo-owned validation tooling if upstream validator drift becomes painful.
 - Add skill-authoring eval cases once the runtime path exists.
 

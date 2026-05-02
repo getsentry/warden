@@ -28,7 +28,7 @@ const skillsCache = new Map<string, Map<string, LoadedSkill>>();
  * Conventional skill directories, checked in priority order.
  *
  * Skills are discovered from these directories in order:
- * 1. .warden/skills - Repo-local synthesized skills
+ * 1. .warden/skills - Repo-local generated skills
  * 2. .agents/skills - Primary authored skills
  * 3. .claude/skills - Backup (matches Claude Code convention)
  *

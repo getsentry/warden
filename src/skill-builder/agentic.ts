@@ -6,11 +6,11 @@ import { parseJsonFromOutput, type ParseJsonFromOutputResult } from '../sdk/json
 import { aggregateUsage, emptyUsage } from '../sdk/usage.js';
 import type { Runtime, SkillRunResult } from '../sdk/runtimes/index.js';
 
-const SYNTH_AGENT_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
+const SKILL_BUILDER_AGENT_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
 const STRUCTURED_REPAIR_MAX_TURNS = 1;
 const STRUCTURED_REPAIR_MAX_CHARS = 60_000;
 
-export interface StructuredSynthAgentResult<T> {
+export interface StructuredSkillBuilderAgentResult<T> {
   data: T;
   usage: UsageStats;
   durationMs: number;
@@ -18,7 +18,7 @@ export interface StructuredSynthAgentResult<T> {
   numTurns?: number;
 }
 
-interface StructuredSynthAgentFailureDetails {
+interface StructuredSkillBuilderAgentFailureDetails {
   rawText?: string;
   stderr?: string;
   usage?: UsageStats;
@@ -27,10 +27,10 @@ interface StructuredSynthAgentFailureDetails {
   numTurns?: number;
 }
 
-export class StructuredSynthAgentError extends Error {
+export class StructuredSkillBuilderAgentError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
-    this.name = 'StructuredSynthAgentError';
+    this.name = 'StructuredSkillBuilderAgentError';
   }
 }
 
@@ -48,7 +48,7 @@ function previewText(value: string | undefined, maxLength = 1200): string {
   return `${trimmed.slice(0, maxLength)}...`;
 }
 
-function formatAgentFailure(message: string, details: StructuredSynthAgentFailureDetails): string {
+function formatAgentFailure(message: string, details: StructuredSkillBuilderAgentFailureDetails): string {
   const lines = [message];
   if (details.responseModel) {
     lines.push(`  Model: ${details.responseModel}`);
@@ -81,7 +81,7 @@ function resultFailureDetails(
   result: SkillRunResult | undefined,
   stderr: string | undefined,
   startedAt: number,
-): StructuredSynthAgentFailureDetails {
+): StructuredSkillBuilderAgentFailureDetails {
   return {
     rawText: result?.text,
     stderr,
@@ -128,7 +128,7 @@ Model output:
 ${truncateForRepair(args.output)}`;
 }
 
-async function repairStructuredSynthOutput<T>(args: {
+async function repairStructuredSkillBuilderOutput<T>(args: {
   runtime: Runtime;
   repoPath: string;
   skillName: string;
@@ -197,7 +197,7 @@ async function repairStructuredSynthOutput<T>(args: {
   };
 }
 
-export async function runStructuredSynthAgent<T>(args: {
+export async function runStructuredSkillBuilderAgent<T>(args: {
   runtime: Runtime;
   repoPath: string;
   skillName: string;
@@ -212,7 +212,7 @@ export async function runStructuredSynthAgent<T>(args: {
     model?: string;
     maxRetries?: number;
   };
-}): Promise<StructuredSynthAgentResult<T>> {
+}): Promise<StructuredSkillBuilderAgentResult<T>> {
   const startedAt = performance.now();
   const { runtime } = args;
   const response = await runtime.runSkill({
@@ -220,7 +220,7 @@ export async function runStructuredSynthAgent<T>(args: {
     userPrompt: args.userPrompt,
     repoPath: args.repoPath,
     skillName: args.skillName,
-    tools: { allowed: SYNTH_AGENT_TOOLS },
+    tools: { allowed: SKILL_BUILDER_AGENT_TOOLS },
     options: {
       model: args.model,
       maxTurns: args.maxTurns,
@@ -229,16 +229,16 @@ export async function runStructuredSynthAgent<T>(args: {
   });
 
   if (response.authError) {
-    throw new StructuredSynthAgentError(response.authError);
+    throw new StructuredSkillBuilderAgentError(response.authError);
   }
   if (!response.result) {
-    throw new StructuredSynthAgentError(formatAgentFailure(
-      'Synth agent returned no result',
+    throw new StructuredSkillBuilderAgentError(formatAgentFailure(
+      'Skill builder agent returned no result',
       resultFailureDetails(undefined, response.stderr, startedAt),
     ));
   }
   if (response.result.status !== 'success') {
-    throw new StructuredSynthAgentError(formatAgentFailure(
+    throw new StructuredSkillBuilderAgentError(formatAgentFailure(
       formatRuntimeFailure(response.result),
       resultFailureDetails(response.result, response.stderr, startedAt),
     ));
@@ -250,7 +250,7 @@ export async function runStructuredSynthAgent<T>(args: {
     schema: args.schema,
   });
   if (!parsed.success) {
-    const skillRepair = await repairStructuredSynthOutput({
+    const skillRepair = await repairStructuredSkillBuilderOutput({
       runtime,
       repoPath: args.repoPath,
       skillName: args.skillName,
@@ -293,11 +293,11 @@ export async function runStructuredSynthAgent<T>(args: {
 
   if (!parsed.success) {
     const label = parsed.error.startsWith('no_json')
-      ? `Synth agent returned no JSON: ${parsed.error}`
+      ? `Skill builder agent returned no JSON: ${parsed.error}`
       : parsed.error.startsWith('invalid_json')
-        ? `Synth agent returned invalid JSON: ${parsed.error}`
-        : `Synth agent output failed validation or repair: ${parsed.error}`;
-    throw new StructuredSynthAgentError(
+        ? `Skill builder agent returned invalid JSON: ${parsed.error}`
+        : `Skill builder agent output failed validation or repair: ${parsed.error}`;
+    throw new StructuredSkillBuilderAgentError(
       formatAgentFailure(
         label,
         {

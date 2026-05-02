@@ -13,22 +13,22 @@ import { getAnthropicApiKey } from '../../utils/index.js';
 import { promptLine, promptMultiline } from '../input.js';
 import { getRepoRoot } from '../git.js';
 import {
-  buildSynthesizedSkillDefinition,
-  createSynthesizedSkillDefinition,
-  getSynthesizedSkillRoot,
-  inferSynthesizedSkillDescription,
-  synthesizedSkillDefinitionExists,
-} from '../../synth/definition.js';
+  buildGeneratedSkillDefinition,
+  createGeneratedSkillDefinition,
+  getGeneratedSkillRoot,
+  inferGeneratedSkillDescription,
+  generatedSkillDefinitionExists,
+} from '../../skill-builder/definition.js';
 import {
-  collectSynthSource,
-  describeSynthOutline,
-  SynthOutlineError,
-  synthesizeSynthOutline,
-} from '../../synth/outline.js';
+  collectSkillBuildSource,
+  describeSkillBuildOutline,
+  SkillBuildOutlineError,
+  buildSkillOutline,
+} from '../../skill-builder/outline.js';
 import {
-  SynthesizedSkillError,
-  synthesizeGeneratedSkill,
-} from '../../synth/skill.js';
+  GeneratedSkillBuildError,
+  buildGeneratedSkill,
+} from '../../skill-builder/skill.js';
 import { getRuntime } from '../../sdk/runtimes/index.js';
 
 function renderHeader(args: {
@@ -166,19 +166,19 @@ async function ensureSynthesizedSkill(args: {
   reporter: Reporter;
 }): Promise<{ skill: SkillDefinition; created: boolean; promptLength?: number }> {
   const { skillName, repoRoot, options, reporter } = args;
-  if (synthesizedSkillDefinitionExists(repoRoot, skillName)) {
-    const rootDir = getSynthesizedSkillRoot(repoRoot, skillName);
-    return { skill: buildSynthesizedSkillDefinition(rootDir), created: false };
+  if (generatedSkillDefinitionExists(repoRoot, skillName)) {
+    const rootDir = getGeneratedSkillRoot(repoRoot, skillName);
+    return { skill: buildGeneratedSkillDefinition(rootDir), created: false };
   }
 
   const prompt = await resolvePrompt(options, skillName);
   if (!prompt) {
-    reporter.error(`Synthesized skill not found: ${skillName}`);
+    reporter.error(`Generated skill not found: ${skillName}`);
     reporter.tip(`Run interactively, or pass --prompt/-p to create .warden/skills/${skillName}`);
-    throw new SynthOutlineError(`Missing prompt for new synthesized skill: ${skillName}`);
+    throw new SkillBuildOutlineError(`Missing prompt for new generated skill: ${skillName}`);
   }
 
-  const skill = createSynthesizedSkillDefinition({
+  const skill = createGeneratedSkillDefinition({
     repoRoot,
     name: skillName,
     prompt,
@@ -211,7 +211,7 @@ export async function runBuild(
     if (process.stdin.isTTY) {
       skillName = await promptLine(
         `${chalk.bold('SKILL NAME')}\n` +
-        `${chalk.dim('  Name for the synthesized skill.')}\n` +
+        `${chalk.dim('  Name for the generated skill.')}\n` +
         `${chalk.cyan('>')} `
       );
     }
@@ -281,7 +281,7 @@ export async function runBuild(
       verbosity: reporter.verbosity,
       message: outlineStatusMessage(skill),
       detail: outlineStatusDetail(),
-      task: ({ setDetail }) => synthesizeSynthOutline({
+      task: ({ setDetail }) => buildSkillOutline({
         skill,
         runtime,
         apiKey: getAnthropicApiKey(),
@@ -309,7 +309,7 @@ export async function runBuild(
         `${outlineResult.outline.tracks.length === 1 ? 'track' : 'tracks'}${outlineStats ? `  ${outlineStats}` : ''}`,
       );
       if (reporter.verbosity >= Verbosity.Verbose) {
-        reporter.dim(describeSynthOutline(outlineResult.outline));
+        reporter.dim(describeSkillBuildOutline(outlineResult.outline));
       }
       reporter.blank();
       reporter.bold('SKILL');
@@ -320,12 +320,12 @@ export async function runBuild(
       verbosity: reporter.verbosity,
       message: skillStatusMessage(skill),
       detail: skillStatusDetail(),
-      task: ({ setDetail }) => synthesizeGeneratedSkill({
+      task: ({ setDetail }) => buildGeneratedSkill({
         outline: outlineResult.outline,
-        source: collectSynthSource(skill),
+        source: collectSkillBuildSource(skill),
         rootDir: (() => {
           if (!skill.rootDir) {
-            throw new SynthesizedSkillError(`Synthesized skill ${skill.name} is missing a root directory`);
+            throw new GeneratedSkillBuildError(`Generated skill ${skill.name} is missing a root directory`);
           }
           return skill.rootDir;
         })(),
@@ -361,7 +361,7 @@ export async function runBuild(
       process.stdout.write(`${JSON.stringify({
         skill: {
           name: skill.name,
-          description: inferSynthesizedSkillDescription(skill.name, skill.prompt),
+          description: inferGeneratedSkillDescription(skill.name, skill.prompt),
           rootDir: skill.rootDir,
         },
         outline: outlineResult.outline,
@@ -384,7 +384,7 @@ export async function runBuild(
       reporter.warning('Interrupted');
       return 130;
     }
-    if (error instanceof SynthOutlineError || error instanceof SynthesizedSkillError) {
+    if (error instanceof SkillBuildOutlineError || error instanceof GeneratedSkillBuildError) {
       reporter.error(error.message);
       return 1;
     }
