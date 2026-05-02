@@ -1,4 +1,4 @@
-import { basename, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
@@ -6,6 +6,15 @@ import { aggregateUsage } from '../sdk/usage.js';
 import type { Runtime } from '../sdk/runtimes/index.js';
 import type { UsageStats } from '../types/index.js';
 import { runStructuredSynthAgent, StructuredSynthAgentError } from './agentic.js';
+import {
+  SKILL_WRITER_REFERENCE_ROLE_GUIDANCE,
+  SKILL_WRITER_ROUTER_GUIDANCE,
+  SYNTH_GENERIC_REFERENCE_BASENAMES,
+  SYNTH_REFERENCE_ROLES,
+  SYNTH_REQUIRED_EXAMPLES_HEADINGS,
+  SYNTH_REQUIRED_PROCEDURE_HEADINGS,
+  type SynthReferenceRole,
+} from './skill-writer-guidance.js';
 import {
   clearSynthesizedSkillArtifacts,
 } from './definition.js';
@@ -17,11 +26,12 @@ import {
   writeSynthState,
 } from './outline.js';
 
-const SYNTH_SKILL_SCHEMA_VERSION = 1;
+const SYNTH_SKILL_SCHEMA_VERSION = 3;
 const GENERIC_SYNTH_MAX_TURNS = 8;
 const LOCAL_SYNTH_MAX_TURNS = 16;
 const GENERIC_TRACK_MAX_TURNS = 4;
 const LOCAL_TRACK_MAX_TURNS = 8;
+const MAX_TRACK_REFERENCE_FILES = 6;
 
 interface SynthExternalSource {
   title: string;
@@ -34,22 +44,15 @@ const REQUIRED_CHECKLIST_INDEX_HEADINGS = [
   '## Track Index',
 ] as const;
 
-const REQUIRED_TRACK_HEADINGS = [
-  '## Intent',
-  '## Relevance Signals',
-  '## Investigate In Order',
-  '## Evidence To Require',
-  '## Safe Counterpatterns',
-  '## False Positive Traps',
-  '## Do Not Report',
-  '## Severity And Confidence',
-  '## Remediation Patterns',
-  '## Research Anchors',
-  '## Transformed Examples',
-  '### True Positive',
-  '### Safe Lookalike',
-  '### Corrected Pattern',
-] as const;
+const SynthReferenceRoleSchema = z.enum(SYNTH_REFERENCE_ROLES);
+
+const REFERENCE_ROLE_ORDER: Record<SynthReferenceRole, number> = {
+  procedure: 0,
+  'decision-guide': 1,
+  'reference-table': 2,
+  troubleshooting: 3,
+  examples: 4,
+};
 
 function hasMarkdownHeading(markdown: string, heading: string): boolean {
   return markdown.includes(`${heading}\n`) || markdown.endsWith(heading);
@@ -63,19 +66,95 @@ function isValidChecklistIndexMarkdown(markdown: string): boolean {
   return REQUIRED_CHECKLIST_INDEX_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
 }
 
-function isValidTrackMarkdown(markdown: string): boolean {
-  const trimmed = markdown.trim();
-  if (!trimmed.startsWith('# Track: ')) {
-    return false;
-  }
-  return REQUIRED_TRACK_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
+function referenceLineCount(markdown: string): number {
+  return markdown.split(/\r?\n/).length;
 }
 
-function invalidTrackMarkdownMessage(): string {
-  return (
-    'Track markdown must contain the full track file contents with the required sections: ' +
-    `${REQUIRED_TRACK_HEADINGS.join(', ')}`
-  );
+function isValidReferencePath(path: string): boolean {
+  if (!/^references\/[a-z0-9][a-z0-9._/-]*\.md$/.test(path)) {
+    return false;
+  }
+  if (path.includes('..') || path.includes('//')) {
+    return false;
+  }
+  const basename = path.split('/').at(-1)?.toLowerCase();
+  if (!basename) {
+    return false;
+  }
+  return !SYNTH_GENERIC_REFERENCE_BASENAMES.has(basename);
+}
+
+function validateProcedureReference(markdown: string): boolean {
+  const trimmed = markdown.trim();
+  if (!trimmed.startsWith('# ')) {
+    return false;
+  }
+  return SYNTH_REQUIRED_PROCEDURE_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
+}
+
+function validateExamplesReference(markdown: string): boolean {
+  const trimmed = markdown.trim();
+  if (!trimmed.startsWith('# ')) {
+    return false;
+  }
+  return SYNTH_REQUIRED_EXAMPLES_HEADINGS.every((heading) => hasMarkdownHeading(trimmed, heading));
+}
+
+function minimumReferenceLength(role: SynthReferenceRole): number {
+  switch (role) {
+    case 'procedure':
+      return 350;
+    case 'examples':
+      return 250;
+    default:
+      return 180;
+  }
+}
+
+function isValidReferenceMarkdown(markdown: string, role: SynthReferenceRole): boolean {
+  const trimmed = markdown.trim();
+  if (!trimmed.startsWith('# ') || !trimmed.includes('\n')) {
+    return false;
+  }
+  if (trimmed.startsWith('references/')) {
+    return false;
+  }
+  if (referenceLineCount(trimmed) > 100 && !hasMarkdownHeading(trimmed, '## Contents')) {
+    return false;
+  }
+
+  switch (role) {
+    case 'procedure':
+      return validateProcedureReference(trimmed);
+    case 'examples':
+      return validateExamplesReference(trimmed);
+    default:
+      return hasMarkdownHeading(trimmed, '## ');
+  }
+}
+
+function invalidReferenceMarkdownMessage(role: SynthReferenceRole): string {
+  if (role === 'procedure') {
+    return (
+      'Procedure references must contain the required sections: ' +
+      `${SYNTH_REQUIRED_PROCEDURE_HEADINGS.join(', ')}`
+    );
+  }
+  if (role === 'examples') {
+    return (
+      'Examples references must contain the required sections: ' +
+      `${SYNTH_REQUIRED_EXAMPLES_HEADINGS.join(', ')}`
+    );
+  }
+  return 'Reference markdown must answer one focused lookup need with a real heading structure.';
+}
+
+function synthReferenceSort(a: { role: SynthReferenceRole; path: string }, b: { role: SynthReferenceRole; path: string }): number {
+  const roleOrder = REFERENCE_ROLE_ORDER[a.role] - REFERENCE_ROLE_ORDER[b.role];
+  if (roleOrder !== 0) {
+    return roleOrder;
+  }
+  return a.path.localeCompare(b.path);
 }
 
 const SynthChecklistIndexMarkdownSchema = z.string()
@@ -85,12 +164,33 @@ const SynthChecklistIndexMarkdownSchema = z.string()
     'Checklist index markdown must contain ## How To Use This Checklist and ## Track Index',
   );
 
-const SynthTrackMarkdownSchema = z.string()
-  .min(500, 'Track markdown must contain the full track reference, not a placeholder or path')
-  .refine(
-    (value) => isValidTrackMarkdown(value),
-    invalidTrackMarkdownMessage(),
-  );
+const SynthReferenceFileSchema = z.object({
+  path: z.string()
+    .min(1)
+    .refine(
+      (value) => isValidReferencePath(value),
+      'Reference paths must live under references/, end in .md, and avoid vague names like notes.md or context.md',
+    ),
+  title: z.string().min(1),
+  role: SynthReferenceRoleSchema,
+  openWhen: z.string().min(1),
+  markdown: z.string().min(1),
+}).strict().superRefine((value, ctx) => {
+  if (value.markdown.trim().length < minimumReferenceLength(value.role)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['markdown'],
+      message: `${value.role} references must contain the full file contents, not a placeholder or path`,
+    });
+  }
+  if (!isValidReferenceMarkdown(value.markdown, value.role)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['markdown'],
+      message: invalidReferenceMarkdownMessage(value.role),
+    });
+  }
+});
 
 const SynthSkillScaffoldSchema = z.object({
   version: z.literal(1),
@@ -113,19 +213,57 @@ const SynthTrackReferenceSchema = z.object({
   skill: z.string().min(1),
   trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
   title: z.string().min(1),
-  markdown: SynthTrackMarkdownSchema,
+  references: z.array(SynthReferenceFileSchema).min(1).max(MAX_TRACK_REFERENCE_FILES),
   externalSources: z.array(z.object({
     title: z.string().min(1),
     url: z.string().min(1),
     reason: z.string().min(1),
   }).strict()).default([]),
   missingInputs: z.array(z.string().min(1)).default([]),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  const paths = new Set<string>();
+  for (const [index, reference] of value.references.entries()) {
+    if (paths.has(reference.path)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['references', index, 'path'],
+        message: `Duplicate reference path within track bundle: ${reference.path}`,
+      });
+    }
+    paths.add(reference.path);
+  }
 
-interface SynthTrackReference {
+  const hasProcedure = value.references.some((reference) => reference.role === 'procedure');
+  if (!hasProcedure) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['references'],
+      message: 'Each track bundle must include at least one procedure reference',
+    });
+  }
+
+  const hasExamples = value.references.some((reference) => reference.role === 'examples');
+  if (!hasExamples) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['references'],
+      message: 'Each track bundle must include at least one examples reference',
+    });
+  }
+});
+
+interface SynthReferenceFile {
+  path: string;
+  title: string;
+  role: SynthReferenceRole;
+  openWhen: string;
+  markdown: string;
+}
+
+interface SynthTrackBundle {
   id: string;
   title: string;
-  markdown: string;
+  references: SynthReferenceFile[];
 }
 
 interface SynthSkillOutput {
@@ -137,7 +275,7 @@ interface SynthSkillOutput {
   specMd: string;
   sourcesMd: string;
   checklistMd: string;
-  trackReferences: SynthTrackReference[];
+  trackBundles: SynthTrackBundle[];
   externalSources: SynthExternalSource[];
   missingInputs: string[];
 }
@@ -171,32 +309,49 @@ function byteLength(...contents: string[]): number {
   return contents.reduce((sum, content) => sum + Buffer.byteLength(content, 'utf-8'), 0);
 }
 
-function trackReferencePath(rootDir: string, trackId: string): string {
-  return join(rootDir, 'references', 'tracks', `${trackId}.md`);
+function referenceFilePath(rootDir: string, referencePath: string): string {
+  return join(rootDir, referencePath);
 }
 
-function readTrackReferenceFiles(rootDir: string): { id: string; content: string }[] {
-  const tracksDir = join(rootDir, 'references', 'tracks');
-  if (!existsSync(tracksDir)) {
+function readGeneratedReferenceFiles(rootDir: string): {
+  path: string;
+  content: string;
+}[] {
+  const referencesDir = join(rootDir, 'references');
+  if (!existsSync(referencesDir)) {
     return [];
   }
 
-  return readdirSync(tracksDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-    .map((entry) => ({
-      id: basename(entry.name, '.md'),
-      content: readFileSync(join(tracksDir, entry.name), 'utf-8'),
-    }))
-    .sort((a, b) => a.id.localeCompare(b.id));
+  const files: { path: string; content: string }[] = [];
+
+  function visit(relativeDir: string): void {
+    for (const entry of readdirSync(join(rootDir, relativeDir), { withFileTypes: true })) {
+      const nextRelativePath = `${relativeDir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        visit(nextRelativePath);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith('.md') || nextRelativePath === 'references/checklist.md') {
+        continue;
+      }
+      files.push({
+        path: nextRelativePath,
+        content: readFileSync(join(rootDir, nextRelativePath), 'utf-8'),
+      });
+    }
+  }
+
+  visit('references');
+  return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-function artifactTrackIds(rootDir: string): string[] {
-  return readTrackReferenceFiles(rootDir).map((file) => file.id);
+function artifactReferencePaths(rootDir: string): string[] {
+  return readGeneratedReferenceFiles(rootDir).map((file) => file.path);
 }
 
 function artifactByteLength(rootDir: string): number | undefined {
   try {
-    const trackContents = readTrackReferenceFiles(rootDir).map((file) => file.content);
+    const trackContents = readGeneratedReferenceFiles(rootDir).map((file) => file.content);
     return byteLength(
       readFileSync(join(rootDir, 'SKILL.md'), 'utf-8'),
       readFileSync(join(rootDir, 'SPEC.md'), 'utf-8'),
@@ -209,19 +364,33 @@ function artifactByteLength(rootDir: string): number | undefined {
   }
 }
 
-function artifactsLookValid(rootDir: string): boolean {
+function artifactsLookValid(args: {
+  rootDir: string;
+  referenceManifest: {
+    path: string;
+    role: SynthReferenceRole;
+  }[];
+}): boolean {
   try {
-    const checklistContent = readFileSync(join(rootDir, 'references', 'checklist.md'), 'utf-8');
+    const checklistContent = readFileSync(join(args.rootDir, 'references', 'checklist.md'), 'utf-8');
     if (!isValidChecklistIndexMarkdown(checklistContent)) {
       return false;
     }
 
-    const trackFiles = readTrackReferenceFiles(rootDir);
-    if (trackFiles.length === 0) {
+    const referenceFiles = readGeneratedReferenceFiles(args.rootDir);
+    if (referenceFiles.length === 0 || args.referenceManifest.length === 0) {
       return false;
     }
 
-    return trackFiles.every((file) => isValidTrackMarkdown(file.content));
+    const fileMap = new Map(referenceFiles.map((file) => [file.path, file.content]));
+    if (fileMap.size !== args.referenceManifest.length) {
+      return false;
+    }
+
+    return args.referenceManifest.every((reference) => {
+      const content = fileMap.get(reference.path);
+      return typeof content === 'string' && isValidReferenceMarkdown(content, reference.role);
+    });
   } catch {
     return false;
   }
@@ -262,6 +431,8 @@ ${repoInspectionGuidance} Use WebSearch or WebFetch for public prior art and cur
 
 Do not send repository code, secrets, private file paths, or proprietary details to web tools. Use public framework, package, API, vulnerability class, and documentation names only.
 
+${SKILL_WRITER_ROUTER_GUIDANCE}
+
 Return only strict JSON. Never return prose, markdown, or a follow-up question. If context is missing, still return the JSON object and put the missing context in missingInputs.`;
 }
 
@@ -270,11 +441,14 @@ function trackSystemPrompt(outline: SynthOutline): string {
     ? 'Use Read, Grep, and Glob only when the current track needs local repository details to sharpen investigation steps, safe counterpatterns, or false-positive controls.'
     : 'Do not inspect repository code just because a repo path is available. This track belongs to an intentionally generic skill, so write it from the outline, bundled source material, and public prior art unless local repository context is explicitly required.';
 
-  return `You synthesize one deep reference track for a generated Warden skill.
+  return `You synthesize one routed reference bundle for a generated Warden skill.
 
 ${repoInspectionGuidance} Use WebSearch or WebFetch for public prior art and current external documentation when framework, runtime, vulnerability, or ecosystem behavior affects the track.
 
 Do not send repository code, secrets, private file paths, or proprietary details to web tools. Use public framework, package, API, vulnerability class, and documentation names only.
+
+${SKILL_WRITER_ROUTER_GUIDANCE}
+${SKILL_WRITER_REFERENCE_ROLE_GUIDANCE}
 
 Return only strict JSON. Never return prose, markdown, or a follow-up question. If context is missing, still return the JSON object and put the missing context in missingInputs.`;
 }
@@ -305,9 +479,10 @@ The resulting runtime skill will run through Warden's normal hunk-based analysis
 - the runtime skill must not blindly execute every checklist track on every hunk
 - instead, it must first determine which checklist tracks are relevant to the current file and hunk, then work only those tracks in order
 - if the outline is intentionally generic, keep the runtime skill generic without becoming shallow
-- depth should come from concrete track procedures, safe counterexamples, false-positive controls, remediation patterns, and transformed examples, not fake repo-specific detail or placeholder advice
+- depth should come from routed references, concrete procedures, safe counterexamples, false-positive controls, remediation patterns, and transformed examples, not fake repo-specific detail or placeholder advice
 - Use minimal prose throughout. Prefer terse bullets, ordered steps, short tables, and compact directive lines over explanatory paragraphs.
 - Keep every section dense and scannable. Do not write essays, narrative transitions, or long background paragraphs.
+- Treat this as a reference-backed-expert skill. SKILL.md routes. references/ files carry optional depth. SOURCES.md holds provenance and decisions.
 ${requiresRepoInspection(outline)
     ? '- This outline is locally grounded. Use Read, Grep, and Glob to deepen the checklist around the repository-specific frameworks, patterns, and runtime boundaries that the outline identified.'
     : '- This outline is intentionally generic. Do not inspect repository code, local file paths, or project structure just because repoPath is available. Build the runtime skill from the outline, bundled source material, and public prior art only.'}
@@ -335,14 +510,14 @@ Return only JSON with this exact shape:
 Required SKILL.md body contents:
 - State that this is a synthesized Warden skill for outline "${outline.skill}".
 - Instruct the execution agent to read references/checklist.md before reporting findings.
-- Instruct the execution agent to open only the relevant references/tracks/<track-id>.md modules for the current file and hunk.
+- Instruct the execution agent to open only the routed references listed for each selected track in references/checklist.md.
 - Instruct the execution agent to identify the relevant checklist tracks for the current file and hunk before doing deeper investigation.
 - Instruct the execution agent to execute the selected checklist tracks sequentially.
 - Instruct the execution agent to perform deep repo-local investigation with Read, Grep, and Glob.
 - Instruct the execution agent to use WebSearch or WebFetch for current public documentation or prior art when external behavior affects findings.
 - Prohibit sending repository code, secrets, private file paths, or proprietary details to web tools.
 - Require changed-line anchoring, explicit verification, and normal Warden findings behavior.
-- Keep SKILL.md concise and runtime-focused. Put the bulk of the task list in references/checklist.md and the bulk of the depth in references/tracks/<track-id>.md.
+- Keep SKILL.md concise and runtime-focused. Put the bulk of the task list in references/checklist.md and the bulk of the depth in focused routed references under references/.
 - Prefer short imperative bullets and compact numbered steps. Avoid prose paragraphs unless one brief sentence is necessary to disambiguate a boundary.
 
 Required SPEC.md structure:
@@ -371,7 +546,7 @@ Use concise bullets to show how the runtime skill framing and checklist tracks w
 
 ## Coverage Matrix
 
-Map each outline track id to the generated checklist track that owns it.
+Map each outline track id to the generated reference paths that own it.
 
 ## Depth Expansion Passes
 
@@ -421,7 +596,7 @@ ${sourceBlocks(args.source)}
 </source_material>
 
 <instructions>
-Create one deep checklist track for outline track "${track.id}".
+Create the routed reference bundle for outline track "${track.id}".
 
 This step owns exactly one track:
 - track id: "${track.id}"
@@ -431,8 +606,14 @@ Rules:
 - Do not rename the track id.
 - Do not cover other outline tracks.
 - Preserve the track's ownership boundaries, exclusions, checks, relevanceSignals, safeCounterpatterns, falsePositiveTraps, and researchHints.
-- Use minimal prose. Prefer terse bullets, short numbered steps, and compact examples.
+- Use minimal prose. Prefer terse bullets, short numbered steps, compact tables, and compact examples.
 - Keep each section dense and scannable. Do not write essays or narrative paragraphs.
+- Choose as many or as few references as the track needs. One focused reference is fine. Multiple focused references are better when procedures, examples, tables, or troubleshooting would otherwise get mixed together.
+- Split by lookup need, not by vague topic bucket. Bad filenames: notes.md, context.md, patterns.md, research.md.
+- The track bundle must include at least one procedure reference and at least one examples reference.
+- The path layout is flexible. Good examples: references/tracks/injection.md, references/examples/xss/rails.md, references/frameworks/auth/django.md, references/troubleshooting/auth/session-confusion.md.
+- Each reference must include a direct openWhen reason that tells the runtime when to load it from checklist.md.
+- Keep provenance out of runtime references. That belongs in SOURCES.md.
 ${requiresRepoInspection(args.outline)
     ? '- This outline is locally grounded. Use Read, Grep, and Glob only when local repository details materially improve this track.'
     : '- This outline is intentionally generic. Do not inspect repository code, local file paths, or project structure just because repoPath is available. Build the track from the blueprint, bundled source material, and public prior art only.'}
@@ -443,22 +624,39 @@ Return only JSON with this exact shape:
   "skill": "${args.outline.skill}",
   "trackId": "${track.id}",
   "title": "${track.title}",
-  "markdown": "# Track: ${track.title}\\n\\n## Intent\\n...",
+  "references": [
+    {
+      "path": "references/tracks/${track.id}.md",
+      "title": "${track.title} investigation procedure",
+      "role": "procedure",
+      "openWhen": "the hunk shows one of the track's primary relevance signals",
+      "markdown": "# ${track.title} investigation procedure\\n\\n## When To Use\\n..."
+    },
+    {
+      "path": "references/examples/${track.id}/framework.md",
+      "title": "${track.title} examples",
+      "role": "examples",
+      "openWhen": "the hunk needs concrete true-positive, safe-lookalike, or corrected-pattern comparisons",
+      "markdown": "# ${track.title} examples\\n\\n## True Positives\\n..."
+    }
+  ],
   "externalSources": [
     {"title": "Source title", "url": "https://example.com", "reason": "Why this source informed the track"}
   ],
   "missingInputs": ["Missing context that would improve this track, if any"]
 }
 
-The markdown field must contain the full track file contents itself. Never return a file path, filename, placeholder label, or "see references/tracks/...".
+The references[].markdown fields must contain the full file contents themselves. Never return file paths, filenames, placeholder labels, or "see references/...".
 
-Required markdown structure:
+Required role coverage:
+- at least one reference with role "procedure"
+- at least one reference with role "examples"
 
-# Track: ${track.title}
+Procedure references must contain:
 
-## Intent
+# <title>
 
-## Relevance Signals
+## When To Use
 - concrete file, hunk, or behavioral cues
 
 ## Investigate In Order
@@ -471,56 +669,65 @@ Required markdown structure:
 ## Safe Counterpatterns
 - patterns that should suppress or downgrade weak findings
 
-## False Positive Traps
-- shallow misreads, sibling overlap traps, or pattern-only claims to avoid
-
 ## Do Not Report
 - boundaries and sibling exclusions
 
 ## Severity And Confidence
 - calibration guidance
 
-## Remediation Patterns
-- concrete safe or corrected approaches
+Examples references must contain:
 
-## Research Anchors
-- public docs, runtime topics, or prior-art areas to consult when needed
+# <title>
 
-## Transformed Examples
+## True Positives
+- compact exploit-shaped examples
 
-### True Positive
+## Safe Lookalikes
+- compact examples that should suppress weak findings
 
-### Safe Lookalike
+## Corrected Patterns
+- compact corrected or remediation-shaped examples
 
-### Corrected Pattern
-
-Keep each section terse. Prefer short bullets, short numbered steps, and compact examples over prose paragraphs.
+Keep every reference terse. Each file should answer one lookup need. Use extra references only when they sharpen routing or reduce monolithic mixed-content files.
 </instructions>`;
 }
 
-function compileChecklistIndex(outline: SynthOutline): string {
+function compileChecklistIndex(args: {
+  outline: SynthOutline;
+  trackBundles: SynthTrackBundle[];
+}): string {
   const lines = [
-    `# ${outline.skill} Checklist`,
+    `# ${args.outline.skill} Checklist`,
     '',
     '## How To Use This Checklist',
     '',
     '1. Classify which checklist tracks are relevant to the current file and hunk.',
     '2. Ignore unrelated tracks instead of running every track on every hunk.',
-    '3. Open only the matching `references/tracks/<track-id>.md` files.',
-    '4. Execute the relevant tracks in order.',
-    '5. Read local source and public prior art only when the selected track needs it.',
-    '6. Report only findings with concrete changed-line evidence.',
+    '3. Open only the routed references listed under the selected track.',
+    '4. Start with the procedure reference for that track, then load additional references only when their open-when rules match.',
+    '5. Execute the relevant track procedures in order.',
+    '6. Read local source and public prior art only when the selected track needs it.',
+    '7. Report only findings with concrete changed-line evidence.',
     '',
     '## Track Index',
     '',
   ];
 
-  for (const track of outline.tracks) {
+  for (const track of args.outline.tracks) {
+    const bundle = args.trackBundles.find((item) => item.id === track.id);
+    if (!bundle) {
+      throw new SynthesizedSkillError(
+        `Checklist compilation missing track bundle "${track.id}" for ${args.outline.skill}`,
+      );
+    }
+
     lines.push(`### ${track.title} (\`${track.id}\`)`);
     for (const signal of track.relevanceSignals.slice(0, 3)) {
       lines.push(`- ${signal}`);
     }
-    lines.push(`- Open \`references/tracks/${track.id}.md\`.`);
+    for (const reference of [...bundle.references].sort(synthReferenceSort)) {
+      lines.push(`- Open \`${reference.path}\` when ${reference.openWhen}.`);
+    }
     lines.push('');
   }
 
@@ -528,7 +735,7 @@ function compileChecklistIndex(outline: SynthOutline): string {
   const validation = SynthChecklistIndexMarkdownSchema.safeParse(compiled);
   if (!validation.success) {
     throw new SynthesizedSkillError(
-      `Compiled checklist index was invalid for ${outline.skill}: ${validation.error.message}`,
+      `Compiled checklist index was invalid for ${args.outline.skill}: ${validation.error.message}`,
     );
   }
   return compiled;
@@ -539,7 +746,7 @@ function combineOutputs(args: {
   scaffold: z.infer<typeof SynthSkillScaffoldSchema>;
   tracks: z.infer<typeof SynthTrackReferenceSchema>[];
 }): SynthSkillOutput {
-  const trackReferences: SynthTrackReference[] = args.outline.tracks.map((outlineTrack) => {
+  const trackBundles: SynthTrackBundle[] = args.outline.tracks.map((outlineTrack) => {
     const track = args.tracks.find((item) => item.trackId === outlineTrack.id);
     if (!track) {
       throw new SynthesizedSkillError(
@@ -554,9 +761,27 @@ function combineOutputs(args: {
     return {
       id: outlineTrack.id,
       title: outlineTrack.title,
-      markdown: track.markdown,
+      references: track.references.map((reference) => ({
+        path: reference.path,
+        title: reference.title,
+        role: reference.role,
+        openWhen: reference.openWhen,
+        markdown: reference.markdown,
+      })),
     };
   });
+
+  const seenPaths = new Set<string>();
+  for (const trackBundle of trackBundles) {
+    for (const reference of trackBundle.references) {
+      if (seenPaths.has(reference.path)) {
+        throw new SynthesizedSkillError(
+          `Generated reference path collision for ${args.outline.skill}: ${reference.path}`,
+        );
+      }
+      seenPaths.add(reference.path);
+    }
+  }
 
   return {
     version: 1,
@@ -566,8 +791,11 @@ function combineOutputs(args: {
     skillBody: args.scaffold.skillBody,
     specMd: args.scaffold.specMd,
     sourcesMd: args.scaffold.sourcesMd,
-    checklistMd: compileChecklistIndex(args.outline),
-    trackReferences,
+    checklistMd: compileChecklistIndex({
+      outline: args.outline,
+      trackBundles,
+    }),
+    trackBundles,
     externalSources: [
       ...args.scaffold.externalSources,
       ...args.tracks.flatMap((track) => track.externalSources),
@@ -598,6 +826,72 @@ function summarizeTurns(turns: (number | undefined)[]): number | undefined {
   return values.reduce((sum, value) => sum + value, 0);
 }
 
+function flattenTrackReferences(trackBundles: SynthTrackBundle[]): {
+  trackId: string;
+  path: string;
+  role: SynthReferenceRole;
+  openWhen: string;
+  markdown: string;
+}[] {
+  return trackBundles.flatMap((trackBundle) =>
+    trackBundle.references.map((reference) => ({
+      trackId: trackBundle.id,
+      path: reference.path,
+      role: reference.role,
+      openWhen: reference.openWhen,
+      markdown: reference.markdown,
+    })),
+  );
+}
+
+function hasRequiredTrackReferenceCoverage(args: {
+  trackIds: string[];
+  referenceManifest: {
+    trackId: string;
+    role: string;
+  }[];
+}): boolean {
+  return args.trackIds.every((trackId) => {
+    const references = args.referenceManifest.filter((reference) => reference.trackId === trackId);
+    return references.some((reference) => reference.role === 'procedure')
+      && references.some((reference) => reference.role === 'examples');
+  });
+}
+
+function parseReferenceManifest(referenceManifest: {
+  trackId: string;
+  path: string;
+  role: string;
+  openWhen: string;
+}[]): {
+  trackId: string;
+  path: string;
+  role: SynthReferenceRole;
+  openWhen: string;
+}[] | undefined {
+  const parsed: {
+    trackId: string;
+    path: string;
+    role: SynthReferenceRole;
+    openWhen: string;
+  }[] = [];
+
+  for (const reference of referenceManifest) {
+    const role = SynthReferenceRoleSchema.safeParse(reference.role);
+    if (!role.success) {
+      return undefined;
+    }
+    parsed.push({
+      trackId: reference.trackId,
+      path: reference.path,
+      role: role.data,
+      openWhen: reference.openWhen,
+    });
+  }
+
+  return parsed;
+}
+
 function loadCachedArtifact(args: {
   rootDir: string;
   outline: SynthOutline;
@@ -608,19 +902,39 @@ function loadCachedArtifact(args: {
     !existsSync(join(args.rootDir, 'SPEC.md')) ||
     !existsSync(join(args.rootDir, 'SOURCES.md')) ||
     !existsSync(join(args.rootDir, 'references', 'checklist.md')) ||
-    readTrackReferenceFiles(args.rootDir).length === 0
+    readGeneratedReferenceFiles(args.rootDir).length === 0
   ) {
-    return undefined;
-  }
-  if (!artifactsLookValid(args.rootDir)) {
     return undefined;
   }
 
   const state = readSynthState(join(args.rootDir, 'synthesis.json'));
   const metadata = state?.artifact;
   const bytes = artifactByteLength(args.rootDir);
-  const trackIds = artifactTrackIds(args.rootDir);
+  const expectedTrackIds = args.outline.tracks.map((track) => track.id);
+  const referencePaths = artifactReferencePaths(args.rootDir);
   if (!metadata || bytes === undefined) {
+    return undefined;
+  }
+  if (!metadata.referenceManifest || metadata.referenceManifest.length === 0) {
+    return undefined;
+  }
+  const parsedManifest = parseReferenceManifest(metadata.referenceManifest);
+  if (!parsedManifest) {
+    return undefined;
+  }
+  if (!hasRequiredTrackReferenceCoverage({
+    trackIds: expectedTrackIds,
+    referenceManifest: parsedManifest,
+  })) {
+    return undefined;
+  }
+  if (!artifactsLookValid({
+    rootDir: args.rootDir,
+    referenceManifest: parsedManifest.map((reference) => ({
+      path: reference.path,
+      role: reference.role,
+    })),
+  })) {
     return undefined;
   }
 
@@ -628,7 +942,8 @@ function loadCachedArtifact(args: {
     metadata.sourceHash !== args.source.hash ||
     metadata.outlineHash !== outlineHash(args.outline) ||
     metadata.synthesisVersion !== args.outline.synthesisVersion ||
-    JSON.stringify(metadata.trackIds) !== JSON.stringify(trackIds) ||
+    JSON.stringify(metadata.trackIds) !== JSON.stringify(expectedTrackIds) ||
+    JSON.stringify(parsedManifest.map((reference) => reference.path).sort()) !== JSON.stringify(referencePaths) ||
     metadata.bytes !== bytes
   ) {
     return undefined;
@@ -658,7 +973,7 @@ function writeGeneratedArtifact(args: {
   numTurns?: number;
 }): SynthesizedSkillArtifact {
   clearSynthesizedSkillArtifacts(args.rootDir);
-  mkdirSync(join(args.rootDir, 'references', 'tracks'), { recursive: true });
+  mkdirSync(join(args.rootDir, 'references'), { recursive: true });
 
   const skillContent = `---
 name: ${args.output.name}
@@ -671,15 +986,17 @@ ${args.output.skillBody.trim()}
   const specContent = `${args.output.specMd.trim()}\n`;
   const sourcesContent = `${args.output.sourcesMd.trim()}\n`;
   const checklistContent = `${args.output.checklistMd.trim()}\n`;
-  const trackContents = args.output.trackReferences.map((track) => `${track.markdown.trim()}\n`);
-  const bytes = byteLength(skillContent, specContent, sourcesContent, checklistContent, ...trackContents);
+  const referenceFiles = flattenTrackReferences(args.output.trackBundles);
+  const referenceContents = referenceFiles.map((reference) => `${reference.markdown.trim()}\n`);
+  const bytes = byteLength(skillContent, specContent, sourcesContent, checklistContent, ...referenceContents);
 
   writeFileSync(join(args.rootDir, 'SKILL.md'), skillContent, 'utf-8');
   writeFileSync(join(args.rootDir, 'SPEC.md'), specContent, 'utf-8');
   writeFileSync(join(args.rootDir, 'SOURCES.md'), sourcesContent, 'utf-8');
   writeFileSync(join(args.rootDir, 'references', 'checklist.md'), checklistContent, 'utf-8');
-  for (const track of args.output.trackReferences) {
-    writeFileSync(trackReferencePath(args.rootDir, track.id), `${track.markdown.trim()}\n`, 'utf-8');
+  for (const reference of referenceFiles) {
+    mkdirSync(dirname(referenceFilePath(args.rootDir, reference.path)), { recursive: true });
+    writeFileSync(referenceFilePath(args.rootDir, reference.path), `${reference.markdown.trim()}\n`, 'utf-8');
   }
 
   return {
@@ -811,6 +1128,12 @@ export async function synthesizeGeneratedSkill(args: {
       scaffold: scaffold.data,
       tracks,
     });
+    const referenceManifest = flattenTrackReferences(output.trackBundles).map((reference) => ({
+      trackId: reference.trackId,
+      path: reference.path,
+      role: reference.role,
+      openWhen: reference.openWhen,
+    }));
 
     const artifact = writeGeneratedArtifact({
       rootDir: args.rootDir,
@@ -838,7 +1161,8 @@ export async function synthesizeGeneratedSkill(args: {
         outlineHash: outlineHash(args.outline),
         synthesisVersion: args.outline.synthesisVersion,
         name: artifact.name,
-        trackIds: artifactTrackIds(artifact.path),
+        trackIds: args.outline.tracks.map((track) => track.id),
+        referenceManifest,
         bytes: artifact.bytes,
         durationMs: artifact.durationMs,
         usage: artifact.usage,

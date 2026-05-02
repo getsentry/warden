@@ -113,7 +113,7 @@ function skillStatusMessage(skill: SkillDefinition): string {
 }
 
 function skillStatusDetail(): string {
-  return 'Write the router, checklist, and track references.';
+  return 'Write the router, checklist, and routed references.';
 }
 
 function readPromptFile(path: string): string {

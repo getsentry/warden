@@ -88,12 +88,18 @@ export const SynthOutlineSchema = z.object({
 export type SynthOutline = z.infer<typeof SynthOutlineSchema>;
 
 export const SynthArtifactStateSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   sourceHash: z.string().min(1),
   outlineHash: z.string().min(1),
   synthesisVersion: z.string().min(1),
   name: z.string().min(1),
   trackIds: z.array(z.string().min(1)).min(1),
+  referenceManifest: z.array(z.object({
+    trackId: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/),
+    path: z.string().min(1),
+    role: z.string().min(1),
+    openWhen: z.string().min(1),
+  }).strict()).optional(),
   bytes: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
   usage: UsageStatsSchema,

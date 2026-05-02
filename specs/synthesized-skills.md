@@ -15,8 +15,11 @@ Generated skills live under `.warden/skills/<name>/`.
 ├── synthesis.json
 └── references/
     ├── checklist.md
-    └── tracks/
-        └── <track-id>.md
+    ├── tracks/
+    │   └── injection.md
+    └── examples/
+        └── xss/
+            └── rails.md
 ```
 
 `warden.yaml` is the stable authored definition.
@@ -35,7 +38,7 @@ Generated skills live under `.warden/skills/<name>/`.
 
 1. Reads or creates `.warden/skills/<name>/warden.yaml`
 2. Synthesizes an internal outline
-3. Synthesizes one runnable skill plus checklist references
+3. Synthesizes one runnable skill plus routed reference files
 4. Writes the generated artifacts back into the same root
 
 The internal outline is planning metadata only. It is not a runnable skill and it is not a separate user-facing artifact.
@@ -46,7 +49,7 @@ Generated skills are normal Warden skills.
 
 - `warden ... --skill <name>` resolves the generated `SKILL.md`
 - the runtime skill reads `references/checklist.md`
-- it opens only the relevant `references/tracks/<track-id>.md` modules for the current file and hunk
+- it opens only the routed reference files listed for the selected checklist tracks
 - it executes those tracks sequentially
 - it still uses normal changed-line anchoring and normal Warden findings
 
@@ -58,7 +61,9 @@ The generated skill should behave as a router plus deep reference set:
 
 - `SKILL.md` stays short and directive
 - `references/checklist.md` is the compact track index
-- `references/tracks/<track-id>.md` carries the depth
+- focused files under `references/` carry the depth
+- paths and subfolders should follow lookup need, not a rigid fixed tree
+- `SOURCES.md` stores provenance and synthesis decisions, not runtime guidance
 
 Depth should come from:
 
@@ -69,6 +74,14 @@ Depth should come from:
 - false-positive traps
 - remediation patterns
 - transformed examples
+
+Reference layout rules:
+
+- treat `SKILL.md` as the router
+- every routed reference needs a direct open-when reason
+- split by lookup need rather than vague buckets
+- examples, framework notes, troubleshooting, and procedures may live in separate files when that improves lookup clarity
+- long references need `## Contents` or should be split further
 
 Avoid broad prose and avoid fake repo specificity when the prompt is intentionally generic.
 
