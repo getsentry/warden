@@ -6,6 +6,8 @@ import type { SkillDefinition } from '../config/schema.js';
 
 export const GENERATED_SKILLS_DIR = '.warden/skills';
 export const SYNTHESIS_DEFINITION_FILE = 'warden.yaml';
+export const BUILD_STATE_FILE = 'build-state.json';
+export const LEGACY_BUILD_STATE_FILE = 'synthesis.json';
 const DESCRIPTION_MAX_LENGTH = 88;
 
 export const GeneratedSkillDefinitionSchema = z.object({
@@ -147,7 +149,7 @@ ${yamlBlock(args.prompt.trim())}
 }
 
 export function clearGeneratedSkillArtifacts(rootDir: string): void {
-  for (const name of ['SKILL.md', 'SPEC.md', 'SOURCES.md', 'synthesis.json']) {
+  for (const name of ['SKILL.md', 'SPEC.md', 'SOURCES.md', BUILD_STATE_FILE, LEGACY_BUILD_STATE_FILE]) {
     rmSync(join(rootDir, name), { force: true });
   }
   rmSync(join(rootDir, 'references'), { recursive: true, force: true });

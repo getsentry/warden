@@ -19,10 +19,13 @@ import {
   clearGeneratedSkillArtifacts,
 } from './definition.js';
 import {
+  getBuildStatePath,
   type SkillBuildOutline,
   type SkillBuildSource,
   outlineHash,
   readSkillBuildState,
+  removeLegacySkillBuildState,
+  resolveSkillBuildStatePath,
   writeSkillBuildState,
 } from './outline.js';
 
@@ -908,7 +911,7 @@ function loadCachedArtifact(args: {
     return undefined;
   }
 
-  const state = readSkillBuildState(join(args.rootDir, 'synthesis.json'));
+  const state = readSkillBuildState(resolveSkillBuildStatePath(args.rootDir));
   const metadata = state?.artifact;
   const bytes = artifactByteLength(args.rootDir);
   const expectedTrackIds = args.outline.tracks.map((track) => track.id);
@@ -1031,7 +1034,7 @@ export async function buildGeneratedSkill(args: {
   onStatus?: (message: string) => void;
 }): Promise<GeneratedSkillArtifact> {
   const startedAt = performance.now();
-  const statePath = join(args.rootDir, 'synthesis.json');
+  const statePath = getBuildStatePath(args.rootDir);
 
   try {
     if (!args.regenerate) {
@@ -1045,7 +1048,7 @@ export async function buildGeneratedSkill(args: {
       }
     }
 
-    const previousState = readSkillBuildState(statePath);
+    const previousState = readSkillBuildState(resolveSkillBuildStatePath(args.rootDir));
     if (!previousState) {
       throw new GeneratedSkillBuildError(
         `Missing generated skill outline state for ${args.outline.skill}`,
@@ -1154,6 +1157,7 @@ export async function buildGeneratedSkill(args: {
       ]),
     });
 
+    removeLegacySkillBuildState(args.rootDir);
     writeSkillBuildState(statePath, {
       ...previousState,
       artifact: {

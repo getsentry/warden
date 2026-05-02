@@ -153,7 +153,7 @@ describe('runBuild', () => {
         ],
       },
       source: 'generated',
-      statePath: join(tempDir, '.warden', 'skills', 'security', 'synthesis.json'),
+      statePath: join(tempDir, '.warden', 'skills', 'security', 'build-state.json'),
       durationMs: 1_000,
       usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
       numTurns: 1,

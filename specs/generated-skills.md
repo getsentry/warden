@@ -12,7 +12,7 @@ Generated skills live under `.warden/skills/<name>/`.
 ├── SKILL.md
 ├── SPEC.md
 ├── SOURCES.md
-├── synthesis.json
+├── build-state.json
 └── references/
     ├── checklist.md
     ├── tracks/
@@ -30,7 +30,7 @@ Generated skills live under `.warden/skills/<name>/`.
 
 `SKILL.md`, `SPEC.md`, `SOURCES.md`, and `references/` are generated artifacts.
 
-`synthesis.json` is machine-owned continuity state. It stores the internal outline, cache identity, and generated artifact metadata.
+`build-state.json` is machine-owned continuity state. It stores the internal outline, cache identity, and generated artifact metadata.
 
 ## Synthesis Flow
 

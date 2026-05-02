@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { SkillDefinition } from '../config/schema.js';
@@ -9,6 +9,8 @@ import { UsageStatsSchema, type UsageStats } from '../types/index.js';
 import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
 import { SKILL_BUILDER_REFERENCE_ROLES } from './skill-writer-guidance.js';
 import {
+  BUILD_STATE_FILE,
+  LEGACY_BUILD_STATE_FILE,
   SYNTHESIS_DEFINITION_FILE,
   loadGeneratedSkillDefinition,
 } from './definition.js';
@@ -190,8 +192,24 @@ function sourceBlocks(source: SkillBuildSource): string {
     .join('\n\n---\n\n');
 }
 
-export function getSynthesisStatePath(rootDir: string): string {
-  return join(rootDir, 'synthesis.json');
+export function getBuildStatePath(rootDir: string): string {
+  return join(rootDir, BUILD_STATE_FILE);
+}
+
+function getLegacyBuildStatePath(rootDir: string): string {
+  return join(rootDir, LEGACY_BUILD_STATE_FILE);
+}
+
+export function resolveSkillBuildStatePath(rootDir: string): string {
+  const currentPath = getBuildStatePath(rootDir);
+  if (existsSync(currentPath)) {
+    return currentPath;
+  }
+  return getLegacyBuildStatePath(rootDir);
+}
+
+export function removeLegacySkillBuildState(rootDir: string): void {
+  rmSync(getLegacyBuildStatePath(rootDir), { force: true });
 }
 
 export function readSkillBuildState(path: string): SkillBuildState | undefined {
@@ -454,14 +472,15 @@ export async function buildSkillOutline(
     throw new SkillBuildOutlineError(`Generated skill ${skill.name} is missing a root directory`);
   }
 
-  const statePath = getSynthesisStatePath(rootDir);
-  if (existsSync(statePath) && !regenerate) {
-    const state = parseCachedOutline(statePath, skill.name, source.hash, model);
+  const statePath = getBuildStatePath(rootDir);
+  const cachedStatePath = resolveSkillBuildStatePath(rootDir);
+  if (existsSync(cachedStatePath) && !regenerate) {
+    const state = parseCachedOutline(cachedStatePath, skill.name, source.hash, model);
     if (state) {
       return {
         outline: state.outline,
         source: 'cache',
-        statePath,
+        statePath: cachedStatePath,
         usage: state.outlineRun?.usage,
         durationMs: state.outlineRun?.durationMs,
         responseModel: state.outlineRun?.responseModel,
@@ -491,6 +510,7 @@ export async function buildSkillOutline(
       });
 
       validateOutlineIdentity(result.data, skill.name, source.hash);
+      removeLegacySkillBuildState(rootDir);
       writeSkillBuildState(statePath, {
         version: SKILL_BUILD_STATE_SCHEMA_VERSION,
         kind: SKILL_BUILD_STATE_KIND,
@@ -538,6 +558,7 @@ export async function buildSkillOutline(
   }
 
   validateOutlineIdentity(result.data, skill.name, source.hash);
+  removeLegacySkillBuildState(rootDir);
   writeSkillBuildState(statePath, {
     version: SKILL_BUILD_STATE_SCHEMA_VERSION,
     kind: SKILL_BUILD_STATE_KIND,
