@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, it, expect } from 'vitest';
+import type { CLIOptions } from './args.js';
 import {
+  createSkillTasks,
   mergeSkillRunnerOptions,
   processTaskResults,
   resolveInvocationCwd,
@@ -7,9 +12,19 @@ import {
   resolveCliDefaultSynthesisModel,
   resolveCliDefaultModel,
   resolveCliLogModel,
+  type RunSkillSpec,
 } from './main.js';
-import { MODEL_DEFAULT_SENTINEL } from './output/index.js';
+import { MODEL_DEFAULT_SENTINEL, Reporter, Verbosity } from './output/index.js';
 import type { SkillReport } from '../types/index.js';
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of tempDirs) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  tempDirs.length = 0;
+});
 
 function makeReport(overrides: Partial<SkillReport> = {}): SkillReport {
   return {
@@ -19,6 +34,62 @@ function makeReport(overrides: Partial<SkillReport> = {}): SkillReport {
     ...overrides,
   };
 }
+
+function createTestReporter(): Reporter {
+  return new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet);
+}
+
+function createCliOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
+  return {
+    json: false,
+    help: false,
+    quiet: true,
+    verbose: 0,
+    debug: false,
+    log: false,
+    fix: false,
+    force: false,
+    list: false,
+    git: false,
+    staged: false,
+    offline: false,
+    failFast: false,
+    regenerate: false,
+    ...overrides,
+  };
+}
+
+describe('createSkillTasks', () => {
+  it('reports missing generated artifacts for explicit generated skill paths', async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), 'warden-main-'));
+    tempDirs.push(repoRoot);
+    const rootDir = join(repoRoot, 'skills', 'security');
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), `version: 1
+kind: generated-skill
+name: security
+prompt: |-
+  Find security issues.
+`, 'utf-8');
+
+    const spec: RunSkillSpec = {
+      name: './skills/security',
+      skill: './skills/security',
+      context: {} as RunSkillSpec['context'],
+      runnerOptions: {},
+    };
+
+    await expect(createSkillTasks({
+      specs: [spec],
+      repoPath: repoRoot,
+      options: createCliOptions(),
+      parallel: 1,
+      reporter: createTestReporter(),
+    })).rejects.toThrow(
+      'Generated skill ./skills/security is missing generated artifacts. Run "warden build ./skills/security" first.',
+    );
+  });
+});
 
 describe('mergeSkillRunnerOptions', () => {
   it('preserves global defaults when per-skill options are undefined', () => {

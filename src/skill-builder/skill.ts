@@ -40,6 +40,7 @@ import {
 
 const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 4;
 const LONG_REFERENCE_LINE_LIMIT = 100;
+const SKILL_FRONTMATTER_PATTERN = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
 function artifactFiles(rootDir: string): {
   path: string;
@@ -97,18 +98,16 @@ function fileManifest(files: { path: string; content: string }[]): {
 }
 
 function normalizeFileContent(content: string): string {
-  return content.endsWith('\n') ? content : `${content}\n`;
+  const normalized = content.replace(/\r\n/g, '\n');
+  return normalized.endsWith('\n') ? normalized : `${normalized}\n`;
 }
 
 function skillFrontmatter(content: string): Record<string, unknown> | undefined {
-  if (!content.startsWith('---\n')) {
+  const match = content.match(SKILL_FRONTMATTER_PATTERN);
+  const frontmatter = match?.[1];
+  if (!frontmatter) {
     return undefined;
   }
-  const end = content.indexOf('\n---', 4);
-  if (end < 0) {
-    return undefined;
-  }
-  const frontmatter = content.slice(4, end);
   try {
     const parsed = parseYaml(frontmatter);
     return parsed && typeof parsed === 'object'
@@ -117,6 +116,49 @@ function skillFrontmatter(content: string): Record<string, unknown> | undefined 
   } catch {
     return undefined;
   }
+}
+
+function oneLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function yamlQuoted(value: string): string {
+  return JSON.stringify(value);
+}
+
+function fallbackDescription(fileMap: GeneratedSkillFileMap, targetName: string): string {
+  const summary = oneLine(fileMap.summary);
+  if (summary) {
+    return summary;
+  }
+  return `Use when running the generated ${targetName} Warden skill.`;
+}
+
+function ensureSkillFrontmatter(args: {
+  content: string;
+  fileMap: GeneratedSkillFileMap;
+  targetName: string;
+}): string {
+  if (SKILL_FRONTMATTER_PATTERN.test(args.content)) {
+    return args.content;
+  }
+  return `---
+name: ${yamlQuoted(args.targetName)}
+description: ${yamlQuoted(fallbackDescription(args.fileMap, args.targetName))}
+---
+
+${args.content.trimStart()}`;
+}
+
+function referencedSkillPaths(content: string): string[] {
+  const paths = new Set<string>();
+  for (const match of content.matchAll(/references\/[a-zA-Z0-9][a-zA-Z0-9._/-]*/g)) {
+    const path = match[0].replace(/[.,;:!?]+$/g, '');
+    if (/[a-zA-Z0-9]$/.test(path)) {
+      paths.add(path);
+    }
+  }
+  return [...paths].sort();
 }
 
 function deterministicValidation(args: {
@@ -153,9 +195,19 @@ function deterministicValidation(args: {
   }
 
   const referenceFiles = args.fileMap.files.filter((file) => file.path.startsWith('references/'));
+  const routedReferenceFiles = referenceFiles.filter((file) => skillMd.includes(file.path));
+  const routeDocuments = [
+    skillMd,
+    ...routedReferenceFiles.map((file) => file.content),
+  ];
+  for (const path of [...new Set(routeDocuments.flatMap(referencedSkillPaths))].sort()) {
+    if (!files.has(path)) {
+      errors.push(`SKILL.md routes ${path} but the generated file map does not include it`);
+    }
+  }
   for (const reference of referenceFiles) {
-    if (!skillMd.includes(reference.path)) {
-      errors.push(`SKILL.md must directly route runtime reference ${reference.path}`);
+    if (!routeDocuments.some((content) => content.includes(reference.path))) {
+      warnings.push(`SKILL.md does not route runtime reference ${reference.path}`);
     }
     const lineCount = reference.content.split('\n').length;
     if (lineCount > LONG_REFERENCE_LINE_LIMIT && !/^## Contents$/m.test(reference.content)) {
@@ -229,6 +281,47 @@ function summarizeTurns(turns: (number | undefined)[]): number | undefined {
   return values.reduce((sum, value) => sum + value, 0);
 }
 
+function zeroUsage(): UsageStats {
+  return { inputTokens: 0, outputTokens: 0, costUSD: 0 };
+}
+
+function loadExistingArtifact(args: {
+  rootDir: string;
+  files: {
+    path: string;
+    content: string;
+  }[];
+  name: string;
+}): GeneratedSkillArtifact | undefined {
+  const validation = deterministicValidation({
+    fileMap: {
+      version: 1,
+      name: args.name,
+      files: args.files.map((file) => ({ path: file.path, content: file.content })),
+      summary: 'Existing generated artifact',
+      validationNotes: [],
+      missingInputs: [],
+      externalSources: [],
+    },
+    targetName: args.name,
+  });
+  if (validation.errors.length > 0) {
+    return undefined;
+  }
+
+  return {
+    kind: 'generated-skill',
+    source: 'cache',
+    name: args.name,
+    path: args.rootDir,
+    bytes: filesByteLength(args.files),
+    durationMs: 0,
+    usage: zeroUsage(),
+    externalSources: [],
+    missingInputs: [],
+  };
+}
+
 function loadCachedArtifact(args: {
   rootDir: string;
   outline: SkillBuildOutline;
@@ -239,13 +332,17 @@ function loadCachedArtifact(args: {
     return undefined;
   }
 
+  const files = artifactFiles(args.rootDir);
   const state = readSkillBuildState(getBuildStatePath(args.rootDir));
   const metadata = state?.artifact;
   if (!metadata) {
-    return undefined;
+    return loadExistingArtifact({
+      rootDir: args.rootDir,
+      files,
+      name: args.outline.skill,
+    });
   }
 
-  const files = artifactFiles(args.rootDir);
   const manifest = fileManifest(files);
   const bytes = filesByteLength(files);
   if (
@@ -257,6 +354,22 @@ function loadCachedArtifact(args: {
     JSON.stringify(metadata.fileManifest) !== JSON.stringify(manifest) ||
     metadata.bytes !== bytes
   ) {
+    return undefined;
+  }
+
+  const validation = deterministicValidation({
+    fileMap: {
+      version: 1,
+      name: metadata.name,
+      files: files.map((file) => ({ path: file.path, content: file.content })),
+      summary: 'Cached generated artifact',
+      validationNotes: [],
+      missingInputs: [],
+      externalSources: [],
+    },
+    targetName: metadata.name,
+  });
+  if (validation.errors.length > 0) {
     return undefined;
   }
 
@@ -310,13 +423,22 @@ function writeGeneratedArtifact(args: {
   };
 }
 
-function normalizeGeneratedFileMap(fileMap: GeneratedSkillFileMap): GeneratedSkillFileMap {
+function normalizeGeneratedFileMap(
+  fileMap: GeneratedSkillFileMap,
+  targetName = fileMap.name,
+): GeneratedSkillFileMap {
   return {
     ...fileMap,
     files: [...fileMap.files]
       .map((file) => ({
         path: file.path,
-        content: normalizeFileContent(file.content),
+        content: normalizeFileContent(file.path === 'SKILL.md'
+          ? ensureSkillFrontmatter({
+            content: file.content,
+            fileMap,
+            targetName,
+          })
+          : file.content),
       }))
       .sort((a, b) => a.path.localeCompare(b.path)),
   };
@@ -418,7 +540,7 @@ export async function buildGeneratedSkill(args: {
       );
     }
 
-    const initialFileMap = normalizeGeneratedFileMap(implementation.data);
+    const initialFileMap = normalizeGeneratedFileMap(implementation.data, args.outline.skill);
     const initialDeterministic = deterministicValidation({
       fileMap: initialFileMap,
       targetName: args.outline.skill,
@@ -450,7 +572,7 @@ export async function buildGeneratedSkill(args: {
     const fileMap = normalizeGeneratedFileMap(applyValidationResult({
       original: initialFileMap,
       validation: validation.data,
-    }));
+    }), args.outline.skill);
     const finalDeterministic = deterministicValidation({
       fileMap,
       targetName: args.outline.skill,

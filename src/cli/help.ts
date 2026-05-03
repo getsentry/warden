@@ -83,8 +83,8 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
     description: 'Show version number',
   },
   skill: {
-    label: '--skill <name>',
-    description: 'Run only this skill',
+    label: '--skill <name|path>',
+    description: 'Run only this skill by name or path',
   },
   config: {
     label: '--config <path>',
@@ -294,7 +294,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
   },
   build: {
     summary: 'Build a repo-local generated skill',
-    description: 'Create or refresh one generated skill by name under .warden/skills, or at an explicit skill root path.',
+    description: 'Create or refresh one generated skill. A name resolves through .warden/skills, .agents/skills, then .claude/skills; use a path for other roots.',
     usage: [
       'warden build <skill> [options]',
     ],

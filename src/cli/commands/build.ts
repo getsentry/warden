@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import chalk from 'chalk';
 import { emptyToUndefined, loadWardenConfigFile } from '../../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../../config/schema.js';
@@ -8,16 +8,15 @@ import type { CLIOptions } from '../args.js';
 import type { Reporter } from '../output/reporter.js';
 import { formatBytes, formatCost, formatDuration, formatTokens } from '../output/formatters.js';
 import { runWithLiveStatus } from '../output/live-status.js';
-import { getAnthropicApiKey, isPathLike } from '../../utils/index.js';
+import { getAnthropicApiKey } from '../../utils/index.js';
 import { promptLine, promptMultiline } from '../input.js';
 import { getRepoRoot } from '../git.js';
 import {
   buildGeneratedSkillDefinition,
   createGeneratedSkillDefinition,
-  GENERATED_SKILL_DEFINITION_FILE,
-  getGeneratedSkillRoot,
   inferGeneratedSkillDescription,
-  generatedSkillDefinitionExists,
+  generatedSkillDefinitionRootExists,
+  resolveGeneratedSkillTarget,
 } from '../../skill-builder/definition.js';
 import {
   collectSkillBuildSource,
@@ -145,27 +144,6 @@ function resolvePromptValue(prompt: string): string {
   return prompt.trim();
 }
 
-function resolveGeneratedSkillTarget(target: string, repoRoot: string): {
-  displayName: string;
-  isPath: boolean;
-  rootDir: string;
-} {
-  if (isPathLike(target)) {
-    const rootDir = resolve(repoRoot, target);
-    return {
-      displayName: target,
-      isPath: true,
-      rootDir,
-    };
-  }
-
-  return {
-    displayName: target,
-    isPath: false,
-    rootDir: getGeneratedSkillRoot(repoRoot, target),
-  };
-}
-
 function resolveSynthesisModel(
   config: WardenConfig | undefined,
   options: CLIOptions,
@@ -202,10 +180,8 @@ async function ensureSynthesizedSkill(args: {
   reporter: Reporter;
 }): Promise<{ skill: SkillDefinition; created: boolean; promptLength?: number }> {
   const { skillName, repoRoot, options, reporter } = args;
-  const target = resolveGeneratedSkillTarget(skillName, repoRoot);
-  const definitionExists = target.isPath
-    ? existsSync(join(target.rootDir, GENERATED_SKILL_DEFINITION_FILE))
-    : generatedSkillDefinitionExists(repoRoot, skillName);
+  const target = resolveGeneratedSkillTarget(repoRoot, skillName);
+  const definitionExists = generatedSkillDefinitionRootExists(target.rootDir);
 
   if (definitionExists) {
     return { skill: buildGeneratedSkillDefinition(target.rootDir), created: false };
@@ -338,12 +314,14 @@ export async function runBuild(
       }),
     });
 
-    const outlineStats = formatStats({
-      durationMs: outlineResult.source === 'generated' ? outlineResult.durationMs : undefined,
-      usage: outlineResult.usage,
-      sources: outlineResult.outline.build.externalSources?.length ?? 0,
-      turns: outlineResult.numTurns,
-    });
+    const outlineStats = outlineResult.source === 'cache'
+      ? chalk.dim('[cached]')
+      : formatStats({
+        durationMs: outlineResult.durationMs,
+        usage: outlineResult.usage,
+        sources: outlineResult.outline.build.externalSources?.length ?? 0,
+        turns: outlineResult.numTurns,
+      });
 
     if (!options.json) {
       reporter.success(
@@ -397,7 +375,7 @@ export async function runBuild(
           turns: artifact.numTurns,
         }));
       }
-      renderTryIt(reporter, isPathLike(skillName) ? skillName : skill.name);
+      renderTryIt(reporter, skillName);
     } else {
       process.stdout.write(`${JSON.stringify({
         skill: {

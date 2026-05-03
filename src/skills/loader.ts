@@ -1,10 +1,9 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { loadSkillMd, SkillLoadError } from '@sentry/dotagents-lib';
 import type { SkillDefinition } from '../config/schema.js';
-import { isPathLike } from '../utils/path.js';
+import { isPathLike, resolvePathTarget } from '../utils/path.js';
 
 export class SkillLoaderError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -68,21 +67,7 @@ export const AGENT_MARKER_FILE = 'AGENT.md';
  * Resolve a skill path, handling absolute paths, tilde expansion, and relative paths.
  */
 export function resolveSkillPath(nameOrPath: string, repoRoot?: string): string {
-  // Expand ~ to home directory
-  if (nameOrPath.startsWith('~/')) {
-    return join(homedir(), nameOrPath.slice(2));
-  }
-  if (nameOrPath === '~') {
-    return homedir();
-  }
-
-  // Absolute path - use as-is
-  if (isAbsolute(nameOrPath)) {
-    return nameOrPath;
-  }
-
-  // Relative path - join with repoRoot if available
-  return repoRoot ? join(repoRoot, nameOrPath) : nameOrPath;
+  return resolvePathTarget(nameOrPath, repoRoot);
 }
 
 /**

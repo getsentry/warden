@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Runtime, SkillRunRequest, SkillRunResponse } from '../sdk/runtimes/index.js';
 import { buildGeneratedSkill } from './skill.js';
+import { resolveAuthoringProvider } from './authoring-provider.js';
 import {
   getBuildStatePath,
   readSkillBuildState,
@@ -11,7 +12,7 @@ import {
   SKILL_BUILD_STATE_SCHEMA_VERSION,
   writeSkillBuildState,
 } from './outline-state.js';
-import type { SkillBuildOutline, SkillBuildSource } from './outline-contract.js';
+import { outlineHash, type SkillBuildOutline, type SkillBuildSource } from './outline-contract.js';
 
 function usage() {
   return { inputTokens: 1, outputTokens: 1, costUSD: 0 };
@@ -109,6 +110,39 @@ Review changed hunks for exploitable security issues.
 ## What to Report
 
 - Concrete exploitable security findings anchored to changed lines.
+`;
+}
+
+function inlineSkillMd(name = 'wrdn-security'): string {
+  return `---
+name: ${name}
+description: Use when asked to review code for exploitable security issues.
+allowed-tools: Read Grep Glob Bash
+---
+
+Review changed hunks for exploitable security issues.
+`;
+}
+
+function skillMdWithoutFrontmatter(): string {
+  return `# Security Review
+
+Review changed hunks for exploitable security issues.
+`;
+}
+
+function indexedSkillMd(name = 'wrdn-security'): string {
+  return `---
+name: ${name}
+description: Use when asked to review code for exploitable security issues.
+allowed-tools: Read Grep Glob Bash
+---
+
+Review changed hunks for exploitable security issues.
+
+## References
+
+Read \`references/checklist.md\` first. It routes to the detailed reference files.
 `;
 }
 
@@ -230,6 +264,48 @@ describe('buildGeneratedSkill', () => {
     ].sort());
   });
 
+  it('reuses valid existing artifacts when artifact metadata is missing or legacy', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(join(rootDir, 'references'), { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    writeFileSync(join(rootDir, 'SKILL.md'), indexedSkillMd(), 'utf-8');
+    writeFileSync(
+      join(rootDir, 'references', 'checklist.md'),
+      '# Checklist\n\n| When | Read |\n|------|------|\n| Security-sensitive hunk | `references/security.md` |\n',
+      'utf-8',
+    );
+    writeFileSync(
+      join(rootDir, 'references', 'security.md'),
+      '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
+      'utf-8',
+    );
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+    const runSkill = vi.fn<Runtime['runSkill']>();
+
+    const artifact = await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+    });
+
+    expect(artifact.source).toBe('cache');
+    expect(artifact.name).toBe('wrdn-security');
+    expect(artifact.bytes).toBeGreaterThan(0);
+    expect(runSkill).not.toHaveBeenCalled();
+  });
+
   it('lets the validation pass return revised files', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
@@ -341,6 +417,384 @@ describe('buildGeneratedSkill', () => {
     }]);
   });
 
+  it('writes generated artifacts when frontmatter is missing and references are not routed', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan.',
+              workflow: ['Read the authoring skill'],
+              researchPlan: [],
+              artifactPlan: ['Create SKILL.md and references'],
+              validationPlan: ['Validate output'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [
+                { path: 'SKILL.md', content: skillMdWithoutFrontmatter() },
+                {
+                  path: 'references/security.md',
+                  content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
+                },
+              ],
+              summary: 'Review code for exploitable security issues.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+    });
+
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toMatch(/^---\nname: "wrdn-security"\n/);
+    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
+    const state = readSkillBuildState(getBuildStatePath(rootDir));
+    expect(state?.artifact?.deterministicWarnings).toContain(
+      'SKILL.md does not route runtime reference references/security.md',
+    );
+  });
+
+  it('fails when SKILL.md routes reference files missing from the file map', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan.',
+              workflow: ['Read the authoring skill'],
+              researchPlan: [],
+              artifactPlan: ['Create SKILL.md and one routed reference'],
+              validationPlan: ['Validate output'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: skillMd() }],
+              summary: 'Generated.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    await expect(buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+    })).rejects.toThrow('SKILL.md routes references/security.md but the generated file map does not include it');
+
+    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(false);
+  });
+
+  it('fails when a routed index references missing files', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan.',
+              workflow: ['Read the authoring skill'],
+              researchPlan: [],
+              artifactPlan: ['Create SKILL.md and a routed checklist'],
+              validationPlan: ['Validate output'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [
+                { path: 'SKILL.md', content: indexedSkillMd() },
+                {
+                  path: 'references/checklist.md',
+                  content: '# Checklist\n\n| When | Read |\n|------|------|\n| Security-sensitive hunk | `references/security.md` |\n',
+                },
+              ],
+              summary: 'Generated.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    await expect(buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+    })).rejects.toThrow('SKILL.md routes references/security.md but the generated file map does not include it');
+
+    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(false);
+  });
+
+  it('does not reuse cached artifacts with missing routed reference files', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const cachedSkill = skillMd();
+    writeFileSync(join(rootDir, 'SKILL.md'), cachedSkill, 'utf-8');
+    const buildOutline = outline();
+    const cachedBytes = Buffer.byteLength(cachedSkill, 'utf-8');
+    writeSkillBuildState(getBuildStatePath(rootDir), {
+      version: SKILL_BUILD_STATE_SCHEMA_VERSION,
+      kind: SKILL_BUILD_STATE_KIND,
+      identity: {},
+      outline: buildOutline,
+      artifact: {
+        version: 4,
+        sourceHash: source().hash,
+        outlineHash: outlineHash(buildOutline),
+        buildVersion: buildOutline.buildVersion,
+        authoringProvider: resolveAuthoringProvider({ authoringSkillRoot }),
+        name: 'wrdn-security',
+        fileManifest: [{ path: 'SKILL.md', bytes: cachedBytes }],
+        deterministicWarnings: [],
+        validationIssues: [],
+        bytes: cachedBytes,
+        durationMs: 10,
+        usage: usage(),
+        externalSources: [],
+        missingInputs: [],
+        generatedAt: '2026-05-01T00:00:00.000Z',
+      },
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    });
+
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan.',
+              workflow: ['Read the authoring skill'],
+              researchPlan: [],
+              artifactPlan: ['Create SKILL.md and one routed reference'],
+              validationPlan: ['Validate output'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [
+                { path: 'SKILL.md', content: skillMd() },
+                {
+                  path: 'references/security.md',
+                  content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
+                },
+              ],
+              summary: 'Generated.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    const artifact = await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+    });
+
+    expect(artifact.source).toBe('generated');
+    expect(runSkill).toHaveBeenCalled();
+    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
+  });
+
   it('fails when provider validation reports unresolved errors', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
@@ -378,7 +832,7 @@ describe('buildGeneratedSkill', () => {
             text: JSON.stringify({
               version: 1,
               name: 'wrdn-security',
-              files: [{ path: 'SKILL.md', content: skillMd() }],
+              files: [{ path: 'SKILL.md', content: inlineSkillMd() }],
               summary: 'Generated.',
               validationNotes: [],
               missingInputs: [],

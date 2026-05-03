@@ -39,7 +39,7 @@ function wardenSkillConstraints(args: {
 - Generated artifacts must be normal Warden skill files. Do not overwrite warden.yaml or build-state.json.
 - Let the authoring skill choose the artifact shape. Optimize for a usable runtime approach: clear review tasks, routing cues, evidence requirements, and supporting references/scripts/assets only when they help the skill execute.
 - Warden runs skills on changed hunks. Findings must anchor to changed lines and must be concrete enough for Warden's normal report schema.
-- SKILL.md should be the runtime router when references exist. Every runtime reference must have a direct "when to read" route in SKILL.md.
+- SKILL.md should be the runtime router when references exist. Prefer clear "when to read" routes for runtime references, using an index reference when that is simpler than listing every file.
 - Use Warden voice: brief, dry, direct. Avoid generated-artifact boilerplate such as "Generated Warden skill for outline".
 - Keep provenance and authoring decisions in SOURCES.md or SPEC.md, not in runtime references.
 - Do not send repository code, secrets, private paths, or proprietary details to web tools.`;
