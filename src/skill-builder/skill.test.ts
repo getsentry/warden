@@ -252,7 +252,17 @@ describe('buildGeneratedSkill', () => {
 
     const planPrompt = runSkill.mock.calls[0]![0].userPrompt;
     expect(planPrompt).toContain(`Use the full authoring skill at \`${authoringSkillRoot}\``);
-    expect(planPrompt).toContain('clear review tasks, routing cues, evidence requirements');
+    expect(planPrompt).toContain('Choose the simplest adequate layout using the authoring skill\'s rules');
+    expect(planPrompt).toContain('Broad or multi-track skills usually need SKILL.md as a compact router plus focused routed references');
+    expect(planPrompt).toContain('Do not create a custom plaintext output format');
+    expect(planPrompt).toContain('Decide the minimum workflow path and simplest adequate artifact layout');
+
+    const implementationPrompt = runSkill.mock.calls[1]![0].userPrompt;
+    expect(implementationPrompt).toContain('Add SPEC.md, SOURCES.md, EVAL.md, references/, scripts/, or assets/ only when they add runtime, provenance, maintenance, validation, or reusable-example value');
+    expect(implementationPrompt).toContain('Keep SKILL.md compact; put optional depth in routed references');
+
+    const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
+    expect(validationPrompt).toContain('Check for over-broad topic-bucket references, stale gap/provenance language, missing routes, and custom output formats');
 
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.version).toBe(4);

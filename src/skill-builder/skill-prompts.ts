@@ -33,13 +33,18 @@ function wardenSkillConstraints(args: {
   authoringSkillRoot: string;
 }): string {
   return `Warden generated-skill constraints:
-- Use the full authoring skill at \`${args.authoringSkillRoot}\`. Start by reading its SKILL.md and follow its own routing. Do not rely on a hand-picked subset of its references.
+- Use the full authoring skill at \`${args.authoringSkillRoot}\` as the authoring method. Start by reading its SKILL.md and follow its own routing. Do not rely on a hand-picked subset of its references.
 - The target skill root is \`${args.targetRootDir}\`.
 - The generated SKILL.md frontmatter name must be exactly \`${args.targetName}\`.
 - Generated artifacts must be normal Warden skill files. Do not overwrite warden.yaml or build-state.json.
-- Let the authoring skill choose the artifact shape. Optimize for a usable runtime approach: clear review tasks, routing cues, evidence requirements, and supporting references/scripts/assets only when they help the skill execute.
-- Warden runs skills on changed hunks. Findings must anchor to changed lines and must be concrete enough for Warden's normal report schema.
-- SKILL.md should be the runtime router when references exist. Prefer clear "when to read" routes for runtime references, using an index reference when that is simpler than listing every file.
+- Choose the simplest adequate layout using the authoring skill's rules. Do not add files just to satisfy a template.
+- Broad or multi-track skills usually need SKILL.md as a compact router plus focused routed references. Inline or single-reference layouts are fine when they are genuinely enough.
+- References should answer one lookup question each. Avoid topic-bucket references that mix routing, examples, troubleshooting, source notes, and remediation.
+- Use SPEC.md for new or materially scoped generated skills when it records a useful scope, evidence model, or maintenance contract.
+- Use SOURCES.md when provenance, source-depth decisions, external sources, or open gaps materially affect the generated skill.
+- Warden runs skills on changed hunks and injects the JSON finding schema separately. Do not create a custom plaintext output format.
+- Findings must anchor to changed lines and be concrete enough for Warden's normal report schema.
+- Security-review skills should include exploit-path evidence, safe lookalikes or false-positive controls, remediation examples, and severity/confidence calibration where relevant.
 - Use Warden voice: brief, dry, direct. Avoid generated-artifact boilerplate such as "Generated Warden skill for outline".
 - Keep provenance and authoring decisions in SOURCES.md or SPEC.md, not in runtime references.
 - Do not send repository code, secrets, private paths, or proprietary details to web tools.`;
@@ -82,9 +87,9 @@ ${wardenSkillConstraints(args)}
 
 Use "tell them what you are going to tell them" discipline:
 - Read and use the authoring skill.
-- Decide the minimum workflow path it requires.
-- Decide what research is needed before implementation.
-- Decide the intended artifact layout without forcing a Warden template.
+- Decide the minimum workflow path and simplest adequate artifact layout.
+- Decide what research is needed before implementation and what gaps should be recorded.
+- Decide where runtime guidance, references, provenance, and maintenance contract belong.
 - Decide how Warden and the authoring skill should validate the output.
 
 The internal outline is supporting context only. If it conflicts with the source material or authoring skill, say how the implementation should resolve that in the plan.
@@ -126,7 +131,8 @@ Use "tell them" discipline:
 - Use the authoring skill again, starting from its SKILL.md.
 - Follow the plan unless new evidence proves the plan is wrong.
 - Return a complete file map for every generated artifact that should exist.
-- Include SKILL.md. Include SPEC.md, SOURCES.md, EVAL.md, references/, scripts/, or assets/ only when the authoring skill and this skill's needs justify them.
+- Include SKILL.md. Add SPEC.md, SOURCES.md, EVAL.md, references/, scripts/, or assets/ only when they add runtime, provenance, maintenance, validation, or reusable-example value.
+- Keep SKILL.md compact; put optional depth in routed references and authoring/provenance notes in SPEC.md or SOURCES.md.
 - If validation later needs a correction, it should be possible to rewrite the skill from this file map alone.
 
 Return JSON:
@@ -178,6 +184,7 @@ ${wardenSkillConstraints(args)}
 Use "remind them what you told them" discipline:
 - Use the authoring skill again as the validation anchor.
 - Check whether the generated files followed the plan, the authoring skill, and Warden constraints.
+- Check for over-broad topic-bucket references, stale gap/provenance language, missing routes, and custom output formats that conflict with Warden's JSON finding schema.
 - If fixes are needed, return a complete revised file map in files.
 - If no fixes are needed, omit files or return an empty files array.
 - Report only issues that remain after any revised files you return.
