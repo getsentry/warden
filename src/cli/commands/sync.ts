@@ -4,6 +4,7 @@ import {
   formatRemoteRef,
   listCachedRemotes,
   parseRemoteRef,
+  GitError,
 } from '../../skills/remote.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
@@ -96,6 +97,9 @@ export async function runSync(options: CLIOptions, reporter: Reporter): Promise<
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       reporter.error(`${ref}: ${message}`);
+      if (err instanceof GitError && err.details?.kind === 'auth-required' && err.details.sshUrl) {
+        reporter.tip(`For private repos, the SSH URL form is: ${err.details.sshUrl}`);
+      }
       errors++;
     }
   }

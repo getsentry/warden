@@ -39,6 +39,7 @@ export {
   resolveRemoteAgent,
   removeRemote,
   listCachedRemotes,
+  GitError,
 } from './remote.js';
 
 export type {
@@ -48,4 +49,5 @@ export type {
   FetchRemoteOptions,
   DiscoveredRemoteSkill,
   DiscoveredRemoteAgent,
+  GitErrorDetails,
 } from './remote.js';

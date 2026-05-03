@@ -10,6 +10,7 @@ import {
   fetchRemote,
   discoverRemoteSkills,
   parseRemoteRef,
+  GitError,
   type DiscoveredRemoteSkill,
 } from '../../skills/remote.js';
 import type { Reporter } from '../output/reporter.js';
@@ -36,6 +37,29 @@ const selectTheme = {
     },
   },
 };
+
+/**
+ * Report a fetch failure with a user-actionable hint when the lib signaled
+ * `auth-required`. Avoids hard-coding stderr regexes — the lib owns the heuristic.
+ */
+function reportFetchError(
+  err: unknown,
+  remote: string,
+  reporter: Reporter,
+  prefix = 'Failed to fetch remote',
+): void {
+  const message = err instanceof Error ? err.message : String(err);
+  reporter.error(`${prefix}: ${message}`);
+
+  if (err instanceof GitError && err.details?.kind === 'auth-required') {
+    const sshUrl = err.details.sshUrl;
+    if (sshUrl) {
+      reporter.tip(`For private repos, retry with the SSH URL: warden add --remote ${sshUrl}`);
+    } else {
+      reporter.tip(`If this is a private repo, try the SSH URL form (git@github.com:owner/repo.git) for ${remote}.`);
+    }
+  }
+}
 
 /**
  * Render the list of available local skills.
@@ -270,8 +294,7 @@ async function runAddRemote(
       onProgress: (msg) => reporter.debug(msg),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    reporter.error(`Failed to fetch remote: ${message}`);
+    reportFetchError(err, remote, reporter);
     return 1;
   }
 
@@ -317,8 +340,7 @@ async function runAddRemote(
       availableSkills = await discoverRemoteSkills(remote);
       skill = availableSkills.find((s) => s.name === skillName);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      reporter.error(`Failed to refetch remote: ${message}`);
+      reportFetchError(err, remote, reporter, 'Failed to refetch remote');
       return 1;
     }
   }

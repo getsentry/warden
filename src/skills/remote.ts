@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync,
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
-import { execGitNonInteractive } from '../utils/exec.js';
+import {
+  parseSource as libParseSource,
+  ensureCached,
+  GitError,
+  type GitErrorDetails,
+} from '@sentry/dotagents-lib';
 import { loadSkillFromMarkdown, SkillLoaderError, AGENT_MARKER_FILE } from './loader.js';
 import type { SkillDefinition } from '../config/schema.js';
 
@@ -52,91 +57,80 @@ export interface ParsedRemoteRef {
 }
 
 /**
- * Normalize a GitHub URL to owner/repo format.
- * Returns null if the input is not a recognized GitHub URL.
- *
- * Supports:
- * - https://github.com/owner/repo
- * - https://github.com/owner/repo.git
- * - git@github.com:owner/repo.git
+ * Owner/repo names: alphanumeric leading char, then alphanumerics, dots,
+ * hyphens, underscores. Rejects `..`, `./`, leading-dash flag injection,
+ * and other path-traversal shapes.
  */
-function normalizeGitHubUrl(input: string): string | null {
-  // HTTPS URL: https://github.com/owner/repo or https://github.com/owner/repo.git
-  const httpsMatch = input.match(/^https?:\/\/github\.com\/([^/]+)\/([^/@]+?)(?:\.git)?$/);
-  if (httpsMatch) {
-    return `${httpsMatch[1]}/${httpsMatch[2]}`;
-  }
-
-  // SSH URL: git@github.com:owner/repo.git
-  const sshMatch = input.match(/^git@github\.com:([^/]+)\/([^/@]+?)(?:\.git)?$/);
-  if (sshMatch) {
-    return `${sshMatch[1]}/${sshMatch[2]}`;
-  }
-
-  return null;
-}
+const SAFE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
  * Parse a remote reference string into its components.
- * Supports formats:
- * - "owner/repo" or "owner/repo@sha"
- * - "https://github.com/owner/repo" or "https://github.com/owner/repo@sha"
- * - "https://github.com/owner/repo.git" or "https://github.com/owner/repo.git@sha"
- * - "git@github.com:owner/repo.git" or "git@github.com:owner/repo.git@sha"
+ *
+ * Delegates source-string grammar to `@sentry/dotagents-lib`'s `parseSource`,
+ * then layers warden's existing validation gates on top:
+ *  - rejects `path:` and well-known HTTPS sources (those are not network-clonable
+ *    via warden's `--remote` flag)
+ *  - rejects shorthand with extra path segments (`owner/repo/nested`)
+ *  - rejects empty owner/repo and empty SHA after `@`
+ *  - rejects values that would inject git flags (leading `-`)
+ *  - rejects path-traversal segments (`..`, `.`)
+ *
+ * Supported input shapes (unchanged from prior versions):
+ *  - `owner/repo` and `owner/repo@sha` (defaults to GitHub)
+ *  - `https://github.com/owner/repo[.git][@sha]`
+ *  - `git@github.com:owner/repo[.git][@sha]`
+ *  - HTTP URLs are upgraded to HTTPS to prevent MITM.
+ *
+ * Newly accepted via the lib's grammar (additive, not breaking):
+ *  - `https://gitlab.com/group/[subgroup/]repo[.git][@sha]` and SSH equivalent.
  */
 export function parseRemoteRef(ref: string): ParsedRemoteRef {
-  let inputRef = ref;
-  let sha: string | undefined;
+  if (ref.startsWith('path:')) {
+    throw new SkillLoaderError(
+      `Invalid remote ref: ${ref} (use --path for local sources; --remote is for network-fetched sources)`,
+    );
+  }
 
-  // Extract SHA suffix from the input before URL normalization.
-  // The SHA is always at the end, after a @ that follows the repo name.
-  // For git@github.com URLs, we need to find the @ after the colon.
-  if (ref.startsWith('git@')) {
-    const colonIndex = ref.indexOf(':');
-    if (colonIndex !== -1) {
-      const afterColon = ref.slice(colonIndex + 1);
-      const shaAtIndex = afterColon.lastIndexOf('@');
-      if (shaAtIndex !== -1) {
-        sha = afterColon.slice(shaAtIndex + 1);
-        inputRef = ref.slice(0, colonIndex + 1 + shaAtIndex);
-      }
+  const parsed = libParseSource(ref);
+
+  if (parsed.type === 'local') {
+    // Defensive — libParseSource only returns "local" for `path:` prefix, which
+    // we already rejected, but keep the branch in case lib's grammar widens.
+    throw new SkillLoaderError(
+      `Invalid remote ref: ${ref} (local sources are not supported here)`,
+    );
+  }
+
+  if (parsed.type === 'well-known') {
+    throw new SkillLoaderError(
+      `Invalid remote ref: ${ref} (well-known HTTPS sources are not supported by warden)`,
+    );
+  }
+
+  // Shorthand sanity: lib's parser silently drops extra path segments
+  // (`owner/repo/nested` becomes `owner/repo`). Detect and reject so the
+  // user gets a clear error instead of a wrong-but-cloneable cache key.
+  // URLs go through stricter regexes in lib and don't have this problem.
+  if (!ref.startsWith('https://') && !ref.startsWith('http://') && !ref.startsWith('git@') && !ref.startsWith('git:')) {
+    const stripped = ref.startsWith('@') ? ref.slice(1) : ref;
+    const beforeAt = stripped.includes('@') ? stripped.slice(0, stripped.indexOf('@')) : stripped;
+    if (!beforeAt.includes('/')) {
+      throw new SkillLoaderError(`Invalid remote ref: ${ref} (expected owner/repo format)`);
     }
-  } else {
-    const lastAtIndex = ref.lastIndexOf('@');
-    if (lastAtIndex !== -1) {
-      const potentialSha = ref.slice(lastAtIndex + 1);
-      // SHA should not contain : or / (those would indicate URL structure)
-      if (!potentialSha.includes(':') && !potentialSha.includes('/')) {
-        if (!potentialSha) {
-          throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty SHA after @)`);
-        }
-        sha = potentialSha;
-        inputRef = ref.slice(0, lastAtIndex);
-      }
+    if (beforeAt.split('/').length > 2) {
+      throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo name cannot contain /)`);
+    }
+    if (stripped.includes('@') && !stripped.slice(stripped.indexOf('@') + 1)) {
+      throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty SHA after @)`);
     }
   }
 
-  // Normalize GitHub URLs to owner/repo format.
-  // When the input is a full URL, preserve it as cloneUrl for fetchRemote.
-  const normalized = normalizeGitHubUrl(inputRef);
-  // Upgrade http:// to https:// to prevent cloning over plain HTTP
-  const cloneUrl = normalized ? inputRef.replace(/^http:\/\//i, 'https://') : undefined;
-  const repoPath = normalized ?? inputRef;
-
-  const slashIndex = repoPath.indexOf('/');
-  if (slashIndex === -1) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (expected owner/repo format)`);
-  }
-
-  const owner = repoPath.slice(0, slashIndex);
-  const repo = repoPath.slice(slashIndex + 1);
+  const owner = parsed.owner ?? '';
+  const repo = parsed.repo ?? '';
+  const sha = parsed.ref;
 
   if (!owner || !repo) {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty owner or repo)`);
-  }
-
-  if (repo.includes('/')) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo name cannot contain /)`);
   }
 
   // Security: Prevent git flag injection by rejecting values starting with '-'
@@ -150,17 +144,19 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (SHA cannot start with -)`);
   }
 
-  // Security: Prevent path traversal via '..' in owner or repo.
-  // Only allow characters valid in GitHub usernames/repo names: alphanumeric, hyphens, dots, underscores.
-  const safeNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
-  if (!safeNamePattern.test(owner)) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner contains invalid characters)`);
+  // Security: Prevent path traversal via '..' in owner or repo. Validate each
+  // owner segment independently so GitLab nested groups (`group/subgroup`)
+  // can pass while still blocking `../evil`.
+  for (const segment of owner.split('/')) {
+    if (!SAFE_NAME_PATTERN.test(segment)) {
+      throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner contains invalid characters)`);
+    }
   }
-  if (!safeNamePattern.test(repo)) {
+  if (!SAFE_NAME_PATTERN.test(repo)) {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo contains invalid characters)`);
   }
 
-  return { owner, repo, sha, cloneUrl };
+  return { owner, repo, sha, cloneUrl: parsed.cloneUrl };
 }
 
 /**
@@ -188,6 +184,10 @@ export function getSkillsCacheDir(): string {
  * Get the cache path for a specific remote ref.
  * - Unpinned: ~/.local/warden/skills/owner/repo/
  * - Pinned: ~/.local/warden/skills/owner/repo@sha/
+ *
+ * Pinned and unpinned references for the same repo are stored separately so
+ * that having `owner/repo@sha` cached doesn't fight `owner/repo`'s working
+ * tree on subsequent syncs.
  */
 export function getRemotePath(ref: string): string {
   const parsed = parseRemoteRef(ref);
@@ -237,16 +237,12 @@ export function saveState(state: RemoteState): void {
   const statePath = getStatePath();
   const stateDir = dirname(statePath);
 
-  // Ensure directory exists
   if (!existsSync(stateDir)) {
     mkdirSync(stateDir, { recursive: true });
   }
 
-  // Write atomically
   const tempPath = `${statePath}.tmp`;
   writeFileSync(tempPath, JSON.stringify(state, null, 2), 'utf-8');
-
-  // Rename is atomic on most filesystems
   renameSync(tempPath, statePath);
 }
 
@@ -298,23 +294,34 @@ export interface FetchRemoteOptions {
   onProgress?: (message: string) => void;
 }
 
+/** Re-export the lib's GitError so CLI callers can catch it without importing the lib directly. */
+export { GitError };
+export type { GitErrorDetails };
+
 /**
- * Execute a git command and return stdout.
- * Uses non-interactive mode to prevent SSH passphrase prompts.
- * Throws SkillLoaderError on failure.
+ * Build the lib `cacheKey` for a parsed remote ref. Lib places the clone at
+ * `<stateDir>/<cacheKey>/`, so the layout warden's `getRemotePath` returns
+ * must match what we pass here. Pinned refs encode the SHA into the key so
+ * that pinned and unpinned caches stay in separate directories.
  */
-function execGit(args: string[], options?: { cwd?: string }): string {
-  try {
-    return execGitNonInteractive(args, { cwd: options?.cwd });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new SkillLoaderError(`Git command failed: git ${args.join(' ')}: ${message}`, { cause: error });
+function cacheKeyFor(parsed: ParsedRemoteRef): string {
+  if (parsed.sha) {
+    return `${parsed.owner}/${parsed.repo}@${parsed.sha}`;
   }
+  return `${parsed.owner}/${parsed.repo}`;
 }
 
 /**
  * Clone or update a remote repository to the cache.
  * Returns the SHA of the fetched commit.
+ *
+ * Lib's `ensureCached` owns the git plumbing (clone, fetch, ref checkout);
+ * warden's wrapper provides the warden-specific surface around it:
+ *   - `WARDEN_STATE_DIR` resolution and per-ref cache layout
+ *   - `cloneUrl` persistence across re-fetches (so SSH-cloned remotes stay SSH)
+ *   - offline mode (read cache without network)
+ *   - state.json bookkeeping with `fetchedAt` for TTL-based refresh
+ *   - TTL-based refresh: skip the fetch when the cached entry is fresh
  */
 export async function fetchRemote(ref: string, options: FetchRemoteOptions = {}): Promise<string> {
   const { force = false, offline = false, onProgress } = options;
@@ -352,74 +359,27 @@ export async function fetchRemote(ref: string, options: FetchRemoteOptions = {})
   }
 
   // Use the original clone URL if provided, fall back to stored URL from state, then HTTPS
-  const repoUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`;
+  const cloneUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl ?? `https://github.com/${parsed.owner}/${parsed.repo}.git`;
 
-  // Clone or update
-  if (!isCached) {
-    onProgress?.(`Cloning ${ref}...`);
+  onProgress?.(isCached ? `Updating ${ref}...` : `Cloning ${ref}...`);
 
-    // Ensure parent directory exists
-    const parentDir = dirname(remotePath);
-    if (!existsSync(parentDir)) {
-      mkdirSync(parentDir, { recursive: true });
-    }
-
-    try {
-      // Note: '--' separates flags from positional args to prevent flag injection
-      const { sha } = parsed;
-      if (sha) {
-        // For pinned refs, shallow clone then checkout the specific SHA
-        execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
-
-        try {
-          // Try to fetch the pinned SHA directly
-          execGit(['fetch', '--depth=1', 'origin', '--', sha], { cwd: remotePath });
-          execGit(['checkout', sha], { cwd: remotePath });
-        } catch {
-          // If SHA not found in shallow history, do a full fetch and retry
-          execGit(['fetch', '--unshallow'], { cwd: remotePath });
-          execGit(['checkout', sha], { cwd: remotePath });
-        }
-      } else {
-        // For unpinned refs, shallow clone of default branch
-        execGit(['clone', '--depth=1', '--', repoUrl, remotePath]);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      // Detect HTTPS auth failures and suggest SSH URL
-      if (!parsed.cloneUrl && (message.includes('terminal prompts disabled') || message.includes('could not read Username'))) {
-        throw new SkillLoaderError(
-          `Failed to clone ${stateKey} via HTTPS. ` +
-          `For private repos, use the SSH URL: warden add --remote git@github.com:${parsed.owner}/${parsed.repo}.git`
-        );
-      }
-      throw error;
-    }
-  } else {
-    // Update existing cache
-    onProgress?.(`Updating ${ref}...`);
-
-    if (!isPinned) {
-      // For unpinned refs, pull latest
-      execGit(['fetch', '--depth=1', 'origin'], { cwd: remotePath });
-      execGit(['reset', '--hard', 'origin/HEAD'], { cwd: remotePath });
-    }
-    // Pinned refs don't need updates - SHA is immutable
-  }
-
-  // Get the current HEAD SHA
-  const sha = execGit(['rev-parse', 'HEAD'], { cwd: remotePath });
+  const cached = await ensureCached({
+    stateDir: getSkillsCacheDir(),
+    url: cloneUrl,
+    cacheKey: cacheKeyFor(parsed),
+    ref: parsed.sha,
+  });
 
   // Update state with normalized key — preserve cloneUrl for future re-clones
-  const cloneUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl;
+  const persistedCloneUrl = parsed.cloneUrl ?? stateEntry?.cloneUrl;
   state.remotes[stateKey] = {
-    sha,
+    sha: cached.commit,
     fetchedAt: new Date().toISOString(),
-    ...(cloneUrl ? { cloneUrl } : {}),
+    ...(persistedCloneUrl ? { cloneUrl: persistedCloneUrl } : {}),
   };
   saveState(state);
 
-  return sha;
+  return cached.commit;
 }
 
 export interface DiscoveredRemoteSkill {
