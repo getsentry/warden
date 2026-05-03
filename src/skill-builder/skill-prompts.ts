@@ -37,6 +37,8 @@ function wardenSkillConstraints(args: {
 - The target skill root is \`${args.targetRootDir}\`.
 - The generated SKILL.md frontmatter name must be exactly \`${args.targetName}\`.
 - Generated artifacts must be normal Warden skill files. Do not overwrite warden.yaml or build-state.json.
+- Treat existing generated artifacts in the target root as stale unless you intentionally re-emit them in the returned file map.
+- Use the source material and internal outline as the source of truth for regeneration.
 - Choose the simplest adequate layout using the authoring skill's rules. Do not add files just to satisfy a template.
 - Broad or multi-track skills usually need SKILL.md as a compact router plus focused routed references. Inline or single-reference layouts are fine when they are genuinely enough.
 - References should answer one lookup question each. Avoid topic-bucket references that mix routing, examples, troubleshooting, source notes, and remediation.
@@ -185,8 +187,9 @@ Use "remind them what you told them" discipline:
 - Use the authoring skill again as the validation anchor.
 - Check whether the generated files followed the plan, the authoring skill, and Warden constraints.
 - Check for over-broad topic-bucket references, stale gap/provenance language, missing routes, and custom output formats that conflict with Warden's JSON finding schema.
-- If fixes are needed, return a complete revised file map in files.
+- If fixes are needed, return a complete revised file map in files, including every referenced runtime file.
 - If no fixes are needed, omit files or return an empty files array.
+- Do not return placeholder files or empty file contents. Omit unchanged files instead.
 - Report only issues that remain after any revised files you return.
 - Set valid to true only when the generated or revised files are valid.
 - Treat deterministic validation issues as actionable unless the generated files were revised to fix them.

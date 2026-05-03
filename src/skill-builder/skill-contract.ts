@@ -48,6 +48,10 @@ export const GeneratedSkillArtifactFileSchema = z.object({
 
 export type GeneratedSkillArtifactFile = z.infer<typeof GeneratedSkillArtifactFileSchema>;
 
+const GeneratedSkillValidationFileSchema = GeneratedSkillArtifactFileSchema.extend({
+  content: z.string(),
+});
+
 export const GeneratedSkillFileMapSchema = z.object({
   version: z.literal(1),
   name: z.string().min(1),
@@ -95,7 +99,7 @@ export const GeneratedSkillValidationResultSchema = z.object({
   valid: z.boolean(),
   summary: z.string().min(1),
   issues: z.array(GeneratedSkillValidationIssueSchema).default([]),
-  files: z.array(GeneratedSkillArtifactFileSchema).optional(),
+  files: z.array(GeneratedSkillValidationFileSchema).optional(),
   missingInputs: z.array(z.string().min(1)).default([]),
 }).strict().superRefine((value, ctx) => {
   if (value.files && value.files.length > 0) {

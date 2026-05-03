@@ -243,11 +243,18 @@ function formatDeterministicIssues(validation: {
 function applyValidationResult(args: {
   original: GeneratedSkillFileMap;
   validation: GeneratedSkillValidationResult;
+  targetName: string;
 }): GeneratedSkillFileMap {
   if (!args.validation.files || args.validation.files.length === 0) {
     return args.original;
   }
-  return {
+  if (
+    !args.validation.files.some((file) => file.path === 'SKILL.md') ||
+    args.validation.files.some((file) => file.content.trim().length === 0)
+  ) {
+    return args.original;
+  }
+  const candidate = {
     ...args.original,
     files: args.validation.files,
     validationNotes: [
@@ -260,6 +267,15 @@ function applyValidationResult(args: {
       ...args.validation.missingInputs,
     ],
   };
+  const validation = deterministicValidation({
+    fileMap: normalizeGeneratedFileMap(candidate, args.targetName),
+    targetName: args.targetName,
+  });
+  if (validation.errors.length > 0) {
+    return args.original;
+  }
+
+  return candidate;
 }
 
 function summarizeResponseModel(models: (string | undefined)[]): string | undefined {
@@ -572,6 +588,7 @@ export async function buildGeneratedSkill(args: {
     const fileMap = normalizeGeneratedFileMap(applyValidationResult({
       original: initialFileMap,
       validation: validation.data,
+      targetName: args.outline.skill,
     }), args.outline.skill);
     const finalDeterministic = deterministicValidation({
       fileMap,
