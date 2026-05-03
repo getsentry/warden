@@ -116,10 +116,6 @@ export function resolveGeneratedSkillRoot(repoRoot: string, skillName: string): 
   return getGeneratedSkillRoot(repoRoot, skillName);
 }
 
-export function generatedSkillDefinitionExists(repoRoot: string, skillName: string): boolean {
-  return generatedSkillDefinitionRootExists(resolveGeneratedSkillRoot(repoRoot, skillName));
-}
-
 export function loadGeneratedSkillDefinition(rootDir: string): {
   content: string;
   data: GeneratedSkillDefinition;
