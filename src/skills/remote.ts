@@ -56,33 +56,16 @@ export interface ParsedRemoteRef {
   cloneUrl?: string;
 }
 
-/**
- * Owner/repo names: alphanumeric leading char, then alphanumerics, dots,
- * hyphens, underscores. Rejects `..`, `./`, leading-dash flag injection,
- * and other path-traversal shapes.
- */
 const SAFE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
- * Parse a remote reference string into its components.
+ * Parse a remote reference string into its components. Delegates the grammar
+ * to `@sentry/dotagents-lib`'s `parseSource`, then layers warden's stricter
+ * validation gates on top.
  *
- * Delegates source-string grammar to `@sentry/dotagents-lib`'s `parseSource`,
- * then layers warden's existing validation gates on top:
- *  - rejects `path:` and well-known HTTPS sources (those are not network-clonable
- *    via warden's `--remote` flag)
- *  - rejects shorthand with extra path segments (`owner/repo/nested`)
- *  - rejects empty owner/repo and empty SHA after `@`
- *  - rejects values that would inject git flags (leading `-`)
- *  - rejects path-traversal segments (`..`, `.`)
- *
- * Supported input shapes (unchanged from prior versions):
- *  - `owner/repo` and `owner/repo@sha` (defaults to GitHub)
- *  - `https://github.com/owner/repo[.git][@sha]`
- *  - `git@github.com:owner/repo[.git][@sha]`
- *  - HTTP URLs are upgraded to HTTPS to prevent MITM.
- *
- * Newly accepted via the lib's grammar (additive, not breaking):
- *  - `https://gitlab.com/group/[subgroup/]repo[.git][@sha]` and SSH equivalent.
+ * Accepted shapes: `owner/repo[@sha]` (GitHub), `https://github.com/...`,
+ * `git@github.com:...`, GitLab equivalents (incl. nested groups), and HTTP
+ * forms which are upgraded to HTTPS.
  */
 export function parseRemoteRef(ref: string): ParsedRemoteRef {
   if (ref.startsWith('path:')) {
@@ -94,11 +77,7 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
   const parsed = libParseSource(ref);
 
   if (parsed.type === 'local') {
-    // Defensive — libParseSource only returns "local" for `path:` prefix, which
-    // we already rejected, but keep the branch in case lib's grammar widens.
-    throw new SkillLoaderError(
-      `Invalid remote ref: ${ref} (local sources are not supported here)`,
-    );
+    throw new SkillLoaderError(`Invalid remote ref: ${ref} (local sources are not supported here)`);
   }
 
   if (parsed.type === 'well-known') {
@@ -107,10 +86,9 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
     );
   }
 
-  // Shorthand sanity: lib's parser silently drops extra path segments
-  // (`owner/repo/nested` becomes `owner/repo`). Detect and reject so the
-  // user gets a clear error instead of a wrong-but-cloneable cache key.
-  // URLs go through stricter regexes in lib and don't have this problem.
+  // libParseSource silently drops extra path segments from shorthand
+  // (`owner/repo/nested` becomes `owner/repo`); reject so the user gets a
+  // clear error instead of a wrong-but-cloneable cache key.
   if (!ref.startsWith('https://') && !ref.startsWith('http://') && !ref.startsWith('git@') && !ref.startsWith('git:')) {
     const stripped = ref.startsWith('@') ? ref.slice(1) : ref;
     const beforeAt = stripped.includes('@') ? stripped.slice(0, stripped.indexOf('@')) : stripped;
@@ -133,7 +111,9 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty owner or repo)`);
   }
 
-  // Security: Prevent git flag injection by rejecting values starting with '-'
+  // Security: reject leading `-` (git flag injection) and characters outside
+  // the GitHub/GitLab name allow-list (path traversal). Owner is validated
+  // segment-by-segment so GitLab nested groups (`group/subgroup`) pass.
   if (owner.startsWith('-')) {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner cannot start with -)`);
   }
@@ -143,10 +123,6 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
   if (sha?.startsWith('-')) {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (SHA cannot start with -)`);
   }
-
-  // Security: Prevent path traversal via '..' in owner or repo. Validate each
-  // owner segment independently so GitLab nested groups (`group/subgroup`)
-  // can pass while still blocking `../evil`.
   for (const segment of owner.split('/')) {
     if (!SAFE_NAME_PATTERN.test(segment)) {
       throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner contains invalid characters)`);
@@ -184,10 +160,6 @@ export function getSkillsCacheDir(): string {
  * Get the cache path for a specific remote ref.
  * - Unpinned: ~/.local/warden/skills/owner/repo/
  * - Pinned: ~/.local/warden/skills/owner/repo@sha/
- *
- * Pinned and unpinned references for the same repo are stored separately so
- * that having `owner/repo@sha` cached doesn't fight `owner/repo`'s working
- * tree on subsequent syncs.
  */
 export function getRemotePath(ref: string): string {
   const parsed = parseRemoteRef(ref);
@@ -294,16 +266,10 @@ export interface FetchRemoteOptions {
   onProgress?: (message: string) => void;
 }
 
-/** Re-export the lib's GitError so CLI callers can catch it without importing the lib directly. */
 export { GitError };
 export type { GitErrorDetails };
 
-/**
- * Build the lib `cacheKey` for a parsed remote ref. Lib places the clone at
- * `<stateDir>/<cacheKey>/`, so the layout warden's `getRemotePath` returns
- * must match what we pass here. Pinned refs encode the SHA into the key so
- * that pinned and unpinned caches stay in separate directories.
- */
+/** Encode the pin into the lib `cacheKey` so pinned and unpinned land in separate dirs. */
 function cacheKeyFor(parsed: ParsedRemoteRef): string {
   if (parsed.sha) {
     return `${parsed.owner}/${parsed.repo}@${parsed.sha}`;
@@ -314,14 +280,6 @@ function cacheKeyFor(parsed: ParsedRemoteRef): string {
 /**
  * Clone or update a remote repository to the cache.
  * Returns the SHA of the fetched commit.
- *
- * Lib's `ensureCached` owns the git plumbing (clone, fetch, ref checkout);
- * warden's wrapper provides the warden-specific surface around it:
- *   - `WARDEN_STATE_DIR` resolution and per-ref cache layout
- *   - `cloneUrl` persistence across re-fetches (so SSH-cloned remotes stay SSH)
- *   - offline mode (read cache without network)
- *   - state.json bookkeeping with `fetchedAt` for TTL-based refresh
- *   - TTL-based refresh: skip the fetch when the cached entry is fresh
  */
 export async function fetchRemote(ref: string, options: FetchRemoteOptions = {}): Promise<string> {
   const { force = false, offline = false, onProgress } = options;

@@ -38,10 +38,6 @@ const selectTheme = {
   },
 };
 
-/**
- * Report a fetch failure with a user-actionable hint when the lib signaled
- * `auth-required`. Avoids hard-coding stderr regexes — the lib owns the heuristic.
- */
 function reportFetchError(
   err: unknown,
   remote: string,

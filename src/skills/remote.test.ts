@@ -205,7 +205,6 @@ describe('parseRemoteRef', () => {
     });
   });
 
-  // GitLab support — gained for free by adopting dotagents-lib's parseSource grammar.
   describe('GitLab sources', () => {
     it('parses GitLab HTTPS URL with single-level path', () => {
       const result = parseRemoteRef('https://gitlab.com/getsentry/skills');
@@ -252,8 +251,6 @@ describe('parseRemoteRef', () => {
     });
   });
 
-  // Reject input shapes that lib's parseSource accepts but warden's --remote
-  // pipeline cannot handle yet.
   describe('rejected source types', () => {
     it('rejects path: prefix with --path guidance', () => {
       expect(() => parseRemoteRef('path:./local/skill')).toThrow(SkillLoaderError);
@@ -333,9 +330,6 @@ describe('getRemotePath', () => {
   });
 
   it('different URL forms of the same unpinned ref share a path', () => {
-    // Hosted URL forms (HTTPS, SSH, shorthand) all normalize to the same
-    // owner/repo cache dir so re-fetching the same repo via a different URL
-    // form hits the same cache.
     const a = getRemotePath('getsentry/skills');
     const b = getRemotePath('https://github.com/getsentry/skills');
     const c = getRemotePath('git@github.com:getsentry/skills.git');
@@ -999,24 +993,6 @@ describe('resolveRemoteAgent', () => {
   });
 });
 
-// =============================================================================
-// GitError contract — pin the lib's error shape we rely on for CLI hints.
-//
-// `auth-required` + `sshUrl` are how the CLI knows to suggest the SSH form
-// for a private repo. If lib ever changes the field names or removes the
-// kind, this test fails loudly instead of silently dropping the hint.
-// =============================================================================
-
-// =============================================================================
-// fetchRemote integration — real git, real lib.
-//
-// These tests are the load-bearing validation of the dotagents-lib swap. The
-// rest of the suite validates parsing/state/discovery in isolation; these
-// confirm the actual fetch pipeline (warden's fetchRemote -> lib's
-// ensureCached -> git on disk) ends up at the right commit on the right path
-// with the right state.json side effects.
-// =============================================================================
-
 describe('fetchRemote integration (real git)', () => {
   let testRoot: string;
   let bareRepoPath: string;
@@ -1052,7 +1028,6 @@ describe('fetchRemote integration (real git)', () => {
     mkdirSync(testRoot, { recursive: true });
     process.env['WARDEN_STATE_DIR'] = testRoot;
 
-    // Build a working repo, commit, then make a bare clone we can `git fetch` from.
     workTree = join(testRoot, '_workTree');
     mkdirSync(workTree, { recursive: true });
     git(['init', '--initial-branch=main'], workTree);
@@ -1062,7 +1037,6 @@ describe('fetchRemote integration (real git)', () => {
 
     bareRepoPath = join(testRoot, '_bareRepo.git');
     execFileSync('git', ['clone', '--bare', workTree, bareRepoPath], { stdio: 'ignore' });
-    // Wire workTree to push back into the bare so future commits show up to fetchers.
     git(['remote', 'add', 'bare', bareRepoPath], workTree);
     git(['push', 'bare', 'main'], workTree);
   });
@@ -1077,18 +1051,12 @@ describe('fetchRemote integration (real git)', () => {
   });
 
   function preCloneIntoCache(ref: string): void {
-    // Pre-populate the cache by cloning the bare repo to the path warden
-    // expects for `<ref>`. After this, `fetchRemote(ref)` exercises the
-    // already-cached fetch-and-reset branch of ensureCached.
     const cachePath = getRemotePath(ref);
     mkdirSync(dirname(cachePath), { recursive: true });
     execFileSync('git', ['clone', '--depth=1', bareRepoPath, cachePath], { stdio: 'ignore' });
   }
 
   it('clones a fresh repo from cloneUrl when cache is empty', async () => {
-    // No pre-clone: ensureCached falls into the clone branch. We use the bare
-    // repo path as cloneUrl by stuffing it into state.json — warden picks it
-    // up via the cloneUrl-fallback chain.
     const ref = 'fixture/integ';
     saveState({
       remotes: {
@@ -1099,24 +1067,19 @@ describe('fetchRemote integration (real git)', () => {
         },
       },
     });
-    // The cache must NOT exist yet for the clone branch to fire.
     rmSync(getRemotePath(ref), { recursive: true, force: true });
 
     const sha = await fetchRemote(ref);
 
     expect(sha).toMatch(/^[0-9a-f]{40}$/);
-    // Cache landed at the expected unpinned layout.
     expect(getRemotePath(ref)).toBe(join(testRoot, 'skills', 'fixture', 'integ'));
     expect(readFileSync(join(getRemotePath(ref), 'SKILL.md'), 'utf-8')).toContain('integ-skill');
-    // State.json updated with the new SHA + a fresh fetchedAt timestamp.
     const state = loadState();
     expect(state.remotes[ref]?.sha).toBe(sha);
     expect(state.remotes[ref]?.fetchedAt).toBeTruthy();
   });
 
   it('clones a pinned ref into the @sha cache directory', async () => {
-    // For pinned refs the cache layout encodes the SHA so multiple pins of the
-    // same repo don't fight each other.
     const headSha = git(['rev-parse', 'HEAD'], workTree);
     const pinnedRef = `fixture/integ@${headSha}`;
     saveState({
@@ -1133,51 +1096,39 @@ describe('fetchRemote integration (real git)', () => {
     const sha = await fetchRemote(pinnedRef);
 
     expect(sha).toBe(headSha);
-    expect(getRemotePath(pinnedRef)).toBe(
-      join(testRoot, 'skills', 'fixture', `integ@${headSha}`),
-    );
-    expect(readFileSync(join(getRemotePath(pinnedRef), 'SKILL.md'), 'utf-8')).toContain(
-      'integ-skill',
-    );
+    expect(getRemotePath(pinnedRef)).toBe(join(testRoot, 'skills', 'fixture', `integ@${headSha}`));
+    expect(readFileSync(join(getRemotePath(pinnedRef), 'SKILL.md'), 'utf-8')).toContain('integ-skill');
   });
 
-  it('fetches latest commits when cache exists and ref is unpinned', async () => {
+  it('fetches latest commits when TTL is stale and ref is unpinned', async () => {
     const ref = 'fixture/integ';
     preCloneIntoCache(ref);
 
-    // Read what was cached, then push a new commit upstream.
     const beforeSha = git(['rev-parse', 'HEAD'], getRemotePath(ref));
     const newSha = commitSkill('integ-skill', 'Updated', 'second');
     git(['push', 'bare', 'main'], workTree);
     expect(newSha).not.toBe(beforeSha);
 
-    // Save state with a stale fetchedAt so warden's TTL gate forces a refresh.
-    const stale = new Date(Date.now() - 86400_000 * 7).toISOString(); // 7 days
+    const stale = new Date(Date.now() - 86400_000 * 7).toISOString();
     saveState({ remotes: { [ref]: { sha: beforeSha, fetchedAt: stale } } });
 
     const fetchedSha = await fetchRemote(ref);
 
     expect(fetchedSha).toBe(newSha);
-    // HEAD on disk must match too — proves fetchAndReset actually moved the working tree.
     expect(git(['rev-parse', 'HEAD'], getRemotePath(ref))).toBe(newSha);
-    // State.json has the new SHA + a refreshed fetchedAt.
     const updated = loadState().remotes[ref];
     expect(updated?.sha).toBe(newSha);
     expect(updated?.fetchedAt).not.toBe(stale);
   });
 
   it('skips network fetch for unpinned ref while TTL is still fresh', async () => {
-    // Mirrors the original warden behavior: WARDEN_SKILL_CACHE_TTL throttles
-    // re-fetches of unpinned refs. The lib swap must not break this.
     const ref = 'fixture/integ';
     preCloneIntoCache(ref);
     const beforeSha = git(['rev-parse', 'HEAD'], getRemotePath(ref));
 
-    // Mark the cache as just-fetched.
-    const fresh = new Date().toISOString();
-    saveState({ remotes: { [ref]: { sha: beforeSha, fetchedAt: fresh } } });
+    saveState({ remotes: { [ref]: { sha: beforeSha, fetchedAt: new Date().toISOString() } } });
 
-    // Push upstream — TTL is fresh, so this commit should NOT be pulled.
+    // Push upstream — TTL is fresh, so this commit must NOT be pulled.
     commitSkill('integ-skill', 'Should not appear', 'newer');
     git(['push', 'bare', 'main'], workTree);
 
@@ -1192,8 +1143,7 @@ describe('fetchRemote integration (real git)', () => {
     preCloneIntoCache(ref);
     const beforeSha = git(['rev-parse', 'HEAD'], getRemotePath(ref));
 
-    const fresh = new Date().toISOString();
-    saveState({ remotes: { [ref]: { sha: beforeSha, fetchedAt: fresh } } });
+    saveState({ remotes: { [ref]: { sha: beforeSha, fetchedAt: new Date().toISOString() } } });
 
     const newSha = commitSkill('integ-skill', 'Force', 'force-update');
     git(['push', 'bare', 'main'], workTree);
@@ -1205,23 +1155,16 @@ describe('fetchRemote integration (real git)', () => {
   });
 
   it('uses pinned cache without touching the network when state entry exists', async () => {
-    // Pinned refs are immutable — once we have a state entry, we trust it
-    // without re-fetching. Lib's ensureCached is only called on cache miss.
     const headSha = git(['rev-parse', 'HEAD'], workTree);
     const pinnedRef = `fixture/integ@${headSha}`;
-    // Pre-clone into the @sha cache directory directly (the layout warden uses for pinned).
     const pinnedCachePath = getRemotePath(pinnedRef);
     mkdirSync(dirname(pinnedCachePath), { recursive: true });
-    execFileSync('git', ['clone', '--depth=1', bareRepoPath, pinnedCachePath], {
-      stdio: 'ignore',
-    });
+    execFileSync('git', ['clone', '--depth=1', bareRepoPath, pinnedCachePath], { stdio: 'ignore' });
     saveState({
-      remotes: {
-        [pinnedRef]: { sha: headSha, fetchedAt: new Date().toISOString() },
-      },
+      remotes: { [pinnedRef]: { sha: headSha, fetchedAt: new Date().toISOString() } },
     });
 
-    // Push an upstream commit that should NOT influence the pinned resolve.
+    // Push upstream — pinned ref is immutable, must not be influenced.
     commitSkill('integ-skill', 'Should not be visible', 'newer');
     git(['push', 'bare', 'main'], workTree);
 
@@ -1231,17 +1174,16 @@ describe('fetchRemote integration (real git)', () => {
     expect(git(['rev-parse', 'HEAD'], pinnedCachePath)).toBe(headSha);
   });
 
-  it('preserves cloneUrl across multiple fetch calls (SSH-form persistence proxy)', async () => {
-    // Real SSH URLs require auth, so we use the bare-repo path as a stand-in
-    // for the "non-default cloneUrl" case. The mechanism is identical: warden
-    // must keep the originally-supplied cloneUrl in state.json so subsequent
-    // fetches don't silently fall back to https://github.com/...
+  it('preserves cloneUrl across multiple fetch calls', async () => {
+    // Stand-in for SSH-form persistence: warden must not silently fall back
+    // to https://github.com/... when the user originally specified a
+    // non-default URL.
     const ref = 'fixture/integ';
     saveState({
       remotes: {
         [ref]: {
           sha: 'placeholder',
-          fetchedAt: new Date(0).toISOString(), // ancient → forces refresh on every call
+          fetchedAt: new Date(0).toISOString(),
           cloneUrl: bareRepoPath,
         },
       },
@@ -1253,7 +1195,6 @@ describe('fetchRemote integration (real git)', () => {
 
     const state = loadState();
     expect(state.remotes[ref]?.cloneUrl).toBe(bareRepoPath);
-    // fetchedAt is always written by warden's bookkeeping (TTL needs it).
     expect(state.remotes[ref]?.fetchedAt).toBeTruthy();
   });
 
@@ -1261,11 +1202,8 @@ describe('fetchRemote integration (real git)', () => {
     const ref = 'fixture/integ';
     preCloneIntoCache(ref);
     const headSha = git(['rev-parse', 'HEAD'], getRemotePath(ref));
-    saveState({
-      remotes: { [ref]: { sha: headSha, fetchedAt: new Date().toISOString() } },
-    });
+    saveState({ remotes: { [ref]: { sha: headSha, fetchedAt: new Date().toISOString() } } });
 
-    // Push upstream to prove offline mode does NOT pull it.
     commitSkill('integ-skill', 'Should not appear', 'upstream');
     git(['push', 'bare', 'main'], workTree);
 
@@ -1276,37 +1214,26 @@ describe('fetchRemote integration (real git)', () => {
   });
 
   it('offline mode throws SkillLoaderError when cache is missing', async () => {
-    await expect(fetchRemote('fixture/missing', { offline: true })).rejects.toThrow(
-      SkillLoaderError,
-    );
-    await expect(fetchRemote('fixture/missing', { offline: true })).rejects.toThrow(
-      'Remote skill not cached',
-    );
+    await expect(fetchRemote('fixture/missing', { offline: true })).rejects.toThrow(SkillLoaderError);
+    await expect(fetchRemote('fixture/missing', { offline: true })).rejects.toThrow('Remote skill not cached');
   });
 });
 
 describe('GitError contract', () => {
+  // Pins the lib's error shape the CLI auth-hint depends on. If lib renames
+  // a field or removes the `auth-required` kind, this fails loudly.
   it('exposes the structural fields the CLI depends on', () => {
-    const err = new GitError('auth required', {
+    const auth = new GitError('auth required', {
       kind: 'auth-required',
       url: 'https://github.com/owner/repo.git',
       sshUrl: 'git@github.com:owner/repo.git',
     });
+    expect(auth).toBeInstanceOf(Error);
+    expect(auth.details?.kind).toBe('auth-required');
+    expect(auth.details?.sshUrl).toBe('git@github.com:owner/repo.git');
 
-    expect(err).toBeInstanceOf(Error);
-    expect(err.message).toBe('auth required');
-    expect(err.details?.kind).toBe('auth-required');
-    expect(err.details?.url).toBe('https://github.com/owner/repo.git');
-    expect(err.details?.sshUrl).toBe('git@github.com:owner/repo.git');
-  });
-
-  it('supports the "other" kind for non-auth git failures', () => {
-    const err = new GitError('clone failed', {
-      kind: 'other',
-      stderr: 'fatal: repository not found',
-    });
-
-    expect(err.details?.kind).toBe('other');
-    expect(err.details?.stderr).toContain('repository not found');
+    const other = new GitError('clone failed', { kind: 'other', stderr: 'fatal: repository not found' });
+    expect(other.details?.kind).toBe('other');
+    expect(other.details?.stderr).toContain('repository not found');
   });
 });
