@@ -21,8 +21,8 @@ importers:
         specifier: ^22.0.1
         version: 22.0.1
       '@sentry/dotagents-lib':
-        specifier: ^1.14.0
-        version: 1.14.0
+        specifier: ^1.15.0
+        version: 1.15.0
       '@sentry/node':
         specifier: ^10.38.0
         version: 10.38.0
@@ -1501,8 +1501,8 @@ packages:
     resolution: {integrity: sha512-1pubWDZE5y5HZEPMAZERP4fVl2NH3Ihp1A+vMoVkb3Qc66Diqj1WierAnStlZP7tCx0TBa0dK85GTW/ZFYyB9g==}
     engines: {node: '>=18'}
 
-  '@sentry/dotagents-lib@1.14.0':
-    resolution: {integrity: sha512-FHGAAo+GXSk/pKMtPmaa2rhm3JVA3ty3K8YgYFTVp2VgLctqArh9XLNn6iM3oWPyuj3J+DhcM2JLMLNoMFXpIw==}
+  '@sentry/dotagents-lib@1.15.0':
+    resolution: {integrity: sha512-PokAf2FtV/VWKO8N3HzyGSjiIpE/9ViJ/ZyqP4bTG5h6nfAcZF/7O1Y6N3PCKWfd7oZjqGQflNMBBlCwzpDoaQ==}
     engines: {node: '>=20'}
 
   '@sentry/node-core@10.38.0':
@@ -4470,7 +4470,9 @@ snapshots:
 
   '@sentry/core@10.38.0': {}
 
-  '@sentry/dotagents-lib@1.14.0': {}
+  '@sentry/dotagents-lib@1.15.0':
+    dependencies:
+      yaml: 2.8.3
 
   '@sentry/node-core@10.38.0(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.5.0(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.5.0(@opentelemetry/api@1.9.0))(@opentelemetry/instrumentation@0.211.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.5.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.5.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.39.0)':
     dependencies:

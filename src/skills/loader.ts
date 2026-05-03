@@ -2,8 +2,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import type { SkillDefinition, ToolName } from '../config/schema.js';
-import { ToolNameSchema } from '../config/schema.js';
+import { loadSkillMd, SkillLoadError } from '@sentry/dotagents-lib';
+import type { SkillDefinition } from '../config/schema.js';
 import { isPathLike } from '../utils/path.js';
 
 export class SkillLoaderError extends Error {
@@ -93,117 +93,6 @@ export function clearSkillsCache(): void {
 }
 
 /**
- * Parse YAML frontmatter from a markdown file.
- * Returns the frontmatter object and the body content.
- */
-function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!match) {
-    throw new SkillLoaderError('Invalid markdown: missing YAML frontmatter');
-  }
-
-  const [, yamlContent, body] = match;
-
-  // Simple YAML parser for frontmatter (handles basic key: value pairs)
-  const frontmatter: Record<string, unknown> = {};
-  let currentKey: string | null = null;
-  let inMetadata = false;
-  let inMultilineScalar = false;
-  let multilineLines: string[] = [];
-  const metadata: Record<string, string> = {};
-
-  for (const line of (yamlContent ?? '').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    // Handle indented continuation lines for multi-line scalar values
-    // (e.g., description:\n  Some text\n  more text)
-    if (line.startsWith('  ') && inMultilineScalar && currentKey) {
-      multilineLines.push(trimmed);
-      continue;
-    }
-
-    // Flush any accumulated multi-line scalar value
-    if (inMultilineScalar && currentKey && multilineLines.length > 0) {
-      frontmatter[currentKey] = multilineLines.join(' ');
-      multilineLines = [];
-    }
-    inMultilineScalar = false;
-
-    if (line.startsWith('  ') && inMetadata) {
-      // Nested metadata value
-      const metaMatch = trimmed.match(/^(\w+):\s*(.*)$/);
-      if (metaMatch && metaMatch[1]) {
-        metadata[metaMatch[1]] = metaMatch[2]?.replace(/^["']|["']$/g, '') ?? '';
-      }
-      continue;
-    }
-
-    inMetadata = false;
-    const keyMatch = line.match(/^(\w[\w-]*):\s*(.*)$/);
-    if (keyMatch && keyMatch[1]) {
-      currentKey = keyMatch[1];
-      const value = (keyMatch[2] ?? '').trim();
-
-      if (currentKey === 'metadata' && !value) {
-        inMetadata = true;
-        frontmatter[currentKey] = metadata;
-      } else if (value) {
-        frontmatter[currentKey] = value.replace(/^["']|["']$/g, '');
-      } else {
-        // Key with no inline value — start collecting multi-line scalar
-        inMultilineScalar = true;
-        multilineLines = [];
-      }
-    }
-  }
-
-  // Flush any trailing multi-line scalar value
-  if (inMultilineScalar && currentKey && multilineLines.length > 0) {
-    frontmatter[currentKey] = multilineLines.join(' ');
-  }
-
-  return { frontmatter, body: body ?? '' };
-}
-
-/**
- * Get valid tool name suggestions for error messages.
- */
-function getValidToolNames(): string {
-  return ToolNameSchema.options.join(', ');
-}
-
-/**
- * Parse allowed-tools from agentskills.io format to our format.
- * agentskills.io uses space-delimited: "Read Grep Glob"
- * We use array: ["Read", "Grep", "Glob"]
- */
-function parseAllowedTools(
-  allowedTools: unknown,
-  onWarning?: (message: string) => void
-): ToolName[] | undefined {
-  if (typeof allowedTools !== 'string') {
-    return undefined;
-  }
-
-  const tools = allowedTools.split(/\s+/).filter(Boolean);
-  const validTools: ToolName[] = [];
-
-  for (const tool of tools) {
-    const result = ToolNameSchema.safeParse(tool);
-    if (result.success) {
-      validTools.push(result.data);
-    } else {
-      onWarning?.(
-        `Invalid tool name '${tool}' in allowed-tools (ignored). Valid tools: ${getValidToolNames()}`
-      );
-    }
-  }
-
-  return validTools.length > 0 ? validTools : undefined;
-}
-
-/**
  * Options for loading a skill from markdown.
  */
 export interface LoadSkillFromMarkdownOptions {
@@ -212,35 +101,46 @@ export interface LoadSkillFromMarkdownOptions {
 }
 
 /**
+ * Extract the markdown body that follows the SKILL.md YAML frontmatter.
+ * Returns the empty string if the file lacks a frontmatter block.
+ */
+function extractBody(content: string): string {
+  const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
+  return match?.[1] ?? '';
+}
+
+/**
  * Load a skill from a SKILL.md file (agentskills.io format).
+ *
+ * Frontmatter parsing and `allowed-tools` interpretation are delegated to
+ * `@sentry/dotagents-lib`; this wrapper attaches warden-specific fields
+ * (`prompt` body, `rootDir`, `tools.allowed`) and translates lib errors to
+ * `SkillLoaderError` for callers that catch on warden's error type.
  */
 export async function loadSkillFromMarkdown(
   filePath: string,
   options?: LoadSkillFromMarkdownOptions
 ): Promise<SkillDefinition> {
-  let content: string;
+  let meta;
   try {
-    content = await readFile(filePath, 'utf-8');
-  } catch (error) {
-    throw new SkillLoaderError(`Failed to read skill file: ${filePath}`, { cause: error });
+    meta = await loadSkillMd(filePath, { onWarning: options?.onWarning });
+  } catch (err) {
+    if (err instanceof SkillLoadError) {
+      throw new SkillLoaderError(err.message, { cause: err });
+    }
+    throw err;
   }
 
-  const { frontmatter, body } = parseMarkdownFrontmatter(content);
-
-  if (!frontmatter['name'] || typeof frontmatter['name'] !== 'string') {
-    throw new SkillLoaderError(`Invalid markdown: missing 'name' in frontmatter`);
-  }
-  if (!frontmatter['description'] || typeof frontmatter['description'] !== 'string') {
-    throw new SkillLoaderError(`Invalid markdown: missing 'description' in frontmatter`);
-  }
-
-  const allowedTools = parseAllowedTools(frontmatter['allowed-tools'], options?.onWarning);
+  // Lib doesn't return the body; re-read for the markdown content. Cheap —
+  // the OS file cache catches the second read.
+  const content = await readFile(filePath, 'utf-8');
+  const body = extractBody(content);
 
   return {
-    name: frontmatter['name'],
-    description: frontmatter['description'],
+    name: meta.name,
+    description: meta.description,
     prompt: body.trim(),
-    tools: allowedTools ? { allowed: allowedTools } : undefined,
+    tools: meta.allowedTools !== undefined ? { allowed: meta.allowedTools } : undefined,
     rootDir: dirname(filePath),
   };
 }

@@ -5,7 +5,10 @@ import { z } from 'zod';
 import {
   parseSource as libParseSource,
   ensureCached,
+  validateGitNameSafety,
   GitError,
+  GitNameSafetyError,
+  ParseSourceError,
   type GitErrorDetails,
 } from '@sentry/dotagents-lib';
 import { loadSkillFromMarkdown, SkillLoaderError, AGENT_MARKER_FILE } from './loader.js';
@@ -56,12 +59,11 @@ export interface ParsedRemoteRef {
   cloneUrl?: string;
 }
 
-const SAFE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
-
 /**
  * Parse a remote reference string into its components. Delegates the grammar
- * to `@sentry/dotagents-lib`'s `parseSource`, then layers warden's stricter
- * validation gates on top.
+ * to `@sentry/dotagents-lib`'s `parseSource` and the safety gate to
+ * `validateGitNameSafety`. Lib errors are translated to `SkillLoaderError`
+ * with warden-formatted messages so the public contract stays stable.
  *
  * Accepted shapes: `owner/repo[@sha]` (GitHub), `https://github.com/...`,
  * `git@github.com:...`, GitLab equivalents (incl. nested groups), and HTTP
@@ -74,62 +76,47 @@ export function parseRemoteRef(ref: string): ParsedRemoteRef {
     );
   }
 
-  const parsed = libParseSource(ref);
+  let parsed;
+  try {
+    parsed = libParseSource(ref);
+  } catch (err) {
+    if (err instanceof ParseSourceError) {
+      const detail = err.kind === 'empty-sha' ? 'empty SHA after @' : 'repo name cannot contain /';
+      throw new SkillLoaderError(`Invalid remote ref: ${ref} (${detail})`);
+    }
+    throw err;
+  }
 
   if (parsed.type === 'local') {
     throw new SkillLoaderError(`Invalid remote ref: ${ref} (local sources are not supported here)`);
   }
-
   if (parsed.type === 'well-known') {
     throw new SkillLoaderError(
       `Invalid remote ref: ${ref} (well-known HTTPS sources are not supported by warden)`,
     );
   }
 
-  // libParseSource silently drops extra path segments from shorthand
-  // (`owner/repo/nested` becomes `owner/repo`); reject so the user gets a
-  // clear error instead of a wrong-but-cloneable cache key.
-  if (!ref.startsWith('https://') && !ref.startsWith('http://') && !ref.startsWith('git@') && !ref.startsWith('git:')) {
-    const stripped = ref.startsWith('@') ? ref.slice(1) : ref;
-    const beforeAt = stripped.includes('@') ? stripped.slice(0, stripped.indexOf('@')) : stripped;
-    if (!beforeAt.includes('/')) {
-      throw new SkillLoaderError(`Invalid remote ref: ${ref} (expected owner/repo format)`);
-    }
-    if (beforeAt.split('/').length > 2) {
-      throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo name cannot contain /)`);
-    }
-    if (stripped.includes('@') && !stripped.slice(stripped.indexOf('@') + 1)) {
-      throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty SHA after @)`);
-    }
-  }
-
   const owner = parsed.owner ?? '';
   const repo = parsed.repo ?? '';
   const sha = parsed.ref;
 
+  // Bare-shorthand inputs without a slash (`noslash`) reach here with empty
+  // repo since lib populates owner only.
   if (!owner || !repo) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (empty owner or repo)`);
+    throw new SkillLoaderError(`Invalid remote ref: ${ref} (expected owner/repo format)`);
   }
 
-  // Security: reject leading `-` (git flag injection) and characters outside
-  // the GitHub/GitLab name allow-list (path traversal). Owner is validated
-  // segment-by-segment so GitLab nested groups (`group/subgroup`) pass.
-  if (owner.startsWith('-')) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner cannot start with -)`);
-  }
-  if (repo.startsWith('-')) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo cannot start with -)`);
-  }
-  if (sha?.startsWith('-')) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (SHA cannot start with -)`);
-  }
-  for (const segment of owner.split('/')) {
-    if (!SAFE_NAME_PATTERN.test(segment)) {
-      throw new SkillLoaderError(`Invalid remote ref: ${ref} (owner contains invalid characters)`);
+  try {
+    validateGitNameSafety({ owner, repo, ref: sha });
+  } catch (err) {
+    if (err instanceof GitNameSafetyError) {
+      const fieldLabel = err.field === 'ref' ? 'SHA' : err.field;
+      const detail = err.reason === 'leading-dash'
+        ? `${fieldLabel} cannot start with -`
+        : `${fieldLabel} contains invalid characters`;
+      throw new SkillLoaderError(`Invalid remote ref: ${ref} (${detail})`);
     }
-  }
-  if (!SAFE_NAME_PATTERN.test(repo)) {
-    throw new SkillLoaderError(`Invalid remote ref: ${ref} (repo contains invalid characters)`);
+    throw err;
   }
 
   return { owner, repo, sha, cloneUrl: parsed.cloneUrl };

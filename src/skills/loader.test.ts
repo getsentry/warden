@@ -357,7 +357,8 @@ Content here
 
       expect(warnings.length).toBe(1);
       expect(warnings[0]).toContain('bad-skill.md');
-      expect(warnings[0]).toContain("missing 'name'");
+      // Lib's message: "Missing 'name' in SKILL.md frontmatter: <path>"
+      expect(warnings[0]).toMatch(/[Mm]issing 'name'/);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -391,12 +392,12 @@ Test prompt content.
       expect(skill).toBeDefined();
       expect(skill!.skill.tools?.allowed).toEqual(['Read', 'Grep']);
 
-      // Should have warnings for each invalid tool
+      // Should have warnings for each invalid tool. Lib emits one warning
+      // per unknown token; the two-tokens-flagged contract is preserved.
       expect(warnings.length).toBe(2);
-      expect(warnings[0]).toContain("Invalid tool name 'InvalidTool'");
+      expect(warnings[0]).toContain('InvalidTool');
       expect(warnings[0]).toContain('ignored');
-      expect(warnings[0]).toContain('Valid tools:');
-      expect(warnings[1]).toContain("Invalid tool name 'FakeTool'");
+      expect(warnings[1]).toContain('FakeTool');
     } finally {
       rmSync(tempDir2, { recursive: true, force: true });
     }

@@ -76,12 +76,12 @@ describe('parseRemoteRef', () => {
 
   it('throws for missing owner', () => {
     expect(() => parseRemoteRef('/repo')).toThrow(SkillLoaderError);
-    expect(() => parseRemoteRef('/repo')).toThrow('empty owner or repo');
+    expect(() => parseRemoteRef('/repo')).toThrow('expected owner/repo format');
   });
 
   it('throws for missing repo', () => {
     expect(() => parseRemoteRef('owner/')).toThrow(SkillLoaderError);
-    expect(() => parseRemoteRef('owner/')).toThrow('empty owner or repo');
+    expect(() => parseRemoteRef('owner/')).toThrow('expected owner/repo format');
   });
 
   it('throws for missing slash', () => {
