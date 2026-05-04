@@ -280,27 +280,25 @@ describe('buildGeneratedSkill', () => {
 
     const planPrompt = runSkill.mock.calls[0]![0].userPrompt;
     expect(planPrompt).toContain(`Use the full authoring skill at \`${authoringSkillRoot}\``);
-    expect(planPrompt).toContain('Choose the simplest adequate layout using the authoring skill\'s rules');
-    expect(planPrompt).toContain('Tracks/tasks are planning work lanes, not filesystem taxonomy');
-    expect(planPrompt).toContain('Do not create `references/tracks/`');
+    expect(planPrompt).toContain('Let the authoring skill decide the simplest adequate artifact layout');
+    expect(planPrompt).toContain('Treat outline tracks/tasks as work lanes for coverage and sequencing');
+    expect(planPrompt).not.toContain('references/tracks/');
     expect(planPrompt).toContain('Do not include Output Format, Output Contract, Response Format, or custom reporting schema sections');
     expect(planPrompt).toContain('Build the authoring brief first');
-    expect(planPrompt).toContain('For every planned routed reference, define the lookup question');
+    expect(planPrompt).toContain('without turning tracks into layout rules');
     expect(planPrompt).toContain('define the source coverage needed before the skill can be considered complete');
 
     const implementationPrompt = runSkill.mock.calls[1]![0].userPrompt;
-    expect(implementationPrompt).toContain('Add references/ only for routed runtime lookup leaves');
-    expect(implementationPrompt).toContain('Keep SKILL.md compact; put optional depth in routed references');
+    expect(implementationPrompt).toContain('Include every local artifact that SKILL.md or another returned artifact requires at runtime');
     expect(implementationPrompt).toContain('Satisfy the plan\'s lookupQuestions and qualityBar');
-    expect(implementationPrompt).toContain('Do not ship catalog-only references');
-    expect(implementationPrompt).toContain('Prefer no SOURCES.md over a SOURCES.md that says the skill came from the internal outline');
+    expect(implementationPrompt).toContain('Do not ship catalog-only runtime guidance');
     expect(implementationPrompt).toContain('externalSources array is cumulative evidence for the final artifact');
 
     const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
-    expect(validationPrompt).toContain('Check for over-broad topic-bucket references, catalog-only references, missing source depth');
+    expect(validationPrompt).toContain('Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth');
     expect(validationPrompt).toContain('Set valid to false for concrete quality failures');
     expect(validationPrompt).toContain('claims broad security coverage but the source base is too thin');
-    expect(validationPrompt).toContain('Set valid to false for any missing routed local file');
+    expect(validationPrompt).toContain('Set valid to false for any missing local artifact needed by returned runtime guidance');
     expect(validationPrompt).toContain('Treat rough validation issues as advisory signals');
 
     const state = readSkillBuildState(getBuildStatePath(rootDir));
@@ -481,9 +479,10 @@ Read \`references/tracks/authentication.md\` for login and session changes.
     expect(writtenSkill).not.toContain('references/tracks/');
 
     const trackPrompt = runSkill.mock.calls[2]![0].userPrompt;
-    expect(trackPrompt).toContain('Treat the assigned track as a work lane');
-    expect(trackPrompt).toContain('It may map to one reference, multiple references, a shared reference, or no new file');
+    expect(trackPrompt).toContain('Treat the assigned track as a bounded coverage work lane');
+    expect(trackPrompt).toContain('Let the authoring skill decide where any resulting guidance belongs');
     expect(trackPrompt).toContain('Topic names or sink catalogs alone do not count as coverage');
+    expect(trackPrompt).not.toContain('references/tracks/');
   });
 
   it('reuses valid existing artifacts when artifact metadata is missing or legacy', async () => {

@@ -37,26 +37,21 @@ function wardenSkillConstraints(args: {
   authoringSkillRoot: string;
 }): string {
   return `Warden generated-skill constraints:
-- Use the full authoring skill at \`${args.authoringSkillRoot}\` as the authoring method. Start by reading its SKILL.md and follow its own routing. Do not rely on a hand-picked subset of its references.
+- Use the full authoring skill at \`${args.authoringSkillRoot}\` as the authoring method. Start by reading its SKILL.md and follow its own routing.
 - The target skill root is \`${args.targetRootDir}\`.
 - The generated SKILL.md frontmatter name must be exactly \`${args.targetName}\`.
 - Generated artifacts must be normal Warden skill files. Do not overwrite warden.yaml or build-state.json.
 - Treat existing generated artifacts in the target root as stale unless you intentionally re-emit them in the returned file map.
 - Use the source material and internal outline as the source of truth for regeneration.
-- Choose the simplest adequate layout using the authoring skill's rules. Do not add files just to satisfy a template.
-- Tracks/tasks are planning work lanes, not filesystem taxonomy. Do not create \`references/tracks/\`; use \`references/<lookup-topic>.md\`, shared references, or inline guidance according to the authoring skill.
-- Broad or multi-track skills often need SKILL.md as a compact router plus focused routed references. Inline, shared-reference, one-reference-per-track, many-references-per-track, and fewer-references-than-tracks layouts are all valid when they fit the authoring skill.
-- References should answer one lookup question each. Avoid topic-bucket references that mix routing, examples, troubleshooting, source notes, and remediation.
-- Treat reference quality as evidence quality, not file count. Each routed runtime reference should have a clear "open when" reason plus concrete checks, required evidence, safe lookalikes or false-positive suppressors, and patch-shaped remediation or examples when the domain warrants it.
-- Sink/API catalogs are supporting tables only. Do not make a reference that is mostly a broad catalog unless it also teaches how to prove exploitability, suppress false positives, and fix the issue.
-- Broad domain or ecosystem skills should use source discovery before writing deep runtime guidance. If no concrete sources or local examples were consulted, record that as a quality risk or missing input rather than filling gaps with generic survey text.
-- Use SPEC.md for new or materially scoped generated skills when it records a useful scope, evidence model, or maintenance contract.
-- Use SOURCES.md only when concrete external sources were consulted or unresolved source gaps materially affect future maintenance. Do not create SOURCES.md just to restate warden.yaml, the internal outline, build pipeline, authoring decisions, or "no external research".
+- Let the authoring skill decide the simplest adequate artifact layout and where guidance belongs. Warden supplies the goal, source packet, outline, runtime constraints, and quality bar.
+- Treat outline tracks/tasks as work lanes for coverage and sequencing, not as filesystem or artifact taxonomy.
+- Treat guidance quality as evidence quality, not file count. Runtime guidance should help the later Warden run decide, verify, and fix issues with concrete evidence, false-positive controls, and remediation patterns where the domain warrants it.
+- Broad domain or ecosystem skills should use source discovery before claiming complete runtime guidance. If source coverage is too thin for the claimed scope, record the gap instead of filling with generic survey text.
 - Warden runs skills on changed hunks and injects the report schema separately. Do not include Output Format, Output Contract, Response Format, or custom reporting schema sections.
 - Findings must anchor to changed lines and be concrete enough for Warden's normal report schema.
 - Security-review skills should include exploit-path evidence, safe lookalikes or false-positive controls, remediation examples, and severity/confidence calibration where relevant.
-- Broad security-review skills need a balanced source pack: taxonomy standards are not enough. Use source discovery to cover exploit behavior, safe counterexamples, language/framework caveats, and remediation patterns across the claimed scope, or record the missing source coverage as a blocking quality gap.
-- Preserve source provenance across passes. If the skill depends on an outline source, prior source decision, or newly consulted source, keep external web/upstream sources in externalSources and local/provenance notes in SOURCES.md so the final artifact can explain its evidence base.
+- Broad security-review skills need a balanced source pack: taxonomy standards, exploit behavior, safe counterexamples, language/framework caveats, and remediation patterns across the claimed scope, or an explicit blocking gap.
+- Preserve source provenance across passes. Keep external web/upstream sources in externalSources and local/provenance notes in whatever artifact the authoring skill chooses for that purpose.
 - Use Warden voice: brief, dry, direct. Avoid generated-artifact boilerplate such as "Generated Warden skill for outline".
 - Keep authoring decisions, build metadata, internal outline details, validation summaries, and future-work notes out of generated runtime artifacts.
 - Do not send repository code, secrets, private paths, or proprietary details to web tools.`;
@@ -100,13 +95,11 @@ ${wardenSkillConstraints(args)}
 Work like an in-process skill-writer session:
 - Read and use the authoring skill.
 - Build the authoring brief first: goal, runtime use, depth bar, sources or source gaps, and the kind of evidence the final skill must carry.
-- Decide the minimum workflow path and simplest adequate artifact layout.
-- Do the first research and source-inspection pass yourself. Use that to identify the work lanes, larger plan, and obvious non-overlap boundaries.
-- Decide what additional research is needed during implementation and what gaps should be recorded.
-- Decide where runtime guidance, references, provenance, and maintenance contract belong by lookup question, not by track name.
-- Decide the sequential task order for track/task additions without prescribing one reference file per track.
+- Decide the minimum skill-writer workflow path and artifact layout using the authoring skill's own guidance.
+- Do the first research and source-inspection pass yourself. Use that to identify the larger plan, coverage work lanes, and obvious non-overlap boundaries.
+- Decide what additional research is needed during implementation and what gaps should be recorded before the skill can be considered complete.
+- Decide the sequential task order for track/task additions without turning tracks into layout rules.
 - Decide how Warden and the authoring skill should roughly validate the output without turning stylistic preferences into hard blockers.
-- For every planned routed reference, define the lookup question, when to open it, and the evidence it must contain before it is useful.
 - For broad security skills, define the source coverage needed before the skill can be considered complete. Include source classes, not just source names: standards/taxonomy, exploit examples, safe counterexamples, language or framework docs, and remediation examples.
 - Carry forward external sources from the internal outline when the plan relies on them. Add new source-discovery targets when the outline sources are too thin for the claimed breadth.
 
@@ -160,17 +153,13 @@ Create or update the generated Warden skill artifacts.
 
 ${wardenSkillConstraints(args)}
 
-Use "tell them" discipline:
+Authoring behavior:
 - Use the authoring skill again, starting from its SKILL.md.
 - Treat the authoring plan as the source/depth brief. Follow it unless new evidence proves the plan is wrong.
-- Return a complete file map for every generated artifact that should exist.
-- Include SKILL.md. Add references/ only for routed runtime lookup leaves. Add SPEC.md, EVAL.md, scripts/, assets/, or SOURCES.md only when they add concrete runtime, maintenance, validation, reusable-example, or external-source value.
-- If SKILL.md routes to a local file, include that file in the same file map. Do not emit a router that points at absent references.
-- If the outline has many tracks, build the baseline router/shared structure first; later track/task passes may add or refine focused runtime guidance without forcing a track directory.
-- Keep SKILL.md compact; put optional depth in routed references. Do not include authoring/provenance notes unless they describe real external sources or unresolved source gaps that future maintainers need.
-- Satisfy the plan's lookupQuestions and qualityBar. If a lookup question is too broad for one reference, split by lookup need. If it is too small for a reference, keep it inline.
-- Do not ship catalog-only references. A routed reference should help the runtime agent decide, do, or verify: exploit path or task path, false-positive controls, and remediation/example material where useful.
-- Prefer no SOURCES.md over a SOURCES.md that says the skill came from the internal outline, build pipeline, or no external research.
+- Return a complete file map for every generated artifact that should exist according to the authoring skill.
+- Include SKILL.md. Include every local artifact that SKILL.md or another returned artifact requires at runtime.
+- Satisfy the plan's lookupQuestions and qualityBar using the structure chosen by the authoring skill.
+- Do not ship catalog-only runtime guidance. The generated skill should help the runtime agent decide, verify, and fix, not just recognize topic names or APIs.
 - The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Include concrete outline sources, plan sources, and newly consulted sources that the generated skill depends on. Do not count warden.yaml, the authoring skill, generated tracks, the target skill root, local paths, or the authoring plan itself as external sources.
 - For broad security-review skills, do not present a complete multi-language skill from thin source coverage. Either consult enough authoritative sources to support the breadth or mark the source coverage gap clearly in missingInputs so the reviewer can block completion.
 - If validation later needs a correction, it should be possible to rewrite the skill from this file map alone.
@@ -221,16 +210,15 @@ Add this track/task's contribution to the generated Warden skill.
 
 ${wardenSkillConstraints(args)}
 
-Use "now tell them this part" discipline:
+Contribution behavior:
 - Use the authoring skill again, starting from its SKILL.md.
-- Treat the assigned track as a work lane. It may map to one reference, multiple references, a shared reference, or no new file.
+- Treat the assigned track as a bounded coverage work lane. Let the authoring skill decide where any resulting guidance belongs.
 - Respect the track's owns/excludes boundaries. Do not duplicate sibling-track material already covered in the current file map.
 - Add or revise the smallest set of files needed for this track. Return only changed or new files, with full file contents.
 - If the current file map already covers this track well, return an empty files array and explain exactly where the current files satisfy the track's required evidence. Topic names or sink catalogs alone do not count as coverage.
 - A compact SKILL.md taxonomy or routing table does not count as full coverage for a broad security track unless the required evidence, false-positive controls, and remediation guidance are present inline.
 - If the current file map routes this track to a missing local reference, return that reference file or revise the routing. Do not leave broken routes for the reviewer to discover.
-- Do not create \`references/tracks/\`. If adding references, use lookup-topic paths like \`references/authentication.md\` or \`references/injection.md\`.
-- Deepen weak shared references instead of adding a sibling file when the problem is missing exploit evidence, safe lookalikes, or remediation detail.
+- Prefer deepening the existing chosen structure over adding parallel artifacts when the problem is missing exploit evidence, safe lookalikes, or remediation detail.
 - Keep generated runtime artifacts free of authoring metadata, validation summaries, and custom output/report schemas.
 - The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Preserve external sources the current file map still depends on and add concrete external sources consulted during this task.
 
@@ -279,13 +267,13 @@ Review the generated Warden skill and return standards feedback only.
 
 ${wardenSkillConstraints(args)}
 
-Use "remind them what you told them" discipline:
+Review behavior:
 - Use the authoring skill again as the validation anchor.
 - Check whether the generated files followed the plan, the authoring skill, and Warden constraints.
-- Check for over-broad topic-bucket references, catalog-only references, missing source depth, stale gap/provenance language, generated-skill metadata, missing routes, and custom output/report formats that conflict with Warden's injected report schema.
-- Set valid to false for concrete quality failures that need one writer pass: a routed reference that lacks a lookup question, missing exploit/task evidence, missing false-positive controls for a risky domain, missing remediation/examples where the plan required them, broad ecosystem output with no sources or recorded gaps, or a long reference that needs navigation or splitting by lookup need.
+- Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth, stale gap/provenance language, generated-skill metadata, missing local artifacts, and custom output/report formats that conflict with Warden's injected report schema.
+- Set valid to false for concrete quality failures that need one writer pass: missing exploit/task evidence, missing false-positive controls for a risky domain, missing remediation/examples where the plan required them, broad ecosystem output with no sources or recorded gaps, broken local artifact links, or a structure that the authoring skill would reject.
 - Set valid to false when the skill claims broad security coverage but the source base is too thin for that claim. Taxonomy-only sources, a handful of generic sources, or provenance that omits exploit/safe-counterexample/remediation evidence are not enough unless the gap is explicitly recorded as incomplete work.
-- Set valid to false for any missing routed local file. That is a mechanical runnability failure, not a stylistic layout preference.
+- Set valid to false for any missing local artifact needed by returned runtime guidance. That is a mechanical runnability failure, not a stylistic layout preference.
 - Do not rewrite files in this review pass. Give concrete feedback; the writer revision pass will decide how to apply it.
 - Report only issues that need another writer pass. Do not report taste-level layout preferences as issues.
 - Set valid to false only when a concrete issue should trigger revision, not when you disagree with a reasonable layout choice.
@@ -338,16 +326,16 @@ Revise the generated Warden skill artifacts from standards-review feedback.
 
 ${wardenSkillConstraints(args)}
 
-Use "tell them again, but cleaner" discipline:
+Revision behavior:
 - Use the authoring skill again, starting from its SKILL.md.
 - Treat the current file map as the draft to improve, not as disposable scaffolding.
 - Apply concrete review feedback and rough validation signals when they identify broken references, malformed artifacts, authoring metadata, custom output schemas, or missing runtime guidance.
 - If feedback is only stylistic or conflicts with the authoring skill, keep the existing structure and explain why in validationNotes.
 - Return a complete file map for every generated artifact that should exist after revision.
-- If review feedback identifies missing routed files, either include those files with useful runtime content or remove the routes and record the lost coverage as a missing input. Do not return a knowingly broken router.
-- Keep the simplest adequate layout. Do not add references just to mirror tracks/tasks.
+- If review feedback identifies missing local artifacts, either include them with useful runtime content or remove the dependency and record the lost coverage as a missing input. Do not return knowingly broken local links.
+- Keep the simplest adequate layout according to the authoring skill. Do not add artifacts just to mirror tracks/tasks.
 - Preserve non-overlapping track/task guidance that is already good.
-- Fix shallow or catalog-only references by adding targeted evidence and examples, splitting by lookup need, or moving small guidance inline. Do not add bulk just to look deeper.
+- Fix shallow or catalog-only runtime guidance by adding targeted evidence and examples, restructuring by lookup need, or moving small guidance inline. Do not add bulk just to look deeper.
 - Fix source-depth failures by adding or preserving the source evidence the artifact actually depends on. If enough source discovery cannot be completed, keep the artifact incomplete and state the missing coverage instead of claiming a finished broad skill.
 - Keep generated runtime artifacts free of authoring metadata, validation summaries, and custom output/report schemas.
 - The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Preserve external sources the revised file map still depends on and add concrete external sources consulted during revision.
