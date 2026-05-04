@@ -1,4 +1,8 @@
-import type { GeneratedSkillAuthoringPlan, GeneratedSkillFileMap } from './skill-contract.js';
+import type {
+  GeneratedSkillAuthoringPlan,
+  GeneratedSkillFileMap,
+  GeneratedSkillValidationResult,
+} from './skill-contract.js';
 import type { SkillBuildOutline, SkillBuildSource } from './outline-contract.js';
 
 const GENERIC_SKILL_BUILD_MAX_TURNS = 16;
@@ -240,7 +244,7 @@ ${JSON.stringify(args.deterministicIssues, null, 2)}
 </rough_validation_issues>
 
 <instructions>
-Roughly validate the generated Warden skill.
+Review the generated Warden skill and return standards feedback only.
 
 ${wardenSkillConstraints(args)}
 
@@ -248,11 +252,9 @@ Use "remind them what you told them" discipline:
 - Use the authoring skill again as the validation anchor.
 - Check whether the generated files followed the plan, the authoring skill, and Warden constraints.
 - Check for over-broad topic-bucket references, stale gap/provenance language, generated-skill metadata, missing routes, and custom output/report formats that conflict with Warden's injected report schema.
-- If clear fixes are needed, return a complete revised file map in files, including every referenced runtime file.
-- If no fixes are needed, omit files or return an empty files array.
-- Do not return placeholder files or empty file contents. Omit unchanged files instead.
-- Report only issues that remain after any revised files you return.
-- Set valid to false only when the generated or revised files are unusable, not when you disagree with a reasonable layout choice.
+- Do not rewrite files in this review pass. Give concrete feedback; the writer revision pass will decide how to apply it.
+- Report only issues that need another writer pass. Do not report taste-level layout preferences as issues.
+- Set valid to false only when a concrete issue should trigger revision, not when you disagree with a reasonable layout choice.
 - Treat rough validation issues as advisory signals. Fix concrete broken references or malformed artifacts, but do not hard-block on taste-level layout preferences.
 
 Return JSON:
@@ -263,10 +265,69 @@ Return JSON:
   "issues": [
     {"severity": "error", "path": "SKILL.md", "message": "Problem", "suggestedFix": "Fix"}
   ],
-  "files": [
-    {"path": "SKILL.md", "content": "Full revised file contents"}
-  ],
   "missingInputs": ["Missing input, if any"]
+}
+</instructions>`;
+}
+
+export function buildAuthoringRevisionPrompt(args: {
+  outline: SkillBuildOutline;
+  source: SkillBuildSource;
+  authoringSkillRoot: string;
+  targetName: string;
+  targetRootDir: string;
+  plan: GeneratedSkillAuthoringPlan;
+  fileMap: GeneratedSkillFileMap;
+  review: GeneratedSkillValidationResult;
+  deterministicIssues: string[];
+}): string {
+  return `${contextPacket(args)}
+
+<authoring_plan>
+${JSON.stringify(args.plan, null, 2)}
+</authoring_plan>
+
+<current_file_map>
+${JSON.stringify(args.fileMap, null, 2)}
+</current_file_map>
+
+<standards_review>
+${JSON.stringify(args.review, null, 2)}
+</standards_review>
+
+<rough_validation_issues>
+${JSON.stringify(args.deterministicIssues, null, 2)}
+</rough_validation_issues>
+
+<instructions>
+Revise the generated Warden skill artifacts from standards-review feedback.
+
+${wardenSkillConstraints(args)}
+
+Use "tell them again, but cleaner" discipline:
+- Use the authoring skill again, starting from its SKILL.md.
+- Treat the current file map as the draft to improve, not as disposable scaffolding.
+- Apply concrete review feedback and rough validation signals when they identify broken references, malformed artifacts, authoring metadata, custom output schemas, or missing runtime guidance.
+- If feedback is only stylistic or conflicts with the authoring skill, keep the existing structure and explain why in validationNotes.
+- Return a complete file map for every generated artifact that should exist after revision.
+- Keep the simplest adequate layout. Do not add references just to mirror tracks/tasks.
+- Preserve non-overlapping track/task guidance that is already good.
+- Keep generated runtime artifacts free of authoring metadata, validation summaries, and custom output/report schemas.
+- The externalSources array is only for concrete external sources you actually consulted during revision.
+
+Return JSON:
+{
+  "version": 1,
+  "name": "${args.targetName}",
+  "files": [
+    {"path": "SKILL.md", "content": "Full file contents"}
+  ],
+  "summary": "What was revised.",
+  "validationNotes": ["Self-check note"],
+  "missingInputs": ["Missing input, if any"],
+  "externalSources": [
+    {"title": "Source title", "url": "https://example.com", "reason": "Why this source informed the revision"}
+  ]
 }
 </instructions>`;
 }

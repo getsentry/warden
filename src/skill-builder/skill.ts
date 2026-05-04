@@ -35,6 +35,7 @@ import {
   authoringSystemPrompt,
   buildAuthoringImplementationPrompt,
   buildAuthoringPlanPrompt,
+  buildAuthoringRevisionPrompt,
   buildAuthoringTrackContributionPrompt,
   buildAuthoringValidationPrompt,
   defaultBuildMaxTurns,
@@ -43,6 +44,7 @@ import {
 
 const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 4;
 const LONG_REFERENCE_LINE_LIMIT = 100;
+const MAX_SKILL_REVISION_ATTEMPTS = 1;
 const SKILL_FRONTMATTER_PATTERN = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 type GeneratedSkillValidationIssue = GeneratedSkillValidationResult['issues'][number];
 
@@ -662,49 +664,6 @@ function hasCanonicalPathChanges(files: { path: string }[]): boolean {
   return files.some((file) => canonicalGeneratedArtifactPath(file.path) !== file.path);
 }
 
-function applyValidationResult(args: {
-  original: GeneratedSkillFileMap;
-  validation: GeneratedSkillValidationResult;
-  targetName: string;
-  outline: SkillBuildOutline;
-}): GeneratedSkillFileMap {
-  if (!args.validation.files || args.validation.files.length === 0) {
-    return args.original;
-  }
-  const replacementFiles = args.validation.files.filter((file) => file.content.trim().length > 0);
-  if (!replacementFiles.some((file) => file.path === 'SKILL.md')) {
-    return args.original;
-  }
-  const candidate = {
-    ...args.original,
-    files: [
-      ...args.original.files.filter(
-        (file) => !replacementFiles.some((replacement) => replacement.path === file.path),
-      ),
-      ...replacementFiles,
-    ],
-    validationNotes: [
-      ...args.original.validationNotes,
-      args.validation.summary,
-      ...args.validation.issues.map((issue) => `${issue.severity}: ${issue.message}`),
-    ],
-    missingInputs: [
-      ...args.original.missingInputs,
-      ...args.validation.missingInputs,
-    ],
-  };
-  const fileMap = prepareGeneratedFileMap(candidate, args.targetName, args.outline);
-  const validation = deterministicValidation({
-    fileMap,
-    targetName: args.targetName,
-  });
-  if (validation.errors.length > 0) {
-    return args.original;
-  }
-
-  return fileMap;
-}
-
 function advisoryProviderIssues(
   validation: GeneratedSkillValidationResult,
 ): GeneratedSkillValidationIssue[] {
@@ -719,6 +678,10 @@ function advisoryProviderIssues(
     });
   }
   return issues;
+}
+
+function reviewNeedsRevision(validation: GeneratedSkillValidationResult): boolean {
+  return !validation.valid || validation.issues.length > 0;
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -1160,45 +1123,96 @@ export async function buildGeneratedSkill(args: {
       }
     }
 
-    const initialFileMap = workingFileMap;
-    const initialDeterministic = deterministicValidation({
-      fileMap: initialFileMap,
-      targetName: args.outline.skill,
-    });
+    const reviewResults: {
+      data: GeneratedSkillValidationResult;
+      usage: UsageStats;
+      responseModel?: string;
+      numTurns?: number;
+    }[] = [];
+    const revisionResults: {
+      usage: UsageStats;
+      responseModel?: string;
+      numTurns?: number;
+    }[] = [];
 
-    args.onStatus?.('Validating generated skill');
-    const validation = await runStructuredSkillBuilderAgent({
-      runtime: args.runtime,
-      repoPath: args.repoPath,
-      skillName: `${args.outline.skill}:authoring-validation`,
-      systemPrompt: authoringSystemPrompt(),
-      userPrompt: buildAuthoringValidationPrompt({
-        outline: args.outline,
-        source: args.source,
-        authoringSkillRoot: authoringProvider.rootDir,
+    let latestReview: GeneratedSkillValidationResult | undefined;
+    for (let reviewRound = 0; reviewRound <= MAX_SKILL_REVISION_ATTEMPTS; reviewRound += 1) {
+      const deterministic = deterministicValidation({
+        fileMap: workingFileMap,
         targetName: args.outline.skill,
-        targetRootDir: args.rootDir,
-        plan: plan.data,
-        fileMap: initialFileMap,
-        deterministicIssues: formatDeterministicIssues(initialDeterministic),
-      }),
-      schema: GeneratedSkillValidationResultSchema,
-      model: args.model,
-      maxTurns: Math.min(maxTurns, defaultValidationMaxTurns()),
-      abortController: args.abortController,
-      repair,
-    });
+      });
 
-    const fileMap = prepareGeneratedFileMap(
-      applyValidationResult({
-        original: initialFileMap,
-        validation: validation.data,
-        targetName: args.outline.skill,
-        outline: args.outline,
-      }),
-      args.outline.skill,
-      args.outline,
-    );
+      args.onStatus?.(reviewRound === 0
+        ? 'Reviewing generated skill'
+        : 'Reviewing revised skill');
+      const review = await runStructuredSkillBuilderAgent({
+        runtime: args.runtime,
+        repoPath: args.repoPath,
+        skillName: `${args.outline.skill}:authoring-validation`,
+        systemPrompt: authoringSystemPrompt(),
+        userPrompt: buildAuthoringValidationPrompt({
+          outline: args.outline,
+          source: args.source,
+          authoringSkillRoot: authoringProvider.rootDir,
+          targetName: args.outline.skill,
+          targetRootDir: args.rootDir,
+          plan: plan.data,
+          fileMap: workingFileMap,
+          deterministicIssues: formatDeterministicIssues(deterministic),
+        }),
+        schema: GeneratedSkillValidationResultSchema,
+        model: args.model,
+        maxTurns: Math.min(maxTurns, defaultValidationMaxTurns()),
+        abortController: args.abortController,
+        repair,
+      });
+      reviewResults.push(review);
+      latestReview = review.data;
+
+      if (
+        !reviewNeedsRevision(review.data) ||
+        revisionResults.length >= MAX_SKILL_REVISION_ATTEMPTS
+      ) {
+        break;
+      }
+
+      args.onStatus?.('Revising generated skill');
+      const revision = await runStructuredSkillBuilderAgent({
+        runtime: args.runtime,
+        repoPath: args.repoPath,
+        skillName: `${args.outline.skill}:authoring-revision`,
+        systemPrompt: authoringSystemPrompt(),
+        userPrompt: buildAuthoringRevisionPrompt({
+          outline: args.outline,
+          source: args.source,
+          authoringSkillRoot: authoringProvider.rootDir,
+          targetName: args.outline.skill,
+          targetRootDir: args.rootDir,
+          plan: plan.data,
+          fileMap: workingFileMap,
+          review: review.data,
+          deterministicIssues: formatDeterministicIssues(deterministic),
+        }),
+        schema: GeneratedSkillFileMapSchema,
+        model: args.model,
+        maxTurns,
+        abortController: args.abortController,
+        repair,
+      });
+      if (revision.data.name !== args.outline.skill) {
+        throw new GeneratedSkillBuildError(
+          `Generated skill identity mismatch: expected ${args.outline.skill}, got ${revision.data.name}`,
+        );
+      }
+      revisionResults.push(revision);
+      workingFileMap = prepareGeneratedFileMap(
+        revision.data,
+        args.outline.skill,
+        args.outline,
+      );
+    }
+
+    const fileMap = workingFileMap;
     const finalDeterministic = deterministicValidation({
       fileMap,
       targetName: args.outline.skill,
@@ -1208,25 +1222,28 @@ export async function buildGeneratedSkill(args: {
         `Generated skill build did not produce SKILL.md for ${args.outline.skill}`,
       );
     }
-    const providerIssues = advisoryProviderIssues(validation.data);
+    const providerIssues = latestReview ? advisoryProviderIssues(latestReview) : [];
 
     const usage = aggregateUsage([
       plan.usage,
       implementation.usage,
       ...contributionResults.map((result) => result.usage),
-      validation.usage,
+      ...reviewResults.map((result) => result.usage),
+      ...revisionResults.map((result) => result.usage),
     ]);
     const responseModel = summarizeResponseModel([
       plan.responseModel,
       implementation.responseModel,
       ...contributionResults.map((result) => result.responseModel),
-      validation.responseModel,
+      ...reviewResults.map((result) => result.responseModel),
+      ...revisionResults.map((result) => result.responseModel),
     ]);
     const numTurns = summarizeTurns([
       plan.numTurns,
       implementation.numTurns,
       ...contributionResults.map((result) => result.numTurns),
-      validation.numTurns,
+      ...reviewResults.map((result) => result.numTurns),
+      ...revisionResults.map((result) => result.numTurns),
     ]);
 
     const artifact = writeGeneratedArtifact({
@@ -1257,7 +1274,7 @@ export async function buildGeneratedSkill(args: {
         missingInputs: [
           ...plan.data.missingInputs,
           ...artifact.missingInputs,
-          ...validation.data.missingInputs,
+          ...reviewResults.flatMap((result) => result.data.missingInputs),
         ],
         responseModel: artifact.responseModel,
         numTurns: artifact.numTurns,
@@ -1271,7 +1288,7 @@ export async function buildGeneratedSkill(args: {
       missingInputs: [
         ...plan.data.missingInputs,
         ...artifact.missingInputs,
-        ...validation.data.missingInputs,
+        ...reviewResults.flatMap((result) => result.data.missingInputs),
       ],
     };
   } catch (error) {

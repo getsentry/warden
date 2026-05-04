@@ -508,7 +508,7 @@ Read \`references/tracks/authentication.md\` for login and session changes.
     expect(runSkill).not.toHaveBeenCalled();
   });
 
-  it('lets the validation pass return revised files', async () => {
+  it('feeds standards feedback to a revision writer', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -522,6 +522,7 @@ Read \`references/tracks/authentication.md\` for login and session changes.
       'Review changed hunks for exploitable security issues.',
       'Review changed hunks for exploitable security issues. Trace before reporting.',
     );
+    let reviewCalls = 0;
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
       if (request.skillName.endsWith(':authoring-plan')) {
         return {
@@ -566,28 +567,54 @@ Read \`references/tracks/authentication.md\` for login and session changes.
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [
+                { path: 'SKILL.md', content: revisedSkill },
+                {
+                  path: 'references/security.md',
+                  content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
+                },
+              ],
+              summary: 'Revised the runtime instruction.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      reviewCalls += 1;
       return {
         result: {
           status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: true,
-            summary: 'Revised the runtime instruction.',
-            issues: [{
-              severity: 'warning',
-              path: 'SKILL.md',
-              message: 'Runtime instruction should be more explicit.',
-              suggestedFix: 'Add trace guidance.',
-            }],
-            files: [
-              { path: 'SKILL.md', content: revisedSkill },
-              {
-                path: 'references/security.md',
-                content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
-              },
-            ],
-            missingInputs: [],
-          }),
+          text: JSON.stringify(reviewCalls === 1
+            ? {
+              version: 1,
+              valid: false,
+              summary: 'Runtime instruction should be more explicit.',
+              issues: [{
+                severity: 'warning',
+                path: 'SKILL.md',
+                message: 'Runtime instruction should be more explicit.',
+                suggestedFix: 'Add trace guidance.',
+              }],
+              missingInputs: [],
+            }
+            : {
+              version: 1,
+              valid: true,
+              summary: 'Revised skill passes standards.',
+              issues: [],
+              missingInputs: [],
+            }),
           errors: [],
           usage: usage(),
         },
@@ -610,13 +637,15 @@ Read \`references/tracks/authentication.md\` for login and session changes.
     });
 
     expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toContain('Trace before reporting.');
+    expect(runSkill.mock.calls.map((call) => call[0].skillName)).toEqual([
+      'wrdn-security:authoring-plan',
+      'wrdn-security:authoring-implementation',
+      'wrdn-security:authoring-validation',
+      'wrdn-security:authoring-revision',
+      'wrdn-security:authoring-validation',
+    ]);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.validationIssues).toEqual([{
-      severity: 'warning',
-      path: 'SKILL.md',
-      message: 'Runtime instruction should be more explicit.',
-      suggestedFix: 'Add trace guidance.',
-    }]);
+    expect(state?.artifact?.validationIssues).toEqual([]);
   });
 
   it('ignores empty placeholder files returned by validation', async () => {
@@ -717,7 +746,7 @@ Read \`references/tracks/authentication.md\` for login and session changes.
     expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8').trim()).not.toBe('');
   });
 
-  it('applies validation revisions while ignoring empty placeholder files', async () => {
+  it('applies revision writer output after review feedback', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -731,6 +760,7 @@ Read \`references/tracks/authentication.md\` for login and session changes.
       'Review changed hunks for exploitable security issues.',
       'Review changed hunks for exploitable security issues. Trace before reporting.',
     );
+    let reviewCalls = 0;
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
       if (request.skillName.endsWith(':authoring-plan')) {
         return {
@@ -775,20 +805,53 @@ Read \`references/tracks/authentication.md\` for login and session changes.
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [
+                { path: 'SKILL.md', content: revisedSkill },
+                {
+                  path: 'references/security.md',
+                  content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
+                },
+              ],
+              summary: 'Applied review feedback.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      reviewCalls += 1;
       return {
         result: {
           status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: true,
-            summary: 'Revised the runtime instruction.',
-            issues: [],
-            files: [
-              { path: 'SKILL.md', content: revisedSkill },
-              { path: 'references/placeholder.md', content: '' },
-            ],
-            missingInputs: [],
-          }),
+          text: JSON.stringify(reviewCalls === 1
+            ? {
+              version: 1,
+              valid: false,
+              summary: 'Needs a more explicit runtime instruction.',
+              issues: [{
+                severity: 'warning',
+                path: 'SKILL.md',
+                message: 'Runtime instruction should be more explicit.',
+              }],
+              missingInputs: [],
+            }
+            : {
+              version: 1,
+              valid: true,
+              summary: 'Revised skill passes standards.',
+              issues: [],
+              missingInputs: [],
+            }),
           errors: [],
           usage: usage(),
         },
@@ -814,7 +877,7 @@ Read \`references/tracks/authentication.md\` for login and session changes.
     expect(existsSync(join(rootDir, 'references', 'placeholder.md'))).toBe(false);
   });
 
-  it('merges and backfills partial replacement file maps returned by validation', async () => {
+  it('backfills routed references added by revision writer output', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -831,6 +894,7 @@ description: Use when asked to review code for exploitable security issues.
 
 Read \`references/missing.md\` before reporting.
 `;
+    let reviewCalls = 0;
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
       if (request.skillName.endsWith(':authoring-plan')) {
         return {
@@ -875,17 +939,53 @@ Read \`references/missing.md\` before reporting.
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [
+                { path: 'SKILL.md', content: incompleteSkill },
+                {
+                  path: 'references/security.md',
+                  content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
+                },
+              ],
+              summary: 'Added missing route guidance.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      reviewCalls += 1;
       return {
         result: {
           status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: true,
-            summary: 'The generated skill is valid; revised files are included.',
-            issues: [],
-            files: [{ path: 'SKILL.md', content: incompleteSkill }],
-            missingInputs: [],
-          }),
+          text: JSON.stringify(reviewCalls === 1
+            ? {
+              version: 1,
+              valid: false,
+              summary: 'A route should be added for the missing reference.',
+              issues: [{
+                severity: 'warning',
+                path: 'SKILL.md',
+                message: 'Add the missing route.',
+              }],
+              missingInputs: [],
+            }
+            : {
+              version: 1,
+              valid: true,
+              summary: 'Revised skill passes standards.',
+              issues: [],
+              missingInputs: [],
+            }),
           errors: [],
           usage: usage(),
         },
@@ -1378,6 +1478,7 @@ Read \`references/output-format.md\` before changing output behavior.
     const buildOutline = outline();
     writeInitialState(rootDir, buildOutline);
 
+    let reviewCalls = 0;
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
       if (request.skillName.endsWith(':authoring-plan')) {
         return {
@@ -1416,24 +1517,51 @@ Read \`references/output-format.md\` before changing output behavior.
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: skillMd() }],
+              summary: 'Re-emitted the routed skill for reference backfill.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      reviewCalls += 1;
       return {
         result: {
           status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: false,
-            summary: 'Provider saw the original file map as incomplete.',
-            issues: [{
-              severity: 'error',
-              path: 'generated_file_map',
-              message: 'Files array only contains SKILL.md but SKILL.md routes reference files that are not included.',
-            }, {
-              severity: 'error',
-              path: 'references/',
-              message: 'Missing all reference files that SKILL.md routes to.',
-            }],
-            missingInputs: [],
-          }),
+          text: JSON.stringify(reviewCalls === 1
+            ? {
+              version: 1,
+              valid: false,
+              summary: 'Provider saw the original file map as incomplete.',
+              issues: [{
+                severity: 'error',
+                path: 'generated_file_map',
+                message: 'Files array only contains SKILL.md but SKILL.md routes reference files that are not included.',
+              }, {
+                severity: 'error',
+                path: 'references/',
+                message: 'Missing all reference files that SKILL.md routes to.',
+              }],
+              missingInputs: [],
+            }
+            : {
+              version: 1,
+              valid: true,
+              summary: 'Revised skill passes standards.',
+              issues: [],
+              missingInputs: [],
+            }),
           errors: [],
           usage: usage(),
         },
@@ -1462,15 +1590,7 @@ Read \`references/output-format.md\` before changing output behavior.
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.fileManifest.some((file) => file.path === 'references/security.md'))
       .toBe(true);
-    expect(state?.artifact?.validationIssues).toEqual([{
-      severity: 'warning',
-      path: 'generated_file_map',
-      message: 'Files array only contains SKILL.md but SKILL.md routes reference files that are not included.',
-    }, {
-      severity: 'warning',
-      path: 'references/',
-      message: 'Missing all reference files that SKILL.md routes to.',
-    }]);
+    expect(state?.artifact?.validationIssues).toEqual([]);
   });
 
   it('does not rewrite routed reference content based on filename heuristics', async () => {
@@ -1831,6 +1951,30 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [
+                { path: 'SKILL.md', content: skillMd() },
+                {
+                  path: 'references/security.md',
+                  content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
+                },
+              ],
+              summary: 'Kept the current layout after review.',
+              validationNotes: ['Navigation warning remains advisory.'],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
       return {
         result: {
           status: 'success',
@@ -1916,6 +2060,24 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
               files: [{ path: 'SKILL.md', content: inlineSkillMd() }],
               summary: 'Generated.',
               validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: inlineSkillMd() }],
+              summary: 'Kept the current runtime guidance after review.',
+              validationNotes: ['Reviewer still considers the skill shallow.'],
               missingInputs: [],
               externalSources: [],
             }),
