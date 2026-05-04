@@ -25,8 +25,7 @@ function isValidGeneratedArtifactPath(path: string): boolean {
 
 // The authoring plan is meant to describe semantic coverage, source depth,
 // sequential work, and review criteria. It must not become an artifact-layout
-// plan. `candidatePaths` is retained only for backwards-compatible parsing of
-// older plans; prompts should not rely on it as a file-placement contract.
+// plan; the authoring skill owns artifact placement and routing choices.
 export const GeneratedSkillAuthoringPlanSchema = z.object({
   version: z.literal(1),
   summary: z.string().min(1),
@@ -41,7 +40,6 @@ export const GeneratedSkillAuthoringPlanSchema = z.object({
     question: z.string().min(1),
     openWhen: z.string().min(1),
     requiredEvidence: z.array(z.string().min(1)).min(1),
-    candidatePaths: z.array(z.string().min(1)).default([]),
   }).strict()).default([]),
   qualityBar: z.array(z.string().min(1)).default([]),
   artifactPlan: z.array(z.string().min(1)).min(1),

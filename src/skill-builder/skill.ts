@@ -42,7 +42,7 @@ import {
   defaultValidationMaxTurns,
 } from './skill-prompts.js';
 
-const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 4;
+const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 5;
 const MAX_SKILL_REVISION_ATTEMPTS = 1;
 const SKILL_FRONTMATTER_PATTERN = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
@@ -114,74 +114,6 @@ function fileManifest(files: { path: string; content: string }[]): {
 function normalizeFileContent(content: string): string {
   const normalized = content.replace(/\r\n/g, '\n');
   return normalized.endsWith('\n') ? normalized : `${normalized}\n`;
-}
-
-function canonicalGeneratedArtifactPath(path: string): string {
-  if (path.startsWith('references/tracks/')) {
-    return `references/${path.slice('references/tracks/'.length)}`;
-  }
-  return path;
-}
-
-function rewriteGeneratedArtifactPathReferences(content: string, pathMap: Map<string, string>): string {
-  let rewritten = content;
-  const entries = [...pathMap.entries()]
-    .filter(([from, to]) => from !== to)
-    .sort((a, b) => b[0].length - a[0].length);
-  for (const [from, to] of entries) {
-    rewritten = rewritten.split(from).join(to);
-  }
-  return rewritten;
-}
-
-function canonicalizeGeneratedFileMapPaths(fileMap: GeneratedSkillFileMap): GeneratedSkillFileMap {
-  const pathMap = new Map<string, string>();
-  const changedPaths: [string, string][] = [];
-  for (const file of fileMap.files) {
-    const canonicalPath = canonicalGeneratedArtifactPath(file.path);
-    pathMap.set(file.path, canonicalPath);
-    if (file.path !== canonicalPath) {
-      changedPaths.push([file.path, canonicalPath]);
-    }
-    if (canonicalPath.startsWith('references/')) {
-      pathMap.set(`references/tracks/${canonicalPath.slice('references/'.length)}`, canonicalPath);
-    }
-  }
-
-  const files = new Map<string, {
-    path: string;
-    content: string;
-  }>();
-  let contentChanged = false;
-  for (const file of fileMap.files) {
-    const path = pathMap.get(file.path) ?? file.path;
-    const content = rewriteGeneratedArtifactPathReferences(file.content, pathMap);
-    contentChanged ||= content !== file.content;
-    const existing = files.get(path);
-    if (!existing || content.length > existing.content.length) {
-      files.set(path, { path, content });
-    }
-  }
-
-  if (changedPaths.length === 0 && !contentChanged) {
-    return fileMap;
-  }
-
-  const validationNotes = [...fileMap.validationNotes];
-  if (changedPaths.length > 0) {
-    validationNotes.push(
-      `Flattened generated reference path(s): ${changedPaths
-        .map(([from, to]) => `${from} -> ${to}`)
-        .sort()
-        .join(', ')}`,
-    );
-  }
-
-  return {
-    ...fileMap,
-    files: [...files.values()].sort((a, b) => a.path.localeCompare(b.path)),
-    validationNotes,
-  };
 }
 
 function skillFrontmatter(content: string): Record<string, unknown> | undefined {
@@ -356,10 +288,7 @@ function prepareGeneratedFileMap(
   fileMap: GeneratedSkillFileMap,
   targetName: string,
 ): GeneratedSkillFileMap {
-  return normalizeGeneratedFileMap(
-    canonicalizeGeneratedFileMapPaths(fileMap),
-    targetName,
-  );
+  return normalizeGeneratedFileMap(fileMap, targetName);
 }
 
 function deterministicValidation(args: {
@@ -417,16 +346,6 @@ function deterministicValidation(args: {
     }
   }
 
-  const hasRuntimeReferences = referenceFiles.length > 0;
-  const sources = files.get('SOURCES.md');
-  if (
-    hasRuntimeReferences &&
-    sources &&
-    /\b(deferred|future passes|next pass|not covered in this pass)\b/i.test(sources)
-  ) {
-    warnings.push('SOURCES.md appears to contain stale deferred-work language while references exist');
-  }
-
   return { errors, warnings };
 }
 
@@ -446,10 +365,6 @@ function hasMissingGeneratedFileWarning(validation: {
   return validation.warnings.some((warning) =>
     warning.includes('generated file map does not include it'),
   );
-}
-
-function hasCanonicalPathChanges(files: { path: string }[]): boolean {
-  return files.some((file) => canonicalGeneratedArtifactPath(file.path) !== file.path);
 }
 
 function reviewNeedsRevision(review: GeneratedSkillReviewResult): boolean {
@@ -543,9 +458,7 @@ function applyContributionResult(args: {
     ...args.original,
     files: [
       ...args.original.files.filter(
-        (file) => !changedFiles.some((changed) =>
-          canonicalGeneratedArtifactPath(changed.path) === canonicalGeneratedArtifactPath(file.path)
-        ),
+        (file) => !changedFiles.some((changed) => changed.path === file.path),
       ),
       ...changedFiles,
     ],
@@ -612,8 +525,7 @@ function loadExistingArtifact(args: {
   });
   if (
     validation.errors.length > 0 ||
-    hasMissingGeneratedFileWarning(validation) ||
-    hasCanonicalPathChanges(args.files)
+    hasMissingGeneratedFileWarning(validation)
   ) {
     return undefined;
   }
@@ -680,8 +592,7 @@ function loadCachedArtifact(args: {
   });
   if (
     validation.errors.length > 0 ||
-    hasMissingGeneratedFileWarning(validation) ||
-    hasCanonicalPathChanges(files)
+    hasMissingGeneratedFileWarning(validation)
   ) {
     const normalizedFileMap = prepareGeneratedFileMap(
       {
@@ -789,12 +700,11 @@ function normalizeGeneratedFileMap(
   fileMap: GeneratedSkillFileMap,
   targetName = fileMap.name,
 ): GeneratedSkillFileMap {
-  const canonicalFileMap = canonicalizeGeneratedFileMapPaths(fileMap);
-  const retainedFiles = canonicalFileMap.files
-    .filter((file) => !shouldOmitGeneratedArtifact(canonicalFileMap, file));
+  const retainedFiles = fileMap.files
+    .filter((file) => !shouldOmitGeneratedArtifact(fileMap, file));
   const retainedPaths = new Set(retainedFiles.map((file) => file.path));
   return {
-    ...canonicalFileMap,
+    ...fileMap,
     files: retainedFiles
       .map((file) => ({
         path: file.path,
@@ -804,7 +714,7 @@ function normalizeGeneratedFileMap(
               stripOutputContractSections(file.content),
               retainedPaths,
             ),
-            fileMap: canonicalFileMap,
+            fileMap,
             targetName,
           })
           : file.content),
@@ -1101,7 +1011,6 @@ export async function buildGeneratedSkill(args: {
         name: artifact.name,
         fileManifest: fileManifest(writtenFiles),
         deterministicWarnings: formatDeterministicIssues(finalDeterministic),
-        validationIssues: [],
         bytes: artifact.bytes,
         durationMs: artifact.durationMs,
         usage: artifact.usage,

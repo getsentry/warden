@@ -11,7 +11,7 @@ export const SKILL_BUILD_STATE_SCHEMA_VERSION = 1;
 export const SKILL_BUILD_STATE_KIND = 'skill-build-state';
 
 export const GeneratedSkillArtifactStateSchema = z.object({
-  version: z.literal(4),
+  version: z.literal(5),
   sourceHash: z.string().min(1),
   outlineHash: z.string().min(1),
   buildVersion: z.string().min(1),
@@ -26,12 +26,6 @@ export const GeneratedSkillArtifactStateSchema = z.object({
     bytes: z.number().int().nonnegative(),
   }).strict()).min(1),
   deterministicWarnings: z.array(z.string().min(1)).default([]),
-  validationIssues: z.array(z.object({
-    severity: z.enum(['error', 'warning']),
-    path: z.string().optional(),
-    message: z.string().min(1),
-    suggestedFix: z.string().optional(),
-  }).strict()).default([]),
   bytes: z.number().int().nonnegative(),
   durationMs: z.number().nonnegative(),
   usage: UsageStatsSchema,

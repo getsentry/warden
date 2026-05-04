@@ -77,7 +77,7 @@ describe('skill build state', () => {
         numTurns: 1,
       },
       artifact: {
-        version: 4,
+        version: 5,
         sourceHash: 'source-hash',
         outlineHash: 'outline-hash',
         buildVersion: '1',
@@ -92,7 +92,6 @@ describe('skill build state', () => {
           { path: 'references/auth-bypass.md', bytes: 512 },
         ],
         deterministicWarnings: [],
-        validationIssues: [],
         bytes: 1024,
         durationMs: 5000,
         usage: {

@@ -125,8 +125,7 @@ Return JSON:
     {
       "question": "Lookup question the reference or inline section must answer",
       "openWhen": "When the runtime agent should open or use it",
-      "requiredEvidence": ["Evidence or example this lookup must include"],
-      "candidatePaths": ["references/example.md"]
+      "requiredEvidence": ["Evidence or example this lookup must include"]
     }
   ],
   "qualityBar": ["Concrete depth requirement for the writer and reviewer"],

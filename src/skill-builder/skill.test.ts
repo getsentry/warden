@@ -282,7 +282,6 @@ describe('buildGeneratedSkill', () => {
     expect(planPrompt).toContain(`Use the full authoring skill at \`${authoringSkillRoot}\``);
     expect(planPrompt).toContain('Let the authoring skill decide the simplest adequate artifact layout');
     expect(planPrompt).toContain('Treat outline tracks/tasks as work lanes for coverage and sequencing');
-    expect(planPrompt).not.toContain('references/tracks/');
     expect(planPrompt).toContain('Do not include Output Format, Output Contract, Response Format, or custom reporting schema sections');
     expect(planPrompt).toContain('Build the authoring brief first');
     expect(planPrompt).toContain('without turning tracks into layout rules');
@@ -302,7 +301,7 @@ describe('buildGeneratedSkill', () => {
     expect(validationPrompt).toContain('Treat rough validation issues as advisory signals');
 
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.version).toBe(4);
+    expect(state?.artifact?.version).toBe(5);
     expect(state?.artifact?.authoringProvider.rootDir).toBe(authoringSkillRoot);
     expect(state?.artifact?.fileManifest.map((file) => file.path).sort()).toEqual([
       'SKILL.md',
@@ -315,7 +314,7 @@ describe('buildGeneratedSkill', () => {
     }]);
   });
 
-  it('runs sequential track contributions without turning tracks into directories', async () => {
+  it('runs sequential track contributions without turning tracks into artifact layout', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -388,7 +387,7 @@ describe('buildGeneratedSkill', () => {
             text: JSON.stringify({
               version: 1,
               files: [{
-                path: 'references/tracks/security.md',
+                path: 'references/security.md',
                 content: '# Security Review\n\nTrace attacker-controlled input before reporting.\n',
               }],
               summary: 'Added security checks.',
@@ -413,12 +412,12 @@ describe('buildGeneratedSkill', () => {
                   content: `${inlineSkillMd()}
 ## References
 
-Read \`references/tracks/security.md\` for general exploitability checks.
-Read \`references/tracks/authentication.md\` for login and session changes.
+Read \`references/security.md\` for general exploitability checks.
+Read \`references/authentication.md\` for login and session changes.
 `,
                 },
                 {
-                  path: 'references/tracks/authentication.md',
+                  path: 'references/authentication.md',
                   content: '# Authentication Review\n\nTrace identity checks and session state before reporting.\n',
                 },
               ],
@@ -470,19 +469,16 @@ Read \`references/tracks/authentication.md\` for login and session changes.
       'wrdn-security:authoring-track-authentication',
       'wrdn-security:authoring-validation',
     ]);
-    expect(existsSync(join(rootDir, 'references', 'tracks'))).toBe(false);
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
     expect(existsSync(join(rootDir, 'references', 'authentication.md'))).toBe(true);
     const writtenSkill = readFileSync(join(rootDir, 'SKILL.md'), 'utf-8');
     expect(writtenSkill).toContain('references/security.md');
     expect(writtenSkill).toContain('references/authentication.md');
-    expect(writtenSkill).not.toContain('references/tracks/');
 
     const trackPrompt = runSkill.mock.calls[2]![0].userPrompt;
     expect(trackPrompt).toContain('Treat the assigned track as a bounded coverage work lane');
     expect(trackPrompt).toContain('Let the authoring skill decide where any resulting guidance belongs');
     expect(trackPrompt).toContain('Topic names or sink catalogs alone do not count as coverage');
-    expect(trackPrompt).not.toContain('references/tracks/');
   });
 
   it('reuses valid existing artifacts when artifact metadata is missing or legacy', async () => {
@@ -555,7 +551,6 @@ Read \`references/tracks/authentication.md\` for login and session changes.
         question: 'How do I prove command injection in changed code?',
         openWhen: 'The hunk builds process commands from external input.',
         requiredEvidence: ['source-to-shell dataflow', 'safe argv counterexample'],
-        candidatePaths: ['references/command-execution.md'],
       }],
       qualityBar: ['Reject catalog-only references without exploit and fix examples.'],
       artifactPlan: ['Use a compact SKILL.md router plus focused references'],
@@ -708,11 +703,6 @@ Read \`references/tracks/authentication.md\` for login and session changes.
       'wrdn-security:authoring-revision',
       'wrdn-security:authoring-validation',
     ]);
-    expect(runSkill.mock.calls[2]![0].userPrompt).not.toContain(
-      'Flattened generated reference path(s)',
-    );
-    const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.validationIssues).toEqual([]);
   });
 
   it('applies revision writer output after review feedback', async () => {
@@ -1659,7 +1649,6 @@ Read \`references/output-format.md\` before changing output behavior.
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.fileManifest.some((file) => file.path === 'references/security.md'))
       .toBe(true);
-    expect(state?.artifact?.validationIssues).toEqual([]);
   });
 
   it('does not rewrite routed reference content based on filename heuristics', async () => {
@@ -1870,7 +1859,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       identity: {},
       outline: buildOutline,
       artifact: {
-        version: 4,
+        version: 5,
         sourceHash: source().hash,
         outlineHash: outlineHash(buildOutline),
         buildVersion: buildOutline.buildVersion,
@@ -1878,7 +1867,6 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
         name: 'wrdn-security',
         fileManifest: [{ path: 'SKILL.md', bytes: cachedBytes }],
         deterministicWarnings: [],
-        validationIssues: [],
         bytes: cachedBytes,
         durationMs: 10,
         usage: usage(),
