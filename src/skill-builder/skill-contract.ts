@@ -24,7 +24,7 @@ function isValidGeneratedArtifactPath(path: string): boolean {
 }
 
 // The authoring plan is meant to describe semantic coverage, source depth,
-// sequential work, and review criteria. It must not become an artifact-layout
+// ordered work, and review criteria. It must not become an artifact-layout
 // plan; the authoring skill owns artifact placement and routing choices.
 export const GeneratedSkillAuthoringPlanSchema = z.object({
   version: z.literal(1),
@@ -65,8 +65,6 @@ export const GeneratedSkillArtifactFileSchema = z.object({
   content: z.string().min(1),
 }).strict();
 
-export type GeneratedSkillArtifactFile = z.infer<typeof GeneratedSkillArtifactFileSchema>;
-
 export const GeneratedSkillFileMapSchema = z.object({
   version: z.literal(1),
   name: z.string().min(1),
@@ -101,33 +99,6 @@ export const GeneratedSkillFileMapSchema = z.object({
 });
 
 export type GeneratedSkillFileMap = z.infer<typeof GeneratedSkillFileMapSchema>;
-
-export const GeneratedSkillContributionSchema = z.object({
-  version: z.literal(1),
-  files: z.array(GeneratedSkillArtifactFileSchema).default([]),
-  summary: z.string().min(1),
-  validationNotes: z.array(z.string().min(1)).default([]),
-  missingInputs: z.array(z.string().min(1)).default([]),
-  externalSources: z.array(z.object({
-    title: z.string().min(1),
-    url: z.string().min(1),
-    reason: z.string().min(1),
-  }).strict()).default([]),
-}).strict().superRefine((value, ctx) => {
-  const paths = new Set<string>();
-  for (const [index, file] of value.files.entries()) {
-    if (paths.has(file.path)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['files', index, 'path'],
-        message: `Duplicate generated artifact path: ${file.path}`,
-      });
-    }
-    paths.add(file.path);
-  }
-});
-
-export type GeneratedSkillContribution = z.infer<typeof GeneratedSkillContributionSchema>;
 
 export const GeneratedSkillReviewIssueSchema = z.object({
   severity: z.enum(['error', 'warning']),

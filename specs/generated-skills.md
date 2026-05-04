@@ -10,7 +10,7 @@ Good generated skills usually have:
 
 - clear runtime trigger language and scope
 - topic coverage broken into useful semantic areas
-- concrete evidence requirements, not only API or vulnerability catalogs
+- concrete evidence requirements, not only API or issue catalogs
 - false-positive controls and safe counterexamples
 - remediation guidance that points toward an actual patch
 - source provenance or explicit gaps when the skill claims broad expertise
@@ -27,7 +27,7 @@ Warden provides:
 - the generated skill goal from `warden.yaml`
 - the internal outline as planning context
 - semantic topics that need coverage
-- sequential authoring tasks or work lanes
+- ordered authoring tasks or work lanes
 - runtime constraints for Warden skills
 - source-depth expectations and known source gaps
 - a qualitative review rubric
@@ -44,7 +44,7 @@ Warden does not prescribe:
 
 The wrapper prompt should say, in effect:
 
-> Use skill-writer as the authoring method. Warden provides the goal, coverage topics, sequential tasks, source expectations, runtime constraints, and qualitative rubric. Choose the simplest artifact layout that satisfies skill-writer and the rubric.
+> Use skill-writer as the authoring method. Warden provides the goal, coverage topics, ordered tasks, source expectations, runtime constraints, and qualitative rubric. Choose the simplest artifact layout that satisfies skill-writer and the rubric.
 
 ## Topics And Tasks
 
@@ -58,7 +58,7 @@ The planner should separate coverage from execution.
 - remediation expectations
 - source requirements or gaps
 
-`tasks` are sequential authoring work items. A task tells the writer what to deepen next:
+`tasks` are ordered authoring work items. A task tells the writer what to deepen:
 
 - objective
 - topic ids covered by the task
@@ -96,13 +96,12 @@ All other files are generated artifacts. The authoring provider decides whether 
 1. Reads or creates `.warden/skills/<name>/warden.yaml`
 2. Synthesizes internal Warden context for the build
 3. Resolves an authoring provider, defaulting to the vendored `src/internal-skills/skill-writer`
-4. Plans the authoring run: brief, topics, sequential tasks, source plan, and review rubric
+4. Plans the authoring run: brief, topics, ordered tasks, source plan, and review rubric
 5. Runs implementation through the authoring provider
-6. Runs sequential task passes to deepen coverage without duplicating prior work
-7. Runs qualitative review against skill-writer and Warden's acceptance bar
-8. Runs one bounded revision pass for concrete review failures
-9. Writes the returned generated file map only after final review and mechanical validation pass
-10. Stores provider/version/hash and validation metadata in build state
+6. Runs qualitative review against skill-writer and Warden's acceptance bar
+7. Runs one bounded revision pass for concrete review failures
+8. Writes the returned generated file map only after final review and mechanical validation pass
+9. Stores provider/version/hash and validation metadata in build state
 
 The internal outline is Warden context only. It is not a runnable skill and it does not prescribe the final artifact layout. It should help the planner identify topics, work lanes, source expectations, and non-overlap boundaries.
 
@@ -139,26 +138,27 @@ Expected planner concepts:
 - `authoringBrief`: goal, runtime use, audience, non-goals, and depth bar
 - `sourcePlan`: known sources, required source classes, and gaps
 - `topics`: semantic coverage requirements
-- `tasks`: sequential work items that deepen topics
+- `tasks`: ordered work items that deepen topics
 - `reviewRubric`: concrete qualitative checks for completion
 
 The planner should not propose reference filenames or imply that a topic maps to a file. Layout belongs to skill-writer.
 
-## Sequential Task Passes
+## Task Coverage
 
-Task passes are how the builder gets depth without making one giant prompt do everything.
+Tasks are how the builder communicates depth expectations without turning Warden into the artifact editor.
 
-Each task pass should:
+The implementation writer should:
 
-- inspect the current file map
-- use skill-writer again as the authoring authority
-- deepen only the assigned coverage
-- preserve good non-overlapping guidance from earlier tasks
-- avoid duplicating sibling-topic material
-- return only changed or new files, with full contents
-- explain where the current file map already satisfies the task if no changes are needed
+- use skill-writer as the authoring authority
+- treat tasks as a coverage checklist inside the single implementation pass
+- cover each task's required evidence, false-positive controls, and remediation expectations somewhere useful
+- preserve non-overlap boundaries between sibling topics
+- record missing source/context when a task cannot be covered honestly
+- return one complete file map for the chosen skill-writer layout
 
 Completion is not "this topic name appears." Completion means the generated runtime guidance gives the later Warden run enough evidence, false-positive controls, and remediation direction to make useful findings.
+
+Warden should not run automatic per-task artifact edit passes. The reviewer enforces task coverage qualitatively and gives one bounded revision pass when the generated skill is shallow, incomplete, or inconsistent with skill-writer.
 
 ## Runtime Contract
 

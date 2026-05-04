@@ -21,11 +21,9 @@ import {
 import {
   GeneratedSkillAuthoringPlanSchema,
   GeneratedSkillBuildError,
-  GeneratedSkillContributionSchema,
   GeneratedSkillFileMapSchema,
   GeneratedSkillReviewResultSchema,
   type GeneratedSkillArtifact,
-  type GeneratedSkillContribution,
   type GeneratedSkillFileMap,
   type GeneratedSkillReviewResult,
   type SkillBuildAuthoringProvider,
@@ -36,7 +34,6 @@ import {
   buildAuthoringImplementationPrompt,
   buildAuthoringPlanPrompt,
   buildAuthoringRevisionPrompt,
-  buildAuthoringTrackContributionPrompt,
   buildAuthoringValidationPrompt,
   defaultBuildMaxTurns,
   defaultValidationMaxTurns,
@@ -448,38 +445,6 @@ function mergeExternalSources(
   return [...sources.values()];
 }
 
-function applyContributionResult(args: {
-  original: GeneratedSkillFileMap;
-  contribution: GeneratedSkillContribution;
-  targetName: string;
-}): GeneratedSkillFileMap {
-  const changedFiles = args.contribution.files.filter((file) => file.content.trim().length > 0);
-  const candidate: GeneratedSkillFileMap = {
-    ...args.original,
-    files: [
-      ...args.original.files.filter(
-        (file) => !changedFiles.some((changed) => changed.path === file.path),
-      ),
-      ...changedFiles,
-    ],
-    validationNotes: uniqueStrings([
-      ...args.original.validationNotes,
-      args.contribution.summary,
-      ...args.contribution.validationNotes,
-    ]),
-    missingInputs: uniqueStrings([
-      ...args.original.missingInputs,
-      ...args.contribution.missingInputs,
-    ]),
-    externalSources: mergeExternalSources(
-      args.original.externalSources,
-      args.contribution.externalSources,
-    ),
-  };
-
-  return prepareGeneratedFileMap(candidate, args.targetName);
-}
-
 function summarizeResponseModel(models: (string | undefined)[]): string | undefined {
   const distinct = [...new Set(models.filter((model): model is string => Boolean(model)))];
   if (distinct.length === 0) {
@@ -823,42 +788,6 @@ export async function buildGeneratedSkill(args: {
       implementation.data,
       args.outline.skill,
     );
-    const contributionResults: SkillBuilderStepMetrics[] = [];
-
-    if (args.outline.tracks.length > 1) {
-      // Tracks are sequential coverage work lanes. They help the writer deepen
-      // topics without overlap, but they must not imply one file per track.
-      for (const track of args.outline.tracks) {
-        args.onStatus?.(`Adding ${track.title}`);
-        const contribution = await runStructuredSkillBuilderAgent({
-          runtime: args.runtime,
-          repoPath: args.repoPath,
-          skillName: `${args.outline.skill}:authoring-track-${track.id}`,
-          systemPrompt: authoringSystemPrompt(),
-          userPrompt: buildAuthoringTrackContributionPrompt({
-            outline: args.outline,
-            source: args.source,
-            authoringSkillRoot: authoringProvider.rootDir,
-            targetName: args.outline.skill,
-            targetRootDir: args.rootDir,
-            plan: plan.data,
-            fileMap: workingFileMap,
-            track,
-          }),
-          schema: GeneratedSkillContributionSchema,
-          model: args.model,
-          maxTurns,
-          abortController: args.abortController,
-          repair,
-        });
-        contributionResults.push(contribution);
-        workingFileMap = applyContributionResult({
-          original: workingFileMap,
-          contribution: contribution.data,
-          targetName: args.outline.skill,
-        });
-      }
-    }
 
     const reviewResults: SkillBuilderReviewResult[] = [];
     const revisionResults: SkillBuilderStepMetrics[] = [];
@@ -972,21 +901,18 @@ export async function buildGeneratedSkill(args: {
     const usage = aggregateUsage([
       plan.usage,
       implementation.usage,
-      ...contributionResults.map((result) => result.usage),
       ...reviewResults.map((result) => result.usage),
       ...revisionResults.map((result) => result.usage),
     ]);
     const responseModel = summarizeResponseModel([
       plan.responseModel,
       implementation.responseModel,
-      ...contributionResults.map((result) => result.responseModel),
       ...reviewResults.map((result) => result.responseModel),
       ...revisionResults.map((result) => result.responseModel),
     ]);
     const numTurns = summarizeTurns([
       plan.numTurns,
       implementation.numTurns,
-      ...contributionResults.map((result) => result.numTurns),
       ...reviewResults.map((result) => result.numTurns),
       ...revisionResults.map((result) => result.numTurns),
     ]);

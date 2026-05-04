@@ -200,7 +200,7 @@ JSON shape:
   "buildVersion": "${SKILL_BUILD_VERSION}",
   "scopeProfile": {
     "kind": "repository",
-    "subject": "Security review for this repo's CLI and runtime surfaces",
+    "subject": "Code review for this repo's CLI and runtime surfaces",
     "localContextUsed": true,
     "observedContext": [
       "Node.js and TypeScript runtime",
@@ -260,9 +260,9 @@ ${sourceBlocks(source)}`;
 function buildOutlineSystemPrompt(): string {
   return `You build the internal outline for one generated Warden skill.
 
-Use Read, Grep, and Glob to inspect relevant repository source before deciding how to decompose the skill when local context is needed. Use WebSearch or WebFetch for public prior art and current external documentation when framework, runtime, vulnerability, or ecosystem behavior affects the outline.
+Use Read, Grep, and Glob to inspect relevant repository source before deciding how to decompose the skill when local context is needed. Use WebSearch or WebFetch for public prior art and current external documentation when framework, runtime, risk class, or ecosystem behavior affects the outline.
 
-Do not send repository code, secrets, private file paths, or proprietary details to web tools. Use public framework, package, API, vulnerability class, and documentation names only.
+Do not send repository code, secrets, private file paths, or proprietary details to web tools. Use public framework, package, API, risk class, and documentation names only.
 
 Return only the strict JSON object requested by the user prompt. Never return prose or follow-up questions.`;
 }

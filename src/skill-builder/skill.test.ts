@@ -296,7 +296,7 @@ describe('buildGeneratedSkill', () => {
     const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
     expect(validationPrompt).toContain('Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth');
     expect(validationPrompt).toContain('Set valid to false for concrete quality failures');
-    expect(validationPrompt).toContain('claims broad security coverage but the source base is too thin');
+    expect(validationPrompt).toContain('claims broad domain coverage but the source base is too thin');
     expect(validationPrompt).toContain('Set valid to false for any missing local artifact needed by returned runtime guidance');
     expect(validationPrompt).toContain('Treat rough validation issues as advisory signals');
 
@@ -314,7 +314,7 @@ describe('buildGeneratedSkill', () => {
     }]);
   });
 
-  it('runs sequential track contributions without turning tracks into artifact layout', async () => {
+  it('uses outline tracks as single-writer coverage input without automatic track passes', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -349,8 +349,8 @@ describe('buildGeneratedSkill', () => {
             status: 'success',
             text: JSON.stringify({
               version: 1,
-              summary: 'Plan sequential work lanes.',
-              workflow: ['Read the authoring skill', 'Create a baseline router', 'Add each work lane'],
+              summary: 'Plan ordered work lanes.',
+              workflow: ['Read the authoring skill', 'Create one complete skill draft'],
               researchPlan: ['Use prompt and track boundaries'],
               artifactPlan: ['Use focused references only where needed'],
               validationPlan: ['Run rough validation'],
@@ -369,43 +369,6 @@ describe('buildGeneratedSkill', () => {
             text: JSON.stringify({
               version: 1,
               name: 'wrdn-security',
-              files: [{ path: 'SKILL.md', content: inlineSkillMd() }],
-              summary: 'Created baseline skill.',
-              validationNotes: [],
-              missingInputs: [],
-              externalSources: [],
-            }),
-            errors: [],
-            usage: usage(),
-          },
-        };
-      }
-      if (request.skillName.endsWith(':authoring-track-security')) {
-        return {
-          result: {
-            status: 'success',
-            text: JSON.stringify({
-              version: 1,
-              files: [{
-                path: 'references/security.md',
-                content: '# Security Review\n\nTrace attacker-controlled input before reporting.\n',
-              }],
-              summary: 'Added security checks.',
-              validationNotes: [],
-              missingInputs: [],
-              externalSources: [],
-            }),
-            errors: [],
-            usage: usage(),
-          },
-        };
-      }
-      if (request.skillName.endsWith(':authoring-track-authentication')) {
-        return {
-          result: {
-            status: 'success',
-            text: JSON.stringify({
-              version: 1,
               files: [
                 {
                   path: 'SKILL.md',
@@ -417,11 +380,15 @@ Read \`references/authentication.md\` for login and session changes.
 `,
                 },
                 {
+                  path: 'references/security.md',
+                  content: '# Security Review\n\nTrace attacker-controlled input before reporting.\n',
+                },
+                {
                   path: 'references/authentication.md',
                   content: '# Authentication Review\n\nTrace identity checks and session state before reporting.\n',
                 },
               ],
-              summary: 'Added authentication guidance.',
+              summary: 'Created a complete skill draft from the outline tracks.',
               validationNotes: [],
               missingInputs: [],
               externalSources: [],
@@ -431,20 +398,23 @@ Read \`references/authentication.md\` for login and session changes.
           },
         };
       }
-      return {
-        result: {
-          status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: true,
-            summary: 'Validated.',
-            issues: [],
-            missingInputs: [],
-          }),
-          errors: [],
-          usage: usage(),
-        },
-      };
+      if (request.skillName.endsWith(':authoring-validation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              valid: true,
+              summary: 'Validated all outline track coverage.',
+              issues: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      throw new Error(`Unexpected skill builder request: ${request.skillName}`);
     });
 
     await buildGeneratedSkill({
@@ -465,20 +435,25 @@ Read \`references/authentication.md\` for login and session changes.
     expect(runSkill.mock.calls.map((call) => call[0].skillName)).toEqual([
       'wrdn-security:authoring-plan',
       'wrdn-security:authoring-implementation',
-      'wrdn-security:authoring-track-security',
-      'wrdn-security:authoring-track-authentication',
       'wrdn-security:authoring-validation',
     ]);
+    expect(runSkill.mock.calls.some((call) => call[0].skillName.includes(':authoring-track-')))
+      .toBe(false);
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
     expect(existsSync(join(rootDir, 'references', 'authentication.md'))).toBe(true);
     const writtenSkill = readFileSync(join(rootDir, 'SKILL.md'), 'utf-8');
     expect(writtenSkill).toContain('references/security.md');
     expect(writtenSkill).toContain('references/authentication.md');
 
-    const trackPrompt = runSkill.mock.calls[2]![0].userPrompt;
-    expect(trackPrompt).toContain('Treat the assigned track as a bounded coverage work lane');
-    expect(trackPrompt).toContain('Let the authoring skill decide where any resulting guidance belongs');
-    expect(trackPrompt).toContain('Topic names or sink catalogs alone do not count as coverage');
+    const implementationPrompt = runSkill.mock.calls[1]![0].userPrompt;
+    expect(implementationPrompt).toContain('coverage checklist for this single writer pass');
+    expect(implementationPrompt).toContain('no automatic track contribution passes will run');
+    expect(implementationPrompt).toContain('Preserve track owns/excludes boundaries');
+
+    const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
+    expect(validationPrompt).toContain('each outline track/task is covered');
+    expect(validationPrompt).toContain('Do not require one artifact per track');
+    expect(validationPrompt).toContain('represented only by a heading, topic name, or route entry');
   });
 
   it('reuses valid existing artifacts when artifact metadata is missing or legacy', async () => {
