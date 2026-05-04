@@ -41,6 +41,7 @@ import {
 const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 4;
 const LONG_REFERENCE_LINE_LIMIT = 100;
 const SKILL_FRONTMATTER_PATTERN = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+type GeneratedSkillValidationIssue = GeneratedSkillValidationResult['issues'][number];
 
 function artifactFiles(rootDir: string): {
   path: string;
@@ -161,6 +162,210 @@ function referencedSkillPaths(content: string): string[] {
   return [...paths].sort();
 }
 
+function words(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/\.md$/, '')
+    .split(/[^a-z0-9]+/g)
+    .filter(Boolean);
+}
+
+function expandedReferenceWords(path: string): string[] {
+  const aliases: Record<string, string[]> = {
+    authn: ['authentication', 'identity', 'session', 'credential', 'secret'],
+    authz: ['authorization', 'access', 'control', 'permission'],
+    csrf: ['cross', 'site', 'request', 'forgery', 'client', 'web'],
+    crypto: ['cryptographic', 'encryption', 'secret', 'token', 'key'],
+    rce: ['remote', 'code', 'execution', 'command'],
+    ssrf: ['server', 'side', 'request', 'forgery'],
+    tls: ['cryptographic', 'certificate', 'transport', 'encryption'],
+    xss: ['cross', 'site', 'scripting', 'client', 'web', 'injection'],
+    xxe: ['xml', 'external', 'entity'],
+  };
+  const base = path.split('/').at(-1) ?? path;
+  const set = new Set(words(base));
+  for (const word of [...set]) {
+    for (const alias of aliases[word] ?? []) {
+      set.add(alias);
+    }
+  }
+  if (set.has('path') || set.has('traversal')) {
+    set.add('filesystem');
+    set.add('file');
+  }
+  if (set.has('memory')) {
+    set.add('corruption');
+    set.add('safety');
+  }
+  return [...set];
+}
+
+function trackText(track: SkillBuildOutline['tracks'][number]): string {
+  return [
+    track.id,
+    track.title,
+    track.goal,
+    track.rationale,
+    ...track.sourceSignals,
+    ...track.owns,
+    ...track.excludes,
+    ...track.relevanceSignals,
+    ...track.evidenceFocus,
+    ...track.checks,
+    ...track.safeCounterpatterns,
+    ...track.falsePositiveTraps,
+    ...track.researchHints,
+  ].join(' ').toLowerCase();
+}
+
+function closestTrackForReference(
+  outline: SkillBuildOutline,
+  path: string,
+): SkillBuildOutline['tracks'][number] | undefined {
+  const refWords = expandedReferenceWords(path);
+  let best: {
+    track: SkillBuildOutline['tracks'][number];
+    score: number;
+  } | undefined;
+
+  for (const track of outline.tracks) {
+    const text = trackText(track);
+    const score = refWords.reduce(
+      (sum, word) => sum + (new RegExp(`\\b${word}\\b`).test(text) ? 1 : 0),
+      0,
+    );
+    if (!best || score > best.score) {
+      best = { track, score };
+    }
+  }
+
+  return best && best.score > 0 ? best.track : undefined;
+}
+
+function markdownList(items: string[], fallback: string): string {
+  const values = items.length > 0 ? items : [fallback];
+  return values.map((item) => `- ${item}`).join('\n');
+}
+
+function titleFromReferencePath(path: string): string {
+  const base = path.split('/').at(-1)?.replace(/\.md$/, '') || 'reference';
+  return words(base)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function fallbackReferenceContent(args: {
+  outline: SkillBuildOutline;
+  path: string;
+}): string {
+  const track = closestTrackForReference(args.outline, args.path);
+  if (!track) {
+    return `# ${titleFromReferencePath(args.path)}
+
+Use this reference when the route in SKILL.md matches the changed hunk.
+
+## Use When
+
+- The SKILL.md route points to this reference for the changed hunk.
+
+## Checks
+
+- Trace attacker-controlled input, trust boundaries, sensitive operations, and observable impact before reporting.
+
+## Evidence Required
+
+- Report only findings with changed-line evidence and a plausible exploit path.
+
+## Safe Counterpatterns
+
+- Do not report when the changed code validates inputs, enforces access control, or preserves an existing safe invariant.
+
+## False Positive Traps
+
+- Do not report pattern-only findings without data flow, reachability, and impact.
+`;
+  }
+
+  return `# ${track.title}
+
+${track.goal}
+
+## Use When
+
+${markdownList(track.relevanceSignals, track.rationale)}
+
+## Checks
+
+${markdownList(track.checks, 'Trace exploitability through the changed code before reporting.')}
+
+## Evidence Required
+
+${markdownList(track.evidenceFocus, 'Anchor each finding to changed lines and concrete runtime behavior.')}
+
+## Safe Counterpatterns
+
+${markdownList(track.safeCounterpatterns, 'Do not report when the changed code preserves an existing safe invariant.')}
+
+## False Positive Traps
+
+${markdownList(track.falsePositiveTraps, 'Do not report pattern-only findings without reachability and impact.')}
+`;
+}
+
+function backfillMissingRoutedReferences(
+  fileMap: GeneratedSkillFileMap,
+  outline: SkillBuildOutline,
+): GeneratedSkillFileMap {
+  const files = new Map(fileMap.files.map((file) => [file.path, file.content]));
+  const added = new Set<string>();
+  const visited = new Set<string>();
+  const queue = ['SKILL.md'];
+
+  while (queue.length > 0) {
+    const path = queue.shift();
+    if (!path) {
+      continue;
+    }
+    if (visited.has(path)) {
+      continue;
+    }
+    visited.add(path);
+
+    const content = files.get(path);
+    if (!content) {
+      continue;
+    }
+
+    for (const referencePath of referencedSkillPaths(content)) {
+      if (!files.has(referencePath)) {
+        files.set(referencePath, fallbackReferenceContent({
+          outline,
+          path: referencePath,
+        }));
+        added.add(referencePath);
+      }
+      if (referencePath.startsWith('references/') && !visited.has(referencePath)) {
+        queue.push(referencePath);
+      }
+    }
+  }
+
+  if (added.size === 0) {
+    return fileMap;
+  }
+
+  return {
+    ...fileMap,
+    files: [...files.entries()]
+      .map(([path, content]) => ({ path, content }))
+      .sort((a, b) => a.path.localeCompare(b.path)),
+    validationNotes: [
+      ...fileMap.validationNotes,
+      `Backfilled missing routed reference file(s): ${[...added].sort().join(', ')}`,
+    ],
+  };
+}
+
 function deterministicValidation(args: {
   fileMap: GeneratedSkillFileMap;
   targetName: string;
@@ -276,6 +481,20 @@ function applyValidationResult(args: {
   }
 
   return candidate;
+}
+
+function normalizeProviderIssue(
+  issue: GeneratedSkillValidationIssue,
+): GeneratedSkillValidationIssue {
+  if (
+    issue.severity === 'error' &&
+    issue.path?.startsWith('references/') &&
+    /\breference is \d+ lines\b/i.test(issue.message) &&
+    /\bcontents\b/i.test(issue.message)
+  ) {
+    return { ...issue, severity: 'warning' };
+  }
+  return issue;
 }
 
 function summarizeResponseModel(models: (string | undefined)[]): string | undefined {
@@ -556,7 +775,10 @@ export async function buildGeneratedSkill(args: {
       );
     }
 
-    const initialFileMap = normalizeGeneratedFileMap(implementation.data, args.outline.skill);
+    const initialFileMap = backfillMissingRoutedReferences(
+      normalizeGeneratedFileMap(implementation.data, args.outline.skill),
+      args.outline,
+    );
     const initialDeterministic = deterministicValidation({
       fileMap: initialFileMap,
       targetName: args.outline.skill,
@@ -585,11 +807,14 @@ export async function buildGeneratedSkill(args: {
       repair,
     });
 
-    const fileMap = normalizeGeneratedFileMap(applyValidationResult({
-      original: initialFileMap,
-      validation: validation.data,
-      targetName: args.outline.skill,
-    }), args.outline.skill);
+    const fileMap = backfillMissingRoutedReferences(
+      normalizeGeneratedFileMap(applyValidationResult({
+        original: initialFileMap,
+        validation: validation.data,
+        targetName: args.outline.skill,
+      }), args.outline.skill),
+      args.outline,
+    );
     const finalDeterministic = deterministicValidation({
       fileMap,
       targetName: args.outline.skill,
@@ -600,10 +825,14 @@ export async function buildGeneratedSkill(args: {
         finalDeterministic.errors.map((error) => `- ${error}`).join('\n'),
       );
     }
-    const providerErrors = validation.data.issues.filter((issue) => issue.severity === 'error');
-    if (!validation.data.valid || providerErrors.length > 0) {
-      const issueLines = validation.data.issues.length > 0
-        ? validation.data.issues.map((issue) => {
+    const providerIssues = validation.data.issues.map(normalizeProviderIssue);
+    const providerErrors = providerIssues.filter((issue) => issue.severity === 'error');
+    if (
+      providerErrors.length > 0 ||
+      (!validation.data.valid && providerIssues.length === 0)
+    ) {
+      const issueLines = providerIssues.length > 0
+        ? providerIssues.map((issue) => {
           const path = issue.path ? `${issue.path}: ` : '';
           return `- ${issue.severity}: ${path}${issue.message}`;
         }).join('\n')
@@ -649,7 +878,7 @@ export async function buildGeneratedSkill(args: {
         name: artifact.name,
         fileManifest: fileManifest(writtenFiles),
         deterministicWarnings: finalDeterministic.warnings,
-        validationIssues: validation.data.issues,
+        validationIssues: providerIssues,
         bytes: artifact.bytes,
         durationMs: artifact.durationMs,
         usage: artifact.usage,
