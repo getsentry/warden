@@ -138,41 +138,51 @@ function rewriteGeneratedArtifactPathReferences(content: string, pathMap: Map<st
 
 function canonicalizeGeneratedFileMapPaths(fileMap: GeneratedSkillFileMap): GeneratedSkillFileMap {
   const pathMap = new Map<string, string>();
+  const changedPaths: [string, string][] = [];
   for (const file of fileMap.files) {
     const canonicalPath = canonicalGeneratedArtifactPath(file.path);
     pathMap.set(file.path, canonicalPath);
+    if (file.path !== canonicalPath) {
+      changedPaths.push([file.path, canonicalPath]);
+    }
     if (canonicalPath.startsWith('references/')) {
       pathMap.set(`references/tracks/${canonicalPath.slice('references/'.length)}`, canonicalPath);
     }
-  }
-  const changedPaths = [...pathMap.entries()].filter(([from, to]) => from !== to);
-  if (changedPaths.length === 0) {
-    return fileMap;
   }
 
   const files = new Map<string, {
     path: string;
     content: string;
   }>();
+  let contentChanged = false;
   for (const file of fileMap.files) {
     const path = pathMap.get(file.path) ?? file.path;
     const content = rewriteGeneratedArtifactPathReferences(file.content, pathMap);
+    contentChanged ||= content !== file.content;
     const existing = files.get(path);
     if (!existing || content.length > existing.content.length) {
       files.set(path, { path, content });
     }
   }
 
-  return {
-    ...fileMap,
-    files: [...files.values()].sort((a, b) => a.path.localeCompare(b.path)),
-    validationNotes: [
-      ...fileMap.validationNotes,
+  if (changedPaths.length === 0 && !contentChanged) {
+    return fileMap;
+  }
+
+  const validationNotes = [...fileMap.validationNotes];
+  if (changedPaths.length > 0) {
+    validationNotes.push(
       `Flattened generated reference path(s): ${changedPaths
         .map(([from, to]) => `${from} -> ${to}`)
         .sort()
         .join(', ')}`,
-    ],
+    );
+  }
+
+  return {
+    ...fileMap,
+    files: [...files.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    validationNotes,
   };
 }
 
@@ -260,15 +270,22 @@ function stripUnavailableArtifactReferences(content: string, availablePaths: Set
   return stripped.replace(/\n{3,}/g, '\n\n').trimEnd();
 }
 
+function documentsExternalSources(fileMap: GeneratedSkillFileMap, content: string): boolean {
+  return fileMap.externalSources.some((source) =>
+    content.includes(source.title) || content.includes(source.url)
+  );
+}
+
 function shouldOmitGeneratedArtifact(fileMap: GeneratedSkillFileMap, file: {
   path: string;
   content: string;
 }): boolean {
-  if (
-    file.path === 'SOURCES.md' &&
-    (fileMap.externalSources.length === 0 || containsAuthoringMetadata(file.content))
-  ) {
-    return true;
+  if (file.path === 'SOURCES.md') {
+    if (fileMap.externalSources.length === 0) {
+      return true;
+    }
+    return containsAuthoringMetadata(file.content) &&
+      !documentsExternalSources(fileMap, file.content);
   }
   if (
     file.path === 'SPEC.md' &&
