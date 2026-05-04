@@ -127,12 +127,24 @@ function yamlQuoted(value: string): string {
   return JSON.stringify(value);
 }
 
+function targetSubject(targetName: string): string {
+  return targetName
+    .replace(/^wrdn-/, '')
+    .replace(/[-_]+/g, ' ')
+    .trim() || targetName;
+}
+
+function isAuthoringMetadataDescription(value: string): boolean {
+  return /\b(generated|architecture|router|focused references|authoring|SKILL\.md|SPEC\.md|SOURCES\.md)\b/i
+    .test(value);
+}
+
 function fallbackDescription(fileMap: GeneratedSkillFileMap, targetName: string): string {
   const summary = oneLine(fileMap.summary);
-  if (summary) {
+  if (summary && !isAuthoringMetadataDescription(summary)) {
     return summary;
   }
-  return `Use when running the generated ${targetName} Warden skill.`;
+  return `Use when reviewing code changes for ${targetSubject(targetName)} concerns.`;
 }
 
 function ensureSkillFrontmatter(args: {
@@ -140,15 +152,23 @@ function ensureSkillFrontmatter(args: {
   fileMap: GeneratedSkillFileMap;
   targetName: string;
 }): string {
-  if (SKILL_FRONTMATTER_PATTERN.test(args.content)) {
+  const frontmatter = skillFrontmatter(args.content);
+  const description = frontmatter?.['description'];
+  if (
+    frontmatter?.['name'] === args.targetName &&
+    typeof description === 'string' &&
+    description.trim() &&
+    !isAuthoringMetadataDescription(description)
+  ) {
     return args.content;
   }
+  const body = args.content.replace(SKILL_FRONTMATTER_PATTERN, '').trimStart();
   return `---
 name: ${yamlQuoted(args.targetName)}
 description: ${yamlQuoted(fallbackDescription(args.fileMap, args.targetName))}
 ---
 
-${args.content.trimStart()}`;
+${body}`;
 }
 
 function referencedSkillPaths(content: string): string[] {
@@ -497,6 +517,22 @@ function normalizeProviderIssue(
   return issue;
 }
 
+function advisoryProviderIssues(
+  validation: GeneratedSkillValidationResult,
+): GeneratedSkillValidationIssue[] {
+  const issues = validation.issues.map((issue) => ({
+    ...normalizeProviderIssue(issue),
+    severity: 'warning' as const,
+  }));
+  if (!validation.valid && issues.length === 0) {
+    issues.push({
+      severity: 'warning',
+      message: 'Authoring provider marked the generated skill invalid without issue details.',
+    });
+  }
+  return issues;
+}
+
 function summarizeResponseModel(models: (string | undefined)[]): string | undefined {
   const distinct = [...new Set(models.filter((model): model is string => Boolean(model)))];
   if (distinct.length === 0) {
@@ -825,22 +861,7 @@ export async function buildGeneratedSkill(args: {
         finalDeterministic.errors.map((error) => `- ${error}`).join('\n'),
       );
     }
-    const providerIssues = validation.data.issues.map(normalizeProviderIssue);
-    const providerErrors = providerIssues.filter((issue) => issue.severity === 'error');
-    if (
-      providerErrors.length > 0 ||
-      (!validation.data.valid && providerIssues.length === 0)
-    ) {
-      const issueLines = providerIssues.length > 0
-        ? providerIssues.map((issue) => {
-          const path = issue.path ? `${issue.path}: ` : '';
-          return `- ${issue.severity}: ${path}${issue.message}`;
-        }).join('\n')
-        : '- error: Authoring provider marked the generated skill invalid';
-      throw new GeneratedSkillBuildError(
-        `Generated skill failed provider validation for ${args.outline.skill}:\n${issueLines}`,
-      );
-    }
+    const providerIssues = advisoryProviderIssues(validation.data);
 
     const usage = aggregateUsage([
       plan.usage,

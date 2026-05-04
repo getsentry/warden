@@ -131,6 +131,17 @@ Review changed hunks for exploitable security issues.
 `;
 }
 
+function skillMdWithAuthoringDescription(name = 'wrdn-security'): string {
+  return `---
+name: ${name}
+description: "Generated wrdn-security skill with reference-backed-expert architecture: SKILL.md router and focused references."
+allowed-tools: Read Grep Glob Bash
+---
+
+Review changed hunks for exploitable security issues.
+`;
+}
+
 function indexedSkillMd(name = 'wrdn-security'): string {
   return `---
 name: ${name}
@@ -716,6 +727,90 @@ Read \`references/missing.md\` before reporting.
     );
   });
 
+  it('repairs generated frontmatter descriptions that contain authoring metadata', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan.',
+              workflow: ['Read the authoring skill'],
+              researchPlan: [],
+              artifactPlan: ['Create SKILL.md'],
+              validationPlan: ['Validate output'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: skillMdWithAuthoringDescription() }],
+              summary: 'Generated wrdn-security skill with reference-backed-expert architecture.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+    });
+
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toMatch(
+      /^---\nname: "wrdn-security"\ndescription: "Use when reviewing code changes for security concerns\."/,
+    );
+  });
+
   it('backfills routed reference files missing from the generated file map', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
@@ -769,9 +864,17 @@ Read \`references/missing.md\` before reporting.
           status: 'success',
           text: JSON.stringify({
             version: 1,
-            valid: true,
-            summary: 'Validated.',
-            issues: [],
+            valid: false,
+            summary: 'Provider saw the original file map as incomplete.',
+            issues: [{
+              severity: 'error',
+              path: 'generated_file_map',
+              message: 'Files array only contains SKILL.md but SKILL.md routes reference files that are not included.',
+            }, {
+              severity: 'error',
+              path: 'references/',
+              message: 'Missing all reference files that SKILL.md routes to.',
+            }],
             missingInputs: [],
           }),
           errors: [],
@@ -802,6 +905,15 @@ Read \`references/missing.md\` before reporting.
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.fileManifest.some((file) => file.path === 'references/security.md'))
       .toBe(true);
+    expect(state?.artifact?.validationIssues).toEqual([{
+      severity: 'warning',
+      path: 'generated_file_map',
+      message: 'Files array only contains SKILL.md but SKILL.md routes reference files that are not included.',
+    }, {
+      severity: 'warning',
+      path: 'references/',
+      message: 'Missing all reference files that SKILL.md routes to.',
+    }]);
   });
 
   it('backfills files routed by a generated reference index', async () => {
@@ -1109,7 +1221,7 @@ Read \`references/missing.md\` before reporting.
     }]);
   });
 
-  it('fails when provider validation reports unresolved errors', async () => {
+  it('records provider validation errors without blocking valid generated artifacts', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1177,7 +1289,7 @@ Read \`references/missing.md\` before reporting.
       };
     });
 
-    await expect(buildGeneratedSkill({
+    const artifact = await buildGeneratedSkill({
       outline: buildOutline,
       source: source(),
       rootDir,
@@ -1190,8 +1302,15 @@ Read \`references/missing.md\` before reporting.
       repoPath: tempDir,
       authoringSkillRoot,
       regenerate: true,
-    })).rejects.toThrow('failed provider validation');
+    });
 
-    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(false);
+    expect(artifact.source).toBe('generated');
+    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(true);
+    const state = readSkillBuildState(getBuildStatePath(rootDir));
+    expect(state?.artifact?.validationIssues).toEqual([{
+      severity: 'warning',
+      path: 'SKILL.md',
+      message: 'Runtime instructions are too shallow.',
+    }]);
   });
 });
