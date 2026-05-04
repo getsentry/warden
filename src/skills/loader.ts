@@ -228,9 +228,12 @@ export async function loadSkillsFromDirectory(
         skills.set(skill.name, { skill, entry });
       } catch (error) {
         // Skip files without YAML frontmatter (e.g., README.md, documentation)
-        // But warn about files that have frontmatter but are malformed
+        // but warn about files that have frontmatter but are malformed.
+        // Lib's loadSkillMd throws "No YAML frontmatter in <path>" for the
+        // no-frontmatter case; everything else (missing required field,
+        // unparseable YAML) is a real malformation worth reporting.
         const message = error instanceof Error ? error.message : String(error);
-        if (!message.includes('missing YAML frontmatter')) {
+        if (!message.includes('No YAML frontmatter')) {
           options?.onWarning?.(`Failed to load skill from ${entry}: ${message}`);
         }
       }

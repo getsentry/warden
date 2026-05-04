@@ -364,6 +364,44 @@ Content here
     }
   });
 
+  it('loadSkillsFromDirectory silently skips .md files without frontmatter', async () => {
+    // Files like README.md, CONTRIBUTING.md often live alongside skills.
+    // They have no `---` block; we must NOT warn about them, only about
+    // files with malformed frontmatter.
+    const warnings: string[] = [];
+    const onWarning = (message: string) => warnings.push(message);
+
+    const tempDir = join(import.meta.dirname, '.test-readme-skip');
+    try {
+      mkdirSync(tempDir, { recursive: true });
+      writeFileSync(
+        join(tempDir, 'README.md'),
+        `# Skills
+
+This directory holds skill definitions. See the docs for details.
+`,
+      );
+      writeFileSync(
+        join(tempDir, 'good-skill.md'),
+        `---
+name: good-skill
+description: A real skill
+---
+Content.
+`,
+      );
+
+      clearSkillsCache();
+      const skills = await loadSkillsFromDirectory(tempDir, { onWarning });
+
+      expect(skills.size).toBe(1);
+      expect(skills.get('good-skill')).toBeDefined();
+      expect(warnings).toEqual([]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('warns when invalid tool names are filtered from allowed-tools', async () => {
     const warnings: string[] = [];
     const onWarning = (message: string) => warnings.push(message);
