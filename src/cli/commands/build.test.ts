@@ -218,6 +218,8 @@ describe('runBuild', () => {
     expect(output).toContain('SKILL');
     expect(output.indexOf('TRACKS  2 tracks')).toBeGreaterThan(output.indexOf('OUTLINE'));
     expect(output.indexOf('TRACKS  2 tracks')).toBeLessThan(output.indexOf('SKILL'));
+    expect(output).toContain('Context   2 turns');
+    expect(output).not.toContain('0 sources');
   });
 
   it('does not report historical usage for cached outline loads', async () => {

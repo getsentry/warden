@@ -70,7 +70,9 @@ function formatUsageCostDetail(usage: UsageStats | undefined): string | undefine
 
 function formatContextDetail(args: { sources?: number; turns?: number }): string | undefined {
   const parts = [
-    args.sources === undefined ? undefined : `${args.sources} ${args.sources === 1 ? 'source' : 'sources'}`,
+    args.sources === undefined || args.sources === 0
+      ? undefined
+      : `${args.sources} external ${args.sources === 1 ? 'source' : 'sources'}`,
     args.turns === undefined ? undefined : `${args.turns} ${args.turns === 1 ? 'turn' : 'turns'}`,
   ].filter((part): part is string => Boolean(part));
   return parts.length > 0 ? parts.join(' / ') : undefined;
@@ -87,7 +89,9 @@ function formatStats(args: {
     args.bytes === undefined ? undefined : formatBytes(args.bytes),
     args.durationMs === undefined ? undefined : formatDuration(args.durationMs),
     formatUsageCostDetail(args.usage),
-    args.sources === undefined ? undefined : `${args.sources} ${args.sources === 1 ? 'source' : 'sources'}`,
+    args.sources === undefined || args.sources === 0
+      ? undefined
+      : `${args.sources} external ${args.sources === 1 ? 'source' : 'sources'}`,
     args.turns === undefined ? undefined : `${args.turns} ${args.turns === 1 ? 'turn' : 'turns'}`,
   ].filter((part): part is string => Boolean(part));
   return parts.length > 0 ? chalk.dim(`[${parts.join(' · ')}]`) : '';

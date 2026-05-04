@@ -1,7 +1,7 @@
 import type { GeneratedSkillAuthoringPlan, GeneratedSkillFileMap } from './skill-contract.js';
 import type { SkillBuildOutline, SkillBuildSource } from './outline-contract.js';
 
-const GENERIC_SKILL_BUILD_MAX_TURNS = 12;
+const GENERIC_SKILL_BUILD_MAX_TURNS = 16;
 const LOCAL_SKILL_BUILD_MAX_TURNS = 24;
 const VALIDATION_MAX_TURNS = 8;
 
@@ -43,12 +43,12 @@ function wardenSkillConstraints(args: {
 - Broad or multi-track skills usually need SKILL.md as a compact router plus focused routed references. Inline or single-reference layouts are fine when they are genuinely enough.
 - References should answer one lookup question each. Avoid topic-bucket references that mix routing, examples, troubleshooting, source notes, and remediation.
 - Use SPEC.md for new or materially scoped generated skills when it records a useful scope, evidence model, or maintenance contract.
-- Use SOURCES.md when provenance, source-depth decisions, external sources, or open gaps materially affect the generated skill.
-- Warden runs skills on changed hunks and injects the JSON finding schema separately. Do not create a custom plaintext output format.
+- Use SOURCES.md only when concrete external sources were consulted or unresolved source gaps materially affect future maintenance. Do not create SOURCES.md just to restate warden.yaml, the internal outline, build pipeline, authoring decisions, or "no external research".
+- Warden runs skills on changed hunks and injects the report schema separately. Do not include Output Format, Output Contract, Response Format, or custom reporting schema sections.
 - Findings must anchor to changed lines and be concrete enough for Warden's normal report schema.
 - Security-review skills should include exploit-path evidence, safe lookalikes or false-positive controls, remediation examples, and severity/confidence calibration where relevant.
 - Use Warden voice: brief, dry, direct. Avoid generated-artifact boilerplate such as "Generated Warden skill for outline".
-- Keep provenance and authoring decisions in SOURCES.md or SPEC.md, not in runtime references.
+- Keep authoring decisions, build metadata, internal outline details, validation summaries, and future-work notes out of generated runtime artifacts.
 - Do not send repository code, secrets, private paths, or proprietary details to web tools.`;
 }
 
@@ -133,8 +133,10 @@ Use "tell them" discipline:
 - Use the authoring skill again, starting from its SKILL.md.
 - Follow the plan unless new evidence proves the plan is wrong.
 - Return a complete file map for every generated artifact that should exist.
-- Include SKILL.md. Add SPEC.md, SOURCES.md, EVAL.md, references/, scripts/, or assets/ only when they add runtime, provenance, maintenance, validation, or reusable-example value.
-- Keep SKILL.md compact; put optional depth in routed references and authoring/provenance notes in SPEC.md or SOURCES.md.
+- Include SKILL.md. Add references/ only for routed runtime lookup leaves. Add SPEC.md, EVAL.md, scripts/, assets/, or SOURCES.md only when they add concrete runtime, maintenance, validation, reusable-example, or external-source value.
+- Keep SKILL.md compact; put optional depth in routed references. Do not include authoring/provenance notes unless they describe real external sources or unresolved source gaps that future maintainers need.
+- Prefer no SOURCES.md over a SOURCES.md that says the skill came from the internal outline, build pipeline, or no external research.
+- The externalSources array is only for concrete external sources you actually consulted. Do not count warden.yaml, the internal outline, generated tracks, or the authoring plan as external sources.
 - If validation later needs a correction, it should be possible to rewrite the skill from this file map alone.
 
 Return JSON:
@@ -186,7 +188,7 @@ ${wardenSkillConstraints(args)}
 Use "remind them what you told them" discipline:
 - Use the authoring skill again as the validation anchor.
 - Check whether the generated files followed the plan, the authoring skill, and Warden constraints.
-- Check for over-broad topic-bucket references, stale gap/provenance language, missing routes, and custom output formats that conflict with Warden's JSON finding schema.
+- Check for over-broad topic-bucket references, stale gap/provenance language, generated-skill metadata, missing routes, and custom output/report formats that conflict with Warden's injected report schema.
 - If fixes are needed, return a complete revised file map in files, including every referenced runtime file.
 - If no fixes are needed, omit files or return an empty files array.
 - Do not return placeholder files or empty file contents. Omit unchanged files instead.

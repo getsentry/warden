@@ -130,9 +130,80 @@ function isAuthoringMetadataDescription(value: string): boolean {
   const normalized = value.replace(/\s+/g, ' ').trim();
   return (
     /\b(SKILL\.md|SPEC\.md|SOURCES\.md|reference-backed|focused references?)\b/i.test(normalized) ||
-    /^generated\b/i.test(normalized) &&
+    (
+      /^generated\b/i.test(normalized) &&
       /\b(skill|architecture|router|references?|wrdn-[a-z0-9-]+)\b/i.test(normalized)
+    )
   );
+}
+
+function containsAuthoringMetadata(content: string): boolean {
+  return /^##\s+(Future Research Needs|Validation Sources|Authoring Decisions)\b/im.test(content) ||
+    /\b(internal outline|build pipeline|build phases|source collection|scope profiling|track identification|coverage validation|authoring decisions|no external research performed)\b/i.test(content);
+}
+
+function containsOutputContract(content: string): boolean {
+  return /^##\s+(Output Format|Output Contract|Response Format|Report Format)\b/im.test(content) ||
+    /\bWarden'?s JSON finding schema\b/i.test(content);
+}
+
+function stripOutputContractSections(content: string): string {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const kept: string[] = [];
+  let skippingUntilLevel: number | undefined;
+
+  for (const line of lines) {
+    const heading = /^(#{2,6})\s+(Output Format|Output Contract|Response Format|Report Format)\b/i.exec(line);
+    const anyHeading = /^(#{1,6})\s+\S/.exec(line);
+    const headingMarker = heading?.[1];
+    const anyHeadingMarker = anyHeading?.[1];
+    if (headingMarker) {
+      skippingUntilLevel = headingMarker.length;
+      continue;
+    }
+    if (skippingUntilLevel !== undefined) {
+      if (anyHeadingMarker && anyHeadingMarker.length <= skippingUntilLevel) {
+        skippingUntilLevel = undefined;
+      } else {
+        continue;
+      }
+    }
+    kept.push(line);
+  }
+
+  return kept.join('\n').trimEnd();
+}
+
+function stripUnavailableArtifactReferences(content: string, availablePaths: Set<string>): string {
+  const missingPaths = referencedArtifactPaths(content)
+    .filter((path) => !availablePaths.has(path));
+  if (missingPaths.length === 0) {
+    return content;
+  }
+  const stripped = content.replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((line) => !missingPaths.some((path) => line.includes(path)))
+    .join('\n');
+  return stripped.replace(/\n{3,}/g, '\n\n').trimEnd();
+}
+
+function shouldOmitGeneratedArtifact(fileMap: GeneratedSkillFileMap, file: {
+  path: string;
+  content: string;
+}): boolean {
+  if (
+    file.path === 'SOURCES.md' &&
+    (fileMap.externalSources.length === 0 || containsAuthoringMetadata(file.content))
+  ) {
+    return true;
+  }
+  if (
+    file.path === 'SPEC.md' &&
+    (containsOutputContract(file.content) || containsAuthoringMetadata(file.content))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function fallbackDescription(fileMap: GeneratedSkillFileMap, targetName: string): string {
@@ -185,6 +256,14 @@ function referencedSkillPaths(content: string): string[] {
   return [...paths].sort();
 }
 
+function referencedArtifactPaths(content: string): string[] {
+  const paths = new Set<string>();
+  for (const match of content.matchAll(/\b(?:SPEC|SOURCES|EVAL)\.md\b/g)) {
+    paths.add(match[0]);
+  }
+  return [...paths].sort();
+}
+
 function words(value: string): string[] {
   return value
     .toLowerCase()
@@ -197,11 +276,21 @@ function expandedReferenceWords(path: string): string[] {
   const aliases: Record<string, string[]> = {
     authn: ['authentication', 'identity', 'session', 'credential', 'secret'],
     authz: ['authorization', 'access', 'control', 'permission'],
+    authentication: ['authn', 'login', 'identity', 'session', 'credential', 'password', 'jwt'],
+    authorization: ['authz', 'access', 'control', 'permission', 'role'],
+    android: ['intent', 'webview', 'keystore', 'manifest', 'mobile'],
+    concurrency: ['race', 'condition', 'thread', 'lock', 'atomic'],
     csrf: ['cross', 'site', 'request', 'forgery', 'client', 'web'],
     crypto: ['cryptographic', 'encryption', 'secret', 'token', 'key'],
+    deserialization: ['deserialize', 'serialized', 'unserialize', 'pickle', 'marshal'],
+    ios: ['swift', 'objective', 'keychain', 'uikit', 'wkwebview', 'mobile'],
     rce: ['remote', 'code', 'execution', 'command'],
+    rust: ['unsafe', 'ffi', 'transmute', 'soundness'],
+    secrets: ['secret', 'credential', 'password', 'token', 'key'],
+    session: ['cookie', 'csrf', 'fixation'],
     ssrf: ['server', 'side', 'request', 'forgery'],
     tls: ['cryptographic', 'certificate', 'transport', 'encryption'],
+    upload: ['file', 'content', 'type'],
     xss: ['cross', 'site', 'scripting', 'client', 'web', 'injection'],
     xxe: ['xml', 'external', 'entity'],
   };
@@ -221,6 +310,54 @@ function expandedReferenceWords(path: string): string[] {
     set.add('safety');
   }
   return [...set];
+}
+
+function distinctiveReferenceWords(path: string): string[] {
+  const generic = new Set([
+    'bug',
+    'bugs',
+    'check',
+    'checks',
+    'code',
+    'guide',
+    'review',
+    'safety',
+    'security',
+    'vulnerabilities',
+    'vulnerability',
+  ]);
+  return expandedReferenceWords(path)
+    .filter((word) => word.length > 2 && !generic.has(word));
+}
+
+function referenceContentMatchesPath(path: string, content: string): boolean {
+  const base = path.split('/').at(-1) ?? path;
+  const baseWords = words(base)
+    .filter((word) => distinctiveReferenceWords(word).includes(word));
+  const expandedWords = distinctiveReferenceWords(path);
+  if (expandedWords.length === 0) {
+    return true;
+  }
+  const normalized = content.toLowerCase();
+  const baseMatches = baseWords.reduce(
+    (sum, word) => sum + (new RegExp(`\\b${word}\\b`).test(normalized) ? 1 : 0),
+    0,
+  );
+  if (baseWords.length === 1 && baseMatches === 1) {
+    return true;
+  }
+  if (baseWords.length > 1 && baseMatches === baseWords.length) {
+    return true;
+  }
+  const aliasWords = expandedWords.filter((word) => !baseWords.includes(word));
+  const aliasMatches = aliasWords.reduce(
+    (sum, word) => sum + (new RegExp(`\\b${word}\\b`).test(normalized) ? 1 : 0),
+    0,
+  );
+  if (baseMatches > 0) {
+    return aliasMatches >= 1;
+  }
+  return aliasMatches >= 2;
 }
 
 function trackText(track: SkillBuildOutline['tracks'][number]): string {
@@ -389,6 +526,42 @@ function backfillMissingRoutedReferences(
   };
 }
 
+function repairMismatchedRoutedReferences(
+  fileMap: GeneratedSkillFileMap,
+  outline: SkillBuildOutline,
+): GeneratedSkillFileMap {
+  const replaced: string[] = [];
+  const files = fileMap.files.map((file) => {
+    if (
+      !file.path.startsWith('references/') ||
+      referenceContentMatchesPath(file.path, file.content)
+    ) {
+      return file;
+    }
+    replaced.push(file.path);
+    return {
+      path: file.path,
+      content: fallbackReferenceContent({
+        outline,
+        path: file.path,
+      }),
+    };
+  });
+
+  if (replaced.length === 0) {
+    return fileMap;
+  }
+
+  return {
+    ...fileMap,
+    files,
+    validationNotes: [
+      ...fileMap.validationNotes,
+      `Repaired mismatched routed reference file(s): ${replaced.sort().join(', ')}`,
+    ],
+  };
+}
+
 function deterministicValidation(args: {
   fileMap: GeneratedSkillFileMap;
   targetName: string;
@@ -422,6 +595,18 @@ function deterministicValidation(args: {
     warnings.push('SKILL.md contains generated-template boilerplate');
   }
 
+  for (const file of args.fileMap.files) {
+    if (!file.path.endsWith('.md')) {
+      continue;
+    }
+    if (containsOutputContract(file.content)) {
+      warnings.push(`${file.path} defines output or report format; Warden injects report schema separately`);
+    }
+    if (containsAuthoringMetadata(file.content)) {
+      warnings.push(`${file.path} contains generated-skill authoring metadata instead of runtime guidance`);
+    }
+  }
+
   const referenceFiles = args.fileMap.files.filter((file) => file.path.startsWith('references/'));
   const routedReferenceFiles = referenceFiles.filter((file) => skillMd.includes(file.path));
   const routeDocuments = [
@@ -433,9 +618,17 @@ function deterministicValidation(args: {
       errors.push(`SKILL.md routes ${path} but the generated file map does not include it`);
     }
   }
+  for (const path of referencedArtifactPaths(skillMd)) {
+    if (!files.has(path)) {
+      errors.push(`SKILL.md references ${path} but the generated file map does not include it`);
+    }
+  }
   for (const reference of referenceFiles) {
     if (!routeDocuments.some((content) => content.includes(reference.path))) {
       warnings.push(`SKILL.md does not route runtime reference ${reference.path}`);
+    }
+    if (!referenceContentMatchesPath(reference.path, reference.content)) {
+      warnings.push(`${reference.path} content does not match its routed reference path`);
     }
     const lineCount = reference.content.split('\n').length;
     if (lineCount > LONG_REFERENCE_LINE_LIMIT && !/^## Contents$/m.test(reference.content)) {
@@ -458,6 +651,14 @@ function deterministicValidation(args: {
   return { errors, warnings };
 }
 
+function hasReferenceMismatchWarning(validation: {
+  warnings: string[];
+}): boolean {
+  return validation.warnings.some((warning) =>
+    warning.includes('content does not match its routed reference path'),
+  );
+}
+
 function formatDeterministicIssues(validation: {
   errors: string[];
   warnings: string[];
@@ -477,13 +678,10 @@ function applyValidationResult(args: {
   if (!args.validation.files || args.validation.files.length === 0) {
     return args.original;
   }
-  if (
-    !args.validation.files.some((file) => file.path === 'SKILL.md') ||
-    args.validation.files.some((file) => file.content.trim().length === 0)
-  ) {
+  const replacementFiles = args.validation.files.filter((file) => file.content.trim().length > 0);
+  if (!replacementFiles.some((file) => file.path === 'SKILL.md')) {
     return args.original;
   }
-  const replacementFiles = args.validation.files;
   const candidate = {
     ...args.original,
     files: [
@@ -503,7 +701,10 @@ function applyValidationResult(args: {
     ],
   };
   const fileMap = backfillMissingRoutedReferences(
-    normalizeGeneratedFileMap(candidate, args.targetName),
+    repairMismatchedRoutedReferences(
+      normalizeGeneratedFileMap(candidate, args.targetName),
+      args.outline,
+    ),
     args.outline,
   );
   const validation = deterministicValidation({
@@ -576,7 +777,7 @@ function loadExistingArtifact(args: {
     },
     targetName: args.name,
   });
-  if (validation.errors.length > 0) {
+  if (validation.errors.length > 0 || hasReferenceMismatchWarning(validation)) {
     return undefined;
   }
 
@@ -635,13 +836,59 @@ function loadCachedArtifact(args: {
       files: files.map((file) => ({ path: file.path, content: file.content })),
       summary: 'Cached generated artifact',
       validationNotes: [],
-      missingInputs: [],
-      externalSources: [],
+      missingInputs: metadata.missingInputs,
+      externalSources: metadata.externalSources,
     },
     targetName: metadata.name,
   });
-  if (validation.errors.length > 0) {
-    return undefined;
+  if (validation.errors.length > 0 || hasReferenceMismatchWarning(validation)) {
+    const normalizedFileMap = normalizeGeneratedFileMap({
+      version: 1,
+      name: metadata.name,
+      files: files.map((file) => ({ path: file.path, content: file.content })),
+      summary: 'Cached generated artifact',
+      validationNotes: [],
+      missingInputs: metadata.missingInputs,
+      externalSources: metadata.externalSources,
+    }, metadata.name);
+    const normalizedValidation = deterministicValidation({
+      fileMap: normalizedFileMap,
+      targetName: metadata.name,
+    });
+    if (
+      normalizedValidation.errors.length > 0 ||
+      hasReferenceMismatchWarning(normalizedValidation)
+    ) {
+      return undefined;
+    }
+
+    const artifact = writeGeneratedArtifact({
+      rootDir: args.rootDir,
+      fileMap: normalizedFileMap,
+      durationMs: metadata.durationMs,
+      usage: metadata.usage,
+      responseModel: metadata.responseModel,
+      numTurns: metadata.numTurns,
+    });
+    const writtenFiles = artifactFiles(args.rootDir);
+    writeSkillBuildState(getBuildStatePath(args.rootDir), {
+      ...state,
+      artifact: {
+        ...metadata,
+        fileManifest: fileManifest(writtenFiles),
+        deterministicWarnings: normalizedValidation.warnings,
+        bytes: artifact.bytes,
+        generatedAt: new Date().toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    return {
+      ...artifact,
+      source: 'cache',
+      externalSources: metadata.externalSources,
+      missingInputs: metadata.missingInputs,
+    };
   }
 
   return {
@@ -698,14 +945,20 @@ function normalizeGeneratedFileMap(
   fileMap: GeneratedSkillFileMap,
   targetName = fileMap.name,
 ): GeneratedSkillFileMap {
+  const retainedFiles = fileMap.files
+    .filter((file) => !shouldOmitGeneratedArtifact(fileMap, file));
+  const retainedPaths = new Set(retainedFiles.map((file) => file.path));
   return {
     ...fileMap,
-    files: [...fileMap.files]
+    files: retainedFiles
       .map((file) => ({
         path: file.path,
         content: normalizeFileContent(file.path === 'SKILL.md'
           ? ensureSkillFrontmatter({
-            content: file.content,
+            content: stripUnavailableArtifactReferences(
+              stripOutputContractSections(file.content),
+              retainedPaths,
+            ),
             fileMap,
             targetName,
           })
@@ -811,8 +1064,11 @@ export async function buildGeneratedSkill(args: {
       );
     }
 
-    const initialFileMap = backfillMissingRoutedReferences(
-      normalizeGeneratedFileMap(implementation.data, args.outline.skill),
+    const initialFileMap = repairMismatchedRoutedReferences(
+      backfillMissingRoutedReferences(
+        normalizeGeneratedFileMap(implementation.data, args.outline.skill),
+        args.outline,
+      ),
       args.outline,
     );
     const initialDeterministic = deterministicValidation({
@@ -843,13 +1099,16 @@ export async function buildGeneratedSkill(args: {
       repair,
     });
 
-    const fileMap = backfillMissingRoutedReferences(
-      normalizeGeneratedFileMap(applyValidationResult({
-        original: initialFileMap,
-        validation: validation.data,
-        targetName: args.outline.skill,
-        outline: args.outline,
-      }), args.outline.skill),
+    const fileMap = repairMismatchedRoutedReferences(
+      backfillMissingRoutedReferences(
+        normalizeGeneratedFileMap(applyValidationResult({
+          original: initialFileMap,
+          validation: validation.data,
+          targetName: args.outline.skill,
+          outline: args.outline,
+        }), args.outline.skill),
+        args.outline,
+      ),
       args.outline,
     );
     const finalDeterministic = deterministicValidation({
