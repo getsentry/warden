@@ -1,13 +1,24 @@
 import type {
   GeneratedSkillAuthoringPlan,
-  GeneratedSkillFileMap,
   GeneratedSkillReviewResult,
+  SkillBuildExternalSource,
 } from './skill-contract.js';
 import type { SkillBuildOutline, SkillBuildSource } from './outline-contract.js';
 
 const GENERIC_SKILL_BUILD_MAX_TURNS = 16;
 const LOCAL_SKILL_BUILD_MAX_TURNS = 24;
 const VALIDATION_MAX_TURNS = 8;
+
+interface GeneratedSkillArtifactSnapshot {
+  summary: string;
+  files: {
+    path: string;
+    content: string;
+  }[];
+  validationNotes: string[];
+  missingInputs: string[];
+  externalSources: SkillBuildExternalSource[];
+}
 
 function sourceBlocks(source: SkillBuildSource): string {
   return source.files
@@ -45,7 +56,8 @@ function wardenSkillConstraints(args: {
 - The target skill root is \`${args.targetRootDir}\`.
 - The generated SKILL.md frontmatter name must be exactly \`${args.targetName}\`.
 - Generated artifacts must be normal Warden skill files. Do not overwrite warden.yaml or build-state.json.
-- Treat existing generated artifacts in the target root as stale unless you intentionally re-emit them in the returned file map.
+- The writer owns disk changes inside the target skill root. Warden will read the files from disk after each writer pass.
+- If a stale generated artifact should not remain, remove it from the target root during the writer pass.
 - Use the source material and internal outline as the source of truth for regeneration.
 - Let the authoring skill decide the simplest adequate artifact layout and where guidance belongs. Warden supplies the goal, source packet, outline, runtime constraints, and quality bar.
 - Treat outline tracks/tasks as work lanes for coverage and sequencing, not as filesystem or artifact taxonomy.
@@ -163,8 +175,8 @@ ${wardenSkillConstraints(args)}
 Authoring behavior:
 - Use the authoring skill again, starting from its SKILL.md.
 - Treat the authoring plan as the source/depth brief. Follow it unless new evidence proves the plan is wrong.
-- Return a complete file map for every generated artifact that should exist according to the authoring skill.
-- Include SKILL.md. Include every local artifact that SKILL.md or another returned artifact requires at runtime.
+- Edit files directly under the target skill root. Do not modify warden.yaml or build-state.json.
+- Write SKILL.md and every local artifact that SKILL.md or another runtime artifact requires.
 - Satisfy the plan's lookupQuestions and qualityBar using the structure chosen by the authoring skill.
 - Treat the outline tracks/tasks as the coverage checklist for this single writer pass. Cover each track's goal, evidence focus, safe counterpatterns, and false-positive traps somewhere useful, or record the missing source/context that prevents that coverage.
 - Preserve track owns/excludes boundaries so sibling topics do not duplicate findings, but merge, split, inline, or reference guidance according to the authoring skill.
@@ -172,15 +184,11 @@ Authoring behavior:
 - Do not ship catalog-only runtime guidance. The generated skill should help the runtime agent decide, verify, and fix, not just recognize topic names or APIs.
 - The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Include concrete outline sources, plan sources, and newly consulted sources that the generated skill depends on. Do not count warden.yaml, the authoring skill, outline tracks, the target skill root, local paths, or the authoring plan itself as external sources.
 - For broad domain, ecosystem, or code-review style skills, do not present complete multi-language or multi-framework coverage from thin source coverage. Either consult enough authoritative sources to support the breadth or mark the source coverage gap clearly in missingInputs so the reviewer can block completion.
-- If validation later needs a correction, it should be possible to rewrite the skill from this file map alone.
+- If validation later needs a correction, the current target directory should be the complete draft to revise.
 
 Return JSON:
 {
   "version": 1,
-  "name": "${args.targetName}",
-  "files": [
-    {"path": "SKILL.md", "content": "Full file contents"}
-  ],
   "summary": "What was generated.",
   "validationNotes": ["Self-check note"],
   "missingInputs": ["Missing input, if any"],
@@ -198,7 +206,7 @@ export function buildAuthoringValidationPrompt(args: {
   targetName: string;
   targetRootDir: string;
   plan: GeneratedSkillAuthoringPlan;
-  fileMap: GeneratedSkillFileMap;
+  artifact: GeneratedSkillArtifactSnapshot;
   deterministicIssues: string[];
 }): string {
   return `${contextPacket(args)}
@@ -207,9 +215,9 @@ export function buildAuthoringValidationPrompt(args: {
 ${JSON.stringify(args.plan, null, 2)}
 </authoring_plan>
 
-<generated_file_map>
-${JSON.stringify(args.fileMap, null, 2)}
-</generated_file_map>
+<generated_artifacts>
+${JSON.stringify(args.artifact, null, 2)}
+</generated_artifacts>
 
 <rough_validation_issues>
 ${JSON.stringify(args.deterministicIssues, null, 2)}
@@ -222,7 +230,7 @@ ${wardenSkillConstraints(args)}
 
 Review behavior:
 - Use the authoring skill again as the validation anchor.
-- Check whether the generated files followed the plan, the authoring skill, and Warden constraints.
+- Check whether the generated artifacts on disk followed the plan, the authoring skill, and Warden constraints.
 - Check whether each outline track/task is covered with useful runtime guidance, merged into another section/reference with clear coverage, or explicitly recorded as missing input. Do not require one artifact per track.
 - Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth, stale gap/provenance language, generated-skill metadata, missing local artifacts, and custom output/report formats that conflict with Warden's injected report schema.
 - Set valid to false for concrete quality failures that need one writer pass: missing task evidence, missing false-positive controls for the requested domain, missing remediation/examples where the plan required them, broad ecosystem output with no sources or recorded gaps, broken local artifact links, or a structure that the authoring skill would reject.
@@ -254,7 +262,7 @@ export function buildAuthoringRevisionPrompt(args: {
   targetName: string;
   targetRootDir: string;
   plan: GeneratedSkillAuthoringPlan;
-  fileMap: GeneratedSkillFileMap;
+  artifact: GeneratedSkillArtifactSnapshot;
   review: GeneratedSkillReviewResult;
   deterministicIssues: string[];
 }): string {
@@ -264,9 +272,9 @@ export function buildAuthoringRevisionPrompt(args: {
 ${JSON.stringify(args.plan, null, 2)}
 </authoring_plan>
 
-<current_file_map>
-${JSON.stringify(args.fileMap, null, 2)}
-</current_file_map>
+<current_artifacts>
+${JSON.stringify(args.artifact, null, 2)}
+</current_artifacts>
 
 <standards_review>
 ${JSON.stringify(args.review, null, 2)}
@@ -283,25 +291,21 @@ ${wardenSkillConstraints(args)}
 
 Revision behavior:
 - Use the authoring skill again, starting from its SKILL.md.
-- Treat the current file map as the draft to improve, not as disposable scaffolding.
+- Treat the current target directory as the draft to improve, not as disposable scaffolding.
 - Apply concrete review feedback and rough validation signals when they identify broken references, malformed artifacts, authoring metadata, custom output schemas, or missing runtime guidance.
 - If feedback is only stylistic or conflicts with the authoring skill, keep the existing structure and explain why in validationNotes.
-- Return a complete file map for every generated artifact that should exist after revision.
+- Edit files directly under the target skill root. Do not modify warden.yaml or build-state.json.
 - If review feedback identifies missing local artifacts, either include them with useful runtime content or remove the dependency and record the lost coverage as a missing input. Do not return knowingly broken local links.
 - Keep the simplest adequate layout according to the authoring skill. Do not add artifacts just to mirror tracks/tasks.
 - Preserve non-overlapping track/task guidance that is already good, and make any missing track/task coverage complete in this revision pass.
 - Fix shallow or catalog-only runtime guidance by adding targeted evidence and examples, restructuring by lookup need, or moving small guidance inline. Do not add bulk just to look deeper.
 - Fix source-depth failures by adding or preserving the source evidence the artifact actually depends on. If enough source discovery cannot be completed, keep the artifact incomplete and state the missing coverage instead of claiming a finished broad skill.
 - Keep generated runtime artifacts free of authoring metadata, validation summaries, and custom output/report schemas.
-- The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Preserve external sources the revised file map still depends on and add concrete external sources consulted during revision.
+- The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Preserve external sources the revised artifacts still depend on and add concrete external sources consulted during revision.
 
 Return JSON:
 {
   "version": 1,
-  "name": "${args.targetName}",
-  "files": [
-    {"path": "SKILL.md", "content": "Full file contents"}
-  ],
   "summary": "What was revised.",
   "validationNotes": ["Self-check note"],
   "missingInputs": ["Missing input, if any"],

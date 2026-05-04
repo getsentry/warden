@@ -13,15 +13,11 @@ export interface SkillBuildAuthoringProvider {
   contentHash: string;
 }
 
-function isValidGeneratedArtifactPath(path: string): boolean {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(path)) {
-    return false;
-  }
-  if (path.startsWith('/') || path.includes('..') || path.includes('//')) {
-    return false;
-  }
-  return path !== 'warden.yaml' && path !== 'build-state.json';
-}
+const SkillBuildExternalSourceSchema = z.object({
+  title: z.string().min(1),
+  url: z.string().min(1),
+  reason: z.string().min(1),
+}).strict();
 
 // The authoring plan is meant to describe semantic coverage, source depth,
 // ordered work, and review criteria. It must not become an artifact-layout
@@ -46,59 +42,20 @@ export const GeneratedSkillAuthoringPlanSchema = z.object({
   validationPlan: z.array(z.string().min(1)).min(1),
   risks: z.array(z.string().min(1)).default([]),
   missingInputs: z.array(z.string().min(1)).default([]),
-  externalSources: z.array(z.object({
-    title: z.string().min(1),
-    url: z.string().min(1),
-    reason: z.string().min(1),
-  }).strict()).default([]),
+  externalSources: z.array(SkillBuildExternalSourceSchema).default([]),
 }).strict();
 
 export type GeneratedSkillAuthoringPlan = z.infer<typeof GeneratedSkillAuthoringPlanSchema>;
 
-export const GeneratedSkillArtifactFileSchema = z.object({
-  path: z.string()
-    .min(1)
-    .refine(
-      (value) => isValidGeneratedArtifactPath(value),
-      'Generated artifact paths must be relative, stay inside the skill root, and must not overwrite warden.yaml or build-state.json',
-    ),
-  content: z.string().min(1),
-}).strict();
-
-export const GeneratedSkillFileMapSchema = z.object({
+export const GeneratedSkillWriterResultSchema = z.object({
   version: z.literal(1),
-  name: z.string().min(1),
-  files: z.array(GeneratedSkillArtifactFileSchema).min(1),
   summary: z.string().min(1),
   validationNotes: z.array(z.string().min(1)).default([]),
   missingInputs: z.array(z.string().min(1)).default([]),
-  externalSources: z.array(z.object({
-    title: z.string().min(1),
-    url: z.string().min(1),
-    reason: z.string().min(1),
-  }).strict()).default([]),
-}).strict().superRefine((value, ctx) => {
-  const paths = new Set<string>();
-  for (const [index, file] of value.files.entries()) {
-    if (paths.has(file.path)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['files', index, 'path'],
-        message: `Duplicate generated artifact path: ${file.path}`,
-      });
-    }
-    paths.add(file.path);
-  }
-  if (!paths.has('SKILL.md')) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['files'],
-      message: 'Generated artifact file map must include SKILL.md',
-    });
-  }
+  externalSources: z.array(SkillBuildExternalSourceSchema).default([]),
 });
 
-export type GeneratedSkillFileMap = z.infer<typeof GeneratedSkillFileMapSchema>;
+export type GeneratedSkillWriterResult = z.infer<typeof GeneratedSkillWriterResultSchema>;
 
 export const GeneratedSkillReviewIssueSchema = z.object({
   severity: z.enum(['error', 'warning']),

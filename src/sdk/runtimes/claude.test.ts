@@ -222,6 +222,28 @@ describe('claudeRuntime.runSkill', () => {
     });
   });
 
+  it('allows requested mutating tools only for trusted writer runs', async () => {
+    mockQuery.mockReturnValue(mockStream([successResult()]));
+
+    await claudeRuntime.runSkill({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo/skill-root',
+      skillName: 'generated-skill-writer',
+      tools: { allowed: ['Read', 'Write', 'Edit', 'Bash'] },
+      allowMutatingTools: true,
+      options: {},
+    });
+
+    expect(mockQuery).toHaveBeenCalledWith({
+      prompt: 'user',
+      options: expect.objectContaining({
+        allowedTools: ['Read', 'Write', 'Edit', 'Bash'],
+        disallowedTools: ['Grep', 'Glob', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'],
+      }),
+    });
+  });
+
   it('surfaces auth status errors', async () => {
     mockQuery.mockReturnValue(mockStream([
       {

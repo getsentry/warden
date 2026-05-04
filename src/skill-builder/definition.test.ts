@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  clearGeneratedSkillArtifacts,
   createGeneratedSkillDefinition,
   getGeneratedSkillRoot,
   loadGeneratedSkillDefinition,
@@ -109,5 +110,22 @@ prompt: |-
       isPath: true,
       rootDir: join(repoRoot, 'skills', 'security'),
     });
+  });
+
+  it('clears generated artifacts without deleting definition or build state', () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'warden-skill-definition-'));
+    tempDirs.push(rootDir);
+    mkdirSync(join(rootDir, 'references'), { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), 'version: 1\nkind: generated-skill\nname: security\nprompt: test\n', 'utf-8');
+    writeFileSync(join(rootDir, 'build-state.json'), '{"version":1}\n', 'utf-8');
+    writeFileSync(join(rootDir, 'SKILL.md'), 'draft\n', 'utf-8');
+    writeFileSync(join(rootDir, 'references', 'security.md'), 'draft\n', 'utf-8');
+
+    clearGeneratedSkillArtifacts(rootDir);
+
+    expect(existsSync(join(rootDir, 'warden.yaml'))).toBe(true);
+    expect(existsSync(join(rootDir, 'build-state.json'))).toBe(true);
+    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(false);
+    expect(existsSync(join(rootDir, 'references'))).toBe(false);
   });
 });

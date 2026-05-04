@@ -41,6 +41,11 @@ export interface SkillRunRequest {
   skillName: string;
   options: SkillRunOptions;
   tools?: ToolConfig;
+  /**
+   * Allow explicitly requested mutating tools for trusted internal writer tasks.
+   * Normal skill analysis keeps this false so hunks remain read-only.
+   */
+  allowMutatingTools?: boolean;
   /** Provider-specific settings consumed only by the selected runtime adapter. */
   providerOptions?: unknown;
 }

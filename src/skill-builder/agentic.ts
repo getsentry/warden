@@ -6,7 +6,8 @@ import { parseJsonFromOutput, type ParseJsonFromOutputResult } from '../sdk/json
 import { aggregateUsage, emptyUsage } from '../sdk/usage.js';
 import type { Runtime, SkillRunResult } from '../sdk/runtimes/index.js';
 
-const SKILL_BUILDER_AGENT_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
+const SKILL_BUILDER_READ_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
+const SKILL_BUILDER_WRITE_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch'];
 const STRUCTURED_REPAIR_MAX_TURNS = 1;
 const STRUCTURED_REPAIR_MAX_CHARS = 60_000;
 
@@ -206,6 +207,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
   schema: z.ZodType<T>;
   model?: string;
   maxTurns?: number;
+  writeAccess?: boolean;
   abortController?: AbortController;
   repair?: {
     apiKey?: string;
@@ -220,7 +222,8 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
     userPrompt: args.userPrompt,
     repoPath: args.repoPath,
     skillName: args.skillName,
-    tools: { allowed: SKILL_BUILDER_AGENT_TOOLS },
+    tools: { allowed: args.writeAccess ? SKILL_BUILDER_WRITE_TOOLS : SKILL_BUILDER_READ_TOOLS },
+    allowMutatingTools: args.writeAccess,
     options: {
       model: args.model,
       maxTurns: args.maxTurns,

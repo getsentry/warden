@@ -9,6 +9,8 @@
  *
  * Important invariants:
  * - Claude receives only read-only tools for hunk analysis.
+ * - Mutating tools are available only to trusted internal writer tasks that
+ *   opt in at the runtime request boundary.
  * - SDK errors remain classifiable by downstream retry/auth logic.
  * - Runtime results always contain valid `UsageStats`.
  * - Claude-specific result subtypes normalize to Warden-owned statuses.
@@ -75,18 +77,25 @@ function missingApiKeyResult<T>(kind: 'auxiliary' | 'synthesis'): AuxiliaryRunRe
   };
 }
 
-function resolveClaudeSkillTools(tools: ToolConfig | undefined): {
+function resolveClaudeSkillTools(
+  tools: ToolConfig | undefined,
+  allowMutatingTools = false,
+): {
   allowedTools: string[];
   disallowedTools: string[];
 } {
   const denied = new Set(tools?.denied ?? []);
   const requested = tools?.allowed ?? DEFAULT_READ_ONLY_TOOLS;
-  const allowedTools = READ_ONLY_TOOLS.filter((tool) => requested.includes(tool) && !denied.has(tool));
-  const disallowedReadOnlyTools = READ_ONLY_TOOLS.filter((tool) => !allowedTools.includes(tool));
+  const availableTools = allowMutatingTools
+    ? [...READ_ONLY_TOOLS, ...MUTATING_TOOLS]
+    : READ_ONLY_TOOLS;
+  const allowedTools = availableTools.filter((tool) => requested.includes(tool) && !denied.has(tool));
+  const disallowedAvailableTools = availableTools.filter((tool) => !allowedTools.includes(tool));
+  const disallowedMutatingTools = allowMutatingTools ? [] : [...MUTATING_TOOLS];
 
   return {
     allowedTools,
-    disallowedTools: [...MUTATING_TOOLS, ...disallowedReadOnlyTools, ...CLAUDE_AGENT_TOOLS],
+    disallowedTools: [...disallowedMutatingTools, ...disallowedAvailableTools, ...CLAUDE_AGENT_TOOLS],
   };
 }
 
@@ -257,10 +266,19 @@ export const claudeRuntime: Runtime = {
   name: 'claude',
 
   async runSkill(request: SkillRunRequest): Promise<SkillRunResponse> {
-    const { systemPrompt, userPrompt, repoPath, options, skillName, providerOptions, tools } = request;
+    const {
+      systemPrompt,
+      userPrompt,
+      repoPath,
+      options,
+      skillName,
+      providerOptions,
+      tools,
+      allowMutatingTools,
+    } = request;
     const { maxTurns = 50, model, abortController } = options;
     const { pathToClaudeCodeExecutable } = getClaudeProviderOptions(providerOptions);
-    const skillTools = resolveClaudeSkillTools(tools);
+    const skillTools = resolveClaudeSkillTools(tools, allowMutatingTools);
     const modelId = model ?? 'unknown';
 
     return Sentry.startSpan(
@@ -289,9 +307,9 @@ export const claudeRuntime: Runtime = {
             maxTurns,
             cwd: repoPath,
             systemPrompt,
-            // Only allow read-only tools. Skills may opt into read-only web tools.
+            // Hunk analysis is read-only; trusted internal writer tasks may opt
+            // into mutating tools explicitly at the runtime request boundary.
             allowedTools: skillTools.allowedTools,
-            // Explicitly block modification/side-effect tools as defense-in-depth.
             disallowedTools: skillTools.disallowedTools,
             permissionMode: 'bypassPermissions',
             // Prevent SDK from writing session .jsonl files and polluting Claude Code's session index.

@@ -1,10 +1,14 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Runtime, SkillRunRequest, SkillRunResponse } from '../sdk/runtimes/index.js';
 import { buildGeneratedSkill } from './skill.js';
-import { GeneratedSkillAuthoringPlanSchema, GeneratedSkillReviewResultSchema } from './skill-contract.js';
+import {
+  GeneratedSkillAuthoringPlanSchema,
+  GeneratedSkillReviewResultSchema,
+  GeneratedSkillWriterResultSchema,
+} from './skill-contract.js';
 import { resolveAuthoringProvider } from './authoring-provider.js';
 import {
   getBuildStatePath,
@@ -169,6 +173,55 @@ Read \`references/checklist.md\` first. It routes to the detailed reference file
 `;
 }
 
+function writeGeneratedFiles(rootDir: string, files: { path: string; content: string }[]): void {
+  for (const file of files) {
+    const target = join(rootDir, file.path);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, file.content, 'utf-8');
+  }
+}
+
+function diskWriterRunSkill(rootDir: string, runSkill: Runtime['runSkill']): Runtime['runSkill'] {
+  return async (request) => {
+    const response = await runSkill(request);
+    if (
+      !request.skillName.endsWith(':authoring-implementation') &&
+      !request.skillName.endsWith(':authoring-revision')
+    ) {
+      return response;
+    }
+
+    const result = response.result;
+    if (!result || result.status !== 'success') {
+      return response;
+    }
+
+    const parsed = JSON.parse(result.text) as {
+      files?: { path: string; content: string }[];
+      summary?: string;
+      validationNotes?: string[];
+      missingInputs?: string[];
+      externalSources?: { title: string; url: string; reason: string }[];
+    };
+    if (parsed.files) {
+      writeGeneratedFiles(rootDir, parsed.files);
+    }
+    return {
+      ...response,
+      result: {
+        ...result,
+        text: JSON.stringify({
+          version: 1,
+          summary: parsed.summary ?? 'Writer updated skill artifacts.',
+          validationNotes: parsed.validationNotes ?? [],
+          missingInputs: parsed.missingInputs ?? [],
+          externalSources: parsed.externalSources ?? [],
+        }),
+      },
+    };
+  };
+}
+
 describe('buildGeneratedSkill', () => {
   const tempDirs: string[] = [];
 
@@ -179,7 +232,7 @@ describe('buildGeneratedSkill', () => {
     tempDirs.length = 0;
   });
 
-  it('writes provider-driven file maps without hardcoded template artifacts', async () => {
+  it('lets the writer persist artifacts without hardcoded template files', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -227,10 +280,6 @@ describe('buildGeneratedSkill', () => {
                   path: 'references/security.md',
                   content: '# Security Reference\n\nUse this when the hunk touches authentication or user-controlled input.\n',
                 },
-                {
-                  path: 'SOURCES.md',
-                  content: '# Sources\n\n- Generated from the prompt and authoring provider.\n',
-                },
               ],
               summary: 'Generated a reference-backed skill.',
               validationNotes: ['Self-check passed'],
@@ -264,7 +313,7 @@ describe('buildGeneratedSkill', () => {
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -288,13 +337,18 @@ describe('buildGeneratedSkill', () => {
     expect(planPrompt).toContain('define the source coverage needed before the skill can be considered complete');
 
     const implementationPrompt = runSkill.mock.calls[1]![0].userPrompt;
-    expect(implementationPrompt).toContain('Include every local artifact that SKILL.md or another returned artifact requires at runtime');
+    expect(implementationPrompt).toContain('Edit files directly under the target skill root');
+    expect(implementationPrompt).toContain('Write SKILL.md and every local artifact that SKILL.md or another runtime artifact requires');
     expect(implementationPrompt).toContain('Satisfy the plan\'s lookupQuestions and qualityBar');
     expect(implementationPrompt).toContain('Do not ship catalog-only runtime guidance');
     expect(implementationPrompt).toContain('externalSources array is cumulative evidence for the final artifact');
+    expect(runSkill.mock.calls[1]![0].repoPath).toBe(rootDir);
+    expect(runSkill.mock.calls[1]![0].allowMutatingTools).toBe(true);
+    expect(runSkill.mock.calls[1]![0].tools?.allowed).toEqual(expect.arrayContaining(['Write', 'Edit', 'Bash']));
 
     const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
     expect(validationPrompt).toContain('Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth');
+    expect(validationPrompt).toContain('generated artifacts on disk');
     expect(validationPrompt).toContain('Set valid to false for concrete quality failures');
     expect(validationPrompt).toContain('claims broad domain coverage but the source base is too thin');
     expect(validationPrompt).toContain('Set valid to false for any missing local artifact needed by returned runtime guidance');
@@ -423,7 +477,7 @@ Read \`references/authentication.md\` for login and session changes.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -484,7 +538,7 @@ Read \`references/authentication.md\` for login and session changes.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -509,6 +563,24 @@ Read \`references/authentication.md\` for login and session changes.
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('accepts writer metadata even when provider includes legacy file-map fields', () => {
+    const result = GeneratedSkillWriterResultSchema.safeParse({
+      version: 1,
+      name: 'wrdn-security',
+      files: [{ path: 'SKILL.md', content: '' }],
+      summary: 'Writer updated files on disk.',
+      validationNotes: [],
+      missingInputs: [],
+      externalSources: [],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('expected writer metadata to parse');
+    }
+    expect(result.data).not.toHaveProperty('files');
   });
 
   it('accepts source-depth details in authoring plans', () => {
@@ -661,7 +733,7 @@ Read \`references/authentication.md\` for login and session changes.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -798,7 +870,7 @@ Read \`references/authentication.md\` for login and session changes.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -810,7 +882,7 @@ Read \`references/authentication.md\` for login and session changes.
     expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toContain('Trace before reporting.');
   });
 
-  it('fails instead of writing artifacts when revision leaves routed references missing', async () => {
+  it('fails and preserves the revision draft when routed references are still missing', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -931,7 +1003,7 @@ Read \`references/missing.md\` before reporting.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -942,13 +1014,14 @@ Read \`references/missing.md\` before reporting.
       /Generated skill failed final review for wrdn-security:[\s\S]*references\/missing\.md/,
     );
 
-    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(false);
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toBe(incompleteSkill);
     expect(existsSync(join(rootDir, 'references', 'missing.md'))).toBe(false);
+    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact).toBeUndefined();
   });
 
-  it('writes generated artifacts when frontmatter is missing and references are not routed', async () => {
+  it('fails mechanical review when the writer leaves SKILL.md malformed and preserves the draft', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1018,30 +1091,30 @@ Read \`references/missing.md\` before reporting.
       };
     });
 
-    await buildGeneratedSkill({
+    await expect(buildGeneratedSkill({
       outline: buildOutline,
       source: source(),
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
       repoPath: tempDir,
       authoringSkillRoot,
       regenerate: true,
-    });
+    })).rejects.toThrow(
+      /Generated skill failed final review for wrdn-security:[\s\S]*SKILL\.md must start with YAML frontmatter/,
+    );
 
-    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toMatch(/^---\nname: wrdn-security\n/);
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toBe(skillMdWithoutFrontmatter());
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.deterministicWarnings).toContain(
-      'warning: SKILL.md does not route runtime reference references/security.md',
-    );
+    expect(state?.artifact).toBeUndefined();
   });
 
-  it('repairs generated frontmatter descriptions that contain authoring metadata', async () => {
+  it('feeds authoring-metadata descriptions to reviewer and revision writer', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1051,6 +1124,15 @@ Read \`references/missing.md\` before reporting.
     const buildOutline = outline();
     writeInitialState(rootDir, buildOutline);
 
+    const revisedSkill = `---
+name: wrdn-security
+description: Use when reviewing code changes for security concerns.
+allowed-tools: Read Grep Glob Bash
+---
+
+Review changed hunks for exploitable security issues.
+`;
+    let reviewCalls = 0;
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
       if (request.skillName.endsWith(':authoring-plan')) {
         return {
@@ -1089,16 +1171,47 @@ Read \`references/missing.md\` before reporting.
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: revisedSkill }],
+              summary: 'Revised the trigger description.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      reviewCalls += 1;
       return {
         result: {
           status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: true,
-            summary: 'Validated.',
-            issues: [],
-            missingInputs: [],
-          }),
+          text: JSON.stringify(reviewCalls === 1
+            ? {
+              version: 1,
+              valid: false,
+              summary: 'Description contains authoring metadata.',
+              issues: [{
+                severity: 'error',
+                path: 'SKILL.md',
+                message: 'Description should be runtime trigger language, not build metadata.',
+              }],
+              missingInputs: [],
+            }
+            : {
+              version: 1,
+              valid: true,
+              summary: 'Description is runtime-facing.',
+              issues: [],
+              missingInputs: [],
+            }),
           errors: [],
           usage: usage(),
         },
@@ -1111,7 +1224,7 @@ Read \`references/missing.md\` before reporting.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1126,7 +1239,7 @@ Read \`references/missing.md\` before reporting.
     );
   });
 
-  it('omits generated metadata artifacts and strips output contract sections', async () => {
+  it('uses revision writer to remove metadata artifacts and output contract sections', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1143,6 +1256,7 @@ Use Warden's JSON finding schema.
 
 See \`SPEC.md\` for maintenance details.
 `;
+    let reviewCalls = 0;
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
       if (request.skillName.endsWith(':authoring-plan')) {
         return {
@@ -1191,16 +1305,53 @@ See \`SPEC.md\` for maintenance details.
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        rmSync(join(rootDir, 'SOURCES.md'), { force: true });
+        rmSync(join(rootDir, 'SPEC.md'), { force: true });
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: inlineSkillMd() }],
+              summary: 'Removed output contract and build metadata.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      reviewCalls += 1;
       return {
         result: {
           status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: true,
-            summary: 'Validated.',
-            issues: [],
-            missingInputs: [],
-          }),
+          text: JSON.stringify(reviewCalls === 1
+            ? {
+              version: 1,
+              valid: false,
+              summary: 'Runtime artifacts contain output-contract and build metadata.',
+              issues: [{
+                severity: 'error',
+                path: 'SKILL.md',
+                message: 'Remove custom output contract sections from runtime guidance.',
+              }, {
+                severity: 'error',
+                path: 'SOURCES.md',
+                message: 'Remove build metadata unless it documents real external sources.',
+              }],
+              missingInputs: [],
+            }
+            : {
+              version: 1,
+              valid: true,
+              summary: 'Metadata artifacts were removed.',
+              issues: [],
+              missingInputs: [],
+            }),
           errors: [],
           usage: usage(),
         },
@@ -1213,7 +1364,7 @@ See \`SPEC.md\` for maintenance details.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1310,7 +1461,7 @@ See \`SPEC.md\` for maintenance details.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1324,7 +1475,7 @@ See \`SPEC.md\` for maintenance details.
     );
   });
 
-  it('does not synthesize references from stripped output contract sections', async () => {
+  it('uses revision writer to remove output-contract routes instead of synthesizing references', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1339,6 +1490,7 @@ See \`SPEC.md\` for maintenance details.
 
 Read \`references/output-format.md\` before changing output behavior.
 `;
+    let reviewCalls = 0;
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
       if (request.skillName.endsWith(':authoring-plan')) {
         return {
@@ -1377,16 +1529,47 @@ Read \`references/output-format.md\` before changing output behavior.
           },
         };
       }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: inlineSkillMd() }],
+              summary: 'Removed output-format route.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      reviewCalls += 1;
       return {
         result: {
           status: 'success',
-          text: JSON.stringify({
-            version: 1,
-            valid: true,
-            summary: 'Validated.',
-            issues: [],
-            missingInputs: [],
-          }),
+          text: JSON.stringify(reviewCalls === 1
+            ? {
+              version: 1,
+              valid: false,
+              summary: 'Output-format route should be removed.',
+              issues: [{
+                severity: 'error',
+                path: 'SKILL.md',
+                message: 'Remove custom output-format runtime guidance.',
+              }],
+              missingInputs: [],
+            }
+            : {
+              version: 1,
+              valid: true,
+              summary: 'Output-format route was removed.',
+              issues: [],
+              missingInputs: [],
+            }),
           errors: [],
           usage: usage(),
         },
@@ -1399,7 +1582,7 @@ Read \`references/output-format.md\` before changing output behavior.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1483,7 +1666,7 @@ Read \`references/output-format.md\` before changing output behavior.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1578,11 +1761,11 @@ Read \`references/output-format.md\` before changing output behavior.
             ? {
               version: 1,
               valid: false,
-              summary: 'Provider saw the original file map as incomplete.',
+              summary: 'Provider saw the original draft as incomplete.',
               issues: [{
                 severity: 'error',
-                path: 'generated_file_map',
-                message: 'Files array only contains SKILL.md but SKILL.md routes reference files that are not included.',
+                path: 'SKILL.md',
+                message: 'SKILL.md routes reference files that are not included on disk.',
               }, {
                 severity: 'error',
                 path: 'references/',
@@ -1609,7 +1792,7 @@ Read \`references/output-format.md\` before changing output behavior.
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1709,7 +1892,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1724,7 +1907,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
     expect(state?.artifact?.deterministicWarnings).toEqual([]);
   });
 
-  it('fails instead of writing artifacts when a generated reference index routes missing files', async () => {
+  it('fails and preserves the draft when a generated reference index routes missing files', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1800,7 +1983,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1811,7 +1994,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       /Generated skill failed final review for wrdn-security:[\s\S]*references\/security\.md/,
     );
 
-    expect(existsSync(join(rootDir, 'references', 'checklist.md'))).toBe(false);
+    expect(existsSync(join(rootDir, 'references', 'checklist.md'))).toBe(true);
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(false);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact).toBeUndefined();
@@ -1918,7 +2101,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -1931,7 +2114,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
   });
 
-  it('fails instead of writing artifacts when final provider review still reports issues', async () => {
+  it('fails and preserves the draft when final provider review still reports issues', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -2035,7 +2218,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -2046,12 +2229,12 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       /Generated skill failed final review for wrdn-security:[\s\S]*Reference is 140 lines/,
     );
 
-    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(false);
+    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact).toBeUndefined();
   });
 
-  it('fails instead of writing artifacts when final provider review remains invalid', async () => {
+  it('fails and preserves the writer draft when final provider review remains invalid', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -2144,7 +2327,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       rootDir,
       runtime: {
         name: 'claude',
-        runSkill,
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
         runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
         runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
       },
@@ -2155,7 +2338,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       /Generated skill failed final review for wrdn-security:[\s\S]*Runtime instructions are too shallow/,
     );
 
-    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toBe('previous artifact\n');
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toBe(inlineSkillMd());
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact).toBeUndefined();
   });

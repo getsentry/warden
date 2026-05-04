@@ -173,7 +173,7 @@ export function clearGeneratedSkillArtifacts(rootDir: string): void {
     return;
   }
   for (const entry of readdirSync(rootDir, { withFileTypes: true })) {
-    if (entry.name === GENERATED_SKILL_DEFINITION_FILE) {
+    if (entry.name === GENERATED_SKILL_DEFINITION_FILE || entry.name === BUILD_STATE_FILE) {
       continue;
     }
     rmSync(join(rootDir, entry.name), { recursive: true, force: true });
