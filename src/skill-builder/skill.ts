@@ -369,6 +369,10 @@ function deterministicValidation(args: {
   errors: string[];
   warnings: string[];
 } {
+  // Deterministic validation is intentionally mechanical. It protects the
+  // filesystem and catches non-runnable local references; depth, segmentation,
+  // source adequacy, and skill-writer compliance belong to the qualitative
+  // reviewer.
   const errors: string[] = [];
   const warnings: string[] = [];
   const files = new Map(args.fileMap.files.map((file) => [file.path, file.content]));
@@ -465,6 +469,9 @@ function finalBlockingIssues(args: {
   };
   review?: GeneratedSkillReviewResult;
 }): string[] {
+  // Final blocking combines mechanical runnability with the reviewer verdict.
+  // Do not add deterministic taste checks here; make the authoring reviewer own
+  // qualitative depth and layout feedback.
   const issues: string[] = [];
   issues.push(...args.deterministic.errors);
   if (hasMissingGeneratedFileWarning(args.deterministic)) {
@@ -909,6 +916,8 @@ export async function buildGeneratedSkill(args: {
     const contributionResults: SkillBuilderStepMetrics[] = [];
 
     if (args.outline.tracks.length > 1) {
+      // Tracks are sequential coverage work lanes. They help the writer deepen
+      // topics without overlap, but they must not imply one file per track.
       for (const track of args.outline.tracks) {
         args.onStatus?.(`Adding ${track.title}`);
         const contribution = await runStructuredSkillBuilderAgent({
@@ -951,6 +960,9 @@ export async function buildGeneratedSkill(args: {
         targetName: args.outline.skill,
       });
 
+      // The reviewer is the quality gate: it judges whether the generated skill
+      // satisfies skill-writer, the source-depth plan, and Warden's runtime bar.
+      // The deterministic notes below are only rough mechanical signals.
       args.onStatus?.(reviewRound === 0
         ? 'Reviewing generated skill'
         : 'Reviewing revised skill');

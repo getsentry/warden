@@ -31,6 +31,10 @@ export function defaultValidationMaxTurns(): number {
   return VALIDATION_MAX_TURNS;
 }
 
+// Keep this wrapper contract narrow. Warden owns the generated skill goal,
+// runtime constraints, source-depth expectations, sequential coverage work,
+// and the qualitative review bar. The authoring skill owns layout, routing,
+// reference naming, and other skill-writer doctrine.
 function wardenSkillConstraints(args: {
   targetName: string;
   targetRootDir: string;
@@ -61,6 +65,9 @@ function contextPacket(args: {
   outline: SkillBuildOutline;
   source: SkillBuildSource;
 }): string {
+  // The outline is planning context: topics, tasks, source signals, and
+  // non-overlap boundaries. It is not a runnable skill and does not prescribe
+  // the final artifact tree.
   return `<source_material>
 ${sourceBlocks(args.source)}
 </source_material>

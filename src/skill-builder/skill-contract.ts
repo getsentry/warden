@@ -23,6 +23,10 @@ function isValidGeneratedArtifactPath(path: string): boolean {
   return path !== 'warden.yaml' && path !== 'build-state.json';
 }
 
+// The authoring plan is meant to describe semantic coverage, source depth,
+// sequential work, and review criteria. It must not become an artifact-layout
+// plan. `candidatePaths` is retained only for backwards-compatible parsing of
+// older plans; prompts should not rely on it as a file-placement contract.
 export const GeneratedSkillAuthoringPlanSchema = z.object({
   version: z.literal(1),
   summary: z.string().min(1),
