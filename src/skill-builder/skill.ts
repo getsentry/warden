@@ -539,6 +539,21 @@ function backfillMissingRoutedReferences(
   };
 }
 
+function prepareGeneratedFileMap(
+  fileMap: GeneratedSkillFileMap,
+  targetName: string,
+  outline: SkillBuildOutline,
+): GeneratedSkillFileMap {
+  const prefilled = backfillMissingRoutedReferences(
+    canonicalizeGeneratedFileMapPaths(fileMap),
+    outline,
+  );
+  return backfillMissingRoutedReferences(
+    normalizeGeneratedFileMap(prefilled, targetName),
+    outline,
+  );
+}
+
 function deterministicValidation(args: {
   fileMap: GeneratedSkillFileMap;
   targetName: string;
@@ -678,10 +693,7 @@ function applyValidationResult(args: {
       ...args.validation.missingInputs,
     ],
   };
-  const fileMap = backfillMissingRoutedReferences(
-    normalizeGeneratedFileMap(candidate, args.targetName),
-    args.outline,
-  );
+  const fileMap = prepareGeneratedFileMap(candidate, args.targetName, args.outline);
   const validation = deterministicValidation({
     fileMap,
     targetName: args.targetName,
@@ -757,10 +769,7 @@ function applyContributionResult(args: {
     ),
   };
 
-  return backfillMissingRoutedReferences(
-    normalizeGeneratedFileMap(candidate, args.targetName),
-    args.outline,
-  );
+  return prepareGeneratedFileMap(candidate, args.targetName, args.outline);
 }
 
 function summarizeResponseModel(models: (string | undefined)[]): string | undefined {
@@ -879,8 +888,8 @@ function loadCachedArtifact(args: {
     hasMissingGeneratedFileWarning(validation) ||
     hasCanonicalPathChanges(files)
   ) {
-    const normalizedFileMap = backfillMissingRoutedReferences(
-      normalizeGeneratedFileMap({
+    const normalizedFileMap = prepareGeneratedFileMap(
+      {
         version: 1,
         name: metadata.name,
         files: files.map((file) => ({ path: file.path, content: file.content })),
@@ -888,7 +897,8 @@ function loadCachedArtifact(args: {
         validationNotes: [],
         missingInputs: metadata.missingInputs,
         externalSources: metadata.externalSources,
-      }, metadata.name),
+      },
+      metadata.name,
       args.outline,
     );
     const normalizedValidation = deterministicValidation({
@@ -1105,8 +1115,9 @@ export async function buildGeneratedSkill(args: {
       );
     }
 
-    let workingFileMap = backfillMissingRoutedReferences(
-      normalizeGeneratedFileMap(implementation.data, args.outline.skill),
+    let workingFileMap = prepareGeneratedFileMap(
+      implementation.data,
+      args.outline.skill,
       args.outline,
     );
     const contributionResults: {
@@ -1178,13 +1189,14 @@ export async function buildGeneratedSkill(args: {
       repair,
     });
 
-    const fileMap = backfillMissingRoutedReferences(
-      normalizeGeneratedFileMap(applyValidationResult({
+    const fileMap = prepareGeneratedFileMap(
+      applyValidationResult({
         original: initialFileMap,
         validation: validation.data,
         targetName: args.outline.skill,
         outline: args.outline,
-      }), args.outline.skill),
+      }),
+      args.outline.skill,
       args.outline,
     );
     const finalDeterministic = deterministicValidation({

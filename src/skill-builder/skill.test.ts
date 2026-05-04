@@ -1195,6 +1195,94 @@ See \`SPEC.md\` for maintenance details.
     expect(existsSync(join(rootDir, 'SPEC.md'))).toBe(false);
   });
 
+  it('backfills routed references before stripping output contract sections', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+
+    const skillWithStrippedRoute = `${inlineSkillMd()}
+## Output Format
+
+Read \`references/output-format.md\` before changing output behavior.
+`;
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan.',
+              workflow: ['Read the authoring skill'],
+              researchPlan: [],
+              artifactPlan: ['Create SKILL.md'],
+              validationPlan: ['Validate output'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: skillWithStrippedRoute }],
+              summary: 'Generated.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+    });
+
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).not.toContain('Output Format');
+    expect(existsSync(join(rootDir, 'references', 'output-format.md'))).toBe(true);
+  });
+
   it('preserves legitimate runtime descriptions that mention generated code', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
