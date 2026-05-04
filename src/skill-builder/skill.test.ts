@@ -187,6 +187,11 @@ describe('buildGeneratedSkill', () => {
     mkdirSync(rootDir, { recursive: true });
     writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
     const buildOutline = outline();
+    buildOutline.build.externalSources = [{
+      title: 'OWASP Testing Guide',
+      url: 'https://owasp.org/www-project-web-security-testing-guide/',
+      reason: 'Security source carried from outline synthesis into artifact metadata.',
+    }];
     writeInitialState(rootDir, buildOutline);
 
     const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
@@ -281,6 +286,7 @@ describe('buildGeneratedSkill', () => {
     expect(planPrompt).toContain('Do not include Output Format, Output Contract, Response Format, or custom reporting schema sections');
     expect(planPrompt).toContain('Build the authoring brief first');
     expect(planPrompt).toContain('For every planned routed reference, define the lookup question');
+    expect(planPrompt).toContain('define the source coverage needed before the skill can be considered complete');
 
     const implementationPrompt = runSkill.mock.calls[1]![0].userPrompt;
     expect(implementationPrompt).toContain('Add references/ only for routed runtime lookup leaves');
@@ -288,10 +294,13 @@ describe('buildGeneratedSkill', () => {
     expect(implementationPrompt).toContain('Satisfy the plan\'s lookupQuestions and qualityBar');
     expect(implementationPrompt).toContain('Do not ship catalog-only references');
     expect(implementationPrompt).toContain('Prefer no SOURCES.md over a SOURCES.md that says the skill came from the internal outline');
+    expect(implementationPrompt).toContain('externalSources array is cumulative evidence for the final artifact');
 
     const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
     expect(validationPrompt).toContain('Check for over-broad topic-bucket references, catalog-only references, missing source depth');
     expect(validationPrompt).toContain('Set valid to false for concrete quality failures');
+    expect(validationPrompt).toContain('claims broad security coverage but the source base is too thin');
+    expect(validationPrompt).toContain('Set valid to false for any missing routed local file');
     expect(validationPrompt).toContain('Treat rough validation issues as advisory signals');
 
     const state = readSkillBuildState(getBuildStatePath(rootDir));
@@ -301,6 +310,11 @@ describe('buildGeneratedSkill', () => {
       'SKILL.md',
       'references/security.md',
     ].sort());
+    expect(artifact.externalSources).toEqual([{
+      title: 'OWASP Testing Guide',
+      url: 'https://owasp.org/www-project-web-security-testing-guide/',
+      reason: 'Security source carried from outline synthesis into artifact metadata.',
+    }]);
   });
 
   it('runs sequential track contributions without turning tracks into directories', async () => {
@@ -832,7 +846,7 @@ Read \`references/tracks/authentication.md\` for login and session changes.
     expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toContain('Trace before reporting.');
   });
 
-  it('keeps missing routed references visible after revision output', async () => {
+  it('fails instead of writing artifacts when revision leaves routed references missing', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -947,7 +961,7 @@ Read \`references/missing.md\` before reporting.
       };
     });
 
-    await buildGeneratedSkill({
+    await expect(buildGeneratedSkill({
       outline: buildOutline,
       source: source(),
       rootDir,
@@ -960,16 +974,14 @@ Read \`references/missing.md\` before reporting.
       repoPath: tempDir,
       authoringSkillRoot,
       regenerate: true,
-    });
+    })).rejects.toThrow(
+      /Generated skill failed final review for wrdn-security:[\s\S]*references\/missing\.md/,
+    );
 
-    const writtenSkill = readFileSync(join(rootDir, 'SKILL.md'), 'utf-8');
-    expect(writtenSkill).toContain('references/missing.md');
-    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
+    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(false);
     expect(existsSync(join(rootDir, 'references', 'missing.md'))).toBe(false);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.deterministicWarnings).toContain(
-      'warning: SKILL.md routes references/missing.md but the generated file map does not include it',
-    );
+    expect(state?.artifact).toBeUndefined();
   });
 
   it('writes generated artifacts when frontmatter is missing and references are not routed', async () => {
@@ -1749,7 +1761,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
     expect(state?.artifact?.deterministicWarnings).toEqual([]);
   });
 
-  it('records missing files routed by a generated reference index', async () => {
+  it('fails instead of writing artifacts when a generated reference index routes missing files', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1819,7 +1831,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       };
     });
 
-    await buildGeneratedSkill({
+    await expect(buildGeneratedSkill({
       outline: buildOutline,
       source: source(),
       rootDir,
@@ -1832,14 +1844,14 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       repoPath: tempDir,
       authoringSkillRoot,
       regenerate: true,
-    });
+    })).rejects.toThrow(
+      /Generated skill failed final review for wrdn-security:[\s\S]*references\/security\.md/,
+    );
 
-    expect(existsSync(join(rootDir, 'references', 'checklist.md'))).toBe(true);
+    expect(existsSync(join(rootDir, 'references', 'checklist.md'))).toBe(false);
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(false);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.deterministicWarnings).toContain(
-      'warning: SKILL.md routes references/security.md but the generated file map does not include it',
-    );
+    expect(state?.artifact).toBeUndefined();
   });
 
   it('regenerates cached artifacts with missing routed reference files', async () => {
@@ -1957,7 +1969,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
   });
 
-  it('writes generated artifacts when provider validation reports reference navigation errors', async () => {
+  it('fails instead of writing artifacts when final provider review still reports issues', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -2055,7 +2067,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       };
     });
 
-    const artifact = await buildGeneratedSkill({
+    await expect(buildGeneratedSkill({
       outline: buildOutline,
       source: source(),
       rootDir,
@@ -2068,25 +2080,23 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       repoPath: tempDir,
       authoringSkillRoot,
       regenerate: true,
-    });
+    })).rejects.toThrow(
+      /Generated skill failed final review for wrdn-security:[\s\S]*Reference is 140 lines/,
+    );
 
-    expect(artifact.source).toBe('generated');
-    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
+    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(false);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.validationIssues).toEqual([{
-      severity: 'warning',
-      path: 'references/security.md',
-      message: 'Reference is 140 lines without ## Contents section for navigation.',
-    }]);
+    expect(state?.artifact).toBeUndefined();
   });
 
-  it('records provider validation errors without blocking valid generated artifacts', async () => {
+  it('fails instead of writing artifacts when final provider review remains invalid', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
     const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
     mkdirSync(rootDir, { recursive: true });
     writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    writeFileSync(join(rootDir, 'SKILL.md'), 'previous artifact\n', 'utf-8');
     const buildOutline = outline();
     writeInitialState(rootDir, buildOutline);
 
@@ -2166,7 +2176,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       };
     });
 
-    const artifact = await buildGeneratedSkill({
+    await expect(buildGeneratedSkill({
       outline: buildOutline,
       source: source(),
       rootDir,
@@ -2179,15 +2189,12 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       repoPath: tempDir,
       authoringSkillRoot,
       regenerate: true,
-    });
+    })).rejects.toThrow(
+      /Generated skill failed final review for wrdn-security:[\s\S]*Runtime instructions are too shallow/,
+    );
 
-    expect(artifact.source).toBe('generated');
-    expect(existsSync(join(rootDir, 'SKILL.md'))).toBe(true);
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toBe('previous artifact\n');
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.validationIssues).toEqual([{
-      severity: 'warning',
-      path: 'SKILL.md',
-      message: 'Runtime instructions are too shallow.',
-    }]);
+    expect(state?.artifact).toBeUndefined();
   });
 });

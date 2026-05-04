@@ -45,7 +45,6 @@ import {
 const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 4;
 const MAX_SKILL_REVISION_ATTEMPTS = 1;
 const SKILL_FRONTMATTER_PATTERN = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
-type GeneratedSkillReviewIssue = GeneratedSkillReviewResult['issues'][number];
 
 interface SkillBuilderStepMetrics {
   usage: UsageStats;
@@ -449,28 +448,67 @@ function hasCanonicalPathChanges(files: { path: string }[]): boolean {
   return files.some((file) => canonicalGeneratedArtifactPath(file.path) !== file.path);
 }
 
-function advisoryProviderIssues(
-  review: GeneratedSkillReviewResult,
-): GeneratedSkillReviewIssue[] {
-  const issues = review.issues.map((issue) => ({
-    ...issue,
-    severity: 'warning' as const,
-  }));
-  if (!review.valid && issues.length === 0) {
-    issues.push({
-      severity: 'warning',
-      message: 'Authoring provider marked the generated skill invalid without issue details.',
-    });
-  }
-  return issues;
-}
-
 function reviewNeedsRevision(review: GeneratedSkillReviewResult): boolean {
   return !review.valid || review.issues.length > 0;
 }
 
+function formatReviewIssue(issue: GeneratedSkillReviewResult['issues'][number]): string {
+  const location = issue.path ? `${issue.path}: ` : '';
+  const fix = issue.suggestedFix ? ` Suggested fix: ${issue.suggestedFix}` : '';
+  return `${location}${issue.message}${fix}`;
+}
+
+function finalBlockingIssues(args: {
+  deterministic: {
+    errors: string[];
+    warnings: string[];
+  };
+  review?: GeneratedSkillReviewResult;
+}): string[] {
+  const issues: string[] = [];
+  issues.push(...args.deterministic.errors);
+  if (hasMissingGeneratedFileWarning(args.deterministic)) {
+    issues.push(...args.deterministic.warnings.filter((warning) =>
+      warning.includes('generated file map does not include it')
+    ));
+  }
+  if (args.review && reviewNeedsRevision(args.review)) {
+    if (args.review.issues.length === 0) {
+      issues.push('Authoring reviewer marked the generated skill invalid without issue details');
+    } else {
+      issues.push(...args.review.issues.map(formatReviewIssue));
+    }
+  }
+  return uniqueStrings(issues);
+}
+
+function throwIfFinalReviewFailed(args: {
+  targetName: string;
+  deterministic: {
+    errors: string[];
+    warnings: string[];
+  };
+  review?: GeneratedSkillReviewResult;
+}): void {
+  const issues = finalBlockingIssues({
+    deterministic: args.deterministic,
+    review: args.review,
+  });
+  if (issues.length === 0) {
+    return;
+  }
+  throw new GeneratedSkillBuildError(
+    `Generated skill failed final review for ${args.targetName}:\n` +
+    issues.map((issue) => `- ${issue}`).join('\n'),
+  );
+}
+
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)].filter((value) => value.trim().length > 0);
+}
+
+function isExternalSourceUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
 }
 
 function mergeExternalSources(
@@ -479,6 +517,9 @@ function mergeExternalSources(
   const sources = new Map<string, GeneratedSkillFileMap['externalSources'][number]>();
   for (const sourceSet of sourceSets) {
     for (const source of sourceSet) {
+      if (!isExternalSourceUrl(source.url)) {
+        continue;
+      }
       sources.set(`${source.title}\n${source.url}`, source);
     }
   }
@@ -982,6 +1023,7 @@ export async function buildGeneratedSkill(args: {
     const fileMap: GeneratedSkillFileMap = {
       ...workingFileMap,
       externalSources: mergeExternalSources(
+        args.outline.build.externalSources ?? [],
         plan.data.externalSources,
         workingFileMap.externalSources,
       ),
@@ -999,7 +1041,11 @@ export async function buildGeneratedSkill(args: {
         `Generated skill build did not produce SKILL.md for ${args.outline.skill}`,
       );
     }
-    const providerIssues = latestReview ? advisoryProviderIssues(latestReview) : [];
+    throwIfFinalReviewFailed({
+      targetName: args.outline.skill,
+      deterministic: finalDeterministic,
+      review: latestReview,
+    });
 
     const usage = aggregateUsage([
       plan.usage,
@@ -1043,7 +1089,7 @@ export async function buildGeneratedSkill(args: {
         name: artifact.name,
         fileManifest: fileManifest(writtenFiles),
         deterministicWarnings: formatDeterministicIssues(finalDeterministic),
-        validationIssues: providerIssues,
+        validationIssues: [],
         bytes: artifact.bytes,
         durationMs: artifact.durationMs,
         usage: artifact.usage,
