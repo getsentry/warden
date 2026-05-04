@@ -2,6 +2,72 @@
 
 Warden can build one repo-local skill from a prompt-backed definition. The builder is an authoring harness, not a fixed skill-template generator.
 
+## Desired Outcome
+
+Generated skills should be rich runtime skills with enough depth for a later Warden run to make good decisions from changed hunks.
+
+Good generated skills usually have:
+
+- clear runtime trigger language and scope
+- topic coverage broken into useful semantic areas
+- concrete evidence requirements, not only API or vulnerability catalogs
+- false-positive controls and safe counterexamples
+- remediation guidance that points toward an actual patch
+- source provenance or explicit gaps when the skill claims broad expertise
+- segmentation that makes the skill usable without loading irrelevant material
+
+Many broad skills will naturally become reference-backed, often with roughly one focused reference per major topic and sometimes multiple references for a large topic. That is an expected outcome, not a required layout. Smaller skills may stay mostly inline. Some topics may share a reference. Some topics may not need a separate file at all. The authoring provider owns that choice.
+
+## Builder Contract
+
+Warden supplies the authoring context and acceptance bar. The authoring provider, normally `skill-writer`, owns the artifact layout and authoring method.
+
+Warden provides:
+
+- the generated skill goal from `warden.yaml`
+- the internal outline as planning context
+- semantic topics that need coverage
+- sequential authoring tasks or work lanes
+- runtime constraints for Warden skills
+- source-depth expectations and known source gaps
+- a qualitative review rubric
+- minimal mechanical validation for runnability
+
+Warden does not prescribe:
+
+- reference filenames
+- folder conventions
+- one topic per file
+- one task per file
+- route table shape beyond local runtime dependencies being usable
+- `skill-writer` internals copied into Warden prompts
+
+The wrapper prompt should say, in effect:
+
+> Use skill-writer as the authoring method. Warden provides the goal, coverage topics, sequential tasks, source expectations, runtime constraints, and qualitative rubric. Choose the simplest artifact layout that satisfies skill-writer and the rubric.
+
+## Topics And Tasks
+
+The planner should separate coverage from execution.
+
+`topics` are semantic coverage areas the final skill must handle. A topic describes what needs to be covered and how deep that coverage must be:
+
+- coverage goal
+- required evidence
+- false-positive controls
+- remediation expectations
+- source requirements or gaps
+
+`tasks` are sequential authoring work items. A task tells the writer what to deepen next:
+
+- objective
+- topic ids covered by the task
+- source work to perform
+- non-overlap boundaries
+- done criteria
+
+A task may cover one topic, part of a topic, or multiple topics. A topic may be handled inline, in one reference, in several references, in a shared reference, or in another valid skill-writer layout. Tracks/tasks are not filesystem taxonomy.
+
 ## Artifact Layout
 
 Generated skills live under `.warden/skills/<name>/`.
@@ -30,11 +96,15 @@ All other files are generated artifacts. The authoring provider decides whether 
 1. Reads or creates `.warden/skills/<name>/warden.yaml`
 2. Synthesizes internal Warden context for the build
 3. Resolves an authoring provider, defaulting to the vendored `src/internal-skills/skill-writer`
-4. Runs plan, implementation, and validation passes through that provider
-5. Writes the returned generated file map
-6. Stores provider/version/hash and validation metadata in build state
+4. Plans the authoring run: brief, topics, sequential tasks, source plan, and review rubric
+5. Runs implementation through the authoring provider
+6. Runs sequential task passes to deepen coverage without duplicating prior work
+7. Runs qualitative review against skill-writer and Warden's acceptance bar
+8. Runs one bounded revision pass for concrete review failures
+9. Writes the returned generated file map only after final review and mechanical validation pass
+10. Stores provider/version/hash and validation metadata in build state
 
-The internal outline is Warden context only. It is not a runnable skill and it does not prescribe the final artifact layout.
+The internal outline is Warden context only. It is not a runnable skill and it does not prescribe the final artifact layout. It should help the planner identify topics, work lanes, source expectations, and non-overlap boundaries.
 
 ## Authoring Provider
 
@@ -58,35 +128,75 @@ The provider returns a file map:
 }
 ```
 
-Warden owns writing, cache invalidation, and validation. The provider owns authoring method, layout choice, depth gates, and source synthesis.
+Warden owns writing, cache invalidation, runtime constraints, and minimal mechanical validation. The provider owns authoring method, layout choice, source synthesis, and how to package depth into skill artifacts.
+
+## Planner Output
+
+The planner should produce an artifact-agnostic authoring plan. It should avoid file paths unless it is referring to an existing input file that was actually inspected.
+
+Expected planner concepts:
+
+- `authoringBrief`: goal, runtime use, audience, non-goals, and depth bar
+- `sourcePlan`: known sources, required source classes, and gaps
+- `topics`: semantic coverage requirements
+- `tasks`: sequential work items that deepen topics
+- `reviewRubric`: concrete qualitative checks for completion
+
+The planner should not propose reference filenames or imply that a topic maps to a file. Layout belongs to skill-writer.
+
+## Sequential Task Passes
+
+Task passes are how the builder gets depth without making one giant prompt do everything.
+
+Each task pass should:
+
+- inspect the current file map
+- use skill-writer again as the authoring authority
+- deepen only the assigned coverage
+- preserve good non-overlapping guidance from earlier tasks
+- avoid duplicating sibling-topic material
+- return only changed or new files, with full contents
+- explain where the current file map already satisfies the task if no changes are needed
+
+Completion is not "this topic name appears." Completion means the generated runtime guidance gives the later Warden run enough evidence, false-positive controls, and remediation direction to make useful findings.
 
 ## Runtime Contract
 
 Generated skills are normal Warden skills.
 
 - `warden ... --skill <name>` resolves the generated `SKILL.md`
-- `SKILL.md` must be a usable runtime router
-- `SKILL.md` must define the core review approach: task set, routing cues, and evidence requirements
-- every runtime reference must have a direct "when to read" route from `SKILL.md`
+- `SKILL.md` must provide enough runtime entry guidance for the chosen layout
+- local runtime dependencies referenced by generated artifacts must exist
 - findings still use normal changed-line anchoring and normal Warden reporting behavior
 
 There is no required filename, track split, parent/child runtime orchestration, or fixed reference tree.
 
 ## Validation
 
-Warden runs deterministic validation and an authoring-provider validation pass.
+Warden runs minimal deterministic validation and an authoring-provider review pass.
 
-Deterministic gates include:
+Deterministic checks should stay mechanical:
 
 - `SKILL.md` exists
 - frontmatter `name` matches the generated skill name
+- frontmatter has a non-empty description
 - generated files do not overwrite `warden.yaml` or `build-state.json`
-- runtime references are routed from `SKILL.md`
-- long references include navigation or are split
-- stale provenance language is flagged
-- generated-template boilerplate is flagged
+- local runtime files referenced by generated artifacts exist
 
-The provider validation pass can return a revised file map. Warden writes the revised files only after deterministic errors are resolved.
+Deterministic validation should not judge taste, depth, segmentation quality, source adequacy, or preferred layout.
+
+The authoring-provider review should judge quality:
+
+- did the artifact follow skill-writer?
+- does the skill meet the authoring brief?
+- are topics covered in enough depth?
+- are broad claims backed by enough source coverage?
+- are source gaps recorded instead of hidden?
+- is guidance over-broad, catalog-only, or shallow?
+- are false-positive controls and remediation patterns concrete?
+- is segmentation useful without being forced?
+
+The reviewer should return concrete feedback for one bounded revision pass. If final review still reports unresolved issues, Warden should fail the build and keep the previous artifact on disk.
 
 ## Caching
 
