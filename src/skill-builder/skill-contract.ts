@@ -48,10 +48,6 @@ export const GeneratedSkillArtifactFileSchema = z.object({
 
 export type GeneratedSkillArtifactFile = z.infer<typeof GeneratedSkillArtifactFileSchema>;
 
-const GeneratedSkillValidationFileSchema = GeneratedSkillArtifactFileSchema.extend({
-  content: z.string(),
-});
-
 export const GeneratedSkillFileMapSchema = z.object({
   version: z.literal(1),
   name: z.string().min(1),
@@ -114,44 +110,22 @@ export const GeneratedSkillContributionSchema = z.object({
 
 export type GeneratedSkillContribution = z.infer<typeof GeneratedSkillContributionSchema>;
 
-export const GeneratedSkillValidationIssueSchema = z.object({
+export const GeneratedSkillReviewIssueSchema = z.object({
   severity: z.enum(['error', 'warning']),
   path: z.string().optional(),
   message: z.string().min(1),
   suggestedFix: z.string().optional(),
 }).strict();
 
-export const GeneratedSkillValidationResultSchema = z.object({
+export const GeneratedSkillReviewResultSchema = z.object({
   version: z.literal(1),
   valid: z.boolean(),
   summary: z.string().min(1),
-  issues: z.array(GeneratedSkillValidationIssueSchema).default([]),
-  files: z.array(GeneratedSkillValidationFileSchema).optional(),
+  issues: z.array(GeneratedSkillReviewIssueSchema).default([]),
   missingInputs: z.array(z.string().min(1)).default([]),
-}).strict().superRefine((value, ctx) => {
-  if (value.files && value.files.length > 0) {
-    const paths = new Set<string>();
-    for (const [index, file] of value.files.entries()) {
-      if (paths.has(file.path)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['files', index, 'path'],
-          message: `Duplicate generated artifact path: ${file.path}`,
-        });
-      }
-      paths.add(file.path);
-    }
-    if (!paths.has('SKILL.md')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['files'],
-        message: 'Validation file map must include SKILL.md when revised files are returned',
-      });
-    }
-  }
-});
+}).strict();
 
-export type GeneratedSkillValidationResult = z.infer<typeof GeneratedSkillValidationResultSchema>;
+export type GeneratedSkillReviewResult = z.infer<typeof GeneratedSkillReviewResultSchema>;
 
 export interface GeneratedSkillArtifact {
   kind: 'generated-skill';

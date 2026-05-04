@@ -23,11 +23,11 @@ import {
   GeneratedSkillBuildError,
   GeneratedSkillContributionSchema,
   GeneratedSkillFileMapSchema,
-  GeneratedSkillValidationResultSchema,
+  GeneratedSkillReviewResultSchema,
   type GeneratedSkillArtifact,
   type GeneratedSkillContribution,
   type GeneratedSkillFileMap,
-  type GeneratedSkillValidationResult,
+  type GeneratedSkillReviewResult,
   type SkillBuildAuthoringProvider,
 } from './skill-contract.js';
 export { GeneratedSkillBuildError } from './skill-contract.js';
@@ -46,7 +46,17 @@ const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 4;
 const LONG_REFERENCE_LINE_LIMIT = 100;
 const MAX_SKILL_REVISION_ATTEMPTS = 1;
 const SKILL_FRONTMATTER_PATTERN = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
-type GeneratedSkillValidationIssue = GeneratedSkillValidationResult['issues'][number];
+type GeneratedSkillReviewIssue = GeneratedSkillReviewResult['issues'][number];
+
+interface SkillBuilderStepMetrics {
+  usage: UsageStats;
+  responseModel?: string;
+  numTurns?: number;
+}
+
+interface SkillBuilderReviewResult extends SkillBuilderStepMetrics {
+  data: GeneratedSkillReviewResult;
+}
 
 function artifactFiles(rootDir: string): {
   path: string;
@@ -665,13 +675,13 @@ function hasCanonicalPathChanges(files: { path: string }[]): boolean {
 }
 
 function advisoryProviderIssues(
-  validation: GeneratedSkillValidationResult,
-): GeneratedSkillValidationIssue[] {
-  const issues = validation.issues.map((issue) => ({
+  review: GeneratedSkillReviewResult,
+): GeneratedSkillReviewIssue[] {
+  const issues = review.issues.map((issue) => ({
     ...issue,
     severity: 'warning' as const,
   }));
-  if (!validation.valid && issues.length === 0) {
+  if (!review.valid && issues.length === 0) {
     issues.push({
       severity: 'warning',
       message: 'Authoring provider marked the generated skill invalid without issue details.',
@@ -680,8 +690,8 @@ function advisoryProviderIssues(
   return issues;
 }
 
-function reviewNeedsRevision(validation: GeneratedSkillValidationResult): boolean {
-  return !validation.valid || validation.issues.length > 0;
+function reviewNeedsRevision(review: GeneratedSkillReviewResult): boolean {
+  return !review.valid || review.issues.length > 0;
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -1083,11 +1093,7 @@ export async function buildGeneratedSkill(args: {
       args.outline.skill,
       args.outline,
     );
-    const contributionResults: {
-      usage: UsageStats;
-      responseModel?: string;
-      numTurns?: number;
-    }[] = [];
+    const contributionResults: SkillBuilderStepMetrics[] = [];
 
     if (args.outline.tracks.length > 1) {
       for (const track of args.outline.tracks) {
@@ -1123,19 +1129,10 @@ export async function buildGeneratedSkill(args: {
       }
     }
 
-    const reviewResults: {
-      data: GeneratedSkillValidationResult;
-      usage: UsageStats;
-      responseModel?: string;
-      numTurns?: number;
-    }[] = [];
-    const revisionResults: {
-      usage: UsageStats;
-      responseModel?: string;
-      numTurns?: number;
-    }[] = [];
+    const reviewResults: SkillBuilderReviewResult[] = [];
+    const revisionResults: SkillBuilderStepMetrics[] = [];
 
-    let latestReview: GeneratedSkillValidationResult | undefined;
+    let latestReview: GeneratedSkillReviewResult | undefined;
     for (let reviewRound = 0; reviewRound <= MAX_SKILL_REVISION_ATTEMPTS; reviewRound += 1) {
       const deterministic = deterministicValidation({
         fileMap: workingFileMap,
@@ -1160,7 +1157,7 @@ export async function buildGeneratedSkill(args: {
           fileMap: workingFileMap,
           deterministicIssues: formatDeterministicIssues(deterministic),
         }),
-        schema: GeneratedSkillValidationResultSchema,
+        schema: GeneratedSkillReviewResultSchema,
         model: args.model,
         maxTurns: Math.min(maxTurns, defaultValidationMaxTurns()),
         abortController: args.abortController,

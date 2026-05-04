@@ -1,7 +1,7 @@
 import type {
   GeneratedSkillAuthoringPlan,
   GeneratedSkillFileMap,
-  GeneratedSkillValidationResult,
+  GeneratedSkillReviewResult,
 } from './skill-contract.js';
 import type { SkillBuildOutline, SkillBuildSource } from './outline-contract.js';
 
@@ -261,7 +261,7 @@ Return JSON:
 {
   "version": 1,
   "valid": true,
-  "summary": "Validation summary.",
+  "summary": "Review summary.",
   "issues": [
     {"severity": "error", "path": "SKILL.md", "message": "Problem", "suggestedFix": "Fix"}
   ],
@@ -278,7 +278,7 @@ export function buildAuthoringRevisionPrompt(args: {
   targetRootDir: string;
   plan: GeneratedSkillAuthoringPlan;
   fileMap: GeneratedSkillFileMap;
-  review: GeneratedSkillValidationResult;
+  review: GeneratedSkillReviewResult;
   deterministicIssues: string[];
 }): string {
   return `${contextPacket(args)}
