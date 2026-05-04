@@ -719,7 +719,7 @@ Read \`references/missing.md\` before reporting.
       regenerate: true,
     });
 
-    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toMatch(/^---\nname: "wrdn-security"\n/);
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toMatch(/^---\nname: wrdn-security\n/);
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.deterministicWarnings).toContain(
@@ -806,8 +806,9 @@ Read \`references/missing.md\` before reporting.
       regenerate: true,
     });
 
-    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toMatch(
-      /^---\nname: "wrdn-security"\ndescription: "Use when reviewing code changes for security concerns\."/,
+    const writtenSkill = readFileSync(join(rootDir, 'SKILL.md'), 'utf-8');
+    expect(writtenSkill).toMatch(
+      /^---\nname: wrdn-security\ndescription: Use when reviewing code changes for security concerns\.\nallowed-tools: Read Grep Glob Bash\n---/,
     );
   });
 

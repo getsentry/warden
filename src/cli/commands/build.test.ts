@@ -324,7 +324,7 @@ prompt: |-
     const output = stderrSpy.mock.calls
       .map((call) => call.map((part) => String(part)).join(' '))
       .join('\n');
-    expect(output).toContain('warden src/file.ts --skill security');
+    expect(output).toContain('warden src/file.ts --skill actual-security');
   });
 
   it('creates a generated skill at an explicit root path from the prompt', async () => {

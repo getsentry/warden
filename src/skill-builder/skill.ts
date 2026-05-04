@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { aggregateUsage } from '../sdk/usage.js';
 import type { Runtime } from '../sdk/runtimes/index.js';
 import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
@@ -123,10 +123,6 @@ function oneLine(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function yamlQuoted(value: string): string {
-  return JSON.stringify(value);
-}
-
 function targetSubject(targetName: string): string {
   return targetName
     .replace(/^wrdn-/, '')
@@ -163,9 +159,16 @@ function ensureSkillFrontmatter(args: {
     return args.content;
   }
   const body = args.content.replace(SKILL_FRONTMATTER_PATTERN, '').trimStart();
+  const preserved = frontmatter && typeof frontmatter === 'object' ? frontmatter : {};
+  const repairedFrontmatter = stringifyYaml({
+    name: args.targetName,
+    description: fallbackDescription(args.fileMap, args.targetName),
+    ...Object.fromEntries(
+      Object.entries(preserved).filter(([key]) => key !== 'name' && key !== 'description'),
+    ),
+  }).trimEnd();
   return `---
-name: ${yamlQuoted(args.targetName)}
-description: ${yamlQuoted(fallbackDescription(args.fileMap, args.targetName))}
+${repairedFrontmatter}
 ---
 
 ${body}`;
@@ -503,25 +506,11 @@ function applyValidationResult(args: {
   return candidate;
 }
 
-function normalizeProviderIssue(
-  issue: GeneratedSkillValidationIssue,
-): GeneratedSkillValidationIssue {
-  if (
-    issue.severity === 'error' &&
-    issue.path?.startsWith('references/') &&
-    /\breference is \d+ lines\b/i.test(issue.message) &&
-    /\bcontents\b/i.test(issue.message)
-  ) {
-    return { ...issue, severity: 'warning' };
-  }
-  return issue;
-}
-
 function advisoryProviderIssues(
   validation: GeneratedSkillValidationResult,
 ): GeneratedSkillValidationIssue[] {
   const issues = validation.issues.map((issue) => ({
-    ...normalizeProviderIssue(issue),
+    ...issue,
     severity: 'warning' as const,
   }));
   if (!validation.valid && issues.length === 0) {

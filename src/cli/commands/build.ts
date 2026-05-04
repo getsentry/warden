@@ -178,13 +178,23 @@ async function ensureSynthesizedSkill(args: {
   repoRoot: string;
   options: CLIOptions;
   reporter: Reporter;
-}): Promise<{ skill: SkillDefinition; created: boolean; promptLength?: number }> {
+}): Promise<{
+  skill: SkillDefinition;
+  created: boolean;
+  promptLength?: number;
+  tryItSkillName: string;
+}> {
   const { skillName, repoRoot, options, reporter } = args;
   const target = resolveGeneratedSkillTarget(repoRoot, skillName);
   const definitionExists = generatedSkillDefinitionRootExists(target.rootDir);
 
   if (definitionExists) {
-    return { skill: buildGeneratedSkillDefinition(target.rootDir), created: false };
+    const skill = buildGeneratedSkillDefinition(target.rootDir);
+    return {
+      skill,
+      created: false,
+      tryItSkillName: target.isPath ? target.displayName : skill.name,
+    };
   }
 
   const prompt = await resolvePrompt(options, skillName);
@@ -201,7 +211,12 @@ async function ensureSynthesizedSkill(args: {
     prompt,
     rootDir: target.rootDir,
   });
-  return { skill, created: true, promptLength: prompt.length };
+  return {
+    skill,
+    created: true,
+    promptLength: prompt.length,
+    tryItSkillName: target.isPath ? target.displayName : skill.name,
+  };
 }
 
 interface RunBuildState {
@@ -375,7 +390,7 @@ export async function runBuild(
           turns: artifact.numTurns,
         }));
       }
-      renderTryIt(reporter, skillName);
+      renderTryIt(reporter, resolved.tryItSkillName);
     } else {
       process.stdout.write(`${JSON.stringify({
         skill: {
