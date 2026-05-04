@@ -28,10 +28,27 @@ export const GeneratedSkillAuthoringPlanSchema = z.object({
   summary: z.string().min(1),
   workflow: z.array(z.string().min(1)).min(1),
   researchPlan: z.array(z.string().min(1)).default([]),
+  sourceDecisions: z.array(z.object({
+    source: z.string().min(1),
+    decision: z.string().min(1),
+    implication: z.string().min(1),
+  }).strict()).default([]),
+  lookupQuestions: z.array(z.object({
+    question: z.string().min(1),
+    openWhen: z.string().min(1),
+    requiredEvidence: z.array(z.string().min(1)).min(1),
+    candidatePaths: z.array(z.string().min(1)).default([]),
+  }).strict()).default([]),
+  qualityBar: z.array(z.string().min(1)).default([]),
   artifactPlan: z.array(z.string().min(1)).min(1),
   validationPlan: z.array(z.string().min(1)).min(1),
   risks: z.array(z.string().min(1)).default([]),
   missingInputs: z.array(z.string().min(1)).default([]),
+  externalSources: z.array(z.object({
+    title: z.string().min(1),
+    url: z.string().min(1),
+    reason: z.string().min(1),
+  }).strict()).default([]),
 }).strict();
 
 export type GeneratedSkillAuthoringPlan = z.infer<typeof GeneratedSkillAuthoringPlanSchema>;
