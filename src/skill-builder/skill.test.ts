@@ -142,6 +142,17 @@ Review changed hunks for exploitable security issues.
 `;
 }
 
+function skillMdWithDescription(description: string, name = 'wrdn-security'): string {
+  return `---
+name: ${name}
+description: ${JSON.stringify(description)}
+allowed-tools: Read Grep Glob Bash
+---
+
+Review changed hunks for exploitable security issues.
+`;
+}
+
 function indexedSkillMd(name = 'wrdn-security'): string {
   return `---
 name: ${name}
@@ -536,7 +547,7 @@ describe('buildGeneratedSkill', () => {
     expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8').trim()).not.toBe('');
   });
 
-  it('ignores incomplete replacement file maps returned by validation', async () => {
+  it('merges and backfills partial replacement file maps returned by validation', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -630,8 +641,9 @@ Read \`references/missing.md\` before reporting.
     });
 
     const writtenSkill = readFileSync(join(rootDir, 'SKILL.md'), 'utf-8');
-    expect(writtenSkill).toContain('references/security.md');
-    expect(writtenSkill).not.toContain('references/missing.md');
+    expect(writtenSkill).toContain('references/missing.md');
+    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
+    expect(existsSync(join(rootDir, 'references', 'missing.md'))).toBe(true);
   });
 
   it('writes generated artifacts when frontmatter is missing and references are not routed', async () => {
@@ -809,6 +821,91 @@ Read \`references/missing.md\` before reporting.
     const writtenSkill = readFileSync(join(rootDir, 'SKILL.md'), 'utf-8');
     expect(writtenSkill).toMatch(
       /^---\nname: wrdn-security\ndescription: Use when reviewing code changes for security concerns\.\nallowed-tools: Read Grep Glob Bash\n---/,
+    );
+  });
+
+  it('preserves legitimate runtime descriptions that mention generated code', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+    const description = 'Use when reviewing generated configuration files for security issues.';
+
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan.',
+              workflow: ['Read the authoring skill'],
+              researchPlan: [],
+              artifactPlan: ['Create SKILL.md'],
+              validationPlan: ['Validate output'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: skillMdWithDescription(description) }],
+              summary: 'Generated configuration review.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+    });
+
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toContain(
+      `description: ${JSON.stringify(description)}`,
     );
   });
 

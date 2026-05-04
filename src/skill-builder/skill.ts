@@ -119,10 +119,6 @@ function skillFrontmatter(content: string): Record<string, unknown> | undefined 
   }
 }
 
-function oneLine(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
-}
-
 function targetSubject(targetName: string): string {
   return targetName
     .replace(/^wrdn-/, '')
@@ -131,12 +127,16 @@ function targetSubject(targetName: string): string {
 }
 
 function isAuthoringMetadataDescription(value: string): boolean {
-  return /\b(generated|architecture|router|focused references|authoring|SKILL\.md|SPEC\.md|SOURCES\.md)\b/i
-    .test(value);
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return (
+    /\b(SKILL\.md|SPEC\.md|SOURCES\.md|reference-backed|focused references?)\b/i.test(normalized) ||
+    /^generated\b/i.test(normalized) &&
+      /\b(skill|architecture|router|references?|wrdn-[a-z0-9-]+)\b/i.test(normalized)
+  );
 }
 
 function fallbackDescription(fileMap: GeneratedSkillFileMap, targetName: string): string {
-  const summary = oneLine(fileMap.summary);
+  const summary = fileMap.summary.replace(/\s+/g, ' ').trim();
   if (summary && !isAuthoringMetadataDescription(summary)) {
     return summary;
   }
@@ -472,6 +472,7 @@ function applyValidationResult(args: {
   original: GeneratedSkillFileMap;
   validation: GeneratedSkillValidationResult;
   targetName: string;
+  outline: SkillBuildOutline;
 }): GeneratedSkillFileMap {
   if (!args.validation.files || args.validation.files.length === 0) {
     return args.original;
@@ -482,9 +483,15 @@ function applyValidationResult(args: {
   ) {
     return args.original;
   }
+  const replacementFiles = args.validation.files;
   const candidate = {
     ...args.original,
-    files: args.validation.files,
+    files: [
+      ...args.original.files.filter(
+        (file) => !replacementFiles.some((replacement) => replacement.path === file.path),
+      ),
+      ...replacementFiles,
+    ],
     validationNotes: [
       ...args.original.validationNotes,
       args.validation.summary,
@@ -495,15 +502,19 @@ function applyValidationResult(args: {
       ...args.validation.missingInputs,
     ],
   };
+  const fileMap = backfillMissingRoutedReferences(
+    normalizeGeneratedFileMap(candidate, args.targetName),
+    args.outline,
+  );
   const validation = deterministicValidation({
-    fileMap: normalizeGeneratedFileMap(candidate, args.targetName),
+    fileMap,
     targetName: args.targetName,
   });
   if (validation.errors.length > 0) {
     return args.original;
   }
 
-  return candidate;
+  return fileMap;
 }
 
 function advisoryProviderIssues(
@@ -837,6 +848,7 @@ export async function buildGeneratedSkill(args: {
         original: initialFileMap,
         validation: validation.data,
         targetName: args.outline.skill,
+        outline: args.outline,
       }), args.outline.skill),
       args.outline,
     );
