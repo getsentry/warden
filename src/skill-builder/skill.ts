@@ -41,7 +41,7 @@ import {
 } from './skill-prompts.js';
 
 const GENERATED_SKILL_ARTIFACT_SCHEMA_VERSION = 5;
-const MAX_SKILL_REVISION_ATTEMPTS = 1;
+const MAX_SKILL_REVIEW_REVISIONS = 3;
 const SKILL_FRONTMATTER_PATTERN = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
 interface SkillBuilderStepMetrics {
@@ -247,52 +247,60 @@ function formatReviewIssue(issue: GeneratedSkillReviewResult['issues'][number]):
   return `${location}${issue.message}${fix}`;
 }
 
-function finalBlockingIssues(args: {
-  deterministic: {
-    errors: string[];
-    warnings: string[];
-  };
-  review?: GeneratedSkillReviewResult;
+function finalMechanicalBlockingIssues(deterministic: {
+  errors: string[];
+  warnings: string[];
 }): string[] {
-  // Final blocking combines mechanical runnability with the reviewer verdict.
-  // Do not add deterministic taste checks here; make the authoring reviewer own
-  // qualitative depth and layout feedback.
+  // Only mechanical runnability blocks the final write. Qualitative reviewer
+  // feedback is handled by the bounded review loop and recorded as warnings if
+  // the reviewer still wants changes after the cap.
   const issues: string[] = [];
-  issues.push(...args.deterministic.errors);
-  if (hasMissingGeneratedFileWarning(args.deterministic)) {
-    issues.push(...args.deterministic.warnings.filter((warning) =>
+  issues.push(...deterministic.errors);
+  if (hasMissingGeneratedFileWarning(deterministic)) {
+    issues.push(...deterministic.warnings.filter((warning) =>
       warning.includes('generated artifacts do not include it')
     ));
-  }
-  if (args.review && reviewNeedsRevision(args.review)) {
-    if (args.review.issues.length === 0) {
-      issues.push('Authoring reviewer marked the generated skill invalid without issue details');
-    } else {
-      issues.push(...args.review.issues.map(formatReviewIssue));
-    }
   }
   return uniqueStrings(issues);
 }
 
-function throwIfFinalReviewFailed(args: {
+function throwIfMechanicalValidationFailed(args: {
   targetName: string;
   deterministic: {
     errors: string[];
     warnings: string[];
   };
-  review?: GeneratedSkillReviewResult;
 }): void {
-  const issues = finalBlockingIssues({
-    deterministic: args.deterministic,
-    review: args.review,
-  });
+  const issues = finalMechanicalBlockingIssues(args.deterministic);
   if (issues.length === 0) {
     return;
   }
   throw new GeneratedSkillBuildError(
-    `Generated skill failed final review for ${args.targetName}:\n` +
+    `Generated skill failed mechanical validation for ${args.targetName}:\n` +
     issues.map((issue) => `- ${issue}`).join('\n'),
   );
+}
+
+function boundedReviewWarnings(args: {
+  review?: GeneratedSkillReviewResult;
+  maxRevisions: number;
+}): string[] {
+  if (!args.review || !reviewNeedsRevision(args.review)) {
+    return [];
+  }
+
+  const plural = args.maxRevisions === 1 ? 'revision pass' : 'revision passes';
+  const warnings = [
+    `Authoring reviewer still requested changes after ${args.maxRevisions} ${plural}; using the latest writer draft.`,
+  ];
+  const issues = args.review.issues.length === 0
+    ? ['Authoring reviewer marked the generated skill invalid without issue details']
+    : args.review.issues.map(formatReviewIssue);
+  warnings.push(...issues.slice(0, 5).map((issue) => `Reviewer: ${issue}`));
+  if (issues.length > 5) {
+    warnings.push(`Reviewer: ${issues.length - 5} more issues omitted from summary`);
+  }
+  return warnings;
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -370,6 +378,7 @@ function loadExistingArtifact(args: {
     usage: zeroUsage(),
     externalSources: [],
     missingInputs: [],
+    warnings: [],
   };
 }
 
@@ -429,6 +438,7 @@ function loadCachedArtifact(args: {
     usage: metadata.usage,
     externalSources: metadata.externalSources,
     missingInputs: metadata.missingInputs,
+    warnings: metadata.authoringWarnings,
     responseModel: metadata.responseModel,
     numTurns: metadata.numTurns,
   };
@@ -454,6 +464,7 @@ function artifactFromDisk(args: {
   usage: UsageStats;
   externalSources: SkillBuildExternalSource[];
   missingInputs: string[];
+  warnings: string[];
   responseModel?: string;
   numTurns?: number;
 }): GeneratedSkillArtifact {
@@ -468,6 +479,7 @@ function artifactFromDisk(args: {
     usage: args.usage,
     externalSources: args.externalSources,
     missingInputs: args.missingInputs,
+    warnings: args.warnings,
     responseModel: args.responseModel,
     numTurns: args.numTurns,
   };
@@ -575,7 +587,8 @@ export async function buildGeneratedSkill(args: {
     const revisionResults: SkillBuilderStepMetrics[] = [];
 
     let latestReview: GeneratedSkillReviewResult | undefined;
-    for (let reviewRound = 0; reviewRound <= MAX_SKILL_REVISION_ATTEMPTS; reviewRound += 1) {
+    let reviewHitRevisionLimit = false;
+    for (let reviewRound = 0; ; reviewRound += 1) {
       const deterministic = deterministicValidation({
         files: workingArtifact.files,
         targetName: args.outline.skill,
@@ -613,12 +626,14 @@ export async function buildGeneratedSkill(args: {
 
       if (
         !reviewNeedsRevision(review.data) ||
-        revisionResults.length >= MAX_SKILL_REVISION_ATTEMPTS
+        revisionResults.length >= MAX_SKILL_REVIEW_REVISIONS
       ) {
+        reviewHitRevisionLimit = reviewNeedsRevision(review.data) &&
+          revisionResults.length >= MAX_SKILL_REVIEW_REVISIONS;
         break;
       }
 
-      args.onStatus?.('Revising generated skill');
+      args.onStatus?.(`Revising generated skill (${revisionResults.length + 1}/${MAX_SKILL_REVIEW_REVISIONS})`);
       const revision = await runStructuredSkillBuilderAgent({
         runtime: args.runtime,
         repoPath: args.rootDir,
@@ -659,6 +674,12 @@ export async function buildGeneratedSkill(args: {
       ...workingArtifact.missingInputs,
       ...reviewResults.flatMap((result) => result.data.missingInputs),
     ]);
+    const finalWarnings = uniqueStrings([
+      ...boundedReviewWarnings({
+        review: reviewHitRevisionLimit ? latestReview : undefined,
+        maxRevisions: MAX_SKILL_REVIEW_REVISIONS,
+      }),
+    ]);
     workingArtifact = {
       ...workingArtifact,
       externalSources: finalExternalSources,
@@ -673,10 +694,9 @@ export async function buildGeneratedSkill(args: {
         `Generated skill build did not produce SKILL.md for ${args.outline.skill}`,
       );
     }
-    throwIfFinalReviewFailed({
+    throwIfMechanicalValidationFailed({
       targetName: args.outline.skill,
       deterministic: finalDeterministic,
-      review: latestReview,
     });
 
     const usage = aggregateUsage([
@@ -705,6 +725,7 @@ export async function buildGeneratedSkill(args: {
       usage,
       externalSources: finalExternalSources,
       missingInputs: finalMissingInputs,
+      warnings: finalWarnings,
       responseModel,
       numTurns,
     });
@@ -725,6 +746,7 @@ export async function buildGeneratedSkill(args: {
         usage: artifact.usage,
         externalSources: artifact.externalSources,
         missingInputs: finalMissingInputs,
+        authoringWarnings: finalWarnings,
         responseModel: artifact.responseModel,
         numTurns: artifact.numTurns,
         generatedAt: new Date().toISOString(),
@@ -735,6 +757,7 @@ export async function buildGeneratedSkill(args: {
     return {
       ...artifact,
       missingInputs: finalMissingInputs,
+      warnings: finalWarnings,
     };
   } catch (error) {
     if (error instanceof GeneratedSkillBuildError) {

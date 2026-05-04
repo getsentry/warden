@@ -35,6 +35,7 @@ export const GeneratedSkillArtifactStateSchema = z.object({
     reason: z.string().min(1),
   }).strict()),
   missingInputs: z.array(z.string().min(1)),
+  authoringWarnings: z.array(z.string().min(1)).default([]),
   responseModel: z.string().optional(),
   numTurns: z.number().int().nonnegative().optional(),
   generatedAt: z.string().min(1),

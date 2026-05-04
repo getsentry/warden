@@ -189,6 +189,7 @@ describe('runBuild', () => {
       usage: { inputTokens: 200, outputTokens: 100, costUSD: 0.02 },
       externalSources: [],
       missingInputs: [],
+      warnings: [],
       numTurns: 2,
     });
   });
@@ -244,6 +245,7 @@ describe('runBuild', () => {
       usage: { inputTokens: 200, outputTokens: 100, costUSD: 0.02 },
       externalSources: [],
       missingInputs: [],
+      warnings: [],
       numTurns: 2,
     });
 
@@ -260,6 +262,33 @@ describe('runBuild', () => {
     expect(output).not.toContain('$0.01');
     expect(output).not.toContain('0 sources');
     expect(output).not.toContain('1 turn');
+  });
+
+  it('prints generated skill authoring warnings', async () => {
+    const reporter = createTestReporter();
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    buildGeneratedSkillMock.mockResolvedValueOnce({
+      kind: 'generated-skill',
+      source: 'generated',
+      name: 'security',
+      path: join(tempDir, '.warden', 'skills', 'security', 'SKILL.md'),
+      bytes: 2_048,
+      durationMs: 2_000,
+      usage: { inputTokens: 200, outputTokens: 100, costUSD: 0.02 },
+      externalSources: [],
+      missingInputs: [],
+      warnings: ['Authoring reviewer still requested changes after 3 revision passes; using the latest writer draft.'],
+      numTurns: 2,
+    });
+
+    const exitCode = await runBuild(createOptions(), reporter);
+
+    expect(exitCode).toBe(0);
+    const output = stderrSpy.mock.calls
+      .map((call) => call.map((part) => String(part)).join(' '))
+      .join('\n');
+    expect(output).toContain('Authoring reviewer still requested changes after 3 revision passes');
   });
 
   it('loads an existing generated skill from an explicit root path', async () => {

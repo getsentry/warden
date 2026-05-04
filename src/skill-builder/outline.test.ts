@@ -106,6 +106,7 @@ describe('skill build state', () => {
         },
         externalSources: [],
         missingInputs: [],
+        authoringWarnings: [],
         responseModel: 'claude-sonnet-4-5',
         numTurns: 2,
         generatedAt: '2026-05-01T00:00:00.000Z',

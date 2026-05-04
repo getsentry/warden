@@ -394,6 +394,9 @@ export async function runBuild(
           turns: artifact.numTurns,
         }));
       }
+      for (const warning of artifact.warnings) {
+        reporter.warning(warning);
+      }
       renderTryIt(reporter, resolved.tryItSkillName);
     } else {
       process.stdout.write(`${JSON.stringify({
@@ -410,6 +413,7 @@ export async function runBuild(
           usage: artifact.usage,
           externalSources: artifact.externalSources,
           missingInputs: artifact.missingInputs,
+          warnings: artifact.warnings,
           responseModel: artifact.responseModel,
           numTurns: artifact.numTurns,
         },

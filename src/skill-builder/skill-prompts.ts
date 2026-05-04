@@ -53,6 +53,7 @@ function wardenSkillConstraints(args: {
 - Let the authoring skill decide the simplest adequate artifact layout and where guidance belongs. Warden supplies the goal, source packet, outline, runtime constraints, and quality bar.
 - Treat outline tracks/tasks as work lanes for coverage and sequencing, not as filesystem or artifact taxonomy.
 - The writer and reviewer must handle all track/task coverage in this authoring run. Warden will not run automatic per-track artifact edit passes after the implementation pass.
+- If using references, keep them usable as lookup leaves: each reference should answer a dominant lookup question, have a direct open-when route from SKILL.md, and either stay short enough to scan or include navigation / split into clearer leaves.
 - Treat guidance quality as evidence quality, not file count. Runtime guidance should help the later Warden run decide, verify, and fix issues with concrete evidence, false-positive controls, and remediation patterns where the domain warrants it.
 - Broad domain or ecosystem skills should use source discovery before claiming complete runtime guidance. If source coverage is too thin for the claimed scope, record the gap instead of filling with generic survey text.
 - Warden runs skills on changed hunks and injects the report schema separately. Do not include Output Format, Output Contract, Response Format, or custom reporting schema sections.
@@ -111,6 +112,7 @@ Work like an in-process skill-writer session:
 - Decide what additional research is needed during implementation and what gaps should be recorded before the skill can be considered complete.
 - Decide the ordered track/task coverage plan without turning tracks into layout rules or separate artifact-edit passes.
 - Decide how Warden and the authoring skill should roughly validate the output without turning stylistic preferences into hard blockers.
+- Include a reference usability bar in qualityBar / validationPlan when the likely shape is reference-backed: references should be focused lookup leaves, not giant mixed catalogs, and long leaves need navigation or a clearer split.
 - For broad domain, ecosystem, or code-review style skills, define the source coverage needed before the skill can be considered complete. Include source classes, not just source names: standards or prior art, failure-mode examples, safe counterexamples, language or framework docs, and remediation examples.
 - Carry forward external sources from the internal outline when the plan relies on them. Add new source-discovery targets when the outline sources are too thin for the claimed breadth.
 
@@ -169,10 +171,11 @@ Authoring behavior:
 - Edit files directly under the target skill root. Do not modify warden.yaml or build-state.json.
 - Write SKILL.md and every local artifact that SKILL.md or another runtime artifact requires.
 - Satisfy the plan's lookupQuestions and qualityBar using the structure chosen by the authoring skill.
-- Treat the outline tracks/tasks as the coverage checklist for this single writer pass. Cover each track's goal, evidence focus, safe counterpatterns, and false-positive traps somewhere useful, or record the missing source/context that prevents that coverage.
+- Treat the outline tracks/tasks as the coverage checklist for this authoring run. Cover each track's goal, evidence focus, safe counterpatterns, and false-positive traps somewhere useful, or record the missing source/context that prevents that coverage.
 - Preserve track owns/excludes boundaries so sibling topics do not duplicate findings, but merge, split, inline, or reference guidance according to the authoring skill.
 - Do not produce shallow placeholders on the assumption that later per-track passes will deepen them; no automatic track contribution passes will run.
 - Do not ship catalog-only runtime guidance. The generated skill should help the runtime agent decide, verify, and fix, not just recognize topic names or APIs.
+- Before finishing, run a reference usability self-check: every reference has a direct route, one dominant lookup need, and enough navigation or segmentation that the runtime agent can open only the relevant material. Split mixed references or add navigation when a leaf becomes hard to scan.
 - The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Include concrete outline sources, plan sources, and newly consulted sources that the generated skill depends on. Do not count warden.yaml, the authoring skill, outline tracks, the target skill root, local paths, or the authoring plan itself as external sources.
 - For broad domain, ecosystem, or code-review style skills, do not present complete multi-language or multi-framework coverage from thin source coverage. Either consult enough authoritative sources to support the breadth or mark the source coverage gap clearly in missingInputs so the reviewer can block completion.
 - If validation later needs a correction, the current target directory should be the complete draft to revise.
@@ -224,13 +227,15 @@ Review behavior:
 - Check whether the generated artifacts on disk followed the plan, the authoring skill, and Warden constraints.
 - Check whether each outline track/task is covered with useful runtime guidance, merged into another section/reference with clear coverage, or explicitly recorded as missing input. Do not require one artifact per track.
 - Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth, stale gap/provenance language, generated-skill metadata, missing local artifacts, and custom output/report formats that conflict with Warden's injected report schema.
-- Set valid to false for concrete quality failures that need one writer pass: missing task evidence, missing false-positive controls for the requested domain, missing remediation/examples where the plan required them, broad ecosystem output with no sources or recorded gaps, broken local artifact links, or a structure that the authoring skill would reject.
+- Set valid to false for concrete quality failures that need a writer revision: missing task evidence, missing false-positive controls for the requested domain, missing remediation/examples where the plan required them, broad ecosystem output with no sources or recorded gaps, broken local artifact links, or a structure that the authoring skill would reject.
 - Set valid to false when a track/task is represented only by a heading, topic name, or route entry without the evidence focus, safe counterpatterns, false-positive controls, and remediation guidance needed for runtime use.
+- Set valid to false when reference-backed output uses oversized, mixed-purpose, or unnavigable references. This is runtime usability, not a taste-level layout preference. Accept any layout that stays focused and navigable; do not require one reference per topic.
 - Set valid to false when the skill claims broad domain coverage but the source base is too thin for that claim. Classification-only sources, a handful of generic sources, or provenance that omits failure-mode, safe-counterexample, and remediation evidence are not enough unless the gap is explicitly recorded as incomplete work.
 - Set valid to false for any missing local artifact needed by returned runtime guidance. That is a mechanical runnability failure, not a stylistic layout preference.
-- Do not rewrite files in this review pass. Give concrete feedback; the writer revision pass will decide how to apply it.
+- Do not rewrite files in this review pass. Give concrete feedback; a bounded writer revision round will decide how to apply it.
 - Report only issues that need another writer pass. Do not report taste-level layout preferences as issues.
 - Set valid to false only when a concrete issue should trigger revision, not when you disagree with a reasonable layout choice.
+- Do not block on maintenance-document template details such as SPEC.md heading names unless the issue affects runtime usability, source provenance, or future maintenance in a concrete way.
 - Treat rough validation issues as advisory signals. Fix concrete broken references or malformed artifacts, but do not hard-block on taste-level layout preferences.
 
 Return JSON:
@@ -290,6 +295,7 @@ Revision behavior:
 - Keep the simplest adequate layout according to the authoring skill. Do not add artifacts just to mirror tracks/tasks.
 - Preserve non-overlapping track/task guidance that is already good, and make any missing track/task coverage complete in this revision pass.
 - Fix shallow or catalog-only runtime guidance by adding targeted evidence and examples, restructuring by lookup need, or moving small guidance inline. Do not add bulk just to look deeper.
+- Fix oversized, mixed-purpose, or unnavigable references by adding concise navigation, splitting by lookup need, or moving short universal guidance back inline. Preserve layout freedom; the goal is runtime usability, not a required file count.
 - Fix source-depth failures by adding or preserving the source evidence the artifact actually depends on. If enough source discovery cannot be completed, keep the artifact incomplete and state the missing coverage instead of claiming a finished broad skill.
 - Keep generated runtime artifacts free of authoring metadata, validation summaries, and custom output/report schemas.
 - The externalSources array is cumulative evidence for the final artifact, but only for external web/upstream sources. Preserve external sources the revised artifacts still depend on and add concrete external sources consulted during revision.

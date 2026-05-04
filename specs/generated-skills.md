@@ -15,8 +15,17 @@ Good generated skills usually have:
 - remediation guidance that points toward an actual patch
 - source provenance or explicit gaps when the skill claims broad expertise
 - segmentation that makes the skill usable without loading irrelevant material
+- reference-backed layouts where references behave as focused lookup leaves,
+  with navigation or further splitting when a leaf becomes hard to scan
 
 Many broad skills will naturally become reference-backed, often with roughly one focused reference per major topic and sometimes multiple references for a large topic. That is an expected outcome, not a required layout. Smaller skills may stay mostly inline. Some topics may share a reference. Some topics may not need a separate file at all. The authoring provider owns that choice.
+
+Reference-backed does not mean "one giant catalog per topic." Each reference
+should have a direct open-when route from `SKILL.md`, one dominant lookup need,
+and enough structure that the runtime agent can open only the material relevant
+to the current changed hunk. Oversized, mixed-purpose, or unnavigable references
+are quality failures even though the exact split remains the authoring
+provider's choice.
 
 ## Builder Contract
 
@@ -97,10 +106,10 @@ All other files are generated artifacts. The authoring provider decides whether 
 2. Synthesizes internal Warden context for the build
 3. Resolves an authoring provider, defaulting to the vendored `src/internal-skills/skill-writer`
 4. Plans the authoring run: brief, topics, ordered tasks, source plan, and review rubric
-5. Runs implementation through the authoring provider
-6. Runs qualitative review against skill-writer and Warden's acceptance bar
-7. Runs one bounded revision pass for concrete review failures
-8. Writes the returned generated file map only after final review and mechanical validation pass
+5. Runs implementation through the authoring provider in the target skill root
+6. Reads generated artifacts from disk and runs qualitative review against skill-writer and Warden's acceptance bar
+7. Runs bounded writer/reviewer revision rounds for concrete review failures
+8. Stores artifact metadata only after the review loop and mechanical validation pass
 9. Stores provider/version/hash and validation metadata in build state
 
 The internal outline is Warden context only. It is not a runnable skill and it does not prescribe the final artifact layout. It should help the planner identify topics, work lanes, source expectations, and non-overlap boundaries.
@@ -111,15 +120,12 @@ The builder passes the full authoring skill directory to the agent and tells it 
 
 The vendored provider is internal runtime data, not an installable bundled skill, and Warden does not discover `skill-writer` from user skill directories. User-facing bundled skills stay under `skills/`.
 
-The provider returns a file map:
+The provider writes artifacts directly under the target skill root and returns
+metadata about the pass:
 
 ```json
 {
   "version": 1,
-  "name": "wrdn-example",
-  "files": [
-    {"path": "SKILL.md", "content": "..."}
-  ],
   "summary": "...",
   "validationNotes": [],
   "missingInputs": [],
@@ -127,7 +133,10 @@ The provider returns a file map:
 }
 ```
 
-Warden owns writing, cache invalidation, runtime constraints, and minimal mechanical validation. The provider owns authoring method, layout choice, source synthesis, and how to package depth into skill artifacts.
+Warden owns cache invalidation, runtime constraints, minimal mechanical
+validation, and artifact metadata. The provider owns disk writes, authoring
+method, layout choice, source synthesis, and how to package depth into skill
+artifacts.
 
 ## Planner Output
 
@@ -154,11 +163,11 @@ The implementation writer should:
 - cover each task's required evidence, false-positive controls, and remediation expectations somewhere useful
 - preserve non-overlap boundaries between sibling topics
 - record missing source/context when a task cannot be covered honestly
-- return one complete file map for the chosen skill-writer layout
+- leave one complete artifact tree on disk for the chosen skill-writer layout
 
 Completion is not "this topic name appears." Completion means the generated runtime guidance gives the later Warden run enough evidence, false-positive controls, and remediation direction to make useful findings.
 
-Warden should not run automatic per-task artifact edit passes. The reviewer enforces task coverage qualitatively and gives one bounded revision pass when the generated skill is shallow, incomplete, or inconsistent with skill-writer.
+Warden should not run automatic per-task artifact edit passes. The reviewer enforces task coverage qualitatively and can drive bounded writer revision rounds when the generated skill is shallow, incomplete, or inconsistent with skill-writer.
 
 ## Runtime Contract
 
@@ -184,6 +193,9 @@ Deterministic checks should stay mechanical:
 - local runtime files referenced by generated artifacts exist
 
 Deterministic validation should not judge taste, depth, segmentation quality, source adequacy, or preferred layout.
+It should also not enforce maintenance-document template headings. Those are
+authoring-quality signals only when the reviewer finds a concrete usability or
+maintenance problem.
 
 The authoring-provider review should judge quality:
 
@@ -195,8 +207,10 @@ The authoring-provider review should judge quality:
 - is guidance over-broad, catalog-only, or shallow?
 - are false-positive controls and remediation patterns concrete?
 - is segmentation useful without being forced?
+- are reference-backed artifacts focused, directly routed, and navigable enough
+  for runtime use?
 
-The reviewer should return concrete feedback for one bounded revision pass. If final review still reports unresolved issues, Warden should fail the build and keep the previous artifact on disk.
+The reviewer should return concrete feedback for bounded revision rounds. If the reviewer still requests changes after the maximum rounds, Warden should keep the latest writer draft, store the reviewer feedback as warnings, and continue unless mechanical validation found an unrunnable artifact.
 
 ## Caching
 

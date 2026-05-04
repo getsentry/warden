@@ -84,6 +84,7 @@ export interface GeneratedSkillArtifact {
   usage: UsageStats;
   externalSources: SkillBuildExternalSource[];
   missingInputs: string[];
+  warnings: string[];
   responseModel?: string;
   numTurns?: number;
 }
