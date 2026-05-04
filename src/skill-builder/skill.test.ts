@@ -275,7 +275,8 @@ describe('buildGeneratedSkill', () => {
     const planPrompt = runSkill.mock.calls[0]![0].userPrompt;
     expect(planPrompt).toContain(`Use the full authoring skill at \`${authoringSkillRoot}\``);
     expect(planPrompt).toContain('Choose the simplest adequate layout using the authoring skill\'s rules');
-    expect(planPrompt).toContain('Broad or multi-track skills usually need SKILL.md as a compact router plus focused routed references');
+    expect(planPrompt).toContain('Tracks/tasks are planning work lanes, not filesystem taxonomy');
+    expect(planPrompt).toContain('Do not create `references/tracks/`');
     expect(planPrompt).toContain('Do not include Output Format, Output Contract, Response Format, or custom reporting schema sections');
     expect(planPrompt).toContain('Decide the minimum workflow path and simplest adequate artifact layout');
 
@@ -286,6 +287,7 @@ describe('buildGeneratedSkill', () => {
 
     const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
     expect(validationPrompt).toContain('Check for over-broad topic-bucket references, stale gap/provenance language, generated-skill metadata, missing routes');
+    expect(validationPrompt).toContain('Treat rough validation issues as advisory signals');
 
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.version).toBe(4);
@@ -294,6 +296,174 @@ describe('buildGeneratedSkill', () => {
       'SKILL.md',
       'references/security.md',
     ].sort());
+  });
+
+  it('runs sequential track contributions without turning tracks into directories', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    const buildOutline = outline();
+    buildOutline.tracks = [
+      buildOutline.tracks[0]!,
+      {
+        id: 'authentication',
+        title: 'Authentication review',
+        goal: 'Find authentication bypass issues.',
+        rationale: 'Authentication-sensitive changes need a separate work lane.',
+        sourceSignals: ['login and session prompts'],
+        owns: ['authentication bypass'],
+        excludes: ['generic injection'],
+        relevanceSignals: ['login or session changes'],
+        evidenceFocus: ['changed-line authentication decision'],
+        checks: ['trace identity checks'],
+        safeCounterpatterns: ['centralized auth middleware still enforced'],
+        falsePositiveTraps: ['confusing authorization with authentication'],
+        researchHints: [],
+      },
+    ];
+    writeInitialState(rootDir, buildOutline);
+
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan sequential work lanes.',
+              workflow: ['Read the authoring skill', 'Create a baseline router', 'Add each work lane'],
+              researchPlan: ['Use prompt and track boundaries'],
+              artifactPlan: ['Use focused references only where needed'],
+              validationPlan: ['Run rough validation'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              name: 'wrdn-security',
+              files: [{ path: 'SKILL.md', content: inlineSkillMd() }],
+              summary: 'Created baseline skill.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-track-security')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              files: [{
+                path: 'references/tracks/security.md',
+                content: '# Security Review\n\nTrace attacker-controlled input before reporting.\n',
+              }],
+              summary: 'Added security checks.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-track-authentication')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              files: [
+                {
+                  path: 'SKILL.md',
+                  content: `${inlineSkillMd()}
+## References
+
+Read \`references/tracks/security.md\` for general exploitability checks.
+Read \`references/tracks/authentication.md\` for login and session changes.
+`,
+                },
+                {
+                  path: 'references/tracks/authentication.md',
+                  content: '# Authentication Review\n\nTrace identity checks and session state before reporting.\n',
+                },
+              ],
+              summary: 'Added authentication guidance.',
+              validationNotes: [],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      return {
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            version: 1,
+            valid: true,
+            summary: 'Validated.',
+            issues: [],
+            missingInputs: [],
+          }),
+          errors: [],
+          usage: usage(),
+        },
+      };
+    });
+
+    await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill,
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+    });
+
+    expect(runSkill.mock.calls.map((call) => call[0].skillName)).toEqual([
+      'wrdn-security:authoring-plan',
+      'wrdn-security:authoring-implementation',
+      'wrdn-security:authoring-track-security',
+      'wrdn-security:authoring-track-authentication',
+      'wrdn-security:authoring-validation',
+    ]);
+    expect(existsSync(join(rootDir, 'references', 'tracks'))).toBe(false);
+    expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
+    expect(existsSync(join(rootDir, 'references', 'authentication.md'))).toBe(true);
+    const writtenSkill = readFileSync(join(rootDir, 'SKILL.md'), 'utf-8');
+    expect(writtenSkill).toContain('references/security.md');
+    expect(writtenSkill).toContain('references/authentication.md');
+    expect(writtenSkill).not.toContain('references/tracks/');
+
+    const trackPrompt = runSkill.mock.calls[2]![0].userPrompt;
+    expect(trackPrompt).toContain('Treat the assigned track as a work lane');
+    expect(trackPrompt).toContain('It may map to one reference, multiple references, a shared reference, or no new file');
   });
 
   it('reuses valid existing artifacts when artifact metadata is missing or legacy', async () => {
@@ -832,7 +1002,7 @@ Read \`references/missing.md\` before reporting.
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.deterministicWarnings).toContain(
-      'SKILL.md does not route runtime reference references/security.md',
+      'warning: SKILL.md does not route runtime reference references/security.md',
     );
   });
 
@@ -1215,7 +1385,7 @@ See \`SPEC.md\` for maintenance details.
     }]);
   });
 
-  it('repairs routed reference files whose content does not match their path', async () => {
+  it('does not rewrite routed reference content based on filename heuristics', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1308,12 +1478,9 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
     });
 
     const reference = readFileSync(join(rootDir, 'references', 'authentication.md'), 'utf-8');
-    expect(reference).toContain('# Authentication');
-    expect(reference).not.toContain('SQL Injection');
+    expect(reference).toContain('# SQL Injection');
     const state = readSkillBuildState(getBuildStatePath(rootDir));
-    expect(state?.artifact?.deterministicWarnings).not.toContain(
-      'references/authentication.md content does not match its routed reference path',
-    );
+    expect(state?.artifact?.deterministicWarnings).toEqual([]);
   });
 
   it('backfills files routed by a generated reference index', async () => {
@@ -1407,7 +1574,7 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
     expect(nestedReference).toContain('pattern-only claims');
   });
 
-  it('does not reuse cached artifacts with missing routed reference files', async () => {
+  it('backfills cached artifacts with missing routed reference files', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);
     const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
@@ -1517,8 +1684,8 @@ Read \`references/authentication.md\` when reviewing login, session, or JWT chan
       authoringSkillRoot,
     });
 
-    expect(artifact.source).toBe('generated');
-    expect(runSkill).toHaveBeenCalled();
+    expect(artifact.source).toBe('cache');
+    expect(runSkill).not.toHaveBeenCalled();
     expect(existsSync(join(rootDir, 'references', 'security.md'))).toBe(true);
   });
 

@@ -40,7 +40,8 @@ function wardenSkillConstraints(args: {
 - Treat existing generated artifacts in the target root as stale unless you intentionally re-emit them in the returned file map.
 - Use the source material and internal outline as the source of truth for regeneration.
 - Choose the simplest adequate layout using the authoring skill's rules. Do not add files just to satisfy a template.
-- Broad or multi-track skills usually need SKILL.md as a compact router plus focused routed references. Inline or single-reference layouts are fine when they are genuinely enough.
+- Tracks/tasks are planning work lanes, not filesystem taxonomy. Do not create \`references/tracks/\`; use \`references/<lookup-topic>.md\`, shared references, or inline guidance according to the authoring skill.
+- Broad or multi-track skills often need SKILL.md as a compact router plus focused routed references. Inline, shared-reference, one-reference-per-track, many-references-per-track, and fewer-references-than-tracks layouts are all valid when they fit the authoring skill.
 - References should answer one lookup question each. Avoid topic-bucket references that mix routing, examples, troubleshooting, source notes, and remediation.
 - Use SPEC.md for new or materially scoped generated skills when it records a useful scope, evidence model, or maintenance contract.
 - Use SOURCES.md only when concrete external sources were consulted or unresolved source gaps materially affect future maintenance. Do not create SOURCES.md just to restate warden.yaml, the internal outline, build pipeline, authoring decisions, or "no external research".
@@ -90,9 +91,11 @@ ${wardenSkillConstraints(args)}
 Use "tell them what you are going to tell them" discipline:
 - Read and use the authoring skill.
 - Decide the minimum workflow path and simplest adequate artifact layout.
-- Decide what research is needed before implementation and what gaps should be recorded.
+- Do the first research and source-inspection pass yourself. Use that to identify the work lanes, larger plan, and obvious non-overlap boundaries.
+- Decide what additional research is needed during implementation and what gaps should be recorded.
 - Decide where runtime guidance, references, provenance, and maintenance contract belong.
-- Decide how Warden and the authoring skill should validate the output.
+- Decide the sequential task order for track/task additions without prescribing one reference file per track.
+- Decide how Warden and the authoring skill should roughly validate the output without turning stylistic preferences into hard blockers.
 
 The internal outline is supporting context only. If it conflicts with the source material or authoring skill, say how the implementation should resolve that in the plan.
 
@@ -134,6 +137,7 @@ Use "tell them" discipline:
 - Follow the plan unless new evidence proves the plan is wrong.
 - Return a complete file map for every generated artifact that should exist.
 - Include SKILL.md. Add references/ only for routed runtime lookup leaves. Add SPEC.md, EVAL.md, scripts/, assets/, or SOURCES.md only when they add concrete runtime, maintenance, validation, reusable-example, or external-source value.
+- If the outline has many tracks, build the baseline router/shared structure first; later track/task passes may add or refine focused runtime guidance without forcing a track directory.
 - Keep SKILL.md compact; put optional depth in routed references. Do not include authoring/provenance notes unless they describe real external sources or unresolved source gaps that future maintainers need.
 - Prefer no SOURCES.md over a SOURCES.md that says the skill came from the internal outline, build pipeline, or no external research.
 - The externalSources array is only for concrete external sources you actually consulted. Do not count warden.yaml, the internal outline, generated tracks, or the authoring plan as external sources.
@@ -151,6 +155,61 @@ Return JSON:
   "missingInputs": ["Missing input, if any"],
   "externalSources": [
     {"title": "Source title", "url": "https://example.com", "reason": "Why this source informed the skill"}
+  ]
+}
+</instructions>`;
+}
+
+export function buildAuthoringTrackContributionPrompt(args: {
+  outline: SkillBuildOutline;
+  source: SkillBuildSource;
+  authoringSkillRoot: string;
+  targetName: string;
+  targetRootDir: string;
+  plan: GeneratedSkillAuthoringPlan;
+  fileMap: GeneratedSkillFileMap;
+  track: SkillBuildOutline['tracks'][number];
+}): string {
+  return `${contextPacket(args)}
+
+<authoring_plan>
+${JSON.stringify(args.plan, null, 2)}
+</authoring_plan>
+
+<assigned_track>
+${JSON.stringify(args.track, null, 2)}
+</assigned_track>
+
+<current_file_map>
+${JSON.stringify(args.fileMap, null, 2)}
+</current_file_map>
+
+<instructions>
+Add this track/task's contribution to the generated Warden skill.
+
+${wardenSkillConstraints(args)}
+
+Use "now tell them this part" discipline:
+- Use the authoring skill again, starting from its SKILL.md.
+- Treat the assigned track as a work lane. It may map to one reference, multiple references, a shared reference, or no new file.
+- Respect the track's owns/excludes boundaries. Do not duplicate sibling-track material already covered in the current file map.
+- Add or revise the smallest set of files needed for this track. Return only changed or new files, with full file contents.
+- If the current file map already covers this track well, return an empty files array and explain that in validationNotes.
+- Do not create \`references/tracks/\`. If adding references, use lookup-topic paths like \`references/authentication.md\` or \`references/injection.md\`.
+- Keep generated runtime artifacts free of authoring metadata, validation summaries, and custom output/report schemas.
+- The externalSources array is only for concrete external sources you actually consulted during this task.
+
+Return JSON:
+{
+  "version": 1,
+  "files": [
+    {"path": "references/example.md", "content": "Full changed or new file contents"}
+  ],
+  "summary": "What this task contributed.",
+  "validationNotes": ["Self-check note"],
+  "missingInputs": ["Missing input, if any"],
+  "externalSources": [
+    {"title": "Source title", "url": "https://example.com", "reason": "Why this source informed this contribution"}
   ]
 }
 </instructions>`;
@@ -176,12 +235,12 @@ ${JSON.stringify(args.plan, null, 2)}
 ${JSON.stringify(args.fileMap, null, 2)}
 </generated_file_map>
 
-<deterministic_validation_issues>
+<rough_validation_issues>
 ${JSON.stringify(args.deterministicIssues, null, 2)}
-</deterministic_validation_issues>
+</rough_validation_issues>
 
 <instructions>
-Validate the generated Warden skill.
+Roughly validate the generated Warden skill.
 
 ${wardenSkillConstraints(args)}
 
@@ -189,12 +248,12 @@ Use "remind them what you told them" discipline:
 - Use the authoring skill again as the validation anchor.
 - Check whether the generated files followed the plan, the authoring skill, and Warden constraints.
 - Check for over-broad topic-bucket references, stale gap/provenance language, generated-skill metadata, missing routes, and custom output/report formats that conflict with Warden's injected report schema.
-- If fixes are needed, return a complete revised file map in files, including every referenced runtime file.
+- If clear fixes are needed, return a complete revised file map in files, including every referenced runtime file.
 - If no fixes are needed, omit files or return an empty files array.
 - Do not return placeholder files or empty file contents. Omit unchanged files instead.
 - Report only issues that remain after any revised files you return.
-- Set valid to true only when the generated or revised files are valid.
-- Treat deterministic validation issues as actionable unless the generated files were revised to fix them.
+- Set valid to false only when the generated or revised files are unusable, not when you disagree with a reasonable layout choice.
+- Treat rough validation issues as advisory signals. Fix concrete broken references or malformed artifacts, but do not hard-block on taste-level layout preferences.
 
 Return JSON:
 {

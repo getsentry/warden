@@ -21,9 +21,11 @@ import {
 import {
   GeneratedSkillAuthoringPlanSchema,
   GeneratedSkillBuildError,
+  GeneratedSkillContributionSchema,
   GeneratedSkillFileMapSchema,
   GeneratedSkillValidationResultSchema,
   type GeneratedSkillArtifact,
+  type GeneratedSkillContribution,
   type GeneratedSkillFileMap,
   type GeneratedSkillValidationResult,
   type SkillBuildAuthoringProvider,
@@ -33,6 +35,7 @@ import {
   authoringSystemPrompt,
   buildAuthoringImplementationPrompt,
   buildAuthoringPlanPrompt,
+  buildAuthoringTrackContributionPrompt,
   buildAuthoringValidationPrompt,
   defaultBuildMaxTurns,
   defaultValidationMaxTurns,
@@ -101,6 +104,64 @@ function fileManifest(files: { path: string; content: string }[]): {
 function normalizeFileContent(content: string): string {
   const normalized = content.replace(/\r\n/g, '\n');
   return normalized.endsWith('\n') ? normalized : `${normalized}\n`;
+}
+
+function canonicalGeneratedArtifactPath(path: string): string {
+  if (path.startsWith('references/tracks/')) {
+    return `references/${path.slice('references/tracks/'.length)}`;
+  }
+  return path;
+}
+
+function rewriteGeneratedArtifactPathReferences(content: string, pathMap: Map<string, string>): string {
+  let rewritten = content;
+  const entries = [...pathMap.entries()]
+    .filter(([from, to]) => from !== to)
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const [from, to] of entries) {
+    rewritten = rewritten.split(from).join(to);
+  }
+  return rewritten;
+}
+
+function canonicalizeGeneratedFileMapPaths(fileMap: GeneratedSkillFileMap): GeneratedSkillFileMap {
+  const pathMap = new Map<string, string>();
+  for (const file of fileMap.files) {
+    const canonicalPath = canonicalGeneratedArtifactPath(file.path);
+    pathMap.set(file.path, canonicalPath);
+    if (canonicalPath.startsWith('references/')) {
+      pathMap.set(`references/tracks/${canonicalPath.slice('references/'.length)}`, canonicalPath);
+    }
+  }
+  const changedPaths = [...pathMap.entries()].filter(([from, to]) => from !== to);
+  if (changedPaths.length === 0) {
+    return fileMap;
+  }
+
+  const files = new Map<string, {
+    path: string;
+    content: string;
+  }>();
+  for (const file of fileMap.files) {
+    const path = pathMap.get(file.path) ?? file.path;
+    const content = rewriteGeneratedArtifactPathReferences(file.content, pathMap);
+    const existing = files.get(path);
+    if (!existing || content.length > existing.content.length) {
+      files.set(path, { path, content });
+    }
+  }
+
+  return {
+    ...fileMap,
+    files: [...files.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    validationNotes: [
+      ...fileMap.validationNotes,
+      `Flattened generated reference path(s): ${changedPaths
+        .map(([from, to]) => `${from} -> ${to}`)
+        .sort()
+        .join(', ')}`,
+    ],
+  };
 }
 
 function skillFrontmatter(content: string): Record<string, unknown> | undefined {
@@ -312,54 +373,6 @@ function expandedReferenceWords(path: string): string[] {
   return [...set];
 }
 
-function distinctiveReferenceWords(path: string): string[] {
-  const generic = new Set([
-    'bug',
-    'bugs',
-    'check',
-    'checks',
-    'code',
-    'guide',
-    'review',
-    'safety',
-    'security',
-    'vulnerabilities',
-    'vulnerability',
-  ]);
-  return expandedReferenceWords(path)
-    .filter((word) => word.length > 2 && !generic.has(word));
-}
-
-function referenceContentMatchesPath(path: string, content: string): boolean {
-  const base = path.split('/').at(-1) ?? path;
-  const baseWords = words(base)
-    .filter((word) => distinctiveReferenceWords(word).includes(word));
-  const expandedWords = distinctiveReferenceWords(path);
-  if (expandedWords.length === 0) {
-    return true;
-  }
-  const normalized = content.toLowerCase();
-  const baseMatches = baseWords.reduce(
-    (sum, word) => sum + (new RegExp(`\\b${word}\\b`).test(normalized) ? 1 : 0),
-    0,
-  );
-  if (baseWords.length === 1 && baseMatches === 1) {
-    return true;
-  }
-  if (baseWords.length > 1 && baseMatches === baseWords.length) {
-    return true;
-  }
-  const aliasWords = expandedWords.filter((word) => !baseWords.includes(word));
-  const aliasMatches = aliasWords.reduce(
-    (sum, word) => sum + (new RegExp(`\\b${word}\\b`).test(normalized) ? 1 : 0),
-    0,
-  );
-  if (baseMatches > 0) {
-    return aliasMatches >= 1;
-  }
-  return aliasMatches >= 2;
-}
-
 function trackText(track: SkillBuildOutline['tracks'][number]): string {
   return [
     track.id,
@@ -526,42 +539,6 @@ function backfillMissingRoutedReferences(
   };
 }
 
-function repairMismatchedRoutedReferences(
-  fileMap: GeneratedSkillFileMap,
-  outline: SkillBuildOutline,
-): GeneratedSkillFileMap {
-  const replaced: string[] = [];
-  const files = fileMap.files.map((file) => {
-    if (
-      !file.path.startsWith('references/') ||
-      referenceContentMatchesPath(file.path, file.content)
-    ) {
-      return file;
-    }
-    replaced.push(file.path);
-    return {
-      path: file.path,
-      content: fallbackReferenceContent({
-        outline,
-        path: file.path,
-      }),
-    };
-  });
-
-  if (replaced.length === 0) {
-    return fileMap;
-  }
-
-  return {
-    ...fileMap,
-    files,
-    validationNotes: [
-      ...fileMap.validationNotes,
-      `Repaired mismatched routed reference file(s): ${replaced.sort().join(', ')}`,
-    ],
-  };
-}
-
 function deterministicValidation(args: {
   fileMap: GeneratedSkillFileMap;
   targetName: string;
@@ -615,20 +592,17 @@ function deterministicValidation(args: {
   ];
   for (const path of [...new Set(routeDocuments.flatMap(referencedSkillPaths))].sort()) {
     if (!files.has(path)) {
-      errors.push(`SKILL.md routes ${path} but the generated file map does not include it`);
+      warnings.push(`SKILL.md routes ${path} but the generated file map does not include it`);
     }
   }
   for (const path of referencedArtifactPaths(skillMd)) {
     if (!files.has(path)) {
-      errors.push(`SKILL.md references ${path} but the generated file map does not include it`);
+      warnings.push(`SKILL.md references ${path} but the generated file map does not include it`);
     }
   }
   for (const reference of referenceFiles) {
     if (!routeDocuments.some((content) => content.includes(reference.path))) {
       warnings.push(`SKILL.md does not route runtime reference ${reference.path}`);
-    }
-    if (!referenceContentMatchesPath(reference.path, reference.content)) {
-      warnings.push(`${reference.path} content does not match its routed reference path`);
     }
     const lineCount = reference.content.split('\n').length;
     if (lineCount > LONG_REFERENCE_LINE_LIMIT && !/^## Contents$/m.test(reference.content)) {
@@ -651,14 +625,6 @@ function deterministicValidation(args: {
   return { errors, warnings };
 }
 
-function hasReferenceMismatchWarning(validation: {
-  warnings: string[];
-}): boolean {
-  return validation.warnings.some((warning) =>
-    warning.includes('content does not match its routed reference path'),
-  );
-}
-
 function formatDeterministicIssues(validation: {
   errors: string[];
   warnings: string[];
@@ -667,6 +633,18 @@ function formatDeterministicIssues(validation: {
     ...validation.errors.map((message) => `error: ${message}`),
     ...validation.warnings.map((message) => `warning: ${message}`),
   ];
+}
+
+function hasMissingGeneratedFileWarning(validation: {
+  warnings: string[];
+}): boolean {
+  return validation.warnings.some((warning) =>
+    warning.includes('generated file map does not include it'),
+  );
+}
+
+function hasCanonicalPathChanges(files: { path: string }[]): boolean {
+  return files.some((file) => canonicalGeneratedArtifactPath(file.path) !== file.path);
 }
 
 function applyValidationResult(args: {
@@ -701,10 +679,7 @@ function applyValidationResult(args: {
     ],
   };
   const fileMap = backfillMissingRoutedReferences(
-    repairMismatchedRoutedReferences(
-      normalizeGeneratedFileMap(candidate, args.targetName),
-      args.outline,
-    ),
+    normalizeGeneratedFileMap(candidate, args.targetName),
     args.outline,
   );
   const validation = deterministicValidation({
@@ -732,6 +707,60 @@ function advisoryProviderIssues(
     });
   }
   return issues;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].filter((value) => value.trim().length > 0);
+}
+
+function mergeExternalSources(
+  ...sourceSets: GeneratedSkillFileMap['externalSources'][]
+): GeneratedSkillFileMap['externalSources'] {
+  const sources = new Map<string, GeneratedSkillFileMap['externalSources'][number]>();
+  for (const sourceSet of sourceSets) {
+    for (const source of sourceSet) {
+      sources.set(`${source.title}\n${source.url}`, source);
+    }
+  }
+  return [...sources.values()];
+}
+
+function applyContributionResult(args: {
+  original: GeneratedSkillFileMap;
+  contribution: GeneratedSkillContribution;
+  targetName: string;
+  outline: SkillBuildOutline;
+}): GeneratedSkillFileMap {
+  const changedFiles = args.contribution.files.filter((file) => file.content.trim().length > 0);
+  const candidate: GeneratedSkillFileMap = {
+    ...args.original,
+    files: [
+      ...args.original.files.filter(
+        (file) => !changedFiles.some((changed) =>
+          canonicalGeneratedArtifactPath(changed.path) === canonicalGeneratedArtifactPath(file.path)
+        ),
+      ),
+      ...changedFiles,
+    ],
+    validationNotes: uniqueStrings([
+      ...args.original.validationNotes,
+      args.contribution.summary,
+      ...args.contribution.validationNotes,
+    ]),
+    missingInputs: uniqueStrings([
+      ...args.original.missingInputs,
+      ...args.contribution.missingInputs,
+    ]),
+    externalSources: mergeExternalSources(
+      args.original.externalSources,
+      args.contribution.externalSources,
+    ),
+  };
+
+  return backfillMissingRoutedReferences(
+    normalizeGeneratedFileMap(candidate, args.targetName),
+    args.outline,
+  );
 }
 
 function summarizeResponseModel(models: (string | undefined)[]): string | undefined {
@@ -777,7 +806,11 @@ function loadExistingArtifact(args: {
     },
     targetName: args.name,
   });
-  if (validation.errors.length > 0 || hasReferenceMismatchWarning(validation)) {
+  if (
+    validation.errors.length > 0 ||
+    hasMissingGeneratedFileWarning(validation) ||
+    hasCanonicalPathChanges(args.files)
+  ) {
     return undefined;
   }
 
@@ -841,23 +874,30 @@ function loadCachedArtifact(args: {
     },
     targetName: metadata.name,
   });
-  if (validation.errors.length > 0 || hasReferenceMismatchWarning(validation)) {
-    const normalizedFileMap = normalizeGeneratedFileMap({
-      version: 1,
-      name: metadata.name,
-      files: files.map((file) => ({ path: file.path, content: file.content })),
-      summary: 'Cached generated artifact',
-      validationNotes: [],
-      missingInputs: metadata.missingInputs,
-      externalSources: metadata.externalSources,
-    }, metadata.name);
+  if (
+    validation.errors.length > 0 ||
+    hasMissingGeneratedFileWarning(validation) ||
+    hasCanonicalPathChanges(files)
+  ) {
+    const normalizedFileMap = backfillMissingRoutedReferences(
+      normalizeGeneratedFileMap({
+        version: 1,
+        name: metadata.name,
+        files: files.map((file) => ({ path: file.path, content: file.content })),
+        summary: 'Cached generated artifact',
+        validationNotes: [],
+        missingInputs: metadata.missingInputs,
+        externalSources: metadata.externalSources,
+      }, metadata.name),
+      args.outline,
+    );
     const normalizedValidation = deterministicValidation({
       fileMap: normalizedFileMap,
       targetName: metadata.name,
     });
     if (
       normalizedValidation.errors.length > 0 ||
-      hasReferenceMismatchWarning(normalizedValidation)
+      hasMissingGeneratedFileWarning(normalizedValidation)
     ) {
       return undefined;
     }
@@ -876,7 +916,7 @@ function loadCachedArtifact(args: {
       artifact: {
         ...metadata,
         fileManifest: fileManifest(writtenFiles),
-        deterministicWarnings: normalizedValidation.warnings,
+        deterministicWarnings: formatDeterministicIssues(normalizedValidation),
         bytes: artifact.bytes,
         generatedAt: new Date().toISOString(),
       },
@@ -945,11 +985,12 @@ function normalizeGeneratedFileMap(
   fileMap: GeneratedSkillFileMap,
   targetName = fileMap.name,
 ): GeneratedSkillFileMap {
-  const retainedFiles = fileMap.files
-    .filter((file) => !shouldOmitGeneratedArtifact(fileMap, file));
+  const canonicalFileMap = canonicalizeGeneratedFileMapPaths(fileMap);
+  const retainedFiles = canonicalFileMap.files
+    .filter((file) => !shouldOmitGeneratedArtifact(canonicalFileMap, file));
   const retainedPaths = new Set(retainedFiles.map((file) => file.path));
   return {
-    ...fileMap,
+    ...canonicalFileMap,
     files: retainedFiles
       .map((file) => ({
         path: file.path,
@@ -959,7 +1000,7 @@ function normalizeGeneratedFileMap(
               stripOutputContractSections(file.content),
               retainedPaths,
             ),
-            fileMap,
+            fileMap: canonicalFileMap,
             targetName,
           })
           : file.content),
@@ -1064,13 +1105,51 @@ export async function buildGeneratedSkill(args: {
       );
     }
 
-    const initialFileMap = repairMismatchedRoutedReferences(
-      backfillMissingRoutedReferences(
-        normalizeGeneratedFileMap(implementation.data, args.outline.skill),
-        args.outline,
-      ),
+    let workingFileMap = backfillMissingRoutedReferences(
+      normalizeGeneratedFileMap(implementation.data, args.outline.skill),
       args.outline,
     );
+    const contributionResults: {
+      usage: UsageStats;
+      responseModel?: string;
+      numTurns?: number;
+    }[] = [];
+
+    if (args.outline.tracks.length > 1) {
+      for (const track of args.outline.tracks) {
+        args.onStatus?.(`Adding ${track.title}`);
+        const contribution = await runStructuredSkillBuilderAgent({
+          runtime: args.runtime,
+          repoPath: args.repoPath,
+          skillName: `${args.outline.skill}:authoring-track-${track.id}`,
+          systemPrompt: authoringSystemPrompt(),
+          userPrompt: buildAuthoringTrackContributionPrompt({
+            outline: args.outline,
+            source: args.source,
+            authoringSkillRoot: authoringProvider.rootDir,
+            targetName: args.outline.skill,
+            targetRootDir: args.rootDir,
+            plan: plan.data,
+            fileMap: workingFileMap,
+            track,
+          }),
+          schema: GeneratedSkillContributionSchema,
+          model: args.model,
+          maxTurns,
+          abortController: args.abortController,
+          repair,
+        });
+        contributionResults.push(contribution);
+        workingFileMap = applyContributionResult({
+          original: workingFileMap,
+          contribution: contribution.data,
+          targetName: args.outline.skill,
+          outline: args.outline,
+        });
+      }
+    }
+
+    const initialFileMap = workingFileMap;
     const initialDeterministic = deterministicValidation({
       fileMap: initialFileMap,
       targetName: args.outline.skill,
@@ -1099,26 +1178,22 @@ export async function buildGeneratedSkill(args: {
       repair,
     });
 
-    const fileMap = repairMismatchedRoutedReferences(
-      backfillMissingRoutedReferences(
-        normalizeGeneratedFileMap(applyValidationResult({
-          original: initialFileMap,
-          validation: validation.data,
-          targetName: args.outline.skill,
-          outline: args.outline,
-        }), args.outline.skill),
-        args.outline,
-      ),
+    const fileMap = backfillMissingRoutedReferences(
+      normalizeGeneratedFileMap(applyValidationResult({
+        original: initialFileMap,
+        validation: validation.data,
+        targetName: args.outline.skill,
+        outline: args.outline,
+      }), args.outline.skill),
       args.outline,
     );
     const finalDeterministic = deterministicValidation({
       fileMap,
       targetName: args.outline.skill,
     });
-    if (finalDeterministic.errors.length > 0) {
+    if (!fileMap.files.some((file) => file.path === 'SKILL.md')) {
       throw new GeneratedSkillBuildError(
-        `Generated skill failed validation for ${args.outline.skill}:\n` +
-        finalDeterministic.errors.map((error) => `- ${error}`).join('\n'),
+        `Generated skill build did not produce SKILL.md for ${args.outline.skill}`,
       );
     }
     const providerIssues = advisoryProviderIssues(validation.data);
@@ -1126,16 +1201,19 @@ export async function buildGeneratedSkill(args: {
     const usage = aggregateUsage([
       plan.usage,
       implementation.usage,
+      ...contributionResults.map((result) => result.usage),
       validation.usage,
     ]);
     const responseModel = summarizeResponseModel([
       plan.responseModel,
       implementation.responseModel,
+      ...contributionResults.map((result) => result.responseModel),
       validation.responseModel,
     ]);
     const numTurns = summarizeTurns([
       plan.numTurns,
       implementation.numTurns,
+      ...contributionResults.map((result) => result.numTurns),
       validation.numTurns,
     ]);
 
@@ -1158,7 +1236,7 @@ export async function buildGeneratedSkill(args: {
         authoringProvider,
         name: artifact.name,
         fileManifest: fileManifest(writtenFiles),
-        deterministicWarnings: finalDeterministic.warnings,
+        deterministicWarnings: formatDeterministicIssues(finalDeterministic),
         validationIssues: providerIssues,
         bytes: artifact.bytes,
         durationMs: artifact.durationMs,
