@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CLIOptions } from '../args.js';
 import { Reporter } from '../output/reporter.js';
 import { Verbosity } from '../output/verbosity.js';
-import { runBuild } from './build.js';
+import { runBuild, runImprove } from './build.js';
 import { getRepoRoot } from '../git.js';
 import {
   buildGeneratedSkillDefinition,
@@ -13,7 +13,12 @@ import {
   generatedSkillDefinitionRootExists,
   resolveGeneratedSkillTarget,
 } from '../../skill-builder/definition.js';
-import { buildSkillOutline, type SkillBuildOutline } from '../../skill-builder/outline.js';
+import {
+  buildSkillOutline,
+  collectSkillBuildSource,
+  collectSkillImproveSource,
+  type SkillBuildOutline,
+} from '../../skill-builder/outline.js';
 import { buildGeneratedSkill } from '../../skill-builder/skill.js';
 import { getRuntime } from '../../sdk/runtimes/index.js';
 
@@ -38,6 +43,7 @@ vi.mock('../../skill-builder/outline.js', () => ({
     }
   },
   collectSkillBuildSource: vi.fn(),
+  collectSkillImproveSource: vi.fn(),
   buildSkillOutline: vi.fn(),
 }));
 
@@ -139,6 +145,8 @@ describe('runBuild', () => {
   const generatedSkillDefinitionRootExistsMock = vi.mocked(generatedSkillDefinitionRootExists);
   const resolveGeneratedSkillTargetMock = vi.mocked(resolveGeneratedSkillTarget);
   const buildSkillOutlineMock = vi.mocked(buildSkillOutline);
+  const collectSkillBuildSourceMock = vi.mocked(collectSkillBuildSource);
+  const collectSkillImproveSourceMock = vi.mocked(collectSkillImproveSource);
   const buildGeneratedSkillMock = vi.mocked(buildGeneratedSkill);
   const getRuntimeMock = vi.mocked(getRuntime);
 
@@ -171,6 +179,17 @@ describe('runBuild', () => {
       rootDir: join(tempDir, '.warden', 'skills', 'security'),
     });
     getRuntimeMock.mockReturnValue({} as never);
+    collectSkillBuildSourceMock.mockReturnValue({
+      hash: 'build-source-hash',
+      files: [{ path: 'warden.yaml', content: 'version: 1\n' }],
+    });
+    collectSkillImproveSourceMock.mockReturnValue({
+      hash: 'improve-source-hash',
+      files: [
+        { path: 'warden.yaml', content: 'version: 1\n' },
+        { path: 'improvement-brief.md', content: 'Improve the skill.' },
+      ],
+    });
     buildSkillOutlineMock.mockResolvedValue({
       outline: createTestOutline(),
       source: 'generated',
@@ -388,5 +407,63 @@ prompt: |-
       prompt: 'Find security issues.',
       rootDir,
     });
+  });
+
+  it('improves an existing generated skill through the shared builder pipeline', async () => {
+    const reporter = createTestReporter();
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const exitCode = await runImprove(createOptions({
+      prompt: 'Tighten source provenance and reference navigation.',
+    }), reporter);
+
+    expect(exitCode).toBe(0);
+    expect(createGeneratedSkillDefinitionMock).not.toHaveBeenCalled();
+    expect(collectSkillImproveSourceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'security' }),
+      'Tighten source provenance and reference navigation.',
+    );
+    expect(buildSkillOutlineMock).toHaveBeenCalledWith(expect.objectContaining({
+      regenerate: true,
+      source: {
+        hash: 'improve-source-hash',
+        files: [
+          { path: 'warden.yaml', content: 'version: 1\n' },
+          { path: 'improvement-brief.md', content: 'Improve the skill.' },
+        ],
+      },
+    }));
+    expect(buildGeneratedSkillMock).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'improve',
+      improvementPrompt: 'Tighten source provenance and reference navigation.',
+      regenerate: true,
+      source: {
+        hash: 'improve-source-hash',
+        files: [
+          { path: 'warden.yaml', content: 'version: 1\n' },
+          { path: 'improvement-brief.md', content: 'Improve the skill.' },
+        ],
+      },
+    }));
+    const output = stderrSpy.mock.calls
+      .map((call) => call.map((part) => String(part)).join(' '))
+      .join('\n');
+    expect(output).toContain('IMPROVE');
+    expect(output).toContain('Brief');
+  });
+
+  it('does not create missing generated skills from improve', async () => {
+    const reporter = createTestReporter();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    generatedSkillDefinitionRootExistsMock.mockReturnValueOnce(false);
+
+    const exitCode = await runImprove(createOptions({
+      prompt: 'Improve the skill.',
+    }), reporter);
+
+    expect(exitCode).toBe(1);
+    expect(createGeneratedSkillDefinitionMock).not.toHaveBeenCalled();
+    expect(buildSkillOutlineMock).not.toHaveBeenCalled();
+    expect(buildGeneratedSkillMock).not.toHaveBeenCalled();
   });
 });

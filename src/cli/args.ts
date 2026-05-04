@@ -73,7 +73,7 @@ export interface RunsOptions {
 }
 
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'build';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'build' | 'improve';
   options: CLIOptions;
   helpTarget?: HelpTarget;
   setupAppOptions?: SetupAppOptions;
@@ -125,6 +125,8 @@ function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTa
       return 'sync';
     case 'build':
       return 'build';
+    case 'improve':
+      return 'improve';
     case 'setup-app':
       return 'setup-app';
     case 'runs':
@@ -382,6 +384,23 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         model: typeof values.model === 'string' ? values.model : undefined,
         json: Boolean(values.json),
         regenerate: Boolean(values.regenerate),
+        prompt: typeof values.prompt === 'string' ? values.prompt : undefined,
+        remote: typeof values.remote === 'string' ? values.remote : undefined,
+        offline: Boolean(values.offline),
+      }),
+    };
+  }
+
+  if (command === 'improve') {
+    return {
+      command: 'improve',
+      options: parseCliOptions({
+        ...sharedOptions(values, verboseCount),
+        skill: typeof values.skill === 'string' ? values.skill : rest[0],
+        config: typeof values.config === 'string' ? values.config : undefined,
+        model: typeof values.model === 'string' ? values.model : undefined,
+        json: Boolean(values.json),
+        regenerate: true,
         prompt: typeof values.prompt === 'string' ? values.prompt : undefined,
         remote: typeof values.remote === 'string' ? values.remote : undefined,
         offline: Boolean(values.offline),

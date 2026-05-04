@@ -116,6 +116,12 @@ describe('parseCliArgs', () => {
     expect(result.helpTarget).toBe('build');
   });
 
+  it('resolves improve help via --help', () => {
+    const result = parseCliArgs(['improve', 'security-review', '--help']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('improve');
+  });
+
   it('resolves explicit help targets', () => {
     const result = parseCliArgs(['help', 'runs', 'show']);
     expect(result.command).toBe('help');
@@ -417,6 +423,31 @@ describe('parseCliArgs', () => {
     expect(result.command).toBe('build');
     expect(result.options.skill).toBe('./skills/security-review');
     expect(result.options.prompt).toBe('@prompts/security.md');
+  });
+
+  it('parses improve command with prompt options', () => {
+    const result = parseCliArgs([
+      'improve',
+      'security-review',
+      '-p',
+      'Preserve references and tighten provenance.',
+    ]);
+    expect(result.command).toBe('improve');
+    expect(result.options.skill).toBe('security-review');
+    expect(result.options.prompt).toBe('Preserve references and tighten provenance.');
+    expect(result.options.regenerate).toBe(true);
+  });
+
+  it('parses improve command with a path target', () => {
+    const result = parseCliArgs([
+      'improve',
+      './skills/security-review',
+      '--prompt',
+      '@feedback.md',
+    ]);
+    expect(result.command).toBe('improve');
+    expect(result.options.skill).toBe('./skills/security-review');
+    expect(result.options.prompt).toBe('@feedback.md');
   });
 
   it('parses runs list command', () => {

@@ -348,6 +348,132 @@ describe('buildGeneratedSkill', () => {
     }]);
   });
 
+  it('improves existing artifacts without clearing the target before reviewer revisions', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
+    tempDirs.push(tempDir);
+    const rootDir = join(tempDir, '.warden', 'skills', 'wrdn-security');
+    const authoringSkillRoot = createAuthoringSkillRoot(tempDir);
+    mkdirSync(join(rootDir, 'references'), { recursive: true });
+    writeFileSync(join(rootDir, 'warden.yaml'), source().files[0]!.content, 'utf-8');
+    writeFileSync(join(rootDir, 'SKILL.md'), skillMd(), 'utf-8');
+    writeFileSync(
+      join(rootDir, 'references', 'security.md'),
+      '# Security Reference\n\nExisting guidance that should survive a focused improvement.\n',
+      'utf-8',
+    );
+    const buildOutline = outline();
+    writeInitialState(rootDir, buildOutline);
+
+    let validationCalls = 0;
+    const runSkill = vi.fn<Runtime['runSkill']>(async (request: SkillRunRequest): Promise<SkillRunResponse> => {
+      if (request.skillName.endsWith(':authoring-plan')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              summary: 'Plan a focused improvement.',
+              workflow: ['Read the current skill', 'Improve only the requested behavior'],
+              researchPlan: ['Use current artifacts and improvement brief'],
+              artifactPlan: ['Keep existing routed references unless the writer changes them'],
+              validationPlan: ['Reviewer verifies the improvement'],
+              risks: [],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-implementation')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              files: [{ path: 'SKILL.md', content: skillMdWithDescription('Initial improved trigger language.') }],
+              summary: 'Improved the trigger language.',
+              validationNotes: ['Needs reviewer check'],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-validation')) {
+        validationCalls += 1;
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              valid: validationCalls > 1,
+              summary: validationCalls > 1 ? 'Improvement is complete.' : 'Needs one revision.',
+              issues: validationCalls > 1
+                ? []
+                : [{
+                  severity: 'error',
+                  path: 'SKILL.md',
+                  message: 'Trigger language is still too vague.',
+                  suggestedFix: 'Make the runtime trigger concrete.',
+                }],
+              missingInputs: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      if (request.skillName.endsWith(':authoring-revision')) {
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({
+              version: 1,
+              files: [{ path: 'SKILL.md', content: skillMdWithDescription('Use when changed code touches exploitable security boundaries.') }],
+              summary: 'Applied reviewer feedback.',
+              validationNotes: ['Reviewer feedback addressed'],
+              missingInputs: [],
+              externalSources: [],
+            }),
+            errors: [],
+            usage: usage(),
+          },
+        };
+      }
+      throw new Error(`Unexpected skill run: ${request.skillName}`);
+    });
+
+    const artifact = await buildGeneratedSkill({
+      outline: buildOutline,
+      source: source(),
+      rootDir,
+      runtime: {
+        name: 'claude',
+        runSkill: diskWriterRunSkill(rootDir, runSkill),
+        runAuxiliary: async () => ({ success: false, error: 'unused', usage: usage() }),
+        runSynthesis: async () => ({ success: false, error: 'unused', usage: usage() }),
+      },
+      repoPath: tempDir,
+      authoringSkillRoot,
+      regenerate: true,
+      mode: 'improve',
+      improvementPrompt: 'Tighten trigger language without replacing the existing reference.',
+    });
+
+    expect(artifact.name).toBe('wrdn-security');
+    expect(readFileSync(join(rootDir, 'SKILL.md'), 'utf-8')).toContain(
+      'Use when changed code touches exploitable security boundaries.',
+    );
+    expect(readFileSync(join(rootDir, 'references', 'security.md'), 'utf-8')).toContain(
+      'Existing guidance that should survive',
+    );
+    expect(runSkill.mock.calls.filter((call) => call[0].skillName.endsWith(':authoring-validation'))).toHaveLength(2);
+    expect(runSkill.mock.calls.some((call) => call[0].skillName.endsWith(':authoring-revision'))).toBe(true);
+  });
+
   it('uses outline tracks as single-writer coverage input without automatic track passes', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-skill-build-'));
     tempDirs.push(tempDir);

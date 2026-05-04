@@ -1,5 +1,6 @@
 import type {
   GeneratedSkillAuthoringPlan,
+  GeneratedSkillAuthoringMode,
   GeneratedSkillReviewResult,
   SkillBuildExternalSource,
 } from './skill-contract.js';
@@ -83,6 +84,27 @@ ${JSON.stringify(args.outline, null, 2)}
 </internal_outline>`;
 }
 
+function authoringIntent(args: {
+  mode?: GeneratedSkillAuthoringMode;
+  improvementPrompt?: string;
+}): string {
+  const mode = args.mode ?? 'build';
+  if (mode === 'improve') {
+    return `<authoring_intent>
+Mode: improve
+Improve the existing generated skill from the improvement brief and current artifacts. Preserve useful existing behavior that the brief and reviewer do not call into question. Use the same planner, writer, reviewer, and revision standards as a build run.
+
+Improvement brief:
+${args.improvementPrompt?.trim() || '(No improvement brief supplied.)'}
+</authoring_intent>`;
+  }
+
+  return `<authoring_intent>
+Mode: build
+Create or refresh the generated skill from the source material and internal outline.
+</authoring_intent>`;
+}
+
 export function authoringSystemPrompt(): string {
   return `You are Warden's generated-skill authoring harness.
 
@@ -97,8 +119,12 @@ export function buildAuthoringPlanPrompt(args: {
   authoringSkillRoot: string;
   targetName: string;
   targetRootDir: string;
+  mode?: GeneratedSkillAuthoringMode;
+  improvementPrompt?: string;
 }): string {
   return `${contextPacket(args)}
+
+${authoringIntent(args)}
 
 <instructions>
 Plan one generated Warden skill authoring run.
@@ -108,6 +134,7 @@ ${wardenSkillConstraints(args)}
 Work like an in-process skill-writer session:
 - Read and use the authoring skill.
 - Build the authoring brief first: goal, runtime use, depth bar, sources or source gaps, and the kind of evidence the final skill must carry.
+- In improve mode, make the improvement brief and current artifacts part of that brief: identify what should change, what should be preserved, and what needs reviewer verification.
 - Decide the minimum skill-writer workflow path and artifact layout using the authoring skill's own guidance.
 - Do the first research and source-inspection pass yourself. Use that to identify the larger plan, coverage work lanes, and obvious non-overlap boundaries.
 - Decide what additional research is needed during implementation and what gaps should be recorded before the skill can be considered complete.
@@ -154,8 +181,12 @@ export function buildAuthoringImplementationPrompt(args: {
   targetName: string;
   targetRootDir: string;
   plan: GeneratedSkillAuthoringPlan;
+  mode?: GeneratedSkillAuthoringMode;
+  improvementPrompt?: string;
 }): string {
   return `${contextPacket(args)}
+
+${authoringIntent(args)}
 
 <authoring_plan>
 ${JSON.stringify(args.plan, null, 2)}
@@ -169,6 +200,7 @@ ${wardenSkillConstraints(args)}
 Authoring behavior:
 - Use the authoring skill again, starting from its SKILL.md.
 - Treat the authoring plan as the source/depth brief. Follow it unless new evidence proves the plan is wrong.
+- In improve mode, treat the current target directory as the draft to improve. Preserve useful existing behavior outside the improvement brief and reviewer feedback.
 - Edit files directly under the target skill root. Do not modify warden.yaml or build-state.json.
 - Write SKILL.md and every local artifact that SKILL.md or another runtime artifact requires.
 - Satisfy the plan's lookupQuestions and qualityBar using the structure chosen by the authoring skill.
@@ -204,8 +236,12 @@ export function buildAuthoringValidationPrompt(args: {
   plan: GeneratedSkillAuthoringPlan;
   artifact: GeneratedSkillArtifactSnapshot;
   deterministicIssues: string[];
+  mode?: GeneratedSkillAuthoringMode;
+  improvementPrompt?: string;
 }): string {
   return `${contextPacket(args)}
+
+${authoringIntent(args)}
 
 <authoring_plan>
 ${JSON.stringify(args.plan, null, 2)}
@@ -227,6 +263,7 @@ ${wardenSkillConstraints(args)}
 Review behavior:
 - Use the authoring skill again as the validation anchor.
 - Check whether the generated artifacts on disk followed the plan, the authoring skill, and Warden constraints.
+- In improve mode, check whether the improvement brief was addressed without regressing useful existing behavior outside that brief.
 - Check whether each outline track/task is covered with useful runtime guidance, merged into another section/reference with clear coverage, or explicitly recorded as missing input. Do not require one artifact per track.
 - Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth, stale gap/provenance language, generated-skill metadata, missing local artifacts, and custom output/report formats that conflict with Warden's injected report schema.
 - Set valid to false for concrete quality failures that need a writer revision: missing task evidence, missing false-positive controls for the requested domain, missing remediation/examples where the plan required them, broad ecosystem output with no sources or recorded gaps, broken local artifact links, or a structure that the authoring skill would reject.
@@ -264,8 +301,12 @@ export function buildAuthoringRevisionPrompt(args: {
   artifact: GeneratedSkillArtifactSnapshot;
   review: GeneratedSkillReviewResult;
   deterministicIssues: string[];
+  mode?: GeneratedSkillAuthoringMode;
+  improvementPrompt?: string;
 }): string {
   return `${contextPacket(args)}
+
+${authoringIntent(args)}
 
 <authoring_plan>
 ${JSON.stringify(args.plan, null, 2)}
@@ -291,6 +332,7 @@ ${wardenSkillConstraints(args)}
 Revision behavior:
 - Use the authoring skill again, starting from its SKILL.md.
 - Treat the current target directory as the draft to improve, not as disposable scaffolding.
+- In improve mode, apply the improvement brief and reviewer feedback while preserving useful existing behavior outside the requested change.
 - Apply concrete review feedback and rough validation signals when they identify broken references, malformed artifacts, authoring metadata, custom output schemas, or missing runtime guidance.
 - If feedback is only stylistic or conflicts with the authoring skill, keep the existing structure and explain why in validationNotes.
 - Edit files directly under the target skill root. Do not modify warden.yaml or build-state.json.

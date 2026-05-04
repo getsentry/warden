@@ -20,6 +20,7 @@ import {
 } from '../../skill-builder/definition.js';
 import {
   collectSkillBuildSource,
+  collectSkillImproveSource,
   type SkillBuildOutline,
   SkillBuildOutlineError,
   buildSkillOutline,
@@ -126,12 +127,14 @@ function outlineStatusDetail(): string {
   return 'Build the internal outline and track split.';
 }
 
-function skillStatusMessage(skill: SkillDefinition): string {
-  return `Generate ${skill.name}`;
+function skillStatusMessageForMode(skill: SkillDefinition, mode: GeneratedSkillCommandMode): string {
+  return `${mode === 'improve' ? 'Improve' : 'Generate'} ${skill.name}`;
 }
 
-function skillStatusDetail(): string {
-  return 'Plan, write, and validate skill artifacts with the authoring provider.';
+function skillStatusDetail(mode: GeneratedSkillCommandMode): string {
+  return mode === 'improve'
+    ? 'Plan, revise, and review skill artifacts with the authoring provider.'
+    : 'Plan, write, and validate skill artifacts with the authoring provider.';
 }
 
 function readPromptFile(path: string): string {
@@ -160,15 +163,22 @@ function resolveSynthesisModel(
   );
 }
 
-async function resolvePrompt(options: CLIOptions, skillName: string): Promise<string | undefined> {
+type GeneratedSkillCommandMode = 'build' | 'improve';
+
+async function resolvePrompt(
+  options: CLIOptions,
+  skillName: string,
+  mode: GeneratedSkillCommandMode,
+): Promise<string | undefined> {
   if (options.prompt?.trim()) {
     return resolvePromptValue(options.prompt);
   }
   if (!process.stdin.isTTY) {
     return undefined;
   }
+  const label = mode === 'improve' ? 'IMPROVEMENT BRIEF' : 'SKILL PROMPT';
   return promptMultiline(
-    `${chalk.bold('SKILL PROMPT')}\n` +
+    `${chalk.bold(label)}\n` +
     `  Skill    ${chalk.cyan(skillName)}`,
     {
       hint: chalk.dim('  Finish with an empty line.'),
@@ -182,26 +192,44 @@ async function ensureSynthesizedSkill(args: {
   repoRoot: string;
   options: CLIOptions;
   reporter: Reporter;
+  mode: GeneratedSkillCommandMode;
 }): Promise<{
   skill: SkillDefinition;
   created: boolean;
   promptLength?: number;
+  improvementPrompt?: string;
   tryItSkillName: string;
 }> {
-  const { skillName, repoRoot, options, reporter } = args;
+  const { skillName, repoRoot, options, reporter, mode } = args;
   const target = resolveGeneratedSkillTarget(repoRoot, skillName);
   const definitionExists = generatedSkillDefinitionRootExists(target.rootDir);
 
   if (definitionExists) {
     const skill = buildGeneratedSkillDefinition(target.rootDir);
+    const improvementPrompt = mode === 'improve'
+      ? await resolvePrompt(options, target.displayName, mode)
+      : undefined;
+    if (mode === 'improve' && !improvementPrompt?.trim()) {
+      reporter.error(`Missing improvement brief for ${target.displayName}`);
+      reporter.tip('Pass --prompt/-p, prefix with @ to read from a file, or run interactively.');
+      throw new SkillBuildOutlineError(`Missing improvement brief for generated skill: ${skillName}`);
+    }
     return {
       skill,
       created: false,
+      improvementPrompt,
+      promptLength: improvementPrompt?.length,
       tryItSkillName: target.isPath ? target.displayName : skill.name,
     };
   }
 
-  const prompt = await resolvePrompt(options, skillName);
+  if (mode === 'improve') {
+    reporter.error(`Generated skill not found: ${target.displayName}`);
+    reporter.tip(`Run warden build ${target.displayName} --prompt <prompt> first`);
+    throw new SkillBuildOutlineError(`Missing generated skill for improvement: ${skillName}`);
+  }
+
+  const prompt = await resolvePrompt(options, skillName, mode);
   if (!prompt) {
     reporter.error(`Generated skill not found: ${target.displayName}`);
     const createTarget = target.isPath ? target.displayName : `.warden/skills/${skillName}`;
@@ -238,9 +266,10 @@ function isInterrupted(error: unknown, state: RunBuildState | undefined): boolea
   return error.name === 'AbortError' || /\b(aborted|cancelled|canceled|interrupted)\b/i.test(error.message);
 }
 
-export async function runBuild(
+async function runGeneratedSkillCommand(
   options: CLIOptions,
   reporter: Reporter,
+  mode: GeneratedSkillCommandMode,
   state?: RunBuildState,
 ): Promise<number> {
   let skillName = options.skill;
@@ -253,7 +282,7 @@ export async function runBuild(
       );
     }
     if (!skillName) {
-      reporter.error('Missing skill name. Usage: warden build <skill>');
+      reporter.error(`Missing skill name. Usage: warden ${mode} <skill>`);
       return 1;
     }
   }
@@ -277,21 +306,25 @@ export async function runBuild(
     return 1;
   }
 
-  const resolved = await ensureSynthesizedSkill({
-    skillName,
-    repoRoot,
-    options,
-    reporter,
-  });
-  const { skill } = resolved;
-
-  const runtimeName = config?.defaults?.runtime ?? 'claude';
-  const runtime = getRuntime(runtimeName);
-  const model = resolveSynthesisModel(config, options);
-  const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
-  const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
-
   try {
+    const resolved = await ensureSynthesizedSkill({
+      skillName,
+      repoRoot,
+      options,
+      reporter,
+      mode,
+    });
+    const { skill } = resolved;
+    const source = mode === 'improve' && resolved.improvementPrompt
+      ? collectSkillImproveSource(skill, resolved.improvementPrompt)
+      : collectSkillBuildSource(skill);
+
+    const runtimeName = config?.defaults?.runtime ?? 'claude';
+    const runtime = getRuntime(runtimeName);
+    const model = resolveSynthesisModel(config, options);
+    const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
+    const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
+
     if (!options.json) {
       renderHeader({
         reporter,
@@ -309,6 +342,10 @@ export async function runBuild(
         }
         renderDetail(reporter, 'Model', `${model ?? 'default'} [${runtimeName}]`);
         reporter.blank();
+      } else if (mode === 'improve') {
+        reporter.bold('IMPROVE');
+        renderDetail(reporter, 'Brief', `${resolved.promptLength?.toLocaleString() ?? 0} chars`);
+        reporter.blank();
       }
       reporter.bold('OUTLINE');
     }
@@ -324,9 +361,10 @@ export async function runBuild(
         apiKey: getAnthropicApiKey(),
         model,
         previousOutline: undefined,
-        regenerate: options.regenerate,
+        regenerate: options.regenerate || mode === 'improve',
         abortController: state?.abortController,
         repoPath: repoRoot,
+        source,
         repairModel,
         repairMaxRetries: maxRetries,
         onStatus: setDetail,
@@ -356,11 +394,11 @@ export async function runBuild(
     const artifact = await runWithLiveStatus({
       mode: reporter.mode,
       verbosity: reporter.verbosity,
-      message: skillStatusMessage(skill),
-      detail: skillStatusDetail(),
+      message: skillStatusMessageForMode(skill, mode),
+      detail: skillStatusDetail(mode),
       task: ({ setDetail }) => buildGeneratedSkill({
         outline: outlineResult.outline,
-        source: collectSkillBuildSource(skill),
+        source,
         rootDir: (() => {
           if (!skill.rootDir) {
             throw new GeneratedSkillBuildError(`Generated skill ${skill.name} is missing a root directory`);
@@ -369,12 +407,14 @@ export async function runBuild(
         })(),
         runtime,
         repoPath: repoRoot,
+        mode,
+        improvementPrompt: resolved.improvementPrompt,
         model,
         apiKey: getAnthropicApiKey(),
         repairModel,
         repairMaxRetries: maxRetries,
         abortController: state?.abortController,
-        regenerate: options.regenerate || outlineResult.source === 'generated',
+        regenerate: options.regenerate || outlineResult.source === 'generated' || mode === 'improve',
         onStatus: setDetail,
       }),
     });
@@ -432,4 +472,21 @@ export async function runBuild(
     }
     throw error;
   }
+}
+
+export async function runBuild(
+  options: CLIOptions,
+  reporter: Reporter,
+  state?: RunBuildState,
+): Promise<number> {
+  return runGeneratedSkillCommand(options, reporter, 'build', state);
+}
+
+/** Run the generated skill improvement command through the shared builder. */
+export async function runImprove(
+  options: CLIOptions,
+  reporter: Reporter,
+  state?: RunBuildState,
+): Promise<number> {
+  return runGeneratedSkillCommand(options, reporter, 'improve', state);
 }

@@ -40,6 +40,7 @@ export type HelpTarget =
   | 'add'
   | 'sync'
   | 'build'
+  | 'improve'
   | 'setup-app'
   | 'runs'
   | 'runs:list'
@@ -177,7 +178,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   prompt: {
     label: '-p, --prompt <value>',
-    description: 'Create a missing generated skill from prompt text',
+    description: 'Generated skill prompt or improvement brief',
     continuation: 'Prefix with @ to read the prompt from a file',
   },
   org: {
@@ -315,6 +316,29 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden build security -p @prompt.md',
       'warden build ./skills/security -p @prompt.md',
       'warden build sentry-security --json',
+    ],
+  },
+  improve: {
+    summary: 'Improve a repo-local generated skill',
+    description: 'Revise an existing generated skill from an improvement brief using the generated-skill reviewer loop.',
+    usage: [
+      'warden improve <skill> [options]',
+    ],
+    arguments: [
+      { label: 'skill', description: 'Generated skill name or skill root path' },
+    ],
+    options: [
+      'cwd',
+      'config',
+      'model',
+      'json',
+      'prompt',
+      ...SHARED_COMMAND_OPTIONS,
+    ],
+    examples: [
+      'warden improve security -p "Deepen source provenance and reference routing"',
+      'warden improve security -p @feedback.md',
+      'warden improve ./skills/security -p @feedback.md',
     ],
   },
   'setup-app': {

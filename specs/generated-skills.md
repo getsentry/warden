@@ -120,6 +120,14 @@ All other files are generated artifacts. The authoring provider decides whether 
 8. Stores artifact metadata only after the review loop and mechanical validation pass
 9. Stores provider/version/hash and validation metadata in build state
 
+`warden improve <name>` uses the same planner, writer, reviewer, revision loop,
+and mechanical validation. The difference is the authoring intent: the source
+packet includes the improvement brief and current generated artifacts, the
+writer edits the existing target directory as the draft, and Warden does not
+clear generated artifacts before the writer pass. The reviewer remains the
+quality gate for whether the improvement brief was addressed without regressing
+useful existing behavior.
+
 The internal outline is Warden context only. It is not a runnable skill and it does not prescribe the final artifact layout. It should help the planner identify topics, work lanes, source expectations, and non-overlap boundaries.
 
 ## Authoring Provider

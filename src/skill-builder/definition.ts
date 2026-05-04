@@ -33,6 +33,12 @@ export interface GeneratedSkillTarget {
   rootDir: string;
 }
 
+export interface GeneratedSkillArtifactFile {
+  path: string;
+  content: string;
+  bytes: number;
+}
+
 function safePathSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '-');
 }
@@ -178,4 +184,38 @@ export function clearGeneratedSkillArtifacts(rootDir: string): void {
     }
     rmSync(join(rootDir, entry.name), { recursive: true, force: true });
   }
+}
+
+/** Read generated runtime artifacts while excluding Warden-owned metadata files. */
+export function readGeneratedSkillArtifactFiles(rootDir: string): GeneratedSkillArtifactFile[] {
+  if (!existsSync(rootDir)) {
+    return [];
+  }
+
+  const files: GeneratedSkillArtifactFile[] = [];
+
+  function visit(relativeDir: string): void {
+    for (const entry of readdirSync(join(rootDir, relativeDir), { withFileTypes: true })) {
+      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+      if (entry.name === GENERATED_SKILL_DEFINITION_FILE || entry.name === BUILD_STATE_FILE) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        visit(relativePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const content = readFileSync(join(rootDir, relativePath), 'utf-8');
+      files.push({
+        path: relativePath,
+        content,
+        bytes: Buffer.byteLength(content, 'utf-8'),
+      });
+    }
+  }
+
+  visit('');
+  return files.sort((a, b) => a.path.localeCompare(b.path));
 }

@@ -20,6 +20,15 @@ describe('renderHelp', () => {
     expect(output).not.toContain('--org <name>');
   });
 
+  it('renders improve help', () => {
+    const output = renderHelp('improve');
+
+    expect(output).toContain('warden improve <skill> [options]');
+    expect(output).toContain('-p, --prompt <value>');
+    expect(output).not.toContain('--regenerate');
+    expect(output).not.toContain('--org <name>');
+  });
+
   it('renders shared output flags on non-run commands that accept them', () => {
     const output = renderHelp('init');
 

@@ -1,12 +1,12 @@
 import { join } from 'node:path';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { parse as parseYaml } from 'yaml';
 import { aggregateUsage } from '../sdk/usage.js';
 import type { Runtime } from '../sdk/runtimes/index.js';
 import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
 import type { UsageStats } from '../types/index.js';
-import { clearGeneratedSkillArtifacts } from './definition.js';
+import { clearGeneratedSkillArtifacts, readGeneratedSkillArtifactFiles } from './definition.js';
 import { resolveAuthoringProvider } from './authoring-provider.js';
 import {
   type SkillBuildOutline,
@@ -20,6 +20,7 @@ import {
 } from './outline-state.js';
 import {
   GeneratedSkillAuthoringPlanSchema,
+  type GeneratedSkillAuthoringMode,
   GeneratedSkillBuildError,
   GeneratedSkillWriterResultSchema,
   GeneratedSkillReviewResultSchema,
@@ -66,47 +67,6 @@ interface GeneratedSkillArtifactSnapshot {
   validationNotes: string[];
   missingInputs: string[];
   externalSources: SkillBuildExternalSource[];
-}
-
-function artifactFiles(rootDir: string): {
-  path: string;
-  content: string;
-  bytes: number;
-}[] {
-  if (!existsSync(rootDir)) {
-    return [];
-  }
-
-  const files: {
-    path: string;
-    content: string;
-    bytes: number;
-  }[] = [];
-
-  function visit(relativeDir: string): void {
-    for (const entry of readdirSync(join(rootDir, relativeDir), { withFileTypes: true })) {
-      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-      if (entry.name === 'warden.yaml' || entry.name === 'build-state.json') {
-        continue;
-      }
-      if (entry.isDirectory()) {
-        visit(relativePath);
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-      const content = readFileSync(join(rootDir, relativePath), 'utf-8');
-      files.push({
-        path: relativePath,
-        content,
-        bytes: Buffer.byteLength(content, 'utf-8'),
-      });
-    }
-  }
-
-  visit('');
-  return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 function filesByteLength(files: { content: string }[]): number {
@@ -392,7 +352,7 @@ function loadCachedArtifact(args: {
     return undefined;
   }
 
-  const files = artifactFiles(args.rootDir);
+  const files = readGeneratedSkillArtifactFiles(args.rootDir);
   const state = readSkillBuildState(getBuildStatePath(args.rootDir));
   const metadata = state?.artifact;
   if (!metadata) {
@@ -450,7 +410,7 @@ function readArtifactSnapshot(args: {
 }): GeneratedSkillArtifactSnapshot {
   return {
     summary: args.writer.summary,
-    files: artifactFiles(args.rootDir),
+    files: readGeneratedSkillArtifactFiles(args.rootDir),
     validationNotes: args.writer.validationNotes,
     missingInputs: args.writer.missingInputs,
     externalSources: args.writer.externalSources,
@@ -468,7 +428,7 @@ function artifactFromDisk(args: {
   responseModel?: string;
   numTurns?: number;
 }): GeneratedSkillArtifact {
-  const files = artifactFiles(args.rootDir);
+  const files = readGeneratedSkillArtifactFiles(args.rootDir);
   return {
     kind: 'generated-skill',
     source: 'generated',
@@ -491,6 +451,8 @@ export async function buildGeneratedSkill(args: {
   rootDir: string;
   runtime: Runtime;
   repoPath: string;
+  mode?: GeneratedSkillAuthoringMode;
+  improvementPrompt?: string;
   model?: string;
   maxTurns?: number;
   abortController?: AbortController;
@@ -503,12 +465,13 @@ export async function buildGeneratedSkill(args: {
 }): Promise<GeneratedSkillArtifact> {
   const startedAt = performance.now();
   const statePath = getBuildStatePath(args.rootDir);
+  const mode = args.mode ?? 'build';
   const authoringProvider = resolveAuthoringProvider({
     authoringSkillRoot: args.authoringSkillRoot,
   });
 
   try {
-    if (!args.regenerate) {
+    if (mode === 'build' && !args.regenerate) {
       const cached = loadCachedArtifact({
         rootDir: args.rootDir,
         outline: args.outline,
@@ -524,6 +487,11 @@ export async function buildGeneratedSkill(args: {
     if (!previousState) {
       throw new GeneratedSkillBuildError(
         `Missing generated skill outline state for ${args.outline.skill}`,
+      );
+    }
+    if (mode === 'improve' && !args.improvementPrompt?.trim()) {
+      throw new GeneratedSkillBuildError(
+        `Missing improvement brief for ${args.outline.skill}`,
       );
     }
 
@@ -546,6 +514,8 @@ export async function buildGeneratedSkill(args: {
         authoringSkillRoot: authoringProvider.rootDir,
         targetName: args.outline.skill,
         targetRootDir: args.rootDir,
+        mode,
+        improvementPrompt: args.improvementPrompt,
       }),
       schema: GeneratedSkillAuthoringPlanSchema,
       model: args.model,
@@ -554,9 +524,11 @@ export async function buildGeneratedSkill(args: {
       repair,
     });
 
-    clearGeneratedSkillArtifacts(args.rootDir);
+    if (mode === 'build') {
+      clearGeneratedSkillArtifacts(args.rootDir);
+    }
 
-    args.onStatus?.('Writing skill artifacts');
+    args.onStatus?.(mode === 'improve' ? 'Improving skill artifacts' : 'Writing skill artifacts');
     const implementation = await runStructuredSkillBuilderAgent({
       runtime: args.runtime,
       repoPath: args.rootDir,
@@ -569,6 +541,8 @@ export async function buildGeneratedSkill(args: {
         targetName: args.outline.skill,
         targetRootDir: args.rootDir,
         plan: plan.data,
+        mode,
+        improvementPrompt: args.improvementPrompt,
       }),
       schema: GeneratedSkillWriterResultSchema,
       model: args.model,
@@ -614,6 +588,8 @@ export async function buildGeneratedSkill(args: {
           plan: plan.data,
           artifact: workingArtifact,
           deterministicIssues: formatDeterministicIssues(deterministic),
+          mode,
+          improvementPrompt: args.improvementPrompt,
         }),
         schema: GeneratedSkillReviewResultSchema,
         model: args.model,
@@ -649,6 +625,8 @@ export async function buildGeneratedSkill(args: {
           artifact: workingArtifact,
           review: review.data,
           deterministicIssues: formatDeterministicIssues(deterministic),
+          mode,
+          improvementPrompt: args.improvementPrompt,
         }),
         schema: GeneratedSkillWriterResultSchema,
         model: args.model,
@@ -664,12 +642,20 @@ export async function buildGeneratedSkill(args: {
       });
     }
 
+    const previousArtifactExternalSources = mode === 'improve'
+      ? previousState.artifact?.externalSources ?? []
+      : [];
+    const previousArtifactMissingInputs = mode === 'improve'
+      ? previousState.artifact?.missingInputs ?? []
+      : [];
     const finalExternalSources = mergeExternalSources(
+      previousArtifactExternalSources,
       args.outline.build.externalSources ?? [],
       plan.data.externalSources,
       workingArtifact.externalSources,
     );
     const finalMissingInputs = uniqueStrings([
+      ...previousArtifactMissingInputs,
       ...plan.data.missingInputs,
       ...workingArtifact.missingInputs,
       ...reviewResults.flatMap((result) => result.data.missingInputs),
@@ -729,7 +715,7 @@ export async function buildGeneratedSkill(args: {
       responseModel,
       numTurns,
     });
-    const writtenFiles = artifactFiles(args.rootDir);
+    const writtenFiles = readGeneratedSkillArtifactFiles(args.rootDir);
     writeSkillBuildState(statePath, {
       ...previousState,
       artifact: {
@@ -763,15 +749,16 @@ export async function buildGeneratedSkill(args: {
     if (error instanceof GeneratedSkillBuildError) {
       throw error;
     }
+    const operation = mode === 'improve' ? 'improvement' : 'build';
     if (error instanceof StructuredSkillBuilderAgentError) {
       throw new GeneratedSkillBuildError(
-        `Generated skill build failed for ${args.outline.skill}: ${error.message}`,
+        `Generated skill ${operation} failed for ${args.outline.skill}: ${error.message}`,
         { cause: error },
       );
     }
     if (error instanceof Error) {
       throw new GeneratedSkillBuildError(
-        `Generated skill build failed for ${args.outline.skill}: ${error.message}`,
+        `Generated skill ${operation} failed for ${args.outline.skill}: ${error.message}`,
         { cause: error },
       );
     }

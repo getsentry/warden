@@ -13,6 +13,8 @@ export interface SkillBuildAuthoringProvider {
   contentHash: string;
 }
 
+export type GeneratedSkillAuthoringMode = 'build' | 'improve';
+
 const SkillBuildExternalSourceSchema = z.object({
   title: z.string().min(1),
   url: z.string().min(1),
