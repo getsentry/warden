@@ -515,7 +515,7 @@ export async function buildGeneratedSkill(args: {
       );
     }
 
-    const maxTurns = args.maxTurns ?? defaultBuildMaxTurns(args.outline);
+    const maxTurns = args.maxTurns ?? defaultBuildMaxTurns();
     const repair = {
       apiKey: args.apiKey,
       model: args.repairModel,

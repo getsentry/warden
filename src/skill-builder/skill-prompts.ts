@@ -5,8 +5,7 @@ import type {
 } from './skill-contract.js';
 import type { SkillBuildOutline, SkillBuildSource } from './outline-contract.js';
 
-const GENERIC_SKILL_BUILD_MAX_TURNS = 16;
-const LOCAL_SKILL_BUILD_MAX_TURNS = 24;
+const GENERATED_SKILL_AUTHORING_MAX_TURNS = 80;
 const VALIDATION_MAX_TURNS = 8;
 
 interface GeneratedSkillArtifactSnapshot {
@@ -26,16 +25,8 @@ function sourceBlocks(source: SkillBuildSource): string {
     .join('\n\n');
 }
 
-export function requiresRepoInspection(outline: SkillBuildOutline): boolean {
-  return outline.scopeProfile.localContextUsed ||
-    outline.scopeProfile.kind === 'repository' ||
-    outline.scopeProfile.kind === 'product';
-}
-
-export function defaultBuildMaxTurns(outline: SkillBuildOutline): number {
-  return requiresRepoInspection(outline)
-    ? LOCAL_SKILL_BUILD_MAX_TURNS
-    : GENERIC_SKILL_BUILD_MAX_TURNS;
+export function defaultBuildMaxTurns(): number {
+  return GENERATED_SKILL_AUTHORING_MAX_TURNS;
 }
 
 export function defaultValidationMaxTurns(): number {

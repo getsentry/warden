@@ -345,6 +345,8 @@ describe('buildGeneratedSkill', () => {
     expect(runSkill.mock.calls[1]![0].repoPath).toBe(rootDir);
     expect(runSkill.mock.calls[1]![0].allowMutatingTools).toBe(true);
     expect(runSkill.mock.calls[1]![0].tools?.allowed).toEqual(expect.arrayContaining(['Write', 'Edit', 'Bash']));
+    expect(runSkill.mock.calls[0]![0].options.maxTurns).toBe(80);
+    expect(runSkill.mock.calls[1]![0].options.maxTurns).toBe(80);
 
     const validationPrompt = runSkill.mock.calls[2]![0].userPrompt;
     expect(validationPrompt).toContain('Check for over-broad topic buckets, catalog-only runtime guidance, missing source depth');
@@ -353,6 +355,7 @@ describe('buildGeneratedSkill', () => {
     expect(validationPrompt).toContain('claims broad domain coverage but the source base is too thin');
     expect(validationPrompt).toContain('Set valid to false for any missing local artifact needed by returned runtime guidance');
     expect(validationPrompt).toContain('Treat rough validation issues as advisory signals');
+    expect(runSkill.mock.calls[2]![0].options.maxTurns).toBe(8);
 
     const state = readSkillBuildState(getBuildStatePath(rootDir));
     expect(state?.artifact?.version).toBe(5);
