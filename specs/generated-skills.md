@@ -16,7 +16,7 @@ Good generated skills usually have:
 - source provenance or explicit gaps when the skill claims broad expertise
 - segmentation that makes the skill usable without loading irrelevant material
 - reference-backed layouts where references behave as focused lookup leaves,
-  with navigation or further splitting when a leaf becomes hard to scan
+  with `## Contents` or further splitting when a leaf becomes hard to scan
 
 Many broad skills will naturally become reference-backed, often with roughly one focused reference per major topic and sometimes multiple references for a large topic. That is an expected outcome, not a required layout. Smaller skills may stay mostly inline. Some topics may share a reference. Some topics may not need a separate file at all. The authoring provider owns that choice.
 
@@ -26,6 +26,14 @@ and enough structure that the runtime agent can open only the material relevant
 to the current changed hunk. Oversized, mixed-purpose, or unnavigable references
 are quality failures even though the exact split remains the authoring
 provider's choice.
+
+Source provenance should be honest and compact. `externalSources` is the
+consulted-source ledger Warden stores in metadata. A generated `SOURCES.md` is
+optional; when present, its consulted-source claims should correspond to
+`externalSources`. Useful source classes that were not actually consulted belong
+in missing inputs or an explicitly labeled gap/candidate section, not in a
+"consulted sources" list. Broad "no gaps" claims are quality failures unless
+the consulted sources and missing-input list support them.
 
 ## Builder Contract
 
@@ -204,6 +212,8 @@ The authoring-provider review should judge quality:
 - are topics covered in enough depth?
 - are broad claims backed by enough source coverage?
 - are source gaps recorded instead of hidden?
+- does `SOURCES.md`, if present, match the consulted-source ledger instead of
+  claiming unconsulted generic source classes?
 - is guidance over-broad, catalog-only, or shallow?
 - are false-positive controls and remediation patterns concrete?
 - is segmentation useful without being forced?
