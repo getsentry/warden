@@ -6,7 +6,7 @@
 
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { execFileNonInteractive } from '../../utils/exec.js';
@@ -258,11 +258,31 @@ export async function getDefaultBranchFromAPI(
 // Findings Output File
 // -----------------------------------------------------------------------------
 
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function isRepoRelativePath(path: string): boolean {
+  return path !== '' && path !== '..' && !path.startsWith('../') && !isAbsolute(path);
+}
+
+function getFindingsOutputValue(filePath: string, repoPath: string): string {
+  const relativePath = normalizePath(relative(repoPath, filePath));
+  return isRepoRelativePath(relativePath) ? relativePath : filePath;
+}
+
 /**
  * Get the path for the findings output file.
- * Uses RUNNER_TEMP (GitHub Actions) with fallback to OS temp dir.
+ *
+ * Uses the GitHub Actions workspace when available so action consumers can pass
+ * the output to upload actions that expect repo-relative paths. Falls back to
+ * RUNNER_TEMP for local callers and tests.
  */
-export function getFindingsOutputPath(): string {
+export function getFindingsOutputPath(repoPath?: string): string {
+  if (repoPath && process.env['GITHUB_WORKSPACE']) {
+    return join(repoPath, 'warden-findings.json');
+  }
+
   const tmpDir = process.env['RUNNER_TEMP'] ?? tmpdir();
   return join(tmpDir, 'warden-findings.json');
 }
@@ -270,14 +290,15 @@ export function getFindingsOutputPath(): string {
 /**
  * Write structured findings data to a JSON file for external export (GCS, S3, etc.).
  *
- * Always writes to a known location under RUNNER_TEMP and sets the `findings-file`
- * output so downstream steps can reference the path.
+ * Sets `findings-file` to a repo-relative path when possible so downstream
+ * steps can reference the path without tripping ignore processors on absolute
+ * runner temp paths.
  */
 export function writeFindingsOutput(
   reports: SkillReport[],
   context: EventContext
 ): string {
-  const filePath = getFindingsOutputPath();
+  const filePath = getFindingsOutputPath(context.repoPath);
   const allFindings = reports.flatMap((r) => r.findings);
 
   const output = {
@@ -330,6 +351,6 @@ export function writeFindingsOutput(
 
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, JSON.stringify(output, null, 2));
-  setOutput('findings-file', filePath);
+  setOutput('findings-file', getFindingsOutputValue(filePath, context.repoPath));
   return filePath;
 }

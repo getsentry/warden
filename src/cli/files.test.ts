@@ -135,6 +135,22 @@ describe('expandFileGlobs', () => {
     expect(files[0]).toContain('specific.ts');
   });
 
+  it('does not pass outside-repo absolute paths to gitignore matching', async () => {
+    const outsideDir = join(tmpdir(), `warden-outside-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(outsideDir, { recursive: true });
+
+    try {
+      const outsideFile = join(outsideDir, 'outside.ts');
+      writeFileSync(outsideFile, 'content');
+
+      const files = await expandFileGlobs([outsideFile], tempDir);
+
+      expect(files).toEqual([outsideFile]);
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
   it('returns empty for no matches', async () => {
     const files = await expandFileGlobs(['*.nonexistent'], tempDir);
     expect(files).toHaveLength(0);

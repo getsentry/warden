@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { resolve, relative, dirname, join } from 'node:path';
+import { resolve, relative, dirname, join, isAbsolute } from 'node:path';
 import fg from 'fast-glob';
 import ignore, { type Ignore } from 'ignore';
 import { countPatchChunks } from '../types/index.js';
@@ -20,6 +20,10 @@ export interface ExpandGlobOptions {
  */
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
+}
+
+function isValidIgnorePath(path: string): boolean {
+  return path !== '' && path !== '..' && !path.startsWith('../') && !isAbsolute(path);
 }
 
 function hasGlobCharacters(pattern: string): boolean {
@@ -208,6 +212,9 @@ export async function expandFileGlobs(
   // Normalize paths to forward slashes for consistent matching
   const filteredFiles = files.filter((file) => {
     const relativePath = normalizePath(relative(gitRoot, file));
+    if (!isValidIgnorePath(relativePath)) {
+      return true;
+    }
     return !ig.ignores(relativePath);
   });
 
