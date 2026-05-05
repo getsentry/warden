@@ -246,6 +246,7 @@ export async function verifyFindings(
           maxTurns: options.maxTurns,
           abortController: options.abortController,
         },
+        tools: options.skill.tools,
         providerOptions: getRuntimeProviderOptions(runtimeName, {
           pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
         }),

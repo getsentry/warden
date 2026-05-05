@@ -304,4 +304,21 @@ describe('verifyFindings', () => {
     expect(maxActive).toBeGreaterThan(1);
     expect(maxActive).toBeLessThanOrEqual(4);
   });
+
+  it('passes skill tool configuration to the verifier runtime', async () => {
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: {
+        ...makeSkill(),
+        tools: { allowed: ['Read', 'Grep', 'WebFetch'] },
+      },
+    });
+
+    expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
+      tools: { allowed: ['Read', 'Grep', 'WebFetch'] },
+    }));
+  });
 });
