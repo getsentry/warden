@@ -41,10 +41,10 @@ This file tracks source material synthesized into `skill-writer`, plus iterative
 8. Hooks are deterministic enforcement and need narrow scope plus security notes because command hooks run with full user permissions.
 9. Multi-agent guidance should distinguish manager/orchestrator, handoff, and isolated subagent execution instead of collapsing them into one pattern.
 10. Reasoning-model guidance is a design option, not a universal default: planner/doer splits are useful when complexity warrants them.
-11. Validation should check architectural choices qualitatively, not only file structure and prose depth.
+11. Authoring review should check architectural choices qualitatively; the quick validator remains mechanical.
 12. Reference files remain split by lookup need rather than topic buckets, even as the set of supported shapes expands.
 13. Subfolders inside `references/` are acceptable when they create clearer lookup leaves, but every bundled reference should still be directly discoverable from `SKILL.md`.
-14. The validator should enforce durable structural guarantees and required fields, but should not hardcode provider-specific optional frontmatter keys.
+14. The validator should enforce durable SKILL.md frontmatter/YAML identity guarantees, but should not hardcode provider-specific optional frontmatter keys or markdown-content opinions.
 15. `skill-writer` should default to dense structures such as tables, checklists, templates, and I/O examples, and should cut explanatory prose unless it prevents a concrete mistake.
 16. `SKILL.md` should stay a thin router; repeated policy belongs in routed references rather than always-loaded step prose.
 17. Evaluation is conditional and should not be part of the default authoring path unless the user asks for it or the change is genuinely risky.
@@ -71,9 +71,8 @@ This file tracks source material synthesized into `skill-writer`, plus iterative
 
 ## Open gaps
 
-1. The validator still only partially checks advanced-shape contracts; deeper automated checks may be worth adding.
-2. This repository still has few real shipped examples using `hooks`, `context: fork`, `when_to_use`, `arguments`, `paths`, or `effort`.
-3. Public repo docs outside `skill-writer` may need follow-up updates to fully reflect the current Claude-specific skill fields.
+1. This repository still has few real shipped examples using `hooks`, `context: fork`, `when_to_use`, `arguments`, `paths`, or `effort`.
+2. Public repo docs outside `skill-writer` may need follow-up updates to fully reflect the current Claude-specific skill fields.
 
 ## Changelog
 
@@ -92,3 +91,4 @@ This file tracks source material synthesized into `skill-writer`, plus iterative
 - 2026-05-01: Removed the validator's hardcoded optional frontmatter allowlist so provider-specific field drift does not create noisy false warnings.
 - 2026-05-01: Reduced prose-heavy guidance in `skill-writer`, rewrote the main runtime refs into denser tables/checklists, and made compact runtime guidance an explicit contract.
 - 2026-05-01: Thinned `SKILL.md` back toward a true router, removed duplicated execution-shape detail from `mode-selection.md`, and made evaluation conditional instead of a default workflow path.
+- 2026-05-05: Reduced `quick_validate.py` to mechanical SKILL.md frontmatter/YAML and identity checks; markdown content quality now belongs to authoring review.

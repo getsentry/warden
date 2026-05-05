@@ -117,8 +117,8 @@ Data that must not be stored:
 ## Evaluation
 
 - Lightweight validation:
-  - Run `uv run <skill-writer-root>/scripts/quick_validate.py <skill-writer-root> --skill-class skill-authoring --strict-depth`.
-  - Inspect changed references for focused scope, direct discoverability, and absence of host-specific paths.
+  - Run `uv run <skill-writer-root>/scripts/quick_validate.py <skill-writer-root> --skill-class skill-authoring --strict-depth` as a frontmatter/YAML smoke check.
+  - Inspect changed references qualitatively for focused scope, direct discoverability, and absence of host-specific paths.
   - Verify that the selected execution shape is explicit and that advanced mechanics, if any, are justified.
 - Deeper evaluation:
   - Use `references/evaluation-path.md` and `EVAL.md` only when the user requests it, the change is high-risk, or the architectural choice needs verification.
@@ -128,17 +128,16 @@ Data that must not be stored:
   - Keep durable holdout examples in `references/evidence/holdout-set.md` when repeated regressions appear.
   - Do not tune directly against holdout examples until they are intentionally moved to the working set.
 - Acceptance gates:
-  - Validator passes with no errors.
+  - Validator passes with no errors for SKILL.md frontmatter/YAML and identity fields.
   - New or changed workflow rules are represented in the correct artifact.
   - `SOURCES.md` records source-backed decisions and any remaining gaps.
   - `SPEC.md` is updated when intent, scope, evidence model, evaluation, or maintenance expectations change.
 
 ## Known Limitations
 
-- The validator checks structure and selected depth gates; it cannot prove that a generated skill is semantically complete.
-- The validator does not yet deeply verify every advanced-shape contract.
+- The validator intentionally checks only SKILL.md frontmatter/YAML and identity fields; markdown content quality belongs to authoring review.
+- The validator does not verify advanced-shape contracts, reference completeness, source depth, prose density, or `SPEC.md` heading templates.
 - The validator intentionally does not hardcode or exhaustively validate provider-specific optional frontmatter fields.
-- The validator does not yet strongly enforce prose density; that still relies mostly on authoring guidance and review.
 - Deeper evals are opt-in unless risk or user request justifies the extra cost.
 - Source discovery can still miss private operational knowledge if it is not present in local files, accessible issue/PR history, or supplied context.
 - Provider-specific skill extensions may drift; `skill-writer` treats them as compatibility guidance unless a skill is intentionally provider-specific.
