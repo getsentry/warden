@@ -11,6 +11,8 @@ Good generated skills usually have:
 - clear runtime trigger language and scope
 - topic coverage broken into useful semantic areas
 - concrete evidence requirements, not only API or issue catalogs
+- a finding proof model: changed-line evidence, boundary/invariant, cause,
+  affected operation, missing guard, impact, and fix
 - false-positive controls and safe counterexamples
 - remediation guidance that points toward an actual patch
 - source provenance or explicit gaps when the skill claims broad expertise
@@ -218,6 +220,7 @@ The authoring-provider review should judge quality:
 - did the artifact follow skill-writer?
 - does the skill meet the authoring brief?
 - are topics covered in enough depth?
+- can findings be proven from the runtime guidance, not just matched by pattern?
 - are broad claims backed by enough source coverage?
 - are source gaps recorded instead of hidden?
 - does `SOURCES.md`, if present, match the consulted-source ledger instead of
