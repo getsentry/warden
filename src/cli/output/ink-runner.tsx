@@ -25,7 +25,7 @@ import {
   type SkillState,
   type FileState,
 } from './tasks.js';
-import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot, pluralize } from './formatters.js';
+import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot, pluralize, totalAuxiliaryCost } from './formatters.js';
 import { Semaphore } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
@@ -62,12 +62,25 @@ function FileProgress({ file }: { file: FileState }): React.ReactElement {
   );
 }
 
+export function getSkillCostUSD(skill: SkillState): number | undefined {
+  const hasFileUsage = skill.files.some((file) => file.usage !== undefined);
+  const primaryCost = skill.usage?.costUSD
+    ?? (hasFileUsage ? skill.files.reduce((sum, file) => sum + (file.usage?.costUSD ?? 0), 0) : undefined);
+  const auxiliaryCost = skill.auxiliaryUsage ? totalAuxiliaryCost(skill.auxiliaryUsage) : 0;
+
+  if (primaryCost === undefined && auxiliaryCost === 0) {
+    return undefined;
+  }
+
+  return (primaryCost ?? 0) + auxiliaryCost;
+}
+
 function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
   const activeFiles = skill.files.filter((f) => f.status === 'running');
   const doneCount = skill.files.filter((f) => f.status === 'done' || f.status === 'skipped').length;
   const totalCount = skill.files.length;
   const findingCount = skill.files.reduce((sum, f) => sum + f.findings.length, 0);
-  const cost = skill.files.reduce((sum, f) => sum + (f.usage?.costUSD ?? 0), 0);
+  const cost = getSkillCostUSD(skill);
 
   return (
     <Box flexDirection="column">
@@ -76,7 +89,7 @@ function RunningSkill({ skill }: { skill: SkillState }): React.ReactElement {
         <Text> {skill.displayName}</Text>
         {totalCount > 0 && <Text dimColor>  [{doneCount}/{totalCount} files]</Text>}
         {findingCount > 0 && <Text>  {findingCount} {findingCount === 1 ? 'finding' : 'findings'}</Text>}
-        {cost > 0 && <Text dimColor>  {formatCost(cost)}</Text>}
+        {cost !== undefined && cost > 0 && <Text dimColor>  {formatCost(cost)}</Text>}
       </Box>
       {activeFiles.map((file) => (
         <Box key={file.filename} marginLeft={2}>
@@ -97,7 +110,7 @@ function CompletedSkill({ skill }: { skill: SkillState }): React.ReactElement {
   }
 
   const findingCount = skill.findings.length;
-  const cost = skill.usage?.costUSD;
+  const cost = getSkillCostUSD(skill);
   const duration = skill.durationMs ? formatDuration(skill.durationMs) : undefined;
 
   if (skill.status === 'error') {
@@ -212,9 +225,11 @@ function printFileSummary(file: FileState): void {
 function printSkillSummary(skillStates: SkillState[]): void {
   for (const skill of skillStates) {
     const duration = skill.durationMs ? chalk.dim(` [${formatDuration(skill.durationMs)}]`) : '';
+    const cost = getSkillCostUSD(skill);
+    const costText = cost !== undefined && cost > 0 ? chalk.dim(`  ${formatCost(cost)}`) : '';
 
     if (skill.status === 'done') {
-      process.stderr.write(`${chalk.green(ICON_CHECK)} ${skill.displayName}${duration}\n`);
+      process.stderr.write(`${chalk.green(ICON_CHECK)} ${skill.displayName}${duration}${costText}\n`);
     } else if (skill.status === 'skipped') {
       process.stderr.write(`${chalk.yellow(ICON_SKIPPED)} ${skill.displayName} ${chalk.dim('[skipped]')}\n`);
     } else if (skill.status === 'error') {
@@ -369,8 +384,20 @@ export async function runSkillTasksWithInk(
         }
       }
     },
-    onSkillComplete: (_name, report) => {
+    onSkillComplete: (name, report) => {
       fireStreamHook?.(report);
+      const idx = skillStates.findIndex((s) => s.name === name);
+      const existing = skillStates[idx];
+      if (idx >= 0 && existing) {
+        skillStates[idx] = {
+          ...existing,
+          status: existing.status === 'error' ? 'error' : 'done',
+          durationMs: report.durationMs,
+          findings: report.findings,
+          usage: report.usage,
+          auxiliaryUsage: report.auxiliaryUsage,
+        };
+      }
       updateUI();
     },
     onChunkComplete: (name, chunk) => {

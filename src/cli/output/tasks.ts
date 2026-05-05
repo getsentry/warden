@@ -5,7 +5,7 @@
  * Reporter spec: specs/reporters.md
  */
 
-import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure } from '../../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
@@ -109,6 +109,7 @@ export interface SkillState {
   files: FileState[];
   findings: Finding[];
   usage?: UsageStats;
+  auxiliaryUsage?: AuxiliaryUsageMap;
   error?: string;
 }
 
@@ -508,6 +509,8 @@ export async function runSkillTask(
             status: 'error',
             durationMs: duration,
             findings: [],
+            usage: errorReport.usage,
+            auxiliaryUsage: errorReport.auxiliaryUsage,
           });
           callbacks.onSkillComplete(name, errorReport);
           // Carry a typed error alongside the report so consumers that re-throw
@@ -583,6 +586,7 @@ export async function runSkillTask(
           durationMs: duration,
           findings: finalFindings,
           usage: report.usage,
+          auxiliaryUsage: report.auxiliaryUsage,
         });
         callbacks.onSkillComplete(name, report);
 
