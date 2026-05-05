@@ -17,6 +17,7 @@ import {
   type SkillRunResult,
 } from './runtimes/index.js';
 import type { FindingProcessingEvent } from './types.js';
+import { runPool } from '../utils/index.js';
 import {
   buildChangedFilesSection,
   buildJsonOutputSection,
@@ -52,6 +53,7 @@ const VerificationVerdictSchema = z.object({
 type VerificationVerdict = z.infer<typeof VerificationVerdictSchema>;
 
 const JSON_OBJECT_START = /\{/g;
+const VERIFICATION_CONCURRENCY = 4;
 
 function isAbortRequested(error: unknown, abortController?: AbortController): boolean {
   return (abortController?.signal.aborted ?? false) || classifyError(error).code === 'aborted';
@@ -180,7 +182,7 @@ function throwIfAuthenticationFailure(
   }
 
   if (authMessage) {
-    throw new WardenAuthenticationError();
+    throw new WardenAuthenticationError(authMessage);
   }
 }
 
@@ -227,13 +229,10 @@ export async function verifyFindings(
   const runtimeName = options.runtime ?? 'claude';
   const runtime = getRuntime(runtimeName);
   const systemPrompt = buildVerificationSystemPrompt(options.skill);
-  const usage: UsageStats[] = [];
-  const verified: Finding[] = [];
 
-  for (const finding of findings) {
+  const results = await runPool(findings, VERIFICATION_CONCURRENCY, async (finding) => {
     if (options.abortController?.signal.aborted) {
-      verified.push(finding);
-      continue;
+      return { finding };
     }
 
     try {
@@ -254,22 +253,15 @@ export async function verifyFindings(
 
       throwIfAuthenticationFailure(authError, result);
 
-      if (result?.usage) {
-        usage.push(result.usage);
-      }
-
       const verdict = result?.status === 'success'
         ? parseVerificationVerdict(result.text)
         : null;
       const next = applyVerdict(finding, verdict);
       notifyVerdict(options, finding, verdict, next);
-      if (next) {
-        verified.push(next);
-      }
+      return { finding: next ?? undefined, usage: result?.usage };
     } catch (error) {
       if (isAbortRequested(error, options.abortController)) {
-        verified.push(finding);
-        continue;
+        return { finding };
       }
 
       if (error instanceof WardenAuthenticationError) {
@@ -289,9 +281,12 @@ export async function verifyFindings(
         throw new WardenAuthenticationError(undefined, { cause: error });
       }
 
-      verified.push(finding);
+      return { finding };
     }
-  }
+  });
+
+  const verified = results.flatMap((result) => result.finding ? [result.finding] : []);
+  const usage = results.map((result) => result.usage).filter((u): u is UsageStats => u !== undefined);
 
   return {
     findings: verified,

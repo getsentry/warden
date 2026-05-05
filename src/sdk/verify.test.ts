@@ -266,6 +266,42 @@ describe('verifyFindings', () => {
     await expect(verifyFindings([makeFinding()], {
       repoPath: '/repo',
       skill: makeSkill(),
-    })).rejects.toBeInstanceOf(WardenAuthenticationError);
+    })).rejects.toThrow('invalid api key');
+  });
+
+  it('verifies multiple findings concurrently', async () => {
+    let active = 0;
+    let maxActive = 0;
+    const runtime: Runtime = {
+      name: 'claude',
+      runSkill: vi.fn(async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active -= 1;
+        return {
+          result: {
+            status: 'success',
+            text: '{"verdict":"keep"}',
+            errors: [],
+            usage: makeUsage(),
+          },
+        };
+      }),
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime;
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const findings = Array.from({ length: 6 }, (_, index) => makeFinding({ id: `ABC-${index}` }));
+    const result = await verifyFindings(findings, {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    });
+
+    expect(result.findings.map((finding) => finding.id)).toEqual(findings.map((finding) => finding.id));
+    expect(runtime.runSkill).toHaveBeenCalledTimes(6);
+    expect(maxActive).toBeGreaterThan(1);
+    expect(maxActive).toBeLessThanOrEqual(4);
   });
 });

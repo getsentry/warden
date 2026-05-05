@@ -216,4 +216,41 @@ describe('runSkillTasksWithInk', () => {
 
     expect(controller.signal.aborted).toBe(false);
   });
+
+  it('does not trigger fail-fast from file findings in quiet mode', async () => {
+    const controller = new AbortController();
+
+    mockRunComposedSkillTasks.mockImplementationOnce(async (_tasks, callbacks) => {
+      callbacks.onFileUpdate('find-warden-bugs', 'src/app.ts', {
+        status: 'done',
+        findings: [{
+          id: 'candidate',
+          severity: 'high',
+          title: 'Rejected candidate',
+          description: 'Rejected during verification',
+        }],
+      });
+      callbacks.onSkillComplete('find-warden-bugs', {
+        skill: 'find-warden-bugs',
+        summary: 'find-warden-bugs: No issues found',
+        findings: [],
+      });
+      return [];
+    });
+
+    await runSkillTasksWithInk(
+      [{
+        name: 'find-warden-bugs',
+        displayName: 'find-warden-bugs',
+      } as never],
+      {
+        mode: { isTTY: true, supportsColor: false, columns: 80 },
+        verbosity: Verbosity.Quiet,
+        concurrency: 2,
+        failFastController: controller,
+      },
+    );
+
+    expect(controller.signal.aborted).toBe(false);
+  });
 });

@@ -272,20 +272,14 @@ export async function runSkillTasksWithInk(
     const composedTasks = composeTasksWithFailFast(tasks, failFastController);
     const callbacks: SkillProgressCallbacks = {
       ...noopCallbacks,
-      ...(failFastController
-        ? {
-            onFileUpdate: (_skillName: string, _filename: string, updates: Partial<FileState>) => {
-              if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
-                failFastController.abort();
-              }
-            },
-          }
-        : {}),
-      ...(fireStreamHook
+      ...(fireStreamHook || failFastController
         ? {
             onSkillComplete: (name: string, report) => {
               noopCallbacks.onSkillComplete(name, report);
-              fireStreamHook(report);
+              fireStreamHook?.(report);
+              if (failFastController && report.findings.length > 0) {
+                failFastController.abort();
+              }
             },
           }
         : {}),
