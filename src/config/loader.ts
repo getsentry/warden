@@ -440,21 +440,14 @@ export function resolveLayeredSkillConfigs(
   skillRootsByName?: LayeredSkillRootsByName
 ): ResolvedTrigger[] {
   if (layered.baseConfig && layered.repoConfig) {
-    const repoConfigWithInheritedRuntime: WardenConfig =
-      layered.baseConfig.defaults?.runtime !== undefined &&
-      layered.repoConfig.defaults?.runtime === undefined
-        ? {
-            ...layered.repoConfig,
-            defaults: {
-              ...layered.repoConfig.defaults,
-              runtime: layered.baseConfig.defaults.runtime,
-            },
-          }
-        : layered.repoConfig;
+    const repoConfigWithInheritedDefaults: WardenConfig = {
+      ...layered.repoConfig,
+      defaults: mergeDefaults(layered.baseConfig.defaults, layered.repoConfig.defaults),
+    };
 
     return [
       ...resolveSkillConfigs(layered.baseConfig, cliModel, skillRootsByName?.base),
-      ...resolveSkillConfigs(repoConfigWithInheritedRuntime, cliModel, skillRootsByName?.repo),
+      ...resolveSkillConfigs(repoConfigWithInheritedDefaults, cliModel, skillRootsByName?.repo),
     ];
   }
 

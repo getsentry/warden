@@ -791,6 +791,37 @@ describe('resolveLayeredSkillConfigs', () => {
     expect(resolved[1]?.runtime).toBe('pi');
   });
 
+  it('lets repo-defined skills inherit base verification defaults when omitted', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        verification: { enabled: false },
+      },
+      skills: [{
+        name: 'org-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'repo-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const resolved = resolveLayeredSkillConfigs({
+      config: { version: 1, skills: [] },
+      baseConfig,
+      repoConfig,
+    });
+
+    expect(resolved).toHaveLength(2);
+    expect(resolved[0]?.verifyFindings).toBe(false);
+    expect(resolved[1]?.verifyFindings).toBe(false);
+  });
+
   it('uses layer-specific skill roots when both layers define the same skill name', () => {
     const baseConfig: WardenConfig = {
       version: 1,
