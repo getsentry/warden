@@ -27,6 +27,8 @@ interface SanitizeSuggestedFixesOptions {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
+  providerOptions?: unknown;
+  abortController?: AbortController;
 }
 
 const SEMANTIC_PROMPT_MAX_CHARS = 4000;
@@ -133,7 +135,7 @@ async function runSemanticGate(
   options: SanitizeSuggestedFixesOptions
 ): Promise<{ verdict: 'pass' | 'fail' | 'unavailable'; usage?: UsageStats }> {
   const { apiKey, runtime, model, maxRetries } = options;
-  if (!apiKey) {
+  if (!apiKey && runtime !== 'acp') {
     return { verdict: 'unavailable' };
   }
   const originalForPrompt = fileContent.slice(0, SEMANTIC_PROMPT_MAX_CHARS);
@@ -166,6 +168,9 @@ async function runSemanticGate(
     maxTokens: 220,
     timeout: 8000,
     maxRetries: maxRetries ?? 1,
+    repoPath: options.repoPath,
+    providerOptions: options.providerOptions,
+    abortController: options.abortController,
   });
 
   if (!result.success) {

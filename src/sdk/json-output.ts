@@ -19,6 +19,9 @@ export interface JsonOutputRepairOptions {
   maxRetries?: number;
   maxTokens?: number;
   timeout?: number;
+  repoPath?: string;
+  providerOptions?: unknown;
+  abortController?: AbortController;
 }
 
 export interface ParseJsonFromOutputOptions<T> {
@@ -66,7 +69,7 @@ async function repairJsonOutput<T>(
   reason: string,
   repair: JsonOutputRepairOptions,
 ): Promise<ParseJsonFromOutputResult<T>> {
-  if (!repair.apiKey) {
+  if (!repair.apiKey && repair.runtimeName !== 'acp') {
     return {
       success: false,
       error: `${reason}; repair_skipped: missing_api_key`,
@@ -81,6 +84,9 @@ async function repairJsonOutput<T>(
     maxRetries: repair.maxRetries,
     maxTokens: repair.maxTokens ?? JSON_REPAIR_MAX_TOKENS,
     timeout: repair.timeout ?? JSON_REPAIR_TIMEOUT_MS,
+    repoPath: repair.repoPath,
+    providerOptions: repair.providerOptions,
+    abortController: repair.abortController,
     schema,
     prompt: `Extract and repair the JSON value from this model output.
 

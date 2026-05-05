@@ -515,6 +515,8 @@ export async function runSkillTask(
           runtime: runnerOptions.runtime,
           model: runnerOptions.synthesisModel,
           maxRetries: runnerOptions.auxiliaryMaxRetries,
+          providerOptions: runnerOptions.runtime === 'acp' ? runnerOptions.acp : undefined,
+          abortController: runnerOptions.abortController,
         });
         let mergedFindings = mergeResult.findings;
         if (mergeResult.usage) {
@@ -526,6 +528,8 @@ export async function runSkillTask(
           runtime: runnerOptions.runtime,
           model: runnerOptions.auxiliaryModel,
           maxRetries: runnerOptions.auxiliaryMaxRetries,
+          providerOptions: runnerOptions.runtime === 'acp' ? runnerOptions.acp : undefined,
+          abortController: runnerOptions.abortController,
         });
         mergedFindings = sanitized.findings;
         if (sanitized.usage) {

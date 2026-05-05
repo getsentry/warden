@@ -1,10 +1,13 @@
+import { acpRuntime } from './acp.js';
 import { claudeRuntime } from './claude.js';
 import type { Runtime, RuntimeName } from './types.js';
 
 const RUNTIMES: Partial<Record<RuntimeName, Runtime>> = {
+  acp: acpRuntime,
   claude: claudeRuntime,
 };
 
+export { acpRuntime } from './acp.js';
 export { claudeRuntime } from './claude.js';
 export type {
   AuxiliaryRunRequest,

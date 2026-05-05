@@ -223,6 +223,27 @@ model = "claude-opus-4-5"`}
   <p><strong>Model precedence:</strong> trigger &gt; skill &gt; defaults &gt; CLI flag (<code>-m</code>) &gt; env var (<code>WARDEN_MODEL</code>). Most specific wins.</p>
   <p><strong>Synthesis fallback:</strong> <code>defaults.synthesis.model</code> falls back to <code>defaults.auxiliary.model</code> when not set.</p>
 
+  <h3>Agent Client Protocol runtime</h3>
+
+  <p>Set <code>defaults.runtime</code> to <code>acp</code> to run hunk analysis through an ACP-compatible agent instead of Claude Code SDK. Use a custom command or a registry agent id.</p>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[defaults]
+runtime = "acp"
+
+[defaults.agent.acp]
+command = "atlas alta agent run"
+
+# Or resolve an agent from the ACP registry:
+# registryId = "amp-acp"`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>Registry agents are resolved from <code>https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json</code> by default. Analysis, extraction repair, consolidation, and fix-quality helper calls use the selected ACP agent.</p>
+
   <h2 id="chunking">Chunking</h2>
 
   <p>Control how files are split for analysis. By default, Warden analyzes each hunk separately.</p>

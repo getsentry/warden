@@ -62,6 +62,7 @@ export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 
 // Re-export runtime registry and adapter contracts
 export {
+  acpRuntime,
   claudeRuntime,
   getRuntime,
 } from './runtimes/index.js';

@@ -51,11 +51,27 @@ export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 export { RuntimeNameSchema };
 export type { RuntimeName };
 
+export const AcpAgentRuntimeConfigSchema = z.object({
+  /** Custom ACP agent command, e.g. "atlas alta agent run". */
+  command: z.string().min(1).optional(),
+  /** Additional arguments appended to the custom ACP command. */
+  args: z.array(z.string()).optional(),
+  /** ACP registry agent id resolved from the public registry. */
+  registryId: z.string().min(1).optional(),
+  /** ACP registry URL. Defaults to the public latest registry. */
+  registryUrl: z.string().url().optional(),
+  /** Extra environment variables for the ACP agent process. */
+  env: z.record(z.string(), z.string()).optional(),
+}).strict();
+export type AcpAgentRuntimeConfig = z.infer<typeof AcpAgentRuntimeConfigSchema>;
+
 export const AgentRuntimeConfigSchema = z.object({
   /** Model for repo-aware skill execution. Overrides legacy defaults.model. */
   model: z.string().optional(),
   /** Maximum agentic turns for repo-aware skill execution. Overrides legacy defaults.maxTurns. */
   maxTurns: z.number().int().positive().optional(),
+  /** Agent Client Protocol runtime options. Used when defaults.runtime = "acp". */
+  acp: AcpAgentRuntimeConfigSchema.optional(),
 }).strict();
 export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeConfigSchema>;
 

@@ -432,6 +432,23 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.auxiliaryMaxRetries).toBe(2);
     });
 
+    it('resolves ACP agent runtime options', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          runtime: 'acp',
+          agent: {
+            acp: { command: 'atlas alta agent run' },
+          },
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+
+      expect(resolved?.runtime).toBe('acp');
+      expect(resolved?.acp).toEqual({ command: 'atlas alta agent run' });
+    });
+
     it('falls back to auxiliary model when synthesis model is unset', () => {
       const config: WardenConfig = {
         ...baseConfig,
@@ -851,6 +868,29 @@ describe('maxTurns config', () => {
     expect(result.data?.defaults?.runtime).toBe('claude');
     expect(result.data?.defaults?.auxiliary?.model).toBe('claude-haiku-4-5');
     expect(result.data?.defaults?.synthesis?.model).toBe('claude-opus-4-5');
+  });
+
+  it('accepts ACP custom command and registry defaults', () => {
+    const customCommand = WardenConfigSchema.safeParse({
+      version: 1,
+      defaults: {
+        runtime: 'acp',
+        agent: { acp: { command: 'atlas alta agent run' } },
+      },
+      skills: [],
+    });
+    const registry = WardenConfigSchema.safeParse({
+      version: 1,
+      defaults: {
+        runtime: 'acp',
+        agent: { acp: { registryId: 'amp-acp', registryUrl: 'https://example.com/registry.json' } },
+      },
+      skills: [],
+    });
+
+    expect(customCommand.success).toBe(true);
+    expect(registry.success).toBe(true);
+    expect(registry.data?.defaults?.agent?.acp?.registryUrl).toBe('https://example.com/registry.json');
   });
 
   it('rejects unknown runtimes', () => {

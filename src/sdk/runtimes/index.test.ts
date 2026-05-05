@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  acpRuntime,
   claudeRuntime,
   getRuntime,
 } from './index.js';
@@ -11,6 +12,16 @@ describe('runtimes', () => {
 
     expect(runtime).toBe(claudeRuntime);
     expect(runtime.name).toBe('claude');
+    expect(runtime.runSkill).toBeTypeOf('function');
+    expect(runtime.runAuxiliary).toBeTypeOf('function');
+    expect(runtime.runSynthesis).toBeTypeOf('function');
+  });
+
+  it('exposes ACP as an alternative runtime provider', () => {
+    const runtime = getRuntime('acp');
+
+    expect(runtime).toBe(acpRuntime);
+    expect(runtime.name).toBe('acp');
     expect(runtime.runSkill).toBeTypeOf('function');
     expect(runtime.runAuxiliary).toBeTypeOf('function');
     expect(runtime.runSynthesis).toBeTypeOf('function');
