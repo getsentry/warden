@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { UsageStats } from '../types/index.js';
 import { extractJson } from './haiku.js';
+import { buildJsonOutputSection, buildTaggedSection, joinPromptSections } from './prompt-sections.js';
 import { getRuntime, type Runtime, type RuntimeName } from './runtimes/index.js';
 
 const JSON_REPAIR_MAX_CHARS = 60_000;
@@ -82,15 +83,17 @@ async function repairJsonOutput<T>(
     maxTokens: repair.maxTokens ?? JSON_REPAIR_MAX_TOKENS,
     timeout: repair.timeout ?? JSON_REPAIR_TIMEOUT_MS,
     schema,
-    prompt: `Extract and repair the JSON value from this model output.
-
-Return only valid JSON accepted by the provided schema. Preserve the model's structured content as much as possible. If the output contains markdown fences, escaped newlines, or prose around JSON, remove only the wrapper/prose and repair JSON escaping. Do not summarize or invent new content.
-
-The local parser failed with:
-${reason}
-
-Model output:
-${truncateForRepair(output)}`,
+    prompt: joinPromptSections([
+      `<task>
+Extract and repair the JSON value from this model output.
+</task>`,
+      buildJsonOutputSection(`Return JSON accepted by the provided schema.
+Preserve the model's structured content as much as possible.
+If the output contains markdown fences, escaped newlines, or prose around JSON, remove only the wrapper/prose and repair JSON escaping.
+Do not summarize or invent new content.`),
+      buildTaggedSection('parse_error', reason),
+      buildTaggedSection('model_output', truncateForRepair(output)),
+    ]),
   });
 
   if (!result.success) {

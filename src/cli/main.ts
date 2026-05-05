@@ -485,6 +485,7 @@ interface SkillToRun {
   auxiliaryModel?: string;
   synthesisModel?: string;
   auxiliaryMaxRetries?: number;
+  verifyFindings?: boolean;
 }
 
 export interface RunSkillSpec {
@@ -507,7 +508,7 @@ interface ProcessedResults {
 
 type SkillRunnerOptionOverrides = Pick<
   SkillRunnerOptions,
-  'model' | 'maxTurns' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries'
+  'model' | 'maxTurns' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries' | 'verifyFindings'
 >;
 
 /** Apply per-skill runner overrides on top of the shared execution defaults. */
@@ -525,6 +526,7 @@ export function mergeSkillRunnerOptions(
   if (overrides.auxiliaryMaxRetries !== undefined) {
     merged.auxiliaryMaxRetries = overrides.auxiliaryMaxRetries;
   }
+  if (overrides.verifyFindings !== undefined) merged.verifyFindings = overrides.verifyFindings;
 
   return merged;
 }
@@ -874,6 +876,7 @@ export async function runSkills(
         match?.auxiliaryMaxRetries ??
         config?.defaults?.auxiliary?.maxRetries ??
         config?.defaults?.auxiliaryMaxRetries,
+      verifyFindings: match?.verifyFindings ?? (config?.defaults?.verification?.enabled !== false),
     }];
   } else if (config) {
     // Get skills from matched triggers, preserving remote property and filters
@@ -897,6 +900,7 @@ export async function runSkills(
         auxiliaryModel: t.auxiliaryModel,
         synthesisModel: t.synthesisModel,
         auxiliaryMaxRetries: t.auxiliaryMaxRetries,
+        verifyFindings: t.verifyFindings,
       }));
   } else {
     skillsToRun = [];
@@ -935,6 +939,7 @@ export async function runSkills(
     auxiliaryMaxRetries:
       config?.defaults?.auxiliary?.maxRetries ??
       config?.defaults?.auxiliaryMaxRetries,
+    verifyFindings: config?.defaults?.verification?.enabled !== false,
   };
   const specs: RunSkillSpec[] = skillsToRun.map(({ skill, remote, filters, ...skillOptions }) => ({
     name: skill,
@@ -1263,6 +1268,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       maxTurns: trigger.maxTurns,
       maxContextFiles: config.defaults?.chunking?.maxContextFiles,
       auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
+      verifyFindings: trigger.verifyFindings,
     },
   }));
   let tasks: SkillTaskOptions[];

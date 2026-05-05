@@ -7,15 +7,14 @@
 
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
-import { Sentry, emitSkillMetrics, emitDedupMetrics, emitFixGateMetrics, logger } from '../../sentry.js';
+import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
 import {
   prepareFiles,
   analyzeFile,
   aggregateUsage,
   aggregateAuxiliaryUsage,
-  deduplicateFindings,
-  mergeCrossLocationFindings,
+  postProcessFindings,
   generateSummary,
   type AuxiliaryUsageEntry,
   type SkillRunnerOptions,
@@ -23,8 +22,8 @@ import {
   type PreparedFile,
   type PRPromptContext,
   type ChunkAnalysisResult,
+  type FindingProcessingEvent,
 } from '../../sdk/runner.js';
-import { sanitizeFindingsSuggestedFixes } from '../../sdk/fix-quality.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import { Verbosity } from './verbosity.js';
@@ -73,6 +72,16 @@ function debugLog(mode: OutputMode, message: string): void {
 function findingLocation(finding: Finding): string {
   if (!finding.location) return 'unknown';
   return formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine);
+}
+
+function findingSummary(finding: Finding): string {
+  return `${findingLocation(finding)}: ${finding.title}`;
+}
+
+function formatFindingProcessingEvent(event: FindingProcessingEvent): string {
+  const reason = event.reason ? ` (${event.reason})` : '';
+  const replacement = event.replacement ? ` -> ${findingSummary(event.replacement)}` : '';
+  return `${event.stage}:${event.action} ${findingSummary(event.finding)}${replacement}${reason}`;
 }
 
 /**
@@ -164,6 +173,8 @@ export interface SkillProgressCallbacks {
   onPromptSize?: (skillName: string, filename: string, lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
   /** Called with extraction result details (debug mode) */
   onExtractionResult?: (skillName: string, filename: string, lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
+  /** Called when findings are dropped, revised, merged, or stripped after analysis */
+  onFindingProcessing?: (skillName: string, event: FindingProcessingEvent) => void;
   /** Called when hunk analysis fails (SDK error, API error, abort) */
   onHunkFailed?: (skillName: string, filename: string, lineRange: string, error: string) => void;
   /** Called when findings extraction fails (both regex and LLM fallback failed) */
@@ -505,52 +516,30 @@ export async function runSkillTask(
           return { name, report: errorReport, error: runnerError, failOn, minConfidence };
         }
 
-        const uniqueFindings = deduplicateFindings(allFindings);
-        emitDedupMetrics(skill.name, allFindings.length, uniqueFindings.length);
-
-        // Merge findings that describe the same issue at different locations
-        const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
-          apiKey: runnerOptions.apiKey,
-          repoPath: context.repoPath,
-          runtime: runnerOptions.runtime,
-          model: runnerOptions.synthesisModel,
-          maxRetries: runnerOptions.auxiliaryMaxRetries,
-        });
-        let mergedFindings = mergeResult.findings;
-        if (mergeResult.usage) {
-          allAuxEntries.push({ agent: 'merge', usage: mergeResult.usage });
-        }
-        const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
+        const processed = await postProcessFindings(allFindings, {
+          skill,
           repoPath: context.repoPath,
           apiKey: runnerOptions.apiKey,
           runtime: runnerOptions.runtime,
-          model: runnerOptions.auxiliaryModel,
-          maxRetries: runnerOptions.auxiliaryMaxRetries,
+          auxiliaryModel: runnerOptions.auxiliaryModel,
+          synthesisModel: runnerOptions.synthesisModel,
+          auxiliaryMaxRetries: runnerOptions.auxiliaryMaxRetries,
+          verifyFindings: runnerOptions.verifyFindings,
+          maxTurns: runnerOptions.maxTurns,
+          abortController: runnerOptions.abortController,
+          pathToClaudeCodeExecutable: runnerOptions.pathToClaudeCodeExecutable,
+          prContext,
+          onFindingProcessing: (event) => {
+            callbacks.onFindingProcessing?.(name, event);
+          },
         });
-        mergedFindings = sanitized.findings;
-        if (sanitized.usage) {
-          allAuxEntries.push({ agent: 'fix_gate', usage: sanitized.usage });
-        }
-        emitFixGateMetrics(
-          skill.name,
-          sanitized.stats.checked,
-          sanitized.stats.strippedDeterministic,
-          sanitized.stats.strippedSemantic,
-          sanitized.stats.semanticUnavailable
-        );
-        if (sanitized.stats.checked > 0) {
-          logger.info('Suggested fix quality gate', {
-            'fix_gate.checked': sanitized.stats.checked,
-            'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
-            'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
-            'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
-          });
-        }
+        const finalFindings = processed.findings;
+        allAuxEntries.push(...processed.auxiliaryUsage);
 
         const report: SkillReport = {
           skill: skill.name,
-          summary: generateSummary(skill.name, mergedFindings),
-          findings: mergedFindings,
+          summary: generateSummary(skill.name, finalFindings),
+          findings: finalFindings,
           usage: aggregateUsage(allUsage),
           durationMs: duration,
           model: runnerOptions?.model,
@@ -592,7 +581,7 @@ export async function runSkillTask(
         callbacks.onSkillUpdate(name, {
           status: 'done',
           durationMs: duration,
-          findings: mergedFindings,
+          findings: finalFindings,
           usage: report.usage,
         });
         callbacks.onSkillComplete(name, report);
@@ -778,6 +767,11 @@ export function createDefaultCallbacks(
     onExtractionResult: verbosity >= Verbosity.Debug
       ? (_skillName, filename, lineRange, findingsCount, method) => {
           debugLog(mode, `Extracted ${findingsCount} ${pluralize(findingsCount, 'finding')} from ${filename}:${lineRange} via ${method}`);
+        }
+      : undefined,
+    onFindingProcessing: verbosity >= Verbosity.Debug
+      ? (_skillName, event) => {
+          debugLog(mode, formatFindingProcessingEvent(event));
         }
       : undefined,
     // Verbose mode: show per-hunk analysis failures (spec: event #16 hunk_failed)

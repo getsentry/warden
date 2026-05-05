@@ -42,10 +42,22 @@ describe('sanitizeFindingsSuggestedFixes', () => {
 
   it('strips suggestion when diff is unparseable', async () => {
     const finding = makeFinding('this is not a diff');
+    const onFindingProcessing = vi.fn();
 
-    const result = await sanitizeFindingsSuggestedFixes([finding], { repoPath, apiKey: 'k' });
+    const result = await sanitizeFindingsSuggestedFixes([finding], {
+      repoPath,
+      apiKey: 'k',
+      onFindingProcessing,
+    });
     expect(result.findings[0]?.suggestedFix).toBeUndefined();
     expect(result.stats.strippedDeterministic).toBe(1);
+    expect(onFindingProcessing).toHaveBeenCalledWith(expect.objectContaining({
+      stage: 'fix_gate',
+      action: 'stripped_fix',
+      finding,
+      reason: 'suggested fix failed deterministic validation',
+      replacement: expect.not.objectContaining({ suggestedFix: expect.anything() }),
+    }));
   });
 
   it('strips suggestion on path mismatch', async () => {

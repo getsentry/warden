@@ -57,12 +57,21 @@ export type {
 // Re-export file preparation
 export { prepareFiles } from './prepare.js';
 
+// Re-export verification utilities
+export { verifyFindings } from './verify.js';
+export { postProcessFindings } from './post-process.js';
+export type {
+  PostProcessFindingsOptions,
+  PostProcessFindingsResult,
+} from './post-process.js';
+
 // Re-export analysis functions
 export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 
 // Re-export runtime registry and adapter contracts
 export {
   claudeRuntime,
+  getRuntimeProviderOptions,
   getRuntime,
 } from './runtimes/index.js';
 export type { Runtime, RuntimeName } from './runtimes/index.js';
@@ -83,6 +92,7 @@ export type {
 // Re-export types
 export type {
   AuxiliaryUsageEntry,
+  FindingProcessingEvent,
   SkillRunnerCallbacks,
   SkillRunnerOptions,
   PreparedFile,

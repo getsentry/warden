@@ -7,6 +7,8 @@ import type { Finding, UsageStats } from '../types/index.js';
 import { getRuntime } from './runtimes/index.js';
 import type { RuntimeName } from './runtimes/index.js';
 import { aggregateUsage } from './usage.js';
+import { buildJsonOutputSection, buildTaggedSection, joinPromptSections } from './prompt-sections.js';
+import type { FindingProcessingEvent } from './types.js';
 
 export interface FixQualityStats {
   checked: number;
@@ -27,6 +29,7 @@ interface SanitizeSuggestedFixesOptions {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
+  onFindingProcessing?: (event: FindingProcessingEvent) => void;
 }
 
 const SEMANTIC_PROMPT_MAX_CHARS = 4000;
@@ -139,23 +142,22 @@ async function runSemanticGate(
   const originalForPrompt = fileContent.slice(0, SEMANTIC_PROMPT_MAX_CHARS);
   const patchedForPrompt = patchedContent.slice(0, SEMANTIC_PROMPT_MAX_CHARS);
 
-  const prompt = [
-    'Judge whether this suggested code fix is valid.',
-    'Return JSON only: {"verdict":"pass|fail","reason":"..."}',
-    'Pass only if the diff clearly addresses the stated issue without obvious regressions in the shown code.',
-    '',
-    `Issue title: ${finding.title}`,
-    `Issue description: ${finding.description}`,
-    '',
-    'Original file:',
-    originalForPrompt,
-    '',
-    'Patched file:',
-    patchedForPrompt,
-    '',
-    'Suggested diff:',
-    finding.suggestedFix?.diff ?? '',
-  ].join('\n');
+  const prompt = joinPromptSections([
+    `<task>
+Judge whether this suggested code fix is valid.
+</task>`,
+    `<fix_quality_rule>
+Pass only if the diff clearly addresses the stated issue without obvious regressions in the shown code.
+</fix_quality_rule>`,
+    buildTaggedSection('issue', [
+      `<title>${finding.title}</title>`,
+      `<description>${finding.description}</description>`,
+    ]),
+    buildTaggedSection('original_file', originalForPrompt),
+    buildTaggedSection('patched_file', patchedForPrompt),
+    buildTaggedSection('suggested_diff', finding.suggestedFix?.diff ?? ''),
+    buildJsonOutputSection('{"verdict":"pass|fail","reason":"..."}'),
+  ]);
 
   const result = await getRuntime(runtime).runAuxiliary({
     task: 'fix_quality',
@@ -199,7 +201,15 @@ export async function sanitizeFindingsSuggestedFixes(
     const deterministic = runDeterministicGate(finding, options.repoPath);
     if (!deterministic.pass) {
       stats.strippedDeterministic++;
-      sanitized.push(stripSuggestedFix(finding));
+      const stripped = stripSuggestedFix(finding);
+      options.onFindingProcessing?.({
+        stage: 'fix_gate',
+        action: 'stripped_fix',
+        finding,
+        replacement: stripped,
+        reason: 'suggested fix failed deterministic validation',
+      });
+      sanitized.push(stripped);
       continue;
     }
 
@@ -215,7 +225,15 @@ export async function sanitizeFindingsSuggestedFixes(
 
     if (semantic.verdict === 'fail') {
       stats.strippedSemantic++;
-      sanitized.push(stripSuggestedFix(finding));
+      const stripped = stripSuggestedFix(finding);
+      options.onFindingProcessing?.({
+        stage: 'fix_gate',
+        action: 'stripped_fix',
+        finding,
+        replacement: stripped,
+        reason: 'suggested fix failed semantic validation',
+      });
+      sanitized.push(stripped);
       continue;
     }
 

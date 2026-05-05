@@ -8,6 +8,8 @@ import { runSkill } from '../sdk/runner.js';
 import { runJudge } from './judge.js';
 import { evalPassed } from './types.js';
 import type { EvalMeta, EvalResult } from './types.js';
+import type { Finding } from '../types/index.js';
+import type { FindingProcessingEvent } from '../sdk/runner.js';
 
 export interface RunEvalOptions {
   /** Anthropic API key */
@@ -73,6 +75,17 @@ function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): string {
   }
 }
 
+function formatFinding(finding: Finding): string {
+  const loc = finding.location ? `${finding.location.path}:${finding.location.startLine}` : 'general';
+  return `${loc} "${finding.title}"`;
+}
+
+function formatFindingProcessingEvent(event: FindingProcessingEvent): string {
+  const reason = event.reason ? ` (${event.reason})` : '';
+  const replacement = event.replacement ? ` -> ${formatFinding(event.replacement)}` : '';
+  return `Finding ${event.stage}:${event.action} ${formatFinding(event.finding)}${replacement}${reason}`;
+}
+
 /**
  * Run a single eval scenario end-to-end.
  *
@@ -130,6 +143,13 @@ export async function runEval(
       model,
       verbose: options.verbose,
       parallel: false,
+      callbacks: options.verbose
+        ? {
+            onFindingProcessing: (event) => {
+              log(formatFindingProcessingEvent(event));
+            },
+          }
+        : undefined,
     });
 
     log(`Skill complete: ${report.findings.length} finding(s)`);

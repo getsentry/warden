@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { extractFindingsWithLLM, mergeCrossLocationFindings, mergeGroupLocations } from './extract.js';
+import {
+  deduplicateFindings,
+  extractFindingsWithLLM,
+  mergeCrossLocationFindings,
+  mergeGroupLocations,
+} from './extract.js';
 import type { Finding } from '../types/index.js';
 
 // Mock callHaiku to avoid real API calls
@@ -46,6 +51,33 @@ describe('extractFindingsWithLLM', () => {
       error: 'llm_extraction_failed: Request timed out',
       preview: '{ "findings": [',
       usage: { inputTokens: 10, outputTokens: 0, costUSD: 0.001 },
+    });
+  });
+});
+
+describe('deduplicateFindings', () => {
+  it('reports dropped duplicate findings', () => {
+    const kept = makeFinding({
+      id: 'f1',
+      title: 'Duplicate issue',
+      location: { path: 'src/a.ts', startLine: 1 },
+    });
+    const duplicate = makeFinding({
+      id: 'f2',
+      title: 'Duplicate issue',
+      location: { path: 'src/a.ts', startLine: 1 },
+    });
+    const onFindingProcessing = vi.fn();
+
+    const result = deduplicateFindings([kept, duplicate], onFindingProcessing);
+
+    expect(result).toEqual([kept]);
+    expect(onFindingProcessing).toHaveBeenCalledWith({
+      stage: 'dedupe',
+      action: 'dropped',
+      finding: duplicate,
+      replacement: kept,
+      reason: 'duplicate title and location',
     });
   });
 });
@@ -135,7 +167,12 @@ describe('mergeCrossLocationFindings', () => {
       usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
     });
 
-    const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
+    const onFindingProcessing = vi.fn();
+    const result = await mergeCrossLocationFindings(findings, {
+      apiKey: 'test-key',
+      repoPath: tempDir,
+      onFindingProcessing,
+    });
     expect(result.findings).toHaveLength(1);
     expect(result.mergedCount).toBe(1);
     // Winner is the one with higher severity
@@ -143,6 +180,13 @@ describe('mergeCrossLocationFindings', () => {
     expect(result.findings[0]!.additionalLocations).toEqual([
       { path: 'src/b.ts', startLine: 2 },
     ]);
+    expect(onFindingProcessing).toHaveBeenCalledWith(expect.objectContaining({
+      stage: 'merge',
+      action: 'merged',
+      finding: findings[1],
+      reason: 'same root cause at another location',
+      replacement: expect.objectContaining({ id: 'f1' }),
+    }));
   });
 
   it('merges 3+ locations in one group', async () => {

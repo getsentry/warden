@@ -432,6 +432,21 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.auxiliaryMaxRetries).toBe(2);
     });
 
+    it('enables finding verification by default and allows disabling it', () => {
+      const [defaultResolved] = resolveSkillConfigs(baseConfig);
+      expect(defaultResolved?.verifyFindings).toBe(true);
+
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          verification: { enabled: false },
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.verifyFindings).toBe(false);
+    });
+
     it('falls back to auxiliary model when synthesis model is unset', () => {
       const config: WardenConfig = {
         ...baseConfig,
@@ -851,6 +866,20 @@ describe('maxTurns config', () => {
     expect(result.data?.defaults?.runtime).toBe('claude');
     expect(result.data?.defaults?.auxiliary?.model).toBe('claude-haiku-4-5');
     expect(result.data?.defaults?.synthesis?.model).toBe('claude-opus-4-5');
+  });
+
+  it('accepts verification defaults', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        verification: { enabled: false },
+      },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.verification?.enabled).toBe(false);
   });
 
   it('rejects unknown runtimes', () => {

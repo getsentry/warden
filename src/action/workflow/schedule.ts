@@ -182,6 +182,7 @@ export async function runScheduleWorkflow(
         batchDelayMs: resolved.batchDelayMs,
         maxContextFiles: resolved.maxContextFiles,
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
+        verifyFindings: resolved.verifyFindings,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);

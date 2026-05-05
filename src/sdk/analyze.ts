@@ -1,14 +1,14 @@
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
-import { Sentry, emitExtractionMetrics, emitRetryMetric, emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
+import { Sentry, emitExtractionMetrics, emitRetryMetric } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
-import { extractFindingsJson, extractFindingsWithLLM, validateFindings, deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
-import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
-import { getRuntime } from './runtimes/index.js';
+import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
+import { postProcessFindings } from './post-process.js';
+import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
 import type { SkillRunResult } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
@@ -200,10 +200,6 @@ async function analyzeHunk(
         try {
           const runtimeName = options.runtime ?? 'claude';
           const runtime = getRuntime(runtimeName);
-          const providerOptions =
-            runtimeName === 'claude'
-              ? { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable }
-              : undefined;
           const { result: resultMessage, authError } = await runtime.runSkill({
             systemPrompt,
             userPrompt,
@@ -215,7 +211,9 @@ async function analyzeHunk(
               model: options.model,
               abortController: options.abortController,
             },
-            providerOptions,
+            providerOptions: getRuntimeProviderOptions(runtimeName, {
+              pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+            }),
           });
 
           // Check for authentication errors from auth_status messages
@@ -792,51 +790,26 @@ export async function runSkill(
     );
   }
 
-  // Deduplicate findings
-  const uniqueFindings = deduplicateFindings(allFindings);
-  emitDedupMetrics(skill.name, allFindings.length, uniqueFindings.length);
-
-  // Merge findings that describe the same issue at different locations
-  const mergeResult = await mergeCrossLocationFindings(uniqueFindings, {
-    apiKey: options.apiKey,
-    repoPath: context.repoPath,
-    runtime: options.runtime,
-    model: options.synthesisModel,
-    maxRetries: options.auxiliaryMaxRetries,
-  });
-  let mergedFindings = mergeResult.findings;
-  if (mergeResult.usage) {
-    allAuxiliaryUsage.push({ agent: 'merge', usage: mergeResult.usage });
-  }
-  const sanitized = await sanitizeFindingsSuggestedFixes(mergedFindings, {
+  const processed = await postProcessFindings(allFindings, {
+    skill,
     repoPath: context.repoPath,
     apiKey: options.apiKey,
     runtime: options.runtime,
-    model: options.auxiliaryModel,
-    maxRetries: options.auxiliaryMaxRetries,
+    auxiliaryModel: options.auxiliaryModel,
+    synthesisModel: options.synthesisModel,
+    auxiliaryMaxRetries: options.auxiliaryMaxRetries,
+    verifyFindings: options.verifyFindings,
+    maxTurns: options.maxTurns,
+    abortController: options.abortController,
+    pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+    prContext,
+    onFindingProcessing: options.callbacks?.onFindingProcessing,
   });
-  mergedFindings = sanitized.findings;
-  if (sanitized.usage) {
-    allAuxiliaryUsage.push({ agent: 'fix_gate', usage: sanitized.usage });
-  }
-  emitFixGateMetrics(
-    skill.name,
-    sanitized.stats.checked,
-    sanitized.stats.strippedDeterministic,
-    sanitized.stats.strippedSemantic,
-    sanitized.stats.semanticUnavailable
-  );
-  if (sanitized.stats.checked > 0) {
-    logger.info('Suggested fix quality gate', {
-      'fix_gate.checked': sanitized.stats.checked,
-      'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
-      'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
-      'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
-    });
-  }
+  const finalFindings = processed.findings;
+  allAuxiliaryUsage.push(...processed.auxiliaryUsage);
 
   // Generate summary
-  const summary = generateSummary(skill.name, mergedFindings);
+  const summary = generateSummary(skill.name, finalFindings);
 
   // Aggregate usage across all hunks
   const totalUsage = aggregateUsage(allUsage);
@@ -844,7 +817,7 @@ export async function runSkill(
   const report: SkillReport = {
     skill: skill.name,
     summary,
-    findings: mergedFindings,
+    findings: finalFindings,
     usage: totalUsage,
     durationMs: Date.now() - startTime,
     model: options.model,

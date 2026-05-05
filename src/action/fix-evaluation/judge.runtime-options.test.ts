@@ -62,6 +62,12 @@ describe('evaluateFix runtime options', () => {
       expect.objectContaining({
         model: undefined,
         maxRetries: undefined,
+        prompt: expect.stringContaining('<reported_issue>'),
+      })
+    );
+    expect(runAuxiliary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('<output_format>'),
       })
     );
   });

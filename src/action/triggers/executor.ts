@@ -143,6 +143,7 @@ export async function executeTrigger(
             maxContextFiles: trigger.maxContextFiles,
             pathToClaudeCodeExecutable: claudePath,
             auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
+            verifyFindings: trigger.verifyFindings,
           },
         };
 

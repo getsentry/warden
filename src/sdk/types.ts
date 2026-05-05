@@ -9,6 +9,14 @@ export interface AuxiliaryUsageEntry {
   usage: UsageStats;
 }
 
+export interface FindingProcessingEvent {
+  stage: 'dedupe' | 'verification' | 'merge' | 'fix_gate';
+  action: 'dropped' | 'rejected' | 'revised' | 'merged' | 'stripped_fix';
+  finding: Finding;
+  reason?: string;
+  replacement?: Finding;
+}
+
 /** Default concurrency for file-level parallel processing (standalone SDK usage only) */
 export const DEFAULT_FILE_CONCURRENCY = 5;
 
@@ -76,6 +84,8 @@ export interface SkillRunnerCallbacks {
   onExtractionFailure?: (file: string, lineRange: string, error: string, preview: string) => void;
   /** Called with extraction result details (debug mode) */
   onExtractionResult?: (file: string, lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
+  /** Called when a finding is dropped, revised, merged, or otherwise changed after analysis. */
+  onFindingProcessing?: (event: FindingProcessingEvent) => void;
   /** Called when hunk analysis fails (SDK error, API error, abort) */
   onHunkFailed?: (file: string, lineRange: string, error: string) => void;
 }
@@ -113,6 +123,8 @@ export interface SkillRunnerOptions {
   maxContextFiles?: number;
   /** Max retries for auxiliary Haiku calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
   auxiliaryMaxRetries?: number;
+  /** Verify candidate findings in a second read-only pass. Defaults to true. */
+  verifyFindings?: boolean;
 }
 
 /**

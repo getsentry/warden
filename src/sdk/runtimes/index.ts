@@ -29,3 +29,21 @@ export function getRuntime(name: RuntimeName = 'claude'): Runtime {
   }
   return runtime;
 }
+
+export interface RuntimeProviderOptionsInput {
+  pathToClaudeCodeExecutable?: string;
+}
+
+/**
+ * Build provider-specific runtime options at the runtime boundary.
+ */
+export function getRuntimeProviderOptions(
+  name: RuntimeName,
+  options: RuntimeProviderOptionsInput
+): unknown {
+  if (name === 'claude') {
+    return { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable };
+  }
+
+  return undefined;
+}

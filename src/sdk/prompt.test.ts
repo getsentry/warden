@@ -46,32 +46,34 @@ describe('buildHunkSystemPrompt', () => {
 });
 
 describe('buildHunkUserPrompt', () => {
-  describe('Other Files section', () => {
-    it('omits "Other Files" when changedFiles is empty (non-PR context)', () => {
+  describe('changed files section', () => {
+    it('omits changed files when changedFiles is empty (non-PR context)', () => {
       const prContext: PRPromptContext = {
         changedFiles: [],
         title: 'Local changes',
       };
       const result = buildHunkUserPrompt(skill, makeHunk(), prContext);
-      expect(result).not.toContain('Other Files in This PR');
+      expect(result).not.toContain('<changed_files>');
     });
 
-    it('omits "Other Files" when no prContext is provided', () => {
+    it('omits changed files when no prContext is provided', () => {
       const result = buildHunkUserPrompt(skill, makeHunk());
-      expect(result).not.toContain('Other Files in This PR');
+      expect(result).not.toContain('<changed_files>');
     });
 
-    it('includes "Other Files" section for PR contexts with files', () => {
+    it('includes tagged changed files for PR contexts with files', () => {
       const prContext: PRPromptContext = {
         changedFiles: ['src/app.ts', 'src/utils.ts', 'src/index.ts'],
         title: 'Add feature',
       };
       const result = buildHunkUserPrompt(skill, makeHunk('src/app.ts'), prContext);
-      expect(result).toContain('Other Files in This PR');
+      expect(result).toContain('<changed_files>');
       expect(result).toContain('- src/utils.ts');
       expect(result).toContain('- src/index.ts');
       // Current file should be excluded
       expect(result).not.toContain('- src/app.ts');
+      expect(result).toContain('<pull_request_context>');
+      expect(result).toContain('<title>Add feature</title>');
     });
 
     it('caps file list at maxContextFiles with truncation message', () => {
@@ -83,7 +85,7 @@ describe('buildHunkUserPrompt', () => {
       };
       const hunk = makeHunk('src/other.ts'); // not in the list
       const result = buildHunkUserPrompt(skill, hunk, prContext);
-      expect(result).toContain('Other Files in This PR');
+      expect(result).toContain('<changed_files>');
       // Should have first 10 files
       expect(result).toContain('- src/file-0.ts');
       expect(result).toContain('- src/file-9.ts');
@@ -112,7 +114,7 @@ describe('buildHunkUserPrompt', () => {
         maxContextFiles: 0,
       };
       const result = buildHunkUserPrompt(skill, makeHunk('src/app.ts'), prContext);
-      expect(result).not.toContain('Other Files in This PR');
+      expect(result).not.toContain('<changed_files>');
     });
 
     it('uses default cap of 50 when maxContextFiles is not specified', () => {

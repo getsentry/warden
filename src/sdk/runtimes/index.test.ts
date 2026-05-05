@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   claudeRuntime,
   getRuntime,
+  getRuntimeProviderOptions,
 } from './index.js';
 
 describe('runtimes', () => {
@@ -18,6 +19,14 @@ describe('runtimes', () => {
 
   it('rejects unsupported runtimes explicitly', () => {
     expect(() => getRuntime('pi' as never)).toThrow('Unsupported runtime: pi');
+  });
+
+  it('builds provider options at the runtime boundary', () => {
+    expect(getRuntimeProviderOptions('claude', {
+      pathToClaudeCodeExecutable: '/bin/claude',
+    })).toEqual({
+      pathToClaudeCodeExecutable: '/bin/claude',
+    });
   });
 
   it('fails auxiliary calls clearly when Claude auth is missing', async () => {

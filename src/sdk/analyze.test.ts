@@ -8,6 +8,7 @@ import { getRuntime, type Runtime } from './runtimes/index.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
+  getRuntimeProviderOptions: vi.fn(() => undefined),
 }));
 
 function makeFinding(startLine: number, id = `f-${startLine}`): Finding {

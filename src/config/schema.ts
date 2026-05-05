@@ -73,6 +73,12 @@ export const SynthesisRuntimeConfigSchema = z.object({
 }).strict();
 export type SynthesisRuntimeConfig = z.infer<typeof SynthesisRuntimeConfigSchema>;
 
+export const VerificationConfigSchema = z.object({
+  /** Verify candidate findings in a second read-only pass. Defaults to true. */
+  enabled: z.boolean().optional(),
+}).strict();
+export type VerificationConfig = z.infer<typeof VerificationConfigSchema>;
+
 // Skill trigger definition (nested under [[skills.triggers]])
 export const SkillTriggerSchema = z.object({
   /** Trigger type: pull_request (GitHub), local (CLI), or schedule (cron) */
@@ -201,6 +207,8 @@ export const DefaultsSchema = z.object({
   auxiliary: AuxiliaryRuntimeConfigSchema.optional(),
   /** Model defaults for post-analysis synthesis/consolidation. */
   synthesis: SynthesisRuntimeConfigSchema.optional(),
+  /** Candidate finding verification. Enabled by default; set enabled=false to opt out. */
+  verification: VerificationConfigSchema.optional(),
   /** Minimum confidence level for findings. Findings below this are filtered from output. Default: medium */
   minConfidence: ConfidenceThresholdSchema.optional(),
   /** Path patterns to exclude from all skills */

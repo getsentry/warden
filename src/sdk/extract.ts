@@ -6,6 +6,13 @@ import { FindingSchema, compareFindingPriority } from '../types/index.js';
 import type { Finding, Location, UsageStats } from '../types/index.js';
 import { getRuntime } from './runtimes/index.js';
 import type { RuntimeName } from './runtimes/index.js';
+import type { FindingProcessingEvent } from './types.js';
+import {
+  buildJsonOutputSection,
+  buildTaggedSection,
+  formatIndexedFindingsForPrompt,
+  joinPromptSections,
+} from './prompt-sections.js';
 
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
@@ -201,12 +208,14 @@ export async function extractFindingsWithLLM(
   // Truncate input while preserving JSON boundaries
   const truncatedText = truncateForLLMFallback(rawText, LLM_FALLBACK_MAX_CHARS);
 
-  const userContent = `Extract the findings JSON from this model output.
-Return ONLY valid JSON in format: {"findings": [...]}
-If no findings exist, return: {"findings": []}
-
-Model output:
-${truncatedText}`;
+  const userContent = joinPromptSections([
+    `<task>
+Extract the findings JSON from this model output.
+</task>`,
+    buildJsonOutputSection(`Return this shape: {"findings": [...]}
+If no findings exist, return: {"findings": []}`),
+    buildTaggedSection('model_output', truncatedText),
+  ]);
 
   const result = await getRuntime(runtime).runAuxiliary({
     task: 'extraction',
@@ -279,15 +288,30 @@ export function validateFindings(findings: unknown[], filename: string): Finding
   return validated;
 }
 
+type FindingProcessingCallback = (event: FindingProcessingEvent) => void;
+
 /**
  * Deduplicate findings by title and location.
  */
-export function deduplicateFindings(findings: Finding[]): Finding[] {
-  const seen = new Set<string>();
+export function deduplicateFindings(
+  findings: Finding[],
+  onFindingProcessing?: FindingProcessingCallback
+): Finding[] {
+  const seen = new Map<string, Finding>();
   return findings.filter((f) => {
     const key = `${f.title}:${f.location?.path}:${f.location?.startLine}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
+    const kept = seen.get(key);
+    if (kept) {
+      onFindingProcessing?.({
+        stage: 'dedupe',
+        action: 'dropped',
+        finding: f,
+        replacement: kept,
+        reason: 'duplicate title and location',
+      });
+      return false;
+    }
+    seen.set(key, f);
     return true;
   });
 }
@@ -411,6 +435,23 @@ export function applyMergeGroups(
   return { absorbed, replacements };
 }
 
+function sameLocation(a: Location | undefined, b: Location | undefined): boolean {
+  return Boolean(a && b && locationKey(a) === locationKey(b));
+}
+
+function findReplacementForAbsorbed(
+  finding: Finding,
+  replacements: Map<Finding, Finding>
+): Finding | undefined {
+  for (const replacement of replacements.values()) {
+    if (replacement.additionalLocations?.some((loc) => sameLocation(loc, finding.location))) {
+      return replacement;
+    }
+  }
+
+  return undefined;
+}
+
 /** Schema for LLM merge response: groups of finding indices sharing a root cause. */
 const MergeGroupsSchema = z.array(z.array(z.number().int()));
 
@@ -454,7 +495,10 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
  */
 export async function mergeCrossLocationFindings(
   findings: Finding[],
-  options?: AuxiliaryCallOptions & { repoPath?: string }
+  options?: AuxiliaryCallOptions & {
+    repoPath?: string;
+    onFindingProcessing?: FindingProcessingCallback;
+  }
 ): Promise<MergeResult> {
   const apiKey = options?.apiKey;
   const repoPath = options?.repoPath ?? '.';
@@ -465,23 +509,24 @@ export async function mergeCrossLocationFindings(
     return { findings, mergedCount: 0 };
   }
 
-  // Build context for each finding
-  const findingDescriptions = withLocations.map((f, i) => {
-    const loc = f.location;
-    if (!loc) return '';
-    const range = loc.endLine ? `${loc.startLine}-${loc.endLine}` : `${loc.startLine}`;
-    const snippet = readSnippet(repoPath, loc.path, loc.startLine);
-    const codeBlock = snippet ? `\n   Code: ${snippet.split('\n').join('\n   ')}` : '';
-    return `${i + 1}. [${loc.path}:${range}] "${f.title}" - ${f.description}${codeBlock}`;
+  const findingDescriptions = formatIndexedFindingsForPrompt(withLocations, {
+    locationStyle: 'range',
+    snippet: (finding) => {
+      const loc = finding.location;
+      return loc ? readSnippet(repoPath, loc.path, loc.startLine) : undefined;
+    },
   });
 
-  const prompt = `Identify which of these code review findings describe the SAME underlying issue appearing at different locations. Group them by shared root cause.
-
-Findings:
-${findingDescriptions.join('\n')}
-
-Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
-Singletons should not appear. Return [] if no findings describe the same issue.`;
+  const prompt = joinPromptSections([
+    `<task>
+Identify which of these code review findings describe the SAME underlying issue appearing at different locations. Group them by shared root cause.
+</task>`,
+    `<findings>
+${findingDescriptions}
+</findings>`,
+    buildJsonOutputSection(`Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
+Singletons should not appear. Return [] if no findings describe the same issue.`),
+  ]);
 
   const result = await getRuntime(options?.runtime).runSynthesis({
     task: 'consolidation',
@@ -501,6 +546,16 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
 
   if (absorbed.size === 0) {
     return { findings, mergedCount: 0, usage: result.usage };
+  }
+
+  for (const finding of absorbed) {
+    options?.onFindingProcessing?.({
+      stage: 'merge',
+      action: 'merged',
+      finding,
+      replacement: findReplacementForAbsorbed(finding, replacements),
+      reason: 'same root cause at another location',
+    });
   }
 
   const merged = findings

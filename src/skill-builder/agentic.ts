@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ToolName } from '../config/schema.js';
 import type { UsageStats } from '../types/index.js';
 import { parseJsonFromOutput, type ParseJsonFromOutputResult } from '../sdk/json-output.js';
+import { buildJsonOutputSection, buildTaggedSection, joinPromptSections } from '../sdk/prompt-sections.js';
 import { aggregateUsage, emptyUsage } from '../sdk/usage.js';
 import type { Runtime, SkillRunResult } from '../sdk/runtimes/index.js';
 
@@ -111,22 +112,17 @@ function structuredRepairPrompt<T>(args: {
   output: string;
   reason: string;
 }): string {
-  return `Repair this model output into valid JSON that matches the provided JSON Schema.
-
-Rules:
-- Return JSON only.
-- Remove surrounding prose or markdown only when needed.
-- Preserve the original structured content as much as possible.
-- Do not invent extra fields.
-
-The local parser failed with:
-${args.reason}
-
-JSON Schema:
-${JSON.stringify(z.toJSONSchema(args.schema), null, 2)}
-
-Model output:
-${truncateForRepair(args.output)}`;
+  return joinPromptSections([
+    `<task>
+Repair this model output into valid JSON that matches the provided JSON Schema.
+</task>`,
+    buildJsonOutputSection(`Remove surrounding prose or markdown only when needed.
+Preserve the original structured content as much as possible.
+Do not invent extra fields.`),
+    buildTaggedSection('parse_error', args.reason),
+    buildTaggedSection('json_schema', JSON.stringify(z.toJSONSchema(args.schema), null, 2)),
+    buildTaggedSection('model_output', truncateForRepair(args.output)),
+  ]);
 }
 
 async function repairStructuredSkillBuilderOutput<T>(args: {

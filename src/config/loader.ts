@@ -120,6 +120,7 @@ function mergeDefaults(base?: Defaults, overlay?: Defaults): Defaults | undefine
     agent: mergeNestedConfig(base.agent, overlay.agent),
     auxiliary: mergeNestedConfig(base.auxiliary, overlay.auxiliary),
     synthesis: mergeNestedConfig(base.synthesis, overlay.synthesis),
+    verification: mergeNestedConfig(base.verification, overlay.verification),
     ignorePaths: mergeArray(base.ignorePaths, overlay.ignorePaths),
     chunking: mergeChunkingConfig(base.chunking, overlay.chunking),
   };
@@ -298,6 +299,8 @@ export interface ResolvedTrigger {
   synthesisModel?: string;
   /** Max retries for auxiliary structured model calls. */
   auxiliaryMaxRetries?: number;
+  /** Whether candidate findings should be verified in a second pass. */
+  verifyFindings?: boolean;
   /** Minimum confidence for findings (merged: trigger > skill > defaults) */
   minConfidence?: ConfidenceThreshold;
   /** Batch delay to use for this trigger's skill execution */
@@ -347,6 +350,7 @@ export function resolveSkillConfigs(
   const auxiliaryMaxRetries =
     defaults?.auxiliary?.maxRetries ??
     defaults?.auxiliaryMaxRetries;
+  const verifyFindings = defaults?.verification?.enabled !== false;
 
   for (const skill of config.skills) {
     const baseModel =
@@ -389,6 +393,7 @@ export function resolveSkillConfigs(
         auxiliaryModel,
         synthesisModel,
         auxiliaryMaxRetries,
+        verifyFindings,
         minConfidence: skill.minConfidence ?? defaults?.minConfidence,
         batchDelayMs: defaults?.batchDelayMs,
         maxContextFiles: defaults?.chunking?.maxContextFiles,
@@ -416,6 +421,7 @@ export function resolveSkillConfigs(
           auxiliaryModel,
           synthesisModel,
           auxiliaryMaxRetries,
+          verifyFindings,
           minConfidence: trigger.minConfidence ?? skill.minConfidence ?? defaults?.minConfidence,
           batchDelayMs: defaults?.batchDelayMs,
           maxContextFiles: defaults?.chunking?.maxContextFiles,

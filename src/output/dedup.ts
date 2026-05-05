@@ -6,6 +6,11 @@ import { findingLine } from '../types/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import { applyMergeGroups } from '../sdk/extract.js';
 import type { AuxiliaryCallOptions } from '../sdk/extract.js';
+import {
+  buildJsonOutputSection,
+  formatIndexedFindingsForPrompt,
+  joinPromptSections,
+} from '../sdk/prompt-sections.js';
 
 /**
  * Parsed marker data from a Warden comment.
@@ -446,30 +451,27 @@ async function findSemanticDuplicates(
     .map((c, i) => `${i + 1}. [${c.path}:${c.line}] "${c.title}" - ${c.description}`)
     .join('\n');
 
-  const findingsList = findings
-    .map((f, i) => {
-      const line = f.location?.endLine ?? f.location?.startLine;
-      const loc = f.location ? `${f.location.path}:${line}` : 'general';
-      return `${i + 1}. [${loc}] "${f.title}" - ${f.description}`;
-    })
-    .join('\n');
+  const findingsList = formatIndexedFindingsForPrompt(findings);
 
-  const prompt = `Compare these code review findings and identify duplicates.
-
-Existing comments:
+  const prompt = joinPromptSections([
+    `<task>
+Compare these code review findings and identify duplicates.
+</task>`,
+    `<existing_comments>
 ${existingList}
-
-New findings:
+</existing_comments>`,
+    `<new_findings>
 ${findingsList}
-
+</new_findings>`,
+    `<deduplication_rules>
 Return a JSON array of objects identifying which findings are DUPLICATES of which existing comments.
 Only mark as duplicate if they describe the SAME issue at the SAME location (within a few lines).
 Different issues at the same location are NOT duplicates.
-
-Return ONLY the JSON array in this format:
-[{"findingIndex": 1, "existingIndex": 2}]
+</deduplication_rules>`,
+    buildJsonOutputSection(`[{"findingIndex": 1, "existingIndex": 2}]
 where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
-Return [] if none are duplicates.`;
+Return [] if none are duplicates.`),
+  ]);
 
   const result = await getRuntime(options.runtime).runAuxiliary({
     task: 'deduplication',
@@ -746,24 +748,24 @@ export async function consolidateBatchFindings(
   // Phase 3: LLM consolidation for proximity clusters
   // Only send clustered findings to the LLM (deduplicated across clusters)
   const clusteredList = [...new Set(clusters.flat())];
-  const findingsList = clusteredList
-    .map((f, i) => {
-      const line = findingLine(f);
-      const loc = f.location ? `${f.location.path}:${line}` : 'general';
-      return `${i + 1}. [${loc}] (${f.severity}) "${f.title}" - ${f.description}`;
-    })
-    .join('\n');
+  const findingsList = formatIndexedFindingsForPrompt(clusteredList, {
+    includeSeverity: true,
+  });
 
-  const prompt = `You are deduplicating code review findings. Group findings that describe the SAME root cause or bug.
-
-Findings:
+  const prompt = joinPromptSections([
+    `<task>
+Group findings that describe the SAME root cause or bug.
+</task>`,
+    `<findings>
 ${findingsList}
-
+</findings>`,
+    `<deduplication_rules>
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings that describe the same root cause.
 Only group findings that are truly about the same underlying issue. Findings about different issues should NOT be grouped even if they're nearby.
 Singletons (findings with no duplicates) should not appear in any group.
-
-Return ONLY the JSON array. Return [] if no findings share a root cause.`;
+</deduplication_rules>`,
+    buildJsonOutputSection('Return the JSON array. Return [] if no findings share a root cause.'),
+  ]);
 
   const result = await getRuntime(options.runtime).runAuxiliary({
     task: 'deduplication',
