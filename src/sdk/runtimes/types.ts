@@ -16,7 +16,7 @@ import { z } from 'zod';
 import type { ToolConfig } from '../../config/schema.js';
 import type { UsageStats } from '../../types/index.js';
 
-export const RuntimeNameSchema = z.enum(['claude']);
+export const RuntimeNameSchema = z.enum(['claude', 'acp']);
 export type RuntimeName = z.infer<typeof RuntimeNameSchema>;
 
 export type SkillRunStatus =
@@ -100,6 +100,9 @@ interface AuxiliaryRunRequestBase<T> {
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;
+  repoPath?: string;
+  providerOptions?: unknown;
+  abortController?: AbortController;
 }
 
 interface AuxiliaryRunRequestWithoutTools<T> extends AuxiliaryRunRequestBase<T> {
@@ -125,6 +128,9 @@ export interface SynthesisRunRequest<T> {
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;
+  repoPath?: string;
+  providerOptions?: unknown;
+  abortController?: AbortController;
 }
 
 export interface Runtime {

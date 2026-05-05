@@ -13,6 +13,7 @@ import {
   type RunnerConfig,
   type LogsConfig,
   type RuntimeName,
+  type AcpAgentRuntimeConfig,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -292,6 +293,8 @@ export interface ResolvedTrigger {
   maxTurns?: number;
   /** Runtime backend for all model-backed execution. */
   runtime?: RuntimeName;
+  /** Agent Client Protocol runtime options. */
+  acp?: AcpAgentRuntimeConfig;
   /** Model for auxiliary structured model calls. */
   auxiliaryModel?: string;
   /** Model for post-analysis synthesis/consolidation. */
@@ -340,6 +343,7 @@ export function resolveSkillConfigs(
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
   const result: ResolvedTrigger[] = [];
   const runtime = defaults?.runtime ?? 'claude';
+  const acp = defaults?.agent?.acp;
   const auxiliaryModel = emptyToUndefined(defaults?.auxiliary?.model);
   const synthesisModel =
     emptyToUndefined(defaults?.synthesis?.model) ??
@@ -386,6 +390,7 @@ export function resolveSkillConfigs(
         model: baseModel,
         maxTurns: baseMaxTurns,
         runtime,
+        acp,
         auxiliaryModel,
         synthesisModel,
         auxiliaryMaxRetries,
@@ -413,6 +418,7 @@ export function resolveSkillConfigs(
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
           runtime,
+          acp,
           auxiliaryModel,
           synthesisModel,
           auxiliaryMaxRetries,

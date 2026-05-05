@@ -482,6 +482,7 @@ interface SkillToRun {
   model?: string;
   maxTurns?: number;
   runtime?: SkillRunnerOptions['runtime'];
+  acp?: SkillRunnerOptions['acp'];
   auxiliaryModel?: string;
   synthesisModel?: string;
   auxiliaryMaxRetries?: number;
@@ -507,7 +508,7 @@ interface ProcessedResults {
 
 type SkillRunnerOptionOverrides = Pick<
   SkillRunnerOptions,
-  'model' | 'maxTurns' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries'
+  'model' | 'maxTurns' | 'runtime' | 'acp' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries'
 >;
 
 /** Apply per-skill runner overrides on top of the shared execution defaults. */
@@ -520,6 +521,7 @@ export function mergeSkillRunnerOptions(
   if (overrides.model !== undefined) merged.model = overrides.model;
   if (overrides.maxTurns !== undefined) merged.maxTurns = overrides.maxTurns;
   if (overrides.runtime !== undefined) merged.runtime = overrides.runtime;
+  if (overrides.acp !== undefined) merged.acp = overrides.acp;
   if (overrides.auxiliaryModel !== undefined) merged.auxiliaryModel = overrides.auxiliaryModel;
   if (overrides.synthesisModel !== undefined) merged.synthesisModel = overrides.synthesisModel;
   if (overrides.auxiliaryMaxRetries !== undefined) {
@@ -819,20 +821,6 @@ export async function runSkills(
     // Not in a git repo - that's fine for file mode
   }
 
-  // Pre-flight: verify auth will work before starting analysis
-  try {
-    verifyAuth({ apiKey });
-  } catch (error: unknown) {
-    const message = (error as WardenAuthenticationError).message;
-    reporter.error(message);
-    emitEmptyRunLog(repoPath ?? cwd, options, {
-      code: 'auth_failed',
-      message,
-      timestamp: new Date().toISOString(),
-    });
-    return 1;
-  }
-
   // Resolve config path
   let configPath: string | null = null;
   if (options.config) {
@@ -848,6 +836,22 @@ export async function runSkills(
   const defaultModel = resolveCliDefaultModel(config, options.model);
   const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
   const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
+
+  // Pre-flight: verify Claude auth only when a Claude-backed run may execute.
+  try {
+    if ((config?.defaults?.runtime ?? 'claude') === 'claude') {
+      verifyAuth({ apiKey });
+    }
+  } catch (error: unknown) {
+    const message = (error as WardenAuthenticationError).message;
+    reporter.error(message);
+    emitEmptyRunLog(repoPath ?? cwd, options, {
+      code: 'auth_failed',
+      message,
+      timestamp: new Date().toISOString(),
+    });
+    return 1;
+  }
 
   // Determine which triggers/skills to run
   let skillsToRun: SkillToRun[];
@@ -868,6 +872,7 @@ export async function runSkills(
       model: match?.model ?? defaultModel,
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
       runtime: match?.runtime ?? config?.defaults?.runtime ?? 'claude',
+      acp: match?.acp ?? config?.defaults?.agent?.acp,
       auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
       synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
       auxiliaryMaxRetries:
@@ -894,6 +899,7 @@ export async function runSkills(
         model: t.model,
         maxTurns: t.maxTurns,
         runtime: t.runtime,
+        acp: t.acp,
         auxiliaryModel: t.auxiliaryModel,
         synthesisModel: t.synthesisModel,
         auxiliaryMaxRetries: t.auxiliaryMaxRetries,
@@ -926,6 +932,7 @@ export async function runSkills(
     apiKey,
     model: sdkModel,
     runtime: config?.defaults?.runtime ?? 'claude',
+    acp: config?.defaults?.agent?.acp,
     auxiliaryModel: defaultAuxiliaryModel,
     synthesisModel: defaultSynthesisModel,
     abortController,
@@ -1231,7 +1238,9 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   try {
-    verifyAuth({ apiKey });
+    if ((config.defaults?.runtime ?? 'claude') === 'claude') {
+      verifyAuth({ apiKey });
+    }
   } catch (error: unknown) {
     const message = (error as WardenAuthenticationError).message;
     reporter.error(message);
@@ -1257,6 +1266,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       apiKey,
       model: trigger.model,
       runtime: trigger.runtime,
+      acp: trigger.acp,
       auxiliaryModel: trigger.auxiliaryModel,
       synthesisModel: trigger.synthesisModel,
       abortController,

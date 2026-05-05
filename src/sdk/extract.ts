@@ -22,6 +22,9 @@ export interface AuxiliaryCallOptions {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
+  repoPath?: string;
+  providerOptions?: unknown;
+  abortController?: AbortController;
 }
 
 /**
@@ -181,7 +184,7 @@ export async function extractFindingsWithLLM(
       : { apiKey: apiKeyOrOptions, maxRetries };
   const { apiKey, runtime, model } = options;
 
-  if (!apiKey) {
+  if (!apiKey && runtime !== 'acp') {
     return {
       success: false,
       error: 'no_api_key_for_fallback',
@@ -217,6 +220,9 @@ ${truncatedText}`;
     maxTokens: LLM_FALLBACK_MAX_TOKENS,
     timeout: LLM_FALLBACK_TIMEOUT_MS,
     maxRetries: options.maxRetries,
+    repoPath: options.repoPath,
+    providerOptions: options.providerOptions,
+    abortController: options.abortController,
   });
 
   if (!result.success) {
@@ -457,11 +463,12 @@ export async function mergeCrossLocationFindings(
   options?: AuxiliaryCallOptions & { repoPath?: string }
 ): Promise<MergeResult> {
   const apiKey = options?.apiKey;
+  const runtime = options?.runtime;
   const repoPath = options?.repoPath ?? '.';
 
   // Early exit: need at least 2 located findings to merge
   const withLocations = findings.filter((f) => f.location);
-  if (withLocations.length < 2 || !apiKey) {
+  if (withLocations.length < 2 || (!apiKey && runtime !== 'acp')) {
     return { findings, mergedCount: 0 };
   }
 
@@ -483,7 +490,7 @@ ${findingDescriptions.join('\n')}
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings about the same issue.
 Singletons should not appear. Return [] if no findings describe the same issue.`;
 
-  const result = await getRuntime(options?.runtime).runSynthesis({
+  const result = await getRuntime(runtime).runSynthesis({
     task: 'consolidation',
     apiKey,
     prompt,
@@ -491,6 +498,9 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     model: options?.model,
     maxTokens: 512,
     maxRetries: options?.maxRetries,
+    repoPath,
+    providerOptions: options?.providerOptions,
+    abortController: options?.abortController,
   });
 
   if (!result.success) {

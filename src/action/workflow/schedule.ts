@@ -176,6 +176,7 @@ export async function runScheduleWorkflow(
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
         runtime: resolved.runtime,
+        acp: resolved.acp,
         auxiliaryModel: resolved.auxiliaryModel,
         synthesisModel: resolved.synthesisModel,
         maxTurns: resolved.maxTurns,

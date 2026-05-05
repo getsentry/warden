@@ -1,6 +1,6 @@
 import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
-import type { ChunkingConfig } from '../config/schema.js';
+import type { AcpAgentRuntimeConfig, ChunkingConfig } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
 
 /** A single auxiliary usage entry, keyed by agent name (e.g. 'extraction', 'dedup'). */
@@ -95,6 +95,8 @@ export interface SkillRunnerOptions {
   model?: string;
   /** Runtime backend for all model-backed execution. Defaults to Claude. */
   runtime?: RuntimeName;
+  /** Agent Client Protocol runtime options. Used when runtime is acp. */
+  acp?: AcpAgentRuntimeConfig;
   /** Model to use for auxiliary structured model calls. Uses runtime default if not specified. */
   auxiliaryModel?: string;
   /** Model to use for post-analysis synthesis/consolidation. Falls back to auxiliaryModel when not specified. */

@@ -66,7 +66,8 @@ function isAbortRequested(error: unknown, abortController?: AbortController): bo
 async function parseHunkOutput(
   result: SkillRunResult,
   filename: string,
-  options: SkillRunnerOptions
+  options: SkillRunnerOptions,
+  repoPath: string,
 ): Promise<ParseHunkOutputResult> {
   if (result.status !== 'success') {
     // SDK error - not an extraction failure, just no findings
@@ -86,6 +87,9 @@ async function parseHunkOutput(
     runtime: options.runtime,
     model: options.auxiliaryModel,
     maxRetries: options.auxiliaryMaxRetries,
+    repoPath,
+    providerOptions: options.runtime === 'acp' ? options.acp : undefined,
+    abortController: options.abortController,
   });
 
   if (fallback.success) {
@@ -200,9 +204,10 @@ async function analyzeHunk(
         try {
           const runtimeName = options.runtime ?? 'claude';
           const runtime = getRuntime(runtimeName);
-          const providerOptions =
-            runtimeName === 'claude'
-              ? { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable }
+          const providerOptions = runtimeName === 'claude'
+            ? { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable }
+            : runtimeName === 'acp'
+              ? options.acp
               : undefined;
           const { result: resultMessage, authError } = await runtime.runSkill({
             systemPrompt,
@@ -271,7 +276,7 @@ async function analyzeHunk(
             };
           }
 
-          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, options);
+          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, options, repoPath);
 
           // Filter findings outside hunk line range (defense-in-depth)
           const hunkRange = getHunkLineRange(hunkCtx.hunk);
@@ -803,6 +808,8 @@ export async function runSkill(
     runtime: options.runtime,
     model: options.synthesisModel,
     maxRetries: options.auxiliaryMaxRetries,
+    providerOptions: options.runtime === 'acp' ? options.acp : undefined,
+    abortController: options.abortController,
   });
   let mergedFindings = mergeResult.findings;
   if (mergeResult.usage) {
@@ -814,6 +821,8 @@ export async function runSkill(
     runtime: options.runtime,
     model: options.auxiliaryModel,
     maxRetries: options.auxiliaryMaxRetries,
+    providerOptions: options.runtime === 'acp' ? options.acp : undefined,
+    abortController: options.abortController,
   });
   mergedFindings = sanitized.findings;
   if (sanitized.usage) {
