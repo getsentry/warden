@@ -12,6 +12,7 @@ import {
   pluralize,
   formatDuration,
   formatCost,
+  totalUsageCost,
   shortRunId,
   parseJsonlReports,
   parseLogMetadata,
@@ -143,6 +144,13 @@ function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>):
 }
 
 /**
+ * Get the total rendered cost for a saved run summary.
+ */
+function getSummaryCostUSD(summary: { usage?: SkillReport['usage']; auxiliaryUsage?: SkillReport['auxiliaryUsage'] }): number | undefined {
+  return totalUsageCost(summary.usage, summary.auxiliaryUsage);
+}
+
+/**
  * List sessions in `.warden/logs/`. Empty (no-file, no-skill) runs
  * are hidden unless `all` is set.
  */
@@ -211,7 +219,7 @@ export async function runRunsList(
       findings: meta?.summary?.totalFindings,
       bySeverity: meta?.summary?.bySeverity,
       durationMs: meta?.summary?.run.durationMs,
-      costUSD: meta?.summary?.usage?.costUSD,
+      costUSD: meta?.summary ? getSummaryCostUSD(meta.summary) : undefined,
       skills: meta?.skills,
       inProgress: meta?.inProgress ?? false,
     }));
@@ -283,9 +291,10 @@ export async function runRunsList(
     }
 
     if (summary) {
+      const costUSD = getSummaryCostUSD(summary);
       totals.findings += summary.totalFindings;
       totals.durationMs += summary.run.durationMs;
-      if (summary.usage) totals.costUSD += summary.usage.costUSD;
+      totals.costUSD += costUSD ?? 0;
       for (const [sev, count] of Object.entries(summary.bySeverity)) {
         totals.bySeverity[sev as Severity] += count;
       }
@@ -297,7 +306,7 @@ export async function runRunsList(
         files: meta.totalFiles > 0 ? String(meta.totalFiles) : '',
         findings: formatSeverityBreakdown(summary.bySeverity),
         time: formatDuration(summary.run.durationMs),
-        cost: summary.usage ? formatCost(summary.usage.costUSD) : '',
+        cost: costUSD !== undefined ? formatCost(costUSD) : '',
         sha: meta.headSha ? meta.headSha.slice(0, 7) : '',
         model: meta.model ?? '-',
         skills: skills.join(', '),

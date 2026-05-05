@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import figures from 'figures';
-import type { SkillReport, Finding, FileChange, UsageStats } from '../../types/index.js';
+import type { SkillReport, Finding, FileChange, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
 import { Verbosity } from './verbosity.js';
 import { type OutputMode, timestamp } from './tty.js';
 import {
@@ -15,6 +15,7 @@ import {
 import { BoxRenderer } from './box.js';
 import { ICON_CHECK } from './icons.js';
 import { getVersion } from '../../utils/index.js';
+import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
 
 /**
  * Map a file change status to its single-character symbol.
@@ -186,6 +187,19 @@ export class Reporter {
   }
 
   /**
+   * Aggregate auxiliary usage stats from multiple reports.
+   */
+  private aggregateAuxiliaryUsage(reports: SkillReport[]): AuxiliaryUsageMap | undefined {
+    let totalAuxiliaryUsage: AuxiliaryUsageMap | undefined;
+    for (const report of reports) {
+      if (report.auxiliaryUsage) {
+        totalAuxiliaryUsage = mergeAuxiliaryUsage(totalAuxiliaryUsage, report.auxiliaryUsage);
+      }
+    }
+    return totalAuxiliaryUsage;
+  }
+
+  /**
    * Render the summary section.
    */
   renderSummary(reports: SkillReport[], totalDuration: number, options?: { traceId?: string }): void {
@@ -201,6 +215,7 @@ export class Reporter {
     }
     const counts = countBySeverity(allFindings);
     const totalUsage = this.aggregateUsage(reports);
+    const totalAuxiliaryUsage = this.aggregateAuxiliaryUsage(reports);
 
     if (this.verbosity === Verbosity.Quiet) {
       // Quiet mode: just output the summary line
@@ -226,7 +241,7 @@ export class Reporter {
       }
       const durationLine = `Analysis completed in ${formatDuration(totalDuration)}`;
       if (totalUsage) {
-        this.log(chalk.dim(`${durationLine} · ${formatUsage(totalUsage)}`));
+        this.log(chalk.dim(`${durationLine} · ${formatUsage(totalUsage, totalAuxiliaryUsage)}`));
       } else {
         this.log(chalk.dim(durationLine));
       }
@@ -248,7 +263,7 @@ export class Reporter {
         this.logPlain(`${totalSkippedFiles} ${pluralize(totalSkippedFiles, 'file')} skipped`);
       }
       if (totalUsage) {
-        this.logPlain(`Usage: ${formatUsagePlain(totalUsage)}`);
+        this.logPlain(`Usage: ${formatUsagePlain(totalUsage, totalAuxiliaryUsage)}`);
       }
       this.logPlain(`Total time: ${formatDuration(totalDuration)}`);
       if (options?.traceId && this.verbosity >= Verbosity.Verbose) {

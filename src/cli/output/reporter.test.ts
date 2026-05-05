@@ -155,6 +155,22 @@ describe('Reporter', () => {
       expect(output).toContain('Total time: 5.0s');
     });
 
+    it('shows total usage cost in log mode', () => {
+      const reporter = new Reporter(logMode(), Verbosity.Normal);
+      reporter.renderSummary([
+        makeReport({
+          usage: { inputTokens: 3000, outputTokens: 680, costUSD: 20 },
+          auxiliaryUsage: {
+            verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+          },
+        }),
+      ], 5000);
+
+      const output = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('\n');
+      expect(output).toContain('$26.19');
+      expect(output).toContain('+verification: $6.19');
+    });
+
     it('outputs only finding counts in Quiet mode', () => {
       const reporter = new Reporter(logMode(), Verbosity.Quiet);
       reporter.renderSummary([makeReport({ findings: [makeFinding()] })], 1000);

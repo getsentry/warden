@@ -257,6 +257,15 @@ export function formatCost(costUSD: number): string {
 }
 
 /**
+ * Calculate total cost across primary and auxiliary usage.
+ */
+export function totalUsageCost(usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): number | undefined {
+  const hasAuxiliaryUsage = auxiliaryUsage !== undefined && Object.keys(auxiliaryUsage).length > 0;
+  if (!usage && !hasAuxiliaryUsage) return undefined;
+  return (usage?.costUSD ?? 0) + (auxiliaryUsage ? totalAuxiliaryCost(auxiliaryUsage) : 0);
+}
+
+/**
  * Format token counts for display.
  */
 export function formatTokens(tokens: number): string {
@@ -272,21 +281,23 @@ export function formatTokens(tokens: number): string {
 /**
  * Format usage stats for terminal display.
  */
-export function formatUsage(usage: UsageStats): string {
+export function formatUsage(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
   const inputStr = formatTokens(usage.inputTokens);
   const outputStr = formatTokens(usage.outputTokens);
-  const costStr = formatCost(usage.costUSD);
-  return `${inputStr} in / ${outputStr} out · ${costStr}`;
+  const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
+  const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
+  return `${inputStr} in / ${outputStr} out · ${costStr}${auxSuffix}`;
 }
 
 /**
  * Format usage stats for plain text display.
  */
-export function formatUsagePlain(usage: UsageStats): string {
+export function formatUsagePlain(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
   const inputStr = formatTokens(usage.inputTokens);
   const outputStr = formatTokens(usage.outputTokens);
-  const costStr = formatCost(usage.costUSD);
-  return `${inputStr} input, ${outputStr} output, ${costStr}`;
+  const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
+  const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
+  return `${inputStr} input, ${outputStr} output, ${costStr}${auxSuffix}`;
 }
 
 /**
@@ -330,9 +341,7 @@ export function formatStatsCompact(durationMs?: number, usage?: UsageStats, auxi
   if (usage) {
     parts.push(`${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
 
-    const auxCost = auxiliaryUsage ? totalAuxiliaryCost(auxiliaryUsage) : 0;
-    const totalCost = usage.costUSD + auxCost;
-    const costStr = formatCost(totalCost);
+    const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
     const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
     parts.push(`${costStr}${auxSuffix}`);
   }

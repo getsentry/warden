@@ -1,7 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
 import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
-import { formatDuration, formatCost, formatTokens, totalAuxiliaryCost, formatAuxiliarySuffix } from '../cli/output/formatters.js';
+import { formatDuration, formatCost, formatTokens, totalUsageCost, formatAuxiliarySuffix } from '../cli/output/formatters.js';
 import { escapeHtml } from '../utils/index.js';
 
 /**
@@ -62,6 +62,7 @@ export interface CoreCheckSummaryData {
     conclusion: CheckConclusion;
     durationMs?: number;
     usage?: UsageStats;
+    auxiliaryUsage?: AuxiliaryUsageMap;
   }[];
 }
 
@@ -377,7 +378,8 @@ function renderStatsFooter(
   usage: UsageStats | undefined,
   auxiliaryUsage: AuxiliaryUsageMap | undefined
 ): string[] {
-  if (durationMs === undefined && !usage) return [];
+  const cost = totalUsageCost(usage, auxiliaryUsage);
+  if (durationMs === undefined && !usage && cost === undefined) return [];
 
   const parts: string[] = [];
   if (durationMs !== undefined) {
@@ -385,10 +387,10 @@ function renderStatsFooter(
   }
   if (usage) {
     parts.push(`**Tokens:** ${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
-    const auxCost = auxiliaryUsage ? totalAuxiliaryCost(auxiliaryUsage) : 0;
-    const totalCost = usage.costUSD + auxCost;
+  }
+  if (cost !== undefined) {
     const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
-    parts.push(`**Cost:** ${formatCost(totalCost)}${auxSuffix}`);
+    parts.push(`**Cost:** ${formatCost(cost)}${auxSuffix}`);
   }
 
   return ['---', parts.join(' · ')];
@@ -441,7 +443,7 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
   }
 
   // Skills table in collapsible section
-  const hasSkillStats = data.skillResults.some((s) => s.durationMs !== undefined || s.usage);
+  const hasSkillStats = data.skillResults.some((s) => s.durationMs !== undefined || s.usage || s.auxiliaryUsage);
   const skillPlural = data.totalSkills === 1 ? '' : 's';
 
   lines.push('<details>');
@@ -454,7 +456,8 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
     );
     for (const skill of data.skillResults) {
       const duration = skill.durationMs !== undefined ? formatDuration(skill.durationMs) : '-';
-      const cost = skill.usage ? formatCost(skill.usage.costUSD) : '-';
+      const costUSD = totalUsageCost(skill.usage, skill.auxiliaryUsage);
+      const cost = costUSD !== undefined ? formatCost(costUSD) : '-';
       lines.push(`| ${skill.name} | ${skill.findingCount} | ${duration} | ${cost} |`);
     }
   } else {

@@ -87,6 +87,7 @@ export function buildCoreSummaryData(
     conclusion: 'success' | 'failure' | 'neutral' | 'cancelled';
     durationMs?: number;
     usage?: UsageStats;
+    auxiliaryUsage?: AuxiliaryUsageMap;
   }[];
 } {
   // Aggregate auxiliary usage across all reports
@@ -115,6 +116,7 @@ export function buildCoreSummaryData(
         : ('failure' as const),
       durationMs: r.report?.durationMs,
       usage: r.report?.usage,
+      auxiliaryUsage: r.report?.auxiliaryUsage,
     })),
   };
 }

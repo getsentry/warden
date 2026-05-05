@@ -7,6 +7,9 @@ import {
   formatProgress,
   truncate,
   padRight,
+  formatUsage,
+  formatUsagePlain,
+  totalUsageCost,
   formatStatsCompact,
   formatSeverityBadge,
   formatConfidenceBadge,
@@ -171,6 +174,37 @@ describe('formatCost', () => {
     expect(formatCost(1.5)).toBe('$1.50');
     expect(formatCost(0.0892)).toBe('$0.09');
     expect(formatCost(0)).toBe('$0.00');
+  });
+});
+
+describe('totalUsageCost', () => {
+  it('adds auxiliary cost to primary usage cost', () => {
+    const usage: UsageStats = {
+      inputTokens: 3000,
+      outputTokens: 680,
+      costUSD: 20,
+    };
+    const auxiliaryUsage: AuxiliaryUsageMap = {
+      verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+    };
+
+    expect(totalUsageCost(usage, auxiliaryUsage)).toBeCloseTo(26.19);
+  });
+});
+
+describe('formatUsage', () => {
+  it('renders total cost when auxiliary usage is present', () => {
+    const usage: UsageStats = {
+      inputTokens: 3000,
+      outputTokens: 680,
+      costUSD: 20,
+    };
+    const auxiliaryUsage: AuxiliaryUsageMap = {
+      verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+    };
+
+    expect(formatUsage(usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $26.19 (+verification: $6.19)');
+    expect(formatUsagePlain(usage, auxiliaryUsage)).toBe('3.0k input, 680 output, $26.19 (+verification: $6.19)');
   });
 });
 

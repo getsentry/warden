@@ -152,6 +152,35 @@ describe('runRunsList', () => {
 
     stdoutSpy.mockRestore();
   });
+
+  it('lists total cost including auxiliary usage', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    writeFixture(logDir, 'ddd44444-2026-02-18T10-00-00-000Z.jsonl', [
+      {
+        skill: 'review',
+        summary: 'Done',
+        findings: [],
+        usage: { inputTokens: 3000, outputTokens: 680, costUSD: 20 },
+        auxiliaryUsage: {
+          verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+        },
+      },
+    ], 1000, 'ddd44444-0000-0000-0000-000000000000', new Date('2026-02-18T10:00:00.000Z'));
+
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const reporter = createTestReporter();
+    const options = createDefaultOptions();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const exitCode = await runRunsList(options, reporter);
+    expect(exitCode).toBe(0);
+
+    const output = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('\n');
+    expect(output).toContain('$26.19');
+
+    errorSpy.mockRestore();
+  });
 });
 
 describe('runRunsShow', () => {

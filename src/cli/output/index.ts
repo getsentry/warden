@@ -21,6 +21,7 @@ export {
   countBySeverity,
   formatCost,
   formatTokens,
+  totalUsageCost,
   formatUsage,
   formatUsagePlain,
 } from './formatters.js';

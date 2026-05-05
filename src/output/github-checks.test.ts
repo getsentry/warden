@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   severityToAnnotationLevel,
   findingsToAnnotations,
   determineConclusion,
   aggregateSeverityCounts,
+  updateCoreCheck,
 } from './github-checks.js';
 import type { Finding, SkillReport } from '../types/index.js';
 
@@ -385,5 +386,46 @@ describe('aggregateSeverityCounts', () => {
       medium: 0,
       low: 0,
     });
+  });
+});
+
+describe('updateCoreCheck', () => {
+  it('renders total skill cost including auxiliary usage', async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    const octokit = { checks: { update } } as unknown as Parameters<typeof updateCoreCheck>[0];
+
+    await updateCoreCheck(
+      octokit,
+      123,
+      {
+        totalSkills: 1,
+        totalFindings: 0,
+        findingsBySeverity: { high: 0, medium: 0, low: 0 },
+        totalDurationMs: 1000,
+        totalUsage: { inputTokens: 3000, outputTokens: 680, costUSD: 20 },
+        totalAuxiliaryUsage: {
+          verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+        },
+        findings: [],
+        skillResults: [
+          {
+            name: 'find-warden-bugs',
+            findingCount: 0,
+            conclusion: 'success',
+            durationMs: 1000,
+            usage: { inputTokens: 3000, outputTokens: 680, costUSD: 20 },
+            auxiliaryUsage: {
+              verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+            },
+          },
+        ],
+      },
+      'success',
+      { owner: 'getsentry', repo: 'warden' },
+    );
+
+    const request = update.mock.calls[0]![0] as { output: { summary: string } };
+    expect(request.output.summary).toContain('| find-warden-bugs | 0 | 1.0s | $26.19 |');
+    expect(request.output.summary).toContain('**Cost:** $26.19 (+verification: $6.19)');
   });
 });
