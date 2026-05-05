@@ -242,6 +242,62 @@ describe('verifyFindings', () => {
     expect(result.findings).toEqual([finding]);
   });
 
+  it('drops unverified findings when verification is already aborted', async () => {
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+    const abortController = new AbortController();
+    abortController.abort();
+    const onFindingProcessing = vi.fn();
+    const finding = makeFinding();
+
+    const result = await verifyFindings([finding], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+      abortController,
+      onFindingProcessing,
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(runtime.runSkill).not.toHaveBeenCalled();
+    expect(onFindingProcessing).toHaveBeenCalledWith({
+      stage: 'verification',
+      action: 'rejected',
+      finding,
+      reason: 'verification aborted before start',
+    });
+  });
+
+  it('drops unverified findings when verification aborts before verdict', async () => {
+    const abortController = new AbortController();
+    const runtime: Runtime = {
+      name: 'claude',
+      runSkill: vi.fn(async () => {
+        abortController.abort();
+        throw new Error('aborted');
+      }),
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime;
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+    const onFindingProcessing = vi.fn();
+    const finding = makeFinding();
+
+    const result = await verifyFindings([finding], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+      abortController,
+      onFindingProcessing,
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(onFindingProcessing).toHaveBeenCalledWith({
+      stage: 'verification',
+      action: 'rejected',
+      finding,
+      reason: 'verification aborted before verdict',
+    });
+  });
+
   it('propagates authentication errors reported by the verifier runtime', async () => {
     vi.mocked(getRuntime).mockReturnValue(mockRuntimeResponse({ authError: 'login required' }));
 

@@ -52,6 +52,11 @@ const VerificationVerdictSchema = z.object({
 
 type VerificationVerdict = z.infer<typeof VerificationVerdictSchema>;
 
+interface VerificationTaskResult {
+  finding?: Finding;
+  usage?: UsageStats;
+}
+
 const JSON_OBJECT_START = /\{/g;
 const VERIFICATION_CONCURRENCY = 4;
 
@@ -215,6 +220,20 @@ function notifyVerdict(
   }
 }
 
+function rejectUnverifiedFinding(
+  options: VerifyFindingsOptions,
+  finding: Finding,
+  reason: string
+): VerificationTaskResult {
+  options.onFindingProcessing?.({
+    stage: 'verification',
+    action: 'rejected',
+    finding,
+    reason,
+  });
+  return { finding: undefined };
+}
+
 /**
  * Verify candidate findings with a second read-only repo-aware agent pass.
  */
@@ -230,61 +249,65 @@ export async function verifyFindings(
   const runtime = getRuntime(runtimeName);
   const systemPrompt = buildVerificationSystemPrompt(options.skill);
 
-  const results = await runPool(findings, VERIFICATION_CONCURRENCY, async (finding) => {
-    if (options.abortController?.signal.aborted) {
-      return { finding };
-    }
+  const results = await runPool<Finding, VerificationTaskResult>(
+    findings,
+    VERIFICATION_CONCURRENCY,
+    async (finding) => {
+      if (options.abortController?.signal.aborted) {
+        return rejectUnverifiedFinding(options, finding, 'verification aborted before start');
+      }
 
-    try {
-      const { result, authError } = await runtime.runSkill({
-        systemPrompt,
-        userPrompt: buildVerificationUserPrompt(finding, options.prContext),
-        repoPath: options.repoPath,
-        skillName: `${options.skill.name}:verification`,
-        options: {
-          model: options.model,
-          maxTurns: options.maxTurns,
-          abortController: options.abortController,
-        },
-        tools: options.skill.tools,
-        providerOptions: getRuntimeProviderOptions(runtimeName, {
-          pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
-        }),
-      });
+      try {
+        const { result, authError } = await runtime.runSkill({
+          systemPrompt,
+          userPrompt: buildVerificationUserPrompt(finding, options.prContext),
+          repoPath: options.repoPath,
+          skillName: `${options.skill.name}:verification`,
+          options: {
+            model: options.model,
+            maxTurns: options.maxTurns,
+            abortController: options.abortController,
+          },
+          tools: options.skill.tools,
+          providerOptions: getRuntimeProviderOptions(runtimeName, {
+            pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+          }),
+        });
 
-      throwIfAuthenticationFailure(authError, result);
+        throwIfAuthenticationFailure(authError, result);
 
-      const verdict = result?.status === 'success'
-        ? parseVerificationVerdict(result.text)
-        : null;
-      const next = applyVerdict(finding, verdict);
-      notifyVerdict(options, finding, verdict, next);
-      return { finding: next ?? undefined, usage: result?.usage };
-    } catch (error) {
-      if (isAbortRequested(error, options.abortController)) {
+        const verdict = result?.status === 'success'
+          ? parseVerificationVerdict(result.text)
+          : null;
+        const next = applyVerdict(finding, verdict);
+        notifyVerdict(options, finding, verdict, next);
+        return { finding: next ?? undefined, usage: result?.usage };
+      } catch (error) {
+        if (isAbortRequested(error, options.abortController)) {
+          return rejectUnverifiedFinding(options, finding, 'verification aborted before verdict');
+        }
+
+        if (error instanceof WardenAuthenticationError) {
+          throw error;
+        }
+
+        if (isSubprocessError(error)) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new WardenAuthenticationError(
+            `Claude Code subprocess failed (${errorMessage}).\n` +
+            `This usually means the claude CLI cannot run in this environment.`,
+            { cause: error }
+          );
+        }
+
+        if (isAuthenticationError(error)) {
+          throw new WardenAuthenticationError(undefined, { cause: error });
+        }
+
         return { finding };
       }
-
-      if (error instanceof WardenAuthenticationError) {
-        throw error;
-      }
-
-      if (isSubprocessError(error)) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new WardenAuthenticationError(
-          `Claude Code subprocess failed (${errorMessage}).\n` +
-          `This usually means the claude CLI cannot run in this environment.`,
-          { cause: error }
-        );
-      }
-
-      if (isAuthenticationError(error)) {
-        throw new WardenAuthenticationError(undefined, { cause: error });
-      }
-
-      return { finding };
     }
-  });
+  );
 
   const verified = results.flatMap((result) => result.finding ? [result.finding] : []);
   const usage = results.map((result) => result.usage).filter((u): u is UsageStats => u !== undefined);
