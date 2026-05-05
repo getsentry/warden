@@ -6,10 +6,11 @@
 
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { execFileNonInteractive } from '../../utils/exec.js';
+import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { TriggerResult } from '../triggers/executor.js';
@@ -257,14 +258,6 @@ export async function getDefaultBranchFromAPI(
 // -----------------------------------------------------------------------------
 // Findings Output File
 // -----------------------------------------------------------------------------
-
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/');
-}
-
-function isRepoRelativePath(path: string): boolean {
-  return path !== '' && path !== '..' && !path.startsWith('../') && !isAbsolute(path);
-}
 
 function getFindingsOutputValue(filePath: string, repoPath: string): string {
   const relativePath = normalizePath(relative(repoPath, filePath));

@@ -2,6 +2,20 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
 /**
+ * Normalize path separators to forward slashes for cross-platform consistency.
+ */
+export function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+/**
+ * Check whether a normalized path stays within a repository-relative boundary.
+ */
+export function isRepoRelativePath(path: string): boolean {
+  return path !== '' && path !== '..' && !path.startsWith('../') && !isAbsolute(path);
+}
+
+/**
  * Check whether a target string should be treated as a filesystem path.
  */
 export function isPathLike(value: string): boolean {
