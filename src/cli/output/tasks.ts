@@ -894,21 +894,14 @@ export async function runSkillTasks(
 
   const wrappedCallbacks: SkillProgressCallbacks = {
     ...effectiveCallbacks,
-    ...(failFastController
-      ? {
-          onFileUpdate: (skillName: string, filename: string, updates: Partial<FileState>) => {
-            effectiveCallbacks.onFileUpdate(skillName, filename, updates);
-            if (updates.status === 'done' && updates.findings && updates.findings.length > 0) {
-              failFastController.abort();
-            }
-          },
-        }
-      : {}),
-    ...(onSkillComplete
+    ...(onSkillComplete || failFastController
       ? {
           onSkillComplete: (name: string, report: SkillReport) => {
             effectiveCallbacks.onSkillComplete(name, report);
-            try { onSkillComplete(report); } catch { /* streaming hook must not break the run */ }
+            try { onSkillComplete?.(report); } catch { /* streaming hook must not break the run */ }
+            if (failFastController && report.findings.length > 0) {
+              failFastController.abort();
+            }
           },
         }
       : {}),

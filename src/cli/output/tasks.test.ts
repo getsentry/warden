@@ -57,7 +57,7 @@ describe('createDefaultCallbacks', () => {
   });
 
   afterEach(() => {
-    errorSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
   describe('onSkillStart', () => {
@@ -683,6 +683,104 @@ describe('runSkillTasks', () => {
 
     expect(results).toHaveLength(0);
     expect(resolveSkill).not.toHaveBeenCalled();
+  });
+
+  it('does not fail-fast on findings rejected by post-processing', async () => {
+    const candidate = makeFinding();
+    const controller = new AbortController();
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [candidate],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    } satisfies FileAnalysisResult);
+    const postProcessFindings = vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
+      findings: [],
+      auxiliaryUsage: [],
+    });
+
+    const results = await runSkillTasks([{
+      name: 'verify-skill',
+      resolveSkill: async () =>
+        ({ name: 'verify-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    }], {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 1,
+      failFastController: controller,
+    });
+
+    expect(results[0]?.report?.findings).toEqual([]);
+    expect(controller.signal.aborted).toBe(false);
+    expect(postProcessFindings).toHaveBeenCalled();
+
+    prepareFiles.mockRestore();
+    analyzeFile.mockRestore();
+    postProcessFindings.mockRestore();
+  });
+
+  it('fail-fast aborts after final findings are post-processed', async () => {
+    const finalFinding = makeFinding();
+    const controller = new AbortController();
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finalFinding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    } satisfies FileAnalysisResult);
+    const postProcessFindings = vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
+      findings: [finalFinding],
+      auxiliaryUsage: [],
+    });
+
+    await runSkillTasks([{
+      name: 'verify-skill',
+      resolveSkill: async () =>
+        ({ name: 'verify-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    }], {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 1,
+      failFastController: controller,
+    });
+
+    expect(controller.signal.aborted).toBe(true);
+
+    prepareFiles.mockRestore();
+    analyzeFile.mockRestore();
+    postProcessFindings.mockRestore();
   });
 });
 

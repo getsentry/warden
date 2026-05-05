@@ -135,4 +135,85 @@ describe('runSkillTasksWithInk', () => {
     expect(output).toContain('find-warden-bugs');
     expect(output).toContain('$26.19');
   });
+
+  it('preserves skipped status when skipped skills emit completion', async () => {
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    mockRunComposedSkillTasks.mockImplementationOnce(async (_tasks, callbacks) => {
+      callbacks.onSkillSkipped('empty-skill');
+      callbacks.onSkillComplete('empty-skill', {
+        skill: 'empty-skill',
+        summary: 'No code changes to analyze',
+        findings: [],
+        durationMs: 100,
+      });
+      return [];
+    });
+
+    await runSkillTasksWithInk(
+      [{
+        name: 'empty-skill',
+        displayName: 'empty-skill',
+      } as never],
+      {
+        mode: { isTTY: true, supportsColor: false, columns: 80 },
+        verbosity: Verbosity.Normal,
+        concurrency: 2,
+      },
+    );
+
+    const output = stderrWrite.mock.calls.map(([chunk]) => String(chunk)).join('');
+    expect(output).toContain('empty-skill');
+    expect(output).toContain('[skipped]');
+  });
+
+  it('does not trigger fail-fast from file findings before completion', async () => {
+    const controller = new AbortController();
+
+    mockRunComposedSkillTasks.mockImplementationOnce(async (_tasks, callbacks) => {
+      callbacks.onSkillStart({
+        name: 'find-warden-bugs',
+        displayName: 'find-warden-bugs',
+        status: 'running',
+        files: [{
+          filename: 'src/app.ts',
+          status: 'running',
+          currentHunk: 1,
+          totalHunks: 1,
+          findings: [],
+        }],
+        findings: [],
+      });
+      callbacks.onFileUpdate('find-warden-bugs', 'src/app.ts', {
+        status: 'done',
+        findings: [{
+          id: 'candidate',
+          severity: 'high',
+          title: 'Rejected candidate',
+          description: 'Rejected during verification',
+        }],
+      });
+      callbacks.onSkillComplete('find-warden-bugs', {
+        skill: 'find-warden-bugs',
+        summary: 'find-warden-bugs: No issues found',
+        findings: [],
+      });
+      return [];
+    });
+
+    await runSkillTasksWithInk(
+      [{
+        name: 'find-warden-bugs',
+        displayName: 'find-warden-bugs',
+      } as never],
+      {
+        mode: { isTTY: true, supportsColor: false, columns: 80 },
+        verbosity: Verbosity.Normal,
+        concurrency: 2,
+        failFastController: controller,
+      },
+    );
+
+    expect(controller.signal.aborted).toBe(false);
+  });
 });

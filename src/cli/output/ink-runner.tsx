@@ -377,10 +377,6 @@ export async function runSkillTasksWithInk(
         if (file) {
           Object.assign(file, updates);
           updateUI();
-          // Fail-fast: abort when a file completes with findings
-          if (failFastController && updates.status === 'done' && updates.findings && updates.findings.length > 0) {
-            failFastController.abort();
-          }
         }
       }
     },
@@ -391,12 +387,15 @@ export async function runSkillTasksWithInk(
       if (idx >= 0 && existing) {
         skillStates[idx] = {
           ...existing,
-          status: existing.status === 'error' ? 'error' : 'done',
+          status: existing.status === 'error' || existing.status === 'skipped' ? existing.status : 'done',
           durationMs: report.durationMs,
           findings: report.findings,
           usage: report.usage,
           auxiliaryUsage: report.auxiliaryUsage,
         };
+      }
+      if (failFastController && report.findings.length > 0) {
+        failFastController.abort();
       }
       updateUI();
     },
