@@ -197,7 +197,7 @@ export function readGeneratedSkillArtifactFiles(rootDir: string): GeneratedSkill
   function visit(relativeDir: string): void {
     for (const entry of readdirSync(join(rootDir, relativeDir), { withFileTypes: true })) {
       const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-      if (entry.name === GENERATED_SKILL_DEFINITION_FILE || entry.name === BUILD_STATE_FILE) {
+      if (!relativeDir && (entry.name === GENERATED_SKILL_DEFINITION_FILE || entry.name === BUILD_STATE_FILE)) {
         continue;
       }
       if (entry.isDirectory()) {
