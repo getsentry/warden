@@ -99,7 +99,7 @@ fixBranchPrefix = "security-fix"       # Branch name prefix
 All skills run locally regardless of trigger type. Skills with no triggers run everywhere (wildcard). Use `type = "local"` for skills that should *only* run locally.
 
 **Actions (for pull_request):**
-- `opened`, `synchronize`, `reopened`, `closed`
+- `opened`, `synchronize`, `ready_for_review`, `reopened`, `closed` or any valid GitHub `pull_request` webhook action
 
 ## Severity Values
 
