@@ -795,7 +795,12 @@ describe('resolveLayeredSkillConfigs', () => {
     const baseConfig: WardenConfig = {
       version: 1,
       defaults: {
+        failOn: 'high',
+        model: 'base-model',
+        ignorePaths: ['base/**'],
+        runtime: 'claude',
         verification: { enabled: false },
+        chunking: { maxContextFiles: 25 },
       },
       skills: [{
         name: 'org-skill',
@@ -820,6 +825,11 @@ describe('resolveLayeredSkillConfigs', () => {
     expect(resolved).toHaveLength(2);
     expect(resolved[0]?.verifyFindings).toBe(false);
     expect(resolved[1]?.verifyFindings).toBe(false);
+    expect(resolved[1]?.runtime).toBe('claude');
+    expect(resolved[1]?.failOn).toBeUndefined();
+    expect(resolved[1]?.model).toBeUndefined();
+    expect(resolved[1]?.filters.ignorePaths).toBeUndefined();
+    expect(resolved[1]?.maxContextFiles).toBeUndefined();
   });
 
   it('uses layer-specific skill roots when both layers define the same skill name', () => {

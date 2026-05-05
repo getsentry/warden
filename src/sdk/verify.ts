@@ -45,7 +45,7 @@ export interface VerifyFindingsResult {
 
 const VerificationVerdictSchema = z.object({
   verdict: z.enum(['keep', 'revise', 'reject']),
-  finding: FindingSchema.optional(),
+  finding: FindingSchema.nullish(),
   reason: z.string().optional(),
 });
 

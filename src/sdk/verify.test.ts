@@ -213,6 +213,22 @@ describe('verifyFindings', () => {
     expect(result.findings).toEqual([]);
   });
 
+  it('accepts reject verdicts with a null finding', async () => {
+    const runtime = mockRuntime(JSON.stringify({
+      verdict: 'reject',
+      finding: null,
+      reason: 'guarded upstream',
+    }));
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const result = await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    });
+
+    expect(result.findings).toEqual([]);
+  });
+
   it('keeps the original finding when verifier output is unusable', async () => {
     const finding = makeFinding();
     const runtime = mockRuntime('not json');

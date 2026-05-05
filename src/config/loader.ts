@@ -144,6 +144,21 @@ function mergeLogsConfig(
   return { ...base, ...overlay };
 }
 
+function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | undefined {
+  const inherited: Defaults = { ...(repo ?? {}) };
+
+  if (base?.runtime !== undefined && inherited.runtime === undefined) {
+    inherited.runtime = base.runtime;
+  }
+
+  const verification = mergeNestedConfig(base?.verification, repo?.verification);
+  if (verification) {
+    inherited.verification = verification;
+  }
+
+  return Object.keys(inherited).length > 0 ? inherited : undefined;
+}
+
 export function mergeWardenConfigs(base: WardenConfig, overlay: WardenConfig): WardenConfig {
   const mergedConfig = {
     version: 1 as const,
@@ -442,7 +457,7 @@ export function resolveLayeredSkillConfigs(
   if (layered.baseConfig && layered.repoConfig) {
     const repoConfigWithInheritedDefaults: WardenConfig = {
       ...layered.repoConfig,
-      defaults: mergeDefaults(layered.baseConfig.defaults, layered.repoConfig.defaults),
+      defaults: inheritRepoLayerDefaults(layered.baseConfig.defaults, layered.repoConfig.defaults),
     };
 
     return [
