@@ -3,7 +3,19 @@ import type { SkillDefinition } from '../config/schema.js';
 import { FindingSchema, type Finding, type UsageStats } from '../types/index.js';
 import { aggregateUsage } from './usage.js';
 import { extractBalancedJson } from './extract.js';
-import { getRuntime, getRuntimeProviderOptions, type RuntimeName } from './runtimes/index.js';
+import {
+  WardenAuthenticationError,
+  classifyError,
+  isAuthenticationError,
+  isAuthenticationErrorMessage,
+  isSubprocessError,
+} from './errors.js';
+import {
+  getRuntime,
+  getRuntimeProviderOptions,
+  type RuntimeName,
+  type SkillRunResult,
+} from './runtimes/index.js';
 import type { FindingProcessingEvent } from './types.js';
 import {
   buildChangedFilesSection,
@@ -40,6 +52,10 @@ const VerificationVerdictSchema = z.object({
 type VerificationVerdict = z.infer<typeof VerificationVerdictSchema>;
 
 const JSON_OBJECT_START = /\{/g;
+
+function isAbortRequested(error: unknown, abortController?: AbortController): boolean {
+  return (abortController?.signal.aborted ?? false) || classifyError(error).code === 'aborted';
+}
 
 function buildVerificationSystemPrompt(skill: SkillDefinition): string {
   return `<role>
@@ -116,7 +132,56 @@ function applyVerdict(finding: Finding, verdict: VerificationVerdict | null): Fi
     return finding;
   }
 
-  return { ...verdict.finding, id: finding.id };
+  // Verification runs after hunk validation, so revisions keep the original
+  // validated anchors and fix payload.
+  const revised = { ...verdict.finding, id: finding.id };
+
+  if (finding.location) {
+    revised.location = finding.location;
+  } else {
+    delete revised.location;
+  }
+
+  if (finding.additionalLocations) {
+    revised.additionalLocations = finding.additionalLocations;
+  } else {
+    delete revised.additionalLocations;
+  }
+
+  if (finding.suggestedFix) {
+    revised.suggestedFix = finding.suggestedFix;
+  } else {
+    delete revised.suggestedFix;
+  }
+
+  if (finding.elapsedMs !== undefined) {
+    revised.elapsedMs = finding.elapsedMs;
+  } else {
+    delete revised.elapsedMs;
+  }
+
+  const result = FindingSchema.safeParse(revised);
+  return result.success ? result.data : finding;
+}
+
+function throwIfAuthenticationFailure(
+  authError: string | undefined,
+  result: SkillRunResult | undefined
+): void {
+  if (authError) {
+    throw new WardenAuthenticationError(authError);
+  }
+
+  if (!result) return;
+
+  const authMessage = result.errors.find(isAuthenticationErrorMessage);
+  if (result.status === 'auth_error') {
+    throw new WardenAuthenticationError(authMessage);
+  }
+
+  if (authMessage) {
+    throw new WardenAuthenticationError();
+  }
 }
 
 function notifyVerdict(
@@ -172,7 +237,7 @@ export async function verifyFindings(
     }
 
     try {
-      const { result } = await runtime.runSkill({
+      const { result, authError } = await runtime.runSkill({
         systemPrompt,
         userPrompt: buildVerificationUserPrompt(finding, options.prContext),
         repoPath: options.repoPath,
@@ -187,6 +252,8 @@ export async function verifyFindings(
         }),
       });
 
+      throwIfAuthenticationFailure(authError, result);
+
       if (result?.usage) {
         usage.push(result.usage);
       }
@@ -199,7 +266,29 @@ export async function verifyFindings(
       if (next) {
         verified.push(next);
       }
-    } catch {
+    } catch (error) {
+      if (isAbortRequested(error, options.abortController)) {
+        verified.push(finding);
+        continue;
+      }
+
+      if (error instanceof WardenAuthenticationError) {
+        throw error;
+      }
+
+      if (isSubprocessError(error)) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new WardenAuthenticationError(
+          `Claude Code subprocess failed (${errorMessage}).\n` +
+          `This usually means the claude CLI cannot run in this environment.`,
+          { cause: error }
+        );
+      }
+
+      if (isAuthenticationError(error)) {
+        throw new WardenAuthenticationError(undefined, { cause: error });
+      }
+
       verified.push(finding);
     }
   }

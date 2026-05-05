@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SkillDefinition } from '../config/schema.js';
 import type { Finding, UsageStats } from '../types/index.js';
+import { WardenAuthenticationError } from './errors.js';
 import { verifyFindings } from './verify.js';
-import { getRuntime, type Runtime } from './runtimes/index.js';
+import { getRuntime, type Runtime, type SkillRunResponse } from './runtimes/index.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
@@ -33,20 +34,44 @@ function makeUsage(): UsageStats {
   return { inputTokens: 10, outputTokens: 5, costUSD: 0.001 };
 }
 
-function mockRuntime(text: string): Runtime {
+function mockRuntimeResponse(response: SkillRunResponse): Runtime {
   return {
     name: 'claude',
-    runSkill: vi.fn().mockResolvedValue({
-      result: {
-        status: 'success',
-        text,
-        errors: [],
-        usage: makeUsage(),
-      },
-    }),
+    runSkill: vi.fn().mockResolvedValue(response),
     runAuxiliary: vi.fn(),
     runSynthesis: vi.fn(),
   } as unknown as Runtime;
+}
+
+function mockRuntime(text: string): Runtime {
+  return mockRuntimeResponse({
+    result: {
+      status: 'success',
+      text,
+      errors: [],
+      usage: makeUsage(),
+    },
+  });
+}
+
+function mockRuntimeError(error: unknown): Runtime {
+  return {
+    name: 'claude',
+    runSkill: vi.fn().mockRejectedValue(error),
+    runAuxiliary: vi.fn(),
+    runSynthesis: vi.fn(),
+  } as unknown as Runtime;
+}
+
+function makeErrorResult(errors: string[]): SkillRunResponse {
+  return {
+    result: {
+      status: 'provider_error',
+      text: '',
+      errors,
+      usage: makeUsage(),
+    },
+  };
 }
 
 describe('verifyFindings', () => {
@@ -132,6 +157,50 @@ describe('verifyFindings', () => {
     }));
   });
 
+  it('pins revised findings to the original validated anchor', async () => {
+    const revised = makeFinding({
+      id: 'DIFFERENT',
+      severity: 'medium',
+      title: 'Narrower issue',
+      location: { path: 'src/other.ts', startLine: 99 },
+      additionalLocations: [{ path: 'src/other.ts', startLine: 100 }],
+      suggestedFix: {
+        description: 'new fix',
+        diff: 'diff --git a/src/other.ts b/src/other.ts',
+      },
+    });
+    const runtime = mockRuntime(JSON.stringify({
+      verdict: 'revise',
+      finding: revised,
+      reason: 'impact is narrower',
+    }));
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const finding = makeFinding({
+      suggestedFix: {
+        description: 'original fix',
+        diff: 'diff --git a/src/app.ts b/src/app.ts',
+      },
+    });
+    const result = await verifyFindings([finding], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    });
+
+    const verified = result.findings[0];
+    expect(verified).toEqual(expect.objectContaining({
+      id: 'ABC-123',
+      severity: 'medium',
+      title: 'Narrower issue',
+      location: { path: 'src/app.ts', startLine: 10 },
+      suggestedFix: {
+        description: 'original fix',
+        diff: 'diff --git a/src/app.ts b/src/app.ts',
+      },
+    }));
+    expect(verified?.additionalLocations).toBeUndefined();
+  });
+
   it('accepts verifier JSON when verdict is not the first key', async () => {
     const runtime = mockRuntime('{"reason":"guarded upstream","verdict":"reject"}');
     vi.mocked(getRuntime).mockReturnValue(runtime);
@@ -155,5 +224,32 @@ describe('verifyFindings', () => {
     });
 
     expect(result.findings).toEqual([finding]);
+  });
+
+  it('propagates authentication errors reported by the verifier runtime', async () => {
+    vi.mocked(getRuntime).mockReturnValue(mockRuntimeResponse({ authError: 'login required' }));
+
+    await expect(verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    })).rejects.toBeInstanceOf(WardenAuthenticationError);
+  });
+
+  it('propagates authentication errors thrown by the verifier runtime', async () => {
+    vi.mocked(getRuntime).mockReturnValue(mockRuntimeError(new WardenAuthenticationError('bad key')));
+
+    await expect(verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    })).rejects.toBeInstanceOf(WardenAuthenticationError);
+  });
+
+  it('propagates authentication errors returned in verifier result errors', async () => {
+    vi.mocked(getRuntime).mockReturnValue(mockRuntimeResponse(makeErrorResult(['invalid api key'])));
+
+    await expect(verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    })).rejects.toBeInstanceOf(WardenAuthenticationError);
   });
 });
