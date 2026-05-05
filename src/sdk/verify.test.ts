@@ -132,6 +132,18 @@ describe('verifyFindings', () => {
     }));
   });
 
+  it('accepts verifier JSON when verdict is not the first key', async () => {
+    const runtime = mockRuntime('{"reason":"guarded upstream","verdict":"reject"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const result = await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    });
+
+    expect(result.findings).toEqual([]);
+  });
+
   it('keeps the original finding when verifier output is unusable', async () => {
     const finding = makeFinding();
     const runtime = mockRuntime('not json');

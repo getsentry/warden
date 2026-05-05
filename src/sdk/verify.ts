@@ -39,7 +39,7 @@ const VerificationVerdictSchema = z.object({
 
 type VerificationVerdict = z.infer<typeof VerificationVerdictSchema>;
 
-const VERDICT_JSON_START = /\{\s*"verdict"/;
+const JSON_OBJECT_START = /\{/g;
 
 function buildVerificationSystemPrompt(skill: SkillDefinition): string {
   return `<role>
@@ -83,19 +83,24 @@ Verify this candidate. Return keep, revise, or reject.
 }
 
 function parseVerificationVerdict(text: string): VerificationVerdict | null {
-  const match = text.match(VERDICT_JSON_START);
-  if (!match || match.index === undefined) return null;
+  for (const match of text.matchAll(JSON_OBJECT_START)) {
+    if (match.index === undefined) continue;
 
-  const json = extractBalancedJson(text, match.index);
-  if (!json) return null;
+    const json = extractBalancedJson(text, match.index);
+    if (!json) continue;
 
-  try {
-    const parsed = JSON.parse(json);
-    const result = VerificationVerdictSchema.safeParse(parsed);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
+    try {
+      const parsed = JSON.parse(json);
+      const result = VerificationVerdictSchema.safeParse(parsed);
+      if (result.success) {
+        return result.data;
+      }
+    } catch {
+      // Keep scanning in case prose or another object appears before the verdict.
+    }
   }
+
+  return null;
 }
 
 function applyVerdict(finding: Finding, verdict: VerificationVerdict | null): Finding | null {
