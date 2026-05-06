@@ -179,6 +179,13 @@ describe('formatSkillSource', () => {
       '/repo'
     )).toBe('/external/skills/security-review');
   });
+
+  it('keeps the repo root source path instead of rendering an empty source', () => {
+    expect(formatSkillSource(
+      { rootDir: '/repo' },
+      '/repo'
+    )).toBe('/repo');
+  });
 });
 
 describe('mergeSkillRunnerOptions', () => {

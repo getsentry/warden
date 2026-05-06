@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
@@ -12,7 +12,7 @@ import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove 
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
-import { normalizePath } from '../utils/path.js';
+import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 import { parseCliArgs, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
@@ -514,11 +514,6 @@ type SkillRunnerOptionOverrides = Pick<
 
 const BUILTIN_SKILL_SOURCE = 'built-in (@sentry/warden)';
 
-function isLocalPath(relativePath: string): boolean {
-  return relativePath === ''
-    || (relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
-}
-
 function isBuiltinSkillRoot(rootDir: string, repoPath?: string): boolean {
   const normalizedRoot = normalizePath(rootDir);
   if (
@@ -558,8 +553,8 @@ export function formatSkillSource(
     return skill.rootDir;
   }
 
-  const relativeRoot = relative(repoPath, skill.rootDir);
-  return isLocalPath(relativeRoot) ? relativeRoot : skill.rootDir;
+  const relativeRoot = normalizePath(relative(repoPath, skill.rootDir));
+  return isRepoRelativePath(relativeRoot) ? relativeRoot : skill.rootDir;
 }
 
 /** Apply per-skill runner overrides on top of the shared execution defaults. */
