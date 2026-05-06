@@ -9,18 +9,9 @@ reportOn = "medium"
 ignorePaths = ["dist/**", "evals/**"]
 
 [[skills]]
-name = "find-warden-bugs"
-paths = ["src/**/*.ts"]
-ignorePaths = ["src/**/*.test.ts"]
-
-[[skills.triggers]]
-type = "pull_request"
-actions = ["opened", "synchronize", "reopened"]
-
-[[skills]]
-name = "wrdn-gha-workflows"
-remote = "getsentry/warden-skills"
+name = "security-review"
 paths = [
+  "src/**/*.ts",
   ".github/workflows/*.yml",
   ".github/workflows/*.yaml",
   ".github/actions/**/*.yml",
@@ -28,6 +19,7 @@ paths = [
   "action.yml",
   "action.yaml",
 ]
+ignorePaths = ["src/**/*.test.ts"]
 
 [[skills.triggers]]
 type = "pull_request"

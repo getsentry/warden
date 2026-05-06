@@ -2,6 +2,8 @@
 src/*
 !src/internal-skills/
 !src/internal-skills/**
+!src/builtin-skills/
+!src/builtin-skills/**
 
 # GitHub Action bundle (only needed for action, not npm)
 dist/action/

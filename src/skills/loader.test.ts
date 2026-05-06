@@ -13,9 +13,11 @@ import {
   resolveSkillAsync,
   resolveSkillPath,
   SkillLoaderError,
+  BUILTIN_SKILL_DIRECTORIES,
   SKILL_DIRECTORIES,
   AGENT_DIRECTORIES,
   AGENT_MARKER_FILE,
+  discoverAllSkills,
 } from './loader.js';
 
 describe('loadSkillFromFile', () => {
@@ -35,6 +37,36 @@ describe('resolveSkillAsync', () => {
     const skill = await resolveSkillAsync('testing-guidelines', repoRoot);
     expect(skill.name).toBe('testing-guidelines');
     expect(skill.description).toBeDefined();
+  });
+
+  it('resolves package-native built-in skills by name', async () => {
+    const skill = await resolveSkillAsync('security-review');
+    expect(skill.name).toBe('security-review');
+    expect(skill.rootDir).toContain('src/builtin-skills/security-review');
+  });
+
+  it('lets repo-local skills override built-in skills', async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), 'warden-builtin-override-'));
+    try {
+      const skillDir = join(repoRoot, '.agents', 'skills', 'security-review');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        `---
+name: security-review
+description: Custom repo security policy
+---
+
+Custom prompt.
+`,
+      );
+
+      const skill = await resolveSkillAsync('security-review', repoRoot);
+      expect(skill.description).toBe('Custom repo security policy');
+      expect(skill.rootDir).toBe(skillDir);
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it('throws for unknown skills', async () => {
@@ -123,6 +155,23 @@ describe('SKILL_DIRECTORIES', () => {
       '.agents/skills',
       '.claude/skills',
     ]);
+  });
+});
+
+describe('BUILTIN_SKILL_DIRECTORIES', () => {
+  it('contains package-native skill assets under src', () => {
+    expect(BUILTIN_SKILL_DIRECTORIES).toEqual([
+      'src/builtin-skills',
+    ]);
+  });
+
+  it('discovers built-in skills without a repo root', async () => {
+    const skills = await discoverAllSkills();
+    const skill = skills.get('security-review');
+
+    expect(skill).toBeDefined();
+    expect(skill!.directory).toBe('built-in');
+    expect(skill!.path).toContain('src/builtin-skills/security-review');
   });
 });
 

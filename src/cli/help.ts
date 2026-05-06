@@ -85,7 +85,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   skill: {
     label: '--skill <name|path>',
-    description: 'Run only this skill by name or path',
+    description: 'Run only this skill by name or path; names fall back to built-ins',
   },
   config: {
     label: '--config <path>',

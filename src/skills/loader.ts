@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { loadSkillMd, SkillLoadError } from '@sentry/dotagents-lib';
 import type { SkillDefinition } from '../config/schema.js';
 import { isPathLike, resolvePathTarget } from '../utils/path.js';
@@ -45,6 +46,16 @@ export const SKILL_DIRECTORIES = [
 ] as const;
 
 /**
+ * Package-native Warden skills, resolved by name without installation.
+ *
+ * Repo-local conventional skills take precedence over these defaults so teams
+ * can override built-ins with their own policy.
+ */
+export const BUILTIN_SKILL_DIRECTORIES = [
+  'src/builtin-skills',
+] as const;
+
+/**
  * Conventional agent directories, checked in priority order.
  *
  * Agents are discovered from these directories in order:
@@ -68,6 +79,14 @@ export const AGENT_MARKER_FILE = 'AGENT.md';
  */
 export function resolveSkillPath(nameOrPath: string, repoRoot?: string): string {
   return resolvePathTarget(nameOrPath, repoRoot);
+}
+
+/**
+ * Resolve the package root from source or compiled dist locations.
+ */
+function resolvePackageRoot(): string {
+  const __filename = fileURLToPath(import.meta.url);
+  return join(dirname(__filename), '..', '..');
 }
 
 /**
@@ -234,7 +253,7 @@ export async function loadSkillsFromDirectory(
  */
 export interface DiscoveredSkill {
   skill: SkillDefinition;
-  /** Relative directory path where the skill was found (e.g., "./.agents/skills") */
+  /** Source label where the skill was found (e.g., "./.agents/skills" or "built-in") */
   directory: string;
   /** Full path to the skill */
   path: string;
@@ -245,14 +264,15 @@ export interface DiscoveredSkill {
  * Scans directories in order; first occurrence of a name wins.
  */
 async function discoverFromDirectories(
-  repoRoot: string,
+  rootDir: string,
   directories: readonly string[],
   options?: LoadSkillsOptions,
+  sourceLabel?: (dir: string) => string,
 ): Promise<Map<string, DiscoveredSkill>> {
   const result = new Map<string, DiscoveredSkill>();
 
   for (const dir of directories) {
-    const dirPath = join(repoRoot, dir);
+    const dirPath = join(rootDir, dir);
     if (!existsSync(dirPath)) continue;
 
     const loaded = await loadSkillsFromDirectory(dirPath, options);
@@ -260,7 +280,7 @@ async function discoverFromDirectories(
       if (!result.has(name)) {
         result.set(name, {
           skill: entry.skill,
-          directory: `./${dir}`,
+          directory: sourceLabel ? sourceLabel(dir) : `./${dir}`,
           path: join(dirPath, entry.entry),
         });
       }
@@ -268,6 +288,15 @@ async function discoverFromDirectories(
   }
 
   return result;
+}
+
+async function discoverBuiltinSkills(options?: LoadSkillsOptions): Promise<Map<string, DiscoveredSkill>> {
+  return discoverFromDirectories(
+    resolvePackageRoot(),
+    BUILTIN_SKILL_DIRECTORIES,
+    options,
+    () => 'built-in',
+  );
 }
 
 /**
@@ -281,10 +310,18 @@ export async function discoverAllSkills(
   repoRoot?: string,
   options?: LoadSkillsOptions
 ): Promise<Map<string, DiscoveredSkill>> {
-  if (!repoRoot) {
-    return new Map();
+  const discovered = repoRoot
+    ? await discoverFromDirectories(repoRoot, SKILL_DIRECTORIES, options)
+    : new Map<string, DiscoveredSkill>();
+
+  const builtin = await discoverBuiltinSkills(options);
+  for (const [name, entry] of builtin) {
+    if (!discovered.has(name)) {
+      discovered.set(name, entry);
+    }
   }
-  return discoverFromDirectories(repoRoot, SKILL_DIRECTORIES, options);
+
+  return discovered;
 }
 
 export interface ResolveSkillOptions {
@@ -298,6 +335,7 @@ export interface ResolveSkillOptions {
 interface ResolveConfig {
   markerFile: string;
   directories: readonly string[];
+  builtinDirectories?: readonly string[];
   label: string;
   kind: 'skill' | 'agent';
 }
@@ -311,6 +349,7 @@ interface ResolveConfig {
  *    - Directory: load marker file from it
  *    - File: load the .md file directly
  * 3. Conventional directories (if repoRoot provided)
+ * 4. Package-native built-in directories (skills only)
  */
 async function resolveEntry(
   nameOrPath: string,
@@ -361,12 +400,30 @@ async function resolveEntry(
     }
   }
 
+  if (config.builtinDirectories) {
+    const packageRoot = resolvePackageRoot();
+    for (const dir of config.builtinDirectories) {
+      const dirPath = join(packageRoot, dir);
+
+      const markerPath = join(dirPath, nameOrPath, config.markerFile);
+      if (existsSync(markerPath)) {
+        return loadSkillFromMarkdown(markerPath);
+      }
+
+      const mdPath = join(dirPath, `${nameOrPath}.md`);
+      if (existsSync(mdPath)) {
+        return loadSkillFromMarkdown(mdPath);
+      }
+    }
+  }
+
   throw new SkillLoaderError(`${config.label} not found: ${nameOrPath}`);
 }
 
 const SKILL_RESOLVE_CONFIG: ResolveConfig = {
   markerFile: 'SKILL.md',
   directories: SKILL_DIRECTORIES,
+  builtinDirectories: BUILTIN_SKILL_DIRECTORIES,
   label: 'Skill',
   kind: 'skill',
 };
@@ -390,6 +447,8 @@ const AGENT_RESOLVE_CONFIG: ResolveConfig = {
  *    - .warden/skills/{name}/SKILL.md or .warden/skills/{name}.md
  *    - .agents/skills/{name}/SKILL.md or .agents/skills/{name}.md
  *    - .claude/skills/{name}/SKILL.md or .claude/skills/{name}.md
+ * 4. Package-native built-in skills
+ *    - src/builtin-skills/{name}/SKILL.md or src/builtin-skills/{name}.md
  */
 export async function resolveSkillAsync(
   nameOrPath: string,

@@ -69,7 +69,7 @@ function generateWardenToml(): string {
 # https://github.com/getsentry/warden
 #
 # Warden reviews code using AI-powered skills triggered by GitHub events.
-# Skills live in .agents/skills/ or .claude/skills/
+# Built-in skills are available by name. Custom skills live in .agents/skills/ or .claude/skills/
 #
 # Add skills with: warden add <skill-name>
 

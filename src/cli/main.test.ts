@@ -60,6 +60,30 @@ function createCliOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
 }
 
 describe('createSkillTasks', () => {
+  it('resolves explicit built-in skills from the package after repo-local paths', async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), 'warden-main-'));
+    tempDirs.push(repoRoot);
+
+    const spec: RunSkillSpec = {
+      name: 'security-review',
+      skill: 'security-review',
+      context: {} as RunSkillSpec['context'],
+      runnerOptions: {},
+    };
+
+    const [task] = await createSkillTasks({
+      specs: [spec],
+      repoPath: repoRoot,
+      options: createCliOptions(),
+      parallel: 1,
+      reporter: createTestReporter(),
+    });
+
+    const skill = await task!.resolveSkill();
+    expect(skill.name).toBe('security-review');
+    expect(skill.rootDir).toContain('src/builtin-skills/security-review');
+  });
+
   it('reports missing generated artifacts for explicit generated skill paths', async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), 'warden-main-'));
     tempDirs.push(repoRoot);

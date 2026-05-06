@@ -130,6 +130,7 @@ describe('init command', () => {
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden', 'SPEC.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SKILL.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SPEC.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'security-review', 'SKILL.md'))).toBe(false);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'skill-writer', 'SKILL.md'))).toBe(false);
     });
 
