@@ -848,7 +848,7 @@ export async function runSkill(
   // extraction-only failure scenario would otherwise slip through silently.
   const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
   const circuitReason = options.circuitBreaker?.reason;
-  if (circuitReason) {
+  if (circuitReason && allFindings.length === 0) {
     throw new SkillRunnerError(circuitReason.message, { code: circuitReason.code });
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {

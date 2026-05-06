@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { SkillDefinition } from '../config/schema.js';
 import type { HunkWithContext } from '../diff/index.js';
-import type { Finding } from '../types/index.js';
-import { analyzeFile, filterOutOfRangeFindings } from './analyze.js';
+import type { EventContext, Finding, UsageStats } from '../types/index.js';
+import { analyzeFile, filterOutOfRangeFindings, runSkill } from './analyze.js';
 import type { PreparedFile } from './types.js';
 import { getRuntime, type Runtime } from './runtimes/index.js';
 import { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
@@ -30,6 +30,10 @@ function makeGeneralFinding(id = 'general'): Finding {
     title: 'General finding',
     description: 'no location',
   };
+}
+
+function makeUsage(): UsageStats {
+  return { inputTokens: 10, outputTokens: 5, costUSD: 0.001 };
 }
 
 function makeAbortError(): Error {
@@ -60,6 +64,43 @@ function makePreparedFile(hunkCount = 1): PreparedFile {
   return {
     filename: 'src/example.ts',
     hunks,
+  };
+}
+
+function makeContextWithThreeHunks(): EventContext {
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: { owner: 'o', name: 'r', fullName: 'o/r', defaultBranch: 'main' },
+    repoPath: '/tmp/repo',
+    pullRequest: {
+      number: 1,
+      title: 'Test PR',
+      body: '',
+      author: 'test',
+      baseBranch: 'main',
+      headBranch: 'feature',
+      headSha: 'head',
+      baseSha: 'base',
+      files: [{
+        filename: 'src/example.ts',
+        status: 'modified',
+        additions: 3,
+        deletions: 3,
+        patch: [
+          '@@ -10,1 +10,1 @@',
+          '-old10',
+          '+new10',
+          '@@ -100,1 +100,1 @@',
+          '-old100',
+          '+new100',
+          '@@ -200,1 +200,1 @@',
+          '-old200',
+          '+new200',
+        ].join('\n'),
+        chunks: 3,
+      }],
+    },
   };
 }
 
@@ -231,6 +272,75 @@ describe('analyzeFile', () => {
     ]);
     expect(result.hunkFailures[1]!.message).toContain('Provider unavailable after 2 consecutive failures');
     expect(onChunkComplete).toHaveBeenCalledTimes(2);
+    consoleSpy.mockRestore();
+  });
+});
+
+describe('runSkill', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('preserves partial findings when the shared circuit opens mid-run', async () => {
+    const controller = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 2,
+      abortController: controller,
+    });
+    const runSkillMock = vi.fn()
+      .mockResolvedValueOnce({
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            findings: [makeFinding(10, 'first-finding')],
+          }),
+          errors: [],
+          usage: makeUsage(),
+        },
+      })
+      .mockRejectedValue(new Error('Claude Code process exited with code 1'));
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithThreeHunks(),
+      {
+        abortController: controller,
+        circuitBreaker,
+        retry: {
+          maxRetries: 0,
+          initialDelayMs: 1,
+          backoffMultiplier: 1,
+          maxDelayMs: 1,
+        },
+        verifyFindings: false,
+      },
+    );
+
+    expect(runSkillMock).toHaveBeenCalledTimes(3);
+    expect(circuitBreaker.reason?.code).toBe('provider_unavailable');
+    expect(report.findings).toEqual([
+      expect.objectContaining({
+        title: 'Finding at line 10',
+        location: { path: 'src/example.ts', startLine: 10 },
+      }),
+    ]);
+    expect(report.failedHunks).toBe(2);
+    expect(report.hunkFailures?.map((failure) => failure.code)).toEqual([
+      'provider_unavailable',
+      'provider_unavailable',
+    ]);
+    expect(report.error).toBeUndefined();
     consoleSpy.mockRestore();
   });
 });
