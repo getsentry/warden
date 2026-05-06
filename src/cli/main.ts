@@ -12,6 +12,7 @@ import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove 
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
+import { normalizePath } from '../utils/path.js';
 import { parseCliArgs, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
@@ -513,17 +514,13 @@ type SkillRunnerOptionOverrides = Pick<
 
 const BUILTIN_SKILL_SOURCE = 'built-in (@sentry/warden)';
 
-function normalizePathForDisplay(path: string): string {
-  return path.replace(/\\/g, '/');
-}
-
 function isLocalPath(relativePath: string): boolean {
   return relativePath === ''
     || (relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
 }
 
 function isBuiltinSkillRoot(rootDir: string, repoPath?: string): boolean {
-  const normalizedRoot = normalizePathForDisplay(rootDir);
+  const normalizedRoot = normalizePath(rootDir);
   if (
     normalizedRoot.includes('/node_modules/@sentry/warden/src/builtin-skills/')
     || normalizedRoot.includes('/node_modules/@sentry/warden/dist/builtin-skills/')
@@ -535,7 +532,7 @@ function isBuiltinSkillRoot(rootDir: string, repoPath?: string): boolean {
     return false;
   }
 
-  const relativeRoot = normalizePathForDisplay(relative(repoPath, rootDir));
+  const relativeRoot = normalizePath(relative(repoPath, rootDir));
   return (
     relativeRoot === 'src/builtin-skills'
     || relativeRoot.startsWith('src/builtin-skills/')
