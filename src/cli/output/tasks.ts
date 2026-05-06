@@ -504,6 +504,7 @@ export async function runSkillTask(
         if (
           totalHunks > 0
           && allFindings.length === 0
+          && totalAttemptFailures > 0
           && (
             circuitReason
             || (

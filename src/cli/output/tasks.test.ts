@@ -9,6 +9,7 @@ import type { HunkWithContext } from '../../diff/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Semaphore, runPool } from '../../utils/index.js';
 import { SkillRunnerError, WardenAuthenticationError } from '../../sdk/errors.js';
+import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import * as sdkRunner from '../../sdk/runner.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
@@ -949,6 +950,53 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(result.report!.error?.code).toBe('provider_unavailable');
     expect(result.report!.error?.message).toContain('Provider unavailable');
     expect((result.error as SkillRunnerError).code).toBe('provider_unavailable');
+  });
+
+  it('ignores unrelated circuit state when this skill completed without failures', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 1,
+    });
+    circuitBreaker.recordFailure('provider_unavailable', 'temporary outage');
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    });
+
+    const options: SkillTaskOptions = {
+      name: 'clean-skill',
+      resolveSkill: async () =>
+        ({ name: 'clean-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: { circuitBreaker },
+    };
+
+    const onSkillError = vi.fn();
+    const result = await runSkillTask(options, 1, { ...noopCallbacks(), onSkillError });
+
+    expect(result.error).toBeUndefined();
+    expect(result.report).toBeDefined();
+    expect(result.report!.error).toBeUndefined();
+    expect(result.report!.findings).toEqual([]);
+    expect(result.report!.failedHunks).toBeUndefined();
+    expect(result.report!.failedExtractions).toBeUndefined();
+    expect(onSkillError).not.toHaveBeenCalled();
   });
 
   it('triggers all_hunks_failed when every hunk succeeded at SDK level but extraction failed for all', async () => {
