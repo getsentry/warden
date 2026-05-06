@@ -49,34 +49,31 @@ interface FileProcessResult {
 
 function allAnalysisFailuresHaveCode(
   hunkFailures: HunkFailure[],
-  totalAttemptFailures: number,
   code: ErrorCode,
 ): boolean {
   const analysisFailures = hunkFailures.filter((failure) => failure.type === 'analysis');
   return (
-    analysisFailures.length === totalAttemptFailures
-    && analysisFailures.length > 0
+    analysisFailures.length > 0
     && analysisFailures.every((failure) => failure.code === code)
   );
 }
 
 function summarizeRunFailure(args: {
   totalHunks: number;
-  totalAttemptFailures: number;
   hunkFailures: HunkFailure[];
   circuitReason?: { code: ErrorCode; message: string };
 }): { code: ErrorCode; message: string } {
-  const { totalHunks, totalAttemptFailures, hunkFailures, circuitReason } = args;
+  const { totalHunks, hunkFailures, circuitReason } = args;
   if (circuitReason) {
     return circuitReason;
   }
-  if (allAnalysisFailuresHaveCode(hunkFailures, totalAttemptFailures, 'auth_failed')) {
+  if (allAnalysisFailuresHaveCode(hunkFailures, 'auth_failed')) {
     return {
       code: 'auth_failed',
       message: 'Authentication failed. Warden stopped early.',
     };
   }
-  if (allAnalysisFailuresHaveCode(hunkFailures, totalAttemptFailures, 'provider_unavailable')) {
+  if (allAnalysisFailuresHaveCode(hunkFailures, 'provider_unavailable')) {
     return {
       code: 'provider_unavailable',
       message: `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
@@ -518,7 +515,6 @@ export async function runSkillTask(
           const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
           const error = summarizeRunFailure({
             totalHunks,
-            totalAttemptFailures,
             hunkFailures: allHunkFailures,
             circuitReason,
           });

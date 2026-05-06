@@ -846,7 +846,7 @@ export async function runSkill(
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
     const analysisFailures = allHunkFailures.filter((failure) => failure.type === 'analysis');
     if (
-      analysisFailures.length === totalAttemptFailures
+      analysisFailures.length > 0
       && analysisFailures.every((failure) => failure.code === 'provider_unavailable')
     ) {
       throw new SkillRunnerError(

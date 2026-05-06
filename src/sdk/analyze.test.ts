@@ -105,6 +105,40 @@ function makeContextWithThreeHunks(): EventContext {
   };
 }
 
+function makeContextWithTwoHunks(): EventContext {
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: { owner: 'o', name: 'r', fullName: 'o/r', defaultBranch: 'main' },
+    repoPath: '/tmp/repo',
+    pullRequest: {
+      number: 1,
+      title: 'Test PR',
+      body: '',
+      author: 'test',
+      baseBranch: 'main',
+      headBranch: 'feature',
+      headSha: 'head',
+      baseSha: 'base',
+      files: [{
+        filename: 'src/example.ts',
+        status: 'modified',
+        additions: 2,
+        deletions: 2,
+        patch: [
+          '@@ -10,1 +10,1 @@',
+          '-old10',
+          '+new10',
+          '@@ -100,1 +100,1 @@',
+          '-old100',
+          '+new100',
+        ].join('\n'),
+        chunks: 2,
+      }],
+    },
+  };
+}
+
 describe('filterOutOfRangeFindings', () => {
   const hunkRange = { start: 10, end: 20 };
 
@@ -446,6 +480,53 @@ describe('runSkill', () => {
       'provider_unavailable',
     ]);
     expect(report.error).toBeUndefined();
+    consoleSpy.mockRestore();
+  });
+
+  it('classifies mixed provider and extraction failures as provider unavailable', async () => {
+    const runSkillMock = vi.fn()
+      .mockResolvedValueOnce({
+        result: {
+          status: 'provider_error',
+          text: '',
+          errors: ['provider overloaded'],
+          usage: makeUsage(),
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          status: 'success',
+          text: 'not json',
+          errors: [],
+          usage: makeUsage(),
+        },
+      });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithTwoHunks(),
+      {
+        retry: {
+          maxRetries: 0,
+          initialDelayMs: 1,
+          backoffMultiplier: 1,
+          maxDelayMs: 1,
+        },
+        verifyFindings: false,
+      },
+    )).rejects.toMatchObject({ code: 'provider_unavailable' });
+    expect(runSkillMock).toHaveBeenCalledTimes(2);
     consoleSpy.mockRestore();
   });
 });

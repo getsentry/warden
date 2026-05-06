@@ -856,6 +856,55 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(result.report!.files![0]!.filename).toBe('a.ts');
   });
 
+  it('preserves auth_failed when all analysis failures are auth alongside extraction failures', async () => {
+    const fakeHunks = [
+      { hunk: { newStart: 1, newCount: 10 } },
+      { hunk: { newStart: 20, newCount: 5 } },
+    ] as unknown as HunkWithContext[];
+    const hunkFailures: HunkFailure[] = [
+      { type: 'analysis', filename: 'a.ts', lineRange: '1-10', code: 'auth_failed', message: 'bad key' },
+      {
+        type: 'extraction',
+        filename: 'a.ts',
+        lineRange: '20-24',
+        code: 'extraction_invalid_json',
+        message: 'invalid_json',
+      },
+    ];
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: fakeHunks }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      failedHunks: 1,
+      failedExtractions: 1,
+      hunkFailures,
+    });
+
+    const options: SkillTaskOptions = {
+      name: 'mixed-fail-skill',
+      resolveSkill: async () =>
+        ({ name: 'mixed-fail-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    };
+
+    const result = await runSkillTask(options, 1, noopCallbacks());
+
+    expect(result.report!.error?.code).toBe('auth_failed');
+    expect(result.report!.failedHunks).toBe(1);
+    expect(result.report!.failedExtractions).toBe(1);
+    expect((result.error as SkillRunnerError).code).toBe('auth_failed');
+  });
+
   it('synthesizes provider_unavailable when every hunk fails with provider errors', async () => {
     const fakeHunk = {
       hunk: { newStart: 1, newCount: 10 },
