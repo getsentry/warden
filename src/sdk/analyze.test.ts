@@ -483,6 +483,51 @@ describe('runSkill', () => {
     consoleSpy.mockRestore();
   });
 
+  it('ignores unrelated circuit state when this skill completed without failures', async () => {
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 1,
+    });
+    const successResult = {
+      result: {
+        status: 'success',
+        text: JSON.stringify({ findings: [] }),
+        errors: [],
+        usage: makeUsage(),
+      },
+    };
+    const runSkillMock = vi.fn()
+      .mockResolvedValueOnce(successResult)
+      .mockImplementationOnce(async () => {
+        circuitBreaker.recordFailure('provider_unavailable', 'temporary outage');
+        return successResult;
+      });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithTwoHunks(),
+      {
+        circuitBreaker,
+        verifyFindings: false,
+      },
+    );
+
+    expect(runSkillMock).toHaveBeenCalledTimes(2);
+    expect(report.findings).toEqual([]);
+    expect(report.failedHunks).toBeUndefined();
+    expect(report.failedExtractions).toBeUndefined();
+    expect(report.error).toBeUndefined();
+  });
+
   it('classifies mixed provider and extraction failures as provider unavailable', async () => {
     const runSkillMock = vi.fn()
       .mockResolvedValueOnce({
