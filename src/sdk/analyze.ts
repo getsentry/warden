@@ -9,6 +9,7 @@ import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } f
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
 import { postProcessFindings } from './post-process.js';
+import { buildFileReports } from './report-files.js';
 import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
 import type { SkillRunResult } from './runtimes/index.js';
 import {
@@ -893,12 +894,14 @@ export async function runSkill(
     usage: totalUsage,
     durationMs: Date.now() - startTime,
     model: options.model,
-    files: fileResults.map((fr) => ({
-      filename: fr.filename,
-      findings: fr.result.findings.length,
-      durationMs: fr.durationMs,
-      usage: fr.result.usage,
-    })),
+    files: buildFileReports(
+      fileResults.map((fr) => ({
+        filename: fr.filename,
+        durationMs: fr.durationMs,
+        usage: fr.result.usage,
+      })),
+      finalFindings,
+    ),
   };
   if (skippedFiles.length > 0) {
     report.skippedFiles = skippedFiles;

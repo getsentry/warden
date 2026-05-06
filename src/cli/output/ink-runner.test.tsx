@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import figures from 'figures';
 import { Verbosity } from './verbosity.js';
 import { getSkillCostUSD, runSkillTasksWithInk } from './ink-runner.js';
 
@@ -215,6 +216,61 @@ describe('runSkillTasksWithInk', () => {
     );
 
     expect(controller.signal.aborted).toBe(false);
+  });
+
+  it('prints completed file counts from final findings, not rejected candidates', async () => {
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    mockRunComposedSkillTasks.mockImplementationOnce(async (_tasks, callbacks) => {
+      callbacks.onSkillStart({
+        name: 'find-warden-bugs',
+        displayName: 'find-warden-bugs',
+        status: 'running',
+        files: [{
+          filename: 'src/app.ts',
+          status: 'running',
+          currentHunk: 1,
+          totalHunks: 1,
+          findings: [],
+        }],
+        findings: [],
+      });
+      callbacks.onFileUpdate('find-warden-bugs', 'src/app.ts', {
+        status: 'done',
+        currentHunk: 1,
+        totalHunks: 1,
+        findings: [{
+          id: 'candidate',
+          severity: 'high',
+          title: 'Rejected candidate',
+          description: 'Rejected during verification',
+          location: { path: 'src/app.ts', startLine: 10 },
+        }],
+      });
+      callbacks.onSkillComplete('find-warden-bugs', {
+        skill: 'find-warden-bugs',
+        summary: 'find-warden-bugs: No issues found',
+        findings: [],
+        durationMs: 1_200,
+      });
+      return [];
+    });
+
+    await runSkillTasksWithInk(
+      [{
+        name: 'find-warden-bugs',
+        displayName: 'find-warden-bugs',
+      } as never],
+      {
+        mode: { isTTY: true, supportsColor: false, columns: 80 },
+        verbosity: Verbosity.Normal,
+        concurrency: 2,
+      },
+    );
+
+    const output = stderrWrite.mock.calls.map(([chunk]) => String(chunk)).join('');
+    expect(output).toContain('src/app.ts');
+    expect(output).not.toContain(`${figures.bullet} 1`);
   });
 
   it('does not trigger fail-fast from file findings in quiet mode', async () => {

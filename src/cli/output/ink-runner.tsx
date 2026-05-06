@@ -30,8 +30,9 @@ import { Semaphore } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
-import type { SkillReport } from '../../types/index.js';
+import type { Finding, SkillReport } from '../../types/index.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
+import { findingAppliesToFile } from '../../sdk/report-files.js';
 
 interface SkillRunnerProps {
   skills: SkillState[];
@@ -201,6 +202,13 @@ const noopCallbacks: SkillProgressCallbacks = {
   onSkillError: noop,
 };
 
+function syncFileFindingsWithFinalReport(files: FileState[], findings: Finding[]): FileState[] {
+  return files.map((file) => ({
+    ...file,
+    findings: findings.filter((finding) => findingAppliesToFile(finding, file.filename)),
+  }));
+}
+
 /** Severity levels in display order. */
 const SEVERITY_LEVELS = ['high', 'medium', 'low'] as const;
 
@@ -368,7 +376,11 @@ export async function runSkillTasksWithInk(
       const idx = skillStates.findIndex((s) => s.name === name);
       const existing = skillStates[idx];
       if (idx >= 0 && existing) {
-        skillStates[idx] = { ...existing, ...updates };
+        const next: SkillState = { ...existing, ...updates };
+        if (updates.findings !== undefined) {
+          next.files = syncFileFindingsWithFinalReport(next.files, updates.findings);
+        }
+        skillStates[idx] = next;
         updateUI();
       }
     },
@@ -394,6 +406,7 @@ export async function runSkillTasksWithInk(
           findings: report.findings,
           usage: report.usage,
           auxiliaryUsage: report.auxiliaryUsage,
+          files: syncFileFindingsWithFinalReport(existing.files, report.findings),
         };
       }
       if (failFastController && report.findings.length > 0) {

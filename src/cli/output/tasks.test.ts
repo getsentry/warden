@@ -728,6 +728,7 @@ describe('runSkillTasks', () => {
     });
 
     expect(results[0]?.report?.findings).toEqual([]);
+    expect(results[0]?.report?.files?.[0]?.findings).toBe(0);
     expect(controller.signal.aborted).toBe(false);
     expect(postProcessFindings).toHaveBeenCalled();
 

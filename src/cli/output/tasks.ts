@@ -25,6 +25,7 @@ import {
   type FindingProcessingEvent,
 } from '../../sdk/runner.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
+import { buildFileReports } from '../../sdk/report-files.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import { Verbosity } from './verbosity.js';
@@ -596,15 +597,17 @@ export async function runSkillTask(
           usage: aggregateUsage(allUsage),
           durationMs: duration,
           model: runnerOptions?.model,
-          files: preparedFiles.map((file, i) => {
-            const r = allResults[i];
-            return {
-              filename: file.filename,
-              findings: r?.findings.length ?? 0,
-              durationMs: r?.durationMs,
-              usage: r?.usage,
-            };
-          }),
+          files: buildFileReports(
+            preparedFiles.map((file, i) => {
+              const r = allResults[i];
+              return {
+                filename: file.filename,
+                durationMs: r?.durationMs,
+                usage: r?.usage,
+              };
+            }),
+            finalFindings,
+          ),
         };
         if (skippedFiles.length > 0) {
           report.skippedFiles = skippedFiles;

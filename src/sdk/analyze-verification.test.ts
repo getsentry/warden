@@ -91,6 +91,7 @@ describe('runSkill verification', () => {
     });
 
     expect(report.findings).toEqual([]);
+    expect(report.files?.[0]?.findings).toBe(0);
     expect(report.auxiliaryUsage?.['verification']).toEqual(makeUsage());
     expect(verifyFindings).toHaveBeenCalledWith(
       expect.any(Array),
