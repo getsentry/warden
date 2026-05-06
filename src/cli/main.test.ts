@@ -1,10 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import type { CLIOptions } from './args.js';
 import {
   createSkillTasks,
+  formatSkillSource,
   mergeSkillRunnerOptions,
   processTaskResults,
   resolveInvocationCwd,
@@ -20,6 +21,7 @@ import type { SkillReport } from '../types/index.js';
 const tempDirs: string[] = [];
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -37,6 +39,10 @@ function makeReport(overrides: Partial<SkillReport> = {}): SkillReport {
 
 function createTestReporter(): Reporter {
   return new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet);
+}
+
+function createVisibleTestReporter(): Reporter {
+  return new Reporter({ isTTY: true, supportsColor: false, columns: 80 }, Verbosity.Normal);
 }
 
 function createCliOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
@@ -84,6 +90,50 @@ describe('createSkillTasks', () => {
     expect(skill.rootDir).toContain('src/builtin-skills/security-review');
   });
 
+  it('shows a built-in source label instead of the package cache path', async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), 'warden-main-repo-'));
+    const packageRoot = mkdtempSync(join(tmpdir(), 'warden-main-package-'));
+    tempDirs.push(repoRoot, packageRoot);
+
+    const rootDir = join(
+      packageRoot,
+      'node_modules',
+      '@sentry',
+      'warden',
+      'src',
+      'builtin-skills',
+      'security-review'
+    );
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, 'SKILL.md'), `---
+name: security-review
+description: Review security issues.
+---
+
+Review security issues.
+`, 'utf-8');
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const spec: RunSkillSpec = {
+      name: rootDir,
+      skill: rootDir,
+      context: {} as RunSkillSpec['context'],
+      runnerOptions: {},
+    };
+
+    await createSkillTasks({
+      specs: [spec],
+      repoPath: repoRoot,
+      options: createCliOptions({ quiet: false }),
+      parallel: 1,
+      reporter: createVisibleTestReporter(),
+    });
+
+    const output = errorSpy.mock.calls.map(([message]) => String(message)).join('\n');
+    expect(output).toContain('  Source   built-in (@sentry/warden)');
+    expect(output).not.toContain(rootDir);
+  });
+
   it('reports missing generated artifacts for explicit generated skill paths', async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), 'warden-main-'));
     tempDirs.push(repoRoot);
@@ -112,6 +162,22 @@ prompt: |-
     })).rejects.toThrow(
       'Generated skill ./skills/security is missing generated artifacts. Run "warden build ./skills/security" first.',
     );
+  });
+});
+
+describe('formatSkillSource', () => {
+  it('formats repo-local skill sources relative to the repo root', () => {
+    expect(formatSkillSource(
+      { rootDir: '/repo/.agents/skills/security-review' },
+      '/repo'
+    )).toBe('.agents/skills/security-review');
+  });
+
+  it('keeps external custom skill sources as absolute paths', () => {
+    expect(formatSkillSource(
+      { rootDir: '/external/skills/security-review' },
+      '/repo'
+    )).toBe('/external/skills/security-review');
   });
 });
 

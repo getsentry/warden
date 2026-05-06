@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
@@ -511,6 +511,60 @@ type SkillRunnerOptionOverrides = Pick<
   'model' | 'maxTurns' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries' | 'verifyFindings'
 >;
 
+const BUILTIN_SKILL_SOURCE = 'built-in (@sentry/warden)';
+
+function normalizePathForDisplay(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function isLocalPath(relativePath: string): boolean {
+  return relativePath === ''
+    || (relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
+}
+
+function isBuiltinSkillRoot(rootDir: string, repoPath?: string): boolean {
+  const normalizedRoot = normalizePathForDisplay(rootDir);
+  if (
+    normalizedRoot.includes('/node_modules/@sentry/warden/src/builtin-skills/')
+    || normalizedRoot.includes('/node_modules/@sentry/warden/dist/builtin-skills/')
+  ) {
+    return true;
+  }
+
+  if (!repoPath) {
+    return false;
+  }
+
+  const relativeRoot = normalizePathForDisplay(relative(repoPath, rootDir));
+  return (
+    relativeRoot === 'src/builtin-skills'
+    || relativeRoot.startsWith('src/builtin-skills/')
+    || relativeRoot === 'dist/builtin-skills'
+    || relativeRoot.startsWith('dist/builtin-skills/')
+  );
+}
+
+/** Format a skill source path for the CLI run header. */
+export function formatSkillSource(
+  skill: Pick<SkillDefinition, 'rootDir'>,
+  repoPath?: string
+): string | undefined {
+  if (!skill.rootDir) {
+    return undefined;
+  }
+
+  if (isBuiltinSkillRoot(skill.rootDir, repoPath)) {
+    return BUILTIN_SKILL_SOURCE;
+  }
+
+  if (!repoPath) {
+    return skill.rootDir;
+  }
+
+  const relativeRoot = relative(repoPath, skill.rootDir);
+  return isLocalPath(relativeRoot) ? relativeRoot : skill.rootDir;
+}
+
 /** Apply per-skill runner overrides on top of the shared execution defaults. */
 export function mergeSkillRunnerOptions(
   base: SkillRunnerOptions,
@@ -539,9 +593,7 @@ function renderSkillRunHeader(args: {
   model?: string;
 }): void {
   const { reporter, skill, repoPath, runtimeName, model } = args;
-  const source = skill.rootDir && repoPath && skill.rootDir.startsWith(repoPath)
-    ? skill.rootDir.slice(repoPath.length + 1)
-    : skill.rootDir;
+  const source = formatSkillSource(skill, repoPath);
 
   reporter.blank();
   reporter.text(`  Skill    ${skill.name}`);
