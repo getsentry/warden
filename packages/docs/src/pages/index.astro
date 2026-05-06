@@ -8,20 +8,22 @@ import { Code } from 'astro:components';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const skillExample = `---
-name: security-scanning
+name: security-review
+description: Finds exploitable application security vulnerabilities in code changes.
+allowed-tools: Read Grep Glob
 ---
 
-You are a security expert analyzing code changes.
+You are a senior application security reviewer finding real, exploitable
+vulnerabilities in code changes for Warden's baseline security skill.
 
-## What to Report
-- SQL injection via unsanitized input
-- Cross-site scripting (XSS)
-- Hardcoded secrets or credentials
-- Command injection vulnerabilities
+## Finding Requirements
+- Report only when you can show attacker-controlled input,
+  the vulnerable sink or missing guard, the security boundary,
+  and concrete impact.
+- Treat pattern matches as leads. A dangerous API is not a
+  vulnerability unless untrusted data can reach it.
+- Prefer no finding over speculative hardening advice.`;
 
-## What NOT to Report
-- Code style or formatting
-- Performance optimizations`;
 ---
 
 <Base title="Home" description="Define skills in Markdown. Compose them into agents that review every change.">
@@ -93,15 +95,15 @@ You are a security expert analyzing code changes.
 
   <section class="section skill-showcase" id="whats-a-skill">
     <h2>Its Just Skills</h2>
-    <p>The PR feedback above comes from skills. Skills are a known standard: a SKILL.md file tells Warden what to look for.</p>
-    <Terminal title=".agents/skills/security-scanning/SKILL.md">
+    <p>The PR feedback above comes from skills. Warden ships with a baseline <code>security-review</code> skill. It is a first pass, not a complete security audit, and it is still just a SKILL.md file telling Warden what to look for.</p>
+    <Terminal title="built-in security-review/SKILL.md">
       <Code
         code={skillExample}
         lang="markdown"
         theme="vitesse-black"
       />
     </Terminal>
-    <p class="skill-showcase-note">That's a trivial example, but it's a working skill. No build step. No schema. No SDK.</p>
+    <p class="skill-showcase-note">Use it by name. No local skill file, build step, schema, or SDK required.</p>
     <p class="skill-showcase-detail">Real skills can include detailed reference material, code examples, style guides, architectural constraints, or anything else you'd put in a design doc. The prompt is the skill.</p>
   </section>
 
@@ -126,7 +128,7 @@ You are a security expert analyzing code changes.
 <span class="cli-green">Created</span> .github/workflows/warden.yml
 
 <span class="cli-bold">Next steps:</span>
-  1. Add a skill: <span class="cli-cyan">warden add &lt;skill-name&gt;</span>
+  1. Add a skill: <span class="cli-cyan">warden add security-review</span>
   2. <span class="cli-cyan">export WARDEN_ANTHROPIC_API_KEY=sk-ant-...</span>
   3. Add <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> to repository secrets
      <span class="cli-dim">https://github.com/your-org/your-repo/settings/secrets/actions</span>
@@ -136,9 +138,9 @@ You are a security expert analyzing code changes.
 
     <div class="step">
       <h3>Load Skills</h3>
-      <p>Add skills for what matters to your codebase. Local or from any GitHub repo.</p>
-      <Terminal showCopy={true} copyText="warden add api-design-review --remote yourcompany/skills">
-        <pre class="cli-output"><span class="cli-dim">$</span> warden add api-design-review --remote yourcompany/skills</pre>
+      <p>Start with the baseline security check. Add custom or remote skills when your codebase needs deeper coverage.</p>
+      <Terminal showCopy={true} copyText="warden add security-review">
+        <pre class="cli-output"><span class="cli-dim">$</span> warden add security-review</pre>
       </Terminal>
       <p>Create your own skills or find ones driven by the community at <a href="https://skills.sh">skills.sh</a>.</p>
     </div>
@@ -158,7 +160,7 @@ Analyzing changes from origin/main to HEAD...
   <span class="cli-green">+</span> src/auth/session.ts <span class="cli-dim">(1 chunk)</span>
   <span class="cli-yellow">~</span> src/middleware/cors.ts <span class="cli-dim">(1 chunk)</span>
 
-┌─ <span class="cli-bold">security-scanning</span> ────────────────────────────────────── <span class="cli-dim">6.1s</span> ─┐
+┌─ <span class="cli-bold">security-review</span> ──────────────────────────────────────── <span class="cli-dim">6.1s</span> ─┐
 │ <span class="cli-bold">2 findings:</span> <span class="cli-red">●</span> 1 high  <span class="cli-yellow">●</span> 1 medium                                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │

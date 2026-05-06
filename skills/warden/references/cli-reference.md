@@ -42,7 +42,7 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 
 | Option | Description |
 |--------|-------------|
-| `--skill <name>` | Run only this skill (default: run all built-in skills) |
+| `--skill <name>` | Run only this skill by name or path; names fall back to built-ins |
 | `--config <path>` | Path to warden.toml (default: `./warden.toml`) |
 | `-m, --model <model>` | Model to use (fallback when not set in config) |
 | `--json` | Output results as JSON |
@@ -114,7 +114,7 @@ warden init
 
 # Interactive skill selection
 warden add
-warden add <skill-name>
+warden add security-review
 warden add --list
 
 # Remote skills

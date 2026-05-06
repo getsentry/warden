@@ -40,7 +40,7 @@ const tocItems = [
       <li>Reports findings with severity, location, and optional fixes</li>
     </ol>
 
-    <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> specification -they're markdown files with a prompt that tells the AI what to look for. You can use community skills, write your own, or combine both.</p>
+    <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> specification -they're markdown files with a prompt that tells the AI what to look for. Warden includes a baseline <code>security-review</code> skill by default. Treat it as a first pass, not a complete security audit, and add community or custom skills when you need deeper coverage.</p>
 
     <p>Warden works in two contexts:</p>
     <ul>
@@ -174,7 +174,7 @@ warden src/api/`}
 
     <h3>Directory Structure</h3>
 
-    <p>Create a skill in one of these directories (first match wins):</p>
+    <p>Create a custom skill in one of these directories (first match wins):</p>
 
     <Terminal showCopy={true}>
       <Code
@@ -192,20 +192,19 @@ warden src/api/`}
     <Terminal showCopy={true}>
       <Code
         code={`---
-name: security-review
-description: Review code for security vulnerabilities
+name: api-review
+description: Review API changes for compatibility and contract issues
 allowed-tools: Read Grep Glob
 ---
 
-Review the code for security issues including:
-- SQL injection and parameter binding
-- XSS vulnerabilities in user input handling
-- Hardcoded secrets or credentials
-- Insecure cryptographic practices
-- Path traversal vulnerabilities
+Review API changes for:
+- Breaking response shape changes
+- Missing pagination on list endpoints
+- Inconsistent error response formats
+- New endpoints without authentication checks
 
 Focus on issues in the changed code. For each issue found, report:
-- The specific vulnerability type
+- The specific contract or compatibility risk
 - Why it's a problem
 - How to fix it`}
         lang="markdown"
@@ -243,7 +242,19 @@ Focus on issues in the changed code. For each issue found, report:
 
     <h2 id="adding-skills">Adding Skills</h2>
 
-    <p>Warden can fetch and install skills from remote GitHub repositories.</p>
+    <p>Use built-in skills by name. Add local or remote skills when your codebase needs more specialized checks.</p>
+
+    <h3>Add the Baseline Security Review</h3>
+
+    <p><code>security-review</code> ships with Warden as a baseline first pass, so no local skill file or remote repository is required:</p>
+
+    <Terminal showCopy={true}>
+      <Code
+        code={`warden add security-review`}
+        lang="bash"
+        theme="vitesse-black"
+      />
+    </Terminal>
 
     <h3>Add a Remote Skill</h3>
 
@@ -273,7 +284,7 @@ Focus on issues in the changed code. For each issue found, report:
 
     <Terminal showCopy={true}>
       <Code
-        code={`warden add security-review`}
+        code={`warden add api-review`}
         lang="bash"
         theme="vitesse-black"
       />

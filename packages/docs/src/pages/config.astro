@@ -318,7 +318,7 @@ createFixPR = true`}
 
   <Terminal showCopy={true}>
     <Code
-      code={`# By name (resolved from .agents/skills/ or .claude/skills/)
+      code={`# By name (repo-local first, then built-in skills)
 [[skills]]
 name = "security-review"
 
@@ -328,13 +328,13 @@ name = "./custom-skills/my-review"
 
 # Remote skill (unpinned - checks for updates every 24h)
 [[skills]]
-name = "security-review"
-remote = "getsentry/warden-skills"
+name = "api-review"
+remote = "your-org/warden-skills"
 
 # Remote skill (pinned to commit - cached permanently)
 [[skills]]
-name = "security-review"
-remote = "getsentry/warden-skills@abc123def"`}
+name = "api-review"
+remote = "your-org/warden-skills@abc123def"`}
       lang="toml"
       theme="vitesse-black"
     />
@@ -345,7 +345,8 @@ remote = "getsentry/warden-skills@abc123def"`}
   <ol>
     <li>Remote repository (if <code>remote</code> field is specified)</li>
     <li>Direct path (if skill contains <code>/</code>, <code>\</code>, or starts with <code>.</code>)</li>
-    <li>Conventional directories (first match wins)</li>
+    <li>Conventional directories: <code>.warden/skills/</code>, <code>.agents/skills/</code>, <code>.claude/skills/</code></li>
+    <li>Built-in skills, including <code>security-review</code></li>
   </ol>
 
   <h2 id="skill-files">Skill Files</h2>
@@ -357,6 +358,8 @@ remote = "getsentry/warden-skills@abc123def"`}
   <p>Warden discovers skills from these directories (first match wins):</p>
 
   <dl>
+    <dt>.warden/skills/</dt>
+    <dd>Warden-local generated skills</dd>
     <dt>.agents/skills/</dt>
     <dd>Primary skill directory (recommended)</dd>
     <dt>.claude/skills/</dt>
@@ -370,7 +373,7 @@ remote = "getsentry/warden-skills@abc123def"`}
   <Terminal showCopy={true}>
     <Code
       code={`.agents/skills/
-└── security-review/
+└── api-review/
     └── SKILL.md`}
       lang="text"
       theme="vitesse-black"
@@ -382,16 +385,16 @@ remote = "getsentry/warden-skills@abc123def"`}
   <Terminal showCopy={true}>
     <Code
       code={`---
-name: security-review
-description: Review code for security vulnerabilities
+name: api-review
+description: Review API changes for compatibility and contract issues
 allowed-tools: Read Grep Glob
 ---
 
-Review the code for security issues including:
-- SQL injection
-- XSS vulnerabilities
-- Hardcoded secrets
-- Insecure dependencies`}
+Review API changes for:
+- Breaking response shape changes
+- Missing pagination on list endpoints
+- Inconsistent error response formats
+- New endpoints without authentication checks`}
       lang="markdown"
       theme="vitesse-black"
     />

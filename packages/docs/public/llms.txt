@@ -4,7 +4,7 @@
 
 Warden watches over your code by running **skills** against your changes. Skills are prompts that define what to look for: security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.
 
-Skills follow the [agentskills.io](https://agentskills.io) specification. They're markdown files with a prompt that tells the AI what to look for. You can use community skills, write your own, or combine both.
+Skills follow the [agentskills.io](https://agentskills.io) specification. They're markdown files with a prompt that tells the AI what to look for. Warden includes a baseline `security-review` skill by default. Treat it as a first pass, not a complete security audit, and add community or custom skills when you need deeper coverage.
 
 - Docs: https://warden.sentry.dev
 - GitHub: https://github.com/getsentry/warden
@@ -50,7 +50,7 @@ Creates `warden.toml` (configuration) and `.github/workflows/warden.yml` (GitHub
 ### Add a Skill
 
 ```bash
-warden add vercel-react-best-practices --remote vercel-labs/agent-skills
+warden add security-review
 ```
 
 ### Run Locally
@@ -115,10 +115,10 @@ Add a skill trigger to your configuration.
 
 ```bash
 warden add                     # Interactive mode
-warden add security-review     # Add local skill
+warden add security-review     # Add baseline security review
 warden add --list              # List available skills
-warden add --remote getsentry/warden-skills --skill security-review
-warden add --remote getsentry/warden-skills@abc123 --skill api-review  # Pinned to commit
+warden add --remote your-org/warden-skills --skill api-review
+warden add --remote your-org/warden-skills@abc123 --skill api-review  # Pinned to commit
 ```
 
 ### warden sync
@@ -327,7 +327,7 @@ createFixPR = true
 Skills can be referenced in multiple ways:
 
 ```toml
-# By name (resolved from .agents/skills/ or .claude/skills/)
+# By name (repo-local first, then built-in skills)
 [[skills]]
 name = "security-review"
 
@@ -337,20 +337,21 @@ name = "./custom-skills/my-review"
 
 # Remote skill (unpinned - checks for updates every 24h)
 [[skills]]
-name = "security-review"
-remote = "getsentry/warden-skills"
+name = "api-review"
+remote = "your-org/warden-skills"
 
 # Remote skill (pinned to commit - cached permanently)
 [[skills]]
-name = "security-review"
-remote = "getsentry/warden-skills@abc123def"
+name = "api-review"
+remote = "your-org/warden-skills@abc123def"
 ```
 
 Resolution order:
 
 1. Remote repository (if `remote` field is specified)
 2. Direct path (if skill contains `/`, `\`, or starts with `.`)
-3. Conventional directories: `.agents/skills/`, `.claude/skills/`
+3. Conventional directories: `.warden/skills/`, `.agents/skills/`, `.claude/skills/`
+4. Built-in skills, including `security-review`
 
 ### Environment Variables
 
@@ -368,6 +369,7 @@ Skills are markdown files that tell Warden what to look for. They follow the [ag
 ### Directory Structure
 
 ```
+.warden/skills/skill-name/SKILL.md   # Warden-local generated skills
 .agents/skills/skill-name/SKILL.md   # Primary (recommended)
 .claude/skills/skill-name/SKILL.md   # Backup (Claude Code convention)
 ```
@@ -378,20 +380,19 @@ A skill has YAML frontmatter for metadata and markdown for the prompt:
 
 ```markdown
 ---
-name: security-review
-description: Review code for security vulnerabilities
+name: api-review
+description: Review API changes for compatibility and contract issues
 allowed-tools: Read Grep Glob
 ---
 
-Review the code for security issues including:
-- SQL injection and parameter binding
-- XSS vulnerabilities in user input handling
-- Hardcoded secrets or credentials
-- Insecure cryptographic practices
-- Path traversal vulnerabilities
+Review API changes for:
+- Breaking response shape changes
+- Missing pagination on list endpoints
+- Inconsistent error response formats
+- New endpoints without authentication checks
 
 Focus on issues in the changed code. For each issue found, report:
-- The specific vulnerability type
+- The specific contract or compatibility risk
 - Why it's a problem
 - How to fix it
 ```

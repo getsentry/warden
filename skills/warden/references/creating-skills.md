@@ -7,9 +7,12 @@ Skills are markdown files that tell Warden what to look for. They follow the [ag
 Warden searches these directories in order (first match wins):
 
 ```
+.warden/skills/{name}/SKILL.md   # Warden-local generated skills
 .agents/skills/{name}/SKILL.md   # Primary (recommended)
 .claude/skills/{name}/SKILL.md   # Backup (Claude Code convention)
 ```
+
+If no repo-local skill matches, names fall back to Warden's built-in skills such as `security-review`.
 
 ## SKILL.md Format
 

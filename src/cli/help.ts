@@ -277,7 +277,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     examples: [
       'warden add',
       'warden add security-review',
-      'warden add --remote getsentry/skills --skill security-review',
+      'warden add --remote your-org/warden-skills --skill api-review',
     ],
   },
   sync: {

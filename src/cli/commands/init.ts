@@ -71,7 +71,7 @@ function generateWardenToml(): string {
 # Warden reviews code using AI-powered skills triggered by GitHub events.
 # Built-in skills are available by name. Custom skills live in .agents/skills/ or .claude/skills/
 #
-# Add skills with: warden add <skill-name>
+# Add skills with: warden add security-review
 
 version = 1
 
@@ -84,7 +84,7 @@ failOn = "high"
 reportOn = "medium"
 
 # Skills define what to analyze and when to run
-# Add skills with: warden add <skill-name>
+# Add skills with: warden add security-review
 #
 # Example skill with path filters and triggers:
 #
@@ -402,7 +402,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
 
   // Print next steps
   reporter.bold('Next steps:');
-  reporter.text(`  1. Add a skill: ${chalk.cyan('warden add <skill-name>')}`);
+  reporter.text(`  1. Add a skill: ${chalk.cyan('warden add security-review')}`);
   reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
   reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to organization or repository secrets`);
 
