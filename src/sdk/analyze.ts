@@ -418,13 +418,6 @@ async function analyzeHunk(
             break;
           }
 
-          const classified = classifyError(error);
-          const classifiedMessage = sanitizeErrorMessage(classified.message);
-          const openReason = recordCircuitFailure(options, classified.code, classifiedMessage);
-          if (openReason) {
-            return hunkFailureFromCircuit(openReason, accumulatedUsage, attempt + 1);
-          }
-
           // Calculate delay and wait before retry
           const delayMs = calculateRetryDelay(attempt, retryConfig);
           const errorMessage = sanitizeErrorMessage(error instanceof Error ? error.message : String(error));

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { APIError } from '@anthropic-ai/sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { HunkWithContext } from '../diff/index.js';
 import type { EventContext, Finding, UsageStats } from '../types/index.js';
@@ -272,6 +273,57 @@ describe('analyzeFile', () => {
     ]);
     expect(result.hunkFailures[1]!.message).toContain('Provider unavailable after 2 consecutive failures');
     expect(onChunkComplete).toHaveBeenCalledTimes(2);
+    consoleSpy.mockRestore();
+  });
+
+  it('counts provider failures once per hunk after retries are exhausted', async () => {
+    const controller = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 2,
+      abortController: controller,
+    });
+    const runSkill = vi.fn(async () => {
+      throw new APIError(
+        529,
+        { error: { type: 'overloaded_error', message: 'overloaded' } },
+        'overloaded',
+        undefined
+      );
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const skill: SkillDefinition = {
+      name: 'security-review',
+      description: 'Security review.',
+      prompt: 'Return findings as JSON.',
+    };
+
+    const result = await analyzeFile(
+      skill,
+      makePreparedFile(),
+      '/tmp/repo',
+      {
+        abortController: controller,
+        circuitBreaker,
+        retry: {
+          maxRetries: 2,
+          initialDelayMs: 1,
+          backoffMultiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+    );
+
+    expect(runSkill).toHaveBeenCalledTimes(3);
+    expect(controller.signal.aborted).toBe(false);
+    expect(circuitBreaker.reason).toBeUndefined();
+    expect(result.failedHunks).toBe(1);
+    expect(result.hunkFailures[0]?.code).toBe('provider_unavailable');
     consoleSpy.mockRestore();
   });
 });
