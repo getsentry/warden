@@ -83,9 +83,8 @@ function recordCircuitFailure(
   code: ErrorCode,
   message: string,
 ): CircuitBreakerReason | undefined {
-  if (isCircuitBreakerCode(code)) {
-    options.circuitBreaker?.recordFailure(code, message);
-  }
+  if (!isCircuitBreakerCode(code)) return undefined;
+  options.circuitBreaker?.recordFailure(code, message);
   return options.circuitBreaker?.reason;
 }
 

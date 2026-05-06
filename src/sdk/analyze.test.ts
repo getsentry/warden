@@ -326,6 +326,59 @@ describe('analyzeFile', () => {
     expect(result.hunkFailures[0]?.code).toBe('provider_unavailable');
     consoleSpy.mockRestore();
   });
+
+  it('preserves non-circuit failure codes when another hunk opens the circuit', async () => {
+    const controller = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 1,
+      abortController: controller,
+    });
+    const runSkill = vi.fn(async () => {
+      circuitBreaker.recordFailure('provider_unavailable', 'provider outage');
+      return {
+        result: {
+          status: 'turn_limit',
+          text: '',
+          errors: ['max turns reached'],
+          usage: makeUsage(),
+        },
+      };
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const skill: SkillDefinition = {
+      name: 'security-review',
+      description: 'Security review.',
+      prompt: 'Return findings as JSON.',
+    };
+
+    const result = await analyzeFile(
+      skill,
+      makePreparedFile(),
+      '/tmp/repo',
+      {
+        abortController: controller,
+        circuitBreaker,
+        retry: {
+          maxRetries: 0,
+          initialDelayMs: 1,
+          backoffMultiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+    );
+
+    expect(circuitBreaker.reason?.code).toBe('provider_unavailable');
+    expect(result.failedHunks).toBe(1);
+    expect(result.hunkFailures[0]?.code).toBe('max_turns');
+    expect(result.hunkFailures[0]?.message).toContain('max turns reached');
+    consoleSpy.mockRestore();
+  });
 });
 
 describe('runSkill', () => {
