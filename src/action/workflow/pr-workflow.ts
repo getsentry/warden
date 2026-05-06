@@ -39,6 +39,7 @@ import type { TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
+import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
   createCoreCheck,
   updateCoreCheck,
@@ -318,6 +319,8 @@ async function executeAllTriggers(
   // Global semaphore gates file-level work across all triggers.
   // All triggers launch immediately; the semaphore limits concurrent file analyses.
   const semaphore = new Semaphore(concurrency);
+  const abortController = new AbortController();
+  const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController });
 
   return runPool(
     matchedTriggers,
@@ -334,7 +337,10 @@ async function executeAllTriggers(
         globalRequestChanges: inputs.requestChanges,
         globalFailCheck: inputs.failCheck,
         semaphore,
+        abortController,
+        circuitBreaker,
       }),
+    { shouldAbort: () => abortController.signal.aborted },
   );
 }
 

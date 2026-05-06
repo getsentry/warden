@@ -2,6 +2,7 @@ import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFail
 import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
+import type { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
 
 /** A single auxiliary usage entry, keyed by agent name (e.g. 'extraction', 'dedup'). */
 export interface AuxiliaryUsageEntry {
@@ -113,6 +114,8 @@ export interface SkillRunnerOptions {
   callbacks?: SkillRunnerCallbacks;
   /** Abort controller for cancellation on SIGINT */
   abortController?: AbortController;
+  /** Shared circuit breaker for run-scoped auth/provider failures */
+  circuitBreaker?: ProviderFailureCircuitBreaker;
   /** Path to Claude Code CLI executable. Required in CI environments when using the Claude runtime. */
   pathToClaudeCodeExecutable?: string;
   /** Retry configuration for transient API failures */

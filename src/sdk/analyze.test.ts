@@ -5,6 +5,7 @@ import type { Finding } from '../types/index.js';
 import { analyzeFile, filterOutOfRangeFindings } from './analyze.js';
 import type { PreparedFile } from './types.js';
 import { getRuntime, type Runtime } from './runtimes/index.js';
+import { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
@@ -37,25 +38,28 @@ function makeAbortError(): Error {
   return error;
 }
 
-function makePreparedFile(): PreparedFile {
-  const hunk: HunkWithContext = {
-    filename: 'src/example.ts',
-    hunk: {
-      oldStart: 1,
-      oldCount: 1,
-      newStart: 1,
-      newCount: 1,
-      content: '@@ -1,1 +1,1 @@\n-old\n+new',
-      lines: ['-old', '+new'],
-    },
-    contextBefore: [],
-    contextAfter: [],
-    contextStartLine: 1,
-    language: 'typescript',
-  };
+function makePreparedFile(hunkCount = 1): PreparedFile {
+  const hunks: HunkWithContext[] = Array.from({ length: hunkCount }, (_, index) => {
+    const line = index + 1;
+    return {
+      filename: 'src/example.ts',
+      hunk: {
+        oldStart: line,
+        oldCount: 1,
+        newStart: line,
+        newCount: 1,
+        content: `@@ -${line},1 +${line},1 @@\n-old\n+new`,
+        lines: ['-old', '+new'],
+      },
+      contextBefore: [],
+      contextAfter: [],
+      contextStartLine: line,
+      language: 'typescript',
+    };
+  });
   return {
     filename: 'src/example.ts',
-    hunks: [hunk],
+    hunks,
   };
 }
 
@@ -174,6 +178,59 @@ describe('analyzeFile', () => {
     expect(result.failedHunks).toBe(0);
     expect(result.hunkFailures).toEqual([]);
     expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('All retry attempts failed'));
+    consoleSpy.mockRestore();
+  });
+
+  it('opens the shared circuit after consecutive provider failures', async () => {
+    const controller = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 2,
+      abortController: controller,
+    });
+    const runSkill = vi.fn(async () => {
+      throw new Error('Claude Code process exited with code 1');
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const onChunkComplete = vi.fn();
+    const skill: SkillDefinition = {
+      name: 'security-review',
+      description: 'Security review.',
+      prompt: 'Return findings as JSON.',
+    };
+
+    const result = await analyzeFile(
+      skill,
+      makePreparedFile(3),
+      '/tmp/repo',
+      {
+        abortController: controller,
+        circuitBreaker,
+        retry: {
+          maxRetries: 0,
+          initialDelayMs: 1,
+          backoffMultiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+      { onChunkComplete },
+    );
+
+    expect(runSkill).toHaveBeenCalledTimes(2);
+    expect(controller.signal.aborted).toBe(true);
+    expect(circuitBreaker.reason?.code).toBe('provider_unavailable');
+    expect(result.failedHunks).toBe(2);
+    expect(result.hunkFailures.map((failure) => failure.code)).toEqual([
+      'provider_unavailable',
+      'provider_unavailable',
+    ]);
+    expect(result.hunkFailures[1]!.message).toContain('Provider unavailable after 2 consecutive failures');
+    expect(onChunkComplete).toHaveBeenCalledTimes(2);
     consoleSpy.mockRestore();
   });
 });

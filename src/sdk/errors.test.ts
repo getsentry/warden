@@ -100,6 +100,20 @@ describe('classifyError', () => {
     expect(classifyError(err).code).toBe('auth_failed');
   });
 
+  it('tags retryable API errors as provider_unavailable', () => {
+    const err = new APIError(
+      529,
+      { error: { type: 'overloaded_error', message: 'overloaded' } },
+      'overloaded',
+      undefined
+    );
+    expect(classifyError(err).code).toBe('provider_unavailable');
+  });
+
+  it('tags Claude Code process exits as provider_unavailable', () => {
+    expect(classifyError(new Error('Claude Code process exited with code 1')).code).toBe('provider_unavailable');
+  });
+
   it('tags AbortError as aborted', () => {
     const err = new Error('The operation was aborted');
     err.name = 'AbortError';

@@ -5,7 +5,7 @@
  * Reporter spec: specs/reporters.md
  */
 
-import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap } from '../../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
@@ -24,6 +24,7 @@ import {
   type ChunkAnalysisResult,
   type FindingProcessingEvent,
 } from '../../sdk/runner.js';
+import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import { Verbosity } from './verbosity.js';
@@ -44,6 +45,50 @@ interface FileProcessResult {
   failedExtractions: number;
   hunkFailures: HunkFailure[];
   auxiliaryUsage?: AuxiliaryUsageEntry[];
+}
+
+function allAnalysisFailuresHaveCode(
+  hunkFailures: HunkFailure[],
+  totalAttemptFailures: number,
+  code: ErrorCode,
+): boolean {
+  const analysisFailures = hunkFailures.filter((failure) => failure.type === 'analysis');
+  return (
+    analysisFailures.length === totalAttemptFailures
+    && analysisFailures.length > 0
+    && analysisFailures.every((failure) => failure.code === code)
+  );
+}
+
+function summarizeRunFailure(args: {
+  totalHunks: number;
+  totalAttemptFailures: number;
+  hunkFailures: HunkFailure[];
+  circuitReason?: { code: ErrorCode; message: string };
+}): { code: ErrorCode; message: string } {
+  const { totalHunks, totalAttemptFailures, hunkFailures, circuitReason } = args;
+  if (circuitReason) {
+    return circuitReason;
+  }
+  if (allAnalysisFailuresHaveCode(hunkFailures, totalAttemptFailures, 'auth_failed')) {
+    return {
+      code: 'auth_failed',
+      message: 'Authentication failed. Warden stopped early.',
+    };
+  }
+  if (allAnalysisFailuresHaveCode(hunkFailures, totalAttemptFailures, 'provider_unavailable')) {
+    return {
+      code: 'provider_unavailable',
+      message: `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
+    };
+  }
+  return {
+    code: 'all_hunks_failed',
+    message:
+      `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
+      `This usually indicates an authentication problem. ` +
+      `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`,
+  };
 }
 
 /**
@@ -458,20 +503,28 @@ export async function runSkillTask(
         // failed — a silent zero-findings run otherwise.
         const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
 
+        const circuitReason = runnerOptions.circuitBreaker?.reason;
         if (
           totalHunks > 0
-          && totalAttemptFailures === totalHunks
           && allFindings.length === 0
-          && !(runnerOptions.abortController?.signal.aborted ?? false)
+          && (
+            circuitReason
+            || (
+              totalAttemptFailures === totalHunks
+              && !(runnerOptions.abortController?.signal.aborted ?? false)
+            )
+          )
         ) {
           const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
-          const errorMessage =
-            `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
-            `This usually indicates an authentication problem. ` +
-            `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`;
+          const error = summarizeRunFailure({
+            totalHunks,
+            totalAttemptFailures,
+            hunkFailures: allHunkFailures,
+            circuitReason,
+          });
           const errorReport: SkillReport = {
             skill: skill.name,
-            summary: `${skill.name}: all chunks failed`,
+            summary: `${skill.name}: failed (${error.code})`,
             findings: [],
             usage: aggregateUsage(allUsage),
             durationMs: duration,
@@ -492,15 +545,15 @@ export async function runSkillTask(
             failedHunks: totalFailedHunks,
             hunkFailures: allHunkFailures,
             error: {
-              code: 'all_hunks_failed',
-              message: errorMessage,
+              code: error.code,
+              message: error.message,
               timestamp: new Date().toISOString(),
             },
           };
           if (totalFailedExtractions > 0) errorReport.failedExtractions = totalFailedExtractions;
           if (skippedFiles.length > 0) errorReport.skippedFiles = skippedFiles;
           if (auxUsage) errorReport.auxiliaryUsage = auxUsage;
-          callbacks.onSkillError(name, errorMessage);
+          callbacks.onSkillError(name, error.message);
           // Mirror the success path: emit a final completion event with the
           // (errored) report so terminal renderers print the per-skill
           // summary line. Without this, console mode shows the error string
@@ -515,7 +568,7 @@ export async function runSkillTask(
           callbacks.onSkillComplete(name, errorReport);
           // Carry a typed error alongside the report so consumers that re-throw
           // (action executor, Sentry.captureException) preserve the ErrorCode.
-          const runnerError = new SkillRunnerError(errorMessage, { code: 'all_hunks_failed' });
+          const runnerError = new SkillRunnerError(error.message, { code: error.code });
           return { name, report: errorReport, error: runnerError, failOn, minConfidence };
         }
 
@@ -822,13 +875,10 @@ export function createDefaultCallbacks(
   };
 }
 
-/**
- * Create an AbortController that fires when either of two controllers abort.
- */
-function composeAbortControllers(a?: AbortController, b?: AbortController): AbortController {
+function composeAbortControllers(...controllers: (AbortController | undefined)[]): AbortController {
   const composed = new AbortController();
 
-  for (const ctrl of [a, b]) {
+  for (const ctrl of controllers) {
     if (ctrl?.signal.aborted) {
       composed.abort();
       return composed;
@@ -840,20 +890,26 @@ function composeAbortControllers(a?: AbortController, b?: AbortController): Abor
 }
 
 /**
- * Overlay a fail-fast abort controller onto each task's runner options.
- * Returns the original tasks unchanged when no controller is provided.
+ * Share abort/circuit state across task runner options.
  */
 export function composeTasksWithFailFast(
   tasks: SkillTaskOptions[],
-  failFastController?: AbortController
+  failFastController?: AbortController,
+  circuitBreaker?: ProviderFailureCircuitBreaker,
+  circuitAbortController?: AbortController,
 ): SkillTaskOptions[] {
-  if (!failFastController) return tasks;
+  if (!failFastController && !circuitBreaker && !circuitAbortController) return tasks;
 
   return tasks.map((task) => ({
     ...task,
     runnerOptions: {
       ...task.runnerOptions,
-      abortController: composeAbortControllers(task.runnerOptions?.abortController, failFastController),
+      abortController: composeAbortControllers(
+        task.runnerOptions?.abortController,
+        failFastController,
+        circuitAbortController,
+      ),
+      circuitBreaker: task.runnerOptions?.circuitBreaker ?? circuitBreaker,
     },
   }));
 }
@@ -920,12 +976,21 @@ export async function runSkillTasks(
     console.error(chalk.bold('SKILLS'));
   }
 
+  const circuitAbortController = new AbortController();
+  const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+  const composedTasks = composeTasksWithFailFast(
+    tasks,
+    failFastController,
+    circuitBreaker,
+    circuitAbortController,
+  );
+
   // Listen for abort signal to show interrupt message (non-TTY only; Ink handles TTY)
-  const abortSignal = tasks[0]?.runnerOptions?.abortController?.signal;
+  const abortSignal = composedTasks[0]?.runnerOptions?.abortController?.signal;
   if (abortSignal && !abortSignal.aborted && !mode.isTTY && verbosity !== Verbosity.Quiet) {
     abortSignal.addEventListener('abort', () => {
       // Only show interrupt message for user SIGINT, not fail-fast
-      if (!failFastController?.signal.aborted) {
+      if (!failFastController?.signal.aborted && !circuitAbortController.signal.aborted) {
         logPlain('Interrupted, finishing up... (press Ctrl+C again to force exit)');
       }
     }, { once: true });
@@ -937,9 +1002,6 @@ export async function runSkillTasks(
       logPlain('Stopping \u2014 finding detected (--fail-fast)');
     }, { once: true });
   }
-
-  // Compose per-task abort controllers: fire on either SIGINT or fail-fast
-  const composedTasks = composeTasksWithFailFast(tasks, failFastController);
 
   // Launch all skills in parallel; the semaphore is the sole concurrency gate.
   return runComposedSkillTasks(composedTasks, wrappedCallbacks, semaphore);

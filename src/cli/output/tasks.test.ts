@@ -800,7 +800,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     vi.restoreAllMocks();
   });
 
-  it('synthesizes a report with error.code=all_hunks_failed when every hunk fails', async () => {
+  it('synthesizes a report with error.code=auth_failed when every hunk fails with auth errors', async () => {
     const fakeHunk = {
       hunk: { newStart: 1, newCount: 10 },
     } as unknown as HunkWithContext;
@@ -839,7 +839,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     const result = await runSkillTask(options, 1, { ...noopCallbacks(), onSkillError });
 
     expect(result.report).toBeDefined();
-    expect(result.report!.error?.code).toBe('all_hunks_failed');
+    expect(result.report!.error?.code).toBe('auth_failed');
     expect(result.report!.findings).toEqual([]);
     expect(result.report!.failedHunks).toBe(1);
     expect(result.report!.hunkFailures).toEqual(hunkFailures);
@@ -848,12 +848,58 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     // re-throw (action executor, Sentry) preserve the ErrorCode. A missing
     // error here produces a plain Error downstream and loses classification.
     expect(result.error).toBeInstanceOf(SkillRunnerError);
-    expect((result.error as SkillRunnerError).code).toBe('all_hunks_failed');
+    expect((result.error as SkillRunnerError).code).toBe('auth_failed');
     // Per-file metadata must be present even on failure runs — `warden runs`
     // and JSONL consumers count attempted files via report.files. Empty
     // files would show totalFiles: 0 for an all-hunks-failed run.
     expect(result.report!.files).toHaveLength(1);
     expect(result.report!.files![0]!.filename).toBe('a.ts');
+  });
+
+  it('synthesizes provider_unavailable when every hunk fails with provider errors', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const hunkFailures: HunkFailure[] = [
+      {
+        type: 'analysis',
+        filename: 'a.ts',
+        lineRange: '1-10',
+        code: 'provider_unavailable',
+        message: 'Claude Code process exited with code 1',
+      },
+    ];
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      failedHunks: 1,
+      failedExtractions: 0,
+      hunkFailures,
+    });
+
+    const options: SkillTaskOptions = {
+      name: 'provider-fail-skill',
+      resolveSkill: async () =>
+        ({ name: 'provider-fail-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    };
+
+    const result = await runSkillTask(options, 1, noopCallbacks());
+
+    expect(result.report!.error?.code).toBe('provider_unavailable');
+    expect(result.report!.error?.message).toContain('Provider unavailable');
+    expect((result.error as SkillRunnerError).code).toBe('provider_unavailable');
   });
 
   it('triggers all_hunks_failed when every hunk succeeded at SDK level but extraction failed for all', async () => {

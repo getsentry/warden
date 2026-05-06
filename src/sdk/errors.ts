@@ -115,6 +115,20 @@ export function isRetryableError(error: unknown): boolean {
 }
 
 /**
+ * Check if an error indicates an unavailable provider/runtime.
+ * These failures can recover later, but repeated failures should stop the run.
+ */
+function isProviderUnavailableError(error: unknown): boolean {
+  if (isRetryableError(error)) return true;
+
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    /Claude Code process exited with code \d+/i.test(message) ||
+    /Claude Code stderr:[\s\S]*\b(overloaded|rate limit|timed? out|timeout|ECONNRESET|ECONNREFUSED|ENOTFOUND|ETIMEDOUT)\b/i.test(message)
+  );
+}
+
+/**
  * Check if an error is an authentication failure.
  * These require user action (login or API key) and should not be retried.
  */
@@ -143,6 +157,9 @@ export function classifyError(error: unknown): { code: ErrorCode; message: strin
   }
   if (isAuthenticationError(error)) {
     return { code: 'auth_failed', message };
+  }
+  if (isProviderUnavailableError(error)) {
+    return { code: 'provider_unavailable', message };
   }
   if (error instanceof Error && error.name === 'AbortError') {
     return { code: 'aborted', message };

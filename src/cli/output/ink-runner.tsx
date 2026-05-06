@@ -31,6 +31,7 @@ import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
 import type { SkillReport } from '../../types/index.js';
+import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 
 interface SkillRunnerProps {
   skills: SkillState[];
@@ -269,7 +270,14 @@ export async function runSkillTasksWithInk(
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
     // No tasks or quiet mode - run without UI using global semaphore.
     const semaphore = new Semaphore(concurrency);
-    const composedTasks = composeTasksWithFailFast(tasks, failFastController);
+    const circuitAbortController = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+    const composedTasks = composeTasksWithFailFast(
+      tasks,
+      failFastController,
+      circuitBreaker,
+      circuitAbortController,
+    );
     const callbacks: SkillProgressCallbacks = {
       ...noopCallbacks,
       ...(fireStreamHook || failFastController
@@ -456,8 +464,15 @@ export async function runSkillTasksWithInk(
   // Global semaphore gates file-level work across all skills.
   const semaphore = new Semaphore(concurrency);
 
-  // Compose per-task abort controllers: fire on either SIGINT or fail-fast
-  const composedTasks = composeTasksWithFailFast(tasks, failFastController);
+  // Compose per-task abort controllers: fire on SIGINT, fail-fast, or provider circuit breaker.
+  const circuitAbortController = new AbortController();
+  const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+  const composedTasks = composeTasksWithFailFast(
+    tasks,
+    failFastController,
+    circuitBreaker,
+    circuitAbortController,
+  );
 
   // Launch all skills in parallel; the semaphore is the sole concurrency gate.
   const results = await runComposedSkillTasks(composedTasks, callbacks, semaphore);

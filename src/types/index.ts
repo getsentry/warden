@@ -200,6 +200,7 @@ export type FileReport = z.infer<typeof FileReportSchema>;
 // Stable codes for run failures. Public contract: add new codes, do not rename.
 export const ErrorCodeSchema = z.enum([
   'auth_failed',
+  'provider_unavailable',
   'sdk_error',
   'subprocess_failure',
   'max_turns',

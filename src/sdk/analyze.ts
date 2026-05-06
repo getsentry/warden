@@ -1,8 +1,9 @@
 import type { SkillDefinition } from '../config/schema.js';
-import type { Finding, RetryConfig } from '../types/index.js';
+import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
+import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
@@ -55,6 +56,37 @@ function notifyHunkFailed(
 
 function isAbortRequested(error: unknown, abortController?: AbortController): boolean {
   return (abortController?.signal.aborted ?? false) || classifyError(error).code === 'aborted';
+}
+
+function isCircuitBreakerCode(code: ErrorCode | undefined): code is CircuitBreakerReason['code'] {
+  return code === 'auth_failed' || code === 'provider_unavailable';
+}
+
+function hunkFailureFromCircuit(
+  reason: CircuitBreakerReason,
+  usage: UsageStats[],
+  attempts: number,
+): HunkAnalysisResult {
+  return {
+    findings: [],
+    usage: aggregateUsage(usage),
+    failed: true,
+    extractionFailed: false,
+    failureCode: reason.code,
+    failureMessage: reason.message,
+    attempts,
+  };
+}
+
+function recordCircuitFailure(
+  options: SkillRunnerOptions,
+  code: ErrorCode,
+  message: string,
+): CircuitBreakerReason | undefined {
+  if (isCircuitBreakerCode(code)) {
+    options.circuitBreaker?.recordFailure(code, message);
+  }
+  return options.circuitBreaker?.reason;
 }
 
 /**
@@ -183,6 +215,11 @@ async function analyzeHunk(
       const accumulatedUsage: UsageStats[] = [];
 
       for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+        const circuitReason = options.circuitBreaker?.reason;
+        if (circuitReason) {
+          return hunkFailureFromCircuit(circuitReason, accumulatedUsage, attempt);
+        }
+
         // Check for abort before each attempt
         if (abortController?.signal.aborted) {
           callbacks?.onHunkFailed?.(callbacks.lineRange, 'Analysis aborted');
@@ -257,18 +294,30 @@ async function analyzeHunk(
             const errorSummary = errorMessages.length > 0
               ? sanitizeErrorMessage(errorMessages.join('; '))
               : `Runtime error: ${resultMessage.status}`;
-            notifyHunkFailed(callbacks, callbacks?.lineRange ?? lineRange, `Runtime execution failed: ${errorSummary}`);
+            const failureCode =
+              resultMessage.status === 'turn_limit'
+                ? 'max_turns'
+                : resultMessage.status === 'provider_error'
+                  ? 'provider_unavailable'
+                  : 'sdk_error';
+            const failureMessage = `Runtime execution failed: ${errorSummary}`;
+            const openReason = recordCircuitFailure(options, failureCode, failureMessage);
+            notifyHunkFailed(callbacks, callbacks?.lineRange ?? lineRange, failureMessage);
+            if (openReason) {
+              return hunkFailureFromCircuit(openReason, accumulatedUsage, attempt + 1);
+            }
             return {
               findings: [],
               usage: aggregateUsage(accumulatedUsage),
               failed: true,
               extractionFailed: false,
-              failureCode: resultMessage.status === 'turn_limit' ? 'max_turns' : 'sdk_error',
-              failureMessage: `Runtime execution failed: ${errorSummary}`,
+              failureCode,
+              failureMessage,
               attempts: attempt + 1,
             };
           }
 
+          options.circuitBreaker?.recordSuccess();
           const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, options);
 
           // Filter findings outside hunk line range (defense-in-depth)
@@ -339,6 +388,8 @@ async function analyzeHunk(
 
           // Re-throw authentication errors (they shouldn't be retried)
           if (error instanceof WardenAuthenticationError) {
+            const message = sanitizeErrorMessage(error.message);
+            options.circuitBreaker?.recordFailure('auth_failed', message);
             throw error;
           }
 
@@ -346,6 +397,7 @@ async function analyzeHunk(
           // can't communicate — surface as an auth error with actionable guidance
           if (isSubprocessError(error)) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            options.circuitBreaker?.recordFailure('auth_failed', sanitizeErrorMessage(errorMessage));
             throw new WardenAuthenticationError(
               `Claude Code subprocess failed (${errorMessage}).\n` +
               `This usually means the claude CLI cannot run in this environment.`,
@@ -355,12 +407,22 @@ async function analyzeHunk(
 
           // Authentication errors should surface immediately with helpful guidance
           if (isAuthenticationError(error)) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            options.circuitBreaker?.recordFailure('auth_failed', sanitizeErrorMessage(errorMessage));
             throw new WardenAuthenticationError(undefined, { cause: error });
           }
 
           // Don't retry if not a retryable error or we've exhausted retries
-          if (!isRetryableError(error) || attempt >= retryConfig.maxRetries) {
+          const shouldRetry = isRetryableError(error) && attempt < retryConfig.maxRetries;
+          if (!shouldRetry) {
             break;
+          }
+
+          const classified = classifyError(error);
+          const classifiedMessage = sanitizeErrorMessage(classified.message);
+          const openReason = recordCircuitFailure(options, classified.code, classifiedMessage);
+          if (openReason) {
+            return hunkFailureFromCircuit(openReason, accumulatedUsage, attempt + 1);
           }
 
           // Calculate delay and wait before retry
@@ -426,6 +488,10 @@ async function analyzeHunk(
 
       const { code: retryCode, message } = classifyError(lastError);
       const retryMsg = sanitizeErrorMessage(message);
+      const openReason = recordCircuitFailure(options, retryCode, retryMsg);
+      if (openReason) {
+        return hunkFailureFromCircuit(openReason, accumulatedUsage, retryConfig.maxRetries + 1);
+      }
       return {
         findings: [],
         usage: aggregateUsage(accumulatedUsage),
@@ -781,7 +847,21 @@ export async function runSkill(
   // at most one (analyzeFile makes them mutually exclusive), and an
   // extraction-only failure scenario would otherwise slip through silently.
   const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
+  const circuitReason = options.circuitBreaker?.reason;
+  if (circuitReason) {
+    throw new SkillRunnerError(circuitReason.message, { code: circuitReason.code });
+  }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
+    const analysisFailures = allHunkFailures.filter((failure) => failure.type === 'analysis');
+    if (
+      analysisFailures.length === totalAttemptFailures
+      && analysisFailures.every((failure) => failure.code === 'provider_unavailable')
+    ) {
+      throw new SkillRunnerError(
+        `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
+        { code: 'provider_unavailable' },
+      );
+    }
     throw new SkillRunnerError(
       `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
       `This usually indicates an authentication problem. ` +

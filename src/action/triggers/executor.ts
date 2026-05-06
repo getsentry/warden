@@ -24,9 +24,10 @@ import {
 } from '../../output/github-checks.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
 import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
-import { SkillRunnerError } from '../../sdk/errors.js';
+import { SkillRunnerError, classifyError } from '../../sdk/errors.js';
 import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
+import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 
 /** Log-mode output for CI: no TTY, no color. */
 const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns: 120 };
@@ -56,6 +57,10 @@ export interface TriggerExecutorDeps {
   globalFailCheck?: boolean;
   /** Global semaphore for limiting concurrent file analyses across triggers */
   semaphore?: Semaphore;
+  /** Shared controller for stopping the whole action run */
+  abortController?: AbortController;
+  /** Shared circuit breaker for auth/provider failures */
+  circuitBreaker?: ProviderFailureCircuitBreaker;
 }
 
 /**
@@ -144,6 +149,8 @@ export async function executeTrigger(
             pathToClaudeCodeExecutable: claudePath,
             auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
             verifyFindings: trigger.verifyFindings,
+            abortController: deps.abortController,
+            circuitBreaker: deps.circuitBreaker,
           },
         };
 
@@ -216,8 +223,12 @@ export async function executeTrigger(
         };
       } catch (error) {
         if (error instanceof ActionFailedError) throw error;
+        const { code } = classifyError(error);
         Sentry.captureException(error, {
           tags: { 'trigger.name': trigger.name, 'skill.name': trigger.skill },
+          ...(code === 'provider_unavailable' || code === 'all_hunks_failed'
+            ? { fingerprint: ['warden', code] }
+            : {}),
         });
 
         // Mark skill check as failed
