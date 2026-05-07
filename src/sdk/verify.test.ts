@@ -242,7 +242,7 @@ describe('verifyFindings', () => {
     expect(result.findings).toEqual([finding]);
   });
 
-  it('drops unverified findings when verification is already aborted', async () => {
+  it('keeps candidate findings when verification is already aborted', async () => {
     const runtime = mockRuntime('{"verdict":"keep"}');
     vi.mocked(getRuntime).mockReturnValue(runtime);
     const abortController = new AbortController();
@@ -257,17 +257,12 @@ describe('verifyFindings', () => {
       onFindingProcessing,
     });
 
-    expect(result.findings).toEqual([]);
+    expect(result.findings).toEqual([finding]);
     expect(runtime.runSkill).not.toHaveBeenCalled();
-    expect(onFindingProcessing).toHaveBeenCalledWith({
-      stage: 'verification',
-      action: 'rejected',
-      finding,
-      reason: 'verification aborted before start',
-    });
+    expect(onFindingProcessing).not.toHaveBeenCalled();
   });
 
-  it('drops unverified findings when verification aborts before verdict', async () => {
+  it('keeps candidate findings when verification aborts before verdict', async () => {
     const abortController = new AbortController();
     const runtime: Runtime = {
       name: 'claude',
@@ -289,13 +284,8 @@ describe('verifyFindings', () => {
       onFindingProcessing,
     });
 
-    expect(result.findings).toEqual([]);
-    expect(onFindingProcessing).toHaveBeenCalledWith({
-      stage: 'verification',
-      action: 'rejected',
-      finding,
-      reason: 'verification aborted before verdict',
-    });
+    expect(result.findings).toEqual([finding]);
+    expect(onFindingProcessing).not.toHaveBeenCalled();
   });
 
   it('propagates authentication errors reported by the verifier runtime', async () => {

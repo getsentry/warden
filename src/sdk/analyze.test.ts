@@ -139,6 +139,37 @@ function makeContextWithTwoHunks(): EventContext {
   };
 }
 
+function makeContextWithOneHunk(): EventContext {
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: { owner: 'o', name: 'r', fullName: 'o/r', defaultBranch: 'main' },
+    repoPath: '/tmp/repo',
+    pullRequest: {
+      number: 1,
+      title: 'Test PR',
+      body: '',
+      author: 'test',
+      baseBranch: 'main',
+      headBranch: 'feature',
+      headSha: 'head',
+      baseSha: 'base',
+      files: [{
+        filename: 'src/example.ts',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        patch: [
+          '@@ -10,1 +10,1 @@',
+          '-old10',
+          '+new10',
+        ].join('\n'),
+        chunks: 1,
+      }],
+    },
+  };
+}
+
 describe('filterOutOfRangeFindings', () => {
   const hunkRange = { start: 10, end: 20 };
 
@@ -418,6 +449,50 @@ describe('analyzeFile', () => {
 describe('runSkill', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('preserves candidate findings when verification is interrupted', async () => {
+    const controller = new AbortController();
+    const runSkillMock = vi.fn()
+      .mockResolvedValueOnce({
+        result: {
+          status: 'success',
+          text: JSON.stringify({
+            findings: [makeFinding(10, 'candidate-finding')],
+          }),
+          errors: [],
+          usage: makeUsage(),
+        },
+      })
+      .mockImplementationOnce(async () => {
+        controller.abort();
+        throw makeAbortError();
+      });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithOneHunk(),
+      { abortController: controller },
+    );
+
+    expect(runSkillMock).toHaveBeenCalledTimes(2);
+    expect(report.findings).toEqual([
+      expect.objectContaining({
+        title: 'Finding at line 10',
+        location: { path: 'src/example.ts', startLine: 10 },
+      }),
+    ]);
+    expect(report.files?.[0]?.findings).toBe(1);
   });
 
   it('preserves partial findings when the shared circuit opens mid-run', async () => {

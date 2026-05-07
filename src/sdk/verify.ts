@@ -220,18 +220,10 @@ function notifyVerdict(
   }
 }
 
-function rejectUnverifiedFinding(
-  options: VerifyFindingsOptions,
-  finding: Finding,
-  reason: string
-): VerificationTaskResult {
-  options.onFindingProcessing?.({
-    stage: 'verification',
-    action: 'rejected',
-    finding,
-    reason,
-  });
-  return { finding: undefined };
+function keepFindingAfterInterruptedVerification(finding: Finding): VerificationTaskResult {
+  // An abort is inconclusive, not a verifier rejection. Preserve candidates so
+  // interrupted runs report the partial findings already collected.
+  return { finding };
 }
 
 /**
@@ -254,7 +246,7 @@ export async function verifyFindings(
     VERIFICATION_CONCURRENCY,
     async (finding) => {
       if (options.abortController?.signal.aborted) {
-        return rejectUnverifiedFinding(options, finding, 'verification aborted before start');
+        return keepFindingAfterInterruptedVerification(finding);
       }
 
       try {
@@ -284,7 +276,7 @@ export async function verifyFindings(
         return { finding: next ?? undefined, usage: result?.usage };
       } catch (error) {
         if (isAbortRequested(error, options.abortController)) {
-          return rejectUnverifiedFinding(options, finding, 'verification aborted before verdict');
+          return keepFindingAfterInterruptedVerification(finding);
         }
 
         if (error instanceof WardenAuthenticationError) {
