@@ -26,8 +26,17 @@ type = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
 
 [[skills]]
-name = "code-simplifier"
-remote = "getsentry/sentry-skills"
+name = "code-review"
+paths = [
+  "src/**/*.ts",
+  ".github/workflows/*.yml",
+  ".github/workflows/*.yaml",
+  ".github/actions/**/*.yml",
+  ".github/actions/**/*.yaml",
+  "action.yml",
+  "action.yaml",
+]
 
 [[skills.triggers]]
-type = "local"
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened"]

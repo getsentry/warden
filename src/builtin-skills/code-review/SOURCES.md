@@ -5,7 +5,7 @@
 | Source | Trust tier | Confidence | Usage constraints | Decisions |
 |--------|------------|------------|-------------------|-----------|
 | Existing built-in `security-review` skill | Local prior art | High | Use structure and evidence gating only; do not import security scope. | Mirror source-boundary-sink style as trigger-contract-impact for correctness bugs. |
-| Local `architecture-review`, `code-simplifier`, and `find-warden-bugs` skills | Local prior art | Medium | Use boundaries to avoid overlap with style, architecture, and Warden-specific sweeps. | Make exclusions explicit so code review reports only bugs. |
+| Local `architecture-review` and `code-simplifier` skills | Local prior art | Medium | Use boundaries to avoid overlap with style and architecture feedback. | Make exclusions explicit so code review reports only bugs. |
 | Common production correctness review failure modes | Engineering practice | Medium | Keep examples generic, transformed, and evidence-gated. | Cover logic, state, async, error handling, contracts, persistence, UI, build, and workflow bugs. |
 | Warden package skill loader and packaging tests | Repository behavior | High | Use for validation scope only. | Add tests that the new built-in skill resolves and is included in the npm package. |
 
