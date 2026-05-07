@@ -36,6 +36,14 @@ describe('parseCliArgs', () => {
     expect(result.options.skill).toBe('security-review');
   });
 
+  it('ignores a leading script delimiter before run arguments', () => {
+    const result = parseCliArgs(['--', '-vvv', 'src/', '--skill', 'code-review']);
+    expect(result.command).toBe('run');
+    expect(result.options.targets).toEqual(['src/']);
+    expect(result.options.skill).toBe('code-review');
+    expect(result.options.verbose).toBe(3);
+  });
+
   it('parses multiple file targets', () => {
     const result = parseCliArgs(['file1.ts', 'file2.ts', '--skill', 'security-review']);
     expect(result.options.targets).toEqual(['file1.ts', 'file2.ts']);
@@ -174,6 +182,11 @@ describe('parseCliArgs', () => {
   it('parses -vv flag', () => {
     const result = parseCliArgs(['-vv']);
     expect(result.options.verbose).toBe(2);
+  });
+
+  it('parses repeated shorthand verbosity', () => {
+    const result = parseCliArgs(['-vvv']);
+    expect(result.options.verbose).toBe(3);
   });
 
   it('parses --verbose flag', () => {

@@ -249,15 +249,17 @@ function resolveColorOption(values: { color?: boolean; 'no-color'?: boolean }): 
 }
 
 export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs {
+  const args = argv[0] === '--' ? argv.slice(1) : argv;
+
   // Count -v flags before parsing (parseArgs doesn't handle multiple -v well)
   let verboseCount = 0;
-  const filteredArgv = argv.filter((arg) => {
-    if (arg === '-v' || arg === '--verbose') {
-      verboseCount++;
+  const filteredArgv = args.filter((arg) => {
+    if (/^-v+$/.test(arg)) {
+      verboseCount += arg.length - 1;
       return false;
     }
-    if (arg === '-vv') {
-      verboseCount += 2;
+    if (arg === '--verbose') {
+      verboseCount++;
       return false;
     }
     return true;
