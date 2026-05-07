@@ -268,7 +268,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
   },
   add: {
     summary: 'Add a skill trigger to warden.toml',
-    description: 'Add a local or remote skill trigger to the repository configuration.',
+    description: 'Add a skill trigger to the repository configuration.',
     usage: ['warden add [skill] [options]'],
     arguments: [
       { label: 'skill', description: 'Skill name to add' },
@@ -277,6 +277,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     examples: [
       'warden add',
       'warden add security-review',
+      'warden add code-review',
       'warden add --remote your-org/warden-skills --skill api-review',
     ],
   },

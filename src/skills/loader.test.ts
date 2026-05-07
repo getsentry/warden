@@ -40,9 +40,13 @@ describe('resolveSkillAsync', () => {
   });
 
   it('resolves package-native built-in skills by name', async () => {
-    const skill = await resolveSkillAsync('security-review');
-    expect(skill.name).toBe('security-review');
-    expect(skill.rootDir).toContain('src/builtin-skills/security-review');
+    const securitySkill = await resolveSkillAsync('security-review');
+    expect(securitySkill.name).toBe('security-review');
+    expect(securitySkill.rootDir).toContain('src/builtin-skills/security-review');
+
+    const codeSkill = await resolveSkillAsync('code-review');
+    expect(codeSkill.name).toBe('code-review');
+    expect(codeSkill.rootDir).toContain('src/builtin-skills/code-review');
   });
 
   it('lets repo-local skills override built-in skills', async () => {
@@ -168,10 +172,14 @@ describe('BUILTIN_SKILL_DIRECTORIES', () => {
   it('discovers built-in skills without a repo root', async () => {
     const skills = await discoverAllSkills();
     const skill = skills.get('security-review');
+    const codeSkill = skills.get('code-review');
 
     expect(skill).toBeDefined();
     expect(skill!.directory).toBe('built-in');
     expect(skill!.path).toContain('src/builtin-skills/security-review');
+    expect(codeSkill).toBeDefined();
+    expect(codeSkill!.directory).toBe('built-in');
+    expect(codeSkill!.path).toContain('src/builtin-skills/code-review');
   });
 });
 

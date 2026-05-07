@@ -20,8 +20,9 @@ Your code is under new management. Agents that review your code - locally or on 
 # Initialize warden in your repository
 npx @sentry/warden init
 
-# Add the built-in baseline security check
+# Add the built-in baseline reviews
 npx @sentry/warden add security-review
+npx @sentry/warden add code-review
 
 # Run a pre-review on current branch changes
 # Uses Claude Code subscription if logged in, or set WARDEN_ANTHROPIC_API_KEY

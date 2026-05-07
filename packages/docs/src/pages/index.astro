@@ -95,7 +95,7 @@ vulnerabilities in code changes for Warden's baseline security skill.
 
   <section class="section skill-showcase" id="whats-a-skill">
     <h2>Its Just Skills</h2>
-    <p>The PR feedback above comes from skills. Warden ships with a baseline <code>security-review</code> skill. It is a first pass, not a complete security audit, and it is still just a SKILL.md file telling Warden what to look for.</p>
+    <p>The PR feedback above comes from skills. Warden ships with <code>security-review</code> for baseline AppSec coverage and <code>code-review</code> for correctness bugs. They are first passes, and they are still just SKILL.md files telling Warden what to look for.</p>
     <Terminal title="built-in security-review/SKILL.md">
       <Code
         code={skillExample}
@@ -103,7 +103,7 @@ vulnerabilities in code changes for Warden's baseline security skill.
         theme="vitesse-black"
       />
     </Terminal>
-    <p class="skill-showcase-note">Use it by name. No local skill file, build step, schema, or SDK required.</p>
+    <p class="skill-showcase-note">Use built-ins by name. No local skill file, build step, schema, or SDK required.</p>
     <p class="skill-showcase-detail">Real skills can include detailed reference material, code examples, style guides, architectural constraints, or anything else you'd put in a design doc. The prompt is the skill.</p>
   </section>
 
@@ -128,7 +128,8 @@ vulnerabilities in code changes for Warden's baseline security skill.
 <span class="cli-green">Created</span> .github/workflows/warden.yml
 
 <span class="cli-bold">Next steps:</span>
-  1. Add a skill: <span class="cli-cyan">warden add security-review</span>
+  1. Add built-in reviews: <span class="cli-cyan">warden add security-review</span>
+     <span class="cli-cyan">warden add code-review</span>
   2. <span class="cli-cyan">export WARDEN_ANTHROPIC_API_KEY=sk-ant-...</span>
   3. Add <span class="cli-cyan">WARDEN_ANTHROPIC_API_KEY</span> to repository secrets
      <span class="cli-dim">https://github.com/your-org/your-repo/settings/secrets/actions</span>
@@ -138,11 +139,12 @@ vulnerabilities in code changes for Warden's baseline security skill.
 
     <div class="step">
       <h3>Load Skills</h3>
-      <p>Start with the baseline security check. Add custom or remote skills when your codebase needs deeper coverage.</p>
-      <Terminal showCopy={true} copyText="warden add security-review">
-        <pre class="cli-output"><span class="cli-dim">$</span> warden add security-review</pre>
+      <p>Start with baseline security and correctness reviews. Add more skills when your codebase needs deeper coverage.</p>
+      <Terminal showCopy={true} copyText={`warden add security-review\nwarden add code-review`}>
+        <pre class="cli-output"><span class="cli-dim">$</span> warden add security-review
+<span class="cli-dim">$</span> warden add code-review</pre>
       </Terminal>
-      <p>Create your own skills or find ones driven by the community at <a href="https://skills.sh">skills.sh</a>.</p>
+      <p>Keep adding skills for areas where your codebase needs specific coverage.</p>
     </div>
 
     <div class="step">

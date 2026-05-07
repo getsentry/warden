@@ -74,6 +74,7 @@ warden init --force    # Overwrite existing files`}
       <Code
         code={`warden add                     # Interactive mode
 warden add security-review     # Add baseline security review
+warden add code-review         # Add correctness bug review
 warden add --list              # List available skills
 
 # Remote skills from GitHub repositories
@@ -154,6 +155,7 @@ warden setup-app --org my-org  # For an organization`}
     <Code
       code={`# By name (repo-local first, then built-in skills)
 warden --skill security-review
+warden --skill code-review
 
 # Relative path
 warden --skill ./skills/custom-review
@@ -173,7 +175,7 @@ warden --skill ~/my-skills/security`}
     <li>Remote repository (if <code>remote</code> is specified in trigger config)</li>
     <li>Direct path (if contains <code>/</code>, <code>\</code>, or starts with <code>.</code>)</li>
     <li>Conventional directories: <code>.warden/skills/</code>, <code>.agents/skills/</code>, <code>.claude/skills/</code></li>
-    <li>Built-in skills, including <code>security-review</code></li>
+    <li>Built-in skills, including <code>security-review</code> and <code>code-review</code></li>
   </ol>
 
   <h2 id="environment-variables">Environment Variables</h2>

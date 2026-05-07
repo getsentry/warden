@@ -40,7 +40,7 @@ const tocItems = [
       <li>Reports findings with severity, location, and optional fixes</li>
     </ol>
 
-    <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> specification -they're markdown files with a prompt that tells the AI what to look for. Warden includes a baseline <code>security-review</code> skill by default. Treat it as a first pass, not a complete security audit, and add community or custom skills when you need deeper coverage.</p>
+    <p>Skills follow the <a href="https://agentskills.io">agentskills.io</a> specification -they're markdown files with a prompt that tells the AI what to look for. Warden includes <code>security-review</code> for baseline AppSec coverage and <code>code-review</code> for correctness bugs. Treat them as first passes, and add more skills when you need deeper coverage.</p>
 
     <p>Warden works in two contexts:</p>
     <ul>
@@ -135,7 +135,8 @@ export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
 
     <Terminal showCopy={true}>
       <Code
-        code={`warden --skill security-review`}
+        code={`warden --skill security-review
+warden --skill code-review`}
         lang="bash"
         theme="vitesse-black"
       />
@@ -242,15 +243,16 @@ Focus on issues in the changed code. For each issue found, report:
 
     <h2 id="adding-skills">Adding Skills</h2>
 
-    <p>Use built-in skills by name. Add local or remote skills when your codebase needs more specialized checks.</p>
+    <p>Use built-in skills by name. Add more skills when your codebase needs specialized checks.</p>
 
-    <h3>Add the Baseline Security Review</h3>
+    <h3>Add Built-in Reviews</h3>
 
-    <p><code>security-review</code> ships with Warden as a baseline first pass, so no local skill file or remote repository is required:</p>
+    <p><code>security-review</code> and <code>code-review</code> ship with Warden as baseline first passes. Add them by name:</p>
 
     <Terminal showCopy={true}>
       <Code
-        code={`warden add security-review`}
+        code={`warden add security-review
+warden add code-review`}
         lang="bash"
         theme="vitesse-black"
       />

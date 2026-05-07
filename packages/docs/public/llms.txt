@@ -4,7 +4,7 @@
 
 Warden watches over your code by running **skills** against your changes. Skills are prompts that define what to look for: security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.
 
-Skills follow the [agentskills.io](https://agentskills.io) specification. They're markdown files with a prompt that tells the AI what to look for. Warden includes a baseline `security-review` skill by default. Treat it as a first pass, not a complete security audit, and add community or custom skills when you need deeper coverage.
+Skills follow the [agentskills.io](https://agentskills.io) specification. They're markdown files with a prompt that tells the AI what to look for. Warden includes `security-review` for baseline AppSec coverage and `code-review` for correctness bugs. Treat them as first passes, and add more skills when you need deeper coverage.
 
 - Docs: https://warden.sentry.dev
 - GitHub: https://github.com/getsentry/warden
@@ -51,6 +51,7 @@ Creates `warden.toml` (configuration) and `.github/workflows/warden.yml` (GitHub
 
 ```bash
 warden add security-review
+warden add code-review
 ```
 
 ### Run Locally
@@ -116,6 +117,7 @@ Add a skill trigger to your configuration.
 ```bash
 warden add                     # Interactive mode
 warden add security-review     # Add baseline security review
+warden add code-review         # Add correctness bug review
 warden add --list              # List available skills
 warden add --remote your-org/warden-skills --skill api-review
 warden add --remote your-org/warden-skills@abc123 --skill api-review  # Pinned to commit
@@ -175,6 +177,13 @@ version = 1
 
 [[skills]]
 name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+
+[[skills]]
+name = "code-review"
 
 [[skills.triggers]]
 type = "pull_request"
@@ -331,6 +340,9 @@ Skills can be referenced in multiple ways:
 [[skills]]
 name = "security-review"
 
+[[skills]]
+name = "code-review"
+
 # By relative path
 [[skills]]
 name = "./custom-skills/my-review"
@@ -351,7 +363,7 @@ Resolution order:
 1. Remote repository (if `remote` field is specified)
 2. Direct path (if skill contains `/`, `\`, or starts with `.`)
 3. Conventional directories: `.warden/skills/`, `.agents/skills/`, `.claude/skills/`
-4. Built-in skills, including `security-review`
+4. Built-in skills, including `security-review` and `code-review`
 
 ### Environment Variables
 

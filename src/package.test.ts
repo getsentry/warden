@@ -17,6 +17,10 @@ describe('npm package contents', () => {
     expect(ignored.ignores('src/builtin-skills/security-review/SKILL.md')).toBe(false);
     expect(ignored.ignores('src/builtin-skills/security-review/references/javascript-typescript.md')).toBe(false);
     expect(ignored.ignores('src/builtin-skills/security-review/references/github-workflows.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/code-review/SKILL.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/code-review/SOURCES.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/code-review/references/javascript-typescript.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/code-review/references/python.md')).toBe(false);
     expect(ignored.ignores('skills/warden/SPEC.md')).toBe(false);
     expect(ignored.ignores('.warden/skills/security/SKILL.md')).toBe(true);
     expect(ignored.ignores('.codex/config.toml')).toBe(true);

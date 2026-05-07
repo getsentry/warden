@@ -38,6 +38,13 @@ name = "security-review"
 
 [[skills.triggers]]
 type = "pull_request"
+actions = ["opened", "synchronize"]
+
+[[skills]]
+name = "code-review"
+
+[[skills.triggers]]
+type = "pull_request"
 actions = ["opened", "synchronize"]`}
           lang="toml"
           theme="vitesse-black"
@@ -322,6 +329,9 @@ createFixPR = true`}
 [[skills]]
 name = "security-review"
 
+[[skills]]
+name = "code-review"
+
 # By relative path
 [[skills]]
 name = "./custom-skills/my-review"
@@ -346,7 +356,7 @@ remote = "your-org/warden-skills@abc123def"`}
     <li>Remote repository (if <code>remote</code> field is specified)</li>
     <li>Direct path (if skill contains <code>/</code>, <code>\</code>, or starts with <code>.</code>)</li>
     <li>Conventional directories: <code>.warden/skills/</code>, <code>.agents/skills/</code>, <code>.claude/skills/</code></li>
-    <li>Built-in skills, including <code>security-review</code></li>
+    <li>Built-in skills, including <code>security-review</code> and <code>code-review</code></li>
   </ol>
 
   <h2 id="skill-files">Skill Files</h2>
