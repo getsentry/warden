@@ -20,6 +20,7 @@ import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../trigger
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { filterFindings } from '../../types/index.js';
 import type { SkillReport } from '../../types/index.js';
+import { setRepositoryScope } from '../../sentry.js';
 import type { ActionInputs } from '../inputs.js';
 import {
   setOutput,
@@ -43,6 +44,9 @@ export async function runScheduleWorkflow(
   inputs: ActionInputs,
   repoPath: string
 ): Promise<void> {
+  const githubRepository = process.env['GITHUB_REPOSITORY'];
+  setRepositoryScope(githubRepository);
+
   logGroup('Loading configuration');
   if (inputs.baseConfigPath) {
     console.log(`Base config path: ${inputs.baseConfigPath}`);
@@ -107,7 +111,6 @@ export async function runScheduleWorkflow(
   }
 
   // Get repo info from environment
-  const githubRepository = process.env['GITHUB_REPOSITORY'];
   if (!githubRepository) {
     setFailed('GITHUB_REPOSITORY environment variable not set');
   }

@@ -6,7 +6,7 @@
 
 import { readFileSync } from 'node:fs';
 import type { Octokit } from '@octokit/rest';
-import { Sentry, logger, emitStaleResolutionMetric, setGlobalAttributes, emitRunMetric } from '../../sentry.js';
+import { Sentry, logger, emitStaleResolutionMetric, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import {
   buildSkillRootsByName,
   loadLayeredWardenConfig,
@@ -169,6 +169,7 @@ async function initializeWorkflow(
     Sentry.captureException(error, { tags: { operation: 'build_event_context' } });
     setFailed(`Failed to build event context: ${error}`);
   }
+  setRepositoryScope(context.repository.fullName);
 
   logGroup('Loading configuration');
   if (inputs.baseConfigPath) {
@@ -791,7 +792,6 @@ export async function runPRWorkflow(
         });
       }
 
-      setGlobalAttributes({ 'warden.repository': context.repository.fullName });
       emitRunMetric();
 
       const traceId = span.spanContext().traceId;

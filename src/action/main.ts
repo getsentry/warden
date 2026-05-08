@@ -24,7 +24,7 @@
  * - ALL triggers failed (no successful analysis)
  */
 
-import { initSentry, Sentry, flushSentry } from '../sentry.js';
+import { initSentry, Sentry, flushSentry, setRepositoryScope } from '../sentry.js';
 initSentry('action');
 
 import { Octokit } from '@octokit/rest';
@@ -44,6 +44,8 @@ async function run(): Promise<void> {
   if (!eventName || !eventPath || !repoPath) {
     setFailed('This action must be run in a GitHub Actions environment');
   }
+
+  setRepositoryScope(process.env['GITHUB_REPOSITORY']);
 
   // Set up authentication environment variables
   setupAuthEnv(inputs);

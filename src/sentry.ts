@@ -48,6 +48,21 @@ export function setGlobalAttributes(attrs: Record<string, string | number | bool
 }
 
 /**
+ * Set repository metadata on the global Sentry scope.
+ */
+export function setRepositoryScope(repository: string | undefined): void {
+  if (!repository || !initialized) return;
+
+  try {
+    Sentry.setTag('repository', repository);
+  } catch {
+    // Never break the workflow
+  }
+
+  setGlobalAttributes({ 'warden.repository': repository });
+}
+
+/**
  * Get the trace ID from the active span, if available.
  * Useful for correlating runs to Sentry traces in logs and output.
  */
