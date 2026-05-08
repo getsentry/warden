@@ -39,3 +39,7 @@ source = "getsentry/skills"
 [[skills]]
 name = "pr-writer"
 source = "getsentry/skills"
+
+[[mcp]]
+name = "sentry"
+url = "https://mcp.sentry.dev/mcp/sentry/warden"
