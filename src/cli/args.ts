@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 import { getVersion } from '../utils/index.js';
+import { RuntimeNameSchema } from '../sdk/runtimes/types.js';
 import type { HelpTarget } from './help.js';
 
 export const CLIOptionsSchema = z.object({
@@ -35,6 +36,8 @@ export const CLIOptionsSchema = z.object({
   fix: z.boolean().default(false),
   /** Overwrite existing files (for init command) */
   force: z.boolean().default(false),
+  /** Runtime to scaffold in generated config (for init command) */
+  initRuntime: RuntimeNameSchema.optional(),
   /** List available skills (for add command) */
   list: z.boolean().default(false),
   /** Force interpretation of ambiguous targets as git refs */
@@ -279,6 +282,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'min-confidence': { type: 'string' },
       fix: { type: 'boolean', default: false },
       force: { type: 'boolean', short: 'f', default: false },
+      runtime: { type: 'string' },
       list: { type: 'boolean', short: 'l', default: false },
       remote: { type: 'string' },
       offline: { type: 'boolean', default: false },
@@ -349,6 +353,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       options: parseCliOptions({
         ...sharedOptions(values, verboseCount),
         force: Boolean(values.force),
+        initRuntime: typeof values.runtime === 'string' ? values.runtime : undefined,
       }),
     };
   }

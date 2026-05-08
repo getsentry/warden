@@ -19,6 +19,7 @@ import { ICON_CHECK, ICON_SKIPPED } from '../output/icons.js';
 import type { Reporter } from '../output/reporter.js';
 import type { CLIOptions } from '../args.js';
 import { getMajorVersion } from '../../utils/index.js';
+import type { RuntimeName } from '../../sdk/runtimes/types.js';
 
 const INSTALLABLE_BUNDLED_SKILLS = new Set([
   'warden',
@@ -64,7 +65,7 @@ function renderSkipped(reporter: Reporter, reason: string): void {
 /**
  * Template for warden.toml configuration file.
  */
-function generateWardenToml(): string {
+function generateWardenToml(runtime: RuntimeName): string {
   return `# Warden Configuration
 # https://github.com/getsentry/warden
 #
@@ -79,6 +80,8 @@ version = 1
 
 # Default settings inherited by all skills
 [defaults]
+# Runtime backend: claude or codex
+runtime = "${runtime}"
 # Severity levels: critical, high, medium, low, info
 # failOn: minimum severity that fails the check
 failOn = "high"
@@ -135,6 +138,30 @@ jobs:
         with:
           anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
 `;
+}
+
+function renderNextSteps(reporter: Reporter, repoRoot: string, runtime: RuntimeName): void {
+  reporter.bold('Next steps:');
+  reporter.text(`  1. Add built-in reviews: ${chalk.cyan('warden add security-review')}`);
+  reporter.text(`     ${chalk.cyan('warden add code-review')}`);
+
+  if (runtime === 'codex') {
+    reporter.text(`  2. Run ${chalk.cyan('codex login')} locally`);
+    reporter.text(`  3. Test locally: ${chalk.cyan('warden run --no-color')}`);
+    reporter.text('  4. Commit warden.toml when ready');
+    return;
+  }
+
+  reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
+  reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to organization or repository secrets`);
+
+  // Show GitHub secrets URL if available
+  const githubUrl = getGitHubRepoUrl(repoRoot);
+  if (githubUrl) {
+    reporter.text(`     ${chalk.dim(githubUrl + '/settings/secrets/actions')}`);
+  }
+
+  reporter.text('  4. Commit and open a PR to test');
 }
 
 /**
@@ -290,6 +317,7 @@ function ensureClaudeSymlink(repoRoot: string, force: boolean, reporter: Reporte
  */
 export async function runInit(options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
+  const runtime = options.initRuntime ?? 'claude';
 
   // Find repo root
   let repoRoot: string;
@@ -312,7 +340,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   if (existing.hasWardenToml && !options.force) {
     renderSkipped(reporter, 'already exists');
   } else {
-    writeFileSync(wardenTomlPath, generateWardenToml(), 'utf-8');
+    writeFileSync(wardenTomlPath, generateWardenToml(runtime), 'utf-8');
     renderCreated(reporter);
     filesCreated++;
   }
@@ -404,20 +432,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
     return 0;
   }
 
-  // Print next steps
-  reporter.bold('Next steps:');
-  reporter.text(`  1. Add built-in reviews: ${chalk.cyan('warden add security-review')}`);
-  reporter.text(`     ${chalk.cyan('warden add code-review')}`);
-  reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
-  reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to organization or repository secrets`);
-
-  // Show GitHub secrets URL if available
-  const githubUrl = getGitHubRepoUrl(repoRoot);
-  if (githubUrl) {
-    reporter.text(`     ${chalk.dim(githubUrl + '/settings/secrets/actions')}`);
-  }
-
-  reporter.text('  4. Commit and open a PR to test');
+  renderNextSteps(reporter, repoRoot, runtime);
 
   return 0;
 }

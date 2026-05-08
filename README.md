@@ -28,6 +28,12 @@ npx @sentry/warden add code-review
 # Uses Claude Code subscription if logged in, or set WARDEN_ANTHROPIC_API_KEY
 npx @sentry/warden
 
+# To use your local Codex subscription instead, set defaults.runtime in warden.toml:
+# [defaults]
+# runtime = "codex"
+# Then authenticate once with:
+# codex login
+
 # Fix issues automatically
 npx @sentry/warden --fix
 ```

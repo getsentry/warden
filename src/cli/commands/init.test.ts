@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, existsSync, readFileSync, readlinkSync, lstatSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -68,6 +68,15 @@ describe('init command', () => {
 
       const content = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
       expect(content).toContain('version = 1');
+      expect(content).toContain('runtime = "claude"');
+    });
+
+    it('creates warden.toml with Codex runtime when requested', async () => {
+      const reporter = createMockReporter();
+      await runInit(createOptions({ initRuntime: 'codex' }), reporter);
+
+      const content = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
+      expect(content).toContain('runtime = "codex"');
     });
 
     it('creates workflow with correct content', async () => {
@@ -83,6 +92,23 @@ describe('init command', () => {
       expect(content).toContain('ref: ${{ github.event.pull_request.head.sha }}');
       expect(content).toContain('WARDEN_ANTHROPIC_API_KEY');
       expect(content).toContain(`getsentry/warden@v${getMajorVersion()}`);
+    });
+
+    it('prints Codex local setup next steps when Codex runtime is requested', async () => {
+      const messages: string[] = [];
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation((message) => {
+        messages.push(String(message));
+      });
+      const reporter = createMockReporter();
+
+      await runInit(createOptions({ initRuntime: 'codex' }), reporter);
+
+      const output = messages.join('\n');
+      expect(output).toContain('codex login');
+      expect(output).toContain('warden run --no-color');
+      expect(output).not.toContain('WARDEN_ANTHROPIC_API_KEY');
+
+      errorSpy.mockRestore();
     });
   });
 

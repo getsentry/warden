@@ -188,7 +188,7 @@ export async function extractFindingsWithLLM(
       : { apiKey: apiKeyOrOptions, maxRetries };
   const { apiKey, runtime, model } = options;
 
-  if (!apiKey) {
+  if (!apiKey && (runtime ?? 'claude') === 'claude') {
     return {
       success: false,
       error: 'no_api_key_for_fallback',
@@ -505,7 +505,7 @@ export async function mergeCrossLocationFindings(
 
   // Early exit: need at least 2 located findings to merge
   const withLocations = findings.filter((f) => f.location);
-  if (withLocations.length < 2 || !apiKey) {
+  if (withLocations.length < 2 || (!apiKey && (options?.runtime ?? 'claude') === 'claude')) {
     return { findings, mergedCount: 0 };
   }
 

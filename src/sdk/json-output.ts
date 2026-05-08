@@ -67,7 +67,7 @@ async function repairJsonOutput<T>(
   reason: string,
   repair: JsonOutputRepairOptions,
 ): Promise<ParseJsonFromOutputResult<T>> {
-  if (!repair.apiKey) {
+  if (!repair.apiKey && (repair.runtimeName ?? repair.runtime?.name ?? 'claude') === 'claude') {
     return {
       success: false,
       error: `${reason}; repair_skipped: missing_api_key`,

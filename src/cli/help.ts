@@ -22,6 +22,7 @@ type HelpOptionId =
   | 'log'
   | 'color'
   | 'force'
+  | 'runtime'
   | 'list'
   | 'remote'
   | 'regenerate'
@@ -164,6 +165,10 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
     label: '-f, --force',
     description: 'Overwrite existing files or bypass caches',
   },
+  runtime: {
+    label: '--runtime <claude|codex>',
+    description: 'Runtime to scaffold in warden.toml',
+  },
   list: {
     label: '--list',
     description: 'List available skills',
@@ -260,9 +265,10 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     summary: 'Initialize Warden configuration',
     description: 'Create a starter warden.toml and GitHub workflow in the current repository.',
     usage: ['warden init [options]'],
-    options: ['cwd', 'force', ...SHARED_COMMAND_OPTIONS],
+    options: ['cwd', 'force', 'runtime', ...SHARED_COMMAND_OPTIONS],
     examples: [
       'warden init',
+      'warden init --runtime codex',
       'warden init --force',
     ],
   },

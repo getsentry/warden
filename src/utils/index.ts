@@ -58,3 +58,11 @@ export function escapeHtml(text: string): string {
 export function getAnthropicApiKey(): string | undefined {
   return process.env['WARDEN_ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'];
 }
+
+/**
+ * Get the OpenAI API key from environment variables.
+ * Checks WARDEN_OPENAI_API_KEY first, then falls back to OPENAI_API_KEY.
+ */
+export function getOpenAIApiKey(): string | undefined {
+  return process.env['WARDEN_OPENAI_API_KEY'] ?? process.env['OPENAI_API_KEY'];
+}

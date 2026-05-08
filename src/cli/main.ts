@@ -11,7 +11,7 @@ import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
-import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
+import { DEFAULT_CONCURRENCY, getAnthropicApiKey, getOpenAIApiKey } from '../utils/index.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 import { parseCliArgs, showVersion, classifyTargets, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
@@ -57,6 +57,7 @@ import {
   generatedSkillDefinitionRootExists,
   resolveGeneratedSkillTarget,
 } from '../skill-builder/definition.js';
+import type { RuntimeName } from '../sdk/runtimes/index.js';
 
 /**
  * Global abort controller for graceful shutdown on SIGINT.
@@ -701,6 +702,41 @@ export function resolveCliLogModel(
   return resolveCliDefaultModel(config, cliModel) ?? MODEL_DEFAULT_SENTINEL;
 }
 
+function getRuntimeApiKey(runtime: RuntimeName | undefined): string | undefined {
+  return runtime === 'codex' ? getOpenAIApiKey() : getAnthropicApiKey();
+}
+
+function verifyRuntimesForLocalRun(
+  runtimes: Iterable<RuntimeName | undefined>,
+  repoPath: string,
+  options: CLIOptions,
+  reporter: Reporter,
+): boolean {
+  const verified = new Set<RuntimeName>();
+  for (const runtime of runtimes) {
+    const runtimeName = runtime ?? 'claude';
+    if (verified.has(runtimeName)) continue;
+    verified.add(runtimeName);
+    const apiKey = getRuntimeApiKey(runtimeName);
+    if (!apiKey) {
+      reporter.debug(`No API key found. Using ${runtimeName === 'codex' ? 'Codex' : 'Claude Code'} subscription auth.`);
+    }
+    try {
+      verifyAuth({ apiKey, runtime: runtimeName });
+    } catch (error: unknown) {
+      const message = (error as WardenAuthenticationError).message;
+      reporter.error(message);
+      emitEmptyRunLog(repoPath, options, {
+        code: 'auth_failed',
+        message,
+        timestamp: new Date().toISOString(),
+      });
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Process skill task results into reports and check for failures.
  * Exported for testing; callers inside main.ts use it directly.
@@ -851,32 +887,12 @@ export async function runSkills(
   const cwd = process.cwd();
   const startTime = Date.now();
 
-  // Get API key (optional - SDK can use Claude Code subscription auth)
-  const apiKey = getAnthropicApiKey();
-  if (!apiKey) {
-    reporter.debug('No API key found. Using Claude Code subscription auth.');
-  }
-
   // Try to find repo root for config loading
   let repoPath: string | undefined;
   try {
     repoPath = getRepoRoot(cwd);
   } catch {
     // Not in a git repo - that's fine for file mode
-  }
-
-  // Pre-flight: verify auth will work before starting analysis
-  try {
-    verifyAuth({ apiKey });
-  } catch (error: unknown) {
-    const message = (error as WardenAuthenticationError).message;
-    reporter.error(message);
-    emitEmptyRunLog(repoPath ?? cwd, options, {
-      code: 'auth_failed',
-      message,
-      timestamp: new Date().toISOString(),
-    });
-    return 1;
   }
 
   // Resolve config path
@@ -964,6 +980,15 @@ export async function runSkills(
     return 0;
   }
 
+  if (!verifyRuntimesForLocalRun(
+    skillsToRun.map((skill) => skill.runtime),
+    repoPath ?? cwd,
+    options,
+    reporter,
+  )) {
+    return 1;
+  }
+
   // Build skill tasks
   // Model precedence: defaults.agent.model > defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
   // sdkModel is undefined when no model is explicitly configured (lets SDK use its default).
@@ -971,7 +996,6 @@ export async function runSkills(
   const sdkModel = defaultModel;
   const logModel = resolveCliLogModel(config, options.model);
   const runnerOptions: SkillRunnerOptions = {
-    apiKey,
     model: sdkModel,
     runtime: config?.defaults?.runtime ?? 'claude',
     auxiliaryModel: defaultAuxiliaryModel,
@@ -991,7 +1015,10 @@ export async function runSkills(
     remote,
     failOn: options.failOn,
     context: filterContextByPaths(context, filters),
-    runnerOptions: mergeSkillRunnerOptions(runnerOptions, skillOptions),
+    runnerOptions: {
+      ...mergeSkillRunnerOptions(runnerOptions, skillOptions),
+      apiKey: getRuntimeApiKey(skillOptions.runtime ?? runnerOptions.runtime),
+    },
   }));
   let tasks: SkillTaskOptions[];
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
@@ -1273,22 +1300,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     triggersToRun.map((t) => ({ name: t.name, skill: t.skill }))
   );
 
-  // Get API key (optional - SDK can use Claude Code subscription auth)
-  const apiKey = getAnthropicApiKey();
-  if (!apiKey) {
-    reporter.debug('No API key found. Using Claude Code subscription auth.');
-  }
-
-  try {
-    verifyAuth({ apiKey });
-  } catch (error: unknown) {
-    const message = (error as WardenAuthenticationError).message;
-    reporter.error(message);
-    emitEmptyRunLog(repoPath, options, {
-      code: 'auth_failed',
-      message,
-      timestamp: new Date().toISOString(),
-    });
+  if (!verifyRuntimesForLocalRun(
+    triggersToRun.map((trigger) => trigger.runtime),
+    repoPath,
+    options,
+    reporter,
+  )) {
     return 1;
   }
 
@@ -1303,7 +1320,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     minConfidence: trigger.minConfidence ?? effectiveMinConfidence,
     context: filterContextByPaths(context, trigger.filters),
     runnerOptions: {
-      apiKey,
+      apiKey: getRuntimeApiKey(trigger.runtime),
       model: trigger.model,
       runtime: trigger.runtime,
       auxiliaryModel: trigger.auxiliaryModel,

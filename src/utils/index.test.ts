@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { escapeHtml, getAnthropicApiKey } from './index.js';
+import { escapeHtml, getAnthropicApiKey, getOpenAIApiKey } from './index.js';
 
 describe('escapeHtml', () => {
   it('escapes angle brackets outside code', () => {
@@ -80,5 +80,35 @@ describe('getAnthropicApiKey', () => {
 
   it('returns undefined when neither key is set', () => {
     expect(getAnthropicApiKey()).toBeUndefined();
+  });
+});
+
+describe('getOpenAIApiKey', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env['WARDEN_OPENAI_API_KEY'];
+    delete process.env['OPENAI_API_KEY'];
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('returns WARDEN_OPENAI_API_KEY when set', () => {
+    process.env['WARDEN_OPENAI_API_KEY'] = 'warden-openai-key';
+    expect(getOpenAIApiKey()).toBe('warden-openai-key');
+  });
+
+  it('returns WARDEN_OPENAI_API_KEY over OPENAI_API_KEY when both set', () => {
+    process.env['WARDEN_OPENAI_API_KEY'] = 'warden-openai-key';
+    process.env['OPENAI_API_KEY'] = 'openai-key';
+    expect(getOpenAIApiKey()).toBe('warden-openai-key');
+  });
+
+  it('falls back to OPENAI_API_KEY when Warden key is not set', () => {
+    process.env['OPENAI_API_KEY'] = 'openai-key';
+    expect(getOpenAIApiKey()).toBe('openai-key');
   });
 });

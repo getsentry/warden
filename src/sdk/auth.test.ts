@@ -27,6 +27,12 @@ describe('verifyAuth', () => {
     expect(mockExec).toHaveBeenCalledWith('claude', ['--version'], { timeout: 5000 });
   });
 
+  it('checks for codex binary when Codex runtime has no API key', () => {
+    mockExec.mockReturnValue('codex-cli 1.0.0');
+    verifyAuth({ runtime: 'codex' });
+    expect(mockExec).toHaveBeenCalledWith('codex', ['login', 'status'], { timeout: 5000 });
+  });
+
   it('throws WardenAuthenticationError when claude binary is missing', () => {
     mockExec.mockImplementation(() => {
       throw new ExecError('claude --version', null, 'spawn claude ENOENT', null);
@@ -45,6 +51,21 @@ describe('verifyAuth', () => {
       expect(error).toBeInstanceOf(WardenAuthenticationError);
       expect((error as Error).message).toContain('Claude Code CLI not found');
       expect((error as Error).message).toContain('WARDEN_ANTHROPIC_API_KEY');
+    }
+  });
+
+  it('includes Codex login guidance when the codex binary is missing', () => {
+    mockExec.mockImplementation(() => {
+      throw new ExecError('codex --version', null, 'spawn codex ENOENT', null);
+    });
+    try {
+      verifyAuth({ runtime: 'codex' });
+      expect.fail('should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(WardenAuthenticationError);
+      expect((error as Error).message).toContain('Codex CLI not found');
+      expect((error as Error).message).toContain('codex login');
+      expect((error as Error).message).toContain('WARDEN_OPENAI_API_KEY');
     }
   });
 

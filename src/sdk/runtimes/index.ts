@@ -1,11 +1,14 @@
+import { codexRuntime } from './codex.js';
 import { claudeRuntime } from './claude.js';
 import type { Runtime, RuntimeName } from './types.js';
 
 const RUNTIMES: Partial<Record<RuntimeName, Runtime>> = {
   claude: claudeRuntime,
+  codex: codexRuntime,
 };
 
 export { claudeRuntime } from './claude.js';
+export { codexRuntime } from './codex.js';
 export type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -32,6 +35,7 @@ export function getRuntime(name: RuntimeName = 'claude'): Runtime {
 
 export interface RuntimeProviderOptionsInput {
   pathToClaudeCodeExecutable?: string;
+  pathToCodexExecutable?: string;
 }
 
 /**
@@ -43,6 +47,9 @@ export function getRuntimeProviderOptions(
 ): unknown {
   if (name === 'claude') {
     return { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable };
+  }
+  if (name === 'codex') {
+    return { pathToCodexExecutable: options.pathToCodexExecutable };
   }
 
   return undefined;

@@ -130,6 +130,12 @@ describe('parseCliArgs', () => {
     expect(result.helpTarget).toBe('improve');
   });
 
+  it('parses init runtime option', () => {
+    const result = parseCliArgs(['init', '--runtime', 'codex']);
+    expect(result.command).toBe('init');
+    expect(result.options.initRuntime).toBe('codex');
+  });
+
   it('resolves explicit help targets', () => {
     const result = parseCliArgs(['help', 'runs', 'show']);
     expect(result.command).toBe('help');

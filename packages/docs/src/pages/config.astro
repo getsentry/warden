@@ -182,6 +182,8 @@ maxFindings = 20`}
     <dd>Model for all skills</dd>
     <dt>maxTurns</dt>
     <dd>Max agentic turns per hunk. Default: 50</dd>
+    <dt>runtime</dt>
+    <dd>Runtime backend. Use <code>claude</code> for Claude Code or <code>codex</code> for local Codex subscription auth.</dd>
     <dt>auxiliary</dt>
     <dd>Model defaults for auxiliary structured calls such as extraction repair, review deduplication, and fix evaluation</dd>
     <dt>synthesis</dt>
@@ -209,6 +211,7 @@ maxFindings = 20`}
   <Terminal showCopy={true}>
     <Code
       code={`[defaults]
+runtime = "claude"
 model = "claude-sonnet-4-5"
 maxTurns = 30
 failOn = "high"
@@ -228,6 +231,7 @@ model = "claude-opus-4-5"`}
   </Terminal>
 
   <p><strong>Model precedence:</strong> trigger &gt; skill &gt; defaults &gt; CLI flag (<code>-m</code>) &gt; env var (<code>WARDEN_MODEL</code>). Most specific wins.</p>
+  <p><strong>Local Codex:</strong> set <code>runtime = "codex"</code> and run <code>codex login</code>. Warden will use <code>codex exec</code> locally.</p>
   <p><strong>Synthesis fallback:</strong> <code>defaults.synthesis.model</code> falls back to <code>defaults.auxiliary.model</code> when not set.</p>
 
   <h2 id="chunking">Chunking</h2>

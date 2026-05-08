@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  codexRuntime,
   claudeRuntime,
   getRuntime,
   getRuntimeProviderOptions,
@@ -21,11 +22,21 @@ describe('runtimes', () => {
     expect(() => getRuntime('pi' as never)).toThrow('Unsupported runtime: pi');
   });
 
+  it('exposes Codex as a runtime provider', () => {
+    expect(getRuntime('codex')).toBe(codexRuntime);
+    expect(codexRuntime.name).toBe('codex');
+  });
+
   it('builds provider options at the runtime boundary', () => {
     expect(getRuntimeProviderOptions('claude', {
       pathToClaudeCodeExecutable: '/bin/claude',
     })).toEqual({
       pathToClaudeCodeExecutable: '/bin/claude',
+    });
+    expect(getRuntimeProviderOptions('codex', {
+      pathToCodexExecutable: '/bin/codex',
+    })).toEqual({
+      pathToCodexExecutable: '/bin/codex',
     });
   });
 

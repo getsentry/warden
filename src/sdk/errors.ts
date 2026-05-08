@@ -64,6 +64,10 @@ const AUTH_ERROR_GUIDANCE = `
 
 https://console.anthropic.com/ for API keys`;
 
+const CODEX_AUTH_ERROR_GUIDANCE = `
+  codex login                              # Use OpenAI subscription auth
+  export WARDEN_OPENAI_API_KEY=sk-...      # Or use API key`;
+
 /** IPC/subprocess failure error codes (EPIPE, ECONNRESET, etc.) */
 const IPC_ERROR_CODES = ['EPIPE', 'ECONNRESET', 'ECONNREFUSED', 'ENOTCONN'];
 
@@ -85,10 +89,13 @@ export function isSubprocessError(error: unknown): boolean {
 }
 
 export class WardenAuthenticationError extends Error {
-  constructor(sdkError?: string, options?: { cause?: unknown }) {
+  constructor(sdkError?: string, options?: { cause?: unknown; runtime?: 'claude' | 'codex' }) {
+    const guidance = options?.runtime === 'codex'
+      ? CODEX_AUTH_ERROR_GUIDANCE
+      : AUTH_ERROR_GUIDANCE;
     const message = sdkError
-      ? `Authentication failed: ${sdkError}\n${AUTH_ERROR_GUIDANCE}`
-      : `Authentication required.${AUTH_ERROR_GUIDANCE}`;
+      ? `Authentication failed: ${sdkError}\n${guidance}`
+      : `Authentication required.${guidance}`;
     super(message, options);
     this.name = 'WardenAuthenticationError';
   }

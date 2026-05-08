@@ -33,6 +33,7 @@ describe('renderHelp', () => {
     const output = renderHelp('init');
 
     expect(output).toContain('-v, --verbose');
+    expect(output).toContain('--runtime <claude|codex>');
     expect(output).toContain('--debug');
     expect(output).toContain('--log');
   });

@@ -68,7 +68,7 @@ describe('runSkills auth flow', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('checks auth before returning success for no matching skills', async () => {
+  it('skips auth when no skills match', async () => {
     verifyAuthMock.mockImplementation(() => {
       throw new Error('bad auth');
     });
@@ -79,7 +79,7 @@ describe('runSkills auth flow', () => {
       new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet)
     );
 
-    expect(exitCode).toBe(1);
-    expect(verifyAuthMock).toHaveBeenCalledWith({ apiKey: undefined });
+    expect(exitCode).toBe(0);
+    expect(verifyAuthMock).not.toHaveBeenCalled();
   });
 });
