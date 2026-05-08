@@ -159,13 +159,52 @@ function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | 
   return Object.keys(inherited).length > 0 ? inherited : undefined;
 }
 
-export function mergeWardenConfigs(base: WardenConfig, overlay: WardenConfig): WardenConfig {
+export interface MergeWardenConfigOptions {
+  baseConfigPath?: string;
+  repoConfigPath?: string;
+  onWarning?: (message: string) => void;
+}
+
+function withoutBaseDuplicateSkills(
+  base: WardenConfig,
+  repo: WardenConfig,
+  options: MergeWardenConfigOptions = {}
+): WardenConfig {
+  const baseSkillNames = new Set(base.skills.map((skill) => skill.name));
+  const skipped = new Set<string>();
+  const skills = repo.skills.filter((skill) => {
+    if (!baseSkillNames.has(skill.name)) {
+      return true;
+    }
+
+    skipped.add(skill.name);
+    return false;
+  });
+
+  for (const skillName of skipped) {
+    const basePath = options.baseConfigPath ?? 'base config';
+    const repoPath = options.repoConfigPath ?? 'repo config';
+    options.onWarning?.(
+      `Skill "${skillName}" is defined in both ${basePath} and ${repoPath}. ` +
+      'Using the base config skill and ignoring the repo config duplicate.'
+    );
+  }
+
+  return skipped.size > 0 ? { ...repo, skills } : repo;
+}
+
+export function mergeWardenConfigs(
+  base: WardenConfig,
+  overlay: WardenConfig,
+  options: MergeWardenConfigOptions = {}
+): WardenConfig {
+  const effectiveOverlay = withoutBaseDuplicateSkills(base, overlay, options);
   const mergedConfig = {
     version: 1 as const,
-    defaults: mergeDefaults(base.defaults, overlay.defaults),
-    skills: [...base.skills, ...overlay.skills],
-    runner: mergeRunnerConfig(base.runner, overlay.runner),
-    logs: mergeLogsConfig(base.logs, overlay.logs),
+    defaults: mergeDefaults(base.defaults, effectiveOverlay.defaults),
+    skills: [...base.skills, ...effectiveOverlay.skills],
+    runner: mergeRunnerConfig(base.runner, effectiveOverlay.runner),
+    logs: mergeLogsConfig(base.logs, effectiveOverlay.logs),
   };
 
   const result = WardenConfigSchema.safeParse(mergedConfig);
@@ -180,6 +219,7 @@ export function mergeWardenConfigs(base: WardenConfig, overlay: WardenConfig): W
 export interface LayeredConfigOptions {
   baseConfigPath?: string;
   configPath?: string;
+  onWarning?: (message: string) => void;
 }
 
 export interface LoadedLayeredConfig {
@@ -265,7 +305,11 @@ export function loadLayeredWardenConfig(
     return { config: baseConfig, baseConfig };
   }
 
-  const repoConfig = loadWardenConfigFile(repoConfigPath);
+  const repoConfig = withoutBaseDuplicateSkills(baseConfig, loadWardenConfigFile(repoConfigPath), {
+    baseConfigPath: options.baseConfigPath,
+    repoConfigPath: options.configPath ?? 'warden.toml',
+    onWarning: options.onWarning,
+  });
   return {
     config: mergeWardenConfigs(baseConfig, repoConfig),
     baseConfig,
@@ -455,9 +499,10 @@ export function resolveLayeredSkillConfigs(
   skillRootsByName?: LayeredSkillRootsByName
 ): ResolvedTrigger[] {
   if (layered.baseConfig && layered.repoConfig) {
+    const repoConfig = withoutBaseDuplicateSkills(layered.baseConfig, layered.repoConfig);
     const repoConfigWithInheritedDefaults: WardenConfig = {
-      ...layered.repoConfig,
-      defaults: inheritRepoLayerDefaults(layered.baseConfig.defaults, layered.repoConfig.defaults),
+      ...repoConfig,
+      defaults: inheritRepoLayerDefaults(layered.baseConfig.defaults, repoConfig.defaults),
     };
 
     return [

@@ -187,6 +187,7 @@ async function initializeWorkflow(
     const layered = loadLayeredWardenConfig(repoPath, {
       baseConfigPath: inputs.baseConfigPath,
       configPath: inputs.configPath,
+      onWarning: (message) => console.log(`::warning::${message}`),
     });
     // The org base config is an enforced baseline. Repo config extends the run
     // with additional repo-local triggers, but does not override these

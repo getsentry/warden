@@ -617,7 +617,7 @@ describe('mergeWardenConfigs', () => {
     });
   });
 
-  it('rejects duplicate skill names across layers', () => {
+  it('uses base skills and warns for duplicate skill names across layers', () => {
     const baseConfig: WardenConfig = {
       version: 1,
       skills: [{
@@ -634,10 +634,19 @@ describe('mergeWardenConfigs', () => {
       }],
     };
 
-    expect(() => mergeWardenConfigs(baseConfig, repoConfig)).toThrow(ConfigLoadError);
-    expect(() => mergeWardenConfigs(baseConfig, repoConfig)).toThrow(
-      'Duplicate skill names: shared-skill'
-    );
+    const warnings: string[] = [];
+    const merged = mergeWardenConfigs(baseConfig, repoConfig, {
+      baseConfigPath: '.warden-org/warden.toml',
+      repoConfigPath: 'warden.toml',
+      onWarning: (message) => warnings.push(message),
+    });
+
+    expect(merged.skills).toHaveLength(1);
+    expect(merged.skills[0]?.name).toBe('shared-skill');
+    expect(warnings).toEqual([
+      'Skill "shared-skill" is defined in both .warden-org/warden.toml and warden.toml. ' +
+      'Using the base config skill and ignoring the repo config duplicate.',
+    ]);
   });
 });
 
@@ -832,7 +841,7 @@ describe('resolveLayeredSkillConfigs', () => {
     expect(resolved[1]?.maxContextFiles).toBeUndefined();
   });
 
-  it('uses layer-specific skill roots when both layers define the same skill name', () => {
+  it('ignores repo layer duplicates when resolving skills', () => {
     const baseConfig: WardenConfig = {
       version: 1,
       skills: [{
@@ -862,13 +871,62 @@ describe('resolveLayeredSkillConfigs', () => {
       }
     );
 
-    expect(resolved).toHaveLength(2);
+    expect(resolved).toHaveLength(1);
     expect(resolved[0]?.skillRoot).toBe('/repo/.warden-org');
-    expect(resolved[1]?.skillRoot).toBe('/repo');
   });
 });
 
 describe('loadLayeredWardenConfig', () => {
+  it('loads base skill and skips repo duplicate with a warning', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'warden-config-'));
+    const warnings: string[] = [];
+
+    try {
+      mkdirSync(join(tempDir, '.warden-org'));
+      writeFileSync(
+        join(tempDir, '.warden-org', 'warden.toml'),
+        [
+          'version = 1',
+          '',
+          '[[skills]]',
+          'name = "security-review"',
+          '',
+        ].join('\n')
+      );
+      writeFileSync(
+        join(tempDir, 'warden.toml'),
+        [
+          'version = 1',
+          '',
+          '[[skills]]',
+          'name = "security-review"',
+          '',
+          '[[skills]]',
+          'name = "repo-only"',
+          '',
+        ].join('\n')
+      );
+
+      const layered = loadLayeredWardenConfig(tempDir, {
+        baseConfigPath: '.warden-org/warden.toml',
+        configPath: 'warden.toml',
+        onWarning: (message) => warnings.push(message),
+      });
+
+      expect(layered.config.skills.map((skill) => skill.name)).toEqual([
+        'security-review',
+        'repo-only',
+      ]);
+      expect(layered.repoConfig?.skills.map((skill) => skill.name)).toEqual(['repo-only']);
+      expect(warnings).toEqual([
+        'Skill "security-review" is defined in both .warden-org/warden.toml and warden.toml. ' +
+        'Using the base config skill and ignoring the repo config duplicate.',
+      ]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects using the same file for the base and repo config', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'warden-config-'));
 

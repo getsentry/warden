@@ -59,6 +59,7 @@ export async function runScheduleWorkflow(
     const layered = loadLayeredWardenConfig(repoPath, {
       baseConfigPath: inputs.baseConfigPath,
       configPath: inputs.configPath,
+      onWarning: (message) => console.log(`::warning::${message}`),
     });
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
     scheduleTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName)
