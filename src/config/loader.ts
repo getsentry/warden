@@ -2,9 +2,11 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, normalize } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { Sentry } from '../sentry.js';
+import { isBuiltinSkillName } from '../skills/loader.js';
 import {
   WardenConfigSchema,
   type WardenConfig,
+  type SkillConfig,
   type ScheduleConfig,
   type TriggerType,
   type Defaults,
@@ -243,7 +245,10 @@ export function buildSkillRootsByName(
 
   if (layered.baseConfig) {
     const localBaseSkills = layered.baseConfig.skills.filter((skill) => !skill.remote);
-    if (localBaseSkills.length > 0 && !baseSkillRoot) {
+    const localBaseSkillsRequiringRoot = localBaseSkills.filter(
+      (skill) => !isBuiltinSkillName(skill.name)
+    );
+    if (localBaseSkillsRequiringRoot.length > 0 && !baseSkillRoot) {
       throw new ConfigLoadError(
         'base-skill-root is required when the base config defines local skills'
       );
@@ -256,6 +261,12 @@ export function buildSkillRootsByName(
       }
       for (const skill of localBaseSkills) {
         baseRoots[skill.name] = resolvedBaseSkillRoot;
+      }
+    } else {
+      for (const skill of localBaseSkills) {
+        if (isBuiltinSkillName(skill.name)) {
+          baseRoots[skill.name] = undefined;
+        }
       }
     }
   }
@@ -335,6 +346,8 @@ export interface ResolvedTrigger {
   remote?: string;
   /** Repository root to use when resolving local skill names or paths */
   skillRoot?: string;
+  /** Resolve from package built-ins instead of repo-local skill directories */
+  useBuiltinSkill?: boolean;
   /** Path filters */
   filters: { paths?: string[]; ignorePaths?: string[] };
   // Flattened output fields (merged: trigger > skill > defaults)
@@ -368,6 +381,21 @@ export interface ResolvedTrigger {
   maxContextFiles?: number;
   /** Schedule-specific configuration */
   schedule?: ScheduleConfig;
+}
+
+function resolveSkillSource(
+  skill: SkillConfig,
+  skillRootsByName?: Record<string, string | undefined>
+): Pick<ResolvedTrigger, 'skillRoot' | 'useBuiltinSkill'> {
+  if (!skillRootsByName || !Object.hasOwn(skillRootsByName, skill.name)) {
+    return {};
+  }
+
+  const skillRoot = skillRootsByName[skill.name];
+  return {
+    skillRoot,
+    useBuiltinSkill: !skill.remote && skillRoot === undefined,
+  };
 }
 
 /**
@@ -412,6 +440,7 @@ export function resolveSkillConfigs(
   const verifyFindings = defaults?.verification?.enabled !== false;
 
   for (const skill of config.skills) {
+    const skillSource = resolveSkillSource(skill, skillRootsByName);
     const baseModel =
       emptyToUndefined(skill.model) ??
       emptyToUndefined(defaults?.agent?.model) ??
@@ -438,7 +467,7 @@ export function resolveSkillConfigs(
         skill: skill.name,
         type: '*',
         remote: skill.remote,
-        skillRoot: skillRootsByName?.[skill.name],
+        ...skillSource,
         filters,
         failOn: skill.failOn ?? defaults?.failOn,
         reportOn: skill.reportOn ?? defaults?.reportOn,
@@ -465,7 +494,7 @@ export function resolveSkillConfigs(
           type: trigger.type,
           actions: trigger.actions,
           remote: skill.remote,
-          skillRoot: skillRootsByName?.[skill.name],
+          ...skillSource,
           filters,
           // 3-level merge: trigger > skill > defaults
           failOn: trigger.failOn ?? skill.failOn ?? defaults?.failOn,

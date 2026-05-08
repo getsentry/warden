@@ -90,6 +90,29 @@ function resolvePackageRoot(): string {
 }
 
 /**
+ * Return true when a skill name resolves to a package-native built-in skill.
+ */
+export function isBuiltinSkillName(name: string): boolean {
+  if (isPathLike(name)) {
+    return false;
+  }
+
+  const packageRoot = resolvePackageRoot();
+  for (const dir of BUILTIN_SKILL_DIRECTORIES) {
+    const dirPath = join(packageRoot, dir);
+
+    if (
+      existsSync(join(dirPath, name, 'SKILL.md')) ||
+      existsSync(join(dirPath, `${name}.md`))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Clear the skills cache. Useful for testing or when skills may have changed.
  */
 export function clearSkillsCache(): void {

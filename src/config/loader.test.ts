@@ -666,6 +666,26 @@ describe('buildSkillRootsByName', () => {
     expect(buildSkillRootsByName('/repo', layered)).toBeUndefined();
   });
 
+  it('resolves built-in base skills without baseSkillRoot', () => {
+    const layered = {
+      config: {
+        version: 1 as const,
+        skills: [{ name: 'security-review' }],
+      },
+      baseConfig: {
+        version: 1 as const,
+        skills: [{ name: 'security-review' }],
+      },
+    };
+
+    const roots = buildSkillRootsByName('/repo', layered);
+    const [resolved] = resolveLayeredSkillConfigs(layered, undefined, roots);
+
+    expect(roots).toEqual({ base: { 'security-review': undefined } });
+    expect(resolved?.useBuiltinSkill).toBe(true);
+    expect(resolved?.skillRoot).toBeUndefined();
+  });
+
   it('requires baseSkillRoot when base config defines local skills', () => {
     const layered = {
       config: {

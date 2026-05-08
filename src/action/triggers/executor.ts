@@ -127,13 +127,14 @@ export async function executeTrigger(
       const minConfidence = trigger.minConfidence ?? 'medium';
       const requestChanges = trigger.requestChanges ?? deps.globalRequestChanges;
       const failCheck = trigger.failCheck ?? deps.globalFailCheck;
+      const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
 
       try {
         const taskOptions: SkillTaskOptions = {
           name: trigger.name,
           displayName: trigger.skill,
           failOn,
-          resolveSkill: () => resolveSkillAsync(trigger.skill, trigger.skillRoot ?? context.repoPath, {
+          resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
             remote: trigger.remote,
           }),
           context: filterContextByPaths(context, trigger.filters),

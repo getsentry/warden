@@ -113,6 +113,30 @@ const mockContext: EventContext = {
     );
   });
 
+  it('resolves built-in base skills without the repo root', async () => {
+    const mockReport = createReport();
+
+    vi.mocked(resolveSkillAsync).mockResolvedValue({
+      name: 'test-skill',
+      description: 'Test skill',
+      prompt: 'Review code',
+    });
+    vi.mocked(runSkillTask).mockImplementation(async (taskOptions) => {
+      await taskOptions.resolveSkill();
+      return { name: 'test-trigger', report: mockReport };
+    });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    await executeTrigger({ ...mockTrigger, useBuiltinSkill: true }, mockDeps);
+
+    expect(resolveSkillAsync).toHaveBeenCalledWith(
+      'test-skill',
+      undefined,
+      { remote: undefined }
+    );
+  });
+
   it('uses trigger-level execution defaults instead of merged config defaults', async () => {
     const mockReport = createReport();
 

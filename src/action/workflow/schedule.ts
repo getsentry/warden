@@ -168,7 +168,8 @@ export async function runScheduleWorkflow(
       console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
 
       // Run skill
-      const skill = await resolveSkillAsync(resolved.skill, resolved.skillRoot ?? repoPath, {
+      const skillRoot = resolved.useBuiltinSkill ? undefined : (resolved.skillRoot ?? repoPath);
+      const skill = await resolveSkillAsync(resolved.skill, skillRoot, {
         remote: resolved.remote,
       });
       const usesClaudeRuntime = (resolved.runtime ?? 'claude') === 'claude';
