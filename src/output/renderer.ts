@@ -91,8 +91,8 @@ function renderReview(
       body += '\n</details>';
     }
 
-    // Add attribution footnote with skill name and finding ID
-    body += `\n\nIdentified by Warden \`${report.skill}\` · \`${finding.id}\``;
+    // Add attribution footer with skill name and finding ID
+    body += `\n\n${renderAttributionFooter(report.skill, finding.id)}`;
 
     // Add deduplication marker
     const contentHash = generateContentHash(finding.title, finding.description);
@@ -167,6 +167,11 @@ function renderSuggestion(description: string, diff: string): string {
 
 function renderHiddenFindingsLink(hiddenCount: number, checkRunUrl: string): string {
   return `[View ${hiddenCount} additional ${pluralize(hiddenCount, 'finding')} in Checks](${checkRunUrl})`;
+}
+
+function renderAttributionFooter(skill: string, findingId?: string): string {
+  const idSuffix = findingId ? ` · ${escapeHtml(findingId)}` : '';
+  return `<sub>Identified by Warden ${escapeHtml(skill)}${idSuffix}</sub>`;
 }
 
 function renderSummaryComment(
@@ -271,7 +276,7 @@ export function renderFindingsBody(findings: Finding[], skill: string): string {
     lines.push(escapeHtml(finding.description));
     lines.push('');
   }
-  lines.push(`Identified by Warden \`${skill}\``);
+  lines.push(renderAttributionFooter(skill));
   return lines.join('\n');
 }
 

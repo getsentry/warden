@@ -161,6 +161,11 @@ describe('isWardenComment', () => {
     expect(isWardenComment(body)).toBe(true);
   });
 
+  it('returns true for current muted attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden skill · ABC-123</sub>`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
   it('returns true for current backtick format attribution', () => {
     const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`skill\` · ABC-123`;
     expect(isWardenComment(body)).toBe(true);
@@ -400,6 +405,16 @@ describe('parseWardenSkills', () => {
     expect(parseWardenSkills(body)).toEqual([]);
   });
 
+  it('parses single skill from current muted format', () => {
+    const body = `<sub>Identified by Warden notseer · ABC-123</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from current muted format', () => {
+    const body = `<sub>Identified by Warden skill1, skill2, skill3 · XYZ-789</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
+
   it('parses new format with severity', () => {
     const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`security-review\` · high</sub>`;
     expect(parseWardenSkills(body)).toEqual(['security-review']);
@@ -460,6 +475,20 @@ describe('updateWardenCommentBody', () => {
 
   it('returns null if skill already listed', () => {
     const body = `<sub>warden: skill1, skill2</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('adds new skill to current muted attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden skill1 · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>Identified by Warden skill1, skill2 · ABC-123</sub>');
+    expect(result).not.toContain('`skill1`');
+    expect(result).not.toContain('[skill1]');
+  });
+
+  it('returns null if skill already listed in current muted attribution', () => {
+    const body = `<sub>Identified by Warden skill1, skill2 · ABC-123</sub>`;
     const result = updateWardenCommentBody(body, 'skill1');
     expect(result).toBeNull();
   });

@@ -383,17 +383,17 @@ function renderStatsFooter(
 
   const parts: string[] = [];
   if (durationMs !== undefined) {
-    parts.push(`**Duration:** ${formatDuration(durationMs)}`);
+    parts.push(`⏱ ${formatDuration(durationMs)}`);
   }
   if (usage) {
-    parts.push(`**Tokens:** ${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
+    parts.push(`${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
   }
   if (cost !== undefined) {
     const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
-    parts.push(`**Cost:** ${formatCost(cost)}${auxSuffix}`);
+    parts.push(`${formatCost(cost)}${auxSuffix}`);
   }
 
-  return ['---', parts.join(' · ')];
+  return ['---', `<sub>${parts.join(' · ')}</sub>`];
 }
 
 /**
