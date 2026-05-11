@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Octokit } from '@octokit/rest';
 import {
   generateContentHash,
   generateMarker,
   parseMarker,
   parseWardenComment,
+  parseWardenFindingId,
   isWardenComment,
   deduplicateFindings,
   findingToExistingComment,
+  fetchExistingComments,
   parseWardenSkills,
   updateWardenCommentBody,
   consolidateBatchFindings,
@@ -140,6 +143,34 @@ The function checks the wrong signal.
   });
 });
 
+describe('parseWardenFindingId', () => {
+  it('parses finding ID from current muted attribution', () => {
+    const body = `**Issue**
+
+Description
+
+<sub>Identified by Warden security-review · WRZ-XPL</sub>`;
+
+    expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
+  });
+
+  it('parses finding ID from legacy title prefix', () => {
+    const body = `**:warning: [2K5-29B] Legacy issue title**
+
+Description
+
+---
+<sub>warden: security-review</sub>`;
+
+    expect(parseWardenFindingId(body)).toBe('2K5-29B');
+  });
+
+  it('does not treat legacy severity attribution as a finding ID', () => {
+    const body = `<sub>Identified by Warden via \`security-review\` · high</sub>`;
+    expect(parseWardenFindingId(body)).toBeUndefined();
+  });
+});
+
 describe('isWardenComment', () => {
   it('returns true for comment with attribution', () => {
     const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: skill</sub>`;
@@ -174,6 +205,61 @@ describe('isWardenComment', () => {
   it('returns false for regular comment', () => {
     const body = 'This is a regular comment.';
     expect(isWardenComment(body)).toBe(false);
+  });
+});
+
+describe('fetchExistingComments', () => {
+  it('preserves parsed Warden skill and finding ID from review comments', async () => {
+    const graphql = vi.fn().mockResolvedValue({
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [
+              {
+                id: 'thread-1',
+                isResolved: false,
+                comments: {
+                  nodes: [
+                    {
+                      id: 'comment-node-1',
+                      databaseId: 123,
+                      body: `**SQL injection**
+
+User input reaches a query.
+
+<sub>Identified by Warden security-review · WRZ-XPL</sub>
+<!-- warden:v1:src/db.ts:42:abc12345 -->`,
+                      path: 'src/db.ts',
+                      line: 42,
+                      originalLine: 40,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const comments = await fetchExistingComments(
+      { graphql } as unknown as Octokit,
+      'getsentry',
+      'warden',
+      123
+    );
+
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toMatchObject({
+      id: 123,
+      path: 'src/db.ts',
+      line: 42,
+      findingId: 'WRZ-XPL',
+      isWarden: true,
+      skills: ['security-review'],
+      threadId: 'thread-1',
+    });
   });
 });
 
@@ -598,6 +684,7 @@ describe('findingToExistingComment', () => {
       line: 45,
       title: 'SQL Injection',
       description: 'User input passed to query',
+      findingId: 'f1',
       contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
       isWarden: true,
       skills: [],

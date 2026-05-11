@@ -191,6 +191,7 @@ export async function postTriggerReview(
         model: ctx.model,
         hashOnly: !apiKey,
         maxRetries: ctx.maxRetries,
+        agentName: result.report.skill,
       });
       findingsToPost = consolidateResult.findings;
 

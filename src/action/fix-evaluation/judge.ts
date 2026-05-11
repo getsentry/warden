@@ -15,6 +15,7 @@ import { fetchFileContent, fetchFileLines } from './github.js';
 
 export interface FixJudgeInput {
   comment: ExistingComment;
+  skillName?: string;
   changedFiles: string[];
   codeBeforeFix: string;
   codeAfterFix?: string;
@@ -224,6 +225,7 @@ export async function evaluateFix(
 
   const result = await getRuntime(runtimeOptions.runtime).runAuxiliary({
     task: 'fix_evaluation',
+    agentName: input.skillName,
     apiKey,
     prompt,
     schema: FixJudgeVerdictSchema,

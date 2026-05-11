@@ -20,7 +20,7 @@ import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../trigger
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { filterFindings } from '../../types/index.js';
 import type { SkillReport } from '../../types/index.js';
-import { setRepositoryScope } from '../../sentry.js';
+import { Sentry, logger, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import type { ActionInputs } from '../inputs.js';
 import {
   setOutput,
@@ -39,10 +39,27 @@ import {
 // Main Schedule Workflow
 // -----------------------------------------------------------------------------
 
+interface WorkflowSpan {
+  setAttribute(key: string, value: string | number | boolean): void;
+  spanContext?: () => { traceId: string };
+}
+
 export async function runScheduleWorkflow(
   octokit: Octokit,
   inputs: ActionInputs,
   repoPath: string
+): Promise<void> {
+  return Sentry.startSpan(
+    { op: 'workflow.run', name: 'review schedule' },
+    (span) => runScheduleWorkflowInner(octokit, inputs, repoPath, span),
+  );
+}
+
+async function runScheduleWorkflowInner(
+  octokit: Octokit,
+  inputs: ActionInputs,
+  repoPath: string,
+  workflowSpan: WorkflowSpan
 ): Promise<void> {
   const githubRepository = process.env['GITHUB_REPOSITORY'];
   setRepositoryScope(githubRepository);
@@ -81,6 +98,8 @@ export async function runScheduleWorkflow(
       try {
         const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
         const [o = '', n = ''] = fullName.split('/');
+        workflowSpan.setAttribute('warden.trigger.count', 0);
+        workflowSpan.setAttribute('warden.finding.count', 0);
         writeFindingsOutput([], {
           eventType: 'schedule',
           action: 'scheduled',
@@ -93,11 +112,20 @@ export async function runScheduleWorkflow(
     throw error;
   }
 
+  workflowSpan.setAttribute('warden.trigger.count', scheduleTriggers.length);
+  emitRunMetric();
+  const traceId = workflowSpan.spanContext?.().traceId;
+  logger.info('Workflow initialized', {
+    'warden.trigger.count': scheduleTriggers.length,
+    ...(traceId ? { 'trace.id': traceId } : {}),
+  });
+
   if (scheduleTriggers.length === 0) {
     console.log('No schedule triggers configured');
     setOutput('findings-count', 0);
     setOutput('high-count', 0);
     setOutput('summary', 'No schedule triggers configured');
+    workflowSpan.setAttribute('warden.finding.count', 0);
     try {
       const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
       const [o = '', n = ''] = fullName.split('/');
@@ -188,6 +216,7 @@ export async function runScheduleWorkflow(
         maxContextFiles: resolved.maxContextFiles,
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         verifyFindings: resolved.verifyFindings,
+        telemetryTriggerName: resolved.name,
         pathToClaudeCodeExecutable: claudePath,
       });
       console.log(`Found ${report.findings.length} findings`);
@@ -250,6 +279,7 @@ export async function runScheduleWorkflow(
 
   // Set outputs
   const highCount = countSeverity(allReports, 'high');
+  workflowSpan.setAttribute('warden.finding.count', totalFindings);
 
   setOutput('findings-count', totalFindings);
   setOutput('high-count', highCount);

@@ -468,7 +468,7 @@ describe('postTriggerReview', () => {
     // Consolidation should have been called with both findings
     expect(consolidateBatchFindings).toHaveBeenCalledWith(
       [finding1, finding2],
-      { apiKey: 'test-key', hashOnly: false }
+      expect.objectContaining({ apiKey: 'test-key', hashOnly: false })
     );
 
     expect(postResult.posted).toBe(true);

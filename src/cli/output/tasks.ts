@@ -286,6 +286,7 @@ export async function runSkillTask(
             model: runnerOptions?.model,
             skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
           };
+          span.setAttribute('warden.finding.count', 0);
           callbacks.onSkillSkipped(name);
           // Also fire onSkillComplete so the incremental JSONL writer records the skipped skill.
           callbacks.onSkillComplete(name, skippedReport);
@@ -556,6 +557,7 @@ export async function runSkillTask(
           if (totalFailedExtractions > 0) errorReport.failedExtractions = totalFailedExtractions;
           if (skippedFiles.length > 0) errorReport.skippedFiles = skippedFiles;
           if (auxUsage) errorReport.auxiliaryUsage = auxUsage;
+          span.setAttribute('warden.finding.count', 0);
           callbacks.onSkillError(name, error.message);
           // Mirror the success path: emit a final completion event with the
           // (errored) report so terminal renderers print the per-skill
@@ -630,6 +632,7 @@ export async function runSkillTask(
         if (auxUsage) {
           report.auxiliaryUsage = auxUsage;
         }
+        span.setAttribute('warden.finding.count', report.findings.length);
 
         // Emit metrics and log completion
         emitSkillMetrics(report);
@@ -664,6 +667,7 @@ export async function runSkillTask(
           model: runnerOptions?.model,
           error: { code, message, timestamp: new Date().toISOString() },
         };
+        span.setAttribute('warden.finding.count', 0);
         // Mirror the success / all-hunks-fail paths: emit a final completion
         // event so non-TTY (log-mode) renderers print a per-skill summary
         // line for the failure. Without this, log mode shows only the

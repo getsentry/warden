@@ -25,8 +25,10 @@ import { aggregateUsage, emptyUsage, estimateTokens, extractUsage } from '../usa
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
+  AuxiliaryTask,
   AuxiliaryTool,
   Runtime,
+  SynthesisTask,
   SynthesisRunRequest,
   SkillRunRequest,
   SkillRunResponse,
@@ -102,6 +104,8 @@ function resolveClaudeSkillTools(
 async function runStructured<T>(
   request: {
     kind: 'auxiliary' | 'synthesis';
+    task?: AuxiliaryTask | SynthesisTask;
+    agentName?: string;
     apiKey?: string;
     prompt: string;
     schema: SynthesisRunRequest<T>['schema'];
@@ -125,6 +129,8 @@ async function runStructured<T>(
       schema: request.schema,
       tools: request.tools.map(toAnthropicTool),
       executeTool: request.executeTool ?? (async () => ''),
+      agentName: request.agentName,
+      task: request.task,
       model: request.model,
       maxTokens: request.maxTokens,
       maxIterations: request.maxIterations,
@@ -137,6 +143,8 @@ async function runStructured<T>(
     apiKey: request.apiKey,
     prompt: request.prompt,
     schema: request.schema,
+    agentName: request.agentName,
+    task: request.task,
     model: request.model,
     maxTokens: request.maxTokens,
     timeout: request.timeout,
@@ -373,6 +381,8 @@ export const claudeRuntime: Runtime = {
                       op: 'gen_ai.execute_tool',
                       name: toolUse.name,
                       attributes: {
+                        'gen_ai.operation.name': 'execute_tool',
+                        'gen_ai.agent.name': skillName,
                         'gen_ai.tool.name': toolUse.name,
                         ...(elapsed !== undefined && { 'tool.elapsed_seconds': elapsed }),
                       },

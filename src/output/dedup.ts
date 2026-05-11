@@ -30,6 +30,8 @@ export interface ExistingComment {
   line: number;
   title: string;
   description: string;
+  /** Stable Warden finding ID from the attribution footer or legacy title prefix */
+  findingId?: string;
   contentHash: string;
   /** GraphQL node ID for the review thread (used to resolve stale comments) */
   threadId?: string;
@@ -140,6 +142,21 @@ export function parseWardenComment(body: string): { title: string; description: 
   const description = body.slice(titleEnd, descEnd).trim();
 
   return { title, description };
+}
+
+/**
+ * Parse the finding ID from a Warden comment's attribution or legacy title.
+ */
+export function parseWardenFindingId(body: string): string | undefined {
+  const attributionMatch = body.match(/(?:<sub>)?Identified by Warden (?!via\s)([^<\n\r]*)(?:<\/sub>|$)/m);
+  if (attributionMatch?.[1]) {
+    const idMatch = attributionMatch[1].match(/·\s*(?:`([^`]+)`|([^`\n\r]+))/);
+    const id = (idMatch?.[1] ?? idMatch?.[2])?.trim();
+    if (id) return id;
+  }
+
+  const titleMatch = body.match(/\*\*(?::[a-z_]+:\s*)?\[([^\]]+)\]\s*.+?\*\*/);
+  return titleMatch?.[1]?.trim() || undefined;
 }
 
 /**
@@ -417,6 +434,7 @@ export async function fetchExistingComments(
         line: marker?.line ?? firstComment.line ?? firstComment.originalLine ?? 0,
         title,
         description,
+        findingId: isWarden ? parseWardenFindingId(firstComment.body) : undefined,
         contentHash: marker?.contentHash ?? generateContentHash(title, description),
         threadId: thread.id,
         isResolved: thread.isResolved,
@@ -471,7 +489,7 @@ async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
   apiKey: string,
-  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'maxRetries'> = {}
+  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'maxRetries' | 'currentSkill'> = {}
 ): Promise<SemanticDuplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
     return { matches: new Map() };
@@ -505,6 +523,7 @@ Return [] if none are duplicates.`),
 
   const result = await getRuntime(options.runtime).runAuxiliary({
     task: 'deduplication',
+    agentName: options.currentSkill,
     apiKey,
     prompt,
     schema: DuplicateMatchesSchema,
@@ -653,6 +672,7 @@ export function findingToExistingComment(finding: Finding, skill?: string): Exis
     line: finding.location.endLine ?? finding.location.startLine,
     title: finding.title,
     description: finding.description,
+    findingId: finding.id,
     contentHash: generateContentHash(finding.title, finding.description),
     isWarden: true,
     skills: skill ? [skill] : [],
@@ -799,6 +819,7 @@ Singletons (findings with no duplicates) should not appear in any group.
 
   const result = await getRuntime(options.runtime).runAuxiliary({
     task: 'deduplication',
+    agentName: options.agentName,
     apiKey: options.apiKey,
     prompt,
     schema: ConsolidationGroupsSchema,

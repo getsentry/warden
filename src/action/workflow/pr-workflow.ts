@@ -774,6 +774,7 @@ export async function runPRWorkflow(
       }
 
       const { context, runnerConcurrency, auxiliaryOptions, matchedTriggers } = initResult;
+      span.setAttribute('warden.trigger.count', matchedTriggers.length);
 
       // Set Sentry context after building event context
       if (context.pullRequest) {
@@ -819,7 +820,11 @@ export async function runPRWorkflow(
       );
 
       const results = await Sentry.startSpan(
-        { op: 'workflow.execute', name: 'execute triggers' },
+        {
+          op: 'workflow.execute',
+          name: 'execute triggers',
+          attributes: { 'warden.trigger.count': matchedTriggers.length },
+        },
         () => executeAllTriggers(matchedTriggers, octokit, context, runnerConcurrency, inputs),
       );
 
@@ -833,6 +838,7 @@ export async function runPRWorkflow(
 
       const canResolveStale = shouldResolveStaleComments(results);
       const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+      span.setAttribute('warden.finding.count', allFindings.length);
 
       await Sentry.startSpan(
         { op: 'workflow.resolve', name: 'resolve stale comments' },

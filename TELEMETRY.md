@@ -65,11 +65,19 @@ fields=timestamp,trace_id,github.event.name,cicd.pipeline.run.id,cicd.pipeline.r
 sort=-timestamp
 ```
 
+Workflow run spans for a repository.
+
+```text
+dataset=spans query='span.op:workflow.run vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
+fields=timestamp,trace,span_id,span.duration,github.event.name,cicd.pipeline.run.id,cicd.pipeline.run.url.full,warden.trigger.count,warden.finding.count,error.type
+sort=-timestamp
+```
+
 Skill execution timeline for a slow or failing skill.
 
 ```text
 dataset=spans query='span.op:skill.run gen_ai.agent.name:"<skill_name>"'
-fields=timestamp,trace,span_id,span.duration,gen_ai.agent.name,warden.trigger.name,warden.file.count,error.type
+fields=timestamp,trace,span_id,span.duration,gen_ai.agent.name,warden.trigger.name,warden.file.count,warden.finding.count,error.type
 sort=-timestamp
 ```
 
@@ -92,11 +100,15 @@ fields=timestamp,trace,span_id,span.duration,gen_ai.conversation.id,gen_ai.reque
 sort=-timestamp
 ```
 
-Tool calls inside a Claude Code SDK turn.
+Structured auxiliary calls use `span.op:gen_ai.chat` and include
+`warden.ai.task` (`extraction`, `deduplication`, `fix_quality`,
+`fix_evaluation`, `consolidation`, or `skill_build`) when available.
+
+Tool calls inside a Claude Code SDK turn or structured tool loop.
 
 ```text
 dataset=spans query='span.op:gen_ai.execute_tool gen_ai.tool.name:"<tool_name>"'
-fields=timestamp,trace,span_id,span.duration,gen_ai.tool.name,tool.elapsed_seconds,error.type
+fields=timestamp,trace,span_id,span.duration,gen_ai.agent.name,warden.ai.task,gen_ai.tool.name,tool.elapsed_seconds,error.type
 sort=-timestamp
 ```
 
@@ -119,17 +131,49 @@ sort=-timestamp
 Repository-level health and cost.
 
 ```text
-dataset=metrics query='metric:warden.workflow.runs OR metric:warden.findings OR metric:warden.skill.duration OR metric:warden.gen_ai.cost.usd vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
-fields=timestamp,metric,vcs.owner.name,vcs.repository.name,cicd.pipeline.run.id,gen_ai.agent.name,gen_ai.request.model,warden.finding.severity,value
+dataset=metrics query='metric:warden.workflow.runs OR metric:warden.skill.duration OR metric:warden.gen_ai.cost.usd vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
+fields=timestamp,metric,vcs.owner.name,vcs.repository.name,cicd.pipeline.run.id,gen_ai.agent.name,gen_ai.request.model,value
 sort=-timestamp
 ```
 
-Total findings for a skill, optionally scoped to a repository.
+Total findings in a time window, segmented by skill and repository. Use the
+Sentry time picker for the window. Query `skill.run` spans so the count uses
+the final post-processed findings, not per-hunk candidates.
 
 ```text
-dataset=metrics query='metric:warden.findings gen_ai.agent.name:"<skill_name>" vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
-fields=timestamp,metric,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,warden.finding.severity,value
-aggregate=sum(value) by gen_ai.agent.name,vcs.owner.name,vcs.repository.name
+dataset=spans query='span.op:skill.run warden.finding.count:>0'
+fields=timestamp,trace,span_id,span.duration,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,warden.trigger.name,warden.finding.count
+aggregate=sum(warden.finding.count) by gen_ai.agent.name,vcs.owner.name,vcs.repository.name
+sort=-timestamp
+```
+
+Add `gen_ai.agent.name:"<skill_name>"`, `vcs.owner.name:"<owner>"`, or
+`vcs.repository.name:"<repo>"` to narrow the same query.
+
+Fix evaluation verdict breakdown for a skill. Use the Sentry time picker for
+the window.
+
+```text
+dataset=spans query='span.op:fix_eval.evaluate gen_ai.agent.name:"<skill_name>"'
+fields=timestamp,trace,span_id,span.duration,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,code.file.path,code.line.number,warden.fix_eval.finding_id,warden.fix_eval.verdict,warden.fix_eval.used_fallback
+aggregate=count() by warden.fix_eval.verdict,gen_ai.agent.name,vcs.owner.name,vcs.repository.name
+sort=-timestamp
+```
+
+Finding lifecycle from analysis to fix evaluation. First find the evaluation
+span by finding ID, then open the trace or query the trace ID with the path and
+skill from that span.
+
+```text
+dataset=spans query='span.op:fix_eval.evaluate warden.fix_eval.finding_id:"<finding_id>"'
+fields=timestamp,trace,span_id,span.duration,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,code.file.path,code.line.number,warden.fix_eval.finding_id,warden.fix_eval.verdict
+sort=-timestamp
+```
+
+```text
+dataset=spans query='trace:"<trace_id>" (span.op:skill.run OR span.op:skill.analyze_hunk OR span.op:fix_eval.evaluate) gen_ai.agent.name:"<skill_name>"'
+fields=timestamp,span.op,span_id,span.duration,code.file.path,warden.hunk.line_range,warden.finding.count,warden.fix_eval.finding_id,warden.fix_eval.verdict,error.type
+sort=timestamp
 ```
 
 ## Domains
@@ -146,7 +190,8 @@ Spans: `workflow.run`, `workflow.init`, `config.load`
 Attributes: `trace_id`, `vcs.owner.name`, `vcs.repository.name`,
 `vcs.repository.url.full`, `warden.source`, `github.event.name`,
 `cicd.pipeline.name`, `cicd.pipeline.run.id`,
-`cicd.pipeline.run.url.full`, `warden.trigger.count`
+`cicd.pipeline.run.url.full`, `warden.trigger.count`,
+`warden.finding.count`
 
 ### Trigger And GitHub Review
 

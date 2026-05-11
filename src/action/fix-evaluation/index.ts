@@ -1,5 +1,6 @@
 import type { Octokit } from '@octokit/rest';
 import type { ExistingComment } from '../../output/dedup.js';
+import { parseWardenFindingId, parseWardenSkills } from '../../output/dedup.js';
 import type { Finding, UsageStats } from '../../types/index.js';
 import { aggregateUsage, emptyUsage } from '../../sdk/usage.js';
 import { findingMatchesComment } from '../../output/stale.js';
@@ -17,8 +18,16 @@ const MAX_EVALUATIONS = 20;
 
 /** Extract finding ID (e.g. "WRZ-XPL") from a comment title like "[WRZ-XPL] Some title" */
 function extractFindingId(title: string): string | undefined {
-  const match = title.match(/^\[([A-Z0-9]{3}-[A-Z0-9]{3})\]\s*/);
+  const match = title.match(/^\[([^\]]+)\]\s*/);
   return match?.[1];
+}
+
+function getCommentFindingId(comment: ExistingComment): string | undefined {
+  return comment.findingId ?? extractFindingId(comment.title) ?? (comment.body ? parseWardenFindingId(comment.body) : undefined);
+}
+
+function getCommentSkill(comment: ExistingComment): string | undefined {
+  return comment.skills?.[0] ?? (comment.body ? parseWardenSkills(comment.body)[0] : undefined);
 }
 
 /** Number of lines of context around the finding location */
@@ -158,8 +167,8 @@ export async function evaluateFixAttempts(
       const uniqueResolvedThreadIds = new Set<string>();
 
       for (const comment of commentsToEvaluate) {
-        const findingId = extractFindingId(comment.title);
-        const skill = comment.skills?.[0];
+        const findingId = getCommentFindingId(comment);
+        const skill = getCommentSkill(comment);
 
         // Fetch code at the issue location before the fix
         let codeBeforeFix: string;
@@ -210,7 +219,7 @@ export async function evaluateFixAttempts(
           async (evalSpan) => {
             const startTime = performance.now();
             const evalResult = await evaluateFix(
-              { comment, changedFiles, codeBeforeFix, codeAfterFix, commitMessages },
+              { comment, skillName: skill, changedFiles, codeBeforeFix, codeAfterFix, commitMessages },
               toolContext,
               apiKey,
               runtimeOptions

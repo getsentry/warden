@@ -157,7 +157,7 @@ Created from `SDKAssistantMessage` events streamed by `query()`. Each span repre
 |-----------|--------|-------|
 | `gen_ai.operation.name` | `'chat'` | OTel operation name |
 | `gen_ai.provider.name` | `'anthropic'` | OTel provider |
-| `gen_ai.agent.name` | Skill name | Links turn to skill |
+| `gen_ai.agent.name` | Skill name when available | Links turn to skill |
 | `gen_ai.response.model` | `message.message.model` | Actual model used for this turn |
 | `gen_ai.usage.input_tokens` | `input + cache_read + cache_write` | Total input tokens (same accounting as parent) |
 | `gen_ai.usage.output_tokens` | `message.message.usage.output_tokens` | Output tokens for this turn |
@@ -172,22 +172,60 @@ Created from `tool_use` content blocks in `SDKAssistantMessage`, enriched with t
 
 | Attribute | Source | Notes |
 |-----------|--------|-------|
+| `gen_ai.operation.name` | `'execute_tool'` | OTel operation name |
+| `gen_ai.agent.name` | Skill name when available | Links tool use to skill |
 | `gen_ai.tool.name` | `tool_use.name` | Tool name (e.g. `Read`, `Grep`) |
 | `tool.elapsed_seconds` | `SDKToolProgressMessage.elapsed_time_seconds` | Execution duration; only set when progress message received |
 
+### Structured `gen_ai.chat` attributes
+
+Direct structured model calls (`runAuxiliary` / `runSynthesis`) create manual
+`gen_ai.chat` spans so the bundled action has coverage even when loader-based
+auto-instrumentation is unavailable.
+
+| Attribute | Source | Notes |
+|-----------|--------|-------|
+| `gen_ai.operation.name` | `'chat'` | OTel operation name |
+| `gen_ai.provider.name` | `'anthropic'` | OTel provider |
+| `gen_ai.agent.name` | Request `agentName` when available | Links the call to the originating skill or builder agent |
+| `warden.ai.task` | Request `task` | Warden task name (`extraction`, `deduplication`, `fix_quality`, `fix_evaluation`, `consolidation`, or `skill_build`) |
+| `gen_ai.request.model` | Requested model | Model sent to Anthropic |
+
+Structured tool-loop calls also create `gen_ai.execute_tool` child spans with
+`gen_ai.operation.name`, `gen_ai.agent.name`, `warden.ai.task`, and
+`gen_ai.tool.name`.
+
 ### Why manual instrumentation for the SDK
 
-The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic-ai/sdk` client call, so `anthropicAIIntegration` cannot auto-instrument it. The SDK streams rich message types (`SDKAssistantMessage`, `SDKToolProgressMessage`) that provide per-turn token usage and tool execution data. We process these to create `gen_ai.chat` and `gen_ai.execute_tool` child spans. The aggregate result message provides session-level totals for the parent `gen_ai.invoke_agent` span. Direct Anthropic API calls (haiku extraction, fix evaluation judge) *are* auto-instrumented by the integration.
+The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic-ai/sdk` client call, so `anthropicAIIntegration` cannot auto-instrument it. The SDK streams rich message types (`SDKAssistantMessage`, `SDKToolProgressMessage`) that provide per-turn token usage and tool execution data. We process these to create `gen_ai.chat` and `gen_ai.execute_tool` child spans. The aggregate result message provides session-level totals for the parent `gen_ai.invoke_agent` span. Direct structured Anthropic calls are also wrapped manually because the bundled GitHub Action cannot rely on loader-based auto-instrumentation.
 
 ---
 
 ## Internal Span Attributes
 
+### `workflow.run`
+
+| Attribute | Type | When set |
+|-----------|------|----------|
+| `warden.trigger.count` | number | After trigger matching |
+| `warden.finding.count` | number | After result |
+
+### `skill.run`
+
+| Attribute | Type | When set |
+|-----------|------|----------|
+| `gen_ai.agent.name` | string | Creation and after skill resolution |
+| `warden.trigger.name` | string | Creation for trigger-backed runs |
+| `warden.file.count` | number | Creation |
+| `warden.finding.count` | number | After result |
+
 ### `skill.analyze_file`
 
 The parent `skill.run` span carries `gen_ai.agent.name` for every run and
 `warden.trigger.name` only when the skill was selected by an actual trigger.
-Direct CLI skill runs omit trigger metadata.
+Direct CLI skill runs omit trigger metadata. Child file and hunk spans also
+carry `gen_ai.agent.name` so skill-scoped span queries do not depend on parent
+span context propagation.
 
 | Attribute | Type | When set |
 |-----------|------|----------|
@@ -224,8 +262,8 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 |-----------|------|----------|
 | `code.file.path` | string | Creation |
 | `code.line.number` | number | Creation |
-| `warden.fix_eval.finding_id` | string | Creation |
-| `gen_ai.agent.name` | string | Creation (when available) |
+| `warden.fix_eval.finding_id` | string | Creation from Warden comment metadata |
+| `gen_ai.agent.name` | string | Creation from Warden comment metadata |
 | `warden.fix_eval.verdict` | string | After result |
 | `warden.fix_eval.used_fallback` | boolean | After result |
 
@@ -275,6 +313,9 @@ All metrics inherit `warden.source`, repository attributes, and GitHub Actions a
 Called once per analysis workflow execution (CLI run or GitHub Action workflow).
 
 ### Skill-level (`emitSkillMetrics`)
+
+Called once per completed skill report from both CLI/PR task execution and
+scheduled workflow execution.
 
 | Metric | Type | Per-metric attributes |
 |--------|------|-----------------------|

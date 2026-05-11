@@ -400,6 +400,7 @@ export async function buildSkillOutline(
 
   const result = await runtime.runSynthesis({
     task: 'skill_build',
+    agentName: `${skill.name}:skill-outline`,
     apiKey,
     prompt: buildOutlinePrompt(skill, source, options.previousOutline),
     schema: SkillBuildOutlineSchema,

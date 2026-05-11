@@ -66,6 +66,7 @@ export async function postProcessFindings(
     runtime: options.runtime,
     model: options.synthesisModel,
     maxRetries: options.auxiliaryMaxRetries,
+    agentName: options.skill.name,
     onFindingProcessing: options.onFindingProcessing,
   });
   currentFindings = mergeResult.findings;
@@ -79,6 +80,7 @@ export async function postProcessFindings(
     runtime: options.runtime,
     model: options.auxiliaryModel,
     maxRetries: options.auxiliaryMaxRetries,
+    agentName: options.skill.name,
     onFindingProcessing: options.onFindingProcessing,
   });
   currentFindings = sanitized.findings;

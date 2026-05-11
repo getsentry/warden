@@ -14,6 +14,7 @@ export type ParseJsonFromOutputResult<T> =
 
 export interface JsonOutputRepairOptions {
   apiKey?: string;
+  agentName?: string;
   runtime?: Runtime;
   runtimeName?: RuntimeName;
   model?: string;
@@ -77,6 +78,7 @@ async function repairJsonOutput<T>(
   const runtime = repair.runtime ?? getRuntime(repair.runtimeName);
   const result = await runtime.runAuxiliary({
     task: 'extraction',
+    agentName: repair.agentName,
     apiKey: repair.apiKey,
     model: repair.model,
     maxRetries: repair.maxRetries,

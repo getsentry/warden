@@ -29,6 +29,7 @@ interface SanitizeSuggestedFixesOptions {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
+  agentName?: string;
   onFindingProcessing?: (event: FindingProcessingEvent) => void;
 }
 
@@ -161,6 +162,7 @@ Pass only if the diff clearly addresses the stated issue without obvious regress
 
   const result = await getRuntime(runtime).runAuxiliary({
     task: 'fix_quality',
+    agentName: options.agentName,
     apiKey,
     prompt,
     schema: SemanticFixVerdictSchema,

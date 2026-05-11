@@ -93,6 +93,8 @@ export type AuxiliaryRunResult<T> =
 
 interface AuxiliaryRunRequestBase<T> {
   task: AuxiliaryTask;
+  /** Skill or agent name that owns this auxiliary call, when available. */
+  agentName?: string;
   apiKey?: string;
   prompt: string;
   schema: z.ZodType<T>;
@@ -118,6 +120,8 @@ export type AuxiliaryRunRequest<T> = AuxiliaryRunRequestWithoutTools<T> | Auxili
 
 export interface SynthesisRunRequest<T> {
   task: SynthesisTask;
+  /** Skill or agent name that owns this synthesis call, when available. */
+  agentName?: string;
   apiKey?: string;
   prompt: string;
   schema: z.ZodType<T>;

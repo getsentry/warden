@@ -29,6 +29,7 @@ export interface AuxiliaryCallOptions {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
+  agentName?: string;
 }
 
 /**
@@ -219,6 +220,7 @@ If no findings exist, return: {"findings": []}`),
 
   const result = await getRuntime(runtime).runAuxiliary({
     task: 'extraction',
+    agentName: options.agentName,
     apiKey,
     prompt: userContent,
     schema: z.object({ findings: z.array(z.unknown()) }),
@@ -530,6 +532,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
 
   const result = await getRuntime(options?.runtime).runSynthesis({
     task: 'consolidation',
+    agentName: options?.agentName,
     apiKey,
     prompt,
     schema: MergeGroupsSchema,

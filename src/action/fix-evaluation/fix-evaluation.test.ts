@@ -318,6 +318,29 @@ describe('evaluateFixAttempts', () => {
     expect(result.evaluations[0]?.findingId).toBe('WRZ-XPL');
   });
 
+  it('uses Warden comment attribution for fix-eval skill and finding ID', async () => {
+    const comment = createComment({
+      title: 'baseSha is set to branch name',
+      body: `**baseSha is set to branch name**
+
+The base SHA points at the branch.
+
+<sub>Identified by Warden security-review · WRZ-XPL</sub>`,
+    });
+    mockEvaluateFix.mockResolvedValue({
+      verdict: { status: 'resolved', reasoning: 'Fixed' },
+      usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+      usedFallback: false,
+    });
+
+    const result = await evaluateFixAttempts(mockOctokit, [comment], defaultContext, [], 'api-key');
+
+    expect(result.evaluations[0]).toMatchObject({
+      findingId: 'WRZ-XPL',
+      skill: 'security-review',
+    });
+  });
+
   it('counts skipped when pre-fix code fetch fails', async () => {
     const comment = createComment();
     mockFetchFileContent.mockRejectedValueOnce(new Error('API rate limit'));

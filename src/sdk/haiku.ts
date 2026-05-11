@@ -152,6 +152,8 @@ export interface CallHaikuOptions<T> {
   apiKey: string;
   prompt: string;
   schema: z.ZodType<T>;
+  agentName?: string;
+  task?: string;
   model?: string;
   maxTokens?: number;
   timeout?: number;
@@ -174,7 +176,7 @@ function inferPrefill(schema: z.ZodType): string | undefined {
  * Auto-prefills based on Zod schema type, extracts JSON, validates with Zod.
  */
 export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuResult<T>> {
-  const { apiKey, prompt, schema, model = HAIKU_MODEL, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS, maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES } = options;
+  const { apiKey, prompt, schema, agentName, task, model = HAIKU_MODEL, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS, maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES } = options;
 
   return Sentry.startSpan(
     {
@@ -183,6 +185,8 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
       attributes: {
         'gen_ai.operation.name': 'chat',
         'gen_ai.provider.name': 'anthropic',
+        ...(agentName ? { 'gen_ai.agent.name': agentName } : {}),
+        ...(task ? { 'warden.ai.task': task } : {}),
         'gen_ai.request.model': model,
         'gen_ai.request.max_tokens': maxTokens,
       },
@@ -250,6 +254,8 @@ export interface CallHaikuWithToolsOptions<T> {
   schema: z.ZodType<T>;
   tools: Anthropic.Tool[];
   executeTool: (name: string, input: Record<string, unknown>) => Promise<string>;
+  agentName?: string;
+  task?: string;
   model?: string;
   maxTokens?: number;
   maxIterations?: number;
@@ -269,6 +275,8 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
     schema,
     tools,
     executeTool,
+    agentName,
+    task,
     model = HAIKU_MODEL,
     maxTokens = DEFAULT_MAX_TOKENS,
     maxIterations = 5,
@@ -283,6 +291,8 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
       attributes: {
         'gen_ai.operation.name': 'chat',
         'gen_ai.provider.name': 'anthropic',
+        ...(agentName ? { 'gen_ai.agent.name': agentName } : {}),
+        ...(task ? { 'warden.ai.task': task } : {}),
         'gen_ai.request.model': model,
         'gen_ai.request.max_tokens': maxTokens,
       },
@@ -362,6 +372,8 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
                 name: `execute_tool ${block.name}`,
                 attributes: {
                   'gen_ai.operation.name': 'execute_tool',
+                  ...(agentName ? { 'gen_ai.agent.name': agentName } : {}),
+                  ...(task ? { 'warden.ai.task': task } : {}),
                   'gen_ai.tool.name': block.name,
                 },
               },

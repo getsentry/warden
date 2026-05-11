@@ -270,6 +270,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
         schema: args.schema,
         repair: {
           runtime,
+          agentName: args.skillName,
           apiKey: args.repair.apiKey,
           model: args.repair.model,
           maxRetries: args.repair.maxRetries,

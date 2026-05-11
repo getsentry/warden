@@ -1,7 +1,7 @@
 import type { SkillDefinition } from '../config/schema.js';
 import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
-import { Sentry, emitExtractionMetrics, emitRetryMetric } from '../sentry.js';
+import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
@@ -98,6 +98,7 @@ function recordCircuitFailure(
 async function parseHunkOutput(
   result: SkillRunResult,
   filename: string,
+  skillName: string,
   options: SkillRunnerOptions
 ): Promise<ParseHunkOutputResult> {
   if (result.status !== 'success') {
@@ -118,6 +119,7 @@ async function parseHunkOutput(
     runtime: options.runtime,
     model: options.auxiliaryModel,
     maxRetries: options.auxiliaryMaxRetries,
+    agentName: skillName,
   });
 
   if (fallback.success) {
@@ -180,6 +182,7 @@ async function analyzeHunk(
       op: 'skill.analyze_hunk',
       name: `analyze hunk ${hunkCtx.filename}:${lineRange}`,
       attributes: {
+        'gen_ai.agent.name': skill.name,
         'code.file.path': hunkCtx.filename,
         'warden.hunk.line_range': lineRange,
       },
@@ -318,7 +321,7 @@ async function analyzeHunk(
           }
 
           options.circuitBreaker?.recordSuccess();
-          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, options);
+          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, skill.name, options);
 
           // Filter findings outside hunk line range (defense-in-depth)
           const hunkRange = getHunkLineRange(hunkCtx.hunk);
@@ -534,6 +537,7 @@ export async function analyzeFile(
       op: 'skill.analyze_file',
       name: `analyze file ${file.filename}`,
       attributes: {
+        'gen_ai.agent.name': skill.name,
         'code.file.path': file.filename,
         'warden.hunk.count': file.hunks.length,
       },
@@ -666,6 +670,35 @@ export function generateSummary(skillName: string, findings: Finding[]): string 
  * Run a skill on a PR, analyzing each hunk separately.
  */
 export async function runSkill(
+  skill: SkillDefinition,
+  context: EventContext,
+  options: SkillRunnerOptions = {}
+): Promise<SkillReport> {
+  return Sentry.startSpan(
+    {
+      op: 'skill.run',
+      name: `run ${skill.name}`,
+      attributes: {
+        'gen_ai.agent.name': skill.name,
+        ...(options.telemetryTriggerName ? { 'warden.trigger.name': options.telemetryTriggerName } : {}),
+        'warden.file.count': context.pullRequest?.files.length ?? 0,
+      },
+    },
+    async (span) => {
+      try {
+        const report = await runSkillAnalysis(skill, context, options);
+        span.setAttribute('warden.finding.count', report.findings.length);
+        emitSkillMetrics(report);
+        return report;
+      } catch (error) {
+        span.setAttribute('warden.finding.count', 0);
+        throw error;
+      }
+    },
+  );
+}
+
+async function runSkillAnalysis(
   skill: SkillDefinition,
   context: EventContext,
   options: SkillRunnerOptions = {}
