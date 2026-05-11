@@ -185,6 +185,10 @@ The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic
 
 ### `skill.analyze_file`
 
+The parent `skill.run` span carries `gen_ai.agent.name` for every run and
+`warden.trigger.name` only when the skill was selected by an actual trigger.
+Direct CLI skill runs omit trigger metadata.
+
 | Attribute | Type | When set |
 |-----------|------|----------|
 | `code.file.path` | string | Creation |

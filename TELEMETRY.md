@@ -73,6 +73,9 @@ fields=timestamp,trace,span_id,span.duration,gen_ai.agent.name,warden.trigger.na
 sort=-timestamp
 ```
 
+`warden.trigger.name` is present only for trigger-backed runs. Direct CLI skill
+runs have `gen_ai.agent.name` without trigger metadata.
+
 File or hunk analysis for a suspicious path.
 
 ```text

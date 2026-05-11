@@ -492,6 +492,7 @@ interface SkillToRun {
 export interface RunSkillSpec {
   name: string;
   displayName?: string;
+  triggerName?: string;
   skill: string;
   remote?: string;
   failOn?: SeverityThreshold;
@@ -634,6 +635,7 @@ async function createDirectSkillTask(args: {
   return {
     name: spec.name,
     displayName: spec.displayName,
+    triggerName: spec.triggerName,
     failOn: spec.failOn,
     minConfidence: spec.minConfidence,
     resolveSkill: async () => skill,
@@ -1297,6 +1299,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const specs: RunSkillSpec[] = triggersToRun.map((trigger) => ({
     name: trigger.name,
     displayName: trigger.skill,
+    triggerName: trigger.name,
     skill: trigger.skill,
     remote: trigger.remote,
     failOn: trigger.failOn ?? options.failOn,

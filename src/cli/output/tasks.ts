@@ -173,6 +173,7 @@ export interface SkillTaskResult {
 export interface SkillTaskOptions {
   name: string;
   displayName?: string;
+  triggerName?: string;
   failOn?: SeverityThreshold;
   minConfidence?: ConfidenceThreshold;
   /** Resolve the skill definition (may be async for loading) */
@@ -236,13 +237,15 @@ export async function runSkillTask(
   callbacks: SkillProgressCallbacks,
   semaphore?: Semaphore
 ): Promise<SkillTaskResult> {
-  const { name, displayName = name, failOn, minConfidence, resolveSkill, context, runnerOptions = {} } = options;
+  const { name, displayName = name, triggerName, failOn, minConfidence, resolveSkill, context, runnerOptions = {} } = options;
 
   return Sentry.startSpan(
     { op: 'skill.run', name: `run ${displayName}` },
     async (span) => {
       span.setAttribute('gen_ai.agent.name', displayName);
-      span.setAttribute('warden.trigger.name', name);
+      if (triggerName) {
+        span.setAttribute('warden.trigger.name', triggerName);
+      }
       const files = context.pullRequest?.files ?? [];
       span.setAttribute('warden.file.count', files.length);
       logger.info(logger.fmt`Skill execution started: ${displayName}`, {

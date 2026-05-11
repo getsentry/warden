@@ -134,6 +134,7 @@ export async function executeTrigger(
         const taskOptions: SkillTaskOptions = {
           name: trigger.name,
           displayName: trigger.skill,
+          triggerName: trigger.name,
           failOn,
           resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
             remote: trigger.remote,
