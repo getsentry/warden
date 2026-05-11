@@ -9,6 +9,11 @@ let initialized = false;
 
 type TelemetryAttributes = Record<string, string | number | boolean>;
 
+function getGitHubServerUrl(): string {
+  const serverUrl = process.env['GITHUB_SERVER_URL'] || 'https://github.com';
+  return serverUrl.replace(/\/+$/, '');
+}
+
 export function initSentry(context: SentryContext): void {
   const dsn = process.env['WARDEN_SENTRY_DSN'];
   if (!dsn || initialized) return;
@@ -65,8 +70,9 @@ export function setRepositoryScope(repository: string | undefined): void {
       };
 
   if (owner && name && owner !== 'local') {
+    const serverUrl = getGitHubServerUrl();
     attrs['vcs.provider.name'] = 'github';
-    attrs['vcs.repository.url.full'] = `https://github.com/${owner}/${name}`;
+    attrs['vcs.repository.url.full'] = `${serverUrl}/${owner}/${name}`;
   }
 
   setGlobalAttributes(attrs);
@@ -80,7 +86,7 @@ export function setGitHubActionScope(eventName: string | undefined): void {
 
   const repository = process.env['GITHUB_REPOSITORY'];
   const runId = process.env['GITHUB_RUN_ID'];
-  const serverUrl = process.env['GITHUB_SERVER_URL'] ?? 'https://github.com';
+  const serverUrl = getGitHubServerUrl();
   const attrs: TelemetryAttributes = {};
 
   if (eventName) {
