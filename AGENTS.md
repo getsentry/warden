@@ -19,6 +19,8 @@ Example: `Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>`
 This is a pnpm workspace monorepo. Shared build tools (oxlint, lint-staged, simple-git-hooks, typescript, vitest) live in the root `package.json`.
 
 ```
+TELEMETRY.md           # Sentry telemetry investigation map; points to Junior's shared spec
+
 packages/
 ├── docs/              # Astro docs site (dex-docs), deployed via Vercel
 
