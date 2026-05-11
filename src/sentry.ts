@@ -7,6 +7,8 @@ export type SentryContext = 'cli' | 'action';
 
 let initialized = false;
 
+type TelemetryAttributes = Record<string, string | number | boolean>;
+
 export function initSentry(context: SentryContext): void {
   const dsn = process.env['WARDEN_SENTRY_DSN'];
   if (!dsn || initialized) return;
@@ -38,7 +40,7 @@ export const { logger } = Sentry;
  * Set attributes on the global Sentry scope.
  * These automatically apply to ALL metrics and spans.
  */
-export function setGlobalAttributes(attrs: Record<string, string | number | boolean>): void {
+export function setGlobalAttributes(attrs: TelemetryAttributes): void {
   if (!initialized) return;
   try {
     Sentry.getGlobalScope().setAttributes(attrs);
@@ -52,14 +54,54 @@ export function setGlobalAttributes(attrs: Record<string, string | number | bool
  */
 export function setRepositoryScope(repository: string | undefined): void {
   if (!repository || !initialized) return;
+  const [owner, name] = repository.split('/');
+  const attrs: TelemetryAttributes = name
+    ? {
+        'vcs.owner.name': owner ?? '',
+        'vcs.repository.name': name,
+      }
+    : {
+        'vcs.repository.name': repository,
+      };
 
-  try {
-    Sentry.setTag('repository', repository);
-  } catch {
-    // Never break the workflow
+  if (owner && name && owner !== 'local') {
+    attrs['vcs.provider.name'] = 'github';
+    attrs['vcs.repository.url.full'] = `https://github.com/${owner}/${name}`;
   }
 
-  setGlobalAttributes({ 'warden.repository': repository });
+  setGlobalAttributes(attrs);
+}
+
+/**
+ * Set GitHub Actions metadata on the global Sentry scope.
+ */
+export function setGitHubActionScope(eventName: string | undefined): void {
+  if (!initialized) return;
+
+  const repository = process.env['GITHUB_REPOSITORY'];
+  const runId = process.env['GITHUB_RUN_ID'];
+  const serverUrl = process.env['GITHUB_SERVER_URL'] ?? 'https://github.com';
+  const attrs: TelemetryAttributes = {};
+
+  if (eventName) {
+    attrs['github.event.name'] = eventName;
+  }
+  if (process.env['GITHUB_WORKFLOW']) {
+    attrs['cicd.pipeline.name'] = process.env['GITHUB_WORKFLOW'];
+  }
+  if (runId) {
+    attrs['cicd.pipeline.run.id'] = runId;
+  }
+  if (repository && runId) {
+    attrs['cicd.pipeline.run.url.full'] = `${serverUrl}/${repository}/actions/runs/${runId}`;
+  }
+  if (process.env['GITHUB_JOB']) {
+    attrs['cicd.pipeline.task.name'] = process.env['GITHUB_JOB'];
+  }
+
+  if (Object.keys(attrs).length > 0) {
+    setGlobalAttributes(attrs);
+  }
 }
 
 /**
@@ -89,47 +131,59 @@ function safeEmit(fn: () => void): void {
 }
 
 /**
+ * Build agent-scoped metric attributes that match span attribute names.
+ */
+function agentMetricAttributes(skill: string, model?: string): TelemetryAttributes {
+  const attrs: TelemetryAttributes = { 'gen_ai.agent.name': skill };
+  if (model) {
+    attrs['gen_ai.request.model'] = model;
+  }
+  return attrs;
+}
+
+/**
  * Emit a single run count. Call once per analysis workflow execution.
- * Inherits warden.source and warden.repository from global scope.
+ * Inherits warden.source, repository, and GitHub Actions attributes from global scope.
  */
 export function emitRunMetric(): void {
   safeEmit(() => {
-    Sentry.metrics.count('workflow.runs', 1);
+    Sentry.metrics.count('warden.workflow.runs', 1);
   });
 }
 
 export function emitSkillMetrics(report: SkillReport): void {
   safeEmit(() => {
-    const attrs: Record<string, string> = { skill: report.skill };
-    if (report.model) {
-      attrs['model'] = report.model;
-    }
+    const attrs = agentMetricAttributes(report.skill, report.model);
 
-    Sentry.metrics.distribution('skill.duration', report.durationMs ?? 0, {
+    Sentry.metrics.distribution('warden.skill.duration', report.durationMs ?? 0, {
       unit: 'millisecond',
       attributes: attrs,
     });
 
     if (report.usage) {
-      Sentry.metrics.distribution('tokens.input', report.usage.inputTokens, {
-        unit: 'none',
-        attributes: attrs,
+      const tokenAttrs = {
+        ...attrs,
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.provider.name': 'anthropic',
+      };
+      Sentry.metrics.distribution('gen_ai.client.token.usage', report.usage.inputTokens, {
+        unit: '{token}',
+        attributes: { ...tokenAttrs, 'gen_ai.token.type': 'input' },
       });
-      Sentry.metrics.distribution('tokens.output', report.usage.outputTokens, {
-        unit: 'none',
-        attributes: attrs,
+      Sentry.metrics.distribution('gen_ai.client.token.usage', report.usage.outputTokens, {
+        unit: '{token}',
+        attributes: { ...tokenAttrs, 'gen_ai.token.type': 'output' },
       });
       if (report.usage.costUSD) {
-        Sentry.metrics.distribution('cost.usd', report.usage.costUSD, { attributes: attrs });
+        Sentry.metrics.distribution('warden.gen_ai.cost.usd', report.usage.costUSD, { attributes: attrs });
       }
     }
 
-    Sentry.metrics.count('findings.total', report.findings.length, { attributes: attrs });
     for (const severity of Object.keys(SEVERITY_ORDER) as Severity[]) {
       const count = report.findings.filter((f) => f.severity === severity).length;
       if (count > 0) {
-        Sentry.metrics.count('findings', count, {
-          attributes: { ...attrs, severity },
+        Sentry.metrics.count('warden.findings', count, {
+          attributes: { ...attrs, 'warden.finding.severity': severity },
         });
       }
     }
@@ -138,9 +192,9 @@ export function emitSkillMetrics(report: SkillReport): void {
 
 export function emitExtractionMetrics(skill: string, method: 'regex' | 'llm' | 'none', count: number): void {
   safeEmit(() => {
-    const attrs = { skill, method };
-    Sentry.metrics.count('extraction.attempts', 1, { attributes: attrs });
-    Sentry.metrics.count('extraction.findings', count, { attributes: attrs });
+    const attrs = { ...agentMetricAttributes(skill), 'warden.extraction.method': method };
+    Sentry.metrics.count('warden.extraction.attempts', 1, { attributes: attrs });
+    Sentry.metrics.count('warden.extraction.findings', count, { attributes: attrs });
   });
 }
 
@@ -172,36 +226,38 @@ export function emitFixGateMetrics(
   semanticUnavailable: number
 ): void {
   safeEmit(() => {
-    const attrs = { skill };
-    Sentry.metrics.count('fix_gate.checked', checked, { attributes: attrs });
-    Sentry.metrics.count('fix_gate.stripped_deterministic', strippedDeterministic, { attributes: attrs });
-    Sentry.metrics.count('fix_gate.stripped_semantic', strippedSemantic, { attributes: attrs });
-    Sentry.metrics.count('fix_gate.semantic_unavailable', semanticUnavailable, { attributes: attrs });
+    const attrs = agentMetricAttributes(skill);
+    Sentry.metrics.count('warden.fix_gate.checked', checked, { attributes: attrs });
+    Sentry.metrics.count('warden.fix_gate.stripped_deterministic', strippedDeterministic, { attributes: attrs });
+    Sentry.metrics.count('warden.fix_gate.stripped_semantic', strippedSemantic, { attributes: attrs });
+    Sentry.metrics.count('warden.fix_gate.semantic_unavailable', semanticUnavailable, { attributes: attrs });
   });
 }
 
 export function emitRetryMetric(skill: string, attempt: number): void {
   safeEmit(() => {
-    Sentry.metrics.count('skill.retries', 1, { attributes: { skill, attempt } });
+    Sentry.metrics.count('warden.skill.retries', 1, {
+      attributes: { ...agentMetricAttributes(skill), 'warden.retry.attempt': attempt },
+    });
   });
 }
 
 export function emitDedupMetrics(skill: string, total: number, unique: number): void {
   safeEmit(() => {
-    const attrs = { skill };
-    Sentry.metrics.distribution('dedup.total', total, { attributes: attrs });
-    Sentry.metrics.distribution('dedup.unique', unique, { attributes: attrs });
+    const attrs = agentMetricAttributes(skill);
+    Sentry.metrics.distribution('warden.dedup.total', total, { attributes: attrs });
+    Sentry.metrics.distribution('warden.dedup.unique', unique, { attributes: attrs });
     if (total > 0) {
-      Sentry.metrics.distribution('dedup.removed', total - unique, { attributes: attrs });
+      Sentry.metrics.distribution('warden.dedup.removed', total - unique, { attributes: attrs });
     }
   });
 }
 
 export function emitFixEvalVerdictMetric(verdict: string, skill?: string): void {
   safeEmit(() => {
-    const attrs: Record<string, string> = { verdict };
+    const attrs: TelemetryAttributes = { 'warden.fix_eval.verdict': verdict };
     if (skill) {
-      attrs['skill'] = skill;
+      Object.assign(attrs, agentMetricAttributes(skill));
     }
     Sentry.metrics.count('warden.fix_eval.verdict', 1, { attributes: attrs });
   });
@@ -209,7 +265,7 @@ export function emitFixEvalVerdictMetric(verdict: string, skill?: string): void 
 
 export function emitStaleResolutionMetric(count: number, skill?: string): void {
   safeEmit(() => {
-    const attrs: Record<string, string> | undefined = skill ? { skill } : undefined;
+    const attrs = skill ? agentMetricAttributes(skill) : undefined;
     Sentry.metrics.count('warden.stale.resolved', count, attrs ? { attributes: attrs } : undefined);
   });
 }

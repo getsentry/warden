@@ -180,8 +180,8 @@ async function analyzeHunk(
       op: 'skill.analyze_hunk',
       name: `analyze hunk ${hunkCtx.filename}:${lineRange}`,
       attributes: {
-        'code.filepath': hunkCtx.filename,
-        'hunk.line_range': lineRange,
+        'code.file.path': hunkCtx.filename,
+        'warden.hunk.line_range': lineRange,
       },
     },
     async (span) => {
@@ -356,8 +356,8 @@ async function analyzeHunk(
             );
           }
 
-          span.setAttribute('hunk.failed', false);
-          span.setAttribute('finding.count', filteredFindings.length);
+          span.setAttribute('warden.hunk.failed', false);
+          span.setAttribute('warden.finding.count', filteredFindings.length);
 
           return {
             findings: filteredFindings,
@@ -476,8 +476,8 @@ async function analyzeHunk(
         );
       }
 
-      span.setAttribute('hunk.failed', true);
-      span.setAttribute('finding.count', 0);
+      span.setAttribute('warden.hunk.failed', true);
+      span.setAttribute('warden.finding.count', 0);
 
       const { code: retryCode, message } = classifyError(lastError);
       const retryMsg = sanitizeErrorMessage(message);
@@ -534,8 +534,8 @@ export async function analyzeFile(
       op: 'skill.analyze_file',
       name: `analyze file ${file.filename}`,
       attributes: {
-        'code.filepath': file.filename,
-        'hunk.count': file.hunks.length,
+        'code.file.path': file.filename,
+        'warden.hunk.count': file.hunks.length,
       },
     },
     async (span) => {
@@ -624,9 +624,9 @@ export async function analyzeFile(
         }
       }
 
-      span.setAttribute('finding.count', fileFindings.length);
-      span.setAttribute('hunk.failed_count', failedHunks);
-      span.setAttribute('extraction.failed_count', failedExtractions);
+      span.setAttribute('warden.finding.count', fileFindings.length);
+      span.setAttribute('warden.hunk.failed_count', failedHunks);
+      span.setAttribute('warden.extraction.failed_count', failedExtractions);
 
       return {
         filename: file.filename,

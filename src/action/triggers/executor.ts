@@ -100,7 +100,8 @@ export async function executeTrigger(
   return Sentry.startSpan(
     { op: 'trigger.execute', name: `execute ${trigger.name}` },
     async (span) => {
-      span.setAttribute('skill.name', trigger.skill);
+      span.setAttribute('gen_ai.agent.name', trigger.skill);
+      span.setAttribute('warden.trigger.name', trigger.name);
       const { octokit, context, anthropicApiKey, claudePath } = deps;
 
       logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
@@ -226,7 +227,7 @@ export async function executeTrigger(
         if (error instanceof ActionFailedError) throw error;
         const { code } = classifyError(error);
         Sentry.captureException(error, {
-          tags: { 'trigger.name': trigger.name, 'skill.name': trigger.skill },
+          tags: { 'warden.trigger.name': trigger.name, 'gen_ai.agent.name': trigger.skill },
           ...(code === 'provider_unavailable' || code === 'all_hunks_failed'
             ? { fingerprint: ['warden', code] }
             : {}),

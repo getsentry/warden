@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
-import { Sentry, flushSentry, setGlobalAttributes, emitRunMetric, getTraceId } from '../sentry.js';
+import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../config/schema.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
@@ -951,7 +951,7 @@ export async function runSkills(
   }
 
   // Set global telemetry context and emit run metric
-  setGlobalAttributes({ 'warden.repository': context.repository.fullName });
+  setRepositoryScope(context.repository.fullName);
   emitRunMetric();
 
   // Handle case where no skills to run
@@ -1231,7 +1231,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   reporter.contextFiles(pullRequest.files);
 
   // Set global telemetry context and emit run metric
-  setGlobalAttributes({ 'warden.repository': context.repository.fullName });
+  setRepositoryScope(context.repository.fullName);
   emitRunMetric();
 
   // Resolve skills into triggers and match

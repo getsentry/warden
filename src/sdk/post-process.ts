@@ -95,10 +95,10 @@ export async function postProcessFindings(
   );
   if (sanitized.stats.checked > 0) {
     logger.info('Suggested fix quality gate', {
-      'fix_gate.checked': sanitized.stats.checked,
-      'fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
-      'fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
-      'fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
+      'warden.fix_gate.checked': sanitized.stats.checked,
+      'warden.fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
+      'warden.fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
+      'warden.fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
     });
   }
 

@@ -241,16 +241,17 @@ export async function runSkillTask(
   return Sentry.startSpan(
     { op: 'skill.run', name: `run ${displayName}` },
     async (span) => {
-      span.setAttribute('skill.name', name);
+      span.setAttribute('gen_ai.agent.name', displayName);
+      span.setAttribute('warden.trigger.name', name);
       const files = context.pullRequest?.files ?? [];
-      span.setAttribute('file.count', files.length);
+      span.setAttribute('warden.file.count', files.length);
       logger.info(logger.fmt`Skill execution started: ${displayName}`, {
-        'file.count': files.length,
+        'warden.file.count': files.length,
       });
 
       const startTime = Date.now();
       // Mirror of the inner-scope `skill` so the outer catch can use
-      // skill.name when resolveSkill succeeded but a later step threw.
+      // report.skill when resolveSkill succeeded but a later step threw.
       // Stays undefined only if resolveSkill itself failed.
       let resolvedSkillName: string | undefined;
 
@@ -259,6 +260,7 @@ export async function runSkillTask(
         try {
           skill = await resolveSkill();
           resolvedSkillName = skill.name;
+          span.setAttribute('gen_ai.agent.name', skill.name);
         } catch (err) {
           if (err instanceof WardenAuthenticationError) throw err;
           const message = err instanceof Error ? err.message : String(err);
@@ -629,7 +631,7 @@ export async function runSkillTask(
         // Emit metrics and log completion
         emitSkillMetrics(report);
         logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
-          'finding.count': report.findings.length,
+          'warden.finding.count': report.findings.length,
           'duration_ms': report.durationMs,
         });
 

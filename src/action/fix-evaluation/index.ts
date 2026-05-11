@@ -201,10 +201,10 @@ export async function evaluateFixAttempts(
             op: 'fix_eval.evaluate',
             name: `evaluate fix ${comment.path}:${comment.line}`,
             attributes: {
-              'code.filepath': comment.path,
-              'code.line': comment.line,
+              'code.file.path': comment.path,
+              'code.line.number': comment.line,
               'warden.fix_eval.finding_id': findingId ?? 'unknown',
-              ...(skill && { 'warden.fix_eval.skill': skill }),
+              ...(skill && { 'gen_ai.agent.name': skill }),
             },
           },
           async (evalSpan) => {

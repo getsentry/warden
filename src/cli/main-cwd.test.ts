@@ -13,7 +13,7 @@ vi.mock('../sentry.js', () => ({
     }),
   },
   flushSentry: vi.fn(async () => undefined),
-  setGlobalAttributes: vi.fn(),
+  setRepositoryScope: vi.fn(),
   emitRunMetric: vi.fn(),
   getTraceId: vi.fn(() => undefined),
 }));

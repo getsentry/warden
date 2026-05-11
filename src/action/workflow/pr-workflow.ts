@@ -751,7 +751,7 @@ export async function runPRWorkflow(
   return Sentry.startSpan(
     { op: 'workflow.run', name: 'review pull_request' },
     async (span) => {
-      span.setAttribute('github.event', eventName);
+      span.setAttribute('github.event.name', eventName);
 
       const initResult = await Sentry.startSpan(
         { op: 'workflow.init', name: 'initialize workflow' },
@@ -797,7 +797,7 @@ export async function runPRWorkflow(
 
       const traceId = span.spanContext().traceId;
       logger.info('Workflow initialized', {
-        'trigger.count': matchedTriggers.length,
+        'warden.trigger.count': matchedTriggers.length,
         'trace.id': traceId,
       });
 
