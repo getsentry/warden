@@ -117,6 +117,14 @@ fields=timestamp,metric,warden.repository,skill,model,severity,value
 sort=-timestamp
 ```
 
+Total findings for a skill, optionally scoped to a repository.
+
+```text
+dataset=metrics query='metric:findings.total skill:"<skill_name>" warden.repository:"<owner/repo>"'
+fields=timestamp,metric,warden.repository,skill,model,value
+aggregate=sum(value) by skill,warden.repository
+```
+
 ## Domains
 
 ### Workflow Entry
