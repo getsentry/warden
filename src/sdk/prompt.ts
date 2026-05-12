@@ -51,14 +51,14 @@ Full schema:
       "id": "unique-identifier",
       "severity": "high|medium|low",
       "confidence": "high|medium|low",
-      "title": "Assertive, impact-focused title stating what is broken or wrong (e.g. 'wasFailFastAborted never detects fail-fast abort')",
-      "description": "2-4 concise sentences. Start with the root cause, end with the user-visible consequence.",
+      "title": "Short, specific title naming the broken behavior or risk (e.g. 'wasFailFastAborted never detects fail-fast abort')",
+      "description": "Visible inline PR comment. Use one short, direct sentence whenever possible; two only if needed for the fix or impact.",
       "location": {
         "path": "path/to/file.ts",
         "startLine": 10,
         "endLine": 15
       },
-      "verification": "Required. What you checked before reporting: files read, code paths traced, assumptions validated. Reference specific files/functions.",
+      "verification": "Required. Detailed evidence for the collapsible verification block: files/functions checked, trigger conditions, expected vs actual behavior, and why mitigations do not apply.",
       "suggestedFix": {
         "description": "How to fix this issue",
         "diff": "unified diff format"
@@ -75,8 +75,10 @@ Requirements:
 - "confidence" reflects how certain you are this is a real issue given the codebase context
 - "suggestedFix" is optional - only include when you can provide a complete, correct fix **to the file being analyzed**. Omit suggestedFix if:
   - The fix would be incomplete or you're uncertain about the correct solution
-  - The fix requires changes to a different file or a new file (describe the fix in the description field instead)
-- Keep descriptions concise (2-4 sentences). Start with the root cause, end with the user-visible consequence.
+  - The fix requires changes to a different file or a new file (briefly name the fix in the description field instead)
+- "description" is rendered directly in GitHub inline comments. Keep it brief and actionable, usually one sentence.
+- Put proof, trace notes, checked files, and expected/actual breakdowns in "verification", not "description".
+- Do not include severity, confidence, finding ID, skill name, or generic review framing in "description".
 - Focus your analysis on the code changes in the hunk. Surrounding context and tool results are for understanding only -- all findings must reference lines within the hunk range.
 `),
   ];

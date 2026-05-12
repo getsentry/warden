@@ -71,7 +71,7 @@ function renderReview(
     let body = `**${escapeHtml(finding.title)}**\n\n${escapeHtml(finding.description)}`;
 
     if (finding.verification) {
-      body += `\n\n<details><summary>Verification</summary>\n\n${escapeHtml(finding.verification)}\n\n</details>`;
+      body += `\n\n${renderVerification(finding.verification)}`;
     }
 
     if (includeSuggestions && finding.suggestedFix) {
@@ -163,6 +163,10 @@ function renderSuggestion(description: string, diff: string): string {
   }
 
   return `**Suggested fix:** ${escapeHtml(description)}\n\n\`\`\`suggestion\n${suggestionLines.join('\n')}\n\`\`\``;
+}
+
+function renderVerification(verification: string): string {
+  return `<details><summary>Verification</summary>\n\n${escapeHtml(verification)}\n\n</details>`;
 }
 
 function renderHiddenFindingsLink(hiddenCount: number, checkRunUrl: string): string {
@@ -275,6 +279,10 @@ export function renderFindingsBody(findings: Finding[], skill: string): string {
     lines.push('');
     lines.push(escapeHtml(finding.description));
     lines.push('');
+    if (finding.verification) {
+      lines.push(renderVerification(finding.verification));
+      lines.push('');
+    }
   }
   lines.push(renderAttributionFooter(skill));
   return lines.join('\n');

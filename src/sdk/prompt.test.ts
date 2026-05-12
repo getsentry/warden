@@ -36,7 +36,6 @@ describe('buildHunkSystemPrompt', () => {
   it('includes verification field in output schema', () => {
     const result = buildHunkSystemPrompt(skill);
     expect(result).toContain('"verification"');
-    expect(result).toContain('Required. What you checked before reporting');
   });
 
   it('includes skill prompt in instructions', () => {

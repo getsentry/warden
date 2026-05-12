@@ -80,6 +80,6 @@ No proof, no finding. Suspicion is not a result.
 ## Finding Format
 
 - Title: name the exact bug and trigger.
-- Description: include the changed behavior, trigger conditions, expected behavior, actual behavior, and concrete impact.
-- `verification`: list checked files, functions, callers, guards, tests, schemas, or framework guarantees.
+- Description: one short public comment stating the broken behavior and impact. Use a second sentence only if needed for the fix.
+- `verification`: include trigger conditions, expected behavior, actual behavior, checked callers, guards, tests, schemas, or framework guarantees.
 - `suggestedFix`: include only when the fix is complete for the analyzed path.

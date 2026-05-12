@@ -9,7 +9,13 @@ How Warden formats and manages PR comments: format conventions, deduplication, a
 ```
 **Title stating what is broken or wrong**
 
-2-4 sentence description. Root cause first, user-visible consequence last.
+One short sentence stating what breaks and why it matters.
+
+<details><summary>Verification</summary>
+
+Evidence checked before reporting the finding.
+
+</details>
 
 <details><summary>Also found at N additional locations</summary>
 
@@ -23,6 +29,7 @@ Identified by Warden `skill-name` · `FINDING-ID`
 ```
 
 - Title: bold, no emoji, no ID, no confidence, no severity
+- Verification details render in a collapsible block when present
 - Severity is communicated via GitHub check annotation level (failure/warning/notice)
 - Footer: skill name and finding ID in backticks
 - Additional locations in collapsible details block

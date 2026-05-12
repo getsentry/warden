@@ -104,6 +104,35 @@ describe('renderSkillReport', () => {
     expect(result.review!.comments[0]!.body).not.toContain('confidence');
   });
 
+  it('renders verification details in a collapsible section', () => {
+    const report: SkillReport = {
+      ...baseReport,
+      skill: 'code-review',
+      findings: [
+        {
+          id: 'f1',
+          severity: 'medium',
+          title: 'Vitest runs in watch mode in CI',
+          description:
+            'The test script can hang CI because Vitest watches by default. Use `vitest run` so the job exits after one pass.',
+          verification: 'Checked package.json scripts and Vitest default behavior.',
+          location: {
+            path: 'package.json',
+            startLine: 10,
+          },
+        },
+      ],
+    };
+
+    const result = renderSkillReport(report);
+    const body = result.review!.comments[0]!.body;
+
+    expect(body).toContain('Vitest runs in watch mode in CI');
+    expect(body).toContain('The test script can hang CI');
+    expect(body).toContain('<details><summary>Verification</summary>');
+    expect(body).toContain('Checked package.json scripts');
+  });
+
   it('includes deduplication marker in comments', () => {
     const report: SkillReport = {
       ...baseReport,
@@ -1283,6 +1312,25 @@ describe('renderFindingsBody', () => {
     expect(body).toContain('(`src/db.ts:42`)');
     expect(body).toContain('User input in query');
     expect(body).toContain('<sub>Identified by Warden security-review</sub>');
+  });
+
+  it('renders verification details in body findings', () => {
+    const findings = [
+      {
+        id: 'f1',
+        severity: 'medium' as const,
+        title: 'Fallback Finding',
+        description: 'Short visible comment',
+        verification: 'Checked the fallback review body path.',
+        location: { path: 'src/app.ts', startLine: 12 },
+      },
+    ];
+
+    const body = renderFindingsBody(findings, 'code-review');
+
+    expect(body).toContain('Short visible comment');
+    expect(body).toContain('<details><summary>Verification</summary>');
+    expect(body).toContain('Checked the fallback review body path.');
   });
 
   it('renders findings without location', () => {

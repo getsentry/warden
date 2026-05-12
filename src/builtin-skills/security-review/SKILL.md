@@ -76,6 +76,6 @@ Load only matching references:
 ## Finding Format
 
 - Title: name the vulnerability and impact.
-- Description: include source, sink or missing guard, boundary crossed, and attacker-visible consequence.
-- `verification`: list checked files, functions, guards, or sibling paths.
+- Description: one short public comment stating the exploitable path and impact. Use a second sentence only if needed for the fix.
+- `verification`: include source, sink or missing guard, boundary crossed, mitigations checked, and attacker-visible consequence.
 - `suggestedFix`: include only when the fix is complete for the analyzed file.
