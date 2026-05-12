@@ -168,10 +168,11 @@ export const JsonlFixEvalDetailSchema = z.object({
   path: z.string(),
   line: z.number().int().positive(),
   findingId: z.string().optional(),
-  verdict: z.union([FixStatusSchema, z.literal('re_detected')]),
+  verdict: z.union([FixStatusSchema, z.literal('re_detected'), z.literal('eval_error')]),
   reasoning: z.string().optional(),
   durationMs: z.number().nonnegative(),
   usage: UsageStatsSchema,
+  usedFallback: z.boolean().optional(),
 });
 export type JsonlFixEvalDetail = z.infer<typeof JsonlFixEvalDetailSchema>;
 

@@ -241,6 +241,64 @@ describe('evaluateFixAttempts', () => {
     expect(result.uniqueFindingsResolved).toBe(0);
   });
 
+  it('overrides not_attempted verdict when issue is re-detected', async () => {
+    const comment = createComment();
+    const finding = createFinding();
+
+    mockEvaluateFix.mockResolvedValue({
+      verdict: { status: 'not_attempted', reasoning: 'Unrelated changes' },
+      usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+      usedFallback: false,
+    });
+
+    const result = await evaluateFixAttempts(
+      mockOctokit,
+      [comment],
+      defaultContext,
+      [finding],
+      'api-key'
+    );
+
+    expect(result.toResolve).toHaveLength(0);
+    expect(result.toReply).toHaveLength(1);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({
+      verdict: 're_detected',
+      usedFallback: false,
+    });
+    expect(result.uniqueFindingsEvaluated).toBe(1);
+    expect(result.uniqueFindingsCodeChanged).toBe(1);
+    expect(result.uniqueFindingsResolved).toBe(0);
+  });
+
+  it('overrides fallback verdict when issue is re-detected', async () => {
+    const comment = createComment();
+    const finding = createFinding();
+
+    mockEvaluateFix.mockResolvedValue({
+      verdict: { status: 'not_attempted', reasoning: 'Evaluation failed' },
+      usage: { inputTokens: 50, outputTokens: 0, costUSD: 0.0001 },
+      usedFallback: true,
+    });
+
+    const result = await evaluateFixAttempts(
+      mockOctokit,
+      [comment],
+      defaultContext,
+      [finding],
+      'api-key'
+    );
+
+    expect(result.failedEvaluations).toBe(1);
+    expect(result.toResolve).toHaveLength(0);
+    expect(result.toReply).toHaveLength(1);
+    expect(result.evaluations).toHaveLength(1);
+    expect(result.evaluations[0]).toMatchObject({
+      verdict: 're_detected',
+      usedFallback: true,
+    });
+  });
+
   it('limits evaluation to MAX_EVALUATIONS (20)', async () => {
     const comments = Array.from({ length: 25 }, (_, i) =>
       createComment({ id: i + 1, threadId: `thread-${i}` })
@@ -275,8 +333,43 @@ describe('evaluateFixAttempts', () => {
     expect(result.toReply).toHaveLength(0);
     expect(result.evaluations).toHaveLength(1);
     expect(result.evaluations[0]).toMatchObject({
+      verdict: 'eval_error',
       usedFallback: true,
     });
+  });
+
+  it('continues evaluating remaining comments when one evaluation throws', async () => {
+    const comments = [
+      createComment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' }),
+      createComment({ id: 2, threadId: 'thread-2', path: 'src/b.ts' }),
+    ];
+
+    mockEvaluateFix
+      .mockRejectedValueOnce(new Error('provider crashed'))
+      .mockResolvedValueOnce({
+        verdict: { status: 'resolved', reasoning: 'Fixed' },
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+        usedFallback: false,
+      });
+
+    const result = await evaluateFixAttempts(mockOctokit, comments, defaultContext, [], 'api-key');
+
+    expect(result.evaluated).toBe(2);
+    expect(result.failedEvaluations).toBe(1);
+    expect(result.toResolve).toHaveLength(1);
+    expect(result.toResolve[0]).toBe(comments[1]);
+    expect(result.evaluations).toHaveLength(2);
+    expect(result.evaluations[0]).toMatchObject({
+      verdict: 'eval_error',
+      usedFallback: true,
+    });
+    expect(result.evaluations[1]).toMatchObject({
+      verdict: 'resolved',
+      usedFallback: false,
+    });
+    expect(result.uniqueFindingsEvaluated).toBe(2);
+    expect(result.uniqueFindingsCodeChanged).toBe(1);
+    expect(result.uniqueFindingsResolved).toBe(1);
   });
 
   it('aggregates usage across multiple evaluations', async () => {

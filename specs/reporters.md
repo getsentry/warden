@@ -558,7 +558,7 @@ New run logs are homogeneous: every line is a chunk result. Each line is self-co
 
 **BySeverity**: `{ high: int, medium: int, low: int }`. Legacy 5-level keys (`critical`, `info`) are still accepted on read for backward compatibility with older logs and normalized to `high`/`low`; new output is strictly 3-level.
 
-**FixEvalDetail**: `{ path: string, line: int, findingId?: string, verdict: "not_attempted" | "attempted_failed" | "resolved" | "re_detected", reasoning?: string, durationMs: number, usage: UsageStats }`
+**FixEvalDetail**: `{ path: string, line: int, findingId?: string, verdict: "not_attempted" | "attempted_failed" | "resolved" | "re_detected" | "eval_error", reasoning?: string, durationMs: number, usage: UsageStats, usedFallback?: boolean }`
 
 ### Output Location
 

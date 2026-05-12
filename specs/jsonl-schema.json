@@ -669,6 +669,10 @@
             {
               "type": "string",
               "const": "re_detected"
+            },
+            {
+              "type": "string",
+              "const": "eval_error"
             }
           ]
         },
@@ -681,6 +685,9 @@
         },
         "usage": {
           "$ref": "#/$defs/UsageStats"
+        },
+        "usedFallback": {
+          "type": "boolean"
         }
       },
       "required": [

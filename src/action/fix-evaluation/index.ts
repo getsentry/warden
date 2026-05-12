@@ -5,7 +5,7 @@ import type { Finding, UsageStats } from '../../types/index.js';
 import { aggregateUsage, emptyUsage } from '../../sdk/usage.js';
 import { findingMatchesComment } from '../../output/stale.js';
 import { Sentry, emitFixEvalMetrics, emitFixEvalVerdictMetric } from '../../sentry.js';
-import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
+import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult, FixEvaluation, FixJudgeResult } from './types.js';
 import { evaluateFix } from './judge.js';
 import type { FixJudgeContext, FixJudgeRuntimeOptions } from './judge.js';
 import { fetchFollowUpChanges, fetchFileContent, formatFailedFixReply } from './github.js';
@@ -15,6 +15,9 @@ export type { EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
 
 /** Maximum comments to evaluate per run */
 const MAX_EVALUATIONS = 20;
+const EVALUATION_FAILED_REASONING = 'Evaluation failed';
+const RE_DETECTED_REASONING =
+  'The fix attempt was made, but the same issue was detected again in the updated code.';
 
 /** Extract finding ID (e.g. "WRZ-XPL") from a comment title like "[WRZ-XPL] Some title" */
 function extractFindingId(title: string): string | undefined {
@@ -76,6 +79,100 @@ async function fetchCodeAtLocation(
  */
 function wasReDetected(comment: ExistingComment, currentFindings: Finding[]): boolean {
   return currentFindings.some((finding) => findingMatchesComment(finding, comment));
+}
+
+function createFallbackEvaluation(): FixJudgeResult {
+  return {
+    verdict: { status: 'not_attempted', reasoning: EVALUATION_FAILED_REASONING },
+    usage: emptyUsage(),
+    usedFallback: true,
+  };
+}
+
+/**
+ * Apply Warden's final verdict precedence and record the side effects for it.
+ */
+function recordEvaluationOutcome(args: {
+  result: EvaluateFixAttemptsResult;
+  comment: ExistingComment;
+  findingId?: string;
+  skill?: string;
+  context: EvaluateFixAttemptsContext;
+  evalResult: FixJudgeResult;
+  durationMs: number;
+  reDetected: boolean;
+  uniqueCodeChangedThreadIds: Set<string>;
+  uniqueResolvedThreadIds: Set<string>;
+}): FixEvaluation['verdict'] {
+  const {
+    result,
+    comment,
+    findingId,
+    skill,
+    context,
+    evalResult,
+    durationMs,
+    reDetected,
+    uniqueCodeChangedThreadIds,
+    uniqueResolvedThreadIds,
+  } = args;
+
+  if (evalResult.usedFallback) {
+    result.failedEvaluations++;
+  }
+
+  let finalVerdict: FixEvaluation['verdict'];
+  let reasoning = evalResult.verdict.reasoning;
+
+  if (reDetected) {
+    finalVerdict = 're_detected';
+    reasoning = RE_DETECTED_REASONING;
+    if (comment.threadId) {
+      uniqueCodeChangedThreadIds.add(comment.threadId);
+    }
+    result.toReply.push({
+      comment,
+      replyBody: formatFailedFixReply(context.headSha, RE_DETECTED_REASONING),
+      commitSha: context.headSha,
+    });
+  } else if (evalResult.usedFallback) {
+    finalVerdict = 'eval_error';
+  } else if (evalResult.verdict.status === 'not_attempted') {
+    finalVerdict = 'not_attempted';
+  } else if (evalResult.verdict.status === 'resolved') {
+    finalVerdict = 'resolved';
+    if (comment.threadId) {
+      uniqueCodeChangedThreadIds.add(comment.threadId);
+      uniqueResolvedThreadIds.add(comment.threadId);
+    }
+    result.toResolve.push(comment);
+  } else {
+    finalVerdict = 'attempted_failed';
+    if (comment.threadId) {
+      uniqueCodeChangedThreadIds.add(comment.threadId);
+    }
+    result.toReply.push({
+      comment,
+      replyBody: formatFailedFixReply(context.headSha, evalResult.verdict.reasoning),
+      commitSha: context.headSha,
+    });
+  }
+
+  result.evaluations.push({
+    findingId,
+    skill,
+    path: comment.path,
+    line: comment.line,
+    title: comment.title,
+    verdict: finalVerdict,
+    reasoning,
+    durationMs,
+    usage: evalResult.usage,
+    usedFallback: evalResult.usedFallback,
+  });
+  emitFixEvalVerdictMetric(finalVerdict, skill, { usedFallback: evalResult.usedFallback });
+
+  return finalVerdict;
 }
 
 /**
@@ -205,7 +302,9 @@ export async function evaluateFixAttempts(
           // Non-fatal: judge can still use tools to investigate
         }
 
-        const evalResultData = await Sentry.startSpan(
+        const reDetected = wasReDetected(comment, currentFindings);
+
+        await Sentry.startSpan(
           {
             op: 'fix_eval.evaluate',
             name: `evaluate fix ${comment.path}:${comment.line}`,
@@ -218,106 +317,39 @@ export async function evaluateFixAttempts(
           },
           async (evalSpan) => {
             const startTime = performance.now();
-            const evalResult = await evaluateFix(
-              { comment, skillName: skill, changedFiles, codeBeforeFix, codeAfterFix, commitMessages },
-              toolContext,
-              apiKey,
-              runtimeOptions
-            );
+            let evalResult: FixJudgeResult;
+            try {
+              evalResult = await evaluateFix(
+                { comment, skillName: skill, changedFiles, codeBeforeFix, codeAfterFix, commitMessages },
+                toolContext,
+                apiKey,
+                runtimeOptions
+              );
+            } catch (error) {
+              Sentry.captureException(error, { tags: { operation: 'evaluate_fix_attempt' } });
+              evalResult = createFallbackEvaluation();
+            }
             const durationMs = performance.now() - startTime;
 
-            evalSpan.setAttribute('warden.fix_eval.verdict', evalResult.verdict.status);
+            evalSpan.setAttribute('warden.fix_eval.raw_verdict', evalResult.verdict.status);
             evalSpan.setAttribute('warden.fix_eval.used_fallback', evalResult.usedFallback);
 
-            return { evalResult, durationMs };
+            usages.push(evalResult.usage);
+            const finalVerdict = recordEvaluationOutcome({
+              result,
+              comment,
+              findingId,
+              skill,
+              context,
+              evalResult,
+              durationMs,
+              reDetected,
+              uniqueCodeChangedThreadIds,
+              uniqueResolvedThreadIds,
+            });
+            evalSpan.setAttribute('warden.fix_eval.verdict', finalVerdict);
           },
         );
-
-        const { evalResult, durationMs } = evalResultData;
-        usages.push(evalResult.usage);
-
-        if (evalResult.usedFallback) {
-          result.failedEvaluations++;
-          result.evaluations.push({
-            findingId,
-            skill,
-            path: comment.path,
-            line: comment.line,
-            title: comment.title,
-            verdict: evalResult.verdict.status,
-            reasoning: evalResult.verdict.reasoning,
-            durationMs,
-            usage: evalResult.usage,
-            usedFallback: true,
-          });
-          emitFixEvalVerdictMetric(evalResult.verdict.status, skill);
-          continue;
-        }
-
-        if (evalResult.verdict.status === 'not_attempted') {
-          result.evaluations.push({
-            findingId,
-            skill,
-            path: comment.path,
-            line: comment.line,
-            title: comment.title,
-            verdict: 'not_attempted',
-            reasoning: evalResult.verdict.reasoning,
-            durationMs,
-            usage: evalResult.usage,
-            usedFallback: false,
-          });
-          emitFixEvalVerdictMetric('not_attempted', skill);
-          continue;
-        }
-
-        // Check if the issue was re-detected (overrides LLM judgment)
-        const reDetected = wasReDetected(comment, currentFindings);
-        let finalVerdict: FixEvaluation['verdict'] = evalResult.verdict.status;
-
-        if (reDetected) {
-          finalVerdict = 're_detected';
-          if (comment.threadId) {
-            uniqueCodeChangedThreadIds.add(comment.threadId);
-          }
-          result.toReply.push({
-            comment,
-            replyBody: formatFailedFixReply(
-              context.headSha,
-              'The fix attempt was made, but the same issue was detected again in the updated code.'
-            ),
-            commitSha: context.headSha,
-          });
-        } else if (evalResult.verdict.status === 'resolved') {
-          if (comment.threadId) {
-            uniqueCodeChangedThreadIds.add(comment.threadId);
-            uniqueResolvedThreadIds.add(comment.threadId);
-          }
-          result.toResolve.push(comment);
-        } else {
-          if (evalResult.verdict.status === 'attempted_failed' && comment.threadId) {
-            uniqueCodeChangedThreadIds.add(comment.threadId);
-          }
-          result.toReply.push({
-            comment,
-            replyBody: formatFailedFixReply(context.headSha, evalResult.verdict.reasoning),
-            commitSha: context.headSha,
-          });
-        }
-
-        result.evaluations.push({
-          findingId,
-          skill,
-          path: comment.path,
-          line: comment.line,
-          title: comment.title,
-          verdict: finalVerdict,
-          reasoning: evalResult.verdict.reasoning,
-          durationMs,
-          usage: evalResult.usage,
-          usedFallback: false,
-        });
-        emitFixEvalVerdictMetric(finalVerdict, skill);
       }
 
       result.usage = usages.length > 0 ? aggregateUsage(usages) : emptyUsage();

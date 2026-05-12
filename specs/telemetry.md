@@ -264,7 +264,8 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 | `code.line.number` | number | Creation |
 | `warden.fix_eval.finding_id` | string | Creation from Warden comment metadata |
 | `gen_ai.agent.name` | string | Creation from Warden comment metadata |
-| `warden.fix_eval.verdict` | string | After result |
+| `warden.fix_eval.raw_verdict` | string | Judge result before Warden overrides |
+| `warden.fix_eval.verdict` | string | Final outcome after re-detection and fallback handling |
 | `warden.fix_eval.used_fallback` | boolean | After result |
 
 ---
@@ -289,6 +290,7 @@ All `captureException` calls include an `operation` tag for filtering in Sentry 
 | `fetch_existing_comments` | `postReviewsAndTrackFailures` | Fetching PR comments for dedup |
 | `post_thread_reply` | `evaluateFixesAndResolveStale` | Posting fix evaluation reply |
 | `evaluate_fix_attempts` | `evaluateFixesAndResolveStale` | Fix evaluation batch |
+| `evaluate_fix_attempt` | `evaluateFixAttempts` | Per-comment fix evaluation |
 | `resolve_stale_comments` | `evaluateFixesAndResolveStale` | Stale comment resolution |
 | `dismiss_review` | `finalizeWorkflow` | Dismissing CHANGES_REQUESTED review |
 | `update_core_check` | `finalizeWorkflow` | Updating check run with summary |
@@ -377,9 +379,9 @@ Called from `evaluateFixAttempts` after all evaluations complete.
 | `warden.fix_eval.unique_findings.evaluated` | count | -- |
 | `warden.fix_eval.unique_findings.code_changed` | count | -- |
 | `warden.fix_eval.unique_findings.resolved` | count | -- |
-| `warden.fix_eval.verdict` | count | `warden.fix_eval.verdict`, `gen_ai.agent.name` |
+| `warden.fix_eval.verdict` | count | `warden.fix_eval.verdict`, `warden.fix_eval.used_fallback`, `gen_ai.agent.name` |
 
-The aggregate metrics above are emitted once per run. The per-verdict metric is emitted after each individual evaluation with the verdict (`resolved`, `attempted_failed`, `not_attempted`, `re_detected`) and the originating skill name.
+The aggregate metrics above are emitted once per run. The per-verdict metric is emitted after each individual evaluation with the final verdict (`resolved`, `attempted_failed`, `not_attempted`, `re_detected`, `eval_error`), whether fallback was used, and the originating skill name.
 
 ### Stale resolution (`emitStaleResolutionMetric`)
 

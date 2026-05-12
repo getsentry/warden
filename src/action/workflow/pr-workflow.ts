@@ -120,7 +120,7 @@ function logFixEvaluation(ev: FixEvaluation, index: number, total: number): void
   const totalTokens = ev.usage.inputTokens + ev.usage.outputTokens;
   const costStr = ev.usage.costUSD > 0 ? `, ${formatCost(ev.usage.costUSD)}` : '';
   const idPrefix = ev.findingId ? `${ev.findingId} ` : '';
-  const verdict = ev.usedFallback ? 'eval_error' : ev.verdict;
+  const verdict = ev.verdict;
 
   const line = `  [${index + 1}/${total}] ${idPrefix}${ev.path}:${ev.line} → ${verdict} (${formatDuration(ev.durationMs)}, ${formatTokens(totalTokens)} tok${costStr})`;
 

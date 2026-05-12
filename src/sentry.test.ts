@@ -100,4 +100,18 @@ describe('sentry telemetry scope', () => {
       })
     );
   });
+
+  it('emits fix evaluation verdict metrics with fallback attribution', async () => {
+    const sentry = await loadInitializedSentry();
+
+    sentry.emitFixEvalVerdictMetric('eval_error', 'security-review', { usedFallback: true });
+
+    expect(sentryMocks.metrics.count).toHaveBeenCalledWith('warden.fix_eval.verdict', 1, {
+      attributes: {
+        'warden.fix_eval.verdict': 'eval_error',
+        'warden.fix_eval.used_fallback': true,
+        'gen_ai.agent.name': 'security-review',
+      },
+    });
+  });
 });

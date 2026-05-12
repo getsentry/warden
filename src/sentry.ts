@@ -259,9 +259,19 @@ export function emitDedupMetrics(skill: string, total: number, unique: number): 
   });
 }
 
-export function emitFixEvalVerdictMetric(verdict: string, skill?: string): void {
+/**
+ * Emit the final fix-evaluation outcome for one comment.
+ */
+export function emitFixEvalVerdictMetric(
+  verdict: string,
+  skill?: string,
+  options: { usedFallback?: boolean } = {}
+): void {
   safeEmit(() => {
     const attrs: TelemetryAttributes = { 'warden.fix_eval.verdict': verdict };
+    if (options.usedFallback !== undefined) {
+      attrs['warden.fix_eval.used_fallback'] = options.usedFallback;
+    }
     if (skill) {
       Object.assign(attrs, agentMetricAttributes(skill));
     }

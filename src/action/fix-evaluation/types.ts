@@ -25,7 +25,7 @@ export interface FixEvaluation {
   path: string;
   line: number;
   title: string;
-  verdict: FixStatus | 're_detected';
+  verdict: FixStatus | 're_detected' | 'eval_error';
   reasoning?: string;
   durationMs: number;
   usage: UsageStats;

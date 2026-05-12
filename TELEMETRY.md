@@ -124,7 +124,7 @@ Finding fix evaluation and stale comment resolution.
 
 ```text
 dataset=spans query='span.op:fix_eval.evaluate warden.fix_eval.finding_id:"<finding_id>"'
-fields=timestamp,trace,span_id,span.duration,code.file.path,code.line.number,gen_ai.agent.name,warden.fix_eval.verdict,warden.fix_eval.used_fallback,error.type
+fields=timestamp,trace,span_id,span.duration,code.file.path,code.line.number,gen_ai.agent.name,warden.fix_eval.verdict,warden.fix_eval.raw_verdict,warden.fix_eval.used_fallback,error.type
 sort=-timestamp
 ```
 
@@ -155,8 +155,8 @@ the window.
 
 ```text
 dataset=spans query='span.op:fix_eval.evaluate gen_ai.agent.name:"<skill_name>"'
-fields=timestamp,trace,span_id,span.duration,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,code.file.path,code.line.number,warden.fix_eval.finding_id,warden.fix_eval.verdict,warden.fix_eval.used_fallback
-aggregate=count() by warden.fix_eval.verdict,gen_ai.agent.name,vcs.owner.name,vcs.repository.name
+fields=timestamp,trace,span_id,span.duration,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,code.file.path,code.line.number,warden.fix_eval.finding_id,warden.fix_eval.verdict,warden.fix_eval.raw_verdict,warden.fix_eval.used_fallback
+aggregate=count() by warden.fix_eval.verdict,warden.fix_eval.used_fallback,gen_ai.agent.name,vcs.owner.name,vcs.repository.name
 sort=-timestamp
 ```
 
@@ -166,13 +166,13 @@ skill from that span.
 
 ```text
 dataset=spans query='span.op:fix_eval.evaluate warden.fix_eval.finding_id:"<finding_id>"'
-fields=timestamp,trace,span_id,span.duration,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,code.file.path,code.line.number,warden.fix_eval.finding_id,warden.fix_eval.verdict
+fields=timestamp,trace,span_id,span.duration,vcs.owner.name,vcs.repository.name,gen_ai.agent.name,code.file.path,code.line.number,warden.fix_eval.finding_id,warden.fix_eval.verdict,warden.fix_eval.raw_verdict
 sort=-timestamp
 ```
 
 ```text
 dataset=spans query='trace:"<trace_id>" (span.op:skill.run OR span.op:skill.analyze_hunk OR span.op:fix_eval.evaluate) gen_ai.agent.name:"<skill_name>"'
-fields=timestamp,span.op,span_id,span.duration,code.file.path,warden.hunk.line_range,warden.finding.count,warden.fix_eval.finding_id,warden.fix_eval.verdict,error.type
+fields=timestamp,span.op,span_id,span.duration,code.file.path,warden.hunk.line_range,warden.finding.count,warden.fix_eval.finding_id,warden.fix_eval.verdict,warden.fix_eval.raw_verdict,error.type
 sort=timestamp
 ```
 
@@ -258,12 +258,13 @@ Existing Warden comments were not resolved, were judged incorrectly, or fix
 evaluation failed.
 
 Events: operation tags `fetch_fix_context`, `evaluate_fix_attempts`,
-`resolve_stale_comments`
+`evaluate_fix_attempt`, `resolve_stale_comments`
 
 Spans: `workflow.resolve`, `fix_eval.run`, `fix_eval.evaluate`
 
 Attributes: `warden.fix_eval.comment_count`, `warden.fix_eval.finding_id`,
 `gen_ai.agent.name`, `warden.fix_eval.verdict`,
+`warden.fix_eval.raw_verdict`,
 `warden.fix_eval.used_fallback`, `code.file.path`, `code.line.number`
 
 ### Local Run Logs
