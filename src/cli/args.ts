@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
@@ -232,6 +233,43 @@ export function classifyTargets(targets: string[], options: DetectTargetTypeOpti
   }
 
   return { gitRefs, filePatterns };
+}
+
+/**
+ * Expand @file target references into newline-delimited target lists.
+ */
+export function expandTargetFileReferences(
+  targets: string[],
+  cwd = process.cwd()
+): string[] {
+  const expanded: string[] = [];
+
+  for (const target of targets) {
+    if (!target.startsWith('@')) {
+      expanded.push(target);
+      continue;
+    }
+
+    const listPath = target.slice(1);
+    if (!listPath) {
+      throw new Error('Target list path is empty: @');
+    }
+
+    try {
+      const content = readFileSync(resolve(cwd, listPath), 'utf-8');
+      for (const line of content.split(/\r?\n/)) {
+        const value = line.trim();
+        if (value && !value.startsWith('#')) {
+          expanded.push(value);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to read target list ${listPath}: ${message}`, { cause: error });
+    }
+  }
+
+  return expanded;
 }
 
 /**

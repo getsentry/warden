@@ -158,12 +158,13 @@ warden --skill code-review`}
 
     <h3>Analyze Specific Files</h3>
 
-    <p>Target specific files or directories:</p>
+    <p>Target specific files, directories, or a file containing one target per line:</p>
 
     <Terminal showCopy={true}>
       <Code
         code={`warden src/auth.ts
-warden src/api/`}
+warden src/api/
+warden @targets.txt`}
         lang="bash"
         theme="vitesse-black"
       />

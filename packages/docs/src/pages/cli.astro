@@ -26,16 +26,17 @@ const tocItems = [
 
   <div class="command-card">
     <h3 id="warden">warden</h3>
-    <div class="synopsis">warden [target] [options]</div>
-    <p>Run code analysis on the specified target. If no target is given, Warden reviews the current branch against the default branch.</p>
+    <div class="synopsis">warden [targets...] [options]</div>
+    <p>Run code analysis on the specified targets. If no target is given, Warden reviews the current branch against the default branch.</p>
     <ul>
-      <li><code>target</code> - Files, directories, or git refs to analyze (optional)</li>
+      <li><code>targets</code> - Files, directories, globs, git refs, or <code>@files</code> containing target lists (optional)</li>
     </ul>
     <Terminal>
       <Code
         code={`warden                     # Review current branch changes
 warden src/auth.ts         # Analyze specific file
 warden src/api/            # Analyze a directory
+warden @targets.txt        # Analyze targets listed in a file
 warden --staged            # Analyze staged changes
 warden HEAD~3..HEAD        # Analyze changes in a git range`}
         lang="bash"

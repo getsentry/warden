@@ -1,6 +1,14 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { parseCliArgs, CLIOptionsSchema, detectTargetType, classifyTargets } from './args.js';
+import {
+  parseCliArgs,
+  CLIOptionsSchema,
+  detectTargetType,
+  classifyTargets,
+  expandTargetFileReferences,
+} from './args.js';
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual('node:fs');
@@ -726,5 +734,47 @@ describe('classifyTargets', () => {
     const { gitRefs, filePatterns } = classifyTargets(['feature'], { forceGit: true });
     expect(gitRefs).toEqual(['feature']);
     expect(filePatterns).toEqual([]);
+  });
+});
+
+describe('expandTargetFileReferences', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = join(
+      tmpdir(),
+      `warden-targets-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    mkdirSync(tempDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('expands @file target lists', () => {
+    writeFileSync(
+      join(tempDir, 'targets.txt'),
+      [
+        '# selected files',
+        'src/auth.ts',
+        '',
+        'internal/api/admin.go',
+        'src/**/*.ts',
+      ].join('\n')
+    );
+
+    expect(expandTargetFileReferences(['README.md', '@targets.txt'], tempDir)).toEqual([
+      'README.md',
+      'src/auth.ts',
+      'internal/api/admin.go',
+      'src/**/*.ts',
+    ]);
+  });
+
+  it('throws when an @file target list cannot be read', () => {
+    expect(() => expandTargetFileReferences(['@missing.txt'], tempDir)).toThrow(
+      /Failed to read target list missing\.txt/
+    );
   });
 });

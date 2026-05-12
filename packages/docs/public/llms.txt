@@ -79,15 +79,16 @@ Get an API key from https://console.anthropic.com/. `ANTHROPIC_API_KEY` is also 
 ### warden
 
 ```
-warden [target] [options]
+warden [targets...] [options]
 ```
 
-Run code analysis on the specified target. If no target is given, analyzes uncommitted changes.
+Run code analysis on the specified targets. If no target is given, analyzes uncommitted changes.
 
 ```bash
 warden                     # Analyze uncommitted changes (default)
 warden src/auth.ts         # Analyze specific file
 warden src/api/            # Analyze a directory
+warden @targets.txt        # Analyze targets listed in a file
 warden HEAD~3..HEAD        # Analyze changes in a git range
 warden main..HEAD          # Analyze all commits not on main
 ```

@@ -13,7 +13,7 @@ import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, F
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
-import { parseCliArgs, showVersion, classifyTargets, type CLIOptions } from './args.js';
+import { parseCliArgs, showVersion, classifyTargets, expandTargetFileReferences, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
 import { getRepoRoot, getHeadSha, refExists, getDefaultBranch } from './git.js';
@@ -1445,21 +1445,32 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 }
 
 async function runCommand(options: CLIOptions, reporter: Reporter): Promise<number> {
-  const targets = options.targets ?? [];
+  const rawTargets = options.targets ?? [];
+  let targets = rawTargets;
+
+  try {
+    targets = expandTargetFileReferences(targets);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reporter.error(message);
+    return 1;
+  }
 
   // --staged is only meaningful without explicit targets
-  if (options.staged && targets.length > 0) {
+  if (options.staged && rawTargets.length > 0) {
     reporter.warning('--staged is ignored when targets are specified');
   }
 
   // No targets with --skill → run skill directly on current branch changes
-  if (targets.length === 0 && options.skill) {
-    return runDirectSkillMode(options, reporter);
+  if (rawTargets.length === 0) {
+    if (options.skill) {
+      return runDirectSkillMode(options, reporter);
+    }
+    return runConfigMode(options, reporter);
   }
 
-  // No targets → config mode (use triggers)
   if (targets.length === 0) {
-    return runConfigMode(options, reporter);
+    return runFileMode([], options, reporter);
   }
 
   // Classify targets

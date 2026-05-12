@@ -229,7 +229,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden run [targets...] [options]',
     ],
     arguments: [
-      { label: 'targets...', description: 'Files, globs, or git refs to analyze' },
+      { label: 'targets...', description: 'Files, globs, git refs, or @files containing target lists' },
     ],
     options: [
       'cwd',
@@ -251,6 +251,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     ],
     examples: [
       'warden src/auth.ts',
+      'warden @targets.txt --skill security-review',
       'warden "src/**/*.ts" --skill security-review',
       'warden HEAD~3',
       'warden --staged --fix',
