@@ -12,6 +12,16 @@ describe('ProviderFailureCircuitBreaker', () => {
     expect(controller.signal.aborted).toBe(true);
   });
 
+  it('opens immediately on invalid model selectors', () => {
+    const controller = new AbortController();
+    const breaker = new ProviderFailureCircuitBreaker({ abortController: controller });
+
+    breaker.recordFailure('invalid_model_selector', 'bad model');
+
+    expect(breaker.reason).toEqual({ code: 'invalid_model_selector', message: 'bad model' });
+    expect(controller.signal.aborted).toBe(true);
+  });
+
   it('opens after consecutive provider failures and resets on success', () => {
     const controller = new AbortController();
     const breaker = new ProviderFailureCircuitBreaker({

@@ -5,6 +5,26 @@ import type { ResolvedTrigger } from '../../config/loader.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
 
+const sentryMocks = vi.hoisted(() => ({
+  captureException: vi.fn(),
+  startSpan: vi.fn((_ctx: unknown, callback: (span: { setAttribute: (key: string, value: unknown) => void }) => unknown) =>
+    callback({ setAttribute: vi.fn() })
+  ),
+}));
+
+vi.mock('../../sentry.js', async (importOriginal) => {
+  const actual: Record<string, unknown> = await importOriginal();
+  const actualSentry = actual['Sentry'] as Record<string, unknown>;
+  return {
+    ...actual,
+    Sentry: {
+      ...actualSentry,
+      captureException: sentryMocks.captureException,
+      startSpan: sentryMocks.startSpan,
+    },
+  };
+});
+
 // Mock dependencies
 vi.mock('../../skills/loader.js', () => ({
   resolveSkillAsync: vi.fn(),
@@ -32,6 +52,7 @@ import { runSkillTask } from '../../cli/output/tasks.js';
 import { createSkillCheck, updateSkillCheck, failSkillCheck } from '../../output/github-checks.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
+import { InvalidPiModelSelectorError } from '../../sdk/runtimes/model-selectors.js';
 
 describe('executeTrigger', () => {
   // Suppress console output during tests
@@ -243,6 +264,40 @@ const mockContext: EventContext = {
     expect(failSkillCheck).toHaveBeenCalledWith(
       mockOctokit, 123, expect.objectContaining({ message: 'API error' }),
       { owner: 'test-owner', repo: 'test-repo', headSha: 'abc123' }
+    );
+  });
+
+  it('reports invalid Pi model selectors before running the skill', async () => {
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(failSkillCheck).mockResolvedValue(undefined);
+
+    const result = await executeTrigger({
+      ...mockTrigger,
+      runtime: 'pi',
+      model: 'claude-sonnet-4-5',
+    }, mockDeps);
+
+    expect(runSkillTask).not.toHaveBeenCalled();
+    expect(result.triggerName).toBe('test-trigger');
+    expect(result.error).toBeInstanceOf(InvalidPiModelSelectorError);
+    expect((result.error as Error).message).toBe(
+      'Pi runtime model for test-trigger must use provider/model format: claude-sonnet-4-5'
+    );
+    expect(failSkillCheck).toHaveBeenCalledWith(
+      mockOctokit, 123, expect.objectContaining({
+        message: 'Pi runtime model for test-trigger must use provider/model format: claude-sonnet-4-5',
+      }),
+      { owner: 'test-owner', repo: 'test-repo', headSha: 'abc123' }
+    );
+    expect(sentryMocks.captureException).toHaveBeenCalledWith(
+      expect.any(InvalidPiModelSelectorError),
+      expect.objectContaining({
+        tags: expect.objectContaining({
+          'warden.error.code': 'invalid_model_selector',
+          'warden.trigger.name': 'test-trigger',
+        }),
+        fingerprint: ['warden', 'invalid_model_selector'],
+      })
     );
   });
 

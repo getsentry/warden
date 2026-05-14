@@ -3,7 +3,7 @@ import { sanitizeErrorMessage } from './errors.js';
 
 const DEFAULT_MAX_CONSECUTIVE_PROVIDER_FAILURES = 5;
 
-type CircuitBreakerCode = Extract<ErrorCode, 'auth_failed' | 'provider_unavailable'>;
+type CircuitBreakerCode = Extract<ErrorCode, 'auth_failed' | 'provider_unavailable' | 'invalid_model_selector'>;
 
 export interface CircuitBreakerReason {
   code: CircuitBreakerCode;
@@ -48,7 +48,7 @@ export class ProviderFailureCircuitBreaker {
   recordFailure(code: ErrorCode, message: string): void {
     if (this.openReason) return;
 
-    if (code === 'auth_failed') {
+    if (code === 'auth_failed' || code === 'invalid_model_selector') {
       this.open({ code, message });
       return;
     }

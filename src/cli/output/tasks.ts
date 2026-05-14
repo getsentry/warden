@@ -59,6 +59,10 @@ function allAnalysisFailuresHaveCode(
   );
 }
 
+function firstAnalysisFailureMessage(hunkFailures: HunkFailure[], code: ErrorCode): string | undefined {
+  return hunkFailures.find((failure) => failure.type === 'analysis' && failure.code === code)?.message;
+}
+
 function summarizeRunFailure(args: {
   totalHunks: number;
   hunkFailures: HunkFailure[];
@@ -73,6 +77,12 @@ function summarizeRunFailure(args: {
     return {
       code: 'auth_failed',
       message: 'Authentication failed. Warden stopped early.',
+    };
+  }
+  if (allAnalysisFailuresHaveCode(hunkFailures, 'invalid_model_selector')) {
+    return {
+      code: 'invalid_model_selector',
+      message: firstAnalysisFailureMessage(hunkFailures, 'invalid_model_selector') ?? 'Invalid Pi model selector.',
     };
   }
   if (allAnalysisFailuresHaveCode(hunkFailures, 'provider_unavailable')) {

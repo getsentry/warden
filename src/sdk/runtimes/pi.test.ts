@@ -312,7 +312,7 @@ describe('piRuntime.runSkill', () => {
       options: {
         model: 'gpt-test',
       },
-    })).rejects.toThrow('Pi model selector must be provider/model');
+    })).rejects.toThrow('Pi runtime model must use provider/model format');
 
     expect(piMocks.registry.find).not.toHaveBeenCalled();
   });

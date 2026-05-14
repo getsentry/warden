@@ -15,6 +15,7 @@ import type { LayeredSkillRootsByName, ResolvedTrigger } from '../../config/load
 import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
+import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
 import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -34,6 +35,7 @@ import {
   getDefaultBranchFromAPI,
   writeFindingsOutput,
 } from './base.js';
+import { captureActionTriggerError } from '../error-reporting.js';
 
 // -----------------------------------------------------------------------------
 // Main Schedule Workflow
@@ -172,6 +174,8 @@ async function runScheduleWorkflowInner(
     logGroup(`Running trigger: ${resolved.name} (skill: ${resolved.skill})`);
 
     try {
+      assertValidPiModelSelectors([resolved]);
+
       // Build context from paths filter
       const patterns = resolved.filters?.paths ?? ['**/*'];
       const ignorePatterns = resolved.filters?.ignorePaths;
@@ -268,6 +272,10 @@ async function runScheduleWorkflowInner(
       logGroupEnd();
     } catch (error) {
       if (error instanceof ActionFailedError) throw error;
+      captureActionTriggerError(error, {
+        triggerName: resolved.name,
+        skillName: resolved.skill,
+      });
       const errorMessage = error instanceof Error ? error.message : String(error);
       triggerErrors.push(`${resolved.name}: ${errorMessage}`);
       console.error(`::warning::Trigger ${resolved.name} failed: ${error}`);

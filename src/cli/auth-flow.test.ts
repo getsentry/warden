@@ -108,7 +108,7 @@ describe('runSkills auth flow', () => {
     expect(exitCode).toBe(1);
     expect(stdoutSpy).toHaveBeenCalled();
     expect(summary.error).toMatchObject({
-      code: 'unknown',
+      code: 'invalid_model_selector',
       message: 'Pi runtime model for security-review must use provider/model format: claude-sonnet-4-5',
     });
     expect(verifyAuthMock).not.toHaveBeenCalled();

@@ -4,7 +4,7 @@ version = 1
 auxiliaryMaxRetries = 7
 
 [defaults.synthesis]
-model = "org-synth-model"
+model = "anthropic/org-synth-model"
 
 [[skills]]
 name = "org-skill"

@@ -953,6 +953,52 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect((result.error as SkillRunnerError).code).toBe('provider_unavailable');
   });
 
+  it('preserves invalid_model_selector when every hunk fails from Pi model validation', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const hunkFailures: HunkFailure[] = [
+      {
+        type: 'analysis',
+        filename: 'a.ts',
+        lineRange: '1-10',
+        code: 'invalid_model_selector',
+        message: 'Pi runtime model must use provider/model format: claude-sonnet-4-5',
+      },
+    ];
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      failedHunks: 1,
+      failedExtractions: 0,
+      hunkFailures,
+    });
+
+    const options: SkillTaskOptions = {
+      name: 'invalid-model-skill',
+      resolveSkill: async () =>
+        ({ name: 'invalid-model-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    };
+
+    const result = await runSkillTask(options, 1, noopCallbacks());
+
+    expect(result.report!.error?.code).toBe('invalid_model_selector');
+    expect(result.report!.error?.message).toContain('provider/model format');
+    expect((result.error as SkillRunnerError).code).toBe('invalid_model_selector');
+  });
+
   it('ignores unrelated circuit state when this skill completed without failures', async () => {
     const fakeHunk = {
       hunk: { newStart: 1, newCount: 10 },

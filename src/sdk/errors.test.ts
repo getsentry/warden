@@ -8,6 +8,7 @@ import {
   SkillRunnerError,
   WardenAuthenticationError,
 } from './errors.js';
+import { InvalidPiModelSelectorError } from './runtimes/model-selectors.js';
 
 describe('isSubprocessError', () => {
   it('detects EPIPE errors', () => {
@@ -82,6 +83,14 @@ describe('classifyError', () => {
   it('respects SkillRunnerError.code when set', () => {
     const err = new SkillRunnerError('all chunks failed', { code: 'all_hunks_failed' });
     expect(classifyError(err)).toEqual({ code: 'all_hunks_failed', message: 'all chunks failed' });
+  });
+
+  it('maps invalid Pi model selectors to invalid_model_selector', () => {
+    const err = new InvalidPiModelSelectorError({ option: 'model', model: 'claude-sonnet-4-5' });
+    expect(classifyError(err)).toEqual({
+      code: 'invalid_model_selector',
+      message: 'Pi runtime model must use provider/model format: claude-sonnet-4-5',
+    });
   });
 
   it('tags subprocess errors as subprocess_failure', () => {

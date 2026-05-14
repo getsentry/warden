@@ -30,7 +30,11 @@ import {
   buildGeneratedSkill,
 } from '../../skill-builder/skill.js';
 import { getRuntime } from '../../sdk/runtimes/index.js';
-import { isPiModelSelector } from '../../sdk/runtimes/model-selectors.js';
+import {
+  findInvalidPiModelSelector,
+  invalidPiModelSelectorMessage,
+  type InvalidPiModelSelector,
+} from '../../sdk/runtimes/model-selectors.js';
 
 function renderHeader(args: {
   reporter: Reporter;
@@ -166,8 +170,8 @@ function resolveSynthesisModel(
 
 type GeneratedSkillCommandMode = 'build' | 'improve';
 
-function reportInvalidPiModelSelector(reporter: Reporter, label: string, model: string): void {
-  reporter.error(`Pi runtime ${label} must use provider/model format: ${model}`);
+function reportInvalidPiModelSelector(reporter: Reporter, invalid: InvalidPiModelSelector): void {
+  reporter.error(invalidPiModelSelectorMessage(invalid));
   reporter.tip('Set a Pi model selector such as anthropic/claude-sonnet-4-6.');
 }
 
@@ -329,15 +333,14 @@ async function runGeneratedSkillCommand(
     const model = resolveSynthesisModel(config, options);
     const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
     const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
-    if (runtimeName === 'pi') {
-      if (model && !isPiModelSelector(model)) {
-        reportInvalidPiModelSelector(reporter, 'model', model);
-        return 1;
-      }
-      if (repairModel && !isPiModelSelector(repairModel)) {
-        reportInvalidPiModelSelector(reporter, 'repair model', repairModel);
-        return 1;
-      }
+    const invalidModelSelector = findInvalidPiModelSelector([{
+      runtime: runtimeName,
+      model,
+      auxiliaryModel: repairModel,
+    }]);
+    if (invalidModelSelector) {
+      reportInvalidPiModelSelector(reporter, invalidModelSelector);
+      return 1;
     }
     const runtime = getRuntime(runtimeName);
 

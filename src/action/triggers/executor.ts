@@ -24,10 +24,12 @@ import {
 } from '../../output/github-checks.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
 import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
-import { SkillRunnerError, classifyError } from '../../sdk/errors.js';
+import { SkillRunnerError } from '../../sdk/errors.js';
 import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
+import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
+import { captureActionTriggerError } from '../error-reporting.js';
 
 /** Log-mode output for CI: no TTY, no color. */
 const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns: 120 };
@@ -131,6 +133,8 @@ export async function executeTrigger(
       const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
 
       try {
+        assertValidPiModelSelectors([trigger]);
+
         const taskOptions: SkillTaskOptions = {
           name: trigger.name,
           displayName: trigger.skill,
@@ -226,12 +230,9 @@ export async function executeTrigger(
         };
       } catch (error) {
         if (error instanceof ActionFailedError) throw error;
-        const { code } = classifyError(error);
-        Sentry.captureException(error, {
-          tags: { 'warden.trigger.name': trigger.name, 'gen_ai.agent.name': trigger.skill },
-          ...(code === 'provider_unavailable' || code === 'all_hunks_failed'
-            ? { fingerprint: ['warden', code] }
-            : {}),
+        captureActionTriggerError(error, {
+          triggerName: trigger.name,
+          skillName: trigger.skill,
         });
 
         // Mark skill check as failed

@@ -60,7 +60,7 @@ function isAbortRequested(error: unknown, abortController?: AbortController): bo
 }
 
 function isCircuitBreakerCode(code: ErrorCode | undefined): code is CircuitBreakerReason['code'] {
-  return code === 'auth_failed' || code === 'provider_unavailable';
+  return code === 'auth_failed' || code === 'provider_unavailable' || code === 'invalid_model_selector';
 }
 
 function hunkFailureFromCircuit(
@@ -889,6 +889,15 @@ async function runSkillAnalysis(
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
     const analysisFailures = allHunkFailures.filter((failure) => failure.type === 'analysis');
+    if (
+      analysisFailures.length > 0
+      && analysisFailures.every((failure) => failure.code === 'invalid_model_selector')
+    ) {
+      throw new SkillRunnerError(
+        analysisFailures[0]?.message ?? 'Invalid Pi model selector.',
+        { code: 'invalid_model_selector' },
+      );
+    }
     if (
       analysisFailures.length > 0
       && analysisFailures.every((failure) => failure.code === 'provider_unavailable')

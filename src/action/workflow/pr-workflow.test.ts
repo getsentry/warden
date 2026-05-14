@@ -846,7 +846,7 @@ describe('runPRWorkflow', () => {
         'test-api-key',
         expect.objectContaining({
           runtime: 'pi',
-          model: 'org-aux-model',
+          model: 'anthropic/org-aux-model',
           maxRetries: 7,
         })
       );

@@ -4,7 +4,7 @@ version = 1
 auxiliaryMaxRetries = 3
 
 [defaults.synthesis]
-model = "repo-synth-model"
+model = "anthropic/repo-synth-model"
 
 [[skills]]
 name = "test-skill"

@@ -325,12 +325,12 @@ describe('runScheduleWorkflow', () => {
       expect(mockRunSkill).toHaveBeenNthCalledWith(1,
         expect.anything(),
         expect.anything(),
-        expect.objectContaining({ synthesisModel: 'org-synth-model' })
+        expect.objectContaining({ synthesisModel: 'anthropic/org-synth-model' })
       );
       expect(mockRunSkill).toHaveBeenNthCalledWith(2,
         expect.anything(),
         expect.anything(),
-        expect.objectContaining({ synthesisModel: 'repo-synth-model' })
+        expect.objectContaining({ synthesisModel: 'anthropic/repo-synth-model' })
       );
     });
 

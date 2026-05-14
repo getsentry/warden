@@ -207,6 +207,7 @@ export const ErrorCodeSchema = z.enum([
   'max_turns',
   'aborted',
   'all_hunks_failed',
+  'invalid_model_selector',
   'skill_resolution_failed',
   'extraction_invalid_json',
   'extraction_unbalanced_json',

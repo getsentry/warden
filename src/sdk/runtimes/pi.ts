@@ -43,7 +43,7 @@ import {
   setGenAiUsageAttrs,
 } from '../otel.js';
 import { aggregateUsage, emptyUsage } from '../usage.js';
-import { isPiModelSelector } from './model-selectors.js';
+import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -106,9 +106,7 @@ function errorMessage(error: unknown): string {
 
 function parseModelSelector(model: string): PiModelSelector {
   if (!isPiModelSelector(model)) {
-    throw new Error(
-      `Pi model selector must be provider/model: ${model}. For example openai/gpt-5.5.`
-    );
+    throw new InvalidPiModelSelectorError({ option: 'model', model });
   }
   const slashIndex = model.indexOf('/');
 

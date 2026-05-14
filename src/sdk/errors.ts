@@ -6,6 +6,7 @@ import {
   APIConnectionTimeoutError,
 } from '@anthropic-ai/sdk';
 import type { ErrorCode } from '../types/index.js';
+import { InvalidPiModelSelectorError } from './runtimes/model-selectors.js';
 
 export class SkillRunnerError extends Error {
   /** Optional classification so callers skip message-sniffing. */
@@ -151,6 +152,9 @@ export function classifyError(error: unknown): { code: ErrorCode; message: strin
   }
   if (error instanceof SkillRunnerError && error.code) {
     return { code: error.code, message };
+  }
+  if (error instanceof InvalidPiModelSelectorError) {
+    return { code: 'invalid_model_selector', message };
   }
   if (isSubprocessError(error)) {
     return { code: 'subprocess_failure', message };
