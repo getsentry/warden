@@ -39,6 +39,7 @@ import type { TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
+import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
   createCoreCheck,
@@ -457,13 +458,18 @@ async function evaluateFixesAndResolveStale(
   const commentsForFixEvaluation = wardenComments.filter(
     (c) => !activeWardenCommentIds.has(c.id)
   );
+  const fixEvaluationRuntime = auxiliaryOptions.runtime ?? 'pi';
+  const canUseFixEvaluationRuntime = canUseRuntimeAuth({
+    apiKey: anthropicApiKey,
+    runtime: fixEvaluationRuntime,
+  });
 
   // Evaluate follow-up commit fix attempts
   if (
     context.pullRequest &&
     commentsForFixEvaluation.length > 0 &&
     canResolveStale &&
-    anthropicApiKey
+    canUseFixEvaluationRuntime
   ) {
     try {
       logGroup('Fix evaluation');
@@ -483,7 +489,7 @@ async function evaluateFixesAndResolveStale(
         },
         allFindings,
         anthropicApiKey,
-        auxiliaryOptions
+        { ...auxiliaryOptions, runtime: fixEvaluationRuntime }
       );
 
       // Log per-evaluation details

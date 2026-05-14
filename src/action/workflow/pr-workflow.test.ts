@@ -770,6 +770,41 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('runs Pi fix evaluation without a legacy Anthropic API key', async () => {
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/test.ts',
+          line: 10,
+          title: 'SQL injection',
+          description: 'User input in query',
+          contentHash: 'abc',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        },
+      ]);
+
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ anthropicApiKey: '', oauthToken: '' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(
+        mockOctokit,
+        expect.arrayContaining([expect.objectContaining({ isWarden: true })]),
+        expect.any(Object),
+        expect.any(Array),
+        '',
+        expect.objectContaining({ runtime: 'pi' })
+      );
+    });
+
     it('keeps base auxiliary defaults for workflow-level fix evaluation', async () => {
       mockFetchExistingComments.mockResolvedValue([
         {
