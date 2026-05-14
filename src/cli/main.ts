@@ -613,10 +613,24 @@ export function findInvalidPiModelSelector(
 }
 
 function reportInvalidPiModelSelector(reporter: Reporter, invalid: InvalidPiModelSelector): void {
-  reporter.error(
-    `Pi runtime ${invalid.option} for ${invalid.specName} must use provider/model format: ${invalid.model}`
-  );
+  reporter.error(invalidPiModelSelectorMessage(invalid));
   reporter.tip('Set a Pi model selector such as anthropic/claude-sonnet-4-6.');
+}
+
+function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): string {
+  return `Pi runtime ${invalid.option} for ${invalid.specName} must use provider/model format: ${invalid.model}`;
+}
+
+function emitInvalidPiModelSelectorRunLog(
+  repoPath: string,
+  options: CLIOptions,
+  invalid: InvalidPiModelSelector
+): void {
+  emitEmptyRunLog(repoPath, options, {
+    code: 'unknown',
+    message: invalidPiModelSelectorMessage(invalid),
+    timestamp: new Date().toISOString(),
+  });
 }
 
 function verifyClaudeAuthForRun(args: {
@@ -1057,6 +1071,7 @@ export async function runSkills(
   const invalidModelSelector = findInvalidPiModelSelector(specs);
   if (invalidModelSelector) {
     reportInvalidPiModelSelector(reporter, invalidModelSelector);
+    emitInvalidPiModelSelectorRunLog(repoPath ?? cwd, options, invalidModelSelector);
     return 1;
   }
   let tasks: SkillTaskOptions[];
@@ -1378,6 +1393,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const invalidModelSelector = findInvalidPiModelSelector(specs);
   if (invalidModelSelector) {
     reportInvalidPiModelSelector(reporter, invalidModelSelector);
+    emitInvalidPiModelSelectorRunLog(repoPath, options, invalidModelSelector);
     return 1;
   }
   let tasks: SkillTaskOptions[];
