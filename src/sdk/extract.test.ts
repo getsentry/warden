@@ -7,6 +7,7 @@ import {
   extractFindingsWithLLM,
   mergeCrossLocationFindings,
   mergeGroupLocations,
+  canUseRuntimeAuth,
 } from './extract.js';
 import type { Finding } from '../types/index.js';
 
@@ -35,6 +36,12 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
 describe('extractFindingsWithLLM', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('allows auxiliary calls without an Anthropic API key for runtimes with their own auth', () => {
+    expect(canUseRuntimeAuth({ runtime: 'pi' })).toBe(true);
+    expect(canUseRuntimeAuth({ runtime: 'claude' })).toBe(false);
+    expect(canUseRuntimeAuth({ apiKey: 'test-key', runtime: 'claude' })).toBe(true);
   });
 
   it('preserves the LLM extraction failure prefix for stable error classification', async () => {

@@ -30,6 +30,7 @@ import {
 export interface VerifyFindingsOptions {
   repoPath: string;
   skill: SkillDefinition;
+  apiKey?: string;
   runtime?: RuntimeName;
   model?: string;
   maxTurns?: number;
@@ -237,7 +238,7 @@ export async function verifyFindings(
     return { findings };
   }
 
-  const runtimeName = options.runtime ?? 'claude';
+  const runtimeName = options.runtime ?? 'pi';
   const runtime = getRuntime(runtimeName);
   const systemPrompt = buildVerificationSystemPrompt(options.skill);
 
@@ -251,6 +252,7 @@ export async function verifyFindings(
 
       try {
         const { result, authError } = await runtime.runSkill({
+          apiKey: options.apiKey,
           systemPrompt,
           userPrompt: buildVerificationUserPrompt(finding, options.prContext),
           repoPath: options.repoPath,

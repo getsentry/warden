@@ -39,7 +39,7 @@ warden --fix
 warden --fail-on high
 ```
 
-Set `WARDEN_ANTHROPIC_API_KEY` or log in via `claude login` before running.
+Set `WARDEN_MODEL` and the WARDEN-prefixed provider API key for that model before running.
 
 ## Pre-Commit Workflow
 

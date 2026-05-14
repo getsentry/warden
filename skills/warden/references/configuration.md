@@ -20,7 +20,7 @@ The `name` field references a skill you've created (via `warden add`) or defined
 version = 1
 
 [defaults.agent]
-model = "claude-sonnet-4-5"
+model = "openai/gpt-5.5"
 
 [[skills]]
 name = "my-skill"           # matches .agents/skills/my-skill/SKILL.md
@@ -108,8 +108,9 @@ From highest to lowest priority:
 
 | Variable | Purpose |
 |----------|---------|
-| `WARDEN_ANTHROPIC_API_KEY` | Claude API key (required unless using Claude Code subscription) |
 | `WARDEN_MODEL` | Default model (lowest priority) |
+| `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
 | `WARDEN_STATE_DIR` | Override cache location (default: `~/.local/warden`) |
 | `WARDEN_SKILL_CACHE_TTL` | Cache TTL in seconds for unpinned remotes (default: 86400) |
 

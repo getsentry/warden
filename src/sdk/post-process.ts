@@ -46,6 +46,7 @@ export async function postProcessFindings(
     const verification = await verifyFindings(currentFindings, {
       repoPath: options.repoPath,
       skill: options.skill,
+      apiKey: options.apiKey,
       runtime: options.runtime,
       model: options.auxiliaryModel,
       maxTurns: options.maxTurns,

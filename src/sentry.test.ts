@@ -114,4 +114,38 @@ describe('sentry telemetry scope', () => {
       },
     });
   });
+
+  it('emits GenAI token metrics with runtime-derived provider attribution', async () => {
+    const sentry = await loadInitializedSentry();
+
+    sentry.emitSkillMetrics({
+      skill: 'security-review',
+      summary: 'No findings',
+      findings: [],
+      runtime: 'pi',
+      model: 'xai/grok-test',
+      durationMs: 1200,
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0,
+      },
+    });
+
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('gen_ai.client.token.usage', 10, {
+      unit: '{token}',
+      attributes: expect.objectContaining({
+        'gen_ai.operation.name': 'invoke_agent',
+        'gen_ai.provider.name': 'xai',
+        'gen_ai.request.model': 'xai/grok-test',
+        'gen_ai.token.type': 'input',
+        'warden.runtime.name': 'pi',
+      }),
+    });
+  });
 });

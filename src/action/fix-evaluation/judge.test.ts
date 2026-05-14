@@ -7,10 +7,11 @@ import type { ExistingComment } from '../../output/dedup.js';
 /**
  * Live integration tests for the fix judge.
  * These call the real Haiku API to verify end-to-end behavior.
- * Gated by ANTHROPIC_API_KEY environment variable.
+ * Gated by WARDEN_ANTHROPIC_API_KEY environment variable.
  */
-describe.skipIf(!process.env['ANTHROPIC_API_KEY'])('evaluateFix (live)', () => {
-  const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+const apiKey = process.env['WARDEN_ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'] ?? '';
+
+describe.skipIf(!apiKey)('evaluateFix (live)', () => {
 
   const baseComment: ExistingComment = {
     id: 1,

@@ -89,6 +89,14 @@ function recordCircuitFailure(
   return options.circuitBreaker?.reason;
 }
 
+function allHunksFailedGuidance(runtime: SkillRunnerOptions['runtime'] | undefined): string {
+  if ((runtime ?? 'pi') === 'pi') {
+    return 'Verify Pi has credentials for the selected provider/model, or choose a configured Pi model.';
+  }
+
+  return "Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.";
+}
+
 /**
  * Parse findings from a hunk analysis result.
  * Uses a two-tier extraction strategy:
@@ -238,9 +246,10 @@ async function analyzeHunk(
         }
 
         try {
-          const runtimeName = options.runtime ?? 'claude';
+          const runtimeName = options.runtime ?? 'pi';
           const runtime = getRuntime(runtimeName);
           const { result: resultMessage, authError } = await runtime.runSkill({
+            apiKey: options.apiKey,
             systemPrompt,
             userPrompt,
             repoPath,
@@ -724,6 +733,7 @@ async function runSkillAnalysis(
       usage: emptyUsage(),
       durationMs: Date.now() - startTime,
       model: options.model,
+      runtime: options.runtime ?? 'pi',
     };
     if (skippedFiles.length > 0) {
       report.skippedFiles = skippedFiles;
@@ -890,8 +900,7 @@ async function runSkillAnalysis(
     }
     throw new SkillRunnerError(
       `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
-      `This usually indicates an authentication problem. ` +
-      `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`,
+      `This usually indicates an authentication problem. ${allHunksFailedGuidance(options.runtime)}`,
       { code: 'all_hunks_failed' },
     );
   }
@@ -936,6 +945,7 @@ async function runSkillAnalysis(
       finalFindings,
     ),
   };
+  report.runtime = options.runtime ?? 'pi';
   if (skippedFiles.length > 0) {
     report.skippedFiles = skippedFiles;
   }

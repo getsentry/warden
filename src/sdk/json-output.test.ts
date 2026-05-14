@@ -72,6 +72,31 @@ describe('parseJsonFromOutput', () => {
     }));
   });
 
+  it('repairs through Pi runtime auth without an Anthropic API key', async () => {
+    const runtime: Runtime = {
+      name: 'pi',
+      runSkill: vi.fn(),
+      runSynthesis: vi.fn(),
+      runAuxiliary: vi.fn(async <T>() => ({
+        success: true as const,
+        data: { value: 'fixed' } as T,
+        usage: emptyUsage(),
+      })) as unknown as Runtime['runAuxiliary'],
+    };
+
+    const result = await parseJsonFromOutput({
+      output: '{"value": "fixed"',
+      schema: PayloadSchema,
+      repair: { runtime },
+    });
+
+    expect(result.success).toBe(true);
+    expect(runtime.runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({
+      task: 'extraction',
+      apiKey: undefined,
+    }));
+  });
+
   it('reports the local parse failure when repair is unavailable', async () => {
     const result = await parseJsonFromOutput({
       output: 'There is no JSON here.',

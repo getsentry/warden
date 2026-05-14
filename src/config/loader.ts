@@ -429,7 +429,7 @@ export function resolveSkillConfigs(
   const defaults = config.defaults;
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
   const result: ResolvedTrigger[] = [];
-  const runtime = defaults?.runtime ?? 'claude';
+  const runtime = defaults?.runtime ?? 'pi';
   const auxiliaryModel = emptyToUndefined(defaults?.auxiliary?.model);
   const synthesisModel =
     emptyToUndefined(defaults?.synthesis?.model) ??

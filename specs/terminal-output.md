@@ -138,7 +138,7 @@ Example:
 ```text
   Skill    security
   Source   .warden/skills/security
-  Model    default [claude]
+  Model    default [pi]
 ```
 
 Style notes:

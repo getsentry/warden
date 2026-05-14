@@ -25,7 +25,7 @@ npx @sentry/warden add security-review
 npx @sentry/warden add code-review
 
 # Run a pre-review on current branch changes
-# Uses Claude Code subscription if logged in, or set WARDEN_ANTHROPIC_API_KEY
+# Uses Pi. Set WARDEN_OPENAI_API_KEY, or WARDEN_ANTHROPIC_API_KEY for Anthropic models.
 npx @sentry/warden
 
 # Fix issues automatically

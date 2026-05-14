@@ -118,36 +118,38 @@ The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes for Sentry
 | Attribute | Source | Spec |
 |-----------|--------|------|
 | `gen_ai.operation.name` | `'invoke_agent'` | [OTel required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
-| `gen_ai.provider.name` | `'anthropic'` | [OTel required](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/) |
+| `gen_ai.provider.name` | Runtime/model provider (`anthropic`, `openai`, `pi`, etc.) | [OTel required](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/) |
 | `gen_ai.agent.name` | Skill name | [OTel SHOULD](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
 | `gen_ai.request.model` | Model ID from options | [OTel conditionally required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
 | `warden.request.max_turns` | `maxTurns` value | Warden extension (not in spec) |
-| `gen_ai.request.messages` | Stringified `[{role, content}]` array | [Sentry AI Agents](https://docs.sentry.io/platforms/javascript/guides/node/ai-agent-monitoring/). Set on all `gen_ai.*` spans. |
+| `gen_ai.system_instructions` | Stringified text instruction parts | OTel GenAI |
+| `gen_ai.input.messages` | Stringified normalized message array | OTel GenAI |
 
 ### Response attributes (set after SDK result)
 
 | Attribute | Source | Spec |
 |-----------|--------|------|
-| `gen_ai.usage.input_tokens` | `input_tokens + cache_read + cache_write` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). **Total** input tokens, not just uncached. |
+| `gen_ai.usage.input_tokens` | Uncached input + cache read + cache write | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). **Total** input tokens, not just uncached. |
 | `gen_ai.usage.output_tokens` | `resultMessage.usage.output_tokens` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.usage.input_tokens.cached` | `resultMessage.usage.cache_read_input_tokens` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). Subset of `input_tokens`. |
-| `gen_ai.usage.input_tokens.cache_write` | `resultMessage.usage.cache_creation_input_tokens` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). Subset of `input_tokens`. |
-| `gen_ai.usage.total_tokens` | `input_tokens + output_tokens` (after totaling) | [OTel](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.cost.total_tokens` | `resultMessage.total_cost_usd` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). USD cost from SDK. |
+| `gen_ai.usage.cache_read.input_tokens` | Cache-read input tokens | OTel GenAI |
+| `gen_ai.usage.cache_creation.input_tokens` | Cache-write input tokens | OTel GenAI |
+| `warden.gen_ai.usage.total_tokens` | `input_tokens + output_tokens` (after totaling) | Warden extension. OTel derives total from input/output. |
+| `warden.gen_ai.cost.usd` | SDK USD cost | Warden extension. Cost is not an OTel GenAI semantic attribute. |
 | `gen_ai.response.id` | `resultMessage.uuid` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.response.model` | First key in `resultMessage.modelUsage` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.response.text` | Stringified `["response text"]` array | [Sentry AI Agents](https://docs.sentry.io/platforms/javascript/guides/node/ai-agent-monitoring/). Set when response text is available. |
+| `gen_ai.response.model` | Actual response model | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+| `gen_ai.response.finish_reasons` | Provider stop reason array | OTel GenAI |
+| `gen_ai.output.messages` | Stringified normalized assistant message array | OTel GenAI |
 
-**Token accounting:** The Anthropic API's `input_tokens` field counts only non-cached input tokens. `cache_read_input_tokens` and `cache_creation_input_tokens` are separate, non-overlapping counts. The OTel `gen_ai.usage.input_tokens` attribute represents the *total* input tokens, so we sum all three. Sentry then [subtracts the cached/reasoning counts from the totals](https://docs.sentry.io/platforms/javascript/guides/node/tracing/instrumentation/ai-agents-module/) to compute the raw portion. Setting `input_tokens` to only the non-cached value causes Sentry to compute negative costs.
+**Token accounting:** Provider usage can split input into uncached input, cache-read input, and cache-write input. Anthropic exposes these as `input_tokens`, `cache_read_input_tokens`, and `cache_creation_input_tokens`; Pi exposes the same normalized shape as `input`, `cacheRead`, and `cacheWrite`. The OTel `gen_ai.usage.input_tokens` attribute represents the *total* input tokens, so Warden sums all three and records the cache subsets with OTel `gen_ai.usage.cache_*` attributes. Setting the top-level field to only the uncached value underreports spend and makes cache accounting ambiguous.
 
 ### SDK-specific attributes
 
 | Attribute | Source |
 |-----------|--------|
 | `sdk.session_id` | `resultMessage.session_id` |
-| `sdk.duration_ms` | `resultMessage.duration_ms` |
-| `sdk.duration_api_ms` | `resultMessage.duration_api_ms` |
-| `sdk.num_turns` | `resultMessage.num_turns` |
+| `warden.sdk.duration_ms` | `resultMessage.duration_ms` |
+| `warden.sdk.duration_api_ms` | `resultMessage.duration_api_ms` |
+| `warden.sdk.num_turns` | `resultMessage.num_turns` |
 
 ### Per-turn `gen_ai.chat` attributes
 
@@ -161,10 +163,10 @@ Created from `SDKAssistantMessage` events streamed by `query()`. Each span repre
 | `gen_ai.response.model` | `message.message.model` | Actual model used for this turn |
 | `gen_ai.usage.input_tokens` | `input + cache_read + cache_write` | Total input tokens (same accounting as parent) |
 | `gen_ai.usage.output_tokens` | `message.message.usage.output_tokens` | Output tokens for this turn |
-| `gen_ai.usage.input_tokens.cached` | `message.message.usage.cache_read_input_tokens` | Cache read subset |
-| `gen_ai.usage.input_tokens.cache_write` | `message.message.usage.cache_creation_input_tokens` | Cache write subset |
-| `gen_ai.usage.total_tokens` | `input + output` | Total tokens for this turn |
-| `gen_ai.tool_use.count` | Count of `tool_use` content blocks | Number of tools invoked in this turn |
+| `gen_ai.usage.cache_read.input_tokens` | `message.message.usage.cache_read_input_tokens` | Cache read subset |
+| `gen_ai.usage.cache_creation.input_tokens` | `message.message.usage.cache_creation_input_tokens` | Cache write subset |
+| `warden.gen_ai.usage.total_tokens` | `input + output` | Total tokens for this turn |
+| `warden.gen_ai.tool_use.count` | Count of tool-use content blocks | Number of tools invoked in this turn |
 
 ### Per-tool `gen_ai.execute_tool` attributes
 
@@ -175,7 +177,7 @@ Created from `tool_use` content blocks in `SDKAssistantMessage`, enriched with t
 | `gen_ai.operation.name` | `'execute_tool'` | OTel operation name |
 | `gen_ai.agent.name` | Skill name when available | Links tool use to skill |
 | `gen_ai.tool.name` | `tool_use.name` | Tool name (e.g. `Read`, `Grep`) |
-| `tool.elapsed_seconds` | `SDKToolProgressMessage.elapsed_time_seconds` | Execution duration; only set when progress message received |
+| `warden.gen_ai.tool.elapsed_seconds` | `SDKToolProgressMessage.elapsed_time_seconds` | Execution duration; only set when progress message received |
 
 ### Structured `gen_ai.chat` attributes
 
@@ -186,10 +188,10 @@ auto-instrumentation is unavailable.
 | Attribute | Source | Notes |
 |-----------|--------|-------|
 | `gen_ai.operation.name` | `'chat'` | OTel operation name |
-| `gen_ai.provider.name` | `'anthropic'` | OTel provider |
+| `gen_ai.provider.name` | Runtime/model provider (`anthropic`, `openai`, `pi`, etc.) | OTel provider |
 | `gen_ai.agent.name` | Request `agentName` when available | Links the call to the originating skill or builder agent |
 | `warden.ai.task` | Request `task` | Warden task name (`extraction`, `deduplication`, `fix_quality`, `fix_evaluation`, `consolidation`, or `skill_build`) |
-| `gen_ai.request.model` | Requested model | Model sent to Anthropic |
+| `gen_ai.request.model` | Requested model | Model sent to the runtime provider |
 
 Structured tool-loop calls also create `gen_ai.execute_tool` child spans with
 `gen_ai.operation.name`, `gen_ai.agent.name`, `warden.ai.task`, and
@@ -321,12 +323,12 @@ scheduled workflow execution.
 
 | Metric | Type | Per-metric attributes |
 |--------|------|-----------------------|
-| `warden.skill.duration` | distribution (ms) | `gen_ai.agent.name`, `gen_ai.request.model` |
-| `gen_ai.client.token.usage` | distribution (`{token}`) | `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.token.type` |
-| `warden.gen_ai.cost.usd` | distribution | `gen_ai.agent.name`, `gen_ai.request.model` |
-| `warden.findings` | count | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.finding.severity` |
+| `warden.skill.duration` | distribution (ms) | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name` |
+| `gen_ai.client.token.usage` | distribution (`{token}`) | `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.token.type`, `warden.runtime.name` |
+| `warden.gen_ai.cost.usd` | distribution | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name` |
+| `warden.findings` | count | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name`, `warden.finding.severity` |
 
-`gen_ai.request.model` is included when `report.model` is set (i.e. when the caller specifies a model).
+`gen_ai.request.model` is included when `report.model` is set (i.e. when the caller specifies a model). `warden.runtime.name` is included when the report runtime is known (`claude` or `pi`).
 
 ### Extraction (`emitExtractionMetrics`)
 
@@ -399,10 +401,10 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emi
 2. **Never break the workflow.** All metric emission and span attribute setting is wrapped in try/catch. Telemetry failures are swallowed silently.
 3. **Follow OTel conventions.** Use OTel semantic attributes (`vcs.*`, `code.*`, `cicd.*`, `gen_ai.*`) where they exist. Use `warden.*` only for Warden-specific concepts that OTel does not define. When OTel and Sentry conventions diverge, follow [Sentry's AI Agents module spec](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/) as the source of truth for what Sentry actually processes.
 4. **Do not emit compatibility aliases.** The same concept must have one canonical attribute name. Breaking telemetry queries is preferable to preserving conflicting semantics.
-5. **Auto-instrument where possible.** Direct Anthropic API calls and HTTP requests are handled by Sentry integrations. Manual spans are only for the Claude Code SDK subprocess and internal orchestration.
+5. **Auto-instrument where possible.** Direct provider API calls and HTTP requests are handled by Sentry integrations where available. Manual spans are only for coding-agent runtime wrappers and internal orchestration.
 6. **Attributes over events.** Prefer span attributes to separate events. Attributes are searchable in Sentry and don't create noise.
 7. **Breadcrumbs for retries.** Retry attempts are breadcrumbs (not spans) because they're supplementary context for the parent span, not independent operations.
-8. **Tokens are totals, subfields are subsets.** `gen_ai.usage.input_tokens` is the total count including cached. `.cached` and `.cache_write` are subsets that Sentry subtracts to derive the raw portion. Never set the top-level field to only the uncached count.
+8. **Tokens are totals, subfields are subsets.** `gen_ai.usage.input_tokens` is the total count including cached input. `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_creation.input_tokens` are subsets. Never set the top-level field to only the uncached count.
 
 ---
 

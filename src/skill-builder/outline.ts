@@ -323,7 +323,7 @@ export async function buildSkillOutline(
   options: BuildSkillOutlineOptions,
 ): Promise<SkillBuildOutlineResult> {
   const { skill, apiKey, model, maxRetries, regenerate = false } = options;
-  const runtime = options.runtime ?? getRuntime(options.runtimeName ?? 'claude');
+  const runtime = options.runtime ?? getRuntime(options.runtimeName ?? 'pi');
   const source = options.source ?? collectSkillBuildSource(skill);
   const rootDir = skill.rootDir;
   if (!rootDir) {
@@ -358,6 +358,7 @@ export async function buildSkillOutline(
         schema: SkillBuildOutlineSchema,
         model,
         maxTurns: options.maxTurns ?? SKILL_BUILD_MAX_TURNS,
+        apiKey,
         abortController: options.abortController,
         repair: {
           apiKey,

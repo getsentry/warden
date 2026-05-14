@@ -8,7 +8,7 @@ describe('evals', () => {
 
   beforeAll(() => {
     if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY (or WARDEN_ANTHROPIC_API_KEY) required for evals');
+      throw new Error('WARDEN_ANTHROPIC_API_KEY required for evals');
     }
   });
 

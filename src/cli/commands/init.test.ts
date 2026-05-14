@@ -68,6 +68,7 @@ describe('init command', () => {
 
       const content = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
       expect(content).toContain('version = 1');
+      expect(content).toContain('runtime = "pi"');
     });
 
     it('creates workflow with correct content', async () => {
@@ -81,7 +82,12 @@ describe('init command', () => {
       expect(content).toContain('pull-requests: write');
       expect(content).toContain('checks: write');
       expect(content).toContain('ref: ${{ github.event.pull_request.head.sha }}');
+      expect(content).toContain('WARDEN_MODEL');
+      expect(content).toContain('WARDEN_OPENAI_API_KEY');
       expect(content).toContain('WARDEN_ANTHROPIC_API_KEY');
+      expect(content).not.toContain('secrets.OPENAI_API_KEY');
+      expect(content).not.toContain('env.ANTHROPIC_API_KEY');
+      expect(content).not.toContain('anthropic-api-key');
       expect(content).toContain(`getsentry/warden@v${getMajorVersion()}`);
     });
   });

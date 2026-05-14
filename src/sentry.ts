@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/node';
 import type { Severity, SkillReport } from './types/index.js';
 import { SEVERITY_ORDER } from './types/index.js';
 import { getVersion } from './utils/index.js';
+import { genAiProviderName } from './sdk/otel.js';
 
 export type SentryContext = 'cli' | 'action';
 
@@ -139,10 +140,13 @@ function safeEmit(fn: () => void): void {
 /**
  * Build agent-scoped metric attributes that match span attribute names.
  */
-function agentMetricAttributes(skill: string, model?: string): TelemetryAttributes {
+function agentMetricAttributes(skill: string, model?: string, runtime?: string): TelemetryAttributes {
   const attrs: TelemetryAttributes = { 'gen_ai.agent.name': skill };
   if (model) {
     attrs['gen_ai.request.model'] = model;
+  }
+  if (runtime) {
+    attrs['warden.runtime.name'] = runtime;
   }
   return attrs;
 }
@@ -159,7 +163,7 @@ export function emitRunMetric(): void {
 
 export function emitSkillMetrics(report: SkillReport): void {
   safeEmit(() => {
-    const attrs = agentMetricAttributes(report.skill, report.model);
+    const attrs = agentMetricAttributes(report.skill, report.model, report.runtime);
 
     Sentry.metrics.distribution('warden.skill.duration', report.durationMs ?? 0, {
       unit: 'millisecond',
@@ -170,7 +174,7 @@ export function emitSkillMetrics(report: SkillReport): void {
       const tokenAttrs = {
         ...attrs,
         'gen_ai.operation.name': 'invoke_agent',
-        'gen_ai.provider.name': 'anthropic',
+        'gen_ai.provider.name': genAiProviderName(report.runtime, report.model),
       };
       Sentry.metrics.distribution('gen_ai.client.token.usage', report.usage.inputTokens, {
         unit: '{token}',

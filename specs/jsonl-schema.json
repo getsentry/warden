@@ -429,6 +429,9 @@
         "model": {
           "type": "string"
         },
+        "runtime": {
+          "type": "string"
+        },
         "run": {
           "$ref": "#/$defs/RunMetadata"
         }

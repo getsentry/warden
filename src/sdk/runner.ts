@@ -71,6 +71,7 @@ export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 // Re-export runtime registry and adapter contracts
 export {
   claudeRuntime,
+  piRuntime,
   getRuntimeProviderOptions,
   getRuntime,
 } from './runtimes/index.js';

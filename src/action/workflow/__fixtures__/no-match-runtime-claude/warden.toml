@@ -1,0 +1,12 @@
+version = 1
+
+[defaults]
+runtime = "claude"
+
+[[skills]]
+name = "test-skill"
+paths = ["docs/**"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]

@@ -71,21 +71,23 @@ const tocItems = [
 
     <h3>Authentication</h3>
 
-    <p>Warden uses your Claude Code subscription if you're logged in. Otherwise, set an API key:</p>
+    <p>Warden runs model-backed work through Pi. Set a model and the matching provider credentials:</p>
 
     <Terminal showCopy={true}>
       <Code
-        code={`# Option 1: Claude Code subscription (if logged in)
-claude login
+        code={`# OpenAI example
+export WARDEN_MODEL=openai/gpt-5.5
+export WARDEN_OPENAI_API_KEY=sk-...
 
-# Option 2: API key
+# Anthropic example
+export WARDEN_MODEL=anthropic/claude-sonnet-4-6
 export WARDEN_ANTHROPIC_API_KEY=sk-ant-...`}
         lang="bash"
         theme="vitesse-black"
       />
     </Terminal>
 
-    <p>Get an API key from <a href="https://console.anthropic.com/">console.anthropic.com</a>. <code>ANTHROPIC_API_KEY</code> is also accepted as a fallback. CI/CD environments require an API key.</p>
+    <p>Warden uses <code>WARDEN_*</code> provider keys, such as <code>WARDEN_OPENAI_API_KEY</code>, <code>WARDEN_ANTHROPIC_API_KEY</code>, and <code>WARDEN_GEMINI_API_KEY</code>. CI/CD environments require provider credentials.</p>
 
     <h3>Run a Pre-Review</h3>
 
@@ -309,10 +311,12 @@ warden add code-review`}
     </ol>
 
     <dl>
+      <dt>WARDEN_MODEL</dt>
+      <dd>Pi model selector, such as <code>openai/gpt-5.5</code> or <code>anthropic/claude-sonnet-4-6</code></dd>
+      <dt>WARDEN_OPENAI_API_KEY</dt>
+      <dd>OpenAI API key when using an OpenAI Pi model</dd>
       <dt>WARDEN_ANTHROPIC_API_KEY</dt>
-      <dd>Your Anthropic API key from <a href="https://console.anthropic.com/">console.anthropic.com</a></dd>
-      <dt>WARDEN_MODEL <em>(optional)</em></dt>
-      <dd>Override the default model (e.g. <code>claude-haiku-4-5</code>)</dd>
+      <dd>Anthropic API key when using an Anthropic Pi model or the Claude runtime</dd>
       <dt>WARDEN_SENTRY_DSN <em>(optional)</em></dt>
       <dd>Sentry DSN for error and performance telemetry</dd>
     </dl>

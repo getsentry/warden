@@ -133,7 +133,7 @@ export const SkillConfigSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn */
   failCheck: z.boolean().optional(),
-  /** Model to use for this skill (e.g., 'claude-sonnet-4-5'). Uses SDK default if not specified. */
+  /** Model to use for this skill (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
   maxTurns: z.number().int().positive().optional(),
@@ -195,11 +195,11 @@ export const DefaultsSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn. Default: false */
   failCheck: z.boolean().optional(),
-  /** Default model for all skills (e.g., 'claude-sonnet-4-5') */
+  /** Default model for all skills (e.g., 'openai/gpt-5.5') */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
   maxTurns: z.number().int().positive().optional(),
-  /** Runtime backend for all model-backed execution. Default: claude */
+  /** Runtime backend for all model-backed execution. Default: pi */
   runtime: RuntimeNameSchema.optional(),
   /** Model defaults for repo-aware skill execution. */
   agent: AgentRuntimeConfigSchema.optional(),
@@ -219,7 +219,7 @@ export const DefaultsSchema = z.object({
   chunking: ChunkingConfigSchema.optional(),
   /** Delay in milliseconds between batch starts when processing files in parallel. Default: 0 */
   batchDelayMs: z.number().int().nonnegative().optional(),
-  /** Max retries for auxiliary Haiku calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
+  /** Max retries for auxiliary structured model calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
   auxiliaryMaxRetries: z.number().int().positive().optional(),
 });
 export type Defaults = z.infer<typeof DefaultsSchema>;

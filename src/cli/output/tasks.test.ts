@@ -1134,6 +1134,7 @@ describe('runSkillTask skipped path', () => {
         repoPath: '/tmp',
         pullRequest: { number: 1, title: 't', body: '', headSha: 'a', baseSha: 'b', files: [] },
       } as unknown as SkillTaskOptions['context'],
+      runnerOptions: { runtime: 'pi' },
     };
 
     const onSkillSkipped = vi.fn();
@@ -1150,6 +1151,7 @@ describe('runSkillTask skipped path', () => {
     expect(name).toBe('no-files-skill');
     expect(report.skill).toBe('no-files-skill');
     expect(report.summary).toBe('No code changes to analyze');
+    expect(report.runtime).toBe('pi');
     expect(result.report).toBe(report);
   });
 });
@@ -1204,6 +1206,7 @@ describe('runSkillTask model lanes', () => {
         pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
       } as unknown as SkillTaskOptions['context'],
       runnerOptions: {
+        runtime: 'pi',
         auxiliaryModel: 'claude-haiku-4-5',
         synthesisModel: 'claude-opus-4-5',
       },
@@ -1213,10 +1216,12 @@ describe('runSkillTask model lanes', () => {
     expect(postProcessSpy).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({
+        runtime: 'pi',
         auxiliaryModel: 'claude-haiku-4-5',
         synthesisModel: 'claude-opus-4-5',
       })
     );
+    expect(result.report?.runtime).toBe('pi');
   });
 });
 

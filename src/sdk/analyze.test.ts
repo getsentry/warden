@@ -451,6 +451,28 @@ describe('runSkill', () => {
     vi.restoreAllMocks();
   });
 
+  it('records runtime on reports with no hunks to analyze', async () => {
+    const context = makeContextWithOneHunk();
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      {
+        ...context,
+        pullRequest: {
+          ...context.pullRequest!,
+          files: [],
+        },
+      },
+      { runtime: 'pi' },
+    );
+
+    expect(report.summary).toBe('No code changes to analyze');
+    expect(report.runtime).toBe('pi');
+  });
+
   it('preserves candidate findings when verification is interrupted', async () => {
     const controller = new AbortController();
     const runSkillMock = vi.fn()

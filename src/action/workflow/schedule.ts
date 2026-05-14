@@ -200,7 +200,7 @@ async function runScheduleWorkflowInner(
       const skill = await resolveSkillAsync(resolved.skill, skillRoot, {
         remote: resolved.remote,
       });
-      const usesClaudeRuntime = (resolved.runtime ?? 'claude') === 'claude';
+      const usesClaudeRuntime = (resolved.runtime ?? 'pi') === 'claude';
       if (usesClaudeRuntime) {
         ensureClaudeAuth(inputs);
       }

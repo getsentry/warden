@@ -79,6 +79,7 @@ version = 1
 
 # Default settings inherited by all skills
 [defaults]
+runtime = "pi"
 # Severity levels: critical, high, medium, low, info
 # failOn: minimum severity that fails the check
 failOn = "high"
@@ -127,13 +128,13 @@ jobs:
     env:
       WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
       WARDEN_SENTRY_DSN: \${{ secrets.WARDEN_SENTRY_DSN }}
+      WARDEN_OPENAI_API_KEY: \${{ secrets.WARDEN_OPENAI_API_KEY }}
+      WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: \${{ github.event.pull_request.head.sha }}
       - uses: getsentry/warden@v${majorVersion}
-        with:
-          anthropic-api-key: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
 `;
 }
 
@@ -408,8 +409,8 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   reporter.bold('Next steps:');
   reporter.text(`  1. Add built-in reviews: ${chalk.cyan('warden add security-review')}`);
   reporter.text(`     ${chalk.cyan('warden add code-review')}`);
-  reporter.text(`  2. Set ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} in .env.local`);
-  reporter.text(`  3. Add ${chalk.cyan('WARDEN_ANTHROPIC_API_KEY')} to organization or repository secrets`);
+  reporter.text(`  2. Set ${chalk.cyan('WARDEN_MODEL')} and the WARDEN-prefixed provider API key for that model`);
+  reporter.text(`  3. Add the same values to organization or repository secrets`);
 
   // Show GitHub secrets URL if available
   const githubUrl = getGitHubRepoUrl(repoRoot);

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { escapeHtml, getAnthropicApiKey } from './index.js';
+import { bridgeWardenProviderApiKeyEnv, escapeHtml, getAnthropicApiKey } from './index.js';
 
 describe('escapeHtml', () => {
   it('escapes angle brackets outside code', () => {
@@ -80,5 +80,42 @@ describe('getAnthropicApiKey', () => {
 
   it('returns undefined when neither key is set', () => {
     expect(getAnthropicApiKey()).toBeUndefined();
+  });
+});
+
+describe('bridgeWardenProviderApiKeyEnv', () => {
+  it('mirrors WARDEN-prefixed API keys to provider SDK env names', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_OPENAI_API_KEY: 'openai-key',
+      WARDEN_ANTHROPIC_API_KEY: 'anthropic-key',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['OPENAI_API_KEY']).toBe('openai-key');
+    expect(env['ANTHROPIC_API_KEY']).toBe('anthropic-key');
+  });
+
+  it('does not overwrite explicitly supplied provider env vars', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_OPENAI_API_KEY: 'warden-openai-key',
+      OPENAI_API_KEY: 'explicit-openai-key',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['OPENAI_API_KEY']).toBe('explicit-openai-key');
+  });
+
+  it('ignores WARDEN env vars that are not API keys', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_MODEL: 'openai/gpt-5.5',
+      WARDEN_SENTRY_DSN: 'https://public@example.com/1',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['MODEL']).toBeUndefined();
+    expect(env['SENTRY_DSN']).toBeUndefined();
   });
 });

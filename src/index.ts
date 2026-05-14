@@ -105,6 +105,7 @@ export {
   SkillRunnerError,
   getRuntime,
   claudeRuntime,
+  piRuntime,
   parseJsonFromOutput,
 } from './sdk/runner.js';
 

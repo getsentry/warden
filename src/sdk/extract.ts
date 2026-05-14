@@ -32,6 +32,12 @@ export interface AuxiliaryCallOptions {
   agentName?: string;
 }
 
+/** Return true when the selected runtime can authenticate outside a legacy Anthropic API key. */
+export function canUseRuntimeAuth(options?: Pick<AuxiliaryCallOptions, 'apiKey' | 'runtime'>): boolean {
+  // A missing runtime means a direct helper call, not the configured pipeline default.
+  return Boolean(options?.apiKey) || (options?.runtime ?? 'claude') !== 'claude';
+}
+
 /**
  * Extract JSON object from text, handling nested braces correctly.
  * Starts from the given position and returns the balanced JSON object.
@@ -188,8 +194,9 @@ export async function extractFindingsWithLLM(
       ? apiKeyOrOptions
       : { apiKey: apiKeyOrOptions, maxRetries };
   const { apiKey, runtime, model } = options;
+  const runtimeName = runtime ?? 'claude';
 
-  if (!apiKey) {
+  if (!canUseRuntimeAuth(options)) {
     return {
       success: false,
       error: 'no_api_key_for_fallback',
@@ -218,7 +225,7 @@ If no findings exist, return: {"findings": []}`),
     buildTaggedSection('model_output', truncatedText),
   ]);
 
-  const result = await getRuntime(runtime).runAuxiliary({
+  const result = await getRuntime(runtimeName).runAuxiliary({
     task: 'extraction',
     agentName: options.agentName,
     apiKey,
@@ -493,7 +500,7 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
  *
  * Skips entirely (no LLM call) when:
  * - Fewer than 2 findings have locations
- * - No API key is provided
+ * - Claude runtime is selected and no API key is provided
  */
 export async function mergeCrossLocationFindings(
   findings: Finding[],
@@ -507,7 +514,7 @@ export async function mergeCrossLocationFindings(
 
   // Early exit: need at least 2 located findings to merge
   const withLocations = findings.filter((f) => f.location);
-  if (withLocations.length < 2 || !apiKey) {
+  if (withLocations.length < 2 || !canUseRuntimeAuth(options)) {
     return { findings, mergedCount: 0 };
   }
 
@@ -530,7 +537,7 @@ ${findingDescriptions}
 Singletons should not appear. Return [] if no findings describe the same issue.`),
   ]);
 
-  const result = await getRuntime(options?.runtime).runSynthesis({
+  const result = await getRuntime(options?.runtime ?? 'claude').runSynthesis({
     task: 'consolidation',
     agentName: options?.agentName,
     apiKey,

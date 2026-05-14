@@ -102,9 +102,9 @@ export interface SkillRunnerOptions {
   concurrency?: number;
   /** Delay in milliseconds between batch starts when parallel=true (default: 0) */
   batchDelayMs?: number;
-  /** Model to use for analysis (e.g., 'claude-sonnet-4-5'). Uses SDK default if not specified. */
+  /** Model to use for analysis (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model?: string;
-  /** Runtime backend for all model-backed execution. Defaults to Claude. */
+  /** Runtime backend for all model-backed execution. Defaults to Pi. */
   runtime?: RuntimeName;
   /** Model to use for auxiliary structured model calls. Uses runtime default if not specified. */
   auxiliaryModel?: string;
@@ -124,7 +124,7 @@ export interface SkillRunnerOptions {
   verbose?: boolean;
   /** Max number of "other files" to list in hunk prompts for PR context (default: 50, 0 disables) */
   maxContextFiles?: number;
-  /** Max retries for auxiliary Haiku calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
+  /** Max retries for auxiliary structured model calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
   auxiliaryMaxRetries?: number;
   /** Verify candidate findings in a second read-only pass. Defaults to true. */
   verifyFindings?: boolean;

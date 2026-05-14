@@ -5,6 +5,11 @@ import type { UsageStats } from '../types/index.js';
 import { Sentry } from '../sentry.js';
 import { apiUsageToStats } from './pricing.js';
 import { aggregateUsage, emptyUsage } from './usage.js';
+import {
+  setGenAiInputMessagesAttr,
+  setGenAiOutputMessagesAttr,
+  setGenAiUsageAttrs,
+} from './otel.js';
 
 export const HAIKU_MODEL = 'claude-haiku-4-5';
 export const DEFAULT_AUXILIARY_MAX_RETRIES = 5;
@@ -44,17 +49,21 @@ export function setGenAiResponseAttrs(
     (usage.cache_creation?.ephemeral_5m_input_tokens ?? 0) +
     (usage.cache_creation?.ephemeral_1h_input_tokens ?? 0);
   const cacheWrite = Math.max(rawCacheWrite, tieredCacheWrite);
-  const totalInput = usage.input_tokens + cacheRead + cacheWrite;
-  span.setAttribute('gen_ai.usage.input_tokens', totalInput);
-  span.setAttribute('gen_ai.usage.output_tokens', usage.output_tokens);
-  span.setAttribute('gen_ai.usage.input_tokens.cached', cacheRead);
-  span.setAttribute('gen_ai.usage.input_tokens.cache_write', cacheWrite);
-  span.setAttribute('gen_ai.usage.total_tokens', totalInput + usage.output_tokens);
+  setGenAiUsageAttrs(span, {
+    inputTokens: usage.input_tokens + cacheRead + cacheWrite,
+    outputTokens: usage.output_tokens,
+    cacheReadInputTokens: cacheRead,
+    cacheCreationInputTokens: cacheWrite,
+    cacheCreation5mInputTokens: usage.cache_creation?.ephemeral_5m_input_tokens ?? cacheWrite,
+    cacheCreation1hInputTokens: usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+    webSearchRequests: 0,
+    costUSD: 0,
+  });
   if (stopReason) {
     span.setAttribute('gen_ai.response.finish_reasons', [stopReason]);
   }
   if (responseText !== undefined) {
-    span.setAttribute('gen_ai.response.text', JSON.stringify([responseText]));
+    setGenAiOutputMessagesAttr(span, responseText, stopReason);
   }
 }
 
@@ -189,6 +198,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         ...(task ? { 'warden.ai.task': task } : {}),
         'gen_ai.request.model': model,
         'gen_ai.request.max_tokens': maxTokens,
+        'gen_ai.output.type': 'json',
       },
     },
     async (span) => {
@@ -202,7 +212,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         messages.push({ role: 'assistant', content: prefill });
       }
 
-      span.setAttribute('gen_ai.request.messages', JSON.stringify(messages));
+      setGenAiInputMessagesAttr(span, messages);
 
       try {
         const response = await client.messages.create({
@@ -216,6 +226,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         const content = response.content[0];
         if (!content || content.type !== 'text') {
           setGenAiResponseAttrs(span, response.usage, response.stop_reason);
+          span.setAttribute('error.type', 'empty_response');
           return { success: false, error: 'Empty response from model', usage };
         }
 
@@ -226,6 +237,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         setGenAiResponseAttrs(span, response.usage, response.stop_reason, fullText);
         const jsonStr = extractJson(fullText);
         if (!jsonStr) {
+          span.setAttribute('error.type', 'invalid_json');
           return { success: false, error: 'No JSON found in response', usage };
         }
 
@@ -233,12 +245,14 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         const validated = schema.safeParse(parsed);
 
         if (!validated.success) {
+          span.setAttribute('error.type', 'validation_error');
           return { success: false, error: `Validation failed: ${validated.error.message}`, usage };
         }
 
         return { success: true, data: validated.data, usage };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        span.setAttribute('error.type', error instanceof Error ? error.name : '_OTHER');
         return { success: false, error: message, usage: emptyUsage() };
       }
     },
@@ -295,6 +309,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         ...(task ? { 'warden.ai.task': task } : {}),
         'gen_ai.request.model': model,
         'gen_ai.request.max_tokens': maxTokens,
+        'gen_ai.output.type': 'json',
       },
     },
     async (span) => {
@@ -306,7 +321,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         { role: 'user', content: prompt },
       ];
 
-      span.setAttribute('gen_ai.request.messages', JSON.stringify(messages));
+      setGenAiInputMessagesAttr(span, messages);
 
       const usages: UsageStats[] = [];
       // Accumulate raw API usage across iterations so setGenAiResponseAttrs
@@ -341,6 +356,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
+          span.setAttribute('error.type', error instanceof Error ? error.name : '_OTHER');
           return { success: false, error: message, usage: currentUsage() };
         }
 
@@ -361,6 +377,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
           );
 
           if (toolUseBlocks.length === 0) {
+            span.setAttribute('error.type', 'missing_tool_call');
             return { success: false, error: 'Tool use indicated but no tool calls found', usage: aggregateUsage(usages) };
           }
 
@@ -397,6 +414,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         // Final response - extract text and set span attributes
         if (response.stop_reason !== 'end_turn' && response.stop_reason !== 'max_tokens') {
           setFinalSpanAttrs(response.stop_reason);
+          span.setAttribute('error.type', 'unexpected_stop_reason');
           return { success: false, error: `Unexpected stop reason: ${response.stop_reason}`, usage: aggregateUsage(usages) };
         }
 
@@ -406,6 +424,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
 
         if (!textBlock) {
           setFinalSpanAttrs(response.stop_reason);
+          span.setAttribute('error.type', 'empty_response');
           return { success: false, error: 'No text in final response', usage: aggregateUsage(usages) };
         }
 
@@ -413,6 +432,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
 
         const jsonStr = extractJson(textBlock.text);
         if (!jsonStr) {
+          span.setAttribute('error.type', 'invalid_json');
           return { success: false, error: 'No JSON found in response', usage: aggregateUsage(usages) };
         }
 
@@ -420,6 +440,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         const validated = schema.safeParse(parsed);
 
         if (!validated.success) {
+          span.setAttribute('error.type', 'validation_error');
           return { success: false, error: `Validation failed: ${validated.error.message}`, usage: aggregateUsage(usages) };
         }
 
@@ -429,6 +450,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
       // Max iterations exceeded - still record usage on span
       setFinalSpanAttrs();
 
+      span.setAttribute('error.type', 'max_tool_iterations');
       return { success: false, error: 'Max tool iterations exceeded', usage: aggregateUsage(usages) };
     },
   );

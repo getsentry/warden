@@ -15,10 +15,12 @@ import { WARDEN_ACTION } from '../utils/version.js';
   <p>Go to <strong>Organization Settings → Secrets and variables → Actions</strong>, then add:</p>
 
   <dl>
+    <dt>WARDEN_MODEL</dt>
+    <dd>Pi model selector for all repos using the shared workflow.</dd>
+    <dt>WARDEN_OPENAI_API_KEY</dt>
+    <dd>OpenAI API key when using an OpenAI Pi model.</dd>
     <dt>WARDEN_ANTHROPIC_API_KEY</dt>
-    <dd>Required. API key used by the action runtime.</dd>
-    <dt>WARDEN_MODEL <em>(optional)</em></dt>
-    <dd>Model override for all repos using the shared workflow.</dd>
+    <dd>Anthropic API key when using an Anthropic Pi model or the Claude runtime.</dd>
     <dt>WARDEN_SENTRY_DSN <em>(optional)</em></dt>
     <dd>Telemetry DSN. When unset, telemetry is a no-op.</dd>
   </dl>
@@ -70,8 +72,9 @@ jobs:
     permissions:
       contents: read
     env:
-      WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
       WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
+      WARDEN_OPENAI_API_KEY: \${{ secrets.WARDEN_OPENAI_API_KEY }}
+      WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
       WARDEN_SENTRY_DSN: \${{ secrets.WARDEN_SENTRY_DSN }}
     steps:
       - uses: actions/checkout@v4

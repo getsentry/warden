@@ -7,6 +7,7 @@ import type { Finding, UsageStats } from '../types/index.js';
 import { getRuntime } from './runtimes/index.js';
 import type { RuntimeName } from './runtimes/index.js';
 import { aggregateUsage } from './usage.js';
+import { canUseRuntimeAuth } from './extract.js';
 import { buildJsonOutputSection, buildTaggedSection, joinPromptSections } from './prompt-sections.js';
 import type { FindingProcessingEvent } from './types.js';
 
@@ -137,7 +138,7 @@ async function runSemanticGate(
   options: SanitizeSuggestedFixesOptions
 ): Promise<{ verdict: 'pass' | 'fail' | 'unavailable'; usage?: UsageStats }> {
   const { apiKey, runtime, model, maxRetries } = options;
-  if (!apiKey) {
+  if (!canUseRuntimeAuth(options)) {
     return { verdict: 'unavailable' };
   }
   const originalForPrompt = fileContent.slice(0, SEMANTIC_PROMPT_MAX_CHARS);
@@ -160,7 +161,7 @@ Pass only if the diff clearly addresses the stated issue without obvious regress
     buildJsonOutputSection('{"verdict":"pass|fail","reason":"..."}'),
   ]);
 
-  const result = await getRuntime(runtime).runAuxiliary({
+  const result = await getRuntime(runtime ?? 'claude').runAuxiliary({
     task: 'fix_quality',
     agentName: options.agentName,
     apiKey,

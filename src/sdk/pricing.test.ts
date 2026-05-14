@@ -148,6 +148,13 @@ describe('apiUsageToStats', () => {
     }).costUSD).toBeCloseTo(0.915, 6);
   });
 
+  it('keeps Sonnet 4.7 aliases at standard pricing above 200k input tokens', () => {
+    expect(apiUsageToStats('claude-sonnet-4-7-20260501', {
+      input_tokens: 300_000,
+      output_tokens: 1_000,
+    }).costUSD).toBeCloseTo(0.915, 6);
+  });
+
   it('calculates cost for alternate Claude SDK model id shapes', () => {
     expect(apiUsageToStats('claude-sonnet-4-20250514', {
       input_tokens: 1000,
@@ -158,6 +165,10 @@ describe('apiUsageToStats', () => {
       output_tokens: 500,
     }).costUSD).toBeCloseTo(0.0525, 6);
     expect(apiUsageToStats('claude-sonnet-4-6', {
+      input_tokens: 1000,
+      output_tokens: 500,
+    }).costUSD).toBeCloseTo(0.0105, 6);
+    expect(apiUsageToStats('claude-sonnet-4-7', {
       input_tokens: 1000,
       output_tokens: 500,
     }).costUSD).toBeCloseTo(0.0105, 6);

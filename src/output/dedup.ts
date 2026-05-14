@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { Finding, UsageStats } from '../types/index.js';
 import { findingLine } from '../types/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
-import { applyMergeGroups } from '../sdk/extract.js';
+import { applyMergeGroups, canUseRuntimeAuth } from '../sdk/extract.js';
 import type { AuxiliaryCallOptions } from '../sdk/extract.js';
 import {
   buildJsonOutputSection,
@@ -488,7 +488,7 @@ interface SemanticDuplicateResult {
 async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
-  apiKey: string,
+  apiKey: string | undefined,
   options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'maxRetries' | 'currentSkill'> = {}
 ): Promise<SemanticDuplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
@@ -521,7 +521,7 @@ where findingIndex is the 1-based index of the new finding and existingIndex is 
 Return [] if none are duplicates.`),
   ]);
 
-  const result = await getRuntime(options.runtime).runAuxiliary({
+  const result = await getRuntime(options.runtime ?? 'claude').runAuxiliary({
     task: 'deduplication',
     agentName: options.currentSkill,
     apiKey,
@@ -790,8 +790,8 @@ export async function consolidateBatchFindings(
   // Phase 2: Proximity grouping
   const clusters = findProximityClusters(hashDeduped);
 
-  // If no proximity clusters or hash-only mode or no API key, return hash-deduped results
-  if (clusters.length === 0 || options.hashOnly || !options.apiKey) {
+  // If no proximity clusters, hash-only mode, or no runtime auth, return hash-deduped results.
+  if (clusters.length === 0 || options.hashOnly || !canUseRuntimeAuth(options)) {
     return { findings: hashDeduped, removedCount: hashRemovedCount };
   }
 
@@ -817,7 +817,7 @@ Singletons (findings with no duplicates) should not appear in any group.
     buildJsonOutputSection('Return the JSON array. Return [] if no findings share a root cause.'),
   ]);
 
-  const result = await getRuntime(options.runtime).runAuxiliary({
+  const result = await getRuntime(options.runtime ?? 'claude').runAuxiliary({
     task: 'deduplication',
     agentName: options.agentName,
     apiKey: options.apiKey,
@@ -924,8 +924,8 @@ export async function deduplicateFindings(
     console.log(`Dedup: ${duplicateActions.length} findings matched by content hash`);
   }
 
-  // If hash-only mode, no API key, or no remaining findings, stop here
-  if (options.hashOnly || !options.apiKey || hashDedupedFindings.length === 0) {
+  // If hash-only mode, no runtime auth, or no remaining findings, stop here.
+  if (options.hashOnly || !canUseRuntimeAuth(options) || hashDedupedFindings.length === 0) {
     return { newFindings: hashDedupedFindings, duplicateActions };
   }
 

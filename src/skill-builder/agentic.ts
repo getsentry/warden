@@ -129,6 +129,7 @@ async function repairStructuredSkillBuilderOutput<T>(args: {
   runtime: Runtime;
   repoPath: string;
   skillName: string;
+  apiKey?: string;
   schema: z.ZodType<T>;
   output: string;
   reason: string;
@@ -136,6 +137,7 @@ async function repairStructuredSkillBuilderOutput<T>(args: {
   abortController?: AbortController;
 }): Promise<ParseJsonFromOutputResult<T>> {
   const response = await args.runtime.runSkill({
+    apiKey: args.apiKey,
     systemPrompt: structuredRepairSystemPrompt(),
     userPrompt: structuredRepairPrompt({
       schema: args.schema,
@@ -205,6 +207,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
   maxTurns?: number;
   writeAccess?: boolean;
   abortController?: AbortController;
+  apiKey?: string;
   repair?: {
     apiKey?: string;
     model?: string;
@@ -214,6 +217,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
   const startedAt = performance.now();
   const { runtime } = args;
   const response = await runtime.runSkill({
+    apiKey: args.apiKey ?? args.repair?.apiKey,
     systemPrompt: args.systemPrompt,
     userPrompt: args.userPrompt,
     repoPath: args.repoPath,
@@ -253,6 +257,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
       runtime,
       repoPath: args.repoPath,
       skillName: args.skillName,
+      apiKey: args.apiKey ?? args.repair?.apiKey,
       schema: args.schema,
       output: response.result.text,
       reason: parsed.error,

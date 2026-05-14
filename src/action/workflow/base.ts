@@ -63,7 +63,7 @@ export function ensureClaudeAuth(inputs: ActionInputs): void {
   }
   setFailed(
     'Authentication not found. Provide an API key via anthropic-api-key input, ' +
-      'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
+      'WARDEN_ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
   );
 }
 

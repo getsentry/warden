@@ -63,8 +63,9 @@ function summarizeRunFailure(args: {
   totalHunks: number;
   hunkFailures: HunkFailure[];
   circuitReason?: { code: ErrorCode; message: string };
+  runtime?: SkillRunnerOptions['runtime'];
 }): { code: ErrorCode; message: string } {
-  const { totalHunks, hunkFailures, circuitReason } = args;
+  const { totalHunks, hunkFailures, circuitReason, runtime } = args;
   if (circuitReason) {
     return circuitReason;
   }
@@ -85,7 +86,9 @@ function summarizeRunFailure(args: {
     message:
       `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
       `This usually indicates an authentication problem. ` +
-      `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`,
+      ((runtime ?? 'pi') === 'claude'
+        ? `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`
+        : `Verify WARDEN_MODEL and the WARDEN-prefixed provider API key for that model are set correctly.`),
   };
 }
 
@@ -253,6 +256,7 @@ export async function runSkillTask(
       });
 
       const startTime = Date.now();
+      const runtime = runnerOptions.runtime ?? 'pi';
       // Mirror of the inner-scope `skill` so the outer catch can use
       // report.skill when resolveSkill succeeded but a later step threw.
       // Stays undefined only if resolveSkill itself failed.
@@ -284,6 +288,7 @@ export async function runSkillTask(
             usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
             durationMs: Date.now() - startTime,
             model: runnerOptions?.model,
+            runtime,
             skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
           };
           span.setAttribute('warden.finding.count', 0);
@@ -525,6 +530,7 @@ export async function runSkillTask(
             totalHunks,
             hunkFailures: allHunkFailures,
             circuitReason,
+            runtime: runnerOptions.runtime,
           });
           const errorReport: SkillReport = {
             skill: skill.name,
@@ -533,6 +539,7 @@ export async function runSkillTask(
             usage: aggregateUsage(allUsage),
             durationMs: duration,
             model: runnerOptions?.model,
+            runtime,
             // Preserve per-file metadata (timing, partial usage, attempted
             // filenames) on failure runs too — `warden runs` and JSONL
             // consumers iterate this array to count attempted files. Without
@@ -604,6 +611,7 @@ export async function runSkillTask(
           usage: aggregateUsage(allUsage),
           durationMs: duration,
           model: runnerOptions?.model,
+          runtime,
           files: buildFileReports(
             preparedFiles.map((file, i) => {
               const r = allResults[i];
@@ -665,6 +673,7 @@ export async function runSkillTask(
           findings: [],
           durationMs: Date.now() - startTime,
           model: runnerOptions?.model,
+          runtime,
           error: { code, message, timestamp: new Date().toISOString() },
         };
         span.setAttribute('warden.finding.count', 0);

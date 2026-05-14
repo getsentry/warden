@@ -20,6 +20,12 @@ import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
+import {
+  setGenAiInputMessagesAttr,
+  setGenAiOutputMessagesAttr,
+  setGenAiSystemInstructionsAttr,
+  setGenAiUsageAttrs,
+} from '../otel.js';
 import { apiUsageToStats } from '../pricing.js';
 import { aggregateUsage, emptyUsage, estimateTokens, extractUsage } from '../usage.js';
 import type {
@@ -302,10 +308,8 @@ export const claudeRuntime: Runtime = {
         },
       },
       async (span) => {
-        span.setAttribute('gen_ai.request.messages', JSON.stringify([
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ]));
+        setGenAiSystemInstructionsAttr(span, systemPrompt);
+        setGenAiInputMessagesAttr(span, [{ role: 'user', content: userPrompt }]);
 
         const stderrChunks: string[] = [];
 
@@ -367,10 +371,10 @@ export const claudeRuntime: Runtime = {
                   'gen_ai.response.model': turn.model,
                   'gen_ai.usage.input_tokens': totalInput,
                   'gen_ai.usage.output_tokens': turn.outputTokens,
-                  'gen_ai.usage.input_tokens.cached': turn.cacheRead,
-                  'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
-                  'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
-                  'gen_ai.tool_use.count': turn.toolUses.length,
+                  'gen_ai.usage.cache_read.input_tokens': turn.cacheRead,
+                  'gen_ai.usage.cache_creation.input_tokens': turn.cacheWrite,
+                  'warden.gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
+                  'warden.gen_ai.tool_use.count': turn.toolUses.length,
                 },
               },
               () => {
@@ -384,7 +388,7 @@ export const claudeRuntime: Runtime = {
                         'gen_ai.operation.name': 'execute_tool',
                         'gen_ai.agent.name': skillName,
                         'gen_ai.tool.name': toolUse.name,
-                        ...(elapsed !== undefined && { 'tool.elapsed_seconds': elapsed }),
+                        ...(elapsed !== undefined && { 'warden.gen_ai.tool.elapsed_seconds': elapsed }),
                       },
                     },
                     () => { /* point-in-time span */ }
@@ -447,14 +451,16 @@ export const claudeRuntime: Runtime = {
             const cacheWrite1h = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
             const cacheWrite = Math.max(usage.cache_creation_input_tokens ?? 0, cacheWrite5m + cacheWrite1h);
             const totalInputTokens = inputTokens + cacheRead + cacheWrite;
-            span.setAttribute('gen_ai.usage.input_tokens', totalInputTokens);
-            span.setAttribute('gen_ai.usage.output_tokens', outputTokens);
-            span.setAttribute('gen_ai.usage.input_tokens.cached', cacheRead);
-            span.setAttribute('gen_ai.usage.input_tokens.cache_write', cacheWrite);
-            span.setAttribute('gen_ai.usage.total_tokens', totalInputTokens + outputTokens);
-          }
-          if (resultMessage.total_cost_usd !== undefined) {
-            span.setAttribute('gen_ai.cost.total_tokens', resultMessage.total_cost_usd);
+            setGenAiUsageAttrs(span, {
+              inputTokens: totalInputTokens,
+              outputTokens,
+              cacheReadInputTokens: cacheRead,
+              cacheCreationInputTokens: cacheWrite,
+              cacheCreation5mInputTokens: cacheWrite5m,
+              cacheCreation1hInputTokens: cacheWrite1h,
+              webSearchRequests: usage.server_tool_use?.web_search_requests ?? 0,
+              costUSD: resultMessage.total_cost_usd ?? 0,
+            });
           }
           if (resultMessage.uuid) {
             span.setAttribute('gen_ai.response.id', resultMessage.uuid);
@@ -467,14 +473,16 @@ export const claudeRuntime: Runtime = {
           }
 
           if (resultMessage.subtype === 'success' && resultMessage.result) {
-            span.setAttribute('gen_ai.response.text', JSON.stringify([resultMessage.result]));
+            setGenAiOutputMessagesAttr(span, resultMessage.result);
+          } else if (resultMessage.subtype !== 'success') {
+            span.setAttribute('error.type', resultMessage.subtype);
           }
 
           const optionalAttrs: Record<string, string | number | undefined> = {
             'gen_ai.conversation.id': resultMessage.session_id,
-            'sdk.duration_ms': resultMessage.duration_ms,
-            'sdk.duration_api_ms': resultMessage.duration_api_ms,
-            'sdk.num_turns': resultMessage.num_turns,
+            'warden.sdk.duration_ms': resultMessage.duration_ms,
+            'warden.sdk.duration_api_ms': resultMessage.duration_api_ms,
+            'warden.sdk.num_turns': resultMessage.num_turns,
           };
           for (const [key, value] of Object.entries(optionalAttrs)) {
             if (value !== undefined) {

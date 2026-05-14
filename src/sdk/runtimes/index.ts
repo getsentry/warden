@@ -1,11 +1,14 @@
 import { claudeRuntime } from './claude.js';
+import { piRuntime } from './pi.js';
 import type { Runtime, RuntimeName } from './types.js';
 
 const RUNTIMES: Partial<Record<RuntimeName, Runtime>> = {
   claude: claudeRuntime,
+  pi: piRuntime,
 };
 
 export { claudeRuntime } from './claude.js';
+export { piRuntime } from './pi.js';
 export type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -22,7 +25,7 @@ export type {
   SkillRunStatus,
 } from './types.js';
 
-export function getRuntime(name: RuntimeName = 'claude'): Runtime {
+export function getRuntime(name: RuntimeName = 'pi'): Runtime {
   const runtime = RUNTIMES[name];
   if (!runtime) {
     throw new Error(`Unsupported runtime: ${name}`);

@@ -39,7 +39,7 @@ vi.mock('./base.js', async () => {
       }
       mockedSetFailed(
         'Authentication not found. Provide an API key via anthropic-api-key input, ' +
-          'ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
+          'WARDEN_ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
       );
     }),
     findClaudeCodeExecutable: vi.fn(() => '/usr/local/bin/claude'),

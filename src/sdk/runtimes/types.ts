@@ -3,8 +3,8 @@
  *
  * Warden's analysis pipeline builds prompts, handles retry policy, parses
  * findings, and aggregates report data. Runtime interfaces are backend
- * capabilities underneath that pipeline. Claude is the only runtime today and
- * exposes skill execution, auxiliary model tasks, and synthesis tasks.
+ * capabilities underneath that pipeline. Runtimes expose skill execution,
+ * auxiliary model tasks, and synthesis tasks.
  *
  * Runtime implementations are responsible for backend-specific execution
  * details such as model identifiers, stream events, authentication side
@@ -16,7 +16,7 @@ import { z } from 'zod';
 import type { ToolConfig } from '../../config/schema.js';
 import type { UsageStats } from '../../types/index.js';
 
-export const RuntimeNameSchema = z.enum(['claude']);
+export const RuntimeNameSchema = z.enum(['claude', 'pi']);
 export type RuntimeName = z.infer<typeof RuntimeNameSchema>;
 
 export type SkillRunStatus =
@@ -35,6 +35,8 @@ export interface SkillRunOptions {
 }
 
 export interface SkillRunRequest {
+  /** Optional legacy Anthropic API key, used only when a runtime targets Anthropic-compatible models. */
+  apiKey?: string;
   systemPrompt: string;
   userPrompt: string;
   repoPath: string;

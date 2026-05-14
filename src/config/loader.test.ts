@@ -401,10 +401,10 @@ describe('resolveSkillConfigs', () => {
   });
 
   describe('runtime config', () => {
-    it('defaults runtime to Claude', () => {
+    it('defaults runtime to Pi', () => {
       const [resolved] = resolveSkillConfigs(baseConfig);
 
-      expect(resolved?.runtime).toBe('claude');
+      expect(resolved?.runtime).toBe('pi');
       expect(resolved?.auxiliaryModel).toBeUndefined();
       expect(resolved?.synthesisModel).toBeUndefined();
       expect(resolved?.auxiliaryMaxRetries).toBeUndefined();
@@ -972,7 +972,7 @@ describe('maxTurns config', () => {
     const config = {
       version: 1,
       defaults: {
-        runtime: 'claude',
+        runtime: 'pi',
         agent: { model: 'claude-main', maxTurns: 25 },
         auxiliary: { model: 'claude-haiku-4-5', maxRetries: 2 },
         synthesis: { model: 'claude-opus-4-5' },
@@ -982,7 +982,7 @@ describe('maxTurns config', () => {
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
-    expect(result.data?.defaults?.runtime).toBe('claude');
+    expect(result.data?.defaults?.runtime).toBe('pi');
     expect(result.data?.defaults?.auxiliary?.model).toBe('claude-haiku-4-5');
     expect(result.data?.defaults?.synthesis?.model).toBe('claude-opus-4-5');
   });
@@ -1004,7 +1004,7 @@ describe('maxTurns config', () => {
   it('rejects unknown runtimes', () => {
     const config = {
       version: 1,
-      defaults: { runtime: 'pi' },
+      defaults: { runtime: 'bogus' },
       skills: [],
     };
 

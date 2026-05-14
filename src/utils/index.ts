@@ -58,3 +58,19 @@ export function escapeHtml(text: string): string {
 export function getAnthropicApiKey(): string | undefined {
   return process.env['WARDEN_ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'];
 }
+
+/**
+ * Mirrors WARDEN-prefixed provider API keys to the env names expected by SDKs.
+ */
+export function bridgeWardenProviderApiKeyEnv(env: NodeJS.ProcessEnv = process.env): void {
+  for (const [key, value] of Object.entries(env)) {
+    if (!value || !key.startsWith('WARDEN_') || !key.endsWith('_API_KEY')) {
+      continue;
+    }
+
+    const providerKey = key.slice('WARDEN_'.length);
+    if (!env[providerKey]) {
+      env[providerKey] = value;
+    }
+  }
+}

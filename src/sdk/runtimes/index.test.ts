@@ -4,11 +4,22 @@ import {
   claudeRuntime,
   getRuntime,
   getRuntimeProviderOptions,
+  piRuntime,
 } from './index.js';
 
 describe('runtimes', () => {
-  it('exposes Claude as the default runtime provider', () => {
+  it('exposes Pi as the default runtime provider', () => {
     const runtime = getRuntime();
+
+    expect(runtime).toBe(piRuntime);
+    expect(runtime.name).toBe('pi');
+    expect(runtime.runSkill).toBeTypeOf('function');
+    expect(runtime.runAuxiliary).toBeTypeOf('function');
+    expect(runtime.runSynthesis).toBeTypeOf('function');
+  });
+
+  it('exposes Claude as an opt-in runtime provider', () => {
+    const runtime = getRuntime('claude');
 
     expect(runtime).toBe(claudeRuntime);
     expect(runtime.name).toBe('claude');
@@ -18,7 +29,7 @@ describe('runtimes', () => {
   });
 
   it('rejects unsupported runtimes explicitly', () => {
-    expect(() => getRuntime('pi' as never)).toThrow('Unsupported runtime: pi');
+    expect(() => getRuntime('bogus' as never)).toThrow('Unsupported runtime: bogus');
   });
 
   it('builds provider options at the runtime boundary', () => {
@@ -27,10 +38,14 @@ describe('runtimes', () => {
     })).toEqual({
       pathToClaudeCodeExecutable: '/bin/claude',
     });
+
+    expect(getRuntimeProviderOptions('pi', {
+      pathToClaudeCodeExecutable: '/bin/claude',
+    })).toBeUndefined();
   });
 
   it('fails auxiliary calls clearly when Claude auth is missing', async () => {
-    const result = await getRuntime().runAuxiliary({
+    const result = await getRuntime('claude').runAuxiliary({
       task: 'extraction',
       prompt: 'Return {"ok": true}',
       schema: z.object({ ok: z.boolean() }),
@@ -53,7 +68,7 @@ describe('runtimes', () => {
   });
 
   it('fails synthesis calls clearly when Claude auth is missing', async () => {
-    const result = await getRuntime().runSynthesis({
+    const result = await getRuntime('claude').runSynthesis({
       task: 'consolidation',
       prompt: 'Return []',
       schema: z.array(z.array(z.number())),

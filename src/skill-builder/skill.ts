@@ -520,6 +520,7 @@ export async function buildGeneratedSkill(args: {
       schema: GeneratedSkillAuthoringPlanSchema,
       model: args.model,
       maxTurns,
+      apiKey: args.apiKey,
       abortController: args.abortController,
       repair,
     });
@@ -547,6 +548,7 @@ export async function buildGeneratedSkill(args: {
       schema: GeneratedSkillWriterResultSchema,
       model: args.model,
       maxTurns,
+      apiKey: args.apiKey,
       writeAccess: true,
       abortController: args.abortController,
       repair,
@@ -594,6 +596,7 @@ export async function buildGeneratedSkill(args: {
         schema: GeneratedSkillReviewResultSchema,
         model: args.model,
         maxTurns: Math.min(maxTurns, defaultValidationMaxTurns()),
+        apiKey: args.apiKey,
         abortController: args.abortController,
         repair,
       });
@@ -631,6 +634,7 @@ export async function buildGeneratedSkill(args: {
         schema: GeneratedSkillWriterResultSchema,
         model: args.model,
         maxTurns,
+        apiKey: args.apiKey,
         writeAccess: true,
         abortController: args.abortController,
         repair,

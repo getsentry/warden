@@ -62,17 +62,19 @@ warden
 
 ### Authentication
 
-Warden uses your Claude Code subscription if you're logged in. Otherwise, set an API key:
+Warden runs model-backed work through Pi. Set a model and the matching WARDEN-prefixed provider key:
 
 ```bash
-# Option 1: Claude Code subscription (if logged in)
-claude login
+# OpenAI example
+export WARDEN_MODEL=openai/gpt-5.5
+export WARDEN_OPENAI_API_KEY=sk-...
 
-# Option 2: API key
+# Anthropic example
+export WARDEN_MODEL=anthropic/claude-sonnet-4-6
 export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Get an API key from https://console.anthropic.com/. `ANTHROPIC_API_KEY` is also accepted as a fallback. CI/CD environments require an API key.
+CI/CD environments require provider credentials.
 
 ## CLI Commands
 
@@ -259,7 +261,8 @@ Default settings inherited by all skills. Individual skills can override any set
 
 ```toml
 [defaults]
-model = "claude-sonnet-4-5"
+runtime = "pi"
+model = "openai/gpt-5.5"
 maxTurns = 30
 failOn = "high"
 reportOn = "medium"
@@ -370,9 +373,9 @@ Resolution order:
 
 | Variable | Description |
 |----------|-------------|
-| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key. Required for CI/CD. Locally, use Claude Code subscription via `claude login`. |
-| `ANTHROPIC_API_KEY` | Fallback if `WARDEN_ANTHROPIC_API_KEY` is not set |
 | `WARDEN_MODEL` | Model override |
+| `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
 | `WARDEN_SKILL_CACHE_TTL` | Cache duration for unpinned remote skills. Default: 24h |
 
 ## Creating Skills
@@ -443,8 +446,9 @@ Add these as organization or repository secrets:
 
 | Secret | Description |
 |--------|-------------|
-| `WARDEN_ANTHROPIC_API_KEY` | Your Anthropic API key |
-| `WARDEN_MODEL` *(optional)* | Override the default model |
+| `WARDEN_MODEL` | Pi model selector |
+| `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
 | `WARDEN_SENTRY_DSN` *(optional)* | Sentry DSN for telemetry |
 
 ### Repository Setup
@@ -478,6 +482,8 @@ on:
     types: [opened, synchronize, reopened]
 
 env:
+  WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+  WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
   WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
 
 jobs:
@@ -495,7 +501,7 @@ jobs:
 | Input | Default | Description |
 |-------|---------|-------------|
 | `github-token` | `GITHUB_TOKEN` | GitHub token for posting comments |
-| `anthropic-api-key` | - | Anthropic API key (falls back to `WARDEN_ANTHROPIC_API_KEY`) |
+| `anthropic-api-key` | - | Anthropic API key input. Prefer `WARDEN_ANTHROPIC_API_KEY` env for new workflows. |
 | `config-path` | `warden.toml` | Path to config file |
 | `fail-on` | - | Minimum severity to fail the check |
 | `report-on` | - | Minimum severity to post comments |

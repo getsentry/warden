@@ -319,7 +319,7 @@ async function runGeneratedSkillCommand(
       ? collectSkillImproveSource(skill, resolved.improvementPrompt)
       : collectSkillBuildSource(skill);
 
-    const runtimeName = config?.defaults?.runtime ?? 'claude';
+    const runtimeName = config?.defaults?.runtime ?? 'pi';
     const runtime = getRuntime(runtimeName);
     const model = resolveSynthesisModel(config, options);
     const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);

@@ -19,6 +19,7 @@ import {
 } from '../../output/dedup.js';
 import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
+import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
@@ -183,13 +184,14 @@ export async function postTriggerReview(
     // Cross-location merging already happened in runSkillTask().
     // Consolidate findings within this batch (intra-batch dedup).
     let findingsToPost = filteredFindings;
+    const canUseAuxiliaryRuntime = canUseRuntimeAuth({ apiKey, runtime: ctx.runtime });
 
     if (findingsToPost.length > 1) {
       const consolidateResult = await consolidateBatchFindings(findingsToPost, {
         apiKey,
         runtime: ctx.runtime,
         model: ctx.model,
-        hashOnly: !apiKey,
+        hashOnly: !canUseAuxiliaryRuntime,
         maxRetries: ctx.maxRetries,
         agentName: result.report.skill,
       });

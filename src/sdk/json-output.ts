@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { UsageStats } from '../types/index.js';
 import { extractJson } from './haiku.js';
+import { canUseRuntimeAuth } from './extract.js';
 import { buildJsonOutputSection, buildTaggedSection, joinPromptSections } from './prompt-sections.js';
 import { getRuntime, type Runtime, type RuntimeName } from './runtimes/index.js';
 
@@ -68,14 +69,14 @@ async function repairJsonOutput<T>(
   reason: string,
   repair: JsonOutputRepairOptions,
 ): Promise<ParseJsonFromOutputResult<T>> {
-  if (!repair.apiKey) {
+  const runtime = repair.runtime ?? getRuntime(repair.runtimeName ?? 'claude');
+  if (!canUseRuntimeAuth({ apiKey: repair.apiKey, runtime: runtime.name })) {
     return {
       success: false,
       error: `${reason}; repair_skipped: missing_api_key`,
     };
   }
 
-  const runtime = repair.runtime ?? getRuntime(repair.runtimeName);
   const result = await runtime.runAuxiliary({
     task: 'extraction',
     agentName: repair.agentName,

@@ -142,7 +142,8 @@ export function compareFindingPriority(a: Finding, b: Finding): number {
   return findingLine(a) - findingLine(b);
 }
 
-// Usage statistics from SDK
+// Usage statistics normalized from runtime/provider responses.
+// inputTokens is total input, including cache-read and cache-created subsets.
 export const UsageStatsSchema = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
@@ -277,6 +278,8 @@ export const SkillReportSchema = z.object({
   files: z.array(FileReportSchema).optional(),
   /** Model used for this skill's analysis */
   model: z.string().optional(),
+  /** Runtime backend used for this skill's analysis. */
+  runtime: z.string().optional(),
 });
 export type SkillReport = z.infer<typeof SkillReportSchema>;
 
