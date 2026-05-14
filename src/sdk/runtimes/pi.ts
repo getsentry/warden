@@ -58,7 +58,6 @@ import type {
   SynthesisTask,
 } from './types.js';
 
-const DEFAULT_READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
@@ -160,7 +159,7 @@ function resolvePiSkillTools(
   allowMutatingTools = false,
 ): { toolNames: string[]; warnings: string[] } {
   const denied = new Set(tools?.denied ?? []);
-  const requested = tools?.allowed ?? DEFAULT_READ_ONLY_TOOLS;
+  const requested = tools?.allowed ?? READ_ONLY_TOOLS;
   const availableTools = allowMutatingTools
     ? [...READ_ONLY_TOOLS, ...MUTATING_TOOLS]
     : READ_ONLY_TOOLS;
@@ -282,12 +281,6 @@ function buildSettingsManager(timeout: number | undefined, maxRetries: number | 
   });
 }
 
-function appendWarning(warnings: string[], warning: string | undefined): void {
-  if (warning) {
-    warnings.push(warning);
-  }
-}
-
 async function promptWithTimeout(
   session: AgentSession,
   userPrompt: string,
@@ -366,7 +359,9 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       settingsManager,
     });
     session = result.session;
-    appendWarning(warnings, result.modelFallbackMessage);
+    if (result.modelFallbackMessage) {
+      warnings.push(result.modelFallbackMessage);
+    }
 
     const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
       if (event.type === 'message_end' && isAssistantMessage(event.message)) {

@@ -22,11 +22,6 @@ function providerFromModel(model: string | undefined): string | undefined {
     return model.slice(0, slashIndex);
   }
 
-  const colonIndex = model.indexOf(':');
-  if (colonIndex > 0) {
-    return model.slice(0, colonIndex);
-  }
-
   return undefined;
 }
 
