@@ -5,6 +5,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import type { CLIOptions } from './args.js';
 import {
   createSkillTasks,
+  findInvalidPiModelSelector,
   formatSkillSource,
   mergeSkillRunnerOptions,
   processTaskResults,
@@ -250,6 +251,40 @@ describe('mergeSkillRunnerOptions', () => {
       maxTurns: 8,
       auxiliaryMaxRetries: 2,
     });
+  });
+});
+
+describe('findInvalidPiModelSelector', () => {
+  it('flags bare model names when the runner uses Pi', () => {
+    const invalid = findInvalidPiModelSelector([
+      {
+        name: 'security-review',
+        runnerOptions: {
+          runtime: 'pi',
+          model: 'claude-sonnet-4-5',
+        },
+      },
+    ]);
+
+    expect(invalid).toEqual({
+      specName: 'security-review',
+      option: 'model',
+      model: 'claude-sonnet-4-5',
+    });
+  });
+
+  it('allows bare model names when the runner uses Claude', () => {
+    const invalid = findInvalidPiModelSelector([
+      {
+        name: 'security-review',
+        runnerOptions: {
+          runtime: 'claude',
+          model: 'claude-sonnet-4-5',
+        },
+      },
+    ]);
+
+    expect(invalid).toBeUndefined();
   });
 });
 

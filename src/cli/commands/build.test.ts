@@ -310,6 +310,30 @@ describe('runBuild', () => {
     expect(output).toContain('Authoring reviewer still requested changes after 3 revision passes');
   });
 
+  it('rejects bare model names for the Pi build runtime', async () => {
+    const reporter = createTestReporter();
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    writeFileSync(join(tempDir, 'warden.toml'), `version = 1
+
+[defaults]
+
+[defaults.synthesis]
+model = "claude-sonnet-4-5"
+`, 'utf-8');
+
+    const exitCode = await runBuild(createOptions(), reporter);
+
+    expect(exitCode).toBe(1);
+    expect(getRuntimeMock).not.toHaveBeenCalled();
+    expect(buildSkillOutlineMock).not.toHaveBeenCalled();
+    const output = stderrSpy.mock.calls
+      .map((call) => call.map((part) => String(part)).join(' '))
+      .join('\n');
+    expect(output).toContain(
+      'Pi runtime model must use provider/model format: claude-sonnet-4-5'
+    );
+  });
+
   it('loads an existing generated skill from an explicit root path', async () => {
     const reporter = createTestReporter();
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);

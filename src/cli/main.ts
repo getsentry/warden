@@ -5,6 +5,7 @@ import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId } fr
 import { emptyToUndefined, loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../config/schema.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
+import { isPiModelSelector } from '../sdk/runtimes/model-selectors.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
@@ -582,6 +583,42 @@ function needsClaudeAuth(items: { runtime?: SkillRunnerOptions['runtime'] }[]): 
   return items.some((item) => (item.runtime ?? 'pi') === 'claude');
 }
 
+interface InvalidPiModelSelector {
+  specName: string;
+  option: 'model' | 'auxiliaryModel' | 'synthesisModel';
+  model: string;
+}
+
+/**
+ * Find the first Pi runner option using a model ID that is not provider/model.
+ */
+export function findInvalidPiModelSelector(
+  specs: Pick<RunSkillSpec, 'name' | 'runnerOptions'>[]
+): InvalidPiModelSelector | undefined {
+  for (const spec of specs) {
+    const runtimeName = spec.runnerOptions.runtime ?? 'pi';
+    if (runtimeName !== 'pi') {
+      continue;
+    }
+
+    for (const option of ['model', 'auxiliaryModel', 'synthesisModel'] as const) {
+      const model = spec.runnerOptions[option];
+      if (model && !isPiModelSelector(model)) {
+        return { specName: spec.name, option, model };
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function reportInvalidPiModelSelector(reporter: Reporter, invalid: InvalidPiModelSelector): void {
+  reporter.error(
+    `Pi runtime ${invalid.option} for ${invalid.specName} must use provider/model format: ${invalid.model}`
+  );
+  reporter.tip('Set a Pi model selector such as anthropic/claude-sonnet-4-6.');
+}
+
 function verifyClaudeAuthForRun(args: {
   apiKey?: string;
   reporter: Reporter;
@@ -1017,6 +1054,11 @@ export async function runSkills(
     context: filterContextByPaths(context, filters),
     runnerOptions: mergeSkillRunnerOptions(runnerOptions, skillOptions),
   }));
+  const invalidModelSelector = findInvalidPiModelSelector(specs);
+  if (invalidModelSelector) {
+    reportInvalidPiModelSelector(reporter, invalidModelSelector);
+    return 1;
+  }
   let tasks: SkillTaskOptions[];
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
   try {
@@ -1333,6 +1375,11 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       verifyFindings: trigger.verifyFindings,
     },
   }));
+  const invalidModelSelector = findInvalidPiModelSelector(specs);
+  if (invalidModelSelector) {
+    reportInvalidPiModelSelector(reporter, invalidModelSelector);
+    return 1;
+  }
   let tasks: SkillTaskOptions[];
   const concurrency = options.parallel ?? config.runner?.concurrency ?? DEFAULT_CONCURRENCY;
   try {
