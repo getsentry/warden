@@ -426,6 +426,6 @@ describe('updateCoreCheck', () => {
 
     const request = update.mock.calls[0]![0] as { output: { summary: string } };
     expect(request.output.summary).toContain('| find-warden-bugs | 0 | 1.0s | $26.19 |');
-    expect(request.output.summary).toContain('<sub>⏱ 1.0s · 3.0k in / 680 out · $26.19 (+verification: $6.19)</sub>');
+    expect(request.output.summary).toContain('<sub>⏱ 1.0s · 3.0k in / 680 out · $26.19</sub>');
   });
 });

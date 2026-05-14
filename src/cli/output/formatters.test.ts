@@ -203,8 +203,8 @@ describe('formatUsage', () => {
       verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
     };
 
-    expect(formatUsage(usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $26.19 (+verification: $6.19)');
-    expect(formatUsagePlain(usage, auxiliaryUsage)).toBe('3.0k input, 680 output, $26.19 (+verification: $6.19)');
+    expect(formatUsage(usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $26.19');
+    expect(formatUsagePlain(usage, auxiliaryUsage)).toBe('3.0k input, 680 output, $26.19');
   });
 });
 
@@ -269,11 +269,11 @@ describe('formatStatsCompact', () => {
     };
     // Total cost: 0.0048 + 0.0012 = 0.0060
     expect(formatStatsCompact(15800, usage, auxiliaryUsage)).toBe(
-      '⏱ 15.8s · 3.0k in / 680 out · $0.01 (+extraction: $0.00)'
+      '⏱ 15.8s · 3.0k in / 680 out · $0.01'
     );
   });
 
-  it('shows multiple auxiliary agents in suffix', () => {
+  it('includes multiple auxiliary agents in total cost', () => {
     const usage: UsageStats = {
       inputTokens: 3000,
       outputTokens: 680,
@@ -283,11 +283,8 @@ describe('formatStatsCompact', () => {
       extraction: { inputTokens: 100, outputTokens: 50, costUSD: 0.0012 },
       dedup: { inputTokens: 200, outputTokens: 80, costUSD: 0.0008 },
     };
-    const result = formatStatsCompact(undefined, usage, auxiliaryUsage);
-    expect(result).toContain('+extraction: $0.00');
-    expect(result).toContain('+dedup: $0.00');
     // Total: 0.0048 + 0.0012 + 0.0008 = 0.0068
-    expect(result).toContain('$0.01');
+    expect(formatStatsCompact(undefined, usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $0.01');
   });
 
   it('omits auxiliary suffix when all agents have zero cost', () => {

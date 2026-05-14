@@ -285,8 +285,7 @@ export function formatUsage(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMa
   const inputStr = formatTokens(usage.inputTokens);
   const outputStr = formatTokens(usage.outputTokens);
   const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
-  const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
-  return `${inputStr} in / ${outputStr} out · ${costStr}${auxSuffix}`;
+  return `${inputStr} in / ${outputStr} out · ${costStr}`;
 }
 
 /**
@@ -296,8 +295,7 @@ export function formatUsagePlain(usage: UsageStats, auxiliaryUsage?: AuxiliaryUs
   const inputStr = formatTokens(usage.inputTokens);
   const outputStr = formatTokens(usage.outputTokens);
   const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
-  const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
-  return `${inputStr} input, ${outputStr} output, ${costStr}${auxSuffix}`;
+  return `${inputStr} input, ${outputStr} output, ${costStr}`;
 }
 
 /**
@@ -307,16 +305,7 @@ export function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
   return Object.values(auxiliaryUsage).reduce((sum, u) => sum + u.costUSD, 0);
 }
 
-/**
- * Format auxiliary cost breakdown as a parenthetical suffix.
- * @example "(+extraction: $0.00, +dedup: $0.00)"
- */
-export function formatAuxiliarySuffix(auxiliaryUsage: AuxiliaryUsageMap): string {
-  const entries = Object.entries(auxiliaryUsage).filter(([, u]) => u.costUSD > 0);
-  if (entries.length === 0) return '';
-  const parts = entries.map(([agent, u]) => `+${agent}: ${formatCost(u.costUSD)}`);
-  return ` (${parts.join(', ')})`;
-}
+
 
 /**
  * Format stats (duration, tokens, cost) into a compact single-line format.
@@ -342,8 +331,7 @@ export function formatStatsCompact(durationMs?: number, usage?: UsageStats, auxi
     parts.push(`${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
 
     const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
-    const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
-    parts.push(`${costStr}${auxSuffix}`);
+    parts.push(`${costStr}`);
   }
 
   return parts.join(' · ');

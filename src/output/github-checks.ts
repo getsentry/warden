@@ -1,7 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
 import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
-import { formatDuration, formatCost, formatTokens, totalUsageCost, formatAuxiliarySuffix } from '../cli/output/formatters.js';
+import { formatDuration, formatCost, formatTokens, totalUsageCost } from '../cli/output/formatters.js';
 import { escapeHtml } from '../utils/index.js';
 
 /**
@@ -389,8 +389,7 @@ function renderStatsFooter(
     parts.push(`${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
   }
   if (cost !== undefined) {
-    const auxSuffix = auxiliaryUsage ? formatAuxiliarySuffix(auxiliaryUsage) : '';
-    parts.push(`${formatCost(cost)}${auxSuffix}`);
+    parts.push(`${formatCost(cost)}`);
   }
 
   return ['---', `<sub>${parts.join(' · ')}</sub>`];

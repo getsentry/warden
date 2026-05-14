@@ -168,7 +168,7 @@ describe('Reporter', () => {
 
       const output = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('\n');
       expect(output).toContain('$26.19');
-      expect(output).toContain('+verification: $6.19');
+      expect(output).not.toContain('+verification');
     });
 
     it('outputs only finding counts in Quiet mode', () => {
