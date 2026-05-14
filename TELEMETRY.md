@@ -92,11 +92,11 @@ fields=timestamp,trace,span_id,span.duration,gen_ai.agent.name,warden.hunk.line_
 sort=-timestamp
 ```
 
-Agent/model calls for token, cost, or provider symptoms.
+Agent/model calls for token or provider symptoms.
 
 ```text
 dataset=spans query='span.op:gen_ai.invoke_agent gen_ai.agent.name:"<skill_name>"'
-fields=timestamp,trace,span_id,span.duration,gen_ai.conversation.id,gen_ai.request.model,gen_ai.response.model,gen_ai.usage.total_tokens,gen_ai.cost.total_tokens,error.type
+fields=timestamp,trace,span_id,span.duration,gen_ai.conversation.id,gen_ai.request.model,gen_ai.response.model,gen_ai.usage.total_tokens,error.type
 sort=-timestamp
 ```
 
@@ -108,7 +108,7 @@ Tool calls inside a Claude Code SDK turn or structured tool loop.
 
 ```text
 dataset=spans query='span.op:gen_ai.execute_tool gen_ai.tool.name:"<tool_name>"'
-fields=timestamp,trace,span_id,span.duration,gen_ai.agent.name,warden.ai.task,gen_ai.tool.name,tool.elapsed_seconds,error.type
+fields=timestamp,trace,span_id,span.duration,gen_ai.agent.name,warden.ai.task,gen_ai.tool.name,error.type
 sort=-timestamp
 ```
 
@@ -232,7 +232,7 @@ Spans: `gen_ai.invoke_agent`, `gen_ai.chat`, `gen_ai.execute_tool`
 Attributes: `gen_ai.agent.name`, `gen_ai.conversation.id`,
 `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.usage.input_tokens`,
 `gen_ai.usage.output_tokens`, `gen_ai.usage.total_tokens`,
-`gen_ai.tool.name`, `tool.elapsed_seconds`
+`gen_ai.tool.name`
 
 ### Finding Pipeline
 
@@ -309,8 +309,6 @@ Attributes: `traceId` in JSONL, `runId`, `headSha`, `model`,
 - `gen_ai.request.messages` and `gen_ai.response.text` may contain prompt or
   model text. Use IDs, models, tokens, and status fields for triage unless the
   incident specifically requires content inspection.
-- `gen_ai.cost.total_tokens` stores SDK-reported USD cost despite the inherited
-  attribute name.
 - `traceId` in JSONL is the same production pivot as Sentry `trace_id`.
 
 ## References

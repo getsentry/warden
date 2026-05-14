@@ -371,28 +371,41 @@ export const claudeRuntime: Runtime = {
                   'gen_ai.response.model': turn.model,
                   'gen_ai.usage.input_tokens': totalInput,
                   'gen_ai.usage.output_tokens': turn.outputTokens,
-                  'gen_ai.usage.cache_read.input_tokens': turn.cacheRead,
-                  'gen_ai.usage.cache_creation.input_tokens': turn.cacheWrite,
-                  'warden.gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
-                  'warden.gen_ai.tool_use.count': turn.toolUses.length,
+                  'gen_ai.usage.input_tokens.cached': turn.cacheRead,
+                  'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
+                  'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
                 },
               },
               () => {
                 for (const toolUse of turn.toolUses) {
                   const elapsed = toolProgress.get(toolUse.id);
-                  Sentry.startSpan(
-                    {
+                  const attributes = {
+                    'gen_ai.operation.name': 'execute_tool',
+                    'gen_ai.agent.name': skillName,
+                    'gen_ai.tool.name': toolUse.name,
+                  };
+
+                  if (elapsed !== undefined) {
+                    const endTime = Date.now() / 1000;
+                    const parentSpan = Sentry.getActiveSpan();
+                    const span = Sentry.startInactiveSpan({
                       op: 'gen_ai.execute_tool',
                       name: toolUse.name,
-                      attributes: {
-                        'gen_ai.operation.name': 'execute_tool',
-                        'gen_ai.agent.name': skillName,
-                        'gen_ai.tool.name': toolUse.name,
-                        ...(elapsed !== undefined && { 'warden.gen_ai.tool.elapsed_seconds': elapsed }),
+                      ...(parentSpan && { parentSpan }),
+                      startTime: Math.max(0, endTime - elapsed),
+                      attributes,
+                    });
+                    span.end(endTime);
+                  } else {
+                    Sentry.startSpan(
+                      {
+                        op: 'gen_ai.execute_tool',
+                        name: toolUse.name,
+                        attributes,
                       },
-                    },
-                    () => { /* point-in-time span */ }
-                  );
+                      () => undefined
+                    );
+                  }
                 }
               }
             );

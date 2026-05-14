@@ -83,7 +83,6 @@ interface PiPromptResult {
   durationMs: number;
   numTurns: number;
   hitMaxTurns: boolean;
-  toolUseCount: number;
   warnings: string[];
 }
 
@@ -353,7 +352,6 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   let lastAssistant: AssistantMessage | undefined;
   let numTurns = 0;
   let hitMaxTurns = false;
-  let toolUseCount = 0;
   const startedAt = Date.now();
 
   try {
@@ -398,8 +396,6 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
           lastAssistant = event.message;
           void session?.abort();
         }
-      } else if (event.type === 'tool_execution_start') {
-        toolUseCount++;
       }
     });
 
@@ -440,7 +436,6 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     durationMs: Date.now() - startedAt,
     numTurns,
     hitMaxTurns,
-    toolUseCount,
     warnings,
   };
 }
@@ -637,7 +632,6 @@ export const piRuntime: Runtime = {
               span.setAttribute('gen_ai.provider.name', run.lastAssistant.provider);
             }
             setGenAiUsageAttrs(span, result.usage);
-            span.setAttribute('warden.gen_ai.tool_use.count', run.toolUseCount);
             if (result.responseId) {
               span.setAttribute('gen_ai.response.id', result.responseId);
             }

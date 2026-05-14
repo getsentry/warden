@@ -35,16 +35,13 @@ export function genAiProviderName(runtime: string | undefined, model: string | u
   return providerFromModel(model) ?? (runtime === 'pi' ? 'pi' : 'anthropic');
 }
 
-/** Set OpenTelemetry GenAI token usage attributes and Warden-owned totals. */
+/** Set GenAI token usage attributes expected by Sentry AI monitoring. */
 export function setGenAiUsageAttrs(span: SpanLike, usage: UsageStats): void {
   span.setAttribute('gen_ai.usage.input_tokens', usage.inputTokens);
   span.setAttribute('gen_ai.usage.output_tokens', usage.outputTokens);
-  span.setAttribute('gen_ai.usage.cache_read.input_tokens', usage.cacheReadInputTokens ?? 0);
-  span.setAttribute('gen_ai.usage.cache_creation.input_tokens', usage.cacheCreationInputTokens ?? 0);
-  span.setAttribute('warden.gen_ai.usage.total_tokens', usage.inputTokens + usage.outputTokens);
-  if (usage.costUSD) {
-    span.setAttribute('warden.gen_ai.cost.usd', usage.costUSD);
-  }
+  span.setAttribute('gen_ai.usage.input_tokens.cached', usage.cacheReadInputTokens ?? 0);
+  span.setAttribute('gen_ai.usage.input_tokens.cache_write', usage.cacheCreationInputTokens ?? 0);
+  span.setAttribute('gen_ai.usage.total_tokens', usage.inputTokens + usage.outputTokens);
 }
 
 /** Set OpenTelemetry GenAI system-instruction attributes for prompt spans. */
