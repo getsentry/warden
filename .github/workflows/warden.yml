@@ -13,7 +13,7 @@ jobs:
   review:
     runs-on: ubuntu-latest
     env:
-      WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+      WARDEN_MODEL: anthropic/claude-sonnet-4-6
       WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
       WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
       WARDEN_SENTRY_DSN: ${{ secrets.WARDEN_SENTRY_DSN }}
