@@ -1,6 +1,7 @@
 version = 1
 
 [defaults]
+runtime = "pi"
 # Fail check on high+ severity findings (critical, high)
 failOn = "high"
 # Show annotations for medium+ severity findings
