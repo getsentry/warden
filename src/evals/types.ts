@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SeveritySchema } from '../types/index.js';
-import type { SkillReport, UsageStats } from '../types/index.js';
+import type { Finding, SkillReport, UsageStats } from '../types/index.js';
 
 /** Default model for eval skill execution and judging. */
 export const DEFAULT_EVAL_MODEL = 'claude-sonnet-4-6';
@@ -11,7 +11,7 @@ export const DEFAULT_EVAL_MODEL = 'claude-sonnet-4-6';
 export const ShouldFindSchema = z.object({
   /** Natural language description of the expected finding for the LLM judge */
   finding: z.string(),
-  /** Expected severity level (hint for the judge, not a strict match) */
+  /** Expected severity level. When provided, evals require an exact normalized match. */
   severity: SeveritySchema.optional(),
   /** If true (default), eval fails when this is not found */
   required: z.boolean().default(true),
@@ -146,13 +146,26 @@ export interface EvalResult {
 /**
  * Determine if an eval passed based on judge response and eval metadata.
  */
-export function evalPassed(meta: EvalMeta, judgeResponse: JudgeResponse): boolean {
+export function evalPassed(
+  meta: EvalMeta,
+  judgeResponse: JudgeResponse,
+  findings?: Finding[]
+): boolean {
   // Check required should_find assertions are met
   for (let i = 0; i < meta.should_find.length; i++) {
     const assertion = meta.should_find[i];
     const verdict = judgeResponse.expectations[i];
     if (assertion?.required && !verdict?.met) {
       return false;
+    }
+
+    if (assertion?.required && assertion.severity && verdict?.met && findings) {
+      const matchedFinding = verdict.matchedFindingIndex === null
+        ? undefined
+        : findings[verdict.matchedFindingIndex];
+      if (matchedFinding?.severity !== assertion.severity) {
+        return false;
+      }
     }
   }
 
@@ -185,6 +198,12 @@ export function formatEvalResult(result: EvalResult): string {
     lines.push(`  [${mark}] should find: ${assertion?.finding ?? 'unknown'}${req}`);
     if (verdict?.reasoning) {
       lines.push(`    -> ${verdict.reasoning}`);
+    }
+    if (assertion?.severity && verdict?.met && verdict.matchedFindingIndex !== null) {
+      const matchedSeverity = result.report.findings[verdict.matchedFindingIndex]?.severity ?? 'missing';
+      if (matchedSeverity !== assertion.severity) {
+        lines.push(`    -> severity mismatch: expected ${assertion.severity}, got ${matchedSeverity}`);
+      }
     }
   }
 

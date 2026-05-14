@@ -51,6 +51,30 @@ describe('evalPassed', () => {
     expect(evalPassed(meta, response)).toBe(false);
   });
 
+  it('fails when a required severity does not match the matched finding', () => {
+    const meta = makeMeta({
+      should_find: [{ finding: 'public endpoint discovery breakage', severity: 'high', required: true }],
+    });
+    const response = makeJudgeResponse({
+      expectations: [{ met: true, matchedFindingIndex: 0, reasoning: 'same issue' }],
+    });
+    const findings = [{ id: 'f1', severity: 'low' as const, title: 'Robots blocks endpoint', description: 'desc' }];
+
+    expect(evalPassed(meta, response, findings)).toBe(false);
+  });
+
+  it('passes when a required severity matches the matched finding', () => {
+    const meta = makeMeta({
+      should_find: [{ finding: 'public endpoint discovery breakage', severity: 'high', required: true }],
+    });
+    const response = makeJudgeResponse({
+      expectations: [{ met: true, matchedFindingIndex: 0, reasoning: 'same issue' }],
+    });
+    const findings = [{ id: 'f1', severity: 'high' as const, title: 'Robots blocks endpoint', description: 'desc' }];
+
+    expect(evalPassed(meta, response, findings)).toBe(true);
+  });
+
   it('passes when optional should_find assertion is not met', () => {
     const meta = makeMeta({
       should_find: [

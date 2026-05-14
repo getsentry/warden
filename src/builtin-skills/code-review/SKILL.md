@@ -51,6 +51,7 @@ No proof, no finding. Suspicion is not a result.
 | Boundaries and edge cases | Empty, first, last, duplicate, pagination, sorting, timezone, locale, precision, overflow, migration, or compatibility cases produce wrong behavior. |
 | Persistence and migrations | Writes are non-atomic, migrations lose data, backfills skip rows, query filters update the wrong records, or rollback paths leave inconsistent state. |
 | API and dependency behavior | Published interfaces, CLI flags, config options, webhooks, service calls, or third-party dependency changes break documented or existing caller behavior. |
+| Public metadata and routing config | Robots rules, sitemaps, manifests, redirects, cache headers, or route config make documented public entry points unreachable, stale, or undiscoverable. |
 | UI correctness | The UI displays stale, wrong, duplicate, missing, or unsaved data because of the changed code, not because of style or preference. |
 | Build, test, and workflow breakage | Changed code, packaging, imports, exports, generated artifacts, CI, or release workflows fail deterministically or report false success. |
 
@@ -58,11 +59,12 @@ No proof, no finding. Suspicion is not a result.
 
 | Level | Use For |
 |-------|---------|
-| high | Data loss or corruption, critical-path crashes, broken production deploy or release, incorrect billing or permissions state, published interface breakage for normal callers, deadlock or hang in core flow, or false success after a failed destructive operation. |
+| high | Data loss or corruption, critical-path crashes, broken production deploy or release, incorrect billing or permissions state, published interface breakage for normal callers, public metadata/config that blocks normal discovery or reachability of shipped endpoints, deadlock or hang in core flow, or false success after a failed destructive operation. |
 | medium | Reproducible wrong results, recoverable crashes, duplicate or missed side effects, broken non-critical workflow, meaningful edge case in a shipped path, or compatibility break with a clear affected caller. |
-| low | Narrow but real bug with limited blast radius, confusing state that can cause user-visible mistakes, or a test/tooling bug that masks the intended behavior. |
+| low | Narrow but real bug with limited blast radius, confusing state that can cause user-visible mistakes, or a test/tooling bug that masks only a narrow non-shipped behavior. |
 
 - Use the lower severity when impact depends on unproven preconditions.
+- Score test and golden-file findings by the shipped behavior they authorize or hide, not by the file type. A test that locks in a high-impact production breakage is high severity.
 - Do not inflate severity for cleverness. The bug earns its level through impact.
 
 ## What Not To Report

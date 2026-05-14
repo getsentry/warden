@@ -10,7 +10,7 @@ It should catch real regressions and production defects while preferring no find
 
 In scope:
 
-- Logic, state, async, data contract, persistence, edge-case, API, UI, build, test, and workflow correctness bugs.
+- Logic, state, async, data contract, persistence, edge-case, API, public metadata/config, UI, build, test, and workflow correctness bugs.
 - Changed production code, user entry points, public APIs, shipped workflows, and tests that can mask shipped regressions.
 - General bug-finding guidance that applies across application code.
 - Focused notes for JavaScript/TypeScript, Python, and GitHub Actions workflow correctness.
@@ -89,6 +89,7 @@ Data that must not be stored:
 - Holdout examples:
   - A style-only diff with no behavior change should produce no finding.
   - A security-only diff should be routed to `security-review`, not reported by `code-review`.
+  - A test or golden fixture that locks in broken shipped behavior should be scored by the shipped behavior's blast radius, not by the file type.
   - A type-safe or schema-validated path should not be reported as a runtime bug.
 - Acceptance gates:
   - Findings require trigger, expected behavior, actual behavior, and impact.

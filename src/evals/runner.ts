@@ -161,7 +161,7 @@ export async function runEval(
     log('Running judge...');
     const judgeResult = await runJudge(meta, report.findings, options.apiKey);
 
-    const passed = evalPassed(meta, judgeResult.response);
+    const passed = evalPassed(meta, judgeResult.response, report.findings);
     log(`Result: ${passed ? 'PASS' : 'FAIL'}`);
 
     return {

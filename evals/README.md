@@ -100,7 +100,7 @@ evals/
 | `model` | No | Model override for this scenario |
 | `should_find` | Yes | What the pipeline should detect (at least one) |
 | `should_find[].finding` | Yes | Natural language description for the LLM judge |
-| `should_find[].severity` | No | Expected severity (hint, not strict) |
+| `should_find[].severity` | No | Expected severity. When provided, the matched finding must use this exact normalized severity. |
 | `should_find[].required` | No | If true (default), eval fails when not found |
 | `should_not_find` | No | Things the pipeline should NOT report (precision) |
 

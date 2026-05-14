@@ -28,7 +28,7 @@ function buildJudgePrompt(meta: EvalMeta, findings: Finding[]): string {
     : '  (no findings reported)';
 
   const shouldFindBlock = meta.should_find.map((e, i) => {
-    const sev = e.severity ? ` [expected severity: ${e.severity}]` : '';
+    const sev = e.severity ? ` [required severity: ${e.severity}]` : '';
     const req = e.required ? ' (REQUIRED)' : ' (optional)';
     return `  [${i}] ${e.finding}${sev}${req}`;
   }).join('\n');
@@ -56,8 +56,8 @@ ${shouldNotFindBlock}
 
 For each "should find" assertion, determine if ANY of the agent's findings satisfy it.
 A finding satisfies an assertion if it describes the same issue, even if worded differently.
-The severity hint is guidance, not a strict requirement: if the finding describes the
-right issue at a close severity level, it still counts as met.
+When an assertion includes a required severity, the matching finding must use that exact
+normalized severity.
 
 For each "should not find" assertion, determine if ANY of the agent's findings violate it.
 A violation means the agent reported something it should not have.
