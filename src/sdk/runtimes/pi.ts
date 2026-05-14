@@ -71,7 +71,7 @@ const PI_TOOL_NAMES: Record<Exclude<ToolName, 'WebFetch' | 'WebSearch'>, string[
 };
 
 interface PiModelSelector {
-  provider?: string;
+  provider: string;
   modelId: string;
 }
 
@@ -107,22 +107,20 @@ function errorMessage(error: unknown): string {
 
 function parseModelSelector(model: string): PiModelSelector {
   const slashIndex = model.indexOf('/');
-  if (slashIndex > 0) {
-    return {
-      provider: model.slice(0, slashIndex),
-      modelId: model.slice(slashIndex + 1),
-    };
+  if (
+    slashIndex <= 0 ||
+    slashIndex === model.length - 1 ||
+    model.indexOf('/', slashIndex + 1) !== -1
+  ) {
+    throw new Error(
+      `Pi model selector must be provider/model: ${model}. For example openai/gpt-5.5.`
+    );
   }
 
-  const colonIndex = model.indexOf(':');
-  if (colonIndex > 0) {
-    return {
-      provider: model.slice(0, colonIndex),
-      modelId: model.slice(colonIndex + 1),
-    };
-  }
-
-  return { modelId: model };
+  return {
+    provider: model.slice(0, slashIndex),
+    modelId: model.slice(slashIndex + 1),
+  };
 }
 
 function legacyApiKeyProvider(model: string | undefined): string | undefined {
@@ -131,9 +129,7 @@ function legacyApiKeyProvider(model: string | undefined): string | undefined {
   }
 
   const selector = parseModelSelector(model);
-  return selector.provider === undefined || selector.provider === 'anthropic'
-    ? 'anthropic'
-    : undefined;
+  return selector.provider === 'anthropic' ? 'anthropic' : undefined;
 }
 
 function createAuthStorage(model: string | undefined, legacyAnthropicApiKey: string | undefined): AuthStorage {
@@ -153,29 +149,14 @@ function resolvePiModel(
     return undefined;
   }
 
-  const selector = parseModelSelector(model);
-  if (selector.provider) {
-    const resolved = registry.find(selector.provider, selector.modelId);
-    if (!resolved) {
-      throw new Error(
-        `Pi model not found: ${model}. Use provider/model, for example openai/gpt-5.5.`
-      );
-    }
-    return resolved;
-  }
-
-  const matches = registry.getAll().filter((candidate) => candidate.id === selector.modelId);
-  if (matches.length === 0) {
+  const { provider, modelId } = parseModelSelector(model);
+  const resolved = registry.find(provider, modelId);
+  if (!resolved) {
     throw new Error(
-      `Pi model not found: ${model}. Use provider/model, for example anthropic/${model}.`
+      `Pi model not found: ${model}. Use provider/model, for example openai/gpt-5.5.`
     );
   }
-  if (matches.length > 1) {
-    const providers = matches.map((candidate) => `${candidate.provider}/${candidate.id}`).join(', ');
-    throw new Error(`Pi model selector is ambiguous: ${model}. Use one of: ${providers}`);
-  }
-
-  return matches[0];
+  return resolved;
 }
 
 function resolvePiSkillTools(

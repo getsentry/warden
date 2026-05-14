@@ -7,9 +7,9 @@ import type { ExistingComment } from '../../output/dedup.js';
 /**
  * Live integration tests for the fix judge.
  * These call the real Haiku API to verify end-to-end behavior.
- * Gated by WARDEN_ANTHROPIC_API_KEY environment variable.
+ * Gated by ANTHROPIC_API_KEY because this is an internal test, not Warden runtime config.
  */
-const apiKey = process.env['WARDEN_ANTHROPIC_API_KEY'] ?? process.env['ANTHROPIC_API_KEY'] ?? '';
+const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 
 describe.skipIf(!apiKey)('evaluateFix (live)', () => {
 

@@ -1,27 +1,8 @@
 /**
- * GitHub Action Entry Point
+ * GitHub Action Runner
  *
- * Thin orchestrator that routes events to the appropriate workflow handler.
- *
- * Error Handling Policy
- * =====================
- *
- * Fatal errors (setFailed - exit immediately):
- * - Missing required inputs (GitHub token, environment variables)
- * - Environment setup failures (not running in GitHub Actions)
- * - Runtime setup failures
- * - Event payload parsing failures
- * - Event context building failures
- *
- * Non-fatal errors (log warning + continue):
- * - Individual trigger execution failures (accumulate and report)
- * - GitHub check creation/update failures
- * - Review comment posting failures
- * - Stale comment resolution failures
- *
- * End-of-run failure conditions:
- * - Findings exceed severity threshold (fail-on)
- * - ALL triggers failed (no successful analysis)
+ * main.ts installs action-bundle compatibility hooks before loading this
+ * module. Workflow modules own trigger-level error handling.
  */
 
 import { Octokit } from '@octokit/rest';

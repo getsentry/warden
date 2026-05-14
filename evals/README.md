@@ -107,7 +107,7 @@ evals/
 ## Running Evals
 
 ```bash
-# Run all evals (requires WARDEN_ANTHROPIC_API_KEY)
+# Run all evals (requires ANTHROPIC_API_KEY)
 pnpm test:evals
 
 # Run evals for a specific category

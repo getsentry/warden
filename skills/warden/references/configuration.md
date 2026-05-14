@@ -58,7 +58,7 @@ actions = ["opened", "synchronize"]
 ```toml
 [[skills]]
 name = "my-skill"
-model = "claude-opus-4-5"
+model = "anthropic/claude-opus-4-5"
 maxTurns = 100
 paths = ["src/auth/**", "src/payments/**"]
 failOn = "high"

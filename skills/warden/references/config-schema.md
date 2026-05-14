@@ -40,11 +40,11 @@ model = "openai/gpt-5.5"              # Default repo-aware analysis model
 maxTurns = 50                         # Max agentic turns per hunk
 
 [defaults.auxiliary]
-model = "claude-haiku-4-5"            # Helper model for extraction and fix gates
+model = "anthropic/claude-haiku-4-5"  # Helper model for extraction and fix gates
 maxRetries = 5                        # Retries for auxiliary structured calls
 
 [defaults.synthesis]
-model = "claude-opus-4-5"             # Consolidation and generated-skill build model
+model = "anthropic/claude-opus-4-5"   # Consolidation and generated-skill build model
 
 [defaults.chunking]
 enabled = true                 # Enable hunk-based chunking
@@ -71,7 +71,7 @@ paths = ["src/**"]             # Include only matching files
 ignorePaths = ["**/*.test.ts"] # Exclude matching files
 
 # Optional overrides (inherit from defaults if not set)
-model = "claude-opus-4-5"
+model = "anthropic/claude-opus-4-5"
 maxTurns = 100
 failOn = "high"
 reportOn = "medium"

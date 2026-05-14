@@ -94,7 +94,7 @@ function allHunksFailedGuidance(runtime: SkillRunnerOptions['runtime'] | undefin
     return 'Verify Pi has credentials for the selected provider/model, or choose a configured Pi model.';
   }
 
-  return "Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.";
+  return "Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' when using the Claude runtime without an API key.";
 }
 
 /**

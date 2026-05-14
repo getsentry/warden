@@ -6,7 +6,7 @@ import { WardenAuthenticationError } from './errors.js';
  *
  * - If an API key is provided, returns immediately (direct API auth).
  * - If no API key, verifies the `claude` binary exists on PATH so the SDK
- *   can use Claude Code subscription auth. Throws WardenAuthenticationError
+ *   can use local Claude Code auth. Throws WardenAuthenticationError
  *   if the binary is missing.
  *
  * This catches the most common failure mode (binary not installed) early.

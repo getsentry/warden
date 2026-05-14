@@ -25,6 +25,7 @@ export type {
   SkillRunStatus,
 } from './types.js';
 
+/** Return the runtime adapter for model-backed execution. */
 export function getRuntime(name: RuntimeName = 'pi'): Runtime {
   const runtime = RUNTIMES[name];
   if (!runtime) {

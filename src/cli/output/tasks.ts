@@ -87,7 +87,7 @@ function summarizeRunFailure(args: {
       `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
       `This usually indicates an authentication problem. ` +
       ((runtime ?? 'pi') === 'claude'
-        ? `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' if using Claude Code subscription.`
+        ? `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' when using the Claude runtime without an API key.`
         : `Verify WARDEN_MODEL and the WARDEN-prefixed provider API key for that model are set correctly.`),
   };
 }

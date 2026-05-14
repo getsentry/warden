@@ -59,7 +59,7 @@ export function isAuthenticationErrorMessage(message: string): boolean {
 
 /** User-friendly error message for authentication failures */
 const AUTH_ERROR_GUIDANCE = `
-  claude login                             # Use Claude Code subscription
+  claude login                             # Use local Claude Code auth
   export WARDEN_ANTHROPIC_API_KEY=sk-...   # Or use API key
 
 https://console.anthropic.com/ for API keys`;

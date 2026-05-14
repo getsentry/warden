@@ -305,6 +305,17 @@ describe('piRuntime.runSkill', () => {
 
     expect(piMocks.authStorage.setRuntimeApiKey).not.toHaveBeenCalled();
   });
+
+  it('requires configured Pi models to use provider/model selectors', async () => {
+    await expect(piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'gpt-test',
+      },
+    })).rejects.toThrow('Pi model selector must be provider/model');
+
+    expect(piMocks.registry.find).not.toHaveBeenCalled();
+  });
 });
 
 describe('piRuntime structured calls', () => {

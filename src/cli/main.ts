@@ -590,7 +590,7 @@ function verifyClaudeAuthForRun(args: {
 }): boolean {
   const { apiKey, reporter, repoPath, options } = args;
   if (!apiKey) {
-    reporter.debug('No API key found. Using Claude Code subscription auth.');
+    reporter.debug('No API key found. Using Claude Code local auth.');
   }
 
   try {
@@ -883,7 +883,7 @@ export async function runSkills(
   const cwd = process.cwd();
   const startTime = Date.now();
 
-  // Get API key (optional - Claude runtime can use Claude Code subscription auth)
+  // Claude runtime can fall back to local Claude Code auth.
   const apiKey = getAnthropicApiKey();
 
   // Try to find repo root for config loading
@@ -1297,7 +1297,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     triggersToRun.map((t) => ({ name: t.name, skill: t.skill }))
   );
 
-  // Get API key (optional - Claude runtime can use Claude Code subscription auth)
+  // Claude runtime can fall back to local Claude Code auth.
   const apiKey = getAnthropicApiKey();
 
   if (needsClaudeAuth(triggersToRun) && !verifyClaudeAuthForRun({

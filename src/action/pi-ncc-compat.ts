@@ -41,6 +41,8 @@ export async function preloadPiRuntimeForActionBundle(
   unhandledRejections.prependListener('unhandledRejection', onUnhandledRejection);
   try {
     await importPiRuntime();
+    // ncc emits the synthetic missing-builtin rejections after Pi module
+    // evaluation, so drain two turns before removing the temporary listener.
     await waitForImmediate();
     await waitForImmediate();
   } finally {

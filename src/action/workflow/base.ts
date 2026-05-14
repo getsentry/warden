@@ -57,6 +57,7 @@ export function setFailed(message: string): never {
   throw new ActionFailedError(message);
 }
 
+/** Validate Claude runtime auth before invoking the Claude Code SDK. */
 export function ensureClaudeAuth(inputs: ActionInputs): void {
   if (inputs.anthropicApiKey || inputs.oauthToken) {
     return;
