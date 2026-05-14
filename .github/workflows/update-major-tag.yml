@@ -38,8 +38,8 @@ jobs:
 
           # Stage only the bundle files needed by the action
           git add -f dist/action/index.js dist/action/licenses.txt dist/action/package.json
-          # Add chunk files if ncc produced any (code-split dynamic imports)
-          git add -f dist/action/*.index.js 2>/dev/null || true
+          # Add chunk and asset files if ncc produced any
+          git add -f dist/action/*.index.js dist/action/*.wasm 2>/dev/null || true
 
           # Skip commit if bundle is already present (idempotent re-runs)
           git diff --cached --quiet || git commit -m "Build dist/action for $GITHUB_REF_NAME"

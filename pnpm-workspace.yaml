@@ -1,5 +1,2 @@
 packages:
   - packages/*
-
-patchedDependencies:
-  '@earendil-works/pi-ai@0.74.0': patches/@earendil-works__pi-ai@0.74.0.patch
