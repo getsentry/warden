@@ -382,6 +382,61 @@ describe('runPRWorkflow', () => {
       expect(semaphore).toBeInstanceOf(Semaphore);
     });
 
+    it('honors the parallel input when dispatching matched triggers', async () => {
+      let activeRuns = 0;
+      let maxActiveRuns = 0;
+      let invocationCount = 0;
+      let resolveFirstRun!: () => void;
+      let resolveFirstRunStarted!: () => void;
+      const firstRun = new Promise<void>((resolve) => {
+        resolveFirstRun = resolve;
+      });
+      const firstRunStarted = new Promise<void>((resolve) => {
+        resolveFirstRunStarted = resolve;
+      });
+
+      mockRunSkillTask.mockImplementation(async (taskOptions) => {
+        invocationCount++;
+        activeRuns++;
+        maxActiveRuns = Math.max(maxActiveRuns, activeRuns);
+        try {
+          if (invocationCount === 1) {
+            resolveFirstRunStarted();
+            await firstRun;
+          }
+          return {
+            name: taskOptions.name,
+            report: createSkillReport({ skill: taskOptions.displayName ?? taskOptions.name }),
+          };
+        } finally {
+          activeRuns--;
+        }
+      });
+
+      const workflow = runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+          parallel: 1,
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      await firstRunStarted;
+      // Let any incorrectly dispatched second trigger reach the mocked runner.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const callsBeforeFirstRunFinished = mockRunSkillTask.mock.calls.length;
+      resolveFirstRun();
+      await workflow;
+
+      expect(mockRunSkillTask).toHaveBeenCalledTimes(2);
+      expect(callsBeforeFirstRunFinished).toBe(1);
+      expect(maxActiveRuns).toBe(1);
+    });
+
     it('records trigger failure and updates check before failing', async () => {
       // When all triggers fail, the workflow should still update the check
       // before calling setFailed.

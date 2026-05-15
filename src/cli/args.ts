@@ -21,7 +21,7 @@ export const CLIOptionsSchema = z.object({
   /** Only show findings at or above this confidence in output */
   minConfidence: ConfidenceThresholdSchema.optional(),
   help: z.boolean().default(false),
-  /** Max concurrent task or skill executions (default depends on command) */
+  /** Max concurrent file analyses across running skills (default depends on command) */
   parallel: z.number().int().positive().optional(),
   /** Model to use for analysis (fallback when not set in config) */
   model: z.string().optional(),

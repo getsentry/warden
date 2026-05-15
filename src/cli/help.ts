@@ -121,7 +121,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   parallel: {
     label: '--parallel <n>',
-    description: 'Max concurrent task or skill executions',
+    description: 'Max concurrent file analyses across running skills',
   },
   failFast: {
     label: '-x, --fail-fast',

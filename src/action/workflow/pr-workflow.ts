@@ -319,15 +319,14 @@ async function executeAllTriggers(
   }
   const claudePath = usesClaudeRuntime ? await findClaudeCodeExecutable() : undefined;
 
-  // Global semaphore gates file-level work across all triggers.
-  // All triggers launch immediately; the semaphore limits concurrent file analyses.
   const semaphore = new Semaphore(concurrency);
   const abortController = new AbortController();
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController });
 
+  // Limit trigger dispatch too; the semaphore only gates work after a trigger starts.
   return runPool(
     matchedTriggers,
-    matchedTriggers.length,
+    concurrency,
     (trigger) =>
       executeTrigger(trigger, {
         octokit,

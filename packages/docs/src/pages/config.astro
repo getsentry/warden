@@ -13,6 +13,7 @@ const tocItems = [
   { href: '#filters', title: 'Filters' },
   { href: '#output', title: 'Output' },
   { href: '#defaults', title: 'Defaults' },
+  { href: '#runner', title: 'Runner' },
   { href: '#chunking', title: 'Chunking' },
   { href: '#schedule-triggers', title: 'Schedule Triggers' },
   { href: '#environment-variables', title: 'Environment Variables' },
@@ -232,6 +233,26 @@ model = "anthropic/claude-opus-4-5"`}
 
   <p><strong>Model precedence:</strong> trigger &gt; skill &gt; defaults &gt; CLI flag (<code>-m</code>) &gt; env var (<code>WARDEN_MODEL</code>). Most specific wins.</p>
   <p><strong>Synthesis fallback:</strong> <code>defaults.synthesis.model</code> falls back to <code>defaults.auxiliary.model</code> when not set.</p>
+
+  <h2 id="runner">Runner</h2>
+
+  <p>Runner settings control run-level concurrency.</p>
+
+  <dl>
+    <dt>concurrency</dt>
+    <dd>Maximum concurrent file analyses across running CLI skills. In GitHub Actions, also limits matched trigger dispatch. If unset, the CLI uses <code>4</code> and the Action uses the workflow <code>parallel</code> input.</dd>
+  </dl>
+
+  <Terminal showCopy={true}>
+    <Code
+      code={`[runner]
+concurrency = 1`}
+      lang="toml"
+      theme="vitesse-black"
+    />
+  </Terminal>
+
+  <p>For CLI runs, <code>--parallel</code> overrides <code>runner.concurrency</code>. In GitHub Actions, <code>runner.concurrency</code> overrides the workflow <code>parallel</code> input.</p>
 
   <h2 id="chunking">Chunking</h2>
 
@@ -562,7 +583,7 @@ jobs:
     <dt>fail-check</dt>
     <dd>Whether to fail the check run. Default: <code>false</code></dd>
     <dt>parallel</dt>
-    <dd>Maximum concurrent trigger executions. Default: <code>5</code></dd>
+    <dd>Maximum concurrent matched trigger executions and file analyses, unless <code>runner.concurrency</code> is set. Default: <code>5</code></dd>
   </dl>
   </DocsPageShell>
 </Base>
