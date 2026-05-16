@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
+const jsonOutputFile = process.env['VITEST_EVALS_JSON'];
+
 export default defineConfig({
   test: {
     // Only run eval suites.
@@ -7,6 +9,9 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**'],
     // Load .env, .env.local, .env.test for API keys
     setupFiles: ['./src/evals/setup.ts'],
-    reporters: [['vitest-evals/reporter', { toolDetails: false }]],
+    reporters: jsonOutputFile
+      ? [['vitest-evals/reporter', { toolDetails: false }], ['json']]
+      : [['vitest-evals/reporter', { toolDetails: false }]],
+    outputFile: jsonOutputFile,
   },
 });

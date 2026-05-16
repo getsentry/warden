@@ -6,11 +6,11 @@ import {
   normalizeMetadata,
   toJsonValue,
   type Harness,
-  type UsageSummary,
 } from 'vitest-evals/harness';
 import { runJudge } from './judge.js';
 import { runEvalSkill, type RunEvalOptions } from './runner.js';
 import { evalPassed, type EvalMeta, type JudgeResponse } from './types.js';
+import { usageToSummary } from './usage.js';
 import { FindingSchema } from '../types/index.js';
 import type { Finding, SkillReport, UsageStats } from '../types/index.js';
 
@@ -25,29 +25,6 @@ export const WardenEvalOutputSchema = z.object({
   failedExtractions: z.number().int().nonnegative().optional(),
 });
 export type WardenEvalOutput = z.infer<typeof WardenEvalOutputSchema>;
-
-function usageToSummary(report: SkillReport): UsageSummary {
-  const usage = report.usage;
-  if (!usage) {
-    return {};
-  }
-
-  return {
-    provider: report.runtime,
-    model: report.model,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    totalTokens: usage.inputTokens + usage.outputTokens,
-    estimatedCost: usage.costUSD,
-    metadata: normalizeMetadata({
-      cacheReadInputTokens: usage.cacheReadInputTokens,
-      cacheCreationInputTokens: usage.cacheCreationInputTokens,
-      cacheCreation5mInputTokens: usage.cacheCreation5mInputTokens,
-      cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
-      webSearchRequests: usage.webSearchRequests,
-    }),
-  };
-}
 
 function usageMetadata(usage: UsageStats | undefined): Record<string, unknown> | undefined {
   if (!usage) {
@@ -163,7 +140,11 @@ export function createWardenEvalHarness(options: RunEvalOptions): Harness<EvalMe
             skill: result.report.skill,
           }),
         },
-        usage: usageToSummary(result.report),
+        usage: usageToSummary({
+          provider: result.report.runtime ?? 'unknown',
+          model: result.report.model ?? 'unknown',
+          usage: result.report.usage,
+        }),
         timings: { totalMs: result.durationMs },
         artifacts: {
           logs: toJsonValue(result.logs) ?? [],

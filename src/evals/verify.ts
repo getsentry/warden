@@ -8,7 +8,6 @@ import {
   normalizeMetadata,
   toJsonValue,
   type Harness,
-  type UsageSummary,
 } from 'vitest-evals/harness';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { verifyFindings } from '../sdk/verify.js';
@@ -17,6 +16,7 @@ import { RuntimeNameSchema, type RuntimeName } from '../sdk/runtimes/types.js';
 import { discoverEvalScenarioFiles } from './index.js';
 import { setupEvalRepo } from './runner.js';
 import type { EvalMeta } from './types.js';
+import { usageToSummary } from './usage.js';
 
 const DEFAULT_VERIFICATION_RUNTIME: RuntimeName = 'pi';
 const DEFAULT_VERIFICATION_MODEL = 'anthropic/claude-sonnet-4-6';
@@ -91,7 +91,14 @@ function getEvalsDir(): string {
 
 function loadVerificationScenario(filePath: string) {
   const content = readFileSync(filePath, 'utf-8');
-  const parsed = JSON.parse(content);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid verification eval ${filePath}: ${message}`);
+  }
+
   const validated = VerificationScenarioFileSchema.safeParse(parsed);
   if (!validated.success) {
     const issues = validated.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ');
@@ -141,28 +148,6 @@ export function resolveVerificationEvalMeta(
 export function discoverVerificationEvalScenarios(options: VerificationScenarioSetOptions): VerificationEvalMeta[] {
   return discoverEvalScenarioFiles(options.category, options.baseDir)
     .map((file) => resolveVerificationEvalMeta(file, options));
-}
-
-function usageToSummary(runtime: RuntimeName, model: string, usage: UsageStats | undefined): UsageSummary {
-  if (!usage) {
-    return {};
-  }
-
-  return {
-    provider: runtime,
-    model,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    totalTokens: usage.inputTokens + usage.outputTokens,
-    estimatedCost: usage.costUSD,
-    metadata: normalizeMetadata({
-      cacheReadInputTokens: usage.cacheReadInputTokens,
-      cacheCreationInputTokens: usage.cacheCreationInputTokens,
-      cacheCreation5mInputTokens: usage.cacheCreation5mInputTokens,
-      cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
-      webSearchRequests: usage.webSearchRequests,
-    }),
-  };
 }
 
 export async function runVerificationEval(
@@ -292,7 +277,7 @@ export function createVerificationEvalHarness(options: RunVerificationEvalOption
             skillPath: meta.skillPath,
           }),
         },
-        usage: usageToSummary(runtime, model, result.usage),
+        usage: usageToSummary({ provider: runtime, model, usage: result.usage }),
         timings: { totalMs: result.durationMs },
         artifacts: {
           logs: toJsonValue(result.logs) ?? [],

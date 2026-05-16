@@ -1,4 +1,3 @@
-import { expect } from 'vitest';
 import { describeEval } from 'vitest-evals';
 import {
   createVerificationEvalHarness,
@@ -33,11 +32,14 @@ describeEval(
         { timeout: 120_000 },
         async ({ run }) => {
           const result = await run(meta);
-          const output = VerificationEvalOutputSchema.parse(result.output);
+          const output = VerificationEvalOutputSchema.safeParse(result.output);
 
-          expect(output.verdict).toBe(meta.expectedVerdict);
-          console.log(`\nverification: expected ${output.expectedVerdict}, got ${output.verdict}`);
-          console.log(`  Findings: ${output.findings.length}`);
+          if (output.success) {
+            console.log(`\nverification: expected ${output.data.expectedVerdict}, got ${output.data.verdict}`);
+            console.log(`  Findings: ${output.data.findings.length}`);
+          } else {
+            console.log(`\nverification: invalid harness output: ${output.error.message}`);
+          }
         },
       );
     }

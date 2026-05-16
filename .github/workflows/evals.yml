@@ -110,7 +110,9 @@ jobs:
           fi
 
       - name: Run evals
-        run: pnpm evals --reporter=json --outputFile=eval-results.json
+        env:
+          VITEST_EVALS_JSON: eval-results.json
+        run: pnpm evals
         continue-on-error: true
 
       - name: Create eval status check
