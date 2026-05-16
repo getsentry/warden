@@ -201,6 +201,10 @@ CI runs evals when eval files or harness code change on a PR, when changes land
 on `main`, or when a maintainer adds the `run-evals` label to a same-repository
 PR. Fork PRs do not receive eval secrets.
 
+Individual eval misses are expected while we tune the harness. CI publishes a
+JUnit eval test report for per-case failures, then gates the workflow on the
+aggregate `Evaluation Results` score. The current baseline threshold is `0.75`.
+
 ## Adding a New Eval
 
 1. Pick an existing YAML suite or scenario directory

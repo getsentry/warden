@@ -91,6 +91,7 @@ jobs:
     timeout-minutes: 90
     env:
       ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      EVAL_SCORE_BASELINE: "0.75"
     steps:
       - uses: actions/checkout@v4
 
@@ -112,8 +113,27 @@ jobs:
       - name: Run evals
         env:
           VITEST_EVALS_JSON: eval-results.json
-        run: pnpm evals
-        continue-on-error: true
+          VITEST_EVALS_JUNIT: eval-results.junit.xml
+        run: |
+          set +e
+          pnpm evals
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::notice title=Individual evals missed::pnpm evals exited with $status. The Evaluation Results baseline check determines CI pass/fail."
+          fi
+          exit 0
+
+      - name: Publish eval test report
+        uses: mikepenz/action-junit-report@cf701569b05ccdd861a76b8607a66d76f6fd4857
+        if: ${{ !cancelled() && hashFiles('eval-results.junit.xml') != '' }}
+        with:
+          report_paths: eval-results.junit.xml
+          check_name: Eval Test Results
+          comment: false
+          fail_on_failure: false
+          require_tests: true
+          include_passed: true
+          detailed_summary: true
 
       - name: Create eval status check
         uses: actions/github-script@v7
@@ -122,6 +142,11 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
+            const baseline = Number(process.env.EVAL_SCORE_BASELINE ?? '0.75');
+
+            if (!Number.isFinite(baseline) || baseline < 0 || baseline > 1) {
+              throw new Error(`Invalid EVAL_SCORE_BASELINE: ${process.env.EVAL_SCORE_BASELINE}`);
+            }
 
             const resultsPath = path.resolve(process.cwd(), 'eval-results.json');
             let vitestResults;
@@ -158,7 +183,7 @@ jobs:
             const green = scores.filter((score) => score >= 0.75).length;
             const yellow = scores.filter((score) => score >= 0.5 && score < 0.75).length;
             const red = scores.filter((score) => score < 0.5).length;
-            const conclusion = avgScore >= 0.5 ? 'success' : 'failure';
+            const conclusion = avgScore >= baseline ? 'success' : 'failure';
 
             function formatScore(score) {
               if (score >= 0.75) return `green ${score.toFixed(2)}`;
@@ -172,7 +197,7 @@ jobs:
               '',
               `- **Total Evaluations**: ${evalResults.length}`,
               `- **Average Score**: ${formatScore(avgScore)}`,
-              '- **Pass Threshold**: 0.50',
+              `- **Baseline Threshold**: ${baseline.toFixed(2)}`,
               '',
               '### Score Distribution',
               `- Green (>=0.75): ${green} evals`,
@@ -214,3 +239,7 @@ jobs:
                 text: details,
               },
             });
+
+            if (conclusion === 'failure') {
+              core.setFailed(`Eval score ${avgScore.toFixed(2)} is below baseline ${baseline.toFixed(2)}.`);
+            }
