@@ -41,12 +41,12 @@ export interface EvalSkillRunResult {
 /**
  * Set up a temporary git repository for an eval scenario.
  *
- * Creates a real git repo with an empty `main` commit (the base) and an
- * `eval` branch containing fixture files + the skill definition. This gives
+ * Creates a real git repo with a `main` commit containing the skill definition
+ * and an `eval` branch containing only fixture files. This gives
  * the agent a real git environment to explore with Read/Grep and produces
  * real git diffs for the pipeline to parse.
  */
-function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): string {
+export function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): string {
   const tmpDir = mkdtempSync(join(tmpdir(), `warden-eval-${meta.name}-`));
 
   try {
@@ -55,19 +55,11 @@ function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): string {
     git(['init', '--initial-branch=main']);
     git(['config', 'user.email', 'eval@warden.dev']);
     git(['config', 'user.name', 'Warden Eval']);
-    git(['commit', '--allow-empty', '-m', 'initial commit']);
-    git(['checkout', '-b', 'eval']);
-
-    // Copy fixture files, preserving their parent directory name
-    for (const srcPath of meta.filePaths) {
-      const destDir = join(tmpDir, basename(dirname(srcPath)));
-      mkdirSync(destDir, { recursive: true });
-      copyFileSync(srcPath, join(destDir, basename(srcPath)));
-    }
 
     // Copy skill into repo. If it lives in a directory (skill-name/SKILL.md),
     // copy the whole directory to preserve resource subdirs (scripts/, references/).
-    // For flat .md files, just copy the single file.
+    // For flat .md files, just copy the single file. Commit it on main so eval
+    // diffs contain only fixture code, not the skill used to run the eval.
     const skillSrcDir = dirname(meta.skillPath);
     const skillMarker = join(skillSrcDir, 'SKILL.md');
     const skillDestDir = join(tmpDir, '.warden', 'skills');
@@ -79,6 +71,17 @@ function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): string {
       cpSync(skillSrcDir, join(skillDestDir, skillDirName), { recursive: true });
     } else {
       copyFileSync(meta.skillPath, join(skillDestDir, basename(meta.skillPath)));
+    }
+
+    git(['add', '.']);
+    git(['commit', '-m', 'install eval skill']);
+    git(['checkout', '-b', 'eval']);
+
+    // Copy fixture files, preserving their parent directory name
+    for (const srcPath of meta.filePaths) {
+      const destDir = join(tmpDir, basename(dirname(srcPath)));
+      mkdirSync(destDir, { recursive: true });
+      copyFileSync(srcPath, join(destDir, basename(srcPath)));
     }
 
     git(['add', '.']);
