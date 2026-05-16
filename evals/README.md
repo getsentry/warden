@@ -197,6 +197,10 @@ Full-pipeline YAML evals run skills on the Claude runtime with
 `claude-sonnet-4-6` by default. Pi evals should set `runtime: pi` and a
 provider-qualified model selector.
 
+CI runs evals when eval files or harness code change on a PR, when changes land
+on `main`, or when a maintainer adds the `run-evals` label to a same-repository
+PR. Fork PRs do not receive eval secrets.
+
 ## Adding a New Eval
 
 1. Pick an existing YAML suite or scenario directory

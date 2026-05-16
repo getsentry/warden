@@ -12,6 +12,11 @@ pnpm evals -t verification
 pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
+CI runs evals for changes under `evals/`, `src/evals/`, the eval workflow, or
+the eval config. Add the `run-evals` label to a same-repository PR to force a
+run when runtime or prompt changes need benchmark coverage. Fork PRs do not get
+eval secrets.
+
 ## Eval Layers
 
 - `evals/*.yaml`: small full-pipeline suites using test skills.

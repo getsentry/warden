@@ -1,0 +1,214 @@
+name: Evals
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: read
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "evals/**"
+      - "scripts/scaffold-eval.ts"
+      - "src/evals/**"
+      - ".github/workflows/evals.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "vitest.evals.config.ts"
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  should-run:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.filter.outputs.run }}
+      reason: ${{ steps.filter.outputs.reason }}
+    steps:
+      - uses: actions/github-script@v7
+        id: filter
+        with:
+          script: |
+            const evalPaths = [
+              'evals/',
+              'scripts/scaffold-eval.ts',
+              'src/evals/',
+              '.github/workflows/evals.yml',
+              'package.json',
+              'pnpm-lock.yaml',
+              'vitest.evals.config.ts',
+            ];
+
+            function setRun(run, reason) {
+              core.setOutput('run', run ? 'true' : 'false');
+              core.setOutput('reason', reason);
+              core.info(`${run ? 'Running' : 'Skipping'} evals: ${reason}`);
+            }
+
+            if (context.eventName === 'workflow_dispatch') {
+              setRun(true, 'manual dispatch');
+              return;
+            }
+
+            if (context.eventName === 'push') {
+              setRun(true, 'eval paths changed on main');
+              return;
+            }
+
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              setRun(false, 'not a pull request');
+              return;
+            }
+
+            const labels = new Set((pr.labels ?? []).map((label) => label.name));
+            if (labels.has('run-evals') || labels.has('evals')) {
+              setRun(true, 'run-evals label present');
+              return;
+            }
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            const changedEvalPath = files.some((file) =>
+              evalPaths.some((path) => file.filename === path || file.filename.startsWith(path))
+            );
+
+            setRun(changedEvalPath, changedEvalPath ? 'eval paths changed' : 'no eval paths changed');
+
+  evals:
+    needs: should-run
+    if: >-
+      needs.should-run.outputs.run == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify eval secret
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "WARDEN_ANTHROPIC_API_KEY is required to run evals in CI" >&2
+            exit 1
+          fi
+
+      - name: Run evals
+        run: pnpm evals --reporter=json --outputFile=eval-results.json
+        continue-on-error: true
+
+      - name: Create eval status check
+        uses: actions/github-script@v7
+        if: ${{ !cancelled() }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const resultsPath = path.resolve(process.cwd(), 'eval-results.json');
+            let vitestResults;
+            try {
+              vitestResults = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
+            } catch (error) {
+              if (error.code === 'ENOENT') {
+                throw new Error(`Eval results file not found at ${resultsPath}`);
+              }
+              throw new Error(`Failed to read eval results: ${error.message}`);
+            }
+
+            const evalResults = [];
+            for (const testFile of vitestResults.testResults || []) {
+              for (const test of testFile.assertionResults || []) {
+                if (test.meta?.eval) {
+                  evalResults.push({
+                    name: test.fullName || test.title,
+                    avgScore: test.meta.eval.avgScore ?? null,
+                    scores: test.meta.eval.scores || [],
+                    passed: test.status === 'passed',
+                    duration: test.duration,
+                  });
+                }
+              }
+            }
+
+            if (evalResults.length === 0) {
+              throw new Error('No eval results were recorded.');
+            }
+
+            const scores = evalResults.map((result) => result.avgScore ?? 0);
+            const avgScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+            const green = scores.filter((score) => score >= 0.75).length;
+            const yellow = scores.filter((score) => score >= 0.5 && score < 0.75).length;
+            const red = scores.filter((score) => score < 0.5).length;
+            const conclusion = avgScore >= 0.5 ? 'success' : 'failure';
+
+            function formatScore(score) {
+              if (score >= 0.75) return `green ${score.toFixed(2)}`;
+              if (score >= 0.5) return `yellow ${score.toFixed(2)}`;
+              return `red ${score.toFixed(2)}`;
+            }
+
+            const title = `Eval Score: ${avgScore.toFixed(2)} (${green} green, ${yellow} yellow, ${red} red)`;
+            const summary = [
+              '## Overall Statistics',
+              '',
+              `- **Total Evaluations**: ${evalResults.length}`,
+              `- **Average Score**: ${formatScore(avgScore)}`,
+              '- **Pass Threshold**: 0.50',
+              '',
+              '### Score Distribution',
+              `- Green (>=0.75): ${green} evals`,
+              `- Yellow (0.50-0.74): ${yellow} evals`,
+              `- Red (<0.50): ${red} evals`,
+            ].join('\n');
+
+            const details = [
+              '## Individual Eval Scores',
+              '',
+              ...evalResults
+                .sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0))
+                .map((result) => {
+                  const score = result.avgScore ?? 0;
+                  const status = result.passed ? 'PASS' : 'FAIL';
+                  let line = `${status} **${result.name}**: ${formatScore(score)}`;
+                  const firstScore = result.scores[0];
+                  if (!result.passed || score < 0.75) {
+                    const rationale = firstScore?.metadata?.rationale;
+                    if (rationale) {
+                      line += `\n   - ${rationale}`;
+                    }
+                  }
+                  return line;
+                }),
+            ].join('\n');
+
+            const headSha = context.payload.pull_request?.head?.sha ?? context.sha;
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Evaluation Results',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion,
+              output: {
+                title,
+                summary,
+                text: details,
+              },
+            });
