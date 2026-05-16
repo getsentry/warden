@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { RuntimeNameSchema } from '../sdk/runtimes/types.js';
 import { SeveritySchema } from '../types/index.js';
-import type { Finding, SkillReport, UsageStats } from '../types/index.js';
+import type { Finding } from '../types/index.js';
 import type { RuntimeName } from '../sdk/runtimes/types.js';
 
 /** Default model for eval skill execution and judging. */
@@ -34,7 +34,6 @@ export const EvalScenarioNotesSchema = z.object({
   /** Optional copied source notes, such as a PR body. */
   body: z.string().optional(),
 }).passthrough();
-export type EvalScenarioNotes = z.infer<typeof EvalScenarioNotesSchema>;
 
 /**
  * A single eval scenario within a YAML eval file or standalone JSON file.
@@ -155,30 +154,6 @@ export const JudgeResponseSchema = z.object({
 export type JudgeResponse = z.infer<typeof JudgeResponseSchema>;
 
 /**
- * Result of running a single eval scenario.
- */
-export interface EvalResult {
-  /** Display name (e.g., "bug-detection/null-property-access") */
-  name: string;
-  /** Eval metadata */
-  meta: EvalMeta;
-  /** Whether the eval passed overall */
-  passed: boolean;
-  /** Skill report from the agent run */
-  report: SkillReport;
-  /** Judge response with per-expectation verdicts */
-  judgeResponse: JudgeResponse;
-  /** Verbose logs from the agent run */
-  logs: string[];
-  /** Total duration of the eval (agent + judge) in ms */
-  durationMs: number;
-  /** Usage from the skill run */
-  skillUsage?: UsageStats;
-  /** Usage from the judge call */
-  judgeUsage?: UsageStats;
-}
-
-/**
  * Determine if an eval passed based on judge response and eval metadata.
  */
 export function evalPassed(
@@ -212,45 +187,4 @@ export function evalPassed(
   }
 
   return true;
-}
-
-/**
- * Format an eval result for human-readable output.
- */
-export function formatEvalResult(result: EvalResult): string {
-  const status = result.passed ? 'PASS' : 'FAIL';
-  const lines: string[] = [];
-
-  lines.push(`[${status}] ${result.name}`);
-  lines.push(`  Given: ${result.meta.given}`);
-  lines.push(`  Findings: ${result.report.findings.length}`);
-
-  for (let i = 0; i < result.meta.should_find.length; i++) {
-    const assertion = result.meta.should_find[i];
-    const verdict = result.judgeResponse.expectations[i];
-    const mark = verdict?.met ? 'PASS' : 'FAIL';
-    const req = assertion?.required ? '' : ' (optional)';
-    lines.push(`  [${mark}] should find: ${assertion?.finding ?? 'unknown'}${req}`);
-    if (verdict?.reasoning) {
-      lines.push(`    -> ${verdict.reasoning}`);
-    }
-    if (assertion?.severity && verdict?.met && verdict.matchedFindingIndex !== null) {
-      const matchedSeverity = result.report.findings[verdict.matchedFindingIndex]?.severity ?? 'missing';
-      if (matchedSeverity !== assertion.severity) {
-        lines.push(`    -> severity mismatch: expected ${assertion.severity}, got ${matchedSeverity}`);
-      }
-    }
-  }
-
-  for (let i = 0; i < result.meta.should_not_find.length; i++) {
-    const assertion = result.meta.should_not_find[i];
-    const verdict = result.judgeResponse.antiExpectations[i];
-    const mark = verdict?.violated ? 'FAIL' : 'PASS';
-    lines.push(`  [${mark}] should not find: ${assertion ?? 'unknown'}`);
-    if (verdict?.reasoning) {
-      lines.push(`    -> ${verdict.reasoning}`);
-    }
-  }
-
-  return lines.join('\n');
 }

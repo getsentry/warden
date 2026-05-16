@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_EVAL_MODEL, DEFAULT_EVAL_RUNTIME, evalPassed, formatEvalResult } from './types.js';
-import type { EvalMeta, JudgeResponse, EvalResult } from './types.js';
+import { DEFAULT_EVAL_MODEL, DEFAULT_EVAL_RUNTIME, evalPassed } from './types.js';
+import type { EvalMeta, JudgeResponse } from './types.js';
 
 function makeMeta(overrides: Partial<EvalMeta> = {}): EvalMeta {
   return {
@@ -114,50 +114,5 @@ describe('evalPassed', () => {
       ],
     });
     expect(evalPassed(meta, response)).toBe(true);
-  });
-});
-
-describe('formatEvalResult', () => {
-  it('formats passing result', () => {
-    const result: EvalResult = {
-      name: 'bug-detection/null-access',
-      meta: makeMeta(),
-      passed: true,
-      report: {
-        skill: 'eval-bug-detection',
-        summary: 'Found 1 issue',
-        findings: [{ id: 'f1', severity: 'high', title: 'Null access', description: 'desc' }],
-      },
-      judgeResponse: makeJudgeResponse(),
-      logs: [],
-      durationMs: 1000,
-    };
-
-    const output = formatEvalResult(result);
-    expect(output).toContain('[PASS]');
-    expect(output).toContain('bug-detection/null-access');
-    expect(output).toContain('Given:');
-  });
-
-  it('formats failing result', () => {
-    const result: EvalResult = {
-      name: 'bug-detection/null-access',
-      meta: makeMeta(),
-      passed: false,
-      report: {
-        skill: 'eval-bug-detection',
-        summary: 'No issues found',
-        findings: [],
-      },
-      judgeResponse: makeJudgeResponse({
-        expectations: [{ met: false, matchedFindingIndex: null, reasoning: 'nothing found' }],
-      }),
-      logs: [],
-      durationMs: 1000,
-    };
-
-    const output = formatEvalResult(result);
-    expect(output).toContain('[FAIL]');
-    expect(output).toContain('nothing found');
   });
 });

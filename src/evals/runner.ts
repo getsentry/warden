@@ -5,10 +5,8 @@ import { execGitNonInteractive } from '../utils/exec.js';
 import { buildLocalEventContext } from '../cli/context.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { runSkill } from '../sdk/runner.js';
-import { runJudge } from './judge.js';
-import { evalPassed } from './types.js';
-import type { EvalMeta, EvalResult } from './types.js';
-import type { Finding, SkillReport, UsageStats } from '../types/index.js';
+import type { EvalMeta } from './types.js';
+import type { Finding, SkillReport } from '../types/index.js';
 import type { FindingProcessingEvent } from '../sdk/runner.js';
 import type { RuntimeName } from '../sdk/runtimes/types.js';
 
@@ -34,8 +32,6 @@ export interface EvalSkillRunResult {
   logs: string[];
   /** Duration of the skill run in ms */
   durationMs: number;
-  /** Usage from the skill run */
-  skillUsage?: UsageStats;
 }
 
 /**
@@ -187,43 +183,10 @@ export async function runEvalSkill(
       report,
       logs,
       durationMs: Date.now() - startTime,
-      skillUsage: report.usage,
     };
   } finally {
     if (repoDir) {
       rmSync(repoDir, { recursive: true, force: true });
     }
   }
-}
-
-/**
- * Run a single eval scenario end-to-end, including the legacy LLM judge.
- */
-export async function runEval(
-  meta: EvalMeta,
-  options: RunEvalOptions
-): Promise<EvalResult> {
-  const startTime = Date.now();
-  const result = await runEvalSkill(meta, options);
-
-  const log = (msg: string): void => {
-    result.logs.push(`[${Date.now() - startTime}ms] ${msg}`);
-    if (options.verbose) {
-      console.log(`  [eval:${result.name}] ${msg}`);
-    }
-  };
-
-  log('Running judge...');
-  const judgeResult = await runJudge(meta, result.report.findings, options.apiKey);
-
-  const passed = evalPassed(meta, judgeResult.response, result.report.findings);
-  log(`Result: ${passed ? 'PASS' : 'FAIL'}`);
-
-  return {
-    ...result,
-    passed,
-    judgeResponse: judgeResult.response,
-    durationMs: Date.now() - startTime,
-    judgeUsage: judgeResult.usage,
-  };
 }

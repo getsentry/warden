@@ -32,7 +32,6 @@ export interface ScaffoldedEval {
 }
 
 interface GitHubFileContent {
-  path: string;
   content: string;
   ref: string;
 }
@@ -166,7 +165,6 @@ async function fetchFileContent(
     }
 
     return {
-      path,
       ref,
       content: Buffer.from(data.content, 'base64').toString('utf-8'),
     };
