@@ -1,0 +1,15 @@
+{
+  "given": "Slack options-load webhook validates Slack but resolves a group by caller-controlled ID without binding it to the Slack workspace or organization",
+  "files": [
+    "fixtures/sentry-slack-options-load-unscoped-group/options_load.py"
+  ],
+  "should_find": [
+    {
+      "finding": "Slack options-load resolves Group by group_id only and returns project teams or members without verifying the group belongs to the requesting Slack integration or organization"
+    }
+  ],
+  "should_not_find": [
+    "timing-safe token comparison",
+    "regex performance"
+  ]
+}

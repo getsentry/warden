@@ -20,7 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:examples": "vitest run --config vitest.integration.config.ts",
-    "test:evals": "vitest run --config vitest.evals.config.ts",
+    "evals": "vitest run --config vitest.evals.config.ts",
     "typecheck": "tsc --noEmit",
     "update-pricing": "tsx scripts/update-pricing.ts",
     "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts",
@@ -83,9 +83,11 @@
     "lint-staged": "^16.2.7",
     "oxlint": "^1.62.0",
     "simple-git-hooks": "^2.13.1",
+    "tinyrainbow": "^3.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.6",
+    "vitest-evals": "0.9.0-beta.3"
   },
   "engines": {
     "node": ">=20.0.0"

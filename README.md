@@ -41,7 +41,7 @@ git clone git@github.com:getsentry/warden.git
 cd warden
 pnpm install && pnpm build
 pnpm test              # unit tests
-pnpm test:evals        # end-to-end evals (requires API key)
+pnpm evals             # end-to-end evals (requires API key)
 ```
 
 See [`evals/README.md`](evals/README.md) for the eval framework.

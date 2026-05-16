@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 
 /**
- * Load environment variables for integration tests.
+ * Load environment variables for evals.
  * Loads in order (later files override earlier):
  * 1. .env (base config)
  * 2. .env.local (local overrides)

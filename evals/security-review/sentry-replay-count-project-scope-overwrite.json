@@ -1,0 +1,15 @@
+{
+  "given": "replay count helper replaces request-scoped projects with projects from issue IDs resolved across the organization",
+  "files": [
+    "fixtures/sentry-replay-count-project-scope-overwrite/replay_counts.py"
+  ],
+  "should_find": [
+    {
+      "finding": "issue.id replay count path overwrites snuba_params.projects with projects from all matching organization groups, bypassing the caller's project access scope"
+    }
+  ],
+  "should_not_find": [
+    "query string parsing as the primary issue",
+    "missing pagination"
+  ]
+}

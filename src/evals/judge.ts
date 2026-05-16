@@ -154,7 +154,17 @@ export async function runJudge(
     };
   }
 
-  const parsed = JSON.parse(jsonStr);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      response: buildFallbackResponse(meta, `Judge response JSON parse failed: ${message}`),
+      usage,
+    };
+  }
+
   const validated = JudgeResponseSchema.safeParse(parsed);
 
   if (!validated.success) {

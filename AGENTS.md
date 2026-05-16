@@ -129,7 +129,7 @@ Skills define **what to look for**, not how to respond to findings:
 
 ## Evals
 
-End-to-end behavioral tests for the full pipeline. See [`evals/README.md`](evals/README.md) for the YAML spec, how to add evals, and how it all works. Run with `pnpm test:evals`.
+End-to-end evals for the full pipeline. See [`evals/README.md`](evals/README.md) for the YAML spec, how to add evals, and how it all works. Run with `pnpm evals`.
 
 ## Voice
 

@@ -1,0 +1,15 @@
+{
+  "given": "group search view visit endpoint updates private views by ID without applying the existing object permission or visibility checks",
+  "files": [
+    "fixtures/sentry-group-search-view-visit-visibility/group_search_view_visit.py"
+  ],
+  "should_find": [
+    {
+      "finding": "visit endpoint loads a GroupSearchView by organization and id only, allowing any org member to mark private views as visited and learn or mutate metadata without object permission checks"
+    }
+  ],
+  "should_not_find": [
+    "missing authentication as the primary issue",
+    "timezone usage"
+  ]
+}

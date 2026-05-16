@@ -1,9 +1,14 @@
 import { z } from 'zod';
+import { RuntimeNameSchema } from '../sdk/runtimes/types.js';
 import { SeveritySchema } from '../types/index.js';
 import type { Finding, SkillReport, UsageStats } from '../types/index.js';
+import type { RuntimeName } from '../sdk/runtimes/types.js';
 
 /** Default model for eval skill execution and judging. */
 export const DEFAULT_EVAL_MODEL = 'claude-sonnet-4-6';
+
+/** Default runtime for eval skill execution. */
+export const DEFAULT_EVAL_RUNTIME: RuntimeName = 'claude';
 
 /**
  * A "should find" assertion in BDD style.
@@ -19,7 +24,7 @@ export const ShouldFindSchema = z.object({
 export type ShouldFind = z.infer<typeof ShouldFindSchema>;
 
 /**
- * A single eval scenario within a YAML eval file.
+ * A single eval scenario within a YAML eval file or standalone JSON file.
  */
 export const EvalScenarioSchema = z.object({
   /** Scenario name (e.g., "null-property-access") */
@@ -30,12 +35,23 @@ export const EvalScenarioSchema = z.object({
   files: z.array(z.string()).min(1),
   /** Model override for this specific scenario */
   model: z.string().optional(),
+  /** Runtime override for this specific scenario */
+  runtime: RuntimeNameSchema.optional(),
   /** What Warden should find (BDD "then") */
   should_find: z.array(ShouldFindSchema).min(1),
   /** What Warden should NOT report (precision assertions) */
   should_not_find: z.array(z.string()).default([]),
 });
 export type EvalScenario = z.infer<typeof EvalScenarioSchema>;
+
+/**
+ * A standalone eval scenario file. The scenario name defaults to the file
+ * basename so adding cases does not require repeating it in JSON.
+ */
+export const EvalScenarioFileSchema = EvalScenarioSchema.extend({
+  name: z.string().optional(),
+});
+export type EvalScenarioFile = z.infer<typeof EvalScenarioFileSchema>;
 
 /**
  * Root schema for a YAML eval file. Each file defines a category of evals
@@ -54,6 +70,8 @@ export type EvalScenario = z.infer<typeof EvalScenarioSchema>;
 export const EvalFileSchema = z.object({
   /** Skill to run, relative to evals/ directory */
   skill: z.string(),
+  /** Default runtime for all evals in this file */
+  runtime: RuntimeNameSchema.default(DEFAULT_EVAL_RUNTIME),
   /** Default model for all evals in this file */
   model: z.string().default(DEFAULT_EVAL_MODEL),
   /** List of eval scenarios */
@@ -78,6 +96,8 @@ export interface EvalMeta {
   filePaths: string[];
   /** Model to use for skill execution */
   model: string;
+  /** Runtime to use for skill execution */
+  runtime: RuntimeName;
   /** What Warden should find */
   should_find: ShouldFind[];
   /** What Warden should NOT report */

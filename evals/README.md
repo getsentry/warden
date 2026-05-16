@@ -20,15 +20,16 @@ test vehicles to exercise the pipeline.
 The only thing mocked is the GitHub event payload. Everything else runs for
 real.
 
-## YAML Format
+## Eval Formats
 
-Evals are defined in YAML files at the top level of `evals/`. Each file
+Small suites can use YAML files at the top level of `evals/`. Each file
 describes a category of behaviors with a shared test skill and a list of
-scenarios. No custom code per eval. Adding a new eval means adding an entry
-to a YAML file and a fixture file.
+scenarios.
 
 ```yaml
 skill: skills/bug-detection.md
+runtime: claude
+model: claude-sonnet-4-6
 
 evals:
   - name: null-property-access
@@ -49,6 +50,28 @@ This reads as:
 > null checking, Warden **should find** a null access bug and **should not
 > find** style issues.
 
+Larger suites should use one JSON file per scenario. The `.eval.ts` file owns
+the shared skill/runtime/model defaults, and each JSON file only describes one
+case.
+
+```json
+{
+  "given": "replay detail endpoint grants DELETE to project:read",
+  "files": [
+    "fixtures/sentry-replay-delete-read-scope/project_replay_details.py"
+  ],
+  "should_find": [
+    {
+      "finding": "DELETE accepts project:read scope, so read-only project users can permanently delete replay data"
+    }
+  ],
+  "should_not_find": [
+    "missing UUID validation",
+    "missing feature flag check"
+  ]
+}
+```
+
 ## Eval Structure
 
 ```
@@ -57,6 +80,8 @@ evals/
 ├── bug-detection.yaml          # Category: finding logic bugs
 ├── security-scanning.yaml      # Category: finding security vulnerabilities
 ├── precision.yaml              # Category: avoiding false positives
+├── security-review/            # One scenario per JSON file
+│   └── sentry-replay-delete-read-scope.json
 ├── skills/                     # Test skills (vehicles for exercising pipeline)
 │   ├── bug-detection.md
 │   ├── security-scanning.md
@@ -87,7 +112,8 @@ evals/
 | Field | Required | Description |
 |-------|----------|-------------|
 | `skill` | Yes | Path to test skill, relative to `evals/` |
-| `model` | No | Default model for all evals (default: `claude-sonnet-4-6`) |
+| `runtime` | No | Default runtime for all evals: `claude` or `pi` (default: `claude`) |
+| `model` | No | Default model for all evals (default: `claude-sonnet-4-6`; Pi models must use provider/model format, e.g. `anthropic/claude-sonnet-4-6`) |
 | `evals` | Yes | List of eval scenarios (at least one) |
 
 ### Per-eval fields
@@ -98,36 +124,47 @@ evals/
 | `given` | Yes | What code/situation the eval sets up (BDD "given") |
 | `files` | Yes | Fixture files, relative to `evals/` |
 | `model` | No | Model override for this scenario |
+| `runtime` | No | Runtime override for this scenario |
 | `should_find` | Yes | What the pipeline should detect (at least one) |
 | `should_find[].finding` | Yes | Natural language description for the LLM judge |
 | `should_find[].severity` | No | Expected severity. When provided, the matched finding must use this exact normalized severity. |
 | `should_find[].required` | No | If true (default), eval fails when not found |
 | `should_not_find` | No | Things the pipeline should NOT report (precision) |
 
+Standalone JSON scenario files may omit `name`; it defaults to the JSON
+filename without `.json`.
+
 ## Running Evals
 
 ```bash
 # Run all evals (requires ANTHROPIC_API_KEY)
-pnpm test:evals
+pnpm evals
 
 # Run evals for a specific category
-pnpm test:evals -- --grep "bug-detection"
+pnpm evals -t "bug-detection"
 
 # Run a single eval
-pnpm test:evals -- --grep "null-property-access"
+pnpm evals -t "null-property-access"
+
+# Run the security-review evals
+pnpm evals -t "security-review"
 ```
 
-Evals make real API calls. They run skills on `claude-sonnet-4-6` by
-default.
+Evals make real API calls. They run skills on the Claude runtime with
+`claude-sonnet-4-6` by default. Pi evals should set `runtime: pi` and a
+provider-qualified model selector.
 
 ## Adding a New Eval
 
-1. Pick an existing YAML file or create a new `evals/<category>.yaml`
-2. Add a scenario entry under the `evals:` key
-3. Create a fixture file under `evals/fixtures/<scenario>/`
-4. Run `pnpm test:evals` to verify
+1. Pick an existing YAML suite or scenario directory
+2. Add a YAML scenario entry or create `evals/<category>/<scenario>.json`
+3. Create fixture files under `evals/fixtures/<scenario>/`
+4. Run `pnpm evals` to verify
 
 If a new category needs a different test skill, add it to `evals/skills/`.
+To exercise a built-in directory-format skill, point `skill` at its `SKILL.md`
+relative to `evals/`, for example
+`../src/builtin-skills/security-review/SKILL.md`.
 
 ### Guidelines
 
@@ -138,12 +175,12 @@ If a new category needs a different test skill, add it to `evals/skills/`.
 - **Include `should_not_find`.** If the code has issues the skill should ignore,
   call them out.
 - **Keep fixtures small.** 20-80 lines. The agent analyzes hunks, not novels.
-- **No custom code.** Every eval is just YAML + fixture files.
+- **No custom code per case.** Every eval case is JSON or YAML + fixture files.
 
 ## How It Works
 
-1. **Discovery**: Scan `evals/` for `.yaml` files
-2. **Loading**: Parse YAML, validate with Zod, resolve paths
+1. **Discovery**: Scan `evals/` for YAML suites and JSON scenario directories
+2. **Loading**: Parse YAML/JSON, validate with Zod, resolve paths
 3. **Git repo**: Create a temp repo with fixture files committed on an `eval`
    branch (empty `main` as base), so the agent has a real repo to explore
 4. **Context**: Build `EventContext` from real `git diff main...eval`

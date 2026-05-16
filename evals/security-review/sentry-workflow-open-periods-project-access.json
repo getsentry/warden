@@ -1,0 +1,15 @@
+{
+  "given": "workflow open-period endpoint resolves detectorId or groupId by organization only and returns issue activity without project permission checks",
+  "files": [
+    "fixtures/sentry-workflow-open-periods-project-access/organization_open_periods.py"
+  ],
+  "should_find": [
+    {
+      "finding": "open-period lookup accepts detectorId or groupId from any project in the organization and returns group activity without checking the caller's project access"
+    }
+  ],
+  "should_not_find": [
+    "date parsing",
+    "missing detectorId format validation"
+  ]
+}

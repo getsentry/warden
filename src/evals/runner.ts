@@ -8,16 +8,34 @@ import { runSkill } from '../sdk/runner.js';
 import { runJudge } from './judge.js';
 import { evalPassed } from './types.js';
 import type { EvalMeta, EvalResult } from './types.js';
-import type { Finding } from '../types/index.js';
+import type { Finding, SkillReport, UsageStats } from '../types/index.js';
 import type { FindingProcessingEvent } from '../sdk/runner.js';
+import type { RuntimeName } from '../sdk/runtimes/types.js';
 
 export interface RunEvalOptions {
   /** Anthropic API key */
   apiKey: string;
   /** Override the model from the YAML spec */
   model?: string;
+  /** Override the runtime from the YAML spec */
+  runtime?: RuntimeName;
   /** Enable verbose logging */
   verbose?: boolean;
+}
+
+export interface EvalSkillRunResult {
+  /** Display name (e.g. "bug-detection/null-property-access") */
+  name: string;
+  /** Eval metadata */
+  meta: EvalMeta;
+  /** Skill report from the agent run */
+  report: SkillReport;
+  /** Verbose logs from the agent run */
+  logs: string[];
+  /** Duration of the skill run in ms */
+  durationMs: number;
+  /** Usage from the skill run */
+  skillUsage?: UsageStats;
 }
 
 /**
@@ -87,16 +105,16 @@ function formatFindingProcessingEvent(event: FindingProcessingEvent): string {
 }
 
 /**
- * Run a single eval scenario end-to-end.
+ * Run a single eval scenario through Warden's skill pipeline.
  *
  * The only thing mocked is the GitHub event payload (no real PR).
  * Everything else runs for real: git repo, diff parsing, SDK invocation,
- * agent with Read/Grep tools, finding extraction, LLM judge.
+ * agent with Read/Grep tools, and finding extraction.
  */
-export async function runEval(
+export async function runEvalSkill(
   meta: EvalMeta,
   options: RunEvalOptions
-): Promise<EvalResult> {
+): Promise<EvalSkillRunResult> {
   const startTime = Date.now();
   const name = `${meta.category}/${meta.name}`;
   const logs: string[] = [];
@@ -136,11 +154,13 @@ export async function runEval(
     log(`Skill resolved: ${skill.name}`);
 
     const model = options.model ?? meta.model;
-    log(`Running skill with model: ${model}`);
+    const runtime = options.runtime ?? meta.runtime;
+    log(`Running skill with model: ${model} [${runtime}]`);
 
     const report = await runSkill(skill, context, {
       apiKey: options.apiKey,
       model,
+      runtime,
       verbose: options.verbose,
       parallel: false,
       callbacks: options.verbose
@@ -158,26 +178,49 @@ export async function runEval(
       log(`  [${finding.severity}] ${finding.title}${loc}`);
     }
 
-    log('Running judge...');
-    const judgeResult = await runJudge(meta, report.findings, options.apiKey);
-
-    const passed = evalPassed(meta, judgeResult.response, report.findings);
-    log(`Result: ${passed ? 'PASS' : 'FAIL'}`);
-
     return {
       name,
       meta,
-      passed,
       report,
-      judgeResponse: judgeResult.response,
       logs,
       durationMs: Date.now() - startTime,
       skillUsage: report.usage,
-      judgeUsage: judgeResult.usage,
     };
   } finally {
     if (repoDir) {
       rmSync(repoDir, { recursive: true, force: true });
     }
   }
+}
+
+/**
+ * Run a single eval scenario end-to-end, including the legacy LLM judge.
+ */
+export async function runEval(
+  meta: EvalMeta,
+  options: RunEvalOptions
+): Promise<EvalResult> {
+  const startTime = Date.now();
+  const result = await runEvalSkill(meta, options);
+
+  const log = (msg: string): void => {
+    result.logs.push(`[${Date.now() - startTime}ms] ${msg}`);
+    if (options.verbose) {
+      console.log(`  [eval:${result.name}] ${msg}`);
+    }
+  };
+
+  log('Running judge...');
+  const judgeResult = await runJudge(meta, result.report.findings, options.apiKey);
+
+  const passed = evalPassed(meta, judgeResult.response, result.report.findings);
+  log(`Result: ${passed ? 'PASS' : 'FAIL'}`);
+
+  return {
+    ...result,
+    passed,
+    judgeResponse: judgeResult.response,
+    durationMs: Date.now() - startTime,
+    judgeUsage: judgeResult.usage,
+  };
 }
