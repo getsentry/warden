@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
+import {
+  buildClaudeHunkSystemPrompt,
+  buildPiHunkSystemPrompt,
+} from './prompts/index.js';
 import type { SkillDefinition } from '../config/schema.js';
 import type { HunkWithContext } from '../diff/index.js';
 
@@ -41,6 +45,18 @@ describe('buildHunkSystemPrompt', () => {
   it('includes skill prompt in instructions', () => {
     const result = buildHunkSystemPrompt(skill);
     expect(result).toContain('Check for issues.');
+  });
+
+  it('uses the Claude prompt for the Claude runtime', () => {
+    expect(buildHunkSystemPrompt(skill, 'claude')).toBe(buildClaudeHunkSystemPrompt(skill));
+  });
+
+  it('uses the Pi prompt for the Pi runtime', () => {
+    expect(buildHunkSystemPrompt(skill, 'pi')).toBe(buildPiHunkSystemPrompt(skill));
+  });
+
+  it('starts with identical Claude and Pi prompts before runtime-specific tuning', () => {
+    expect(buildPiHunkSystemPrompt(skill)).toBe(buildClaudeHunkSystemPrompt(skill));
   });
 });
 

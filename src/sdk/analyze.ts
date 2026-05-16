@@ -198,7 +198,8 @@ async function analyzeHunk(
     async (span) => {
       const { abortController, retry } = options;
 
-      const systemPrompt = buildHunkSystemPrompt(skill);
+      const runtimeName = options.runtime ?? 'pi';
+      const systemPrompt = buildHunkSystemPrompt(skill, runtimeName);
       const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
 
       // Report prompt size information
@@ -246,7 +247,6 @@ async function analyzeHunk(
         }
 
         try {
-          const runtimeName = options.runtime ?? 'pi';
           const runtime = getRuntime(runtimeName);
           const { result: resultMessage, authError } = await runtime.runSkill({
             apiKey: options.apiKey,
