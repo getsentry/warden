@@ -8,6 +8,6 @@
     "src/**/*.eval.ts",
     "src/**/*.integration.test.ts",
     "src/**/*.integration.test.tsx",
-    "src/evals/harness.ts"
+    "src/evals/**"
   ]
 }
