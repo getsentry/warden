@@ -55,8 +55,11 @@ describe('buildHunkSystemPrompt', () => {
     expect(buildHunkSystemPrompt(skill, 'pi')).toBe(buildPiHunkSystemPrompt(skill));
   });
 
-  it('starts with identical Claude and Pi prompts before runtime-specific tuning', () => {
-    expect(buildPiHunkSystemPrompt(skill)).toBe(buildClaudeHunkSystemPrompt(skill));
+  it('allows Pi to carry generic runtime-specific analysis guidance', () => {
+    const piPrompt = buildPiHunkSystemPrompt(skill);
+    expect(piPrompt).toContain('<analysis_workflow>');
+    expect(piPrompt).toContain('Interpret the skill contract first');
+    expect(buildClaudeHunkSystemPrompt(skill)).not.toContain('<analysis_workflow>');
   });
 });
 

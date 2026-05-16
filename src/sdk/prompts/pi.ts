@@ -21,6 +21,15 @@ Before reporting a finding:
 5. Document your verification in the 'verification' field of each finding
 </verification>`,
 
+    `<analysis_workflow>
+Use this process for every hunk:
+1. Interpret the skill contract first: what it asks you to report, what it excludes, what evidence it requires, and how severity should be assigned.
+2. Map the changed lines to concrete behavior: entry points, inputs, state changes, outputs, side effects, and error paths affected by the hunk.
+3. For each plausible lead, read the smallest useful set of surrounding code needed to prove or disprove it: called helpers, guards, wrappers, type definitions, base classes, sibling patterns, and tests when they clarify intended behavior.
+4. Keep a candidate finding only when it matches the skill criteria, is caused or exposed by the changed hunk, has a concrete user-visible or system-visible impact, and is not mitigated by the effective code path.
+5. Return an empty findings array when no candidate survives those checks.
+</analysis_workflow>`,
+
     `<skill_instructions>
 The following defines the ONLY criteria you should evaluate. Do not report findings outside this scope:
 
