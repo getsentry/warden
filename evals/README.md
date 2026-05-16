@@ -192,9 +192,10 @@ pnpm evals -t "verification"
 pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
-Evals make real API calls. Full-pipeline YAML evals run skills on the Claude
-runtime with `claude-sonnet-4-6` by default. Pi evals should set `runtime: pi`
-and a provider-qualified model selector.
+Evals make real API calls and are skipped when `ANTHROPIC_API_KEY` is not set.
+Full-pipeline YAML evals run skills on the Claude runtime with
+`claude-sonnet-4-6` by default. Pi evals should set `runtime: pi` and a
+provider-qualified model selector.
 
 ## Adding a New Eval
 

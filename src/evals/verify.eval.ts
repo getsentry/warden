@@ -1,12 +1,13 @@
-import { beforeAll, expect } from 'vitest';
+import { expect } from 'vitest';
 import { describeEval } from 'vitest-evals';
 import {
   createVerificationEvalHarness,
+  createVerificationEvalJudge,
   discoverVerificationEvalScenarios,
   VerificationEvalOutputSchema,
 } from './verify.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'];
+const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 const evals = discoverVerificationEvalScenarios({
   category: 'verification',
   skill: '../src/builtin-skills/security-review/SKILL.md',
@@ -18,18 +19,14 @@ describeEval(
   'verification',
   {
     harness: createVerificationEvalHarness({
-      apiKey: apiKey ?? '',
+      apiKey,
       verbose: true,
     }),
-    judgeThreshold: null,
+    judges: [createVerificationEvalJudge()],
+    judgeThreshold: 1,
+    skipIf: () => !apiKey,
   },
   (it) => {
-    beforeAll(() => {
-      if (!apiKey) {
-        throw new Error('ANTHROPIC_API_KEY required for evals');
-      }
-    });
-
     for (const meta of evals) {
       it(
         `${meta.name}: ${meta.given}`,

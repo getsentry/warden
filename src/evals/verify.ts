@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
+import { namedJudge } from 'vitest-evals';
+import type { JudgeContext } from 'vitest-evals';
 import {
   normalizeContent,
   normalizeMetadata,
@@ -299,4 +301,33 @@ export function createVerificationEvalHarness(options: RunVerificationEvalOption
       };
     },
   };
+}
+
+/** Creates the deterministic judge for verifier-only eval verdicts. */
+export function createVerificationEvalJudge() {
+  return namedJudge<JudgeContext<VerificationEvalMeta>>('WardenVerificationEvalJudge', async ({ inputValue, run }) => {
+    const output = VerificationEvalOutputSchema.safeParse(run.output);
+    if (!output.success) {
+      return {
+        score: 0,
+        metadata: {
+          rationale: `Invalid Warden verification output: ${output.error.message}`,
+        },
+      };
+    }
+
+    const passed = output.data.verdict === inputValue.expectedVerdict;
+
+    return {
+      score: passed ? 1 : 0,
+      metadata: {
+        rationale: passed
+          ? 'Verifier verdict matched expected result.'
+          : `Expected ${inputValue.expectedVerdict}, got ${output.data.verdict}.`,
+        expectedVerdict: inputValue.expectedVerdict,
+        verdict: output.data.verdict,
+        findings: output.data.findings.length,
+      },
+    };
+  });
 }

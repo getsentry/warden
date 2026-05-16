@@ -62,3 +62,7 @@ Use full-pipeline evals to classify misses:
 
 Do not optimize by testing prompt text. Change behavior, then rerun the same
 eval slice.
+
+Eval suites use `skipIf` when `ANTHROPIC_API_KEY` is missing. Full-pipeline
+evals should always register the Warden judge, and verifier-only evals should
+always register the verifier verdict judge.

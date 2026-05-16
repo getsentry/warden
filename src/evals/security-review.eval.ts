@@ -1,4 +1,4 @@
-import { beforeAll, expect } from 'vitest';
+import { expect } from 'vitest';
 import { describeEval } from 'vitest-evals';
 import {
   createWardenEvalHarness,
@@ -7,7 +7,7 @@ import {
 } from './harness.js';
 import { discoverEvalScenarios } from './index.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'];
+const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 const evals = discoverEvalScenarios({
   category: 'security-review',
   skill: '../src/builtin-skills/security-review/SKILL.md',
@@ -19,19 +19,14 @@ describeEval(
   'security-review',
   {
     harness: createWardenEvalHarness({
-      apiKey: apiKey ?? '',
+      apiKey,
       verbose: true,
     }),
-    judges: apiKey ? [createWardenEvalJudge(apiKey)] : [],
+    judges: [createWardenEvalJudge(apiKey)],
     judgeThreshold: 1,
+    skipIf: () => !apiKey,
   },
   (it) => {
-    beforeAll(() => {
-      if (!apiKey) {
-        throw new Error('ANTHROPIC_API_KEY required for evals');
-      }
-    });
-
     for (const meta of evals) {
       it(
         `${meta.name}: ${meta.given}`,
