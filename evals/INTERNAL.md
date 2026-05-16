@@ -19,9 +19,9 @@ eval secrets.
 
 The raw Vitest eval command can exit non-zero when individual evals miss. CI
 still records the JSON and JUnit reports, publishes the individual misses as
-test results, and gates the workflow on the aggregate `Evaluation Results`
-baseline. The baseline is `0.75`, below the current `0.82` score but high enough
-to catch broad regressions.
+JUnit annotations and job-summary details, and gates the workflow on the
+aggregate `Evaluation Results` baseline. The baseline is `0.75`, below the
+current `0.82` score but high enough to catch broad regressions.
 
 ## Eval Layers
 
