@@ -11,7 +11,7 @@ const apiKey = process.env['ANTHROPIC_API_KEY'];
 const evals = discoverEvals();
 
 describeEval(
-  'evals',
+  'e2e',
   {
     harness: createWardenEvalHarness({
       apiKey: apiKey ?? '',

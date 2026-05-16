@@ -18,7 +18,9 @@ pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 - `evals/security-review/*.json`: one full-pipeline security-review scenario per file.
 - `evals/verification/*.json`: one candidate finding sent directly to `verifyFindings`.
 - `evals/fixtures/*`: checked-in fixture source code. Eval runs copy these files into temporary git repos under the OS temp directory.
-- `src/evals/*.eval.ts`: Vitest entrypoints that choose shared skill, runtime, and model defaults.
+- `src/evals/e2e.eval.ts`: generic YAML full-pipeline suites.
+- `src/evals/security-review.eval.ts`: security-review benchmark scenarios.
+- `src/evals/verify.eval.ts`: verifier-only scenarios.
 
 ## Adding Full-Pipeline Evals
 

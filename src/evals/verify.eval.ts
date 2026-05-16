@@ -4,7 +4,7 @@ import {
   createVerificationEvalHarness,
   discoverVerificationEvalScenarios,
   VerificationEvalOutputSchema,
-} from './verification.js';
+} from './verify.js';
 
 const apiKey = process.env['ANTHROPIC_API_KEY'];
 const evals = discoverVerificationEvalScenarios({

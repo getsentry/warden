@@ -109,6 +109,12 @@ evals/
         └── utils.ts
 ```
 
+The Vitest entrypoints are intentionally split by eval layer:
+
+- `src/evals/e2e.eval.ts`: generic YAML full-pipeline suites.
+- `src/evals/security-review.eval.ts`: security-review benchmark scenarios.
+- `src/evals/verify.eval.ts`: verifier-only scenarios from `evals/verification/`.
+
 ## YAML Schema
 
 ### File-level fields
