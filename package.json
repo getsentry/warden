@@ -21,6 +21,7 @@
     "test:watch": "vitest",
     "test:examples": "vitest run --config vitest.integration.config.ts",
     "evals": "vitest run --config vitest.evals.config.ts",
+    "evals:scaffold": "tsx scripts/scaffold-eval.ts",
     "typecheck": "tsc --noEmit",
     "update-pricing": "tsx scripts/update-pricing.ts",
     "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts",

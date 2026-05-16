@@ -1,0 +1,21 @@
+{
+  "given": "verifier keeps an open-periods authorization finding when detectorId or groupId is org-scoped but project access is never checked",
+  "files": [
+    "fixtures/sentry-workflow-open-periods-project-access/organization_open_periods.py"
+  ],
+  "candidate": {
+    "id": "verification-workflow-open-periods",
+    "severity": "medium",
+    "confidence": "medium",
+    "title": "Open-periods endpoint lacks project access checks",
+    "description": "The endpoint resolves detectorId or groupId by organization only and returns group open-period activity without checking whether the caller can access the target project.",
+    "verification": "Source: request query parameters detectorId and groupId. Sink: Response returns open period IDs for the resolved group. Boundary: helper methods validate organization_id but never call a request access check for detector.project or group.project.",
+    "location": {
+      "path": "sentry-workflow-open-periods-project-access/organization_open_periods.py",
+      "startLine": 21
+    }
+  },
+  "expect": {
+    "verdict": "keep"
+  }
+}

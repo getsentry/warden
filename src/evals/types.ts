@@ -24,6 +24,19 @@ export const ShouldFindSchema = z.object({
 export type ShouldFind = z.infer<typeof ShouldFindSchema>;
 
 /**
+ * Maintainer-only provenance for standalone evals. Runners ignore this field.
+ */
+export const EvalScenarioNotesSchema = z.object({
+  /** Original PR, issue, benchmark, or other source URL. */
+  source: z.string().optional(),
+  /** Which source side was captured when scaffolded from a PR. */
+  side: z.string().optional(),
+  /** Optional copied source notes, such as a PR body. */
+  body: z.string().optional(),
+}).passthrough();
+export type EvalScenarioNotes = z.infer<typeof EvalScenarioNotesSchema>;
+
+/**
  * A single eval scenario within a YAML eval file or standalone JSON file.
  */
 export const EvalScenarioSchema = z.object({
@@ -41,6 +54,8 @@ export const EvalScenarioSchema = z.object({
   should_find: z.array(ShouldFindSchema).min(1),
   /** What Warden should NOT report (precision assertions) */
   should_not_find: z.array(z.string()).default([]),
+  /** Optional maintainer-only provenance, ignored by eval execution */
+  notes: EvalScenarioNotesSchema.optional(),
 });
 export type EvalScenario = z.infer<typeof EvalScenarioSchema>;
 

@@ -1,8 +1,8 @@
 # Warden Evals
 
-End-to-end behavioral evaluations for the Warden pipeline. These evals verify
-that Warden correctly runs skills, invokes the agent, extracts findings, and
-produces the expected behavioral outcomes on known code.
+Behavioral evaluations for the Warden pipeline. These evals verify that Warden
+correctly runs skills, invokes the agent, extracts findings, verifies
+candidates, and produces the expected outcomes on known code.
 
 ## Philosophy
 
@@ -10,12 +10,14 @@ Evals are not unit tests or A/B comparisons. They answer one question:
 
 > **Does the Warden pipeline behave correctly when given known inputs?**
 
-Each eval provides code with a known issue, runs the full Warden agent pipeline
-(skill loading, prompt construction, SDK invocation, finding extraction), and
-uses an LLM judge to verify the output matches behavioral expectations.
+Full-pipeline evals provide code with a known issue, run the Warden agent
+pipeline (skill loading, prompt construction, SDK invocation, finding
+extraction), and use an LLM judge to verify the output matches behavioral
+expectations.
 
 Evals test **Warden's behavior**, not individual skills. Skills are used as
-test vehicles to exercise the pipeline.
+test vehicles to exercise the pipeline. Verifier-only evals isolate Warden's
+post-processing decision for one candidate finding.
 
 The only thing mocked is the GitHub event payload. Everything else runs for
 real.
@@ -82,11 +84,13 @@ evals/
 ├── precision.yaml              # Category: avoiding false positives
 ├── security-review/            # One scenario per JSON file
 │   └── sentry-replay-delete-read-scope.json
+├── verification/               # Candidate findings for verifier-only evals
+│   └── workflow-open-periods-project-access-keep.json
 ├── skills/                     # Test skills (vehicles for exercising pipeline)
 │   ├── bug-detection.md
 │   ├── security-scanning.md
 │   └── precision.md
-└── fixtures/                   # Source code with known issues
+└── fixtures/                   # Checked-in source code with known issues
     ├── null-property-access/
     │   └── handler.ts
     ├── off-by-one/
@@ -130,9 +134,35 @@ evals/
 | `should_find[].severity` | No | Expected severity. When provided, the matched finding must use this exact normalized severity. |
 | `should_find[].required` | No | If true (default), eval fails when not found |
 | `should_not_find` | No | Things the pipeline should NOT report (precision) |
+| `notes` | No | Maintainer-only provenance, ignored by eval execution |
 
 Standalone JSON scenario files may omit `name`; it defaults to the JSON
 filename without `.json`.
+
+## Verification Evals
+
+Verifier-only evals live in `evals/verification/`. They feed one candidate
+finding directly into Warden's verification pass and assert whether it should be
+kept or rejected. Use them when a full pipeline eval finds the right issue and a
+later verification pass drops it, or when the verifier must reject a known false
+positive.
+
+```json
+{
+  "given": "verifier keeps a concrete authorization finding",
+  "files": ["fixtures/example/handler.py"],
+  "candidate": {
+    "id": "verification-example",
+    "severity": "medium",
+    "confidence": "medium",
+    "title": "Project access is not checked",
+    "description": "The endpoint returns project data after only an organization check.",
+    "verification": "Source, boundary, sink, and absence of mitigation.",
+    "location": {"path": "example/handler.py", "startLine": 10}
+  },
+  "expect": {"verdict": "keep"}
+}
+```
 
 ## Running Evals
 
@@ -148,23 +178,46 @@ pnpm evals -t "null-property-access"
 
 # Run the security-review evals
 pnpm evals -t "security-review"
+
+# Run verifier-only evals
+pnpm evals -t "verification"
+
+# Scaffold a security-review eval from the vulnerable side of a GitHub PR
+pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
-Evals make real API calls. They run skills on the Claude runtime with
-`claude-sonnet-4-6` by default. Pi evals should set `runtime: pi` and a
-provider-qualified model selector.
+Evals make real API calls. Full-pipeline YAML evals run skills on the Claude
+runtime with `claude-sonnet-4-6` by default. Pi evals should set `runtime: pi`
+and a provider-qualified model selector.
 
 ## Adding a New Eval
 
 1. Pick an existing YAML suite or scenario directory
 2. Add a YAML scenario entry or create `evals/<category>/<scenario>.json`
-3. Create fixture files under `evals/fixtures/<scenario>/`
+3. Create checked-in fixture files under `evals/fixtures/<scenario>/`
 4. Run `pnpm evals` to verify
 
 If a new category needs a different test skill, add it to `evals/skills/`.
 To exercise a built-in directory-format skill, point `skill` at its `SKILL.md`
 relative to `evals/`, for example
 `../src/builtin-skills/security-review/SKILL.md`.
+
+### Scaffolding From GitHub
+
+Use `pnpm evals:scaffold <github-pr-url>` to create the fixture files and
+standalone JSON stub for a PR. By default it copies the PR's base-side files,
+which is usually what you want when the PR fixes a vulnerability and the eval
+should exercise the vulnerable code.
+
+```bash
+pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
+pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345 --name sentry-example-authz
+pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345 --side head
+```
+
+The scaffold writes a `TODO` `should_find` assertion. That stub is expected to
+fail until you replace it with the exact expected finding, and it should not be
+committed as-is.
 
 ### Guidelines
 
@@ -181,8 +234,8 @@ relative to `evals/`, for example
 
 1. **Discovery**: Scan `evals/` for YAML suites and JSON scenario directories
 2. **Loading**: Parse YAML/JSON, validate with Zod, resolve paths
-3. **Git repo**: Create a temp repo with fixture files committed on an `eval`
-   branch (empty `main` as base), so the agent has a real repo to explore
+3. **Git repo**: Copy checked-in fixtures into a temp repo and commit them on
+   an `eval` branch (empty `main` as base), so the agent has a real repo to explore
 4. **Context**: Build `EventContext` from real `git diff main...eval`
 5. **Execution**: Run the skill via `runSkill()` with the real SDK pipeline;
    the agent operates in the temp repo with Read/Grep tools

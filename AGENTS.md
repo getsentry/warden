@@ -129,7 +129,7 @@ Skills define **what to look for**, not how to respond to findings:
 
 ## Evals
 
-End-to-end evals for the full pipeline. See [`evals/README.md`](evals/README.md) for the YAML spec, how to add evals, and how it all works. Run with `pnpm evals`.
+End-to-end evals for the full pipeline plus verifier-only evals. See [`evals/INTERNAL.md`](evals/INTERNAL.md) for maintainer workflow and [`evals/README.md`](evals/README.md) for schemas. Run with `pnpm evals`; scaffold PR fixtures with `pnpm evals:scaffold <github-pr-url>`.
 
 ## Voice
 
