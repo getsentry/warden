@@ -11,7 +11,6 @@ import {
   readGeneratedSkillArtifactFiles,
 } from './definition.js';
 import {
-  outlineHash,
   SKILL_BUILD_OUTLINE_SCHEMA_VERSION,
   SKILL_BUILD_VERSION,
   SkillBuildOutlineSchema,

@@ -505,7 +505,7 @@ export async function runRunsShow(
 /**
  * Garbage-collect expired log files.
  */
-export async function runRunsGc(options: CLIOptions, reporter: Reporter): Promise<number> {
+export async function runRunsGc(_options: CLIOptions, reporter: Reporter): Promise<number> {
   const resolved = resolveLogDir();
   if (!resolved) {
     reporter.error('Not a git repository');
