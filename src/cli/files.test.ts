@@ -2,12 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import {
   createPatchFromContent,
   createSyntheticFileChange,
   expandFileGlobs,
   expandAndCreateFileChanges,
 } from './files.js';
+
+function initGitRepo(dir: string): void {
+  execFileSync('git', ['init', '--initial-branch=main'], { cwd: dir, stdio: 'ignore' });
+}
 
 describe('createPatchFromContent', () => {
   it('creates patch for single line content', () => {
@@ -75,8 +80,6 @@ describe('expandFileGlobs', () => {
   beforeEach(() => {
     tempDir = join(tmpdir(), `warden-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tempDir, { recursive: true });
-    // Create .git so findGitRoot stops here and doesn't pick up ancestor gitignore rules
-    mkdirSync(join(tempDir, '.git'), { recursive: true });
   });
 
   afterEach(() => {
@@ -157,12 +160,8 @@ describe('expandFileGlobs', () => {
   });
 
   describe('gitignore support', () => {
-    function initGitRepo(): void {
-      mkdirSync(join(tempDir, '.git'), { recursive: true });
-    }
-
     it('excludes files matching .gitignore patterns by default', async () => {
-      initGitRepo();
+      initGitRepo(tempDir);
       writeFileSync(join(tempDir, '.gitignore'), 'ignored.ts\nbuild/\n');
       writeFileSync(join(tempDir, 'included.ts'), 'content');
       writeFileSync(join(tempDir, 'ignored.ts'), 'should be ignored');
@@ -178,7 +177,7 @@ describe('expandFileGlobs', () => {
     });
 
     it('includes ignored files when gitignore: false', async () => {
-      initGitRepo();
+      initGitRepo(tempDir);
       writeFileSync(join(tempDir, '.gitignore'), 'ignored.ts\n');
       writeFileSync(join(tempDir, 'included.ts'), 'content');
       writeFileSync(join(tempDir, 'ignored.ts'), 'content');
@@ -191,7 +190,7 @@ describe('expandFileGlobs', () => {
     });
 
     it('handles node_modules pattern', async () => {
-      initGitRepo();
+      initGitRepo(tempDir);
       writeFileSync(join(tempDir, '.gitignore'), 'node_modules/\n');
       writeFileSync(join(tempDir, 'index.ts'), 'content');
       mkdirSync(join(tempDir, 'node_modules', 'pkg'), { recursive: true });
@@ -205,7 +204,7 @@ describe('expandFileGlobs', () => {
     });
 
     it('handles negation patterns in .gitignore', async () => {
-      initGitRepo();
+      initGitRepo(tempDir);
       writeFileSync(join(tempDir, '.gitignore'), '*.ts\n!important.ts\n');
       writeFileSync(join(tempDir, 'ignored.ts'), 'ignored');
       writeFileSync(join(tempDir, 'important.ts'), 'not ignored');
@@ -218,8 +217,6 @@ describe('expandFileGlobs', () => {
     });
 
     it('skips gitignore rules when not in a git repository', async () => {
-      // Remove .git created by beforeEach so this looks like a non-repo dir
-      rmSync(join(tempDir, '.git'), { recursive: true, force: true });
       writeFileSync(join(tempDir, 'file1.ts'), 'content');
       writeFileSync(join(tempDir, 'file2.ts'), 'content');
       writeFileSync(join(tempDir, '.gitignore'), 'file2.ts\n');
@@ -229,8 +226,21 @@ describe('expandFileGlobs', () => {
       expect(files).toHaveLength(2);
     });
 
+    it('ignores bogus ancestor .git directories', async () => {
+      const childDir = join(tempDir, 'child');
+      mkdirSync(join(tempDir, '.git'), { recursive: true });
+      mkdirSync(childDir, { recursive: true });
+      writeFileSync(join(tempDir, '.gitignore'), 'child/file2.ts\n');
+      writeFileSync(join(childDir, 'file1.ts'), 'content');
+      writeFileSync(join(childDir, 'file2.ts'), 'content');
+
+      const files = await expandFileGlobs(['**/*.ts'], childDir);
+
+      expect(files).toHaveLength(2);
+    });
+
     it('handles nested .gitignore files', async () => {
-      initGitRepo();
+      initGitRepo(tempDir);
       writeFileSync(join(tempDir, '.gitignore'), 'root-ignored.ts\n');
       mkdirSync(join(tempDir, 'subdir'), { recursive: true });
       writeFileSync(join(tempDir, 'subdir', '.gitignore'), 'subdir-ignored.ts\n');
@@ -248,7 +258,7 @@ describe('expandFileGlobs', () => {
     });
 
     it('handles leading slash patterns in nested .gitignore', async () => {
-      initGitRepo();
+      initGitRepo(tempDir);
       mkdirSync(join(tempDir, 'subdir'), { recursive: true });
       // Leading slash anchors pattern to the .gitignore location
       writeFileSync(join(tempDir, 'subdir', '.gitignore'), '/anchored.ts\n');

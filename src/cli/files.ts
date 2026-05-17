@@ -1,5 +1,5 @@
-import { readFileSync, existsSync, statSync } from 'node:fs';
-import { resolve, relative, dirname, join } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { resolve, relative, dirname } from 'node:path';
 import fg from 'fast-glob';
 import ignore, { type Ignore } from 'ignore';
 import { countPatchChunks } from '../types/index.js';
@@ -43,18 +43,14 @@ function expandDirectoryPattern(pattern: string, cwd: string): string {
  * Returns the git root path, or null if not in a git repository.
  */
 function findGitRoot(startPath: string): string | null {
-  // Resolve to absolute path to handle relative paths like '.' or 'src'
-  let current = resolve(startPath);
-
-  while (current !== dirname(current)) {
-    const gitDir = join(current, '.git');
-    if (existsSync(gitDir)) {
-      return current;
-    }
-    current = dirname(current);
+  try {
+    const root = execGitNonInteractive(['rev-parse', '--show-toplevel'], {
+      cwd: resolve(startPath),
+    });
+    return root ? resolve(root) : null;
+  } catch {
+    return null;
   }
-
-  return null;
 }
 
 /**
