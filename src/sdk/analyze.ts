@@ -758,6 +758,7 @@ async function runSkillAnalysis(
   // bloating every hunk prompt with thousands of filenames.
   const isPullRequest = context.pullRequest.number !== 0;
   const prContext: PRPromptContext = {
+    repository: context.repository.fullName,
     changedFiles: isPullRequest ? context.pullRequest.files.map((f) => f.filename) : [],
     title: context.pullRequest.title,
     body: context.pullRequest.body,

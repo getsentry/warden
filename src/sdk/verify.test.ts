@@ -90,6 +90,7 @@ describe('verifyFindings', () => {
       skill: makeSkill(),
       model: 'claude-haiku-4-5',
       prContext: {
+        repository: 'getsentry/sentry',
         title: 'Fix guarded path',
         body: 'Adds a guard before the call.',
         changedFiles: ['src/app.ts', 'src/guard.ts'],
@@ -113,6 +114,9 @@ describe('verifyFindings', () => {
     }));
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
       userPrompt: expect.stringContaining('<candidate_finding>'),
+    }));
+    expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
+      userPrompt: expect.stringContaining('<repository>getsentry/sentry</repository>'),
     }));
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
       userPrompt: expect.stringContaining('- src/guard.ts'),

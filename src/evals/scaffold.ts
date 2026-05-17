@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { Octokit } from '@octokit/rest';
+import { buildGitHubEvalFixturePath } from './fixtures.js';
 
 type PullRequestSide = 'base' | 'head';
 
@@ -25,10 +26,16 @@ export interface ScaffoldedEvalFile {
   ref: string;
 }
 
+export interface SkippedScaffoldFile {
+  sourcePath: string;
+  reason: string;
+}
+
 export interface ScaffoldedEval {
   name: string;
   scenarioPath: string;
   files: ScaffoldedEvalFile[];
+  skippedFiles: SkippedScaffoldFile[];
 }
 
 interface GitHubFileContent {
@@ -42,7 +49,6 @@ interface PullFile {
   previous_filename?: string;
 }
 
-const UNSAFE_FILENAME_CHARS = /[^a-zA-Z0-9._-]+/g;
 const SAFE_PATH_SEGMENT = /^[a-zA-Z0-9._-]+$/;
 
 function requireSafePathSegment(value: string, label: string): string {
@@ -105,26 +111,29 @@ function getGitHubToken(): string | undefined {
   return process.env['GITHUB_TOKEN'] ?? process.env['GH_TOKEN'];
 }
 
-function fixtureFilename(path: string, seen: Set<string>): string {
-  const base = path.split('/').pop() || 'fixture';
-  let candidate = base.replace(UNSAFE_FILENAME_CHARS, '_');
+function fixturePathForSource(
+  pull: GitHubPullRequestRef,
+  sourcePath: string,
+  seen: Set<string>
+): string {
+  const candidate = buildGitHubEvalFixturePath({
+    owner: pull.owner,
+    repo: pull.repo,
+    sourcePath,
+  });
+
   if (!seen.has(candidate)) {
     seen.add(candidate);
     return candidate;
   }
 
-  const prefix = path
-    .split('/')
-    .slice(0, -1)
-    .join('_')
-    .replace(UNSAFE_FILENAME_CHARS, '_')
-    .slice(-40)
-    .replace(/^_+|_+$/g, '');
-  candidate = prefix ? `${prefix}_${candidate}` : candidate;
+  const dir = posix.dirname(candidate);
+  const base = posix.basename(candidate);
   let deduped = candidate;
   let suffix = 2;
   while (seen.has(deduped)) {
-    deduped = `${candidate}.${suffix}`;
+    const filename = `${base}.${suffix}`;
+    deduped = dir === '.' ? filename : posix.join(dir, filename);
     suffix++;
   }
   seen.add(deduped);
@@ -143,6 +152,16 @@ function filePathForSide(file: PullFile, side: PullRequestSide): string | undefi
     return undefined;
   }
   return file.filename;
+}
+
+function skippedSideReason(file: PullFile, side: PullRequestSide): string | undefined {
+  if (side === 'base' && file.status === 'added') {
+    return 'added file has no base-side content';
+  }
+  if (side === 'head' && file.status === 'removed') {
+    return 'removed file has no head-side content';
+  }
+  return undefined;
 }
 
 async function fetchFileContent(
@@ -186,7 +205,9 @@ function scenarioJson(args: {
   body?: string | null;
   files: string[];
   url: string;
+  repository: string;
   side: PullRequestSide;
+  skippedFiles: SkippedScaffoldFile[];
 }): string {
   return `${JSON.stringify({
     given: args.title,
@@ -197,7 +218,9 @@ function scenarioJson(args: {
     should_not_find: [],
     notes: {
       source: args.url,
+      repository: args.repository,
       side: args.side,
+      skipped_files: args.skippedFiles.length > 0 ? args.skippedFiles : undefined,
       body: args.body || undefined,
     },
   }, null, 2)}\n`;
@@ -229,8 +252,9 @@ export async function scaffoldEvalFromGitHubPullRequest(
   const name = requestedName ?? slugifyEvalName(pr.title);
   const fixtureDir = fromEvalsPath(options.evalsDir, posix.join('fixtures', name));
   const scenarioPath = join(options.evalsDir, category, `${name}.json`);
-  const seenFilenames = new Set<string>();
+  const seenFixturePaths = new Set<string>();
   const copiedFiles: ScaffoldedEvalFile[] = [];
+  const skippedFiles: SkippedScaffoldFile[] = [];
   const contents: (ScaffoldedEvalFile & { content: string })[] = [];
 
   if (!options.force && existsSync(scenarioPath)) {
@@ -240,16 +264,27 @@ export async function scaffoldEvalFromGitHubPullRequest(
   for (const file of files) {
     const sourcePath = filePathForSide(file, side);
     if (!sourcePath) {
+      skippedFiles.push({
+        sourcePath: file.previous_filename ?? file.filename,
+        reason: skippedSideReason(file, side) ?? `file has no ${side}-side content`,
+      });
       continue;
     }
 
     const content = await fetchFileContent(octokit, pull, sourcePath, ref);
     if (!content) {
+      skippedFiles.push({
+        sourcePath,
+        reason: `content was not available at ${side} ref ${ref}`,
+      });
       continue;
     }
 
-    const filename = fixtureFilename(sourcePath, seenFilenames);
-    const fixturePath = posix.join('fixtures', name, filename);
+    const fixturePath = posix.join(
+      'fixtures',
+      name,
+      fixturePathForSource(pull, sourcePath, seenFixturePaths),
+    );
     const fullFixturePath = fromEvalsPath(options.evalsDir, fixturePath);
     if (!options.force && existsSync(fullFixturePath)) {
       throw new Error(`Eval fixture already exists: ${fullFixturePath}`);
@@ -282,7 +317,9 @@ export async function scaffoldEvalFromGitHubPullRequest(
       body: pr.body,
       files: copiedFiles.map((file) => file.fixturePath),
       url: options.url,
+      repository: `${pull.owner}/${pull.repo}`,
       side,
+      skippedFiles,
     }),
     { flag: options.force ? 'w' : 'wx' },
   );
@@ -291,5 +328,6 @@ export async function scaffoldEvalFromGitHubPullRequest(
     name,
     scenarioPath,
     files: copiedFiles,
+    skippedFiles,
   };
 }

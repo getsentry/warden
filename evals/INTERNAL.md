@@ -29,7 +29,9 @@ summary for per-case test reporting, and gates the workflow on the aggregate
 - `evals/code-review/*.json`: one full-pipeline code-review scenario per file.
 - `evals/security-review/*.json`: one full-pipeline security-review scenario per file.
 - `evals/verification/*.json`: one candidate finding sent directly to `verifyFindings`.
-- `evals/fixtures/*`: checked-in fixture source code. Eval runs copy these files into temporary git repos under the OS temp directory.
+- `evals/fixtures/*`: checked-in fixture source code. Eval runs copy these files
+  into temporary git repos under the OS temp directory, preserving paths under
+  `evals/fixtures/`.
 - `src/evals/e2e.eval.ts`: generic YAML full-pipeline suites.
 - `src/evals/code-review.eval.ts`: code-review correctness benchmark scenarios.
 - `src/evals/security-review.eval.ts`: security-review benchmark scenarios.
@@ -43,6 +45,10 @@ real skill under test.
 
 1. Add or scaffold a scenario JSON file under `evals/<category>/`.
 2. Add focused, checked-in fixture files under `evals/fixtures/<scenario>/`.
+   GitHub scaffolds use
+   `evals/fixtures/<scenario>/github/<owner>/<repo>/<repo-relative-path>` to
+   preserve source context while eval output uses `<scenario>/<repo-relative-path>`.
+   Scaffolded source repositories are still passed to prompts as repository context.
 3. Write a specific `should_find` assertion and useful `should_not_find` guards.
 4. Run the narrow case first with `pnpm evals -t <scenario>`.
 5. Run the suite with `pnpm evals -t <category>`.

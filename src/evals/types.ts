@@ -29,8 +29,15 @@ export type ShouldFind = z.infer<typeof ShouldFindSchema>;
 export const EvalScenarioNotesSchema = z.object({
   /** Original PR, issue, benchmark, or other source URL. */
   source: z.string().optional(),
+  /** Source repository for scaffolded fixtures, for example "getsentry/sentry". */
+  repository: z.string().optional(),
   /** Which source side was captured when scaffolded from a PR. */
   side: z.string().optional(),
+  /** Files intentionally skipped while scaffolding, with maintainer-facing reasons. */
+  skipped_files: z.array(z.object({
+    sourcePath: z.string(),
+    reason: z.string(),
+  })).optional(),
   /** Optional copied source notes, such as a PR body. */
   body: z.string().optional(),
 }).passthrough();

@@ -5,6 +5,7 @@ import { execGitNonInteractive } from '../utils/exec.js';
 import { buildLocalEventContext } from '../cli/context.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { runSkill } from '../sdk/runner.js';
+import { evalFixtureRepoPath, singleEvalFixtureSourceRepository } from './fixtures.js';
 import { formatEvalId } from './names.js';
 import type { EvalMeta } from './types.js';
 import type { Finding, SkillReport } from '../types/index.js';
@@ -52,6 +53,10 @@ export function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): strin
     git(['init', '--initial-branch=main']);
     git(['config', 'user.email', 'eval@warden.dev']);
     git(['config', 'user.name', 'Warden Eval']);
+    const sourceRepository = singleEvalFixtureSourceRepository(meta.filePaths);
+    if (sourceRepository) {
+      git(['remote', 'add', 'origin', `https://github.com/${sourceRepository}.git`]);
+    }
 
     // Copy skill into repo. If it lives in a directory (skill-name/SKILL.md),
     // copy the whole directory to preserve resource subdirs (scripts/, references/).
@@ -74,11 +79,11 @@ export function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): strin
     git(['commit', '-m', 'install eval skill']);
     git(['checkout', '-b', 'eval']);
 
-    // Copy fixture files, preserving their parent directory name
+    // Copy fixture files, preserving their path under evals/fixtures.
     for (const srcPath of meta.filePaths) {
-      const destDir = join(tmpDir, basename(dirname(srcPath)));
-      mkdirSync(destDir, { recursive: true });
-      copyFileSync(srcPath, join(destDir, basename(srcPath)));
+      const destPath = join(tmpDir, ...evalFixtureRepoPath(srcPath).split('/'));
+      mkdirSync(dirname(destPath), { recursive: true });
+      copyFileSync(srcPath, destPath);
     }
 
     git(['add', '.']);

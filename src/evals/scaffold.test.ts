@@ -98,14 +98,18 @@ describe('scaffoldEvalFromGitHubPullRequest', () => {
       'src/api.py',
       'src/previous.py',
     ]);
+    expect(result.skippedFiles).toEqual([{
+      sourcePath: 'src/new.py',
+      reason: 'added file has no base-side content',
+    }]);
     expect(result.files.map((file) => file.fixturePath)).toEqual([
-      'fixtures/fix-project-access-bypass/api.py',
-      'fixtures/fix-project-access-bypass/previous.py',
+      'fixtures/fix-project-access-bypass/github/getsentry/sentry/src/api.py',
+      'fixtures/fix-project-access-bypass/github/getsentry/sentry/src/previous.py',
     ]);
 
-    expect(readFileSync(join(tempDir, 'fixtures/fix-project-access-bypass/api.py'), 'utf-8'))
+    expect(readFileSync(join(tempDir, 'fixtures/fix-project-access-bypass/github/getsentry/sentry/src/api.py'), 'utf-8'))
       .toBe('src/api.py@base-sha\n');
-    expect(readFileSync(join(tempDir, 'fixtures/fix-project-access-bypass/previous.py'), 'utf-8'))
+    expect(readFileSync(join(tempDir, 'fixtures/fix-project-access-bypass/github/getsentry/sentry/src/previous.py'), 'utf-8'))
       .toBe('src/previous.py@base-sha\n');
 
     const scenario = JSON.parse(
@@ -114,15 +118,20 @@ describe('scaffoldEvalFromGitHubPullRequest', () => {
     expect(scenario).toMatchObject({
       given: 'Fix project access bypass',
       files: [
-        'fixtures/fix-project-access-bypass/api.py',
-        'fixtures/fix-project-access-bypass/previous.py',
+        'fixtures/fix-project-access-bypass/github/getsentry/sentry/src/api.py',
+        'fixtures/fix-project-access-bypass/github/getsentry/sentry/src/previous.py',
       ],
       should_find: [{
         finding: 'TODO: describe the vulnerability fixed by https://github.com/getsentry/sentry/pull/12345',
       }],
       notes: {
         source: 'https://github.com/getsentry/sentry/pull/12345',
+        repository: 'getsentry/sentry',
         side: 'base',
+        skipped_files: [{
+          sourcePath: 'src/new.py',
+          reason: 'added file has no base-side content',
+        }],
       },
     });
 
@@ -131,6 +140,10 @@ describe('scaffoldEvalFromGitHubPullRequest', () => {
     );
     expect(validatedScenario.notes?.source).toBe('https://github.com/getsentry/sentry/pull/12345');
     expect(validatedScenario.notes?.side).toBe('base');
+    expect(validatedScenario.notes?.skipped_files).toEqual([{
+      sourcePath: 'src/new.py',
+      reason: 'added file has no base-side content',
+    }]);
   });
 
   it('rejects unsafe category and scenario names', async () => {

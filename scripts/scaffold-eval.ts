@@ -85,5 +85,11 @@ console.log('Fixtures:');
 for (const file of result.files) {
   console.log(`  ${file.fixturePath} <- ${file.sourcePath}@${file.ref}`);
 }
+if (result.skippedFiles.length > 0) {
+  console.log('Skipped:');
+  for (const file of result.skippedFiles) {
+    console.log(`  ${file.sourcePath} (${file.reason})`);
+  }
+}
 console.log('');
 console.log('Next: replace the TODO should_find entry with the exact expected finding.');

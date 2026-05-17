@@ -1,6 +1,8 @@
 import { findingLine, type Finding } from '../types/index.js';
 
 export interface PromptPRContext {
+  /** Repository full name, e.g. "getsentry/sentry" */
+  repository?: string;
   /** All files being changed in the PR */
   changedFiles: string[];
   /** PR title - explains what the change does */
@@ -52,9 +54,15 @@ ${lines.join('\n')}
  * Build tagged pull request context shared by Warden agents.
  */
 export function buildPullRequestContextSection(prContext?: PromptPRContext): string | undefined {
-  if (!prContext?.title) return undefined;
+  if (!prContext?.title && !prContext?.repository) return undefined;
 
-  const lines = [`<title>${prContext.title}</title>`];
+  const lines: string[] = [];
+  if (prContext.repository) {
+    lines.push(`<repository>${prContext.repository}</repository>`);
+  }
+  if (prContext.title) {
+    lines.push(`<title>${prContext.title}</title>`);
+  }
 
   if (prContext.body) {
     const body = prContext.body.length > MAX_BODY_LENGTH

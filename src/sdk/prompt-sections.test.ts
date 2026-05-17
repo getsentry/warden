@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildFileListSection,
   buildJsonOutputSection,
+  buildPullRequestContextSection,
   buildTaggedSection,
   formatIndexedFindingsForPrompt,
   joinPromptSections,
@@ -48,6 +49,18 @@ describe('prompt section helpers', () => {
     expect(section).not.toContain('src/a.ts');
     expect(section).toContain('- src/b.ts');
     expect(section).toContain('... and 1 more');
+  });
+
+  it('includes repository in pull request context without changing file paths', () => {
+    const section = buildPullRequestContextSection({
+      repository: 'getsentry/sentry',
+      title: 'Fix project access bypass',
+      body: 'Project access was missing.',
+      changedFiles: ['src/api.py'],
+    });
+
+    expect(section).toContain('<repository>getsentry/sentry</repository>');
+    expect(section).toContain('<title>Fix project access bypass</title>');
   });
 
   it('formats indexed findings consistently for auxiliary prompts', () => {

@@ -251,6 +251,17 @@ The scaffold writes a `TODO` `should_find` assertion. That stub is expected to
 fail until you replace it with the exact expected finding, and it should not be
 committed as-is.
 
+Scaffolded GitHub fixtures include source context in their paths:
+`evals/fixtures/<scenario>/github/<owner>/<repo>/<repo-relative-path>`.
+Eval runs copy them into the temp repo as `<scenario>/<repo-relative-path>` so
+test output stays focused on the case and original source file. The source
+repository is still included in prompt context and `notes.repository`.
+Hand-written fixtures can stay shorter when the source repository path is not
+useful.
+
+When a scaffold skips files, it records them in `notes.skipped_files` and prints
+them in CLI output. Review that list before committing the eval.
+
 ### Guidelines
 
 - **One bug per eval.** Each scenario tests one specific behavior.
@@ -266,8 +277,9 @@ committed as-is.
 
 1. **Discovery**: Scan `evals/` for YAML suites and JSON scenario directories
 2. **Loading**: Parse YAML/JSON, validate with Zod, resolve paths
-3. **Git repo**: Copy checked-in fixtures into a temp repo and commit them on
-   an `eval` branch (empty `main` as base), so the agent has a real repo to explore
+3. **Git repo**: Copy checked-in fixtures into a temp repo, preserving paths
+   under `evals/fixtures/`, and commit them on an `eval` branch (empty `main`
+   as base), so the agent has a real repo to explore
 4. **Context**: Build `EventContext` from real `git diff main...eval`
 5. **Execution**: Run the skill via `runSkill()` with the real SDK pipeline;
    the agent operates in the temp repo with Read/Grep tools

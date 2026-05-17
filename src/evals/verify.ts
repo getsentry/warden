@@ -14,6 +14,7 @@ import { verifyFindings } from '../sdk/verify.js';
 import { FindingSchema, type Finding, type UsageStats } from '../types/index.js';
 import { RuntimeNameSchema, type RuntimeName } from '../sdk/runtimes/types.js';
 import { discoverEvalScenarioFiles, resolveEvalSkillName } from './index.js';
+import { evalFixtureRepoPath, singleEvalFixtureSourceRepository } from './fixtures.js';
 import { formatEvalId } from './names.js';
 import { setupEvalRepo } from './runner.js';
 import type { EvalMeta } from './types.js';
@@ -109,10 +110,6 @@ function loadVerificationScenario(filePath: string) {
   return validated.data;
 }
 
-function copiedFixturePath(srcPath: string): string {
-  return `${basename(dirname(srcPath))}/${basename(srcPath)}`;
-}
-
 export function resolveVerificationEvalMeta(
   scenarioPath: string,
   options: VerificationScenarioSetOptions
@@ -184,6 +181,7 @@ export async function runVerificationEval(
   let repoDir: string | undefined;
   try {
     repoDir = setupEvalRepo(repoMeta, log);
+    const sourceRepository = singleEvalFixtureSourceRepository(meta.filePaths);
     const skillSrcDir = dirname(meta.skillPath);
     const skillPath = existsSync(join(skillSrcDir, 'SKILL.md'))
       ? join(repoDir, '.warden', 'skills', basename(skillSrcDir))
@@ -200,8 +198,9 @@ export async function runVerificationEval(
       runtime,
       model,
       prContext: {
+        repository: sourceRepository,
         title: meta.given,
-        changedFiles: meta.filePaths.map(copiedFixturePath),
+        changedFiles: meta.filePaths.map(evalFixtureRepoPath),
       },
     });
 
