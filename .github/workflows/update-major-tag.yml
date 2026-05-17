@@ -22,13 +22,12 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           SOURCE_TAG="v${VERSION}-src"
           ARTIFACT_SUBJECT="Build dist/action for $GITHUB_REF_NAME"
-          HEAD_SUBJECT="$(git show -s --format=%s HEAD)"
           SOURCE_SHA="$(git rev-parse HEAD)"
 
-          if [ "$HEAD_SUBJECT" = "$ARTIFACT_SUBJECT" ]; then
-            SOURCE_SHA="$(git rev-parse HEAD^)"
-            echo "Detected existing artifact commit. Using parent $SOURCE_SHA for $SOURCE_TAG"
-          fi
+          while [ "$(git show -s --format=%s "$SOURCE_SHA")" = "$ARTIFACT_SUBJECT" ]; do
+            SOURCE_SHA="$(git rev-parse "$SOURCE_SHA^")"
+            echo "Detected existing artifact commit. Walking back to $SOURCE_SHA for $SOURCE_TAG"
+          done
 
           if git rev-parse "$SOURCE_TAG^{commit}" >/dev/null 2>&1; then
             EXISTING_SHA="$(git rev-parse "$SOURCE_TAG^{commit}")"
