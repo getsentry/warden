@@ -82,6 +82,7 @@ evals/
 ├── bug-detection.yaml          # Category: finding logic bugs
 ├── security-scanning.yaml      # Category: finding security vulnerabilities
 ├── precision.yaml              # Category: avoiding false positives
+├── code-review/                # One scenario per code-review correctness case
 ├── security-review/            # One scenario per JSON file
 │   └── sentry-replay-delete-read-scope.json
 ├── verification/               # Candidate findings for verifier-only evals
@@ -112,6 +113,7 @@ evals/
 The Vitest entrypoints are intentionally split by eval layer:
 
 - `src/evals/e2e.eval.ts`: generic YAML full-pipeline suites.
+- `src/evals/code-review.eval.ts`: code-review correctness benchmark scenarios.
 - `src/evals/security-review.eval.ts`: security-review benchmark scenarios.
 - `src/evals/verify.eval.ts`: verifier-only scenarios from `evals/verification/`.
 
@@ -184,6 +186,9 @@ pnpm evals -t "null-property-access"
 
 # Run the security-review evals
 pnpm evals -t "security-review"
+
+# Run the code-review evals
+pnpm evals -t "code-review"
 
 # Run verifier-only evals
 pnpm evals -t "verification"

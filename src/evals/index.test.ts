@@ -202,6 +202,19 @@ describe('standalone scenario files', () => {
     expect(metas.map((meta) => meta.name)).toContain('sentry-replay-delete-read-scope');
   });
 
+  it('discovers standalone code-review scenarios', () => {
+    const metas = discoverEvalScenarios({
+      category: 'code-review',
+      skill: '../src/builtin-skills/code-review/SKILL.md',
+      runtime: 'pi',
+      model: 'anthropic/claude-sonnet-4-6',
+      baseDir: evalsDir,
+    });
+
+    expect(metas.map((meta) => meta.name)).toContain('eval-optional-assertion-rationale');
+    expect(metas[0]?.skillPath).toContain('src/builtin-skills/code-review/SKILL.md');
+  });
+
   it('throws when a standalone scenario fixture file does not exist', () => {
     const scenario = EvalScenarioFileSchema.parse({
       given: 'an eval with a missing fixture',

@@ -7,6 +7,7 @@ tests, prompt snapshots, or repeated benchmark loops.
 
 ```bash
 pnpm evals
+pnpm evals -t code-review
 pnpm evals -t security-review
 pnpm evals -t verification
 pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
@@ -25,10 +26,12 @@ summary for per-case test reporting, and gates the workflow on the aggregate
 ## Eval Layers
 
 - `evals/*.yaml`: small full-pipeline suites using test skills.
+- `evals/code-review/*.json`: one full-pipeline code-review scenario per file.
 - `evals/security-review/*.json`: one full-pipeline security-review scenario per file.
 - `evals/verification/*.json`: one candidate finding sent directly to `verifyFindings`.
 - `evals/fixtures/*`: checked-in fixture source code. Eval runs copy these files into temporary git repos under the OS temp directory.
 - `src/evals/e2e.eval.ts`: generic YAML full-pipeline suites.
+- `src/evals/code-review.eval.ts`: code-review correctness benchmark scenarios.
 - `src/evals/security-review.eval.ts`: security-review benchmark scenarios.
 - `src/evals/verify.eval.ts`: verifier-only scenarios.
 

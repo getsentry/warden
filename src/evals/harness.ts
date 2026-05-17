@@ -60,8 +60,12 @@ function failedJudgeReasons(
 
   for (let i = 0; i < meta.should_find.length; i++) {
     const assertion = meta.should_find[i];
+    if (!assertion?.required) {
+      continue;
+    }
+
     const verdict = response.expectations[i];
-    if (!assertion || !verdict) {
+    if (!verdict) {
       reasons.push(`missing verdict for should_find[${i}]`);
       continue;
     }
@@ -71,14 +75,14 @@ function failedJudgeReasons(
       : findings[verdict.matchedFindingIndex];
     if (!verdict.met) {
       reasons.push(`should_find[${i}] not met: ${verdict.reasoning}`);
-    } else if (
-      assertion.severity
-      && matchedFinding
-      && matchedFinding.severity !== assertion.severity
-    ) {
-      reasons.push(
-        `should_find[${i}] severity mismatch: expected ${assertion.severity}, got ${matchedFinding.severity}`
-      );
+    } else if (assertion.severity) {
+      if (!matchedFinding) {
+        reasons.push(`should_find[${i}] severity could not be checked: no matched finding`);
+      } else if (matchedFinding.severity !== assertion.severity) {
+        reasons.push(
+          `should_find[${i}] severity mismatch: expected ${assertion.severity}, got ${matchedFinding.severity}`
+        );
+      }
     }
   }
 

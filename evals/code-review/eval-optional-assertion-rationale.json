@@ -1,0 +1,20 @@
+{
+  "given": "eval judge reporting records failure reasons for optional should_find assertions even when the eval score passes",
+  "files": [
+    "fixtures/eval-optional-assertion-rationale/harness.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "failedJudgeReasons ignores required: false on an unmet should_find assertion, so createEvalResult can return score 1 while the rationale says an optional assertion failed"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues",
+    "the use of arrays indexed by expectation order"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/warden/pull/327",
+    "body": "Regression seed from Warden code-review finding: optional should_find assertions were allowed to miss for score calculation but still appeared as failure reasons in eval reports."
+  }
+}
