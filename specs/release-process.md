@@ -43,9 +43,11 @@ All of `dist/` is gitignored. No exceptions, no whitelist. Build artifacts never
 
 A maintainer runs the **Release** workflow (`release.yml`) via `workflow_dispatch`, choosing a semver bump type (patch, minor, major).
 
-### 2. Source tag
+### 2. Previous source tag preflight
 
-Before preparing the release, the workflow creates a source tag (`vX.Y.Z-src`) on the previous version's bump commit on main. This is required because `git describe --tags` cannot find version tags that point to detached commits off main (see step 6).
+Before preparing the release, the workflow verifies that the current version has a source tag (`vX.Y.Z-src`) and that `git describe --tags --abbrev=0` resolves to that same commit. This is required because the published version tags point to detached action artifact commits that are not ancestors of main.
+
+The release workflow does not create this tag. It fails fast if the previous release did not finalize its source tag, preventing Craft from generating a full-history changelog from an old reachable tag.
 
 ### 3. Prepare release PR
 
@@ -75,7 +77,7 @@ A maintainer reviews and merges the release PR into main. Main gets the version 
 
 After merge, Craft:
 
-1. Creates git tag `vX.Y.Z` on the merge commit
+1. Creates git tag `vX.Y.Z` on the source release commit
 2. Creates a GitHub Release (triggers step 7)
 3. Downloads the npm tarball from CI artifacts
 4. Publishes the tarball to npm (no build happens here)
@@ -87,12 +89,13 @@ Craft's npm target publishes pre-built tarballs. It does not check out code or r
 Triggered by `release: published`. This is where the GitHub Action bundle gets built:
 
 1. Checks out the `vX.Y.Z` tag
-2. Installs dependencies and runs `pnpm build:action`
-3. Commits only the ncc bundle files (`index.js`, chunk files, `licenses.txt`, `package.json`) via `git add -f`
-4. Force-updates `vX.Y.Z` to point to this new commit
-5. Force-updates the major tag (`vX`) to the same commit
+2. Creates the immutable source tag (`vX.Y.Z-src`) on the checked-out source commit
+3. Installs dependencies and runs `pnpm build:action`
+4. Commits only the ncc bundle files (`index.js`, chunk files, `licenses.txt`, `package.json`) via `git add -f`
+5. Force-updates `vX.Y.Z` to point to this new commit
+6. Force-updates the major tag (`vX`) to the same commit
 
-After this step, `vX.Y.Z` and `vX` point to a detached commit that is NOT on main. This commit has everything from main plus `dist/action/`.
+After this step, `vX.Y.Z` and `vX` point to a detached commit that is NOT on main. This commit has everything from the source release plus `dist/action/`. The `vX.Y.Z-src` tag remains on the source release commit so Craft can find the previous release from main during the next prepare run.
 
 ## Sequencing
 
@@ -100,7 +103,7 @@ After this step, `vX.Y.Z` and `vX` point to a detached commit that is NOT on mai
 workflow_dispatch
   |
   v
-release.yml: create -src tag, prepare PR (bump version)
+release.yml: verify current -src tag, prepare PR (bump version)
   |
   v
 CI: build, test, pack tarball, upload artifact
@@ -115,14 +118,14 @@ CI: build + pack on main (tarball for Craft)
 Craft: tag vX.Y.Z, GitHub Release, download tarball, publish npm
   |
   v
-update-major-tag.yml: build ncc, commit to tag, force-update vX.Y.Z + vX
+update-major-tag.yml: create vX.Y.Z-src, build ncc, commit to tag, force-update vX.Y.Z + vX
 ```
 
 ## Timing and failure modes
 
 **Tag update window**: There is a 1-3 minute window between Craft creating the GitHub Release and the tag workflow finishing. During this window, the version and major tags point to a commit without `dist/action/`. Any GitHub Action runs that resolve the tag during this window will fail. Existing users with cached action versions are unaffected.
 
-**Tag workflow failure**: If `update-major-tag.yml` fails (build error, permission issue), the release tags will point to commits without the ncc bundle, breaking the GitHub Action for this version. Recovery: fix the issue and re-run the workflow from the Actions tab.
+**Tag workflow failure**: If `update-major-tag.yml` fails before creating the source tag, the next release prepare run will fail fast because the previous source tag is missing. If it fails after creating the source tag but before updating the artifact tags (build error, permission issue), changelog generation for the next release remains safe, but the GitHub Action tag may point to a commit without the ncc bundle. Recovery: fix the issue and re-run the workflow from the Actions tab.
 
 **npm publish is independent**: The npm tarball is built by CI and published by Craft before the tag workflow runs. A tag workflow failure does not affect npm.
 
@@ -142,9 +145,9 @@ Controls what goes into the npm tarball. Key exclusions:
 |------|------|
 | `.craft.yml` | Craft config: `preReleaseCommand`, targets (github, npm) |
 | `bin/bump-version.sh` | Version bump + build validation for release PR |
-| `.github/workflows/release.yml` | Triggers release PR creation, creates `-src` tags |
+| `.github/workflows/release.yml` | Triggers release PR creation, verifies the previous `-src` tag |
 | `.github/workflows/ci.yml` | Builds tarball for npm, validates ncc build |
-| `.github/workflows/update-major-tag.yml` | Builds ncc bundle, commits to release tags |
+| `.github/workflows/update-major-tag.yml` | Creates `-src` tags, builds ncc bundle, commits to release tags |
 | `action.yml` | GitHub Action definition, references `dist/action/index.js` |
 | `.gitignore` | Ignores all of `dist/` |
 | `.npmignore` | Excludes `dist/action/` and non-library files from npm tarball |

@@ -51,34 +51,30 @@ jobs:
           echo "current=$CURRENT" >> $GITHUB_OUTPUT
           echo "new=$NEW" >> $GITHUB_OUTPUT
 
-      # Craft uses `git describe --tags` to find the previous version.
-      # Our release process creates tags on dist/ artifact commits (for GitHub
-      # Action users), but those commits aren't ancestors of main. This causes
-      # `git describe` to fail. We create a source tag on main to work around this.
-      - name: Create source tag for git describe
+      # Craft uses `git describe --tags` to find the previous version. The
+      # published action tags point to detached dist/ artifact commits, so the
+      # previous release must have created a reachable source tag before Craft
+      # prepares the next changelog.
+      - name: Verify previous source tag
         run: |
           VERSION="${{ steps.version.outputs.current }}"
-          TAG="v${VERSION}-src"
+          SOURCE_TAG="v${VERSION}-src"
 
-          # Find the commit that bumped to this version on main
-          # Uses extended regex to match "0.1.1" or "0.1.1 (#123)" formats
-          # --first-parent ensures we only search mainline commits
-          COMMIT=$(git log --first-parent -E --grep="^${VERSION}( |$)" --format="%H" main | head -1)
-
-          if [ -z "$COMMIT" ]; then
-            echo "::warning::Could not find version bump commit for ${VERSION}"
-            exit 0
+          if ! git rev-parse "$SOURCE_TAG^{commit}" >/dev/null 2>&1; then
+            echo "::error::Missing source tag $SOURCE_TAG. The previous release did not finalize its source tag."
+            exit 1
           fi
 
-          # Check if source tag already exists
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Source tag $TAG already exists"
-            exit 0
+          DESCRIBED_TAG="$(git describe --tags --abbrev=0)"
+          DESCRIBED_SHA="$(git rev-parse "$DESCRIBED_TAG^{commit}")"
+          SOURCE_SHA="$(git rev-parse "$SOURCE_TAG^{commit}")"
+
+          if [ "$DESCRIBED_SHA" != "$SOURCE_SHA" ]; then
+            echo "::error::Expected git describe to resolve to $SOURCE_TAG ($SOURCE_SHA), got $DESCRIBED_TAG ($DESCRIBED_SHA)"
+            exit 1
           fi
 
-          echo "Creating source tag $TAG on commit $COMMIT"
-          git tag "$TAG" "$COMMIT"
-          git push origin "$TAG"
+          echo "Craft previous-release baseline: $DESCRIBED_TAG ($DESCRIBED_SHA)"
 
       - name: Prepare release
         uses: getsentry/action-prepare-release@v1

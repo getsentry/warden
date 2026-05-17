@@ -15,6 +15,35 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
+          fetch-tags: true
+
+      - name: Ensure source release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SOURCE_TAG="v${VERSION}-src"
+          ARTIFACT_SUBJECT="Build dist/action for $GITHUB_REF_NAME"
+          HEAD_SUBJECT="$(git show -s --format=%s HEAD)"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+
+          if [ "$HEAD_SUBJECT" = "$ARTIFACT_SUBJECT" ]; then
+            SOURCE_SHA="$(git rev-parse HEAD^)"
+            echo "Detected existing artifact commit. Using parent $SOURCE_SHA for $SOURCE_TAG"
+          fi
+
+          if git rev-parse "$SOURCE_TAG^{commit}" >/dev/null 2>&1; then
+            EXISTING_SHA="$(git rev-parse "$SOURCE_TAG^{commit}")"
+            if [ "$EXISTING_SHA" = "$SOURCE_SHA" ]; then
+              echo "Source tag $SOURCE_TAG already points to $SOURCE_SHA"
+              exit 0
+            fi
+
+            echo "::error::Source tag $SOURCE_TAG points to $EXISTING_SHA, expected $SOURCE_SHA"
+            exit 1
+          fi
+
+          echo "Creating source tag $SOURCE_TAG on $SOURCE_SHA"
+          git tag "$SOURCE_TAG" "$SOURCE_SHA"
+          git push origin "refs/tags/$SOURCE_TAG"
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
