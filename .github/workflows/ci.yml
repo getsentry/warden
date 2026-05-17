@@ -51,7 +51,7 @@ jobs:
         run: test -f coverage/lcov.info
 
       - name: Coverage report
-        uses: getsentry/codecov-action@v1
+        uses: getsentry/codecov-action@0.3.7
         if: ${{ success() && hashFiles('coverage/lcov.info') != '' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

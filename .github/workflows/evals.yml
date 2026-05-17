@@ -124,13 +124,71 @@ jobs:
           fi
           exit 0
 
-      - name: Publish eval test report
+      - name: Summarize eval test report
+        uses: actions/github-script@v7
+        if: ${{ !cancelled() && hashFiles('eval-results.json') != '' }}
+        with:
+          script: |
+            const fs = require('fs');
+
+            function escapeCell(value) {
+              return String(value ?? '')
+                .replaceAll('|', '\\|')
+                .replaceAll('\n', '<br>');
+            }
+
+            const results = JSON.parse(fs.readFileSync('eval-results.json', 'utf-8'));
+            const tests = [];
+            for (const testFile of results.testResults || []) {
+              for (const test of testFile.assertionResults || []) {
+                tests.push(test);
+              }
+            }
+
+            const passed = tests.filter((test) => test.status === 'passed').length;
+            const failed = tests.filter((test) => test.status === 'failed').length;
+            const skipped = tests.filter((test) =>
+              ['pending', 'skipped', 'todo'].includes(test.status)
+            ).length;
+            const failedTests = tests.filter((test) => test.status === 'failed');
+
+            const lines = [
+              '## Eval Test Results',
+              '',
+              `- **Total**: ${tests.length}`,
+              `- **Passed**: ${passed}`,
+              `- **Failed**: ${failed}`,
+              `- **Skipped**: ${skipped}`,
+              '',
+              'Eval misses are reported here for visibility. The aggregate `Evaluation Results` check is the gating signal.',
+            ];
+
+            if (failedTests.length > 0) {
+              lines.push('', '### Failed Eval Cases', '', '| Test | Score | Rationale |', '|---|---:|---|');
+              for (const test of failedTests) {
+                const evalMeta = test.meta?.eval;
+                const score = typeof evalMeta?.avgScore === 'number'
+                  ? evalMeta.avgScore.toFixed(2)
+                  : 'n/a';
+                const rationale = evalMeta?.scores?.[0]?.metadata?.rationale
+                  ?? test.failureMessages?.[0]
+                  ?? '';
+                lines.push(
+                  `| ${escapeCell(test.fullName || test.title)} | ${score} | ${escapeCell(rationale).slice(0, 500)} |`
+                );
+              }
+            }
+
+            await core.summary.addRaw(lines.join('\n')).write();
+
+      - name: Publish eval annotations
         uses: mikepenz/action-junit-report@cf701569b05ccdd861a76b8607a66d76f6fd4857
         if: ${{ !cancelled() && hashFiles('eval-results.junit.xml') != '' }}
         with:
           report_paths: eval-results.junit.xml
           check_name: Eval Test Results
           comment: false
+          annotate_only: true
           fail_on_failure: false
           require_tests: true
           include_passed: true
