@@ -31,8 +31,8 @@ name, such as `evals/code-review/` or `evals/security-review/`.
 
 ```yaml
 skill: skills/bug-detection.md
-runtime: claude
-model: claude-sonnet-4-6
+runtime: pi
+model: anthropic/claude-sonnet-4-6
 
 evals:
   - name: null-property-access
@@ -115,8 +115,12 @@ evals/
 Eval test names are formatted as:
 
 ```text
-<skill>/<runtime>/<model>/<case>
+<skill>/<case>
 ```
+
+The suite chooses runtime and model. The current full-pipeline suites run Pi
+with `anthropic/claude-sonnet-4-6`; future suites can matrix the same fixtures
+over multiple runtimes or models without changing case identity.
 
 The Vitest entrypoints are intentionally split by eval layer:
 
@@ -186,8 +190,8 @@ positive.
 # Run all evals (requires ANTHROPIC_API_KEY)
 pnpm evals
 
-# Run evals for a specific skill/runtime/model slice
-pnpm evals -t "code-review/pi/anthropic/claude-sonnet-4-6"
+# Run evals for a specific skill
+pnpm evals -t "code-review"
 
 # Run a single eval
 pnpm evals -t "null-property-access"
@@ -206,9 +210,8 @@ pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
 Evals make real API calls and are skipped when `ANTHROPIC_API_KEY` is not set.
-Full-pipeline YAML evals run skills on the Claude runtime with
-`claude-sonnet-4-6` by default. Pi evals should set `runtime: pi` and a
-provider-qualified model selector.
+Suites choose the runtime and model. The checked-in full-pipeline suites
+currently run Pi with `anthropic/claude-sonnet-4-6`.
 
 CI runs evals when eval files or harness code change on a PR, when changes land
 on `main`, or when a maintainer adds the `run-evals` label to a same-repository

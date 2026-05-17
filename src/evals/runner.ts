@@ -23,7 +23,7 @@ export interface RunEvalOptions {
 }
 
 export interface EvalSkillRunResult {
-  /** Display name (e.g. "code-review/pi/anthropic/claude-sonnet-4-6/case") */
+  /** Display name (e.g. "code-review/case") */
   name: string;
   /** Eval metadata */
   meta: EvalMeta;

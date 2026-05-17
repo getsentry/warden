@@ -35,8 +35,9 @@ summary for per-case test reporting, and gates the workflow on the aggregate
 - `src/evals/security-review.eval.ts`: security-review benchmark scenarios.
 - `src/evals/verify.eval.ts`: verifier-only scenarios.
 
-Eval names should read as `<skill>/<runtime>/<model>/<case>`. Avoid category
-names that hide the real skill under test.
+Eval names should read as `<skill>/<case>`. Runtime and model belong to the
+suite configuration, not the case identity. Avoid category names that hide the
+real skill under test.
 
 ## Adding Full-Pipeline Evals
 

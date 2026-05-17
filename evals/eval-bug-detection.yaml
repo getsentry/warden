@@ -1,4 +1,6 @@
 skill: skills/bug-detection.md
+runtime: pi
+model: anthropic/claude-sonnet-4-6
 
 evals:
   - name: null-property-access

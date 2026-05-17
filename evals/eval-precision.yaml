@@ -1,4 +1,6 @@
 skill: skills/precision.md
+runtime: pi
+model: anthropic/claude-sonnet-4-6
 
 evals:
   - name: ignores-style-issues
