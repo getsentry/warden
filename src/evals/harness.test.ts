@@ -116,4 +116,29 @@ describe('createWardenEvalJudge', () => {
       'should_find[0] severity could not be checked: no matched finding'
     );
   });
+
+  it('fails when the judge fails even if all should_find assertions are optional', async () => {
+    const meta = makeMeta({
+      should_find: [{ finding: 'optional issue', required: false }],
+      should_not_find: ['style-only feedback'],
+    });
+    mockedRunJudge.mockResolvedValue({
+      response: {
+        expectations: [
+          { met: false, matchedFindingIndex: null, reasoning: 'judge failed' },
+        ],
+        antiExpectations: [
+          { violated: false, violatingFindingIndex: null, reasoning: 'judge failed' },
+        ],
+      },
+      usage: emptyUsage(),
+      error: 'No JSON found in judge response',
+    });
+
+    const judge = createWardenEvalJudge('test-key');
+    const result = await judge(makeJudgeContext(meta, [makeFinding()]));
+
+    expect(result.score).toBe(0);
+    expect(result.metadata?.rationale).toBe('Judge failed: No JSON found in judge response');
+  });
 });

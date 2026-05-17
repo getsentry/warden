@@ -14,6 +14,7 @@ const JUDGE_TIMEOUT_MS = 60_000;
 export interface JudgeResult {
   response: JudgeResponse;
   usage: UsageStats;
+  error?: string;
 }
 
 /**
@@ -115,11 +116,12 @@ export async function runJudge(
       messages,
     });
   } catch (error) {
+    const reason = `Judge API call failed: ${error instanceof Error ? error.message : String(error)}`;
     // On API failure, return a judge response marking everything as failed
     const failedExpectations = meta.should_find.map(() => ({
       met: false,
       matchedFindingIndex: null,
-      reasoning: `Judge API call failed: ${error instanceof Error ? error.message : String(error)}`,
+      reasoning: reason,
     }));
     const failedAntiExpectations = meta.should_not_find.map(() => ({
       violated: false,
@@ -129,6 +131,7 @@ export async function runJudge(
     return {
       response: { expectations: failedExpectations, antiExpectations: failedAntiExpectations },
       usage: emptyUsage(),
+      error: reason,
     };
   }
 
@@ -142,6 +145,7 @@ export async function runJudge(
     return {
       response: buildFallbackResponse(meta, 'No text in judge response'),
       usage,
+      error: 'No text in judge response',
     };
   }
 
@@ -151,6 +155,7 @@ export async function runJudge(
     return {
       response: buildFallbackResponse(meta, 'No JSON found in judge response'),
       usage,
+      error: 'No JSON found in judge response',
     };
   }
 
@@ -162,6 +167,7 @@ export async function runJudge(
     return {
       response: buildFallbackResponse(meta, `Judge response JSON parse failed: ${message}`),
       usage,
+      error: `Judge response JSON parse failed: ${message}`,
     };
   }
 
@@ -171,6 +177,7 @@ export async function runJudge(
     return {
       response: buildFallbackResponse(meta, `Judge response validation failed: ${validated.error.message}`),
       usage,
+      error: `Judge response validation failed: ${validated.error.message}`,
     };
   }
 
@@ -180,12 +187,14 @@ export async function runJudge(
     return {
       response: buildFallbackResponse(meta, `Judge returned ${judgeResp.expectations.length} verdicts, expected ${meta.should_find.length}`),
       usage,
+      error: `Judge returned ${judgeResp.expectations.length} verdicts, expected ${meta.should_find.length}`,
     };
   }
   if (judgeResp.antiExpectations.length !== meta.should_not_find.length) {
     return {
       response: buildFallbackResponse(meta, `Judge returned ${judgeResp.antiExpectations.length} anti-verdicts, expected ${meta.should_not_find.length}`),
       usage,
+      error: `Judge returned ${judgeResp.antiExpectations.length} anti-verdicts, expected ${meta.should_not_find.length}`,
     };
   }
 

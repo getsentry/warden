@@ -179,6 +179,17 @@ export function createWardenEvalJudge(apiKey: string) {
     const meta = inputValue;
     const findings = output.data.findings;
     const judgeResult = await runJudge(meta, findings, apiKey);
+    if (judgeResult.error) {
+      return {
+        score: 0,
+        metadata: {
+          rationale: `Judge failed: ${judgeResult.error}`,
+          output: judgeResult.response,
+          usage: usageMetadata(judgeResult.usage),
+        },
+      };
+    }
+
     const passed = evalPassed(meta, judgeResult.response, findings);
     const reasons = failedJudgeReasons(meta, judgeResult.response, findings);
 
