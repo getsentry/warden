@@ -18,10 +18,9 @@ run when runtime or prompt changes need benchmark coverage. Fork PRs do not get
 eval secrets.
 
 The raw Vitest eval command can exit non-zero when individual evals miss. CI
-still records the JSON and JUnit reports, publishes the individual misses as
-JUnit annotations and job-summary details, and gates the workflow on the
-aggregate `Evaluation Results` baseline. The baseline is `0.75`, below the
-current `0.82` score but high enough to catch broad regressions.
+still records the JSON and JUnit reports, publishes a JUnit check summary for
+per-case test reporting, and gates the workflow on the aggregate
+`Evaluation Results` baseline. The baseline is `0.75`.
 
 ## Eval Layers
 

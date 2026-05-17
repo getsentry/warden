@@ -41,6 +41,7 @@ git clone git@github.com:getsentry/warden.git
 cd warden
 pnpm install && pnpm build
 pnpm test              # unit tests
+pnpm test:coverage     # unit tests with LCOV coverage
 pnpm evals             # end-to-end evals (requires API key)
 ```
 

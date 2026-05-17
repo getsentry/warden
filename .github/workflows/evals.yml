@@ -1,6 +1,7 @@
 name: Evals
 
 permissions:
+  actions: read
   checks: write
   contents: read
   pull-requests: read
@@ -130,7 +131,6 @@ jobs:
           report_paths: eval-results.junit.xml
           check_name: Eval Test Results
           comment: false
-          annotate_only: true
           fail_on_failure: false
           require_tests: true
           include_passed: true

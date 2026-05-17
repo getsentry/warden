@@ -1,7 +1,11 @@
 name: CI
 
 permissions:
+  actions: read
+  checks: write
   contents: read
+  pull-requests: read
+  statuses: write
 
 on:
   push:
@@ -25,7 +29,41 @@ jobs:
 
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
+      - name: Test
+        env:
+          VITEST_JUNIT: test-results.junit.xml
+        run: pnpm test:coverage
+
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@cf701569b05ccdd861a76b8607a66d76f6fd4857
+        if: ${{ !cancelled() && hashFiles('test-results.junit.xml') != '' }}
+        with:
+          report_paths: test-results.junit.xml
+          check_name: Unit Test Results
+          comment: false
+          fail_on_failure: false
+          require_tests: true
+          include_passed: true
+          detailed_summary: true
+
+      - name: Verify coverage report
+        if: ${{ success() }}
+        run: test -f coverage/lcov.info
+
+      - name: Coverage report
+        uses: getsentry/codecov-action@v1
+        if: ${{ success() && hashFiles('coverage/lcov.info') != '' }}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: ./coverage/lcov.info
+          coverage-format: lcov
+          disable-search: true
+          enable-tests: false
+          flags: unittests
+          name: unit-tests
+          informational-project: true
+          informational-patch: true
+          fail-ci-if-error: true
       - run: pnpm build
       - run: pnpm build:action
 
