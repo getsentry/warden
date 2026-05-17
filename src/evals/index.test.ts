@@ -214,9 +214,12 @@ describe('standalone scenario files', () => {
       baseDir: evalsDir,
     });
 
-    expect(metas.length).toBe(2);
-    expect(metas.map((meta) => meta.name)).toContain('eval-optional-assertion-rationale');
-    expect(metas.map((meta) => meta.name)).toContain('robots-prefix-blocks-public-metadata');
+    expect(metas.map((meta) => meta.name)).toEqual(expect.arrayContaining([
+      'eval-optional-assertion-rationale',
+      'robots-prefix-blocks-public-metadata',
+      'sentry-vitest-evals-duration-sixty-seconds',
+      'sentry-vitest-evals-github-reporter-positional-json',
+    ]));
     expect(metas.every((meta) => meta.skillName === 'code-review')).toBe(true);
     expect(metas[0]?.skillPath).toContain('src/builtin-skills/code-review/SKILL.md');
   });

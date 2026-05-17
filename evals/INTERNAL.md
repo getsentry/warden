@@ -23,6 +23,13 @@ still records the JSON and JUnit reports, publishes JUnit annotations and a job
 summary for per-case test reporting, and gates the workflow on the aggregate
 `Evaluation Results` baseline. The baseline is `0.75`.
 
+Individual misses are useful harness debt. For a verified real bug, write the
+expected `should_find` for the bug Warden should catch even if the current
+pipeline fails, drops the candidate in verification, finds only an adjacent
+duplicate, or uses the wrong severity. Do not tune assertions to the current
+output just to get a passing eval. Remove or skip a bug fixture only when the
+source finding is not actually a reachable bug under the target skill.
+
 ## Eval Layers
 
 - `evals/*.yaml`: small full-pipeline suites using test skills.
@@ -49,7 +56,8 @@ real skill under test.
    `evals/fixtures/<scenario>/github/<owner>/<repo>/<repo-relative-path>` to
    preserve source context while eval output uses `<scenario>/<repo-relative-path>`.
    Scaffolded source repositories are still passed to prompts as repository context.
-3. Write a specific `should_find` assertion and useful `should_not_find` guards.
+3. Write a specific `should_find` assertion for the verified bug, not for the
+   current Warden output, and add useful `should_not_find` guards.
 4. Run the narrow case first with `pnpm evals -t <scenario>`.
 5. Run the suite with `pnpm evals -t <category>`.
 

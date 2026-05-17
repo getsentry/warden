@@ -222,6 +222,19 @@ JUnit annotations and a job summary for per-case test reporting, then gates the
 workflow on the aggregate `Evaluation Results` score. The current baseline
 threshold is `0.75`.
 
+## Expected Misses
+
+Eval fixtures are benchmark targets, not proof that the current harness already
+passes. When a source finding is verified as a real bug, encode the bug Warden
+should find even if the current pipeline misses it, verifies it away, reports a
+nearby duplicate, or assigns a different severity. Do not weaken `should_find`
+or delete a real bug fixture just to make today's eval run green.
+
+Only remove or avoid a bug fixture when the source finding is not a real,
+reachable bug under the skill's criteria. If Warden reports the wrong adjacent
+issue, keep the expected assertion focused on the verified bug and use the miss
+to improve discovery, verification, merging, or judging later.
+
 ## Adding a New Eval
 
 1. Pick an existing skill directory, or create `evals/<skill>/`
