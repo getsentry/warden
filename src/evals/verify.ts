@@ -13,7 +13,8 @@ import { resolveSkillAsync } from '../skills/loader.js';
 import { verifyFindings } from '../sdk/verify.js';
 import { FindingSchema, type Finding, type UsageStats } from '../types/index.js';
 import { RuntimeNameSchema, type RuntimeName } from '../sdk/runtimes/types.js';
-import { discoverEvalScenarioFiles } from './index.js';
+import { discoverEvalScenarioFiles, resolveEvalSkillName } from './index.js';
+import { formatEvalId } from './names.js';
 import { setupEvalRepo } from './runner.js';
 import type { EvalMeta } from './types.js';
 import { usageToSummary } from './usage.js';
@@ -51,6 +52,7 @@ export type VerificationEvalOutput = z.infer<typeof VerificationEvalOutputSchema
 export interface VerificationEvalMeta {
   name: string;
   category: string;
+  skillName: string;
   given: string;
   skillPath: string;
   filePaths: string[];
@@ -135,6 +137,7 @@ export function resolveVerificationEvalMeta(
   return {
     name,
     category: options.category,
+    skillName: resolveEvalSkillName(skillPath),
     given: scenario.given,
     skillPath,
     filePaths,
@@ -155,7 +158,7 @@ export async function runVerificationEval(
   options: RunVerificationEvalOptions
 ): Promise<VerificationEvalRunResult> {
   const startTime = Date.now();
-  const name = `${meta.category}/${meta.name}`;
+  const name = formatEvalId(meta);
   const logs: string[] = [];
 
   const log = (msg: string): void => {
@@ -168,6 +171,7 @@ export async function runVerificationEval(
   const repoMeta: EvalMeta = {
     name: meta.name,
     category: meta.category,
+    skillName: meta.skillName,
     given: meta.given,
     skillPath: meta.skillPath,
     filePaths: meta.filePaths,
@@ -274,6 +278,7 @@ export function createVerificationEvalHarness(options: RunVerificationEvalOption
           metadata: normalizeMetadata({
             category: meta.category,
             scenario: meta.name,
+            skill: meta.skillName,
             skillPath: meta.skillPath,
           }),
         },

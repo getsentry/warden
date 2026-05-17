@@ -17,6 +17,7 @@ function makeMeta(overrides: Partial<EvalMeta> = {}): EvalMeta {
   return {
     name: 'optional-assertion',
     category: 'code-review',
+    skillName: 'code-review',
     given: 'an eval with an optional assertion',
     skillPath: '/path/to/skills/code-review/SKILL.md',
     filePaths: ['/path/to/fixtures/harness.ts'],

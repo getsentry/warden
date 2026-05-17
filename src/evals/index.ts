@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
   DEFAULT_EVAL_MODEL,
@@ -30,6 +30,49 @@ export interface EvalScenarioSetOptions {
  */
 function getEvalsDir(): string {
   return join(import.meta.dirname, '..', '..', 'evals');
+}
+
+function fallbackSkillName(skillPath: string): string {
+  const filename = basename(skillPath);
+  return filename === 'SKILL.md'
+    ? basename(dirname(skillPath))
+    : filename.replace(/\.[^.]+$/, '');
+}
+
+/**
+ * Resolve the skill name used in eval output from skill frontmatter.
+ */
+export function resolveEvalSkillName(skillPath: string): string {
+  let content: string;
+  try {
+    content = readFileSync(skillPath, 'utf-8');
+  } catch {
+    return fallbackSkillName(skillPath);
+  }
+
+  if (!content.startsWith('---')) {
+    return fallbackSkillName(skillPath);
+  }
+
+  const end = content.indexOf('\n---', 3);
+  if (end === -1) {
+    return fallbackSkillName(skillPath);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(content.slice(3, end));
+  } catch {
+    return fallbackSkillName(skillPath);
+  }
+  if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+    const name = (parsed as { name?: unknown }).name;
+    if (typeof name === 'string' && name.trim()) {
+      return name.trim();
+    }
+  }
+
+  return fallbackSkillName(skillPath);
 }
 
 /**
@@ -154,6 +197,8 @@ export function resolveEvalMetas(evalFile: EvalFile, yamlPath: string): EvalMeta
     throw new Error(`Eval skill not found in ${yamlPath}: ${evalFile.skill}`);
   }
 
+  const skillName = resolveEvalSkillName(skillPath);
+
   return evalFile.evals.map((scenario) => {
     const filePaths = scenario.files.map((file) => {
       const filePath = join(evalsDir, file);
@@ -166,6 +211,7 @@ export function resolveEvalMetas(evalFile: EvalFile, yamlPath: string): EvalMeta
     return {
       name: scenario.name,
       category,
+      skillName,
       given: scenario.given,
       skillPath,
       filePaths,
@@ -204,6 +250,7 @@ export function resolveEvalScenarioMeta(
   return {
     name,
     category: options.category,
+    skillName: resolveEvalSkillName(skillPath),
     given: scenario.given,
     skillPath,
     filePaths,

@@ -42,7 +42,7 @@ src/                   # @sentry/warden core (root package)
 └── examples/          # Example configurations
 
 evals/                 # Eval specs, fixtures, and test skills (see evals/README.md)
-├── *.yaml             # YAML eval definitions
+├── eval-*.yaml        # Harness smoke suites using eval-* test skills
 ├── code-review/       # Code-review benchmark scenarios
 ├── security-review/   # Security-review benchmark scenarios
 ├── verification/      # Verifier-only eval scenarios

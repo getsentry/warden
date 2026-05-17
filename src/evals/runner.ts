@@ -5,6 +5,7 @@ import { execGitNonInteractive } from '../utils/exec.js';
 import { buildLocalEventContext } from '../cli/context.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { runSkill } from '../sdk/runner.js';
+import { formatEvalId } from './names.js';
 import type { EvalMeta } from './types.js';
 import type { Finding, SkillReport } from '../types/index.js';
 import type { FindingProcessingEvent } from '../sdk/runner.js';
@@ -22,7 +23,7 @@ export interface RunEvalOptions {
 }
 
 export interface EvalSkillRunResult {
-  /** Display name (e.g. "bug-detection/null-property-access") */
+  /** Display name (e.g. "code-review/pi/anthropic/claude-sonnet-4-6/case") */
   name: string;
   /** Eval metadata */
   meta: EvalMeta;
@@ -115,7 +116,7 @@ export async function runEvalSkill(
   options: RunEvalOptions
 ): Promise<EvalSkillRunResult> {
   const startTime = Date.now();
-  const name = `${meta.category}/${meta.name}`;
+  const name = formatEvalId(meta);
   const logs: string[] = [];
 
   const log = (msg: string): void => {

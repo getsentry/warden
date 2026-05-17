@@ -100,8 +100,10 @@ export type EvalFile = z.infer<typeof EvalFileSchema>;
 export interface EvalMeta {
   /** Scenario name (e.g., "null-property-access") */
   name: string;
-  /** Category name from the YAML filename (e.g., "bug-detection") */
+  /** Category name from the YAML filename (e.g., "eval-bug-detection") */
   category: string;
+  /** Resolved skill name from the skill frontmatter or file path */
+  skillName: string;
   /** What this eval tests (BDD "given") */
   given: string;
   /** Resolved absolute path to the skill file */

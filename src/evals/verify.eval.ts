@@ -5,6 +5,7 @@ import {
   discoverVerificationEvalScenarios,
   VerificationEvalOutputSchema,
 } from './verify.js';
+import { formatEvalTestName } from './names.js';
 
 const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 const evals = discoverVerificationEvalScenarios({
@@ -28,7 +29,7 @@ describeEval(
   (it) => {
     for (const meta of evals) {
       it(
-        `${meta.name}: ${meta.given}`,
+        formatEvalTestName(meta),
         { timeout: 120_000 },
         async ({ run }) => {
           const result = await run(meta);

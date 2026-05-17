@@ -76,6 +76,7 @@ describe('resolveEvalMetas', () => {
     for (const meta of metas) {
       expect(meta).toHaveProperty('name');
       expect(meta).toHaveProperty('category');
+      expect(meta).toHaveProperty('skillName');
       expect(meta).toHaveProperty('given');
       expect(meta).toHaveProperty('skillPath');
       expect(meta).toHaveProperty('filePaths');
@@ -140,13 +141,14 @@ describe('resolveEvalMetas', () => {
     }
   });
 
-  it('extracts category from YAML filename', () => {
+  it('extracts category from YAML filename and skillName from frontmatter', () => {
     const files = discoverEvalFiles(evalsDir);
     const evalFile = loadEvalFile(files[0]!);
     const metas = resolveEvalMetas(evalFile, files[0]!);
 
-    // First file alphabetically should be bug-detection.yaml
-    expect(metas[0]!.category).toBe('bug-detection');
+    // First file alphabetically should be eval-bug-detection.yaml
+    expect(metas[0]!.category).toBe('eval-bug-detection');
+    expect(metas[0]!.skillName).toBe('eval-bug-detection');
   });
 });
 
@@ -183,6 +185,7 @@ describe('standalone scenario files', () => {
 
     expect(meta.name).toBe('sentry-replay-delete-read-scope');
     expect(meta.category).toBe('security-review');
+    expect(meta.skillName).toBe('security-review');
     expect(meta.skillPath).toContain('src/builtin-skills/security-review/SKILL.md');
     expect(meta.runtime).toBe('pi');
     expect(meta.model).toBe('anthropic/claude-sonnet-4-6');
@@ -211,7 +214,10 @@ describe('standalone scenario files', () => {
       baseDir: evalsDir,
     });
 
+    expect(metas.length).toBe(2);
     expect(metas.map((meta) => meta.name)).toContain('eval-optional-assertion-rationale');
+    expect(metas.map((meta) => meta.name)).toContain('robots-prefix-blocks-public-metadata');
+    expect(metas.every((meta) => meta.skillName === 'code-review')).toBe(true);
     expect(metas[0]?.skillPath).toContain('src/builtin-skills/code-review/SKILL.md');
   });
 
@@ -238,6 +244,7 @@ describe('discoverEvals', () => {
     for (const meta of evals) {
       expect(meta).toHaveProperty('name');
       expect(meta).toHaveProperty('category');
+      expect(meta).toHaveProperty('skillName');
       expect(meta).toHaveProperty('given');
       expect(meta.should_find.length).toBeGreaterThan(0);
     }

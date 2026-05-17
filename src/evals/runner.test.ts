@@ -17,6 +17,7 @@ describe('setupEvalRepo', () => {
     const meta: EvalMeta = {
       name: 'sentry-preprod-size-analysis-base-artifact-access',
       category: 'security-review',
+      skillName: 'security-review',
       given: 'public size-analysis endpoint accepts a baseArtifactId',
       skillPath: join(repoRoot, 'src', 'builtin-skills', 'security-review', 'SKILL.md'),
       filePaths: [

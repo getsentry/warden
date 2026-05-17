@@ -1,0 +1,15 @@
+{
+  "given": "a robots.txt golden test disallows a prefix that also blocks a documented public metadata endpoint",
+  "files": [
+    "fixtures/robots-prefix-blocks-public-metadata/__static_test.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "robots.txt Disallow /mcp is a prefix rule that blocks the public /mcp.json metadata endpoint from crawlers",
+      "severity": "high"
+    }
+  ],
+  "should_not_find": [
+    "the test file being test-only makes the finding low severity"
+  ]
+}

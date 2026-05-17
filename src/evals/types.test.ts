@@ -5,7 +5,8 @@ import type { EvalMeta, JudgeResponse } from './types.js';
 function makeMeta(overrides: Partial<EvalMeta> = {}): EvalMeta {
   return {
     name: 'test-eval',
-    category: 'bug-detection',
+    category: 'eval-bug-detection',
+    skillName: 'eval-bug-detection',
     given: 'code with a known bug',
     skillPath: '/path/to/skills/bug-detection.md',
     filePaths: ['/path/to/fixtures/test/file.ts'],

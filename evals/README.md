@@ -24,9 +24,10 @@ real.
 
 ## Eval Formats
 
-Small suites can use YAML files at the top level of `evals/`. Each file
-describes a category of behaviors with a shared test skill and a list of
-scenarios.
+Small suites can use YAML files at the top level of `evals/`. These are mostly
+generic harness smoke suites that use `eval-*` test skills. Product-facing
+benchmark suites should prefer one JSON file per scenario under the real skill
+name, such as `evals/code-review/` or `evals/security-review/`.
 
 ```yaml
 skill: skills/bug-detection.md
@@ -79,10 +80,11 @@ case.
 ```
 evals/
 ├── README.md
-├── bug-detection.yaml          # Category: finding logic bugs
-├── security-scanning.yaml      # Category: finding security vulnerabilities
-├── precision.yaml              # Category: avoiding false positives
+├── eval-bug-detection.yaml     # Harness smoke suite using eval-bug-detection
+├── eval-security-scanning.yaml # Harness smoke suite using eval-security-scanning
+├── eval-precision.yaml         # Harness smoke suite using eval-precision
 ├── code-review/                # One scenario per code-review correctness case
+│   └── robots-prefix-blocks-public-metadata.json
 ├── security-review/            # One scenario per JSON file
 │   └── sentry-replay-delete-read-scope.json
 ├── verification/               # Candidate findings for verifier-only evals
@@ -108,6 +110,12 @@ evals/
     │   └── server.ts
     └── ignores-style-issues/
         └── utils.ts
+```
+
+Eval test names are formatted as:
+
+```text
+<skill>/<runtime>/<model>/<case>
 ```
 
 The Vitest entrypoints are intentionally split by eval layer:
@@ -178,8 +186,8 @@ positive.
 # Run all evals (requires ANTHROPIC_API_KEY)
 pnpm evals
 
-# Run evals for a specific category
-pnpm evals -t "bug-detection"
+# Run evals for a specific skill/runtime/model slice
+pnpm evals -t "code-review/pi/anthropic/claude-sonnet-4-6"
 
 # Run a single eval
 pnpm evals -t "null-property-access"
@@ -213,8 +221,8 @@ threshold is `0.75`.
 
 ## Adding a New Eval
 
-1. Pick an existing YAML suite or scenario directory
-2. Add a YAML scenario entry or create `evals/<category>/<scenario>.json`
+1. Pick an existing skill directory, or create `evals/<skill>/`
+2. Add a YAML scenario entry for harness smoke suites or create `evals/<skill>/<scenario>.json`
 3. Create checked-in fixture files under `evals/fixtures/<scenario>/`
 4. Run `pnpm evals` to verify
 
