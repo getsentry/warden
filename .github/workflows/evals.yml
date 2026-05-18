@@ -59,7 +59,7 @@ jobs:
             }
 
             const labels = new Set((pr.labels ?? []).map((label) => label.name));
-            if (labels.has('run-evals') || labels.has('evals')) {
+            if (labels.has('run-evals')) {
               setRun(true, 'run-evals label present');
               return;
             }
