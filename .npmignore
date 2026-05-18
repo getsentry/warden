@@ -15,6 +15,7 @@ action.yml
 *.test.d.ts
 **/*.test.*
 vitest*.config.ts
+coverage/
 
 # Environment and secrets (.npmignore overrides .gitignore)
 .env
@@ -24,6 +25,7 @@ vitest*.config.ts
 .github/
 .agents/
 .codex/
+.cursor/
 .warden/
 .claude/
 .dex/
@@ -34,7 +36,6 @@ pnpm-lock.yaml
 pnpm-workspace.yaml
 
 # Evals and dev scripts
-evals/
 /scripts/
 superwarden-bench/
 

@@ -15,15 +15,15 @@
     "build": "pnpm run clean:dist && tsc -p tsconfig.build.json",
     "build:action": "rm -rf dist/action && ncc build src/action/main.ts -o dist/action --no-source-map-register --license licenses.txt",
     "dev": "tsc --watch",
-    "lint": "oxlint src",
-    "lint:fix": "oxlint --fix src",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:examples": "vitest run --config vitest.integration.config.ts",
-    "evals": "vitest run --config vitest.evals.config.ts",
-    "evals:scaffold": "tsx scripts/scaffold-eval.ts",
-    "typecheck": "tsc --noEmit",
+    "evals": "pnpm -C packages/evals evals",
+    "evals:scaffold": "pnpm -C packages/evals scaffold",
+    "typecheck": "tsc --noEmit && pnpm -C packages/evals typecheck",
     "update-pricing": "tsx scripts/update-pricing.ts",
     "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts",
     "docs": "pnpm --filter dex-docs dev",
@@ -34,6 +34,15 @@
   },
   "lint-staged": {
     "src/**/*.ts": [
+      "oxlint --fix"
+    ],
+    "packages/evals/src/**/*.ts": [
+      "oxlint --fix"
+    ],
+    "packages/evals/scripts/**/*.ts": [
+      "oxlint --fix"
+    ],
+    "packages/evals/*.ts": [
       "oxlint --fix"
     ],
     "packages/docs/**/*.astro": [
@@ -89,8 +98,7 @@
     "tinyrainbow": "^3.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.6",
-    "vitest-evals": "0.9.0-beta.3"
+    "vitest": "^4.1.6"
   },
   "engines": {
     "node": ">=20.0.0"

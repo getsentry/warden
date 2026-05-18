@@ -1,0 +1,34 @@
+{
+  "given": "GitHub reporter CLI argument parsing initializes a default JSON report path before parsing arguments while also keeping a positional JSON path fallback",
+  "files": [
+    "fixtures/sentry-vitest-evals-github-reporter-positional-json/github/getsentry/vitest-evals/packages/github-reporter/src/cli.ts"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-vitest-evals-github-reporter-positional-json/github/getsentry/vitest-evals/LICENSE"
+  ],
+  "should_find": [
+    {
+      "finding": "parseArgs initializes jsonPath from VITEST_EVALS_JSON_REPORT or vitest-results.json before argument parsing, so the default-case branch intended to accept a bare positional JSON report path is unreachable and vitest-evals-github-report my-results.json throws Unknown argument instead of using that file"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues",
+    "the documented --json flag being broken",
+    "the CLI lacking a default JSON path when no arguments are provided"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/vitest-evals/pull/56#discussion_r3255238970",
+    "repository": "getsentry/vitest-evals",
+    "source_ref": "72d64e16efcfa5c50c2f1091b24b2dfacbcf1b3d",
+    "side": "head",
+    "body": "Regression seed from Sentry-disclosed potential bug. Verified real: parseArgs defaults jsonPath before checking the positional fallback, making a bare report path unreachable. Severity is intentionally not asserted; Sentry labeled it low, while Warden may treat shipped CLI argument failures under its published-interface rubric.",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-vitest-evals-github-reporter-positional-json/github/getsentry/vitest-evals/packages/github-reporter/src/cli.ts",
+        "sourcePath": "packages/github-reporter/src/cli.ts",
+        "ref": "72d64e16efcfa5c50c2f1091b24b2dfacbcf1b3d"
+      }
+    ]
+  }
+}

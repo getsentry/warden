@@ -11,13 +11,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "evals/**"
-      - "scripts/scaffold-eval.ts"
-      - "src/evals/**"
+      - "packages/evals/**"
       - ".github/workflows/evals.yml"
       - "package.json"
       - "pnpm-lock.yaml"
-      - "vitest.evals.config.ts"
   pull_request:
     types: [opened, synchronize, reopened, labeled]
 
@@ -33,13 +30,10 @@ jobs:
         with:
           script: |
             const evalPaths = [
-              'evals/',
-              'scripts/scaffold-eval.ts',
-              'src/evals/',
+              'packages/evals/',
               '.github/workflows/evals.yml',
               'package.json',
               'pnpm-lock.yaml',
-              'vitest.evals.config.ts',
             ];
 
             function setRun(run, reason) {
@@ -113,8 +107,8 @@ jobs:
 
       - name: Run evals
         env:
-          VITEST_EVALS_JSON: eval-results.json
-          VITEST_EVALS_JUNIT: eval-results.junit.xml
+          VITEST_EVALS_JSON: ../../eval-results.json
+          VITEST_EVALS_JUNIT: ../../eval-results.junit.xml
         run: |
           set +e
           pnpm evals

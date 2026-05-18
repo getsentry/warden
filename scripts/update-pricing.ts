@@ -52,7 +52,7 @@ const PRICE_FALLBACKS: Record<string, string> = {
   'claude-sonnet-4-6': 'claude-sonnet-4-5',
 };
 
-function hasPrice(record: ModelPricingRecord | undefined): boolean {
+function hasPrice(record: ModelPricingRecord | undefined): record is ModelPricingRecord {
   return record !== undefined && (
     record.inputPerMTok > 0 ||
     record.outputPerMTok > 0 ||
@@ -64,10 +64,11 @@ function hasPrice(record: ModelPricingRecord | undefined): boolean {
 
 function fillPricingFallbacks(pricing: Record<string, ModelPricingRecord>): void {
   for (const [target, source] of Object.entries(PRICE_FALLBACKS)) {
-    if (hasPrice(pricing[target]) || !hasPrice(pricing[source])) {
+    const sourcePricing = pricing[source];
+    if (hasPrice(pricing[target]) || !hasPrice(sourcePricing)) {
       continue;
     }
-    pricing[target] = { ...pricing[source]! };
+    pricing[target] = { ...sourcePricing };
   }
 }
 

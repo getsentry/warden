@@ -5,9 +5,7 @@
     "dist",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
-    "src/**/*.eval.ts",
     "src/**/*.integration.test.ts",
-    "src/**/*.integration.test.tsx",
-    "src/evals/**"
+    "src/**/*.integration.test.tsx"
   ]
 }

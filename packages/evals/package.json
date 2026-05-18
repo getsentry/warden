@@ -1,0 +1,24 @@
+{
+  "name": "warden-evals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "evals": "vitest run --config vitest.config.ts",
+    "scaffold": "tsx scripts/scaffold-eval.ts",
+    "test": "vitest run --config vitest.unit.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "dotenv": "^17.2.3",
+    "vitest-evals": "0.9.0-beta.3",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.6"
+  }
+}

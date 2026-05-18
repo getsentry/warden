@@ -1,0 +1,30 @@
+{
+  "given": "release threshold endpoint builds an empty ORM filter when the caller has no accessible projects",
+  "files": [
+    "fixtures/sentry-release-threshold-empty-project-filter/release_threshold_index.py"
+  ],
+  "should_find": [
+    {
+      "finding": "ReleaseThreshold query omits project and organization scoping when get_projects returns an empty list, allowing cross-project or cross-organization threshold disclosure"
+    }
+  ],
+  "should_not_find": [
+    "generic missing serializer validation",
+    "missing rate limiting"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-release-threshold-empty-project-filter/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/pull/114049",
+    "repository": "getsentry/sentry",
+    "source_ref": "aebfdffc6afec83f0c66830e93fd872aa4c85c43",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-release-threshold-empty-project-filter/release_threshold_index.py",
+        "sourcePath": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+        "ref": "aebfdffc6afec83f0c66830e93fd872aa4c85c43"
+      }
+    ]
+  }
+}

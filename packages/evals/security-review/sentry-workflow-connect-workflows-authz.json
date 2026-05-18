@@ -1,0 +1,30 @@
+{
+  "given": "detector-to-workflow connection validates target workflows exist in the organization but does not check permission to modify those workflows",
+  "files": [
+    "fixtures/sentry-workflow-connect-workflows-authz/workflow_validator_utils.py"
+  ],
+  "should_find": [
+    {
+      "finding": "connect_detectors_to_workflows permits linking a detector to arbitrary organization workflows because validate_workflows_exist performs no authorization check"
+    }
+  ],
+  "should_not_find": [
+    "detector ID enumeration",
+    "bulk operation performance"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-workflow-connect-workflows-authz/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/blob/d12e82ea6554d6794b1a490369ec6baa75aeaa15/src/sentry/workflow_engine/endpoints/validators/utils.py",
+    "repository": "getsentry/sentry",
+    "source_ref": "d12e82ea6554d6794b1a490369ec6baa75aeaa15",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-workflow-connect-workflows-authz/workflow_validator_utils.py",
+        "sourcePath": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+        "ref": "d12e82ea6554d6794b1a490369ec6baa75aeaa15"
+      }
+    ]
+  }
+}

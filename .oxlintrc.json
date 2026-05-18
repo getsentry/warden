@@ -12,10 +12,11 @@
   "ignorePatterns": [
     "dist/**",
     "node_modules/**",
+    "coverage/**",
     "*.js",
     "examples/**",
-    "scripts/**",
-    "vitest*.config.ts"
+    "packages/docs/**/*.astro",
+    "packages/evals/fixtures/**"
   ],
   "rules": {
     "constructor-super": "error",

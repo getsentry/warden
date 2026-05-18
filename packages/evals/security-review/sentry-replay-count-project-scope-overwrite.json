@@ -1,0 +1,30 @@
+{
+  "given": "replay count helper replaces request-scoped projects with projects from issue IDs resolved across the organization",
+  "files": [
+    "fixtures/sentry-replay-count-project-scope-overwrite/replay_counts.py"
+  ],
+  "should_find": [
+    {
+      "finding": "issue.id replay count path overwrites snuba_params.projects with projects from all matching organization groups, bypassing the caller's project access scope"
+    }
+  ],
+  "should_not_find": [
+    "query string parsing as the primary issue",
+    "missing pagination"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-replay-count-project-scope-overwrite/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/blob/d12e82ea6554d6794b1a490369ec6baa75aeaa15/src/sentry/replays/usecases/replay_counts.py",
+    "repository": "getsentry/sentry",
+    "source_ref": "d12e82ea6554d6794b1a490369ec6baa75aeaa15",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-replay-count-project-scope-overwrite/replay_counts.py",
+        "sourcePath": "src/sentry/replays/usecases/replay_counts.py",
+        "ref": "d12e82ea6554d6794b1a490369ec6baa75aeaa15"
+      }
+    ]
+  }
+}

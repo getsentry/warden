@@ -1,0 +1,30 @@
+{
+  "given": "replay detail endpoint grants DELETE to project:read and then enqueues destructive replay deletion",
+  "files": [
+    "fixtures/sentry-replay-delete-read-scope/project_replay_details.py"
+  ],
+  "should_find": [
+    {
+      "finding": "DELETE accepts project:read scope, so read-only project users can permanently delete replay data"
+    }
+  ],
+  "should_not_find": [
+    "missing UUID validation",
+    "missing feature flag check"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-replay-delete-read-scope/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/pull/114159",
+    "repository": "getsentry/sentry",
+    "source_ref": "8e848834d2efde23ae32f1c93957842460b12ea4",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-replay-delete-read-scope/project_replay_details.py",
+        "sourcePath": "src/sentry/replays/endpoints/project_replay_details.py",
+        "ref": "8e848834d2efde23ae32f1c93957842460b12ea4"
+      }
+    ]
+  }
+}

@@ -105,9 +105,6 @@ importers:
       vitest:
         specifier: ^4.1.6
         version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.0.10)(@vitest/coverage-v8@4.1.6)(vite@7.3.1(@types/node@25.0.10)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-      vitest-evals:
-        specifier: 0.9.0-beta.3
-        version: 0.9.0-beta.3(tinyrainbow@3.0.3)(vitest@4.1.6)(zod@4.3.6)
 
   packages/docs:
     dependencies:
@@ -139,6 +136,37 @@ importers:
       '@vercel/functions':
         specifier: ^2.0.0
         version: 2.2.13(@aws-sdk/credential-provider-web-identity@3.972.38)
+
+  packages/evals:
+    dependencies:
+      '@octokit/rest':
+        specifier: ^22.0.1
+        version: 22.0.1
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      vitest-evals:
+        specifier: 0.9.0-beta.3
+        version: 0.9.0-beta.3(tinyrainbow@3.1.0)(vitest@4.1.6)(zod@4.3.6)
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.3
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.10
+        version: 25.0.10
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.0.10)(@vitest/coverage-v8@4.1.6)(vite@7.3.1(@types/node@25.0.10)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
 packages:
 
@@ -9118,9 +9146,9 @@ snapshots:
     optionalDependencies:
       vite: 6.4.1(@types/node@25.0.10)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3)
 
-  vitest-evals@0.9.0-beta.3(tinyrainbow@3.0.3)(vitest@4.1.6)(zod@4.3.6):
+  vitest-evals@0.9.0-beta.3(tinyrainbow@3.1.0)(vitest@4.1.6)(zod@4.3.6):
     dependencies:
-      tinyrainbow: 3.0.3
+      tinyrainbow: 3.1.0
       vitest: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.0.10)(@vitest/coverage-v8@4.1.6)(vite@7.3.1(@types/node@25.0.10)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
     optionalDependencies:
       zod: 4.3.6

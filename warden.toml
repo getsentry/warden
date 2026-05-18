@@ -7,8 +7,8 @@ model = "anthropic/claude-sonnet-4-6"
 failOn = "high"
 # Show annotations for medium+ severity findings
 reportOn = "medium"
-# Exclude build output from all skills
-ignorePaths = ["dist/**", "evals/**"]
+# Exclude build output and internal eval fixtures from all skills
+ignorePaths = ["dist/**", "packages/evals/**"]
 
 [[skills]]
 name = "security-review"

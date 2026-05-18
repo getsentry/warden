@@ -45,7 +45,7 @@ pnpm test:coverage     # unit tests with LCOV coverage
 pnpm evals             # end-to-end evals (requires API key)
 ```
 
-See [`evals/README.md`](evals/README.md) for the eval framework.
+See [`packages/evals/README.md`](packages/evals/README.md) for the eval framework.
 
 ## License
 

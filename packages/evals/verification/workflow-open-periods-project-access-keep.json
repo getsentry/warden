@@ -1,0 +1,36 @@
+{
+  "given": "verifier keeps an open-periods authorization finding when detectorId or groupId is org-scoped but project access is never checked",
+  "files": [
+    "fixtures/sentry-workflow-open-periods-project-access/organization_open_periods.py"
+  ],
+  "candidate": {
+    "id": "verification-workflow-open-periods",
+    "severity": "medium",
+    "confidence": "medium",
+    "title": "Open-periods endpoint lacks project access checks",
+    "description": "The endpoint resolves detectorId or groupId by organization only and returns group open-period activity without checking whether the caller can access the target project.",
+    "verification": "Source: request query parameters detectorId and groupId. Sink: Response returns open period IDs for the resolved group. Boundary: helper methods validate organization_id but never call a request access check for detector.project or group.project.",
+    "location": {
+      "path": "sentry-workflow-open-periods-project-access/organization_open_periods.py",
+      "startLine": 21
+    }
+  },
+  "expect": {
+    "verdict": "keep"
+  },
+  "supporting_files": [
+    "fixtures/sentry-workflow-open-periods-project-access/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/blob/d12e82ea6554d6794b1a490369ec6baa75aeaa15/src/sentry/workflow_engine/endpoints/organization_open_periods.py",
+    "repository": "getsentry/sentry",
+    "source_ref": "d12e82ea6554d6794b1a490369ec6baa75aeaa15",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-workflow-open-periods-project-access/organization_open_periods.py",
+        "sourcePath": "src/sentry/workflow_engine/endpoints/organization_open_periods.py",
+        "ref": "d12e82ea6554d6794b1a490369ec6baa75aeaa15"
+      }
+    ]
+  }
+}
