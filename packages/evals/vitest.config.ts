@@ -9,6 +9,7 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**'],
     // Load .env, .env.local, .env.test for API keys
     setupFiles: ['./src/setup.ts'],
+    includeTaskLocation: true,
     reporters: [
       ['vitest-evals/reporter', { toolDetails: false }],
       ...(jsonOutputFile ? [['json']] : []),
