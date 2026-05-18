@@ -1,7 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
 const jsonOutputFile = process.env['VITEST_EVALS_JSON'];
-const junitOutputFile = process.env['VITEST_EVALS_JUNIT'];
 
 export default defineConfig({
   test: {
@@ -13,11 +12,9 @@ export default defineConfig({
     reporters: [
       ['vitest-evals/reporter', { toolDetails: false }],
       ...(jsonOutputFile ? [['json']] : []),
-      ...(junitOutputFile ? [['junit']] : []),
     ],
     outputFile: {
       ...(jsonOutputFile ? { json: jsonOutputFile } : {}),
-      ...(junitOutputFile ? { junit: junitOutputFile } : {}),
     },
   },
 });
