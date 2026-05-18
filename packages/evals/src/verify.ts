@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
-import { namedJudge } from 'vitest-evals';
+import { createJudge } from 'vitest-evals';
 import type { JudgeContext } from 'vitest-evals';
 import {
   normalizeContent,
   normalizeMetadata,
   toJsonValue,
   type Harness,
+  type JsonValue,
 } from 'vitest-evals/harness';
 import { resolveSkillAsync } from '../../../src/skills/loader.js';
 import { verifyFindings } from '../../../src/sdk/verify.js';
@@ -234,12 +235,9 @@ export async function runVerificationEval(
   }
 }
 
-export function createVerificationEvalHarness(options: RunVerificationEvalOptions): Harness<VerificationEvalMeta> {
+export function createVerificationEvalHarness(options: RunVerificationEvalOptions): Harness<VerificationEvalMeta, JsonValue> {
   return {
     name: 'warden-verification',
-    prompt: async () => {
-      throw new Error('Warden verification evals use runVerificationEval directly.');
-    },
     run: async (meta, context) => {
       const modelOverride = typeof context.metadata['model'] === 'string'
         ? context.metadata['model']
@@ -266,7 +264,7 @@ export function createVerificationEvalHarness(options: RunVerificationEvalOption
       };
 
       return {
-        output: toJsonValue(output),
+        output: toJsonValue(output) as JsonValue,
         session: {
           messages: [
             {
@@ -282,7 +280,6 @@ export function createVerificationEvalHarness(options: RunVerificationEvalOption
               content: normalizeContent(output),
             },
           ],
-          outputText: result.verdict,
           provider: runtime,
           model,
           metadata: normalizeMetadata({
@@ -305,7 +302,7 @@ export function createVerificationEvalHarness(options: RunVerificationEvalOption
 
 /** Creates the deterministic judge for verifier-only eval verdicts. */
 export function createVerificationEvalJudge() {
-  return namedJudge<JudgeContext<VerificationEvalMeta>>('WardenVerificationEvalJudge', async ({ inputValue, run }) => {
+  return createJudge<JudgeContext<VerificationEvalMeta, JsonValue>>('WardenVerificationEvalJudge', async ({ input, run }) => {
     const output = VerificationEvalOutputSchema.safeParse(run.output);
     if (!output.success) {
       return {
@@ -316,15 +313,15 @@ export function createVerificationEvalJudge() {
       };
     }
 
-    const passed = output.data.verdict === inputValue.expectedVerdict;
+    const passed = output.data.verdict === input.expectedVerdict;
 
     return {
       score: passed ? 1 : 0,
       metadata: {
         rationale: passed
           ? 'Verifier verdict matched expected result.'
-          : `Expected ${inputValue.expectedVerdict}, got ${output.data.verdict}.`,
-        expectedVerdict: inputValue.expectedVerdict,
+          : `Expected ${input.expectedVerdict}, got ${output.data.verdict}.`,
+        expectedVerdict: input.expectedVerdict,
         verdict: output.data.verdict,
         findings: output.data.findings.length,
       },

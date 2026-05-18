@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { namedJudge } from 'vitest-evals';
+import { createJudge } from 'vitest-evals';
 import type { JudgeContext } from 'vitest-evals';
 import {
   normalizeContent,
   normalizeMetadata,
   toJsonValue,
   type Harness,
+  type JsonValue,
 } from 'vitest-evals/harness';
 import { runJudge } from './judge.js';
 import { runEvalSkill, type RunEvalOptions } from './runner.js';
@@ -96,12 +97,9 @@ function failedJudgeReasons(
   return reasons;
 }
 
-export function createWardenEvalHarness(options: RunEvalOptions): Harness<EvalMeta> {
+export function createWardenEvalHarness(options: RunEvalOptions): Harness<EvalMeta, JsonValue> {
   return {
     name: 'warden',
-    prompt: async () => {
-      throw new Error('Warden eval judges use runJudge directly.');
-    },
     run: async (meta, context) => {
       const modelOverride = typeof context.metadata['model'] === 'string'
         ? context.metadata['model']
@@ -118,7 +116,7 @@ export function createWardenEvalHarness(options: RunEvalOptions): Harness<EvalMe
       const output = reportToOutput(result.name, result.report);
 
       return {
-        output: toJsonValue(output),
+        output: toJsonValue(output) as JsonValue,
         session: {
           messages: [
             {
@@ -135,7 +133,6 @@ export function createWardenEvalHarness(options: RunEvalOptions): Harness<EvalMe
               content: normalizeContent(output),
             },
           ],
-          outputText: result.report.summary,
           provider: result.report.runtime,
           model: result.report.model,
           metadata: normalizeMetadata({
@@ -165,7 +162,7 @@ export function createWardenEvalHarness(options: RunEvalOptions): Harness<EvalMe
 }
 
 export function createWardenEvalJudge(apiKey: string) {
-  return namedJudge<JudgeContext<EvalMeta>>('WardenEvalJudge', async ({ inputValue, run }) => {
+  return createJudge<JudgeContext<EvalMeta, JsonValue>>('WardenEvalJudge', async ({ input, run }) => {
     const output = WardenEvalOutputSchema.safeParse(run.output);
     if (!output.success) {
       return {
@@ -176,7 +173,7 @@ export function createWardenEvalJudge(apiKey: string) {
       };
     }
 
-    const meta = inputValue;
+    const meta = input;
     const findings = output.data.findings;
     const judgeResult = await runJudge(meta, findings, apiKey);
     if (judgeResult.error) {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { JudgeContext } from 'vitest-evals';
+import { toJsonValue, type JsonValue } from 'vitest-evals/harness';
 import { createWardenEvalJudge } from './harness.js';
 import { runJudge } from './judge.js';
 import { DEFAULT_EVAL_MODEL, DEFAULT_EVAL_RUNTIME } from './types.js';
@@ -40,20 +41,21 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
   };
 }
 
-function makeJudgeContext(meta: EvalMeta, findings: Finding[]): JudgeContext<EvalMeta> {
+function makeJudgeContext(meta: EvalMeta, findings: Finding[]): JudgeContext<EvalMeta, JsonValue> {
+  const output = toJsonValue({
+    name: `${meta.category}/${meta.name}`,
+    summary: 'Found one issue.',
+    skill: 'code-review',
+    findings,
+  })!;
+
   return {
-    input: '',
-    output: '',
-    inputValue: meta,
+    input: meta,
+    output,
     toolCalls: [],
     metadata: {},
     run: {
-      output: {
-        name: `${meta.category}/${meta.name}`,
-        summary: 'Found one issue.',
-        skill: 'code-review',
-        findings,
-      },
+      output,
       session: { messages: [] },
       usage: {},
       errors: [],
@@ -88,7 +90,7 @@ describe('createWardenEvalJudge', () => {
     });
 
     const judge = createWardenEvalJudge('test-key');
-    const result = await judge(makeJudgeContext(meta, findings));
+    const result = await judge.assess(makeJudgeContext(meta, findings));
 
     expect(result.score).toBe(1);
     expect(result.metadata?.rationale).toBe('All eval assertions passed.');
@@ -109,7 +111,7 @@ describe('createWardenEvalJudge', () => {
     });
 
     const judge = createWardenEvalJudge('test-key');
-    const result = await judge(makeJudgeContext(meta, [makeFinding()]));
+    const result = await judge.assess(makeJudgeContext(meta, [makeFinding()]));
 
     expect(result.score).toBe(0);
     expect(result.metadata?.rationale).toBe(
@@ -136,7 +138,7 @@ describe('createWardenEvalJudge', () => {
     });
 
     const judge = createWardenEvalJudge('test-key');
-    const result = await judge(makeJudgeContext(meta, [makeFinding()]));
+    const result = await judge.assess(makeJudgeContext(meta, [makeFinding()]));
 
     expect(result.score).toBe(0);
     expect(result.metadata?.rationale).toBe('Judge failed: No JSON found in judge response');
