@@ -119,11 +119,10 @@ jobs:
 
       - name: Publish eval report
         if: ${{ !cancelled() && hashFiles('eval-results.json') != '' }}
-        run: |
-          pnpm -C packages/evals exec vitest-evals-github-report \
-            --json ../../eval-results.json \
-            --annotations \
-            --max-failures 20
+        uses: getsentry/vitest-evals@v0.9.0-beta.6
+        with:
+          results: eval-results.json
+          max-failures: 20
         continue-on-error: true
 
       - name: Create eval status check

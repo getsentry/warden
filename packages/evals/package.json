@@ -11,13 +11,12 @@
   "dependencies": {
     "@octokit/rest": "^22.0.1",
     "dotenv": "^17.2.3",
-    "vitest-evals": "0.9.0-beta.5",
+    "vitest-evals": "0.9.0-beta.6",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
-    "@vitest-evals/github-reporter": "0.9.0-beta.5",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.6"

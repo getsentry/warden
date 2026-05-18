@@ -19,7 +19,6 @@ export function usageToSummary({ provider, model, usage }: EvalUsageSummaryInput
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     totalTokens: usage.inputTokens + usage.outputTokens,
-    estimatedCost: usage.costUSD,
     metadata: normalizeMetadata({
       cacheReadInputTokens: usage.cacheReadInputTokens,
       cacheCreationInputTokens: usage.cacheCreationInputTokens,

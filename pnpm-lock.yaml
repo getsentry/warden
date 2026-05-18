@@ -146,8 +146,8 @@ importers:
         specifier: ^17.2.3
         version: 17.2.3
       vitest-evals:
-        specifier: 0.9.0-beta.5
-        version: 0.9.0-beta.5(tinyrainbow@3.1.0)(vitest@4.1.6)(zod@4.3.6)
+        specifier: 0.9.0-beta.6
+        version: 0.9.0-beta.6(tinyrainbow@3.1.0)(vitest@4.1.6)(zod@4.3.6)
       yaml:
         specifier: ^2.8.2
         version: 2.8.3
@@ -158,9 +158,6 @@ importers:
       '@types/node':
         specifier: ^25.0.10
         version: 25.0.10
-      '@vitest-evals/github-reporter':
-        specifier: 0.9.0-beta.5
-        version: 0.9.0-beta.5(vitest@4.1.6)
       tsx:
         specifier: ^4.19.0
         version: 4.21.0
@@ -2181,12 +2178,6 @@ packages:
   '@vercel/oidc@2.0.2':
     resolution: {integrity: sha512-59PBFx3T+k5hLTEWa3ggiMpGRz1OVvl9eN8SUai+A43IsqiOuAe7qPBf+cray/Fj6mkgnxm/D7IAtjc8zSHi7g==}
     engines: {node: '>= 18'}
-
-  '@vitest-evals/github-reporter@0.9.0-beta.5':
-    resolution: {integrity: sha512-9Otmb7WSEyNi5gJanY2QmoIo+IhhxwJ/XwmzJQr59EycWhf3BbzEJ/vtvYheSw9E2Ub6g+cUOvmZ0pUGSu5gig==}
-    hasBin: true
-    peerDependencies:
-      vitest: '>=4 <5'
 
   '@vitest/coverage-v8@4.1.6':
     resolution: {integrity: sha512-36l628fQ/9a/8ihy97eOtEnvWQEdqULQOJtcaxtoNq0G1w3Mxd4szSahOaMM9/NGyZ+hyKcMtIW/WIxq0XQViQ==}
@@ -4240,8 +4231,8 @@ packages:
       vite:
         optional: true
 
-  vitest-evals@0.9.0-beta.5:
-    resolution: {integrity: sha512-Ggrqcy8Qwo5yxENwnXxnEhg9epC1lj6GU11c9pI9M0O0c1mCFLnqLbuu3DAyEnOJwcpcjraRNwcJVgdXJoa/QA==}
+  vitest-evals@0.9.0-beta.6:
+    resolution: {integrity: sha512-7thZvZUvHNHtfxxOcV9gWmDdWV59AzHVATXsiwyXv7fPZVB5Uvi9+FjsoyBY9XScGtfBYo0BO1hGWF92v+lgHQ==}
     peerDependencies:
       ai: '>=4 <7'
       tinyrainbow: '>=2 <4'
@@ -6541,10 +6532,6 @@ snapshots:
     dependencies:
       '@types/ms': 2.1.0
       ms: 2.1.3
-
-  '@vitest-evals/github-reporter@0.9.0-beta.5(vitest@4.1.6)':
-    dependencies:
-      vitest: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.0.10)(@vitest/coverage-v8@4.1.6)(vite@7.3.1(@types/node@25.0.10)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
 
   '@vitest/coverage-v8@4.1.6(vitest@4.1.6)':
     dependencies:
@@ -9159,7 +9146,7 @@ snapshots:
     optionalDependencies:
       vite: 6.4.1(@types/node@25.0.10)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3)
 
-  vitest-evals@0.9.0-beta.5(tinyrainbow@3.1.0)(vitest@4.1.6)(zod@4.3.6):
+  vitest-evals@0.9.0-beta.6(tinyrainbow@3.1.0)(vitest@4.1.6)(zod@4.3.6):
     dependencies:
       tinyrainbow: 3.1.0
       vitest: 4.1.6(@opentelemetry/api@1.9.0)(@types/node@25.0.10)(@vitest/coverage-v8@4.1.6)(vite@7.3.1(@types/node@25.0.10)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))

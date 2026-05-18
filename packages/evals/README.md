@@ -221,10 +221,10 @@ CI runs evals when eval files or harness code change on a PR, when changes land
 on `main`, or when a maintainer adds the `run-evals` label to a same-repository
 PR. Fork PRs do not receive eval secrets.
 
-Individual eval misses are expected while we tune the harness. CI publishes
-JUnit annotations and a job summary for per-case test reporting, then gates the
-workflow on the aggregate `Evaluation Results` score. The current baseline
-threshold is `0.75`.
+Individual eval misses are expected while we tune the harness. CI publishes a
+vitest-evals job summary and workflow annotations for per-case reporting, then
+gates the workflow on the aggregate `Evaluation Results` score. The current
+baseline threshold is `0.75`.
 
 ## Expected Misses
 
