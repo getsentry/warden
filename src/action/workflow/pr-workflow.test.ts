@@ -88,6 +88,19 @@ vi.mock('./base.js', async () => {
       );
     }),
     findClaudeCodeExecutable: vi.fn(() => '/usr/local/bin/claude'),
+    prepareRuntimeEnvironment: vi.fn((triggers: Iterable<{ runtime?: string }>, inputs: ActionInputs) => {
+      const usesClaude = Array.from(triggers).some((trigger) => (trigger.runtime ?? 'pi') === 'claude');
+      if (!usesClaude) {
+        return Promise.resolve({});
+      }
+      if (!inputs.anthropicApiKey && !inputs.oauthToken) {
+        mockedSetFailed(
+          'Authentication not found. Provide an API key via anthropic-api-key input, ' +
+            'WARDEN_ANTHROPIC_API_KEY env var, or OAuth token via CLAUDE_CODE_OAUTH_TOKEN env var.'
+        );
+      }
+      return Promise.resolve({ pathToClaudeCodeExecutable: '/usr/local/bin/claude' });
+    }),
     getAuthenticatedBotLogin: vi.fn(() => Promise.resolve('warden[bot]')),
   };
 });

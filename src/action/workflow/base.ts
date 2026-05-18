@@ -9,10 +9,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
-import { execFileNonInteractive } from '../../utils/exec.js';
+import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import { countSeverity } from '../../triggers/matcher.js';
+import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import type { ActionInputs } from '../inputs.js';
 
@@ -83,8 +84,46 @@ export function logGroupEnd(): void {
 }
 
 // -----------------------------------------------------------------------------
+// Runtime setup
+// -----------------------------------------------------------------------------
+
+export interface RuntimeEnvironment {
+  pathToClaudeCodeExecutable?: string;
+}
+
+export async function prepareRuntimeEnvironment(
+  triggers: Iterable<{ runtime?: RuntimeName }>,
+  inputs: ActionInputs
+): Promise<RuntimeEnvironment> {
+  const runtimes = new Set<RuntimeName>();
+  for (const trigger of triggers) {
+    runtimes.add(trigger.runtime ?? 'pi');
+  }
+
+  const env: RuntimeEnvironment = {};
+  for (const runtime of runtimes) {
+    switch (runtime) {
+      case 'pi':
+        break;
+      case 'claude':
+        ensureClaudeAuth(inputs);
+        env.pathToClaudeCodeExecutable = await findClaudeCodeExecutable();
+        break;
+    }
+  }
+
+  return env;
+}
+
+// -----------------------------------------------------------------------------
 // Claude Code CLI
 // -----------------------------------------------------------------------------
+
+const CLAUDE_CODE_VERSION = '2.1.32';
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Test whether a path is an executable file.
@@ -98,20 +137,16 @@ function isExecutable(path: string): boolean {
   }
 }
 
-/**
- * Find the Claude Code CLI executable path.
- * Required in CI environments where the SDK can't auto-detect the CLI location.
- */
-export async function findClaudeCodeExecutable(): Promise<string> {
-  // Check environment variable first (set by action.yml)
+function findInstalledClaudeCodeExecutable(): string | undefined {
   const envPath = process.env['CLAUDE_CODE_PATH'];
   if (envPath && isExecutable(envPath)) {
     return envPath;
   }
 
   // Standard install location from claude.ai/install.sh
-  const homeLocalBin = `${process.env['HOME']}/.local/bin/claude`;
-  if (isExecutable(homeLocalBin)) {
+  const home = process.env['HOME'];
+  const homeLocalBin = home ? `${home}/.local/bin/claude` : undefined;
+  if (homeLocalBin && isExecutable(homeLocalBin)) {
     return homeLocalBin;
   }
 
@@ -129,8 +164,53 @@ export async function findClaudeCodeExecutable(): Promise<string> {
     if (isExecutable(p)) return p;
   }
 
+  return undefined;
+}
+
+async function installClaudeCodeExecutable(): Promise<void> {
+  console.log(`Installing Claude Code v${CLAUDE_CODE_VERSION}...`);
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`Installation attempt ${attempt}...`);
+    try {
+      const output = execNonInteractive(
+        `curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_VERSION}"`,
+        { timeout: 120_000 }
+      );
+      if (output) {
+        console.log(output);
+      }
+      console.log('Claude Code installed successfully');
+      return;
+    } catch (error) {
+      if (attempt === 3) {
+        setFailed(`Failed to install Claude Code after 3 attempts: ${error}`);
+      }
+      console.log('Installation failed, retrying...');
+      await sleep(5000);
+    }
+  }
+}
+
+/**
+ * Find the Claude Code CLI executable path, installing it on demand when the
+ * selected runtime needs Claude Code in CI.
+ */
+export async function findClaudeCodeExecutable(): Promise<string> {
+  const existingPath = findInstalledClaudeCodeExecutable();
+  if (existingPath) {
+    return existingPath;
+  }
+
+  await installClaudeCodeExecutable();
+
+  const installedPath = findInstalledClaudeCodeExecutable();
+  if (installedPath) {
+    return installedPath;
+  }
+
   setFailed(
-    'Claude Code CLI not found. Ensure Claude Code is installed via https://claude.ai/install.sh'
+    'Claude Code CLI not found after installation. Ensure Claude Code is installed via https://claude.ai/install.sh'
   );
 }
 

@@ -53,7 +53,7 @@ import {
   ensureClaudeAuth,
   logGroup,
   logGroupEnd,
-  findClaudeCodeExecutable,
+  prepareRuntimeEnvironment,
   handleTriggerErrors,
   collectTriggerErrors,
   computeWorkflowOutputs,
@@ -313,11 +313,7 @@ async function executeAllTriggers(
   inputs: ActionInputs
 ): Promise<TriggerResult[]> {
   const concurrency = runnerConcurrency ?? inputs.parallel;
-  const usesClaudeRuntime = matchedTriggers.some((trigger) => (trigger.runtime ?? 'pi') === 'claude');
-  if (usesClaudeRuntime) {
-    ensureClaudeAuth(inputs);
-  }
-  const claudePath = usesClaudeRuntime ? await findClaudeCodeExecutable() : undefined;
+  const runtimeEnv = await prepareRuntimeEnvironment(matchedTriggers, inputs);
 
   const semaphore = new Semaphore(concurrency);
   const abortController = new AbortController();
@@ -332,7 +328,7 @@ async function executeAllTriggers(
         octokit,
         context,
         anthropicApiKey: inputs.anthropicApiKey,
-        claudePath,
+        claudePath: runtimeEnv.pathToClaudeCodeExecutable,
         globalFailOn: inputs.failOn,
         globalReportOn: inputs.reportOn,
         globalMaxFindings: inputs.maxFindings,

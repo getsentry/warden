@@ -27,10 +27,9 @@ import {
   setOutput,
   setFailed,
   ActionFailedError,
-  ensureClaudeAuth,
   logGroup,
   logGroupEnd,
-  findClaudeCodeExecutable,
+  prepareRuntimeEnvironment,
   handleTriggerErrors,
   getDefaultBranchFromAPI,
   writeFindingsOutput,
@@ -204,11 +203,7 @@ async function runScheduleWorkflowInner(
       const skill = await resolveSkillAsync(resolved.skill, skillRoot, {
         remote: resolved.remote,
       });
-      const usesClaudeRuntime = (resolved.runtime ?? 'pi') === 'claude';
-      if (usesClaudeRuntime) {
-        ensureClaudeAuth(inputs);
-      }
-      const claudePath = usesClaudeRuntime ? await findClaudeCodeExecutable() : undefined;
+      const runtimeEnv = await prepareRuntimeEnvironment([resolved], inputs);
       const report = await runSkill(skill, context, {
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
@@ -221,7 +216,7 @@ async function runScheduleWorkflowInner(
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         verifyFindings: resolved.verifyFindings,
         telemetryTriggerName: resolved.name,
-        pathToClaudeCodeExecutable: claudePath,
+        pathToClaudeCodeExecutable: runtimeEnv.pathToClaudeCodeExecutable,
       });
       console.log(`Found ${report.findings.length} findings`);
 

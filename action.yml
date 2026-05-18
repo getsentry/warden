@@ -66,26 +66,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install Claude Code CLI
-      shell: bash
-      run: |
-        CLAUDE_CODE_VERSION="2.1.32"
-        echo "Installing Claude Code v${CLAUDE_CODE_VERSION}..."
-        for attempt in 1 2 3; do
-          echo "Installation attempt $attempt..."
-          if curl -fsSL https://claude.ai/install.sh | bash -s -- "$CLAUDE_CODE_VERSION"; then
-            break
-          fi
-          if [ $attempt -eq 3 ]; then
-            echo "Failed to install Claude Code after 3 attempts"
-            exit 1
-          fi
-          echo "Installation failed, retrying..."
-          sleep 5
-        done
-        echo "Claude Code installed successfully"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
     - name: Run Warden
       id: warden
       shell: bash
@@ -101,5 +81,4 @@ runs:
         INPUT_REQUEST_CHANGES: ${{ inputs.request-changes }}
         INPUT_FAIL_CHECK: ${{ inputs.fail-check }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
-        CLAUDE_CODE_PATH: ${{ env.HOME }}/.local/bin/claude
       run: node ${{ github.action_path }}/dist/action/index.js
