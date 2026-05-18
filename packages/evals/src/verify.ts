@@ -182,6 +182,7 @@ export async function runVerificationEval(
     given: meta.given,
     skillPath: meta.skillPath,
     filePaths: meta.filePaths,
+    supportingFilePaths: meta.supportingFilePaths,
     model: meta.model,
     runtime: meta.runtime,
     should_find: [{ finding: meta.given, required: true }],
