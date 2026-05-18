@@ -91,6 +91,7 @@ export interface RuntimeEnvironment {
   pathToClaudeCodeExecutable?: string;
 }
 
+/** Prepare runtime-specific process dependencies required by matched triggers. */
 export async function prepareRuntimeEnvironment(
   triggers: Iterable<{ runtime?: RuntimeName }>,
   inputs: ActionInputs
