@@ -449,6 +449,13 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('assets/');
   });
 
+  it('asks for a compact evidence trace in finding verification', () => {
+    const prompt = buildSystemPrompt(baseSkill);
+    expect(prompt).toContain('Evidence for the public Evidence block');
+    expect(prompt).toContain('2-5 short Markdown bullets tracing the concrete code path');
+    expect(prompt).toContain('Do not format "verification" as any labeled checklist or template');
+  });
+
   it('does not include resource guidance when rootDir has no resource directories', () => {
     const skill: SkillDefinition = { ...baseSkill, rootDir: tempDir };
     const prompt = buildSystemPrompt(skill);

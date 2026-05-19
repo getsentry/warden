@@ -104,7 +104,7 @@ describe('renderSkillReport', () => {
     expect(result.review!.comments[0]!.body).not.toContain('confidence');
   });
 
-  it('renders verification details in a collapsible section', () => {
+  it('renders evidence details in a collapsible section', () => {
     const report: SkillReport = {
       ...baseReport,
       skill: 'code-review',
@@ -115,7 +115,10 @@ describe('renderSkillReport', () => {
           title: 'Vitest runs in watch mode in CI',
           description:
             'The test script can hang CI because Vitest watches by default. Use `vitest run` so the job exits after one pass.',
-          verification: 'Checked package.json scripts and Vitest default behavior.',
+          verification: [
+            '- `package.json` still runs `vitest` without `run`.',
+            '- Vitest defaults to watch mode outside explicit run mode.',
+          ].join('\n'),
           location: {
             path: 'package.json',
             startLine: 10,
@@ -129,8 +132,9 @@ describe('renderSkillReport', () => {
 
     expect(body).toContain('Vitest runs in watch mode in CI');
     expect(body).toContain('The test script can hang CI');
-    expect(body).toContain('<details><summary>Verification</summary>');
-    expect(body).toContain('Checked package.json scripts');
+    expect(body).toContain('<details><summary>Evidence</summary>');
+    expect(body).not.toContain('<details><summary>Verification</summary>');
+    expect(body).toContain('- `package.json` still runs `vitest` without `run`.');
   });
 
   it('includes deduplication marker in comments', () => {
@@ -1314,7 +1318,7 @@ describe('renderFindingsBody', () => {
     expect(body).toContain('<sub>Identified by Warden security-review</sub>');
   });
 
-  it('renders verification details in body findings', () => {
+  it('renders evidence details in body findings', () => {
     const findings = [
       {
         id: 'f1',
@@ -1329,7 +1333,8 @@ describe('renderFindingsBody', () => {
     const body = renderFindingsBody(findings, 'code-review');
 
     expect(body).toContain('Short visible comment');
-    expect(body).toContain('<details><summary>Verification</summary>');
+    expect(body).toContain('<details><summary>Evidence</summary>');
+    expect(body).not.toContain('<details><summary>Verification</summary>');
     expect(body).toContain('Checked the fallback review body path.');
   });
 

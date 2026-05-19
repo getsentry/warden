@@ -70,7 +70,7 @@ function renderReview(
     }
     let body = `**${escapeHtml(finding.title)}**\n\n${escapeHtml(finding.description)}`;
 
-    if (finding.verification) {
+    if (finding.verification?.trim()) {
       body += `\n\n${renderVerification(finding.verification)}`;
     }
 
@@ -166,7 +166,7 @@ function renderSuggestion(description: string, diff: string): string {
 }
 
 function renderVerification(verification: string): string {
-  return `<details><summary>Verification</summary>\n\n${escapeHtml(verification)}\n\n</details>`;
+  return `<details><summary>Evidence</summary>\n\n${escapeHtml(verification.trim())}\n\n</details>`;
 }
 
 function renderHiddenFindingsLink(hiddenCount: number, checkRunUrl: string): string {
@@ -279,7 +279,7 @@ export function renderFindingsBody(findings: Finding[], skill: string): string {
     lines.push('');
     lines.push(escapeHtml(finding.description));
     lines.push('');
-    if (finding.verification) {
+    if (finding.verification?.trim()) {
       lines.push(renderVerification(finding.verification));
       lines.push('');
     }

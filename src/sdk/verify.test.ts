@@ -113,6 +113,12 @@ describe('verifyFindings', () => {
       userPrompt: expect.stringContaining('<pull_request_context>'),
     }));
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
+      systemPrompt: expect.stringContaining('public Evidence block'),
+    }));
+    expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
+      systemPrompt: expect.stringContaining('Do not use checklist labels'),
+    }));
+    expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
       userPrompt: expect.stringContaining('<candidate_finding>'),
     }));
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({

@@ -11,9 +11,11 @@ How Warden formats and manages PR comments: format conventions, deduplication, a
 
 One short sentence stating what breaks and why it matters.
 
-<details><summary>Verification</summary>
+<details><summary>Evidence</summary>
 
-Evidence checked before reporting the finding.
+- `createThing()` passes the caller-controlled value into `runThing()`.
+- The adjacent write path checks `resolveThing()` before calling the same helper.
+- This read path skips that guard, so access depends on the broader token scope.
 
 </details>
 
@@ -29,7 +31,7 @@ Identified by Warden `skill-name` · `FINDING-ID`
 ```
 
 - Title: bold, no emoji, no ID, no confidence, no severity
-- Verification details render in a collapsible block when present
+- Evidence details render in a collapsible block when present
 - Severity is communicated via GitHub check annotation level (failure/warning/notice)
 - Footer: skill name and finding ID in backticks
 - Additional locations in collapsible details block

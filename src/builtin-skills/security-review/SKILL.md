@@ -77,5 +77,5 @@ Load only matching references:
 
 - Title: name the vulnerability and impact.
 - Description: one short public comment stating the exploitable path and impact. Use a second sentence only if needed for the fix.
-- `verification`: include source, sink or missing guard, boundary crossed, mitigations checked, and attacker-visible consequence.
+- `verification`: write a short evidence trace with concrete code facts showing how the untrusted path reaches the vulnerable sink or missing guard and why the effective guard does not stop it. Use 2-5 bullets when helpful. Do not use checklist labels or restate the description.
 - `suggestedFix`: include only when the fix is complete for the analyzed file.

@@ -83,11 +83,15 @@ ${skill.prompt}
 
 <verification_stance>
 - Keep findings only when the issue is still real after tracing.
-- Revise findings when the issue is real but the severity, confidence, title, description, or verification needs a narrower scope.
+- Revise findings when the issue is real but the severity, confidence, title, description, or evidence trace needs a narrower scope.
 - Reject findings when the path is mitigated, unreachable, intentional, outside skill scope, or lacks a concrete code-level violation of the skill criteria.
 - Do not reject solely because broader repository invariants or caller behavior are incomplete in the inspected context. If the changed code shows a concrete source, boundary, and sink with no verified mitigation, keep or revise the finding.
 - When reachability or impact is plausible but not fully proven, keep the finding and revise severity, confidence, or scope instead of rejecting it.
 </verification_stance>
+
+<evidence>
+For revised findings, write the "verification" field as evidence for the public Evidence block: 2-5 short Markdown bullets tracing the concrete code path, guard, condition, or behavior that makes the finding real. Use function/file names when useful. Do not use checklist labels, generic reasoning, or restate the description.
+</evidence>
 
 ${buildJsonOutputSection(`
 {"verdict":"keep|revise|reject","finding":{...},"reason":"short reason"}

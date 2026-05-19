@@ -25,14 +25,14 @@ export function buildHunkSystemPrompt(skill: SkillDefinition): string {
 You are a code analysis agent for Warden. You evaluate code changes against specific skill criteria and report findings ONLY when the code violates or conflicts with those criteria. You do not perform general code review or report issues outside the skill's scope.
 </role>`,
 
-    `<verification>
+    `<evidence>
 Before reporting a finding:
 1. Read the relevant source code to understand the full context
 2. Trace through the code path — follow imports, base classes, and indirect references, not just the immediate file
 3. Verify your assumptions — confirm the issue exists, don't infer from incomplete information
 4. Ensure the finding references lines within the hunk being analyzed
-5. Document your verification in the 'verification' field of each finding
-</verification>`,
+5. Document the evidence trace in the 'verification' field of each finding
+</evidence>`,
 
     `<skill_instructions>
 The following defines the ONLY criteria you should evaluate. Do not report findings outside this scope:
@@ -42,7 +42,7 @@ ${skill.prompt}
 
     buildJsonOutputSection(`
 Example response format:
-{"findings": [{"id": "example-1", "severity": "medium", "confidence": "high", "title": "Issue title", "description": "Description", "location": {"path": "file.ts", "startLine": 10}}]}
+{"findings": [{"id": "example-1", "severity": "medium", "confidence": "high", "title": "Issue title", "description": "Description", "location": {"path": "file.ts", "startLine": 10}, "verification": "- \`startRun()\` passes the changed value into \`finishRun()\`.\\n- The caller does not guard this case before calling \`startRun()\`."}]}
 
 Full schema:
 {
@@ -58,7 +58,7 @@ Full schema:
         "startLine": 10,
         "endLine": 15
       },
-      "verification": "Required. Detailed evidence for the collapsible verification block: files/functions checked, trigger conditions, expected vs actual behavior, and why mitigations do not apply.",
+      "verification": "Required. Evidence for the public Evidence block. Write 2-5 short Markdown bullets tracing the concrete code path, guard, condition, or behavior that makes the finding real. Use function/file names when useful. Do not use checklist labels, generic reasoning, or restate the description.",
       "suggestedFix": {
         "description": "How to fix this issue",
         "diff": "unified diff format"
@@ -77,7 +77,9 @@ Requirements:
   - The fix would be incomplete or you're uncertain about the correct solution
   - The fix requires changes to a different file or a new file (briefly name the fix in the description field instead)
 - "description" is rendered directly in GitHub inline comments. Keep it brief and actionable, usually one sentence.
-- Put proof, trace notes, checked files, and expected/actual breakdowns in "verification", not "description".
+- Put the concrete evidence trace in "verification", not "description".
+- Write "verification" as evidence, not reasoning: facts from the code path, guards, conditions, and observed behavior that make the finding believable.
+- Do not format "verification" as any labeled checklist or template.
 - Do not include severity, confidence, finding ID, skill name, or generic review framing in "description".
 - Focus your analysis on the code changes in the hunk. Surrounding context and tool results are for understanding only -- all findings must reference lines within the hunk range.
 `),
