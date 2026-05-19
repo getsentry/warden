@@ -1,4 +1,24 @@
 # Changelog
+## 0.31.1
+
+### Bug Fixes 🐛
+
+- (action) Install Claude Code only for Claude runtime by @tmustier in [#334](https://github.com/getsentry/warden/pull/334)
+- (output) Render finding evidence traces by @dcramer in [#335](https://github.com/getsentry/warden/pull/335)
+
+### Internal Changes 🔧
+
+#### Evals
+
+- Upgrade vitest-evals to 0.9.0-beta.6 by @sentry-junior in [#332](https://github.com/getsentry/warden/pull/332)
+- Move eval harness into workspace package by @dcramer in [#331](https://github.com/getsentry/warden/pull/331)
+- Add vitest-evals reporter bug fixtures by @dcramer in [#330](https://github.com/getsentry/warden/pull/330)
+- Centralize fixture provenance by @dcramer in [#329](https://github.com/getsentry/warden/pull/329)
+
+#### Other
+
+- (release) Create source tags before artifact tags by @dcramer in [#328](https://github.com/getsentry/warden/pull/328)
+
 ## 0.31.0
 
 ### New Features ✨
