@@ -903,20 +903,6 @@ export function createDefaultCallbacks(
   };
 }
 
-function composeAbortControllers(...controllers: (AbortController | undefined)[]): AbortController {
-  const composed = new AbortController();
-
-  for (const ctrl of controllers) {
-    if (ctrl?.signal.aborted) {
-      composed.abort();
-      return composed;
-    }
-    ctrl?.signal.addEventListener('abort', () => composed.abort(), { once: true });
-  }
-
-  return composed;
-}
-
 /**
  * Share abort/circuit state across task runner options.
  */
@@ -928,15 +914,52 @@ export function composeTasksWithFailFast(
 ): SkillTaskOptions[] {
   if (!failFastController && !circuitBreaker && !circuitAbortController) return tasks;
 
+  const sharedAbortController = new AbortController();
+  const taskControllers = new Set<AbortController>();
+  const composedTaskControllers = new WeakMap<AbortController, AbortController>();
+
+  const abortAll = () => {
+    sharedAbortController.abort();
+    for (const controller of taskControllers) {
+      controller.abort();
+    }
+  };
+
+  for (const source of [failFastController, circuitAbortController]) {
+    if (!source) continue;
+    if (source.signal.aborted) {
+      abortAll();
+    } else {
+      source.signal.addEventListener('abort', abortAll, { once: true });
+    }
+  }
+
+  const composeAbortController = (taskController: AbortController | undefined): AbortController => {
+    if (!taskController) return sharedAbortController;
+
+    const cached = composedTaskControllers.get(taskController);
+    if (cached) return cached;
+
+    const composed = new AbortController();
+    composedTaskControllers.set(taskController, composed);
+    taskControllers.add(composed);
+
+    const abortTask = () => composed.abort();
+
+    if (sharedAbortController.signal.aborted || taskController.signal.aborted) {
+      abortTask();
+    } else {
+      taskController.signal.addEventListener('abort', abortTask, { once: true });
+    }
+
+    return composed;
+  };
+
   return tasks.map((task) => ({
     ...task,
     runnerOptions: {
       ...task.runnerOptions,
-      abortController: composeAbortControllers(
-        task.runnerOptions?.abortController,
-        failFastController,
-        circuitAbortController,
-      ),
+      abortController: composeAbortController(task.runnerOptions?.abortController),
       circuitBreaker: task.runnerOptions?.circuitBreaker ?? circuitBreaker,
     },
   }));

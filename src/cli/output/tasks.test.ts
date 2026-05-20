@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createDefaultCallbacks, runSkillTask, runSkillTasks, type SkillProgressCallbacks } from './tasks.js';
+import { getEventListeners } from 'node:events';
+import { createDefaultCallbacks, composeTasksWithFailFast, runSkillTask, runSkillTasks, type SkillProgressCallbacks } from './tasks.js';
 import { Verbosity } from './verbosity.js';
 import type { OutputMode } from './tty.js';
 import type { SkillReport, Finding, HunkFailure } from '../../types/index.js';
@@ -783,6 +784,50 @@ describe('runSkillTasks', () => {
     prepareFiles.mockRestore();
     analyzeFile.mockRestore();
     postProcessFindings.mockRestore();
+  });
+});
+
+describe('composeTasksWithFailFast', () => {
+  it('does not add one abort listener per task to shared abort signals', () => {
+    const failFastController = new AbortController();
+    const circuitAbortController = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+    const tasks = Array.from({ length: 12 }, (_, index) => makeTask(`task-${index}`));
+
+    const composedTasks = composeTasksWithFailFast(
+      tasks,
+      failFastController,
+      circuitBreaker,
+      circuitAbortController,
+    );
+
+    expect(getEventListeners(failFastController.signal, 'abort')).toHaveLength(1);
+    expect(getEventListeners(circuitAbortController.signal, 'abort')).toHaveLength(1);
+    expect(new Set(composedTasks.map((task) => task.runnerOptions?.abortController)).size).toBe(1);
+
+    failFastController.abort();
+
+    expect(composedTasks.every((task) => task.runnerOptions?.abortController?.signal.aborted)).toBe(true);
+  });
+
+  it('reuses the composed controller when tasks share the same original abort signal', () => {
+    const userAbortController = new AbortController();
+    const failFastController = new AbortController();
+    const tasks = Array.from({ length: 12 }, (_, index) => ({
+      ...makeTask(`task-${index}`),
+      runnerOptions: { abortController: userAbortController },
+    }));
+
+    const composedTasks = composeTasksWithFailFast(tasks, failFastController);
+
+    expect(getEventListeners(userAbortController.signal, 'abort')).toHaveLength(1);
+    expect(getEventListeners(failFastController.signal, 'abort')).toHaveLength(1);
+    expect(new Set(composedTasks.map((task) => task.runnerOptions?.abortController)).size).toBe(1);
+
+    userAbortController.abort();
+
+    expect(composedTasks.every((task) => task.runnerOptions?.abortController?.signal.aborted)).toBe(true);
+    expect(failFastController.signal.aborted).toBe(false);
   });
 });
 
