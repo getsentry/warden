@@ -1,0 +1,48 @@
+---
+title: Repository Setup
+description: Configure Warden for one GitHub repository.
+editUrl: false
+---
+
+Initialize Warden in each repository:
+
+```bash
+npx @sentry/warden init
+```
+
+This creates:
+
+| File | Purpose |
+| --- | --- |
+| `warden.toml` | Configuration with skills and triggers. |
+| `.github/workflows/warden.yml` | GitHub Actions workflow. |
+
+## Secrets
+
+Add the provider credentials used by your configured model:
+
+| Secret | Purpose |
+| --- | --- |
+| `WARDEN_MODEL` | Pi model selector. |
+| `WARDEN_OPENAI_API_KEY` | OpenAI key for OpenAI Pi models. |
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic key for Anthropic Pi models or Claude runtime. |
+| `WARDEN_SENTRY_DSN` | Optional telemetry DSN. |
+
+## GitHub App
+
+By default, comments come from `github-actions`. Use a GitHub App for a branded
+bot identity:
+
+```bash
+npx @sentry/warden setup-app --org your-org
+```
+
+Add the generated app secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `WARDEN_APP_ID` | GitHub App ID. |
+| `WARDEN_PRIVATE_KEY` | Full PEM private key contents. |
+
+Then use `actions/create-github-app-token` and pass the app token to Warden.
+

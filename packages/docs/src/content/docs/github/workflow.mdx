@@ -1,0 +1,109 @@
+---
+title: Workflow
+description: GitHub Actions workflow configuration and action inputs.
+editUrl: false
+---
+
+This is the GitHub Actions layer, not `warden.toml`. `warden.toml` controls
+which skills run and how findings are reported. The workflow controls when
+GitHub starts Warden, which credentials are available, and which action inputs
+are passed.
+
+`warden init` generates the starter workflow. Uncomment the GitHub App section
+when you want branded comments.
+
+```yaml title=".github/workflows/warden.yml"
+name: Warden
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+  WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
+  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: getsentry/warden@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+## Global Workflow With Layered Config
+
+Put the workflow file in your org `.github` repository to run Warden everywhere
+with one mandatory workflow definition. Add the second checkout when you want a
+shared base `warden.toml`.
+
+```yaml title=".github/workflows/warden.yml"
+name: Warden
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+  WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
+  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Checkout org GitHub repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/.github
+          path: .warden-org
+
+      - uses: getsentry/warden@v0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-config-path: .warden-org/warden.toml
+          base-skill-root: .warden-org
+```
+
+The first checkout is the repository being reviewed. The second checkout
+provides the org-wide base config and local shared skills.
+
+If the target repo also has a root `warden.toml`, Warden loads it in the same
+run. Repo-local config can add skills and repo-local defaults, but it does not
+weaken org-enforced base skills.
+
+## Action Inputs
+
+| Input | Purpose |
+| --- | --- |
+| `github-token` | GitHub token for posting comments. Default: `GITHUB_TOKEN`. |
+| `anthropic-api-key` | Anthropic API key input. Prefer `WARDEN_ANTHROPIC_API_KEY` env for new workflows. |
+| `base-config-path` | Optional path to a base `warden.toml` loaded before repo config. |
+| `base-skill-root` | Optional repo root containing local shared skills used by the base config. |
+| `config-path` | Path to the repo-local config. Default: `warden.toml`. |
+| `fail-on` | Minimum severity to fail the check. |
+| `report-on` | Minimum severity to post comments. |
+| `max-findings` | Maximum findings to report. Default: `50`. |
+| `request-changes` | Whether to request changes on PR reviews. Default: `false`. |
+| `fail-check` | Whether to fail the check run. Default: `false`. |
+| `parallel` | Maximum concurrent matched trigger executions and file analyses unless `runner.concurrency` is set. Default: `5`. |

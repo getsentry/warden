@@ -1,0 +1,62 @@
+---
+title: Triggers
+description: Configure when skills run.
+editUrl: false
+---
+
+Triggers define when a skill runs. Each skill can have one or more triggers.
+Triggers can override output and model settings.
+
+## Fields
+
+| Field | Purpose |
+| --- | --- |
+| `type` | `pull_request`, `local`, or `schedule`. |
+| `actions` | Event actions for `pull_request` triggers. |
+| `failOn` | Override failure threshold. |
+| `reportOn` | Override reporting threshold. |
+| `maxFindings` | Override maximum findings. |
+| `reportOnSuccess` | Override report-on-success behavior. |
+| `requestChanges` | Override `REQUEST_CHANGES` behavior. |
+| `failCheck` | Override check failure behavior. |
+| `model` | Override model for this trigger. |
+| `maxTurns` | Override max agentic turns. |
+
+## Pull Request Actions
+
+| Action | Meaning |
+| --- | --- |
+| `opened` | PR created. |
+| `synchronize` | New commits pushed. |
+| `reopened` | PR reopened. |
+| `closed` | PR closed or merged. |
+
+```toml title="warden.toml"
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+```
+
+## Schedule Triggers
+
+Schedule triggers run on cron workflows instead of PR events. They require
+`paths` so Warden knows which files to scan.
+
+| Field | Purpose |
+| --- | --- |
+| `issueTitle` | Title for the tracking issue. Default: `Warden: {name}`. |
+| `createFixPR` | Create a PR with fixes when available. Default: `false`. |
+| `fixBranchPrefix` | Branch prefix for fix PRs. Default: `warden-fix`. |
+
+```toml title="warden.toml"
+[[skills]]
+name = "security-review"
+paths = ["src/**/*.ts"]
+
+[[skills.triggers]]
+type = "schedule"
+createFixPR = true
+```

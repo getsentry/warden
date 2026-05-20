@@ -1,0 +1,21 @@
+---
+title: Runner
+description: Configure Warden run-level concurrency.
+editUrl: false
+---
+
+Runner settings control run-level concurrency.
+
+```toml title="warden.toml"
+[runner]
+concurrency = 1
+```
+
+| Field | Purpose |
+| --- | --- |
+| `concurrency` | Maximum concurrent file analyses across running CLI skills. In GitHub Actions, also limits matched trigger dispatch. |
+
+If unset, the CLI uses `4` and the Action uses the workflow `parallel` input.
+
+For CLI runs, `--parallel` overrides `runner.concurrency`. In GitHub Actions,
+`runner.concurrency` overrides the workflow `parallel` input.

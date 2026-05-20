@@ -1,0 +1,63 @@
+---
+title: Writing Skills
+description: Create focused SKILL.md files for Warden.
+editUrl: false
+---
+
+Skills follow the [agentskills.io](https://agentskills.io) specification. They
+use YAML frontmatter for metadata and Markdown for the prompt.
+
+## Directory Structure
+
+Create a custom skill in one of the conventional directories:
+
+```text title="Skill locations"
+.agents/skills/api-review/SKILL.md
+.warden/skills/api-review/SKILL.md
+.claude/skills/api-review/SKILL.md
+```
+
+## SKILL.md Format
+
+```markdown title=".agents/skills/api-review/SKILL.md"
+---
+name: api-review
+description: Review API changes for compatibility and contract issues
+allowed-tools: Read Grep Glob
+---
+
+Review API changes for:
+- Breaking response shape changes
+- Missing pagination on list endpoints
+- Inconsistent error response formats
+- New endpoints without authentication checks
+
+Focus on issues in the changed code. For each issue found, report:
+- The specific contract or compatibility risk
+- Why it is a problem
+- How to fix it
+```
+
+## Frontmatter
+
+| Field | Purpose |
+| --- | --- |
+| `name` | Skill identifier referenced in triggers and CLI. |
+| `description` | Brief description of what the skill does. |
+| `allowed-tools` | Space-separated tool names. |
+
+## Tools
+
+Available tool names include `Read`, `Grep`, `Glob`, `Edit`, `Write`, `Bash`,
+`WebFetch`, and `WebSearch`.
+
+Most review skills only need `Read`, `Grep`, and `Glob`. Warden restricts
+execution to read-only tools during analysis, regardless of what the skill
+declares.
+
+## What Makes a Good Skill
+
+- Specific scope: one concern per skill.
+- Clear criteria: define what counts as an issue and how severe it is.
+- Actionable output: findings should say how to fix the problem.
+- Examples: include good and bad code when the distinction is subtle.

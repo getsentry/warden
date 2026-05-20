@@ -1,0 +1,87 @@
+---
+title: Agent Skill
+description: Use the /warden agent skill from coding agents.
+editUrl: false
+---
+
+Warden ships with an [agentskills.io](https://agentskills.io) skill that lets
+AI coding agents run Warden on your behalf.
+
+## Install
+
+Use the skills installer for Claude Code, OpenCode, Codex, or Cursor:
+
+```bash
+pnpx skills add getsentry/warden
+```
+
+For Claude Code marketplace installs:
+
+```bash
+claude plugin marketplace add getsentry/warden
+claude plugin install warden@warden
+```
+
+The `/warden` skill is available immediately.
+
+## What It Does
+
+The `/warden` skill teaches agents how to:
+
+- Run Warden against current branch changes before review.
+- Interpret findings and fix the code.
+- Configure skills in `warden.toml`.
+- Create custom skills.
+
+Agents load it automatically when they detect trigger phrases like "run
+warden", "check my changes", or "review before PR".
+
+## Usage
+
+Ask an agent that supports the spec to use Warden before opening a pull request:
+
+```text
+> Use /warden before opening a PR
+```
+
+The agent runs `warden`, reads the output, and fixes what it finds.
+
+## How It Works
+
+The skill follows progressive disclosure. `SKILL.md` contains the core
+workflow, and reference files load when the agent needs deeper detail.
+
+| File | Loaded when |
+| --- | --- |
+| `SKILL.md` | Always, for the core workflow. |
+| `references/cli-reference.md` | Full option details and per-command flags. |
+| `references/configuration.md` | Editing `warden.toml`, triggers, and troubleshooting. |
+| `references/config-schema.md` | Exact field names, types, and defaults. |
+| `references/creating-skills.md` | Writing custom and remote skills. |
+
+## Discovery
+
+Agents discover the skill by scanning known directories for `SKILL.md` files.
+The `name` field in frontmatter must match its directory name:
+
+```text title=".claude/skills/warden/"
+.claude/skills/warden/
+├── SKILL.md
+└── references/
+    ├── cli-reference.md
+    ├── configuration.md
+    ├── config-schema.md
+    └── creating-skills.md
+```
+
+## Pre-Commit Workflow
+
+The primary workflow:
+
+1. You make code changes, or an agent makes them for you.
+2. Before committing, the agent runs `warden`.
+3. The agent reads findings and fixes issues.
+4. The agent commits the clean code.
+
+One pass. The skill instructs agents to run Warden once, fix what it finds, and
+move on.

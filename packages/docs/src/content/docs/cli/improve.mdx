@@ -1,0 +1,43 @@
+---
+title: warden improve
+description: Improve a repo-local generated skill.
+editUrl: false
+---
+
+```bash
+warden improve <skill> [options]
+```
+
+Revises an existing generated skill from an improvement brief using the
+generated-skill reviewer loop.
+
+## Arguments
+
+| Argument | Purpose |
+| --- | --- |
+| `skill` | Generated skill name or skill root path. |
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `--config <path>` | Path to `warden.toml`. |
+| `-m, --model <model>` | Model fallback when config does not specify one. |
+| `--json` | Output results as JSON. |
+| `-p, --prompt <value>` | Improvement brief. Prefix with `@` to read from a file. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden improve security -p "Deepen source provenance and reference routing"
+warden improve security -p @feedback.md
+warden improve ./skills/security -p @feedback.md
+```
+

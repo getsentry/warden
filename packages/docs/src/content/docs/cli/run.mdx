@@ -1,0 +1,56 @@
+---
+title: warden run
+description: Analyze files, git refs, or current branch changes.
+editUrl: false
+---
+
+```bash
+warden [targets...] [options]
+warden run [targets...] [options]
+```
+
+Runs Warden analysis against explicit targets or the current branch by default.
+The bare `warden` command is an alias for this command.
+
+## Arguments
+
+| Argument | Purpose |
+| --- | --- |
+| `targets...` | Files, globs, git refs, or `@files` containing target lists. |
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `--skill <name\|path>` | Run only this skill by name or path. Names fall back to built-ins. |
+| `--config <path>` | Path to `warden.toml`. |
+| `-m, --model <model>` | Model fallback when config does not specify one. |
+| `--json` | Output results as JSON. |
+| `-o, --output <path>` | Write full run output to a JSONL file. |
+| `--fail-on <severity>` | Exit with code 1 if findings meet this severity. |
+| `--report-on <severity>` | Only show findings at or above this severity. |
+| `--min-confidence <level>` | Only show findings at or above this confidence. |
+| `--fix` | Automatically apply all suggested fixes. |
+| `--parallel <n>` | Max concurrent file analyses across running skills. |
+| `-x, --fail-fast` | Stop after the first finding. |
+| `--staged` | Analyze only staged changes. |
+| `--git` | Force ambiguous targets to be treated as git refs. |
+| `--offline` | Use cached remote skills without network access. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden src/auth.ts
+warden @targets.txt --skill security-review
+warden "src/**/*.ts" --skill security-review
+warden HEAD~3
+warden --staged --fix
+```
+

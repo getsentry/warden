@@ -1,0 +1,52 @@
+---
+title: warden runs
+description: Inspect saved sessions and run logs.
+editUrl: false
+---
+
+```bash
+warden runs [list] [options]
+warden runs show <files...> [options]
+warden runs follow [run] [options]
+warden runs gc [options]
+```
+
+Browses, shows, follows, and cleans up saved Warden run logs.
+
+## Subcommands
+
+| Subcommand | Purpose |
+| --- | --- |
+| `list` | List saved runs. This is the default. |
+| `show <files...>` | Show results from saved logs or run IDs. |
+| `follow [run]` | Tail a live or completed session. |
+| `gc` | Remove expired session logs. |
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `--follow` | Follow a run instead of showing it once. |
+| `--all` | Include zero-file sessions in runs list output. |
+| `--json` | Output results as JSON. |
+| `--report-on <severity>` | For `show`, only show findings at or above this severity. |
+| `--min-confidence <level>` | For `show`, only show findings at or above this confidence. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden runs
+warden runs list --all
+warden runs show deadbeef
+warden runs follow
+warden runs --follow deadbeef
+warden runs gc
+```
+

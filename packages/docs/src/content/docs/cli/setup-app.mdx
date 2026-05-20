@@ -1,0 +1,36 @@
+---
+title: warden setup-app
+description: Create a GitHub App for Warden.
+editUrl: false
+---
+
+```bash
+warden setup-app [options]
+```
+
+Creates a GitHub App for Warden so pull request comments use a custom bot
+identity instead of the generic `github-actions` user.
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `--org <name>` | Create the app for an organization. |
+| `--port <number>` | Local callback server port. Default: `3000`. |
+| `--timeout <sec>` | Callback timeout in seconds. Default: `300`. |
+| `--name <string>` | Custom app name. Default: `Warden`. |
+| `--no-open` | Print the URL instead of opening a browser. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden setup-app
+warden setup-app --org my-org
+```

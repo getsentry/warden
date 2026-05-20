@@ -1,0 +1,84 @@
+---
+title: Overview
+description: How Warden watches over your code.
+editUrl: false
+---
+
+Warden watches over your code by running **skills** against your changes.
+Skills are Markdown prompts that define what to look for: security
+vulnerabilities, correctness bugs, API contract issues, performance problems,
+or anything else that needs consistent review coverage.
+
+The important split:
+
+| Layer | What it controls |
+| --- | --- |
+| `warden.toml` | Which skills run, which files they see, and how findings are reported. |
+| GitHub workflow | When GitHub starts Warden and which credentials/action inputs are available. |
+| Skill files | The review expertise Warden applies to changed code. |
+
+Every analysis run follows the same loop:
+
+1. Identify what changed: files, hunks, directories, or an explicit git range.
+2. Match changes against configured triggers.
+3. Run the matching skills against the matching code.
+4. Report findings with severity, location, and optional fixes.
+
+Skills follow the [agentskills.io](https://agentskills.io) specification.
+Warden includes `security-review` for baseline AppSec coverage and
+`code-review` for correctness bugs. Treat them as first passes, then add more
+skills when your codebase needs deeper coverage.
+
+## When to Use Warden
+
+Use Warden when you want consistent review coverage before human review starts,
+when specialized issues are easy to miss, or when your team needs to enforce
+patterns specific to your codebase.
+
+Skip Warden for quick typo fixes, formatting-only changes, generated code, or
+vendored dependencies unless you have a skill for that specific work.
+
+## Where It Runs
+
+Warden works in two contexts:
+
+| Context | Use it for |
+| --- | --- |
+| Local development | Review changes before pushing. |
+| GitHub Actions | Review pull requests and post findings inline. |
+
+## Reading Path
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/quickstart/">
+    <strong>Quickstart</strong>
+    <span>Install Warden, authenticate model access, and initialize a repository.</span>
+  </a>
+  <a class="api-link-card" href="/local-review/">
+    <strong>Local Review</strong>
+    <span>Run branch, staged, range, file, and autofix reviews before pushing.</span>
+  </a>
+  <a class="api-link-card" href="/github/">
+    <strong>GitHub Reviews</strong>
+    <span>Run Warden automatically on pull requests.</span>
+  </a>
+  <a class="api-link-card" href="/agent-skill/">
+    <strong>Agent Skill</strong>
+    <span>Have coding agents run Warden before they commit.</span>
+  </a>
+  <a class="api-link-card" href="/skills/">
+    <strong>Skills</strong>
+    <span>Use built-ins, add remote skills, and write codebase-specific reviews.</span>
+  </a>
+</div>
+
+## Tips
+
+- Use `--verbose` to see which triggers matched and what Warden is doing.
+- Use `--fix` to apply suggested fixes interactively.
+- Use `--skill <name>` to skip trigger matching and run one skill directly.
+- Use `--fail-on <level>` to override CI failure behavior.
+- Use `-vv` for debug output with token counts and latencies.
+
+Warden also ships as an [agent skill](/agent-skill/) so coding agents can run
+it before they commit.

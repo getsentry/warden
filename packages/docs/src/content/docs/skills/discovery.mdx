@@ -1,0 +1,27 @@
+---
+title: Skill Discovery
+description: How Warden resolves skill references.
+editUrl: false
+---
+
+Warden resolves skills from the most explicit source first.
+
+## Resolution Order
+
+1. Remote repository, when `remote` is specified.
+2. Direct path, when the name contains `/`, `\`, or starts with `.`.
+3. Conventional directories: `.warden/skills/`, `.agents/skills/`, `.claude/skills/`.
+4. Built-in skills, including `security-review` and `code-review`.
+
+## Skill Directories
+
+| Directory | Purpose |
+| --- | --- |
+| `.warden/skills/` | Warden-local generated skills. |
+| `.agents/skills/` | Primary shared skill directory. |
+| `.claude/skills/` | Claude Code convention fallback. |
+
+Remote skills without a pinned SHA are refreshed according to
+`WARDEN_SKILL_CACHE_TTL`, which defaults to 24 hours. Pinned remote skills are
+cached permanently.
+

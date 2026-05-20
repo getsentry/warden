@@ -1,0 +1,46 @@
+---
+title: warden build
+description: Create or refresh a repo-local generated skill.
+editUrl: false
+---
+
+```bash
+warden build <skill> [options]
+```
+
+Creates or refreshes one generated skill. A name resolves through
+`.warden/skills`, `.agents/skills`, then `.claude/skills`; use a path for other
+roots.
+
+## Arguments
+
+| Argument | Purpose |
+| --- | --- |
+| `skill` | Generated skill name or skill root path. |
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `--config <path>` | Path to `warden.toml`. |
+| `-m, --model <model>` | Model fallback when config does not specify one. |
+| `--json` | Output results as JSON. |
+| `--regenerate` | Ignore cached generated skill artifacts and build again. |
+| `-p, --prompt <value>` | Generated skill prompt. Prefix with `@` to read from a file. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden build security --regenerate
+warden build security -p @prompt.md
+warden build ./skills/security -p @prompt.md
+warden build sentry-security --json
+```
+

@@ -1,0 +1,51 @@
+---
+title: GitHub Pull Requests
+description: Run Warden automatically on pull requests.
+editUrl: false
+---
+
+Warden runs on pull requests through GitHub Actions and posts findings as
+review comments.
+
+This page explains the pull request behavior. Setup lives in
+[Repository Setup](/github/repository/), and action inputs live in
+[Workflow](/github/workflow/).
+
+## What Happens on a PR
+
+1. A pull request is opened or updated.
+2. GitHub Actions runs the Warden workflow.
+3. Warden analyzes changed files against configured triggers.
+4. Findings are posted as inline review comments.
+5. If `requestChanges` is enabled, Warden requests changes when findings exceed `failOn`.
+6. If `failCheck` is enabled, the check run fails when findings exceed `failOn`.
+
+## What Comes From `warden.toml`
+
+Pull request behavior is still driven by `warden.toml`:
+
+| Concern | Where to configure it |
+| --- | --- |
+| Which skills run on PRs | [Triggers](/config/triggers/) |
+| Which files a skill sees | [Skill Entries](/config/skills/) |
+| What severity reports or fails | [Output and Defaults](/config/output/) |
+
+The GitHub workflow decides when the action starts and which credentials it can
+use. The config decides what Warden does once it is running.
+
+## Next
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/github/repository/">
+    <strong>Repository Setup</strong>
+    <span>Initialize one repository with config and a workflow.</span>
+  </a>
+  <a class="api-link-card" href="/github/org/">
+    <strong>Organization Setup</strong>
+    <span>Roll Warden out across many repositories.</span>
+  </a>
+  <a class="api-link-card" href="/github/workflow/">
+    <strong>Workflow Reference</strong>
+    <span>Review action inputs and layered config options.</span>
+  </a>
+</div>

@@ -1,0 +1,59 @@
+---
+title: Skill Entries
+description: Configure skills, filters, remotes, and per-skill overrides.
+editUrl: false
+---
+
+Skills define what Warden analyzes and when.
+
+## Fields
+
+| Field | Purpose |
+| --- | --- |
+| `name` | Skill name or path. |
+| `paths` | Files to include as glob patterns. |
+| `ignorePaths` | Files to exclude as glob patterns. |
+| `failOn` | Minimum severity to fail: `critical`, `high`, `medium`, `low`, `info`, `off`. |
+| `reportOn` | Minimum severity to report. |
+| `remote` | GitHub repository for remote skills: `owner/repo` or `owner/repo@sha`. |
+| `model` | Optional model override. |
+| `maxTurns` | Optional max agentic turns per hunk. |
+
+## Filters
+
+Use `paths` and `ignorePaths` to scope a skill:
+
+```toml title="warden.toml"
+[[skills]]
+name = "api-review"
+paths = ["src/api/**/*.ts"]
+ignorePaths = ["**/*.test.ts"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+```
+
+## Skill References
+
+```toml title="warden.toml"
+# Built-in skill
+[[skills]]
+name = "security-review"
+
+# Relative path
+[[skills]]
+name = "./custom-skills/my-review"
+
+# Remote skill
+[[skills]]
+name = "api-review"
+remote = "your-org/warden-skills"
+
+# Pinned remote skill
+[[skills]]
+name = "api-review"
+remote = "your-org/warden-skills@abc123def"
+```
+
+See [skill discovery](/skills/discovery/) for resolution order.

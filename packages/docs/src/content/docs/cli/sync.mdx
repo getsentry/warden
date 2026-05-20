@@ -1,0 +1,38 @@
+---
+title: warden sync
+description: Update cached remote skills.
+editUrl: false
+---
+
+```bash
+warden sync [remote]
+```
+
+Refreshes cached remote skills. Unpinned skills are updated to their latest
+versions.
+
+## Arguments
+
+| Argument | Purpose |
+| --- | --- |
+| `remote` | Optional remote to sync, such as `owner/repo`. |
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `--remote <ref>` | Remote repository reference. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden sync
+warden sync getsentry/warden-skills
+```

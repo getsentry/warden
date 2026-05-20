@@ -1,0 +1,81 @@
+---
+title: CLI
+description: Warden CLI command reference.
+editUrl: false
+---
+
+The Warden CLI reviews local changes, manages skills, and helps configure
+GitHub integration.
+
+```bash
+warden [targets...] [options]
+```
+
+If no command is given, Warden runs the default analysis command. With no
+target, it reviews the current branch against the default branch.
+
+## Commands
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/cli/run/">
+    <strong>warden run</strong>
+    <span>Analyze files, git refs, or current branch changes.</span>
+  </a>
+  <a class="api-link-card" href="/cli/init/">
+    <strong>warden init</strong>
+    <span>Create config and GitHub workflow files.</span>
+  </a>
+  <a class="api-link-card" href="/cli/add/">
+    <strong>warden add</strong>
+    <span>Add built-in, remote, or local skills.</span>
+  </a>
+  <a class="api-link-card" href="/cli/sync/">
+    <strong>warden sync</strong>
+    <span>Refresh cached remote skills.</span>
+  </a>
+  <a class="api-link-card" href="/cli/build/">
+    <strong>warden build</strong>
+    <span>Create or refresh a generated skill.</span>
+  </a>
+  <a class="api-link-card" href="/cli/improve/">
+    <strong>warden improve</strong>
+    <span>Revise an existing generated skill from feedback.</span>
+  </a>
+  <a class="api-link-card" href="/cli/runs/">
+    <strong>warden runs</strong>
+    <span>Inspect saved sessions and run logs.</span>
+  </a>
+  <a class="api-link-card" href="/cli/setup-app/">
+    <strong>warden setup-app</strong>
+    <span>Create a GitHub App for branded comments.</span>
+  </a>
+</div>
+
+## Global Options
+
+These options are available at the root CLI level. Command-specific options are
+documented on each command page.
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `-h, --help` | Show help for a command. |
+| `-V, --version` | Show version number. |
+
+## Common Examples
+
+```bash
+warden                     # Review current branch changes
+warden src/auth.ts         # Analyze a specific file
+warden src/api/            # Analyze a directory
+warden @targets.txt        # Analyze targets listed in a file
+warden --staged            # Analyze staged changes
+warden HEAD~3..HEAD        # Analyze changes in a git range
+warden help add            # Show command help
+```
+
+## Source of Truth
+
+The CLI help text is defined in `src/cli/help.ts`. This reference mirrors that
+structured command metadata. If the CLI changes, update the help spec first and
+then update these pages from it.

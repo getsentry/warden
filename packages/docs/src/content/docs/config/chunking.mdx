@@ -1,0 +1,41 @@
+---
+title: Chunking
+description: Configure how files are split for analysis.
+editUrl: false
+---
+
+By default, Warden analyzes each diff hunk separately. Chunking lets you skip
+files, review whole files, or merge nearby hunks for more context.
+
+## File Pattern Modes
+
+| Mode | Behavior |
+| --- | --- |
+| `per-hunk` | Analyze each diff hunk separately. |
+| `whole-file` | Analyze the entire file as one chunk. |
+| `skip` | Skip the file entirely. |
+
+## Coalescing
+
+| Field | Purpose |
+| --- | --- |
+| `enabled` | Enable hunk coalescing. Default: `true`. |
+| `maxGapLines` | Max lines between hunks to merge. Default: `30`. |
+| `maxChunkSize` | Target max chunk size in characters. Default: `8000`. |
+
+```toml title="warden.toml"
+[defaults.chunking]
+
+[[defaults.chunking.filePatterns]]
+pattern = "**/pnpm-lock.yaml"
+mode = "skip"
+
+[[defaults.chunking.filePatterns]]
+pattern = "**/migrations/*.sql"
+mode = "whole-file"
+
+[defaults.chunking.coalesce]
+enabled = true
+maxGapLines = 50
+maxChunkSize = 10000
+```

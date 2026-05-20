@@ -1,0 +1,39 @@
+---
+title: warden add
+description: Add a skill trigger to your configuration.
+editUrl: false
+---
+
+```bash
+warden add [skill] [options]
+```
+
+Adds a skill trigger to `warden.toml`. Run without arguments for interactive
+mode.
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `--list` | List available skills. |
+| `--remote <ref>` | Remote repository reference. |
+| `-f, --force` | Overwrite existing files or bypass caches. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden add
+warden add security-review
+warden add code-review
+warden add --list
+
+warden add --remote your-org/warden-skills --skill api-review
+warden add --remote your-org/warden-skills@abc123 --skill api-review
+```

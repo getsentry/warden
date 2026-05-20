@@ -1,0 +1,32 @@
+---
+title: Built-in Skills
+description: Warden's baseline review skills.
+editUrl: false
+---
+
+Use built-in skills by name. No local skill file, build step, schema, or SDK is
+required.
+
+## security-review
+
+`security-review` is Warden's baseline application security pass. It looks for
+real exploitable vulnerabilities in changed code.
+
+```bash
+warden add security-review
+warden --skill security-review
+```
+
+## code-review
+
+`code-review` looks for correctness bugs and behavioral regressions in changed
+code.
+
+```bash
+warden add code-review
+warden --skill code-review
+```
+
+Built-ins are first passes. Add project-specific skills for domain rules,
+framework conventions, API contracts, and product-specific invariants.
+

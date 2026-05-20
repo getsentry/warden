@@ -1,0 +1,102 @@
+---
+title: Organization Setup
+description: Org-wide GitHub setup for Warden.
+editUrl: false
+---
+
+Use this when one org-level setup should cover many repositories. The pattern
+is: set credentials once at the organization level, then run Warden from shared
+`.github` workflow conventions.
+
+## Organization Secrets
+
+Go to **Organization Settings > Secrets and variables > Actions**, then add:
+
+| Secret | Purpose |
+| --- | --- |
+| `WARDEN_MODEL` | Pi model selector for all repos using the shared workflow. |
+| `WARDEN_OPENAI_API_KEY` | OpenAI key for OpenAI Pi models. |
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic key for Anthropic Pi models or Claude runtime. |
+| `WARDEN_SENTRY_DSN` | Optional telemetry DSN. |
+
+## GitHub App
+
+For branded comments and org-wide repository access:
+
+```bash
+npx @sentry/warden setup-app --org your-org
+```
+
+The generated app uses these permissions:
+
+- `contents: write`
+- `pull_requests: write`
+- `issues: write`
+- `checks: write`
+- `metadata: read`
+
+Add these org secrets after app creation:
+
+| Secret | Purpose |
+| --- | --- |
+| `WARDEN_APP_ID` | GitHub App ID. |
+| `WARDEN_PRIVATE_KEY` | Full PEM private key contents. |
+
+## Shared Workflow Pattern
+
+Keep a canonical workflow in your org `.github` repository and have repos
+consume that convention.
+
+```yaml title=".github/workflows/warden.yml"
+name: Warden
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+      WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
+      WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_SENTRY_DSN: ${{ secrets.WARDEN_SENTRY_DSN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.WARDEN_APP_ID }}
+          private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - uses: getsentry/warden@v0
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+```
+
+## Rollout
+
+Use organization rulesets to roll Warden out gradually:
+
+- Enforcement status: **Evaluate** while you are testing.
+- Target repositories: the repos you want covered.
+- Target branches: default branch.
+- Required workflows: select the Warden workflow.
+
+If `warden.toml` is missing, Warden logs a warning and skips analysis. Once a
+repo adds `warden.toml`, it is analyzed normally.
+
+## Failure Behavior
+
+Org-wide workflows still fail for real errors:
+
+- Missing authentication or GitHub token.
+- Invalid `warden.toml`.
+- Action runtime failures.

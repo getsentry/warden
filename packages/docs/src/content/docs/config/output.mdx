@@ -1,0 +1,55 @@
+---
+title: Output and Defaults
+description: Configure reporting, failure behavior, and inherited defaults.
+editUrl: false
+---
+
+Output settings control what gets reported and when Warden should fail.
+
+## Output Fields
+
+| Field | Purpose |
+| --- | --- |
+| `failOn` | Minimum severity to fail: `critical`, `high`, `medium`, `low`, `info`, `off`. |
+| `reportOn` | Minimum severity to report. |
+| `maxFindings` | Maximum findings to report. |
+| `reportOnSuccess` | Post a comment when no findings. Default: `false`. |
+| `requestChanges` | Request changes when findings exceed `failOn`. Default: `false`. |
+| `failCheck` | Fail the check run when findings exceed `failOn`. Default: `false`. |
+
+```toml title="warden.toml"
+[[skills]]
+name = "security-review"
+failOn = "high"
+reportOn = "medium"
+maxFindings = 20
+```
+
+## Defaults
+
+Defaults are inherited by all skills. Individual skills and triggers can
+override them.
+
+```toml title="warden.toml"
+[defaults]
+runtime = "pi"
+model = "anthropic/claude-sonnet-4-6"
+maxTurns = 30
+failOn = "high"
+reportOn = "medium"
+requestChanges = false
+failCheck = false
+ignorePaths = ["**/vendor/**", "**/node_modules/**"]
+
+[defaults.auxiliary]
+model = "anthropic/claude-haiku-4-5"
+
+[defaults.synthesis]
+model = "anthropic/claude-opus-4-5"
+```
+
+Model precedence is: trigger, skill, defaults, CLI flag, then `WARDEN_MODEL`.
+Most specific wins.
+
+`defaults.synthesis.model` falls back to `defaults.auxiliary.model` when it is
+not set.

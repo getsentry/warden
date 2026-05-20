@@ -1,0 +1,61 @@
+---
+title: Configuration
+description: Warden configuration reference.
+editUrl: false
+---
+
+Warden is configured with `warden.toml` in your repository root.
+This reference covers `warden.toml` only. GitHub Actions workflow settings live
+under [GitHub Workflow](/github/workflow/).
+
+```toml title="warden.toml"
+version = 1
+
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+
+[[skills]]
+name = "code-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+```
+
+## Sections
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/config/skills/">
+    <strong>Skill Entries</strong>
+    <span>Skill fields, filters, remotes, and model overrides.</span>
+  </a>
+  <a class="api-link-card" href="/config/triggers/">
+    <strong>Triggers</strong>
+    <span>Pull request, local, and schedule trigger settings.</span>
+  </a>
+  <a class="api-link-card" href="/config/output/">
+    <strong>Output and Defaults</strong>
+    <span>Failure thresholds, report thresholds, and defaults.</span>
+  </a>
+  <a class="api-link-card" href="/config/runner/">
+    <strong>Runner</strong>
+    <span>Run-level concurrency for CLI and action executions.</span>
+  </a>
+  <a class="api-link-card" href="/config/chunking/">
+    <strong>Chunking</strong>
+    <span>Control whether Warden analyzes hunks, whole files, or skips files.</span>
+  </a>
+</div>
+
+## Environment Variables
+
+| Variable | Purpose |
+| --- | --- |
+| `WARDEN_MODEL` | Pi model selector, such as `openai/gpt-5.5` or `anthropic/claude-sonnet-4-6`. |
+| `WARDEN_OPENAI_API_KEY` | OpenAI API key when using an OpenAI Pi model. |
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key when using an Anthropic Pi model or the Claude runtime. |
+| `WARDEN_SKILL_CACHE_TTL` | Cache duration for unpinned remote skills. Default: 24h. |

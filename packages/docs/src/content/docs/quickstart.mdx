@@ -1,0 +1,90 @@
+---
+title: Quickstart
+description: Install Warden, configure model credentials, and initialize a repository.
+editUrl: false
+---
+
+Install the CLI globally:
+
+```bash
+pnpm add -g @sentry/warden
+```
+
+## Authenticate
+
+Warden runs model-backed work through Pi by default. Set the model selector and
+the matching provider credential:
+
+```bash
+# OpenAI example
+export WARDEN_MODEL=openai/gpt-5.5
+export WARDEN_OPENAI_API_KEY=sk-...
+
+# Anthropic example
+export WARDEN_MODEL=anthropic/claude-sonnet-4-6
+export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
+```
+
+CI environments require the same provider credentials as repository or
+organization secrets.
+
+## Initialize
+
+Initialize Warden in a repository:
+
+```bash
+warden init
+```
+
+`warden init` creates:
+
+| File | Purpose |
+| --- | --- |
+| `warden.toml` | Skills, triggers, thresholds, and defaults. |
+| `.github/workflows/warden.yml` | Pull request workflow for GitHub Actions. |
+
+## Run Locally
+
+```bash
+warden
+```
+
+With no arguments, Warden reviews the current branch against the default branch.
+Use this before opening or updating a pull request.
+
+## Initial `warden.toml`
+
+The default config starts with the built-in security and correctness reviews:
+
+```toml title="warden.toml"
+version = 1
+
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+
+[[skills]]
+name = "code-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+```
+
+Add more skills when your codebase has specific review needs.
+
+## Next
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/local-review/">
+    <strong>Local Review</strong>
+    <span>Use staged, range, target, skill-specific, and autofix runs.</span>
+  </a>
+  <a class="api-link-card" href="/github/repository/">
+    <strong>Repository Setup</strong>
+    <span>Set up GitHub secrets and pull request reviews.</span>
+  </a>
+</div>
