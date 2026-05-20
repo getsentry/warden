@@ -19,6 +19,34 @@ Every time you run Warden, it:
 3. Runs the appropriate skills against matching code
 4. Reports findings with severity, location, and optional fixes
 
+Architecture details: https://warden.sentry.dev/architecture/
+
+## Architecture Flow
+
+Warden has three entry paths and one review pipeline:
+
+- CLI runs start from local git state or explicit file targets.
+- Pull request reviews start from a GitHub event payload.
+- Scheduled reviews start from cron workflows and configured paths.
+
+All entry paths build a review context, resolve `warden.toml`, match triggers, and run skill tasks through the same analysis engine.
+
+The review pipeline is:
+
+1. Changed code becomes an event context.
+2. Config and triggers decide which skills run and which files they see.
+3. Matched triggers become skill tasks with model, runtime, chunking, verification, and output settings.
+4. Warden prepares diffs by parsing patches, applying chunking rules, coalescing nearby hunks, expanding context, and grouping hunks by file.
+5. Main analysis agents run the resolved `SKILL.md` prompt against prepared hunks.
+6. Post-processing agents extract and validate findings, verify candidates, merge same-root-cause findings, and check suggested fixes.
+7. Reports render to terminal output, JSONL logs, GitHub Checks, and GitHub review comments.
+
+Agent lanes:
+
+- Main analysis uses `defaults.agent.model`, skill `model`, or trigger `model`.
+- Auxiliary work uses `defaults.auxiliary.model` for structured helper calls such as extraction repair, verification, fix gates, deduplication, and fix evaluation.
+- Synthesis uses `defaults.synthesis.model` for cross-location finding consolidation.
+
 Warden works in two contexts:
 
 - **Locally** - Review changes before you push, get instant feedback

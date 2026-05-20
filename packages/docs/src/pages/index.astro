@@ -214,6 +214,10 @@ Analysis completed in <span class="cli-dim">6.1s</span></pre>
         <strong>Configure Triggers</strong>
         <p>Control when and where skills run</p>
       </a>
+      <a href={`${base}/architecture`} class="next-step-card">
+        <strong>Understand the Flow</strong>
+        <p>Follow changed code through agents and reports</p>
+      </a>
       <a href={`${base}/cli`} class="next-step-card">
         <strong>CLI Reference</strong>
         <p>Commands, options, and usage</p>
@@ -551,7 +555,7 @@ Analysis completed in <span class="cli-dim">6.1s</span></pre>
   /* Next Steps */
   .next-steps-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
     gap: 1rem;
   }
 

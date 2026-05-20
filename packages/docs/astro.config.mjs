@@ -36,6 +36,7 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/guide" },
             { label: "Quickstart", link: "/quickstart" },
+            { label: "Architecture", link: "/architecture" },
             {
               label: "Workflows",
               items: [

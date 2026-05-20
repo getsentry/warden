@@ -1,0 +1,163 @@
+---
+title: Architecture
+description: How data moves through Warden from changed code to findings.
+editUrl: false
+---
+
+Warden has three entry paths and one review pipeline.
+
+The CLI starts from local git state or explicit targets. Pull request reviews
+start from a GitHub event payload. Scheduled reviews start from cron workflows
+and configured paths. All three paths build a review context, resolve
+`warden.toml`, and run skills through the same analysis engine.
+
+```text title="Review flow"
+Changed code
+  -> Event context
+  -> Config and trigger resolution
+  -> Skill tasks
+  -> File and hunk preparation
+  -> Main skill analysis agents
+  -> Finding post-processing agents
+  -> Reports, comments, checks, and logs
+```
+
+## Entry Points
+
+| Entry point | What it provides |
+| --- | --- |
+| CLI | Local repository path, git range or file targets, terminal mode, optional JSONL output. |
+| GitHub Action | Webhook payload, PR metadata, GitHub API client, workflow inputs, check and review permissions. |
+| Scheduled review | Repository context, configured paths, and schedule triggers. |
+
+The entry point decides where context comes from and where results go. It does
+not change what a skill means.
+
+## Review Context
+
+Warden normalizes input into an event context:
+
+- repository owner, name, and local checkout path
+- pull request title, body, base SHA, head SHA, and changed files when present
+- file status, patch text, and diff context source
+- event type and action for trigger matching
+
+Local runs synthesize this context from git and file targets. GitHub runs build
+it from the event payload and GitHub API data.
+
+## Config and Triggers
+
+`warden.toml` decides which skills are eligible to run. Warden loads config,
+resolves local, built-in, and remote skill roots, then matches each configured
+trigger against the event context.
+
+Trigger matching answers three questions:
+
+| Question | Controlled by |
+| --- | --- |
+| Should this skill run for this event? | `type`, `actions`, local run mode, and schedule settings. |
+| Which files should it see? | `paths`, `ignorePaths`, and defaults. |
+| How should results behave? | `failOn`, `reportOn`, `maxFindings`, `requestChanges`, `failCheck`, and confidence thresholds. |
+
+In GitHub Actions, org-level base config and repository config can be layered.
+The base config is the enforced baseline. Repository config can add local
+coverage without weakening base skills.
+
+## Skill Tasks
+
+A matched trigger becomes a skill task. Each task contains:
+
+- the resolved `SKILL.md`
+- the filtered review context
+- model, runtime, max turns, chunking, and verification options
+- output thresholds for failure and reporting
+
+Warden launches matched skills in parallel. A shared semaphore gates file-level
+analysis so multiple skills can be active while total model concurrency stays
+bounded.
+
+See [Runner](/config/runner/) for concurrency settings.
+
+## Diff Preparation
+
+Before a model sees code, Warden prepares the diff:
+
+1. Parse each changed file patch.
+2. Classify files as per-hunk, whole-file, or skipped by chunking rules.
+3. Split large hunks and coalesce nearby hunks.
+4. Expand each hunk with surrounding file context.
+5. Group hunks by file.
+
+The unit of main analysis is a hunk with context. Files run in parallel when
+allowed by the runner, while hunks inside a file run in order.
+
+See [Chunking](/config/chunking/) for file pattern modes and coalescing
+settings.
+
+## Agent Lanes
+
+Warden uses model-backed agents in several lanes. They share the selected
+runtime, but can use different configured models.
+
+| Lane | Model field | Purpose |
+| --- | --- | --- |
+| Main analysis | `defaults.agent.model`, skill `model`, or trigger `model` | Runs the skill prompt against each prepared hunk. |
+| Auxiliary | `defaults.auxiliary.model` | Repairs malformed structured output, verifies findings, checks suggested fixes, deduplicates against existing comments, and evaluates fix attempts. |
+| Synthesis | `defaults.synthesis.model` | Merges findings that describe the same root cause across multiple locations. |
+
+The main analysis agent is the skill itself: Warden builds a system prompt from
+`SKILL.md`, adds the changed-code context, and asks for structured findings.
+
+Auxiliary agents are narrower. They do not decide what the skill should care
+about. They keep the output usable: parse it, verify it, merge duplicates, and
+remove unsafe suggested fixes.
+
+## Finding Pipeline
+
+Each hunk analysis returns candidate findings plus usage and error metadata.
+Warden then runs the shared post-processing pipeline:
+
+1. Extract and validate JSON findings.
+2. Drop findings outside the analyzed hunk range.
+3. Deduplicate identical findings from the same skill run.
+4. Verify candidates with a second read-only repo-aware pass unless disabled.
+5. Merge same-root-cause findings across locations.
+6. Validate suggested fixes deterministically and, when available, semantically.
+7. Build a `SkillReport` with findings, skipped files, hunk failures, usage, and duration.
+
+If every hunk fails for the same systemic reason, Warden stops early and reports
+the provider, auth, or model-selector failure instead of pretending the code was
+clean.
+
+## Output Paths
+
+Local and CI runs consume the same `SkillReport` shape, then render it for the
+current surface.
+
+| Surface | Output |
+| --- | --- |
+| Terminal | Live skill progress, filtered findings, summary, optional interactive fixes. |
+| JSONL | Incremental chunks, skill reports, and final summary for `warden runs`. |
+| GitHub Checks | One core Warden check plus per-skill checks when running on pull requests. |
+| GitHub Reviews | Inline comments, deduplicated findings, optional change requests. |
+
+GitHub runs do extra PR hygiene after posting new findings. Warden fetches
+existing comments, suppresses duplicates, evaluates whether follow-up commits
+fixed prior findings, resolves stale Warden comments when safe, and can dismiss
+a previous Warden change request when blocking findings are gone.
+
+## Runtime Boundary
+
+The runtime adapter is the boundary between Warden and model execution.
+
+| Runtime | Role |
+| --- | --- |
+| `pi` | Default runtime for main, auxiliary, and synthesis model calls through Pi. |
+| `claude` | Claude Code runtime for repo-aware execution, with API key or local Claude auth. |
+
+Everything before the runtime boundary is deterministic orchestration:
+configuration, trigger matching, diff parsing, chunking, concurrency, reporting,
+and GitHub state management. Everything after it is model-backed review work
+scoped by the active skill and lane.
+
+For model configuration details, see [Models and Runtimes](/config/models/).
