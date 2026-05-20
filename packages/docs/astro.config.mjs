@@ -28,6 +28,7 @@ export default defineConfig({
     starlight({
       title: "Warden",
       description: "Define skills in Markdown. Compose them into agents that review every change.",
+      customCss: ["./src/styles/docs.css"],
       pagination: false,
       sidebar: [
         {
@@ -70,6 +71,7 @@ export default defineConfig({
               label: "warden.toml",
               items: [
                 { label: "Overview", link: "/config" },
+                { label: "Models and Runtimes", link: "/config/models" },
                 { label: "Skill Entries", link: "/config/skills" },
                 { label: "Triggers", link: "/config/triggers" },
                 { label: "Output and Defaults", link: "/config/output" },

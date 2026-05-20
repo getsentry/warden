@@ -205,12 +205,12 @@ Skills define what Warden analyzes and when.
 | `failOn` | Minimum severity to fail: `critical`, `high`, `medium`, `low`, `info`, `off` |
 | `reportOn` | Minimum severity to report |
 | `remote` | GitHub repository for remote skills: `owner/repo` or `owner/repo@sha` |
-| `model` | Model override |
+| `model` | Override the main agent model for this skill |
 | `maxTurns` | Max agentic turns per hunk |
 
 ### Triggers
 
-Triggers define when a skill runs. Each skill can have one or more triggers. Triggers can override any output setting.
+Triggers define when a skill runs. Each skill can have one or more triggers. Triggers can override output settings and the main agent model.
 
 | Field | Description |
 |-------|-------------|
@@ -222,7 +222,7 @@ Triggers define when a skill runs. Each skill can have one or more triggers. Tri
 | `reportOnSuccess` | Override report-on-success behavior |
 | `requestChanges` | Override REQUEST_CHANGES behavior |
 | `failCheck` | Override check failure behavior |
-| `model` | Override model |
+| `model` | Override the main agent model for this trigger |
 | `maxTurns` | Override max agentic turns |
 
 Pull request actions: `opened`, `synchronize`, `reopened`, `closed`.
@@ -257,28 +257,58 @@ Control how findings are reported. Set at the skill level or in defaults.
 
 ### Defaults
 
-Default settings inherited by all skills. Individual skills can override any setting.
+Default settings inherited by all skills. Individual skills can override output
+settings and the main agent model.
 
 ```toml
 [defaults]
-runtime = "pi"
-model = "openai/gpt-5.5"
-maxTurns = 30
 failOn = "high"
 reportOn = "medium"
 requestChanges = false
 failCheck = false
 ignorePaths = ["**/vendor/**", "**/node_modules/**"]
+```
+
+### Models and Runtimes
+
+Runtime is configured under `[defaults]`. The default runtime is `pi`.
+
+```toml
+[defaults]
+runtime = "pi"
+
+[defaults.agent]
+model = "anthropic/claude-sonnet-4-6"
+maxTurns = 30
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"
+maxRetries = 3
 
 [defaults.synthesis]
 model = "anthropic/claude-opus-4-5"
 ```
 
-Model precedence: trigger > skill > defaults > CLI flag (`-m`) > env var (`WARDEN_MODEL`). Most specific wins.
-Synthesis fallback: `defaults.synthesis.model` falls back to `defaults.auxiliary.model` when not set.
+Runtime values:
+
+- `pi` - default. Model values must use `provider/model` selectors such as `openai/gpt-5.5` or `anthropic/claude-sonnet-4-6`.
+- `claude` - runs through Claude Code. Use Claude Code model IDs and Anthropic API key or Claude Code OAuth auth.
+
+Runtime selection is global within a config layer. `runtime` is not currently a skill-level or trigger-level field.
+
+Model lanes:
+
+- `defaults.agent.model` - main repo-aware skill analysis. Preferred default model field.
+- `defaults.auxiliary.model` - structured helper calls such as extraction, repair, merging, dedupe, and fix evaluation.
+- `defaults.synthesis.model` - post-analysis synthesis and consolidation. Falls back to `defaults.auxiliary.model` when unset.
+
+`defaults.model` and `defaults.maxTurns` are legacy shorthand for the agent lane.
+
+Main agent model precedence: trigger `model` > skill `model` > `defaults.agent.model` > legacy `defaults.model` > CLI flag (`-m`) > env var (`WARDEN_MODEL`) > SDK/runtime default.
+
+Auxiliary and synthesis models only come from `[defaults.auxiliary]` and `[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
+
+Generated skill commands (`warden build` and `warden improve`) use the synthesis lane. Their model fallback order is `defaults.synthesis.model` > `defaults.auxiliary.model` > CLI flag (`-m`) > env var (`WARDEN_MODEL`) > SDK/runtime default.
 
 ### Chunking
 
@@ -373,7 +403,7 @@ Resolution order:
 
 | Variable | Description |
 |----------|-------------|
-| `WARDEN_MODEL` | Model override |
+| `WARDEN_MODEL` | Fallback model selector when config and CLI do not set one |
 | `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
 | `WARDEN_SKILL_CACHE_TTL` | Cache duration for unpinned remote skills. Default: 24h |
@@ -446,7 +476,7 @@ Add these as organization or repository secrets:
 
 | Secret | Description |
 |--------|-------------|
-| `WARDEN_MODEL` | Pi model selector |
+| `WARDEN_MODEL` | Fallback model selector when config does not set one |
 | `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
 | `WARDEN_SENTRY_DSN` *(optional)* | Sentry DSN for telemetry |

@@ -14,7 +14,7 @@ Go to **Organization Settings > Secrets and variables > Actions**, then add:
 
 | Secret | Purpose |
 | --- | --- |
-| `WARDEN_MODEL` | Pi model selector for all repos using the shared workflow. |
+| `WARDEN_MODEL` | Fallback model selector for repos that do not set a model in `warden.toml`. |
 | `WARDEN_OPENAI_API_KEY` | OpenAI key for OpenAI Pi models. |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic key for Anthropic Pi models or Claude runtime. |
 | `WARDEN_SENTRY_DSN` | Optional telemetry DSN. |

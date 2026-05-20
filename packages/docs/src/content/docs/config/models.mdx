@@ -1,0 +1,132 @@
+---
+title: Models and Runtimes
+description: Configure Warden model selection, runtime backends, and model precedence.
+editUrl: false
+---
+
+Warden selects one runtime backend for a config layer and can use separate model
+lanes for different kinds of model work.
+
+## Runtime
+
+The runtime selects the backend used for model-backed execution. Configure it
+under `[defaults]`:
+
+```toml title="warden.toml"
+[defaults]
+runtime = "pi"
+```
+
+| Runtime | Purpose |
+| --- | --- |
+| `pi` | Default. Runs through Pi. Model values must use `provider/model` selectors. |
+| `claude` | Runs through Claude Code. Requires Anthropic API key or Claude Code OAuth auth. |
+
+Runtime selection is global within a config layer. `runtime` is not currently a
+skill-level or trigger-level field.
+
+## Pi Model Selectors
+
+When `runtime = "pi"`, configured model values must include a provider prefix:
+
+```toml title="warden.toml"
+[defaults.agent]
+model = "anthropic/claude-sonnet-4-6"
+```
+
+Examples:
+
+| Selector | Credential |
+| --- | --- |
+| `openai/gpt-5.5` | `WARDEN_OPENAI_API_KEY` |
+| `anthropic/claude-sonnet-4-6` | `WARDEN_ANTHROPIC_API_KEY` |
+
+## Claude Runtime Models
+
+When `runtime = "claude"`, use the model IDs accepted by Claude Code:
+
+```toml title="warden.toml"
+[defaults]
+runtime = "claude"
+
+[defaults.agent]
+model = "claude-sonnet-4-6"
+```
+
+In GitHub Actions, set `WARDEN_ANTHROPIC_API_KEY` or provide Claude Code OAuth
+auth. Locally, Claude runtime can also use existing Claude Code auth.
+
+## Model Lanes
+
+Warden can use different models for different stages:
+
+| Field | Purpose |
+| --- | --- |
+| `defaults.agent.model` | Main repo-aware skill analysis. Preferred default model field. |
+| `defaults.auxiliary.model` | Structured helper calls such as extraction, repair, merging, dedupe, and fix evaluation. |
+| `defaults.synthesis.model` | Post-analysis synthesis and consolidation. Falls back to `defaults.auxiliary.model` when unset. |
+
+```toml title="warden.toml"
+[defaults]
+runtime = "pi"
+
+[defaults.agent]
+model = "anthropic/claude-sonnet-4-6"
+maxTurns = 30
+
+[defaults.auxiliary]
+model = "anthropic/claude-haiku-4-5"
+maxRetries = 3
+
+[defaults.synthesis]
+model = "anthropic/claude-opus-4-5"
+```
+
+`defaults.model` and `defaults.maxTurns` are legacy shorthand for the agent
+lane. Prefer `defaults.agent.model` and `defaults.agent.maxTurns` in new config.
+
+## Overrides
+
+Skills and triggers can override the main agent model:
+
+```toml title="warden.toml"
+[[skills]]
+name = "security-review"
+model = "anthropic/claude-opus-4-5"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+model = "anthropic/claude-sonnet-4-6"
+```
+
+The CLI `--model` flag and `WARDEN_MODEL` environment variable are fallbacks.
+They only apply when the resolved skill or trigger path does not set a model.
+
+Main agent model precedence, from highest to lowest:
+
+| Source | Notes |
+| --- | --- |
+| `skills.triggers.model` | Most specific. Applies to one trigger. |
+| `skills.model` | Applies to one skill. |
+| `defaults.agent.model` | Preferred global default. |
+| `defaults.model` | Legacy global default. |
+| `--model` | CLI fallback. |
+| `WARDEN_MODEL` | Environment fallback. |
+| SDK/runtime default | Used when no explicit model is set. |
+
+Auxiliary and synthesis models only come from `[defaults.auxiliary]` and
+`[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
+
+## Generated Skill Commands
+
+`warden build` and `warden improve` use the synthesis lane because they generate
+or revise skill artifacts. Their model fallback order is:
+
+| Source | Notes |
+| --- | --- |
+| `defaults.synthesis.model` | Preferred generated-skill model. |
+| `defaults.auxiliary.model` | Fallback when synthesis is unset. |
+| `--model` | CLI fallback for this command. |
+| `WARDEN_MODEL` | Environment fallback. |
+| SDK/runtime default | Used when no explicit model is set. |

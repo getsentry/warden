@@ -23,7 +23,7 @@ generated-skill reviewer loop.
 | --- | --- |
 | `-C, --cwd <path>` | Run as if invoked from this directory. |
 | `--config <path>` | Path to `warden.toml`. |
-| `-m, --model <model>` | Model fallback when config does not specify one. |
+| `-m, --model <model>` | Model fallback when `warden.toml` does not specify one. See [Models and Runtimes](/config/models/). |
 | `--json` | Output results as JSON. |
 | `-p, --prompt <value>` | Improvement brief. Prefix with `@` to read from a file. |
 | `--quiet` | Errors and final summary only. |
@@ -40,4 +40,3 @@ warden improve security -p "Deepen source provenance and reference routing"
 warden improve security -p @feedback.md
 warden improve ./skills/security -p @feedback.md
 ```
-

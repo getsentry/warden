@@ -5,7 +5,7 @@ editUrl: false
 ---
 
 Triggers define when a skill runs. Each skill can have one or more triggers.
-Triggers can override output and model settings.
+Triggers can override output settings and the main agent model.
 
 ## Fields
 
@@ -19,7 +19,7 @@ Triggers can override output and model settings.
 | `reportOnSuccess` | Override report-on-success behavior. |
 | `requestChanges` | Override `REQUEST_CHANGES` behavior. |
 | `failCheck` | Override check failure behavior. |
-| `model` | Override model for this trigger. |
+| `model` | Override the main agent model for this trigger. See [Models and Runtimes](/config/models/). |
 | `maxTurns` | Override max agentic turns. |
 
 ## Pull Request Actions

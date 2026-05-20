@@ -33,6 +33,10 @@ actions = ["opened", "synchronize"]
     <strong>Skill Entries</strong>
     <span>Skill fields, filters, remotes, and model overrides.</span>
   </a>
+  <a class="api-link-card" href="/config/models/">
+    <strong>Models and Runtimes</strong>
+    <span>Pi selectors, Claude runtime, model lanes, and precedence.</span>
+  </a>
   <a class="api-link-card" href="/config/triggers/">
     <strong>Triggers</strong>
     <span>Pull request, local, and schedule trigger settings.</span>
@@ -55,7 +59,7 @@ actions = ["opened", "synchronize"]
 
 | Variable | Purpose |
 | --- | --- |
-| `WARDEN_MODEL` | Pi model selector, such as `openai/gpt-5.5` or `anthropic/claude-sonnet-4-6`. |
+| `WARDEN_MODEL` | Fallback model selector when `warden.toml` and `--model` do not set one. See [Models and Runtimes](/config/models/). |
 | `WARDEN_OPENAI_API_KEY` | OpenAI API key when using an OpenAI Pi model. |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key when using an Anthropic Pi model or the Claude runtime. |
 | `WARDEN_SKILL_CACHE_TTL` | Cache duration for unpinned remote skills. Default: 24h. |

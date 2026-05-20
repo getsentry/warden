@@ -19,11 +19,12 @@ This creates:
 
 ## Secrets
 
-Add the provider credentials used by your configured model:
+Add the provider credentials used by your configured model. `WARDEN_MODEL` is a
+fallback when `warden.toml` does not set a model; see [Models and Runtimes](/config/models/).
 
 | Secret | Purpose |
 | --- | --- |
-| `WARDEN_MODEL` | Pi model selector. |
+| `WARDEN_MODEL` | Fallback model selector. |
 | `WARDEN_OPENAI_API_KEY` | OpenAI key for OpenAI Pi models. |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic key for Anthropic Pi models or Claude runtime. |
 | `WARDEN_SENTRY_DSN` | Optional telemetry DSN. |
@@ -45,4 +46,3 @@ Add the generated app secrets:
 | `WARDEN_PRIVATE_KEY` | Full PEM private key contents. |
 
 Then use `actions/create-github-app-token` and pass the app token to Warden.
-

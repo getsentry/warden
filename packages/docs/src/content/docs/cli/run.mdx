@@ -25,7 +25,7 @@ The bare `warden` command is an alias for this command.
 | `-C, --cwd <path>` | Run as if invoked from this directory. |
 | `--skill <name\|path>` | Run only this skill by name or path. Names fall back to built-ins. |
 | `--config <path>` | Path to `warden.toml`. |
-| `-m, --model <model>` | Model fallback when config does not specify one. |
+| `-m, --model <model>` | Model fallback when `warden.toml` does not specify one. See [Models and Runtimes](/config/models/). |
 | `--json` | Output results as JSON. |
 | `-o, --output <path>` | Write full run output to a JSONL file. |
 | `--fail-on <severity>` | Exit with code 1 if findings meet this severity. |
@@ -53,4 +53,3 @@ warden "src/**/*.ts" --skill security-review
 warden HEAD~3
 warden --staged --fix
 ```
-
