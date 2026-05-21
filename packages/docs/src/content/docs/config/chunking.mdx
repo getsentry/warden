@@ -17,11 +17,29 @@ files, review whole files, or merge nearby hunks for more context.
 
 ## Coalescing
 
-| Field | Purpose |
-| --- | --- |
-| `enabled` | Enable hunk coalescing. Default: `true`. |
-| `maxGapLines` | Max lines between hunks to merge. Default: `30`. |
-| `maxChunkSize` | Target max chunk size in characters. Default: `8000`. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>enabled</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Enable hunk coalescing. Default: <code>true</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxGapLines</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Max lines between hunks to merge. Default: <code>30</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxChunkSize</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Target max chunk size in characters. Default: <code>8000</code>.</dd>
+  </div>
+</dl>
 
 ```toml title="warden.toml"
 [defaults.chunking]

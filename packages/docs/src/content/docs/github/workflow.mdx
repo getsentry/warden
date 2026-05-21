@@ -94,16 +94,82 @@ weaken org-enforced base skills.
 
 ## Action Inputs
 
-| Input | Purpose |
-| --- | --- |
-| `github-token` | GitHub token for posting comments. Default: `GITHUB_TOKEN`. |
-| `anthropic-api-key` | Anthropic API key input. Prefer `WARDEN_ANTHROPIC_API_KEY` env for new workflows. |
-| `base-config-path` | Optional path to a base `warden.toml` loaded before repo config. |
-| `base-skill-root` | Optional repo root containing local shared skills used by the base config. |
-| `config-path` | Path to the repo-local config. Default: `warden.toml`. |
-| `fail-on` | Minimum severity to fail the check. |
-| `report-on` | Minimum severity to post comments. |
-| `max-findings` | Maximum findings to report. Default: `50`. |
-| `request-changes` | Whether to request changes on PR reviews. Default: `false`. |
-| `fail-check` | Whether to fail the check run. Default: `false`. |
-| `parallel` | Maximum concurrent matched trigger executions and file analyses unless `runner.concurrency` is set. Default: `5`. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>github-token</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>GitHub token for posting comments. Default: <code>GITHUB_TOKEN</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>anthropic-api-key</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Anthropic API key input. Prefer <code>WARDEN_ANTHROPIC_API_KEY</code> env for new workflows.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>base-config-path</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Path to a base <code>warden.toml</code> loaded before repo config.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>base-skill-root</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Repo root containing local shared skills used by the base config.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>config-path</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Path to the repo-local config. Default: <code>warden.toml</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>fail-on</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to fail the check.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>report-on</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to post comments.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>max-findings</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Maximum findings to report. Default: <code>50</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>request-changes</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Whether to request changes on PR reviews. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>fail-check</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Whether to fail the check run. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>parallel</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Maximum concurrent matched trigger executions and file analyses unless <code>runner.concurrency</code> is set. Default: <code>5</code>.</dd>
+  </div>
+</dl>

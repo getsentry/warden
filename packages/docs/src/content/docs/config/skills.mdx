@@ -8,16 +8,64 @@ Skills define what Warden analyzes and when.
 
 ## Fields
 
-| Field | Purpose |
-| --- | --- |
-| `name` | Skill name or path. |
-| `paths` | Files to include as glob patterns. |
-| `ignorePaths` | Files to exclude as glob patterns. |
-| `failOn` | Minimum severity to fail: `critical`, `high`, `medium`, `low`, `info`, `off`. |
-| `reportOn` | Minimum severity to report. |
-| `remote` | GitHub repository for remote skills: `owner/repo` or `owner/repo@sha`. |
-| `model` | Override the main agent model for this skill. See [Models and Runtimes](/config/models/). |
-| `maxTurns` | Optional max agentic turns per hunk. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>name</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Skill name or path.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>paths</code>
+      <span class="sentry-property-meta">string[]</span>
+    </dt>
+    <dd>Files to include as glob patterns.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>ignorePaths</code>
+      <span class="sentry-property-meta">string[]</span>
+    </dt>
+    <dd>Files to exclude as glob patterns.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>failOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to fail: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>, <code>info</code>, <code>off</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>reportOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to report.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>remote</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>GitHub repository for remote skills: <code>owner/repo</code> or <code>owner/repo@sha</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>model</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Override the main agent model for this skill. See <a href="/config/models/">Models and Runtimes</a>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxTurns</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Optional max agentic turns per hunk.</dd>
+  </div>
+</dl>
 
 ## Filters
 

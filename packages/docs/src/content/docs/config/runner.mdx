@@ -11,9 +11,15 @@ Runner settings control run-level concurrency.
 concurrency = 1
 ```
 
-| Field | Purpose |
-| --- | --- |
-| `concurrency` | Maximum concurrent file analyses across running CLI skills. In GitHub Actions, also limits matched trigger dispatch. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>concurrency</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Maximum concurrent file analyses across running CLI skills. In GitHub Actions, also limits matched trigger dispatch.</dd>
+  </div>
+</dl>
 
 If unset, the CLI uses `4` and the Action uses the workflow `parallel` input.
 

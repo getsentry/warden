@@ -57,9 +57,33 @@ actions = ["opened", "synchronize"]
 
 ## Environment Variables
 
-| Variable | Purpose |
-| --- | --- |
-| `WARDEN_MODEL` | Fallback model selector when `warden.toml` and `--model` do not set one. See [Models and Runtimes](/config/models/). |
-| `WARDEN_OPENAI_API_KEY` | OpenAI API key when using an OpenAI Pi model. |
-| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key when using an Anthropic Pi model or the Claude runtime. |
-| `WARDEN_SKILL_CACHE_TTL` | Cache duration for unpinned remote skills. Default: 24h. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_MODEL</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Fallback model selector when <code>warden.toml</code> and <code>--model</code> do not set one. See <a href="/config/models/">Models and Runtimes</a>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENAI_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenAI API key when using an OpenAI Pi model.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_ANTHROPIC_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Anthropic API key when using an Anthropic Pi model or the Claude runtime.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_SKILL_CACHE_TTL</code>
+      <span class="sentry-property-meta">duration</span>
+    </dt>
+    <dd>Cache duration for unpinned remote skills. Default: 24h.</dd>
+  </div>
+</dl>

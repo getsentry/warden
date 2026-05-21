@@ -9,14 +9,50 @@ and runtime defaults live under [Models and Runtimes](/config/models/).
 
 ## Output Fields
 
-| Field | Purpose |
-| --- | --- |
-| `failOn` | Minimum severity to fail: `critical`, `high`, `medium`, `low`, `info`, `off`. |
-| `reportOn` | Minimum severity to report. |
-| `maxFindings` | Maximum findings to report. |
-| `reportOnSuccess` | Post a comment when no findings. Default: `false`. |
-| `requestChanges` | Request changes when findings exceed `failOn`. Default: `false`. |
-| `failCheck` | Fail the check run when findings exceed `failOn`. Default: `false`. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>failOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to fail: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>, <code>info</code>, <code>off</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>reportOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to report.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxFindings</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Maximum findings to report.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>reportOnSuccess</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Post a comment when no findings. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>requestChanges</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Request changes when findings exceed <code>failOn</code>. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>failCheck</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Fail the check run when findings exceed <code>failOn</code>. Default: <code>false</code>.</dd>
+  </div>
+</dl>
 
 ```toml title="warden.toml"
 [[skills]]

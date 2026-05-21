@@ -12,12 +12,36 @@ is: set credentials once at the organization level, then run Warden from shared
 
 Go to **Organization Settings > Secrets and variables > Actions**, then add:
 
-| Secret | Purpose |
-| --- | --- |
-| `WARDEN_MODEL` | Fallback model selector for repos that do not set a model in `warden.toml`. |
-| `WARDEN_OPENAI_API_KEY` | OpenAI key for OpenAI Pi models. |
-| `WARDEN_ANTHROPIC_API_KEY` | Anthropic key for Anthropic Pi models or Claude runtime. |
-| `WARDEN_SENTRY_DSN` | Optional telemetry DSN. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_MODEL</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Fallback model selector for repos that do not set a model in <code>warden.toml</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENAI_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenAI key for OpenAI Pi models.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_ANTHROPIC_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Anthropic key for Anthropic Pi models or Claude runtime.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_SENTRY_DSN</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Optional telemetry DSN.</dd>
+  </div>
+</dl>
 
 ## GitHub App
 
@@ -37,10 +61,22 @@ The generated app uses these permissions:
 
 Add these org secrets after app creation:
 
-| Secret | Purpose |
-| --- | --- |
-| `WARDEN_APP_ID` | GitHub App ID. |
-| `WARDEN_PRIVATE_KEY` | Full PEM private key contents. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_APP_ID</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>GitHub App ID.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_PRIVATE_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Full PEM private key contents.</dd>
+  </div>
+</dl>
 
 ## Shared Workflow Pattern
 

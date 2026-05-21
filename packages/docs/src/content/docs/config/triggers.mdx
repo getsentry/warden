@@ -9,18 +9,78 @@ Triggers can override output settings and the main agent model.
 
 ## Fields
 
-| Field | Purpose |
-| --- | --- |
-| `type` | `pull_request`, `local`, or `schedule`. |
-| `actions` | Event actions for `pull_request` triggers. |
-| `failOn` | Override failure threshold. |
-| `reportOn` | Override reporting threshold. |
-| `maxFindings` | Override maximum findings. |
-| `reportOnSuccess` | Override report-on-success behavior. |
-| `requestChanges` | Override `REQUEST_CHANGES` behavior. |
-| `failCheck` | Override check failure behavior. |
-| `model` | Override the main agent model for this trigger. See [Models and Runtimes](/config/models/). |
-| `maxTurns` | Override max agentic turns. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>type</code>
+      <span class="sentry-property-meta">enum</span>
+    </dt>
+    <dd><code>pull_request</code>, <code>local</code>, or <code>schedule</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>actions</code>
+      <span class="sentry-property-meta">string[]</span>
+    </dt>
+    <dd>Event actions for <code>pull_request</code> triggers.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>failOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Override failure threshold.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>reportOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Override reporting threshold.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxFindings</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Override maximum findings.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>reportOnSuccess</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Override report-on-success behavior.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>requestChanges</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Override <code>REQUEST_CHANGES</code> behavior.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>failCheck</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Override check failure behavior.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>model</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Override the main agent model for this trigger. See <a href="/config/models/">Models and Runtimes</a>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxTurns</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Override max agentic turns.</dd>
+  </div>
+</dl>
 
 ## Pull Request Actions
 
@@ -45,11 +105,29 @@ actions = ["opened", "synchronize"]
 Schedule triggers run on cron workflows instead of PR events. They require
 `paths` so Warden knows which files to scan.
 
-| Field | Purpose |
-| --- | --- |
-| `issueTitle` | Title for the tracking issue. Default: `Warden: {name}`. |
-| `createFixPR` | Create a PR with fixes when available. Default: `false`. |
-| `fixBranchPrefix` | Branch prefix for fix PRs. Default: `warden-fix`. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>issueTitle</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Title for the tracking issue. Default: <code>Warden: &#123;name&#125;</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>createFixPR</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Create a PR with fixes when available. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>fixBranchPrefix</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Branch prefix for fix PRs. Default: <code>warden-fix</code>.</dd>
+  </div>
+</dl>
 
 ```toml title="warden.toml"
 [[skills]]

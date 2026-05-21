@@ -22,12 +22,36 @@ This creates:
 Add the provider credentials used by your configured model. `WARDEN_MODEL` is a
 fallback when `warden.toml` does not set a model; see [Models and Runtimes](/config/models/).
 
-| Secret | Purpose |
-| --- | --- |
-| `WARDEN_MODEL` | Fallback model selector. |
-| `WARDEN_OPENAI_API_KEY` | OpenAI key for OpenAI Pi models. |
-| `WARDEN_ANTHROPIC_API_KEY` | Anthropic key for Anthropic Pi models or Claude runtime. |
-| `WARDEN_SENTRY_DSN` | Optional telemetry DSN. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_MODEL</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Fallback model selector.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENAI_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenAI key for OpenAI Pi models.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_ANTHROPIC_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Anthropic key for Anthropic Pi models or Claude runtime.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_SENTRY_DSN</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Optional telemetry DSN.</dd>
+  </div>
+</dl>
 
 ## GitHub App
 
@@ -40,9 +64,21 @@ npx @sentry/warden setup-app --org your-org
 
 Add the generated app secrets:
 
-| Secret | Purpose |
-| --- | --- |
-| `WARDEN_APP_ID` | GitHub App ID. |
-| `WARDEN_PRIVATE_KEY` | Full PEM private key contents. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_APP_ID</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>GitHub App ID.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_PRIVATE_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Full PEM private key contents.</dd>
+  </div>
+</dl>
 
 Then use `actions/create-github-app-token` and pass the app token to Warden.

@@ -60,11 +60,29 @@ auth. Locally, Claude runtime can also use existing Claude Code auth.
 
 Warden can use different models for different stages:
 
-| Field | Purpose |
-| --- | --- |
-| `defaults.agent.model` | Main repo-aware skill analysis. Preferred default model field. |
-| `defaults.auxiliary.model` | Structured helper calls such as extraction, repair, merging, dedupe, and fix evaluation. |
-| `defaults.synthesis.model` | Post-analysis synthesis and consolidation. Falls back to `defaults.auxiliary.model` when unset. |
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>defaults.agent.model</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Main repo-aware skill analysis. Preferred default model field.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>defaults.auxiliary.model</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Structured helper calls such as extraction, repair, merging, dedupe, and fix evaluation.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>defaults.synthesis.model</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Post-analysis synthesis and consolidation. Falls back to <code>defaults.auxiliary.model</code> when unset.</dd>
+  </div>
+</dl>
 
 ```toml title="warden.toml"
 [defaults]
