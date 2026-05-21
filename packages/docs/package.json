@@ -11,6 +11,8 @@
     "@sentry/warden": "workspace:*",
     "@astrojs/mdx": "^5.0.6",
     "@astrojs/starlight": "^0.39.2",
+    "@fontsource-variable/rubik": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
     "@sentry/starlight-theme": "^0.4.0",
     "astro": "^6.3.5",
     "geist": "^1.5.1",
