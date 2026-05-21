@@ -4,23 +4,30 @@ description: Use the /warden agent skill from coding agents.
 editUrl: false
 ---
 
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
 Warden ships with an [agentskills.io](https://agentskills.io) skill that lets
 AI coding agents run Warden on your behalf.
 
 ## Install
 
-Use the skills installer for Claude Code, OpenCode, Codex, or Cursor:
+<Tabs syncKey="installer">
+  <TabItem label="dotagents">
+    ```bash
+    npx @sentry/dotagents add getsentry/warden
+    ```
+  </TabItem>
+  <TabItem label="Vercel Skills">
+    ```bash
+    npx skills add getsentry/warden
+    ```
+  </TabItem>
+</Tabs>
 
-```bash
-pnpx skills add getsentry/warden
-```
-
-For Claude Code marketplace installs:
-
-```bash
-claude plugin marketplace add getsentry/warden
-claude plugin install warden@warden
-```
+[dotagents](https://dotagents.sentry.dev) is the recommended installer. If your
+environment already uses
+[Vercel Skills](https://vercel.com/docs/agent-resources/skills), use the Vercel
+Skills tab instead.
 
 The `/warden` skill is available immediately.
 
