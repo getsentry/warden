@@ -112,7 +112,6 @@ export default defineConfig({
   markdown: {
     shikiConfig: {
       theme: monochromeCodeTheme,
-  sentryAgentMarkdown,
     },
   }
 });
