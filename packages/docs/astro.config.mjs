@@ -2,6 +2,7 @@ import mdx from "@astrojs/mdx";
 import starlight from "@astrojs/starlight";
 import sentryStarlightTheme, {
   monochromeCodeTheme,
+  sentryAgentMarkdown,
 } from "@sentry/starlight-theme";
 import { defineConfig } from 'astro/config';
 
@@ -104,13 +105,14 @@ export default defineConfig({
           href: "https://github.com/getsentry/warden",
         },
       ],
-      plugins: [sentryStarlightTheme()],
+      plugins: [sentryStarlightTheme(), sentryAgentMarkdown()],
     }),
     mdx(),
   ],
   markdown: {
     shikiConfig: {
       theme: monochromeCodeTheme,
+  sentryAgentMarkdown,
     },
   }
 });
