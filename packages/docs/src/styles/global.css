@@ -22,6 +22,7 @@
   --radius-lg: 12px;
 
   /* Fonts */
+  --font-display-mono: 'Geist Mono', var(--font-mono);
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   --font-sans: 'Rubik Variable', -apple-system, system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
