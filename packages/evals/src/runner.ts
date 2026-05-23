@@ -59,6 +59,7 @@ export function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): strin
     git(['init', '--initial-branch=main']);
     git(['config', 'user.email', 'eval@warden.dev']);
     git(['config', 'user.name', 'Warden Eval']);
+    git(['config', 'commit.gpgsign', 'false']);
     const sourceRepository = singleEvalFixtureSourceRepository(meta.filePaths);
     if (sourceRepository) {
       git(['remote', 'add', 'origin', `https://github.com/${sourceRepository}.git`]);

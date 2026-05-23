@@ -27,16 +27,16 @@ export const WardenEvalOutputSchema = z.object({
 });
 export type WardenEvalOutput = z.infer<typeof WardenEvalOutputSchema>;
 
-function usageMetadata(usage: UsageStats | undefined): Record<string, unknown> | undefined {
+function usageMetadata(usage: UsageStats | undefined): JsonValue | undefined {
   if (!usage) {
     return undefined;
   }
 
-  return {
+  return toJsonValue({
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     costUSD: usage.costUSD,
-  };
+  });
 }
 
 function reportToOutput(name: string, report: SkillReport): WardenEvalOutput {

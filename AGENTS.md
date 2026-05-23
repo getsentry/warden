@@ -22,7 +22,7 @@ This is a pnpm workspace monorepo. Shared build tools (oxlint, lint-staged, simp
 TELEMETRY.md           # Sentry telemetry investigation map; points to Junior's shared spec
 
 packages/
-├── docs/              # Astro docs site (dex-docs), deployed via Vercel
+├── docs/              # Astro docs site (warden-docs), deployed via Vercel
 ├── evals/             # Private eval package: runner, scenarios, fixtures, test skills
 
 src/                   # @sentry/warden core (root package)

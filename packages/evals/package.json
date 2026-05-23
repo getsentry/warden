@@ -10,15 +10,15 @@
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
-    "dotenv": "^17.2.3",
-    "vitest-evals": "0.9.0-beta.6",
-    "yaml": "^2.8.2",
-    "zod": "^4.3.6"
+    "dotenv": "^17.4.2",
+    "vitest-evals": "0.11.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^25.0.10",
-    "tsx": "^4.19.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.6"
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }

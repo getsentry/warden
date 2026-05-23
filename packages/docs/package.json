@@ -1,5 +1,5 @@
 {
-  "name": "dex-docs",
+  "name": "warden-docs",
   "type": "module",
   "version": "0.0.1",
   "scripts": {
@@ -8,16 +8,14 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@sentry/warden": "workspace:*",
     "@astrojs/mdx": "^5.0.6",
     "@astrojs/starlight": "^0.39.2",
     "@sentry/starlight-theme": "^0.7.0",
-    "astro": "^6.3.5",
-    "geist": "^1.5.1",
-    "shiki": "^1.0.0",
-    "unist-util-visit": "^5.1.0"
+    "@sentry/warden": "workspace:*",
+    "astro": "^6.3.7",
+    "shiki": "^4.1.0"
   },
   "devDependencies": {
-    "@vercel/functions": "^2.0.0"
+    "@vercel/functions": "^3.6.0"
   }
 }

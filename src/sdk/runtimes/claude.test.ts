@@ -17,6 +17,7 @@ function successResult(overrides: Partial<SDKResultSuccess> = {}): SDKResultSucc
     is_error: false,
     num_turns: 1,
     result: '{"findings":[]}',
+    stop_reason: null,
     total_cost_usd: 0.01,
     usage: {
       input_tokens: 10,
@@ -24,8 +25,11 @@ function successResult(overrides: Partial<SDKResultSuccess> = {}): SDKResultSucc
       cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 3 },
       cache_creation_input_tokens: 3,
       cache_read_input_tokens: 2,
+      inference_geo: 'us',
+      iterations: [],
       server_tool_use: { web_fetch_requests: 0, web_search_requests: 0 },
       service_tier: 'standard',
+      speed: 'standard',
     },
     modelUsage: {
       'claude-test': {
@@ -54,6 +58,7 @@ function errorResult(overrides: Partial<SDKResultError> = {}): SDKResultError {
     duration_api_ms: 80,
     is_error: true,
     num_turns: 3,
+    stop_reason: null,
     total_cost_usd: 0.01,
     usage: {
       input_tokens: 10,
@@ -61,8 +66,11 @@ function errorResult(overrides: Partial<SDKResultError> = {}): SDKResultError {
       cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 3 },
       cache_creation_input_tokens: 3,
       cache_read_input_tokens: 2,
+      inference_geo: 'us',
+      iterations: [],
       server_tool_use: { web_fetch_requests: 0, web_search_requests: 0 },
       service_tier: 'standard',
+      speed: 'standard',
     },
     modelUsage: {
       'claude-test': {

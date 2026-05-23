@@ -60,6 +60,7 @@ describe('prepareFiles', () => {
     git(repoPath, ['init']);
     git(repoPath, ['config', 'user.email', 'warden@example.com']);
     git(repoPath, ['config', 'user.name', 'Warden Test']);
+    git(repoPath, ['config', 'commit.gpgsign', 'false']);
     return repoPath;
   }
 
