@@ -26,4 +26,4 @@ jobs:
       - run: pnpm build
 
       - name: Build docs
-        run: pnpm --filter dex-docs build
+        run: pnpm --filter warden-docs build
