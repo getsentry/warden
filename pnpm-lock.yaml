@@ -108,6 +108,12 @@ importers:
       '@astrojs/starlight':
         specifier: ^0.39.2
         version: 0.39.2(astro@6.3.7(@types/node@25.9.1)(@vercel/functions@3.6.0(@aws-sdk/credential-provider-web-identity@3.972.43))(jiti@2.7.0)(rollup@4.60.4)(tsx@4.22.3)(yaml@2.9.0))(typescript@6.0.3)
+      '@fontsource-variable/rubik':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/ibm-plex-mono':
+        specifier: ^5.2.7
+        version: 5.2.7
       '@sentry/starlight-theme':
         specifier: ^0.7.0
         version: 0.7.0(@astrojs/starlight@0.39.2(astro@6.3.7(@types/node@25.9.1)(@vercel/functions@3.6.0(@aws-sdk/credential-provider-web-identity@3.972.43))(jiti@2.7.0)(rollup@4.60.4)(tsx@4.22.3)(yaml@2.9.0))(typescript@6.0.3))

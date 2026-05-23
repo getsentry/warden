@@ -22,8 +22,8 @@
   --radius-lg: 12px;
 
   /* Fonts */
-  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  --font-sans: 'Rubik Variable', -apple-system, system-ui, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
 * {
