@@ -11,7 +11,7 @@
     "@sentry/warden": "workspace:*",
     "@astrojs/mdx": "^5.0.6",
     "@astrojs/starlight": "^0.39.2",
-    "@sentry/starlight-theme": "^0.6.0",
+    "@sentry/starlight-theme": "^0.7.0",
     "astro": "^6.3.5",
     "geist": "^1.5.1",
     "shiki": "^1.0.0",
