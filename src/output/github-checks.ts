@@ -41,12 +41,20 @@ export interface UpdateSkillCheckOptions extends CheckOptions {
   minConfidence?: ConfidenceThreshold;
   /** Whether to fail the check run when findings exceed failOn. Default: false */
   failCheck?: boolean;
+  /** Optional check conclusion override for intentional no-op runs. */
+  conclusion?: CheckConclusion;
+  /** Optional check output title override. */
+  title?: string;
 }
 
 /**
  * Summary data for the core warden check.
  */
 export interface CoreCheckSummaryData {
+  /** Optional check output title override. */
+  title?: string;
+  /** Optional message shown when there are no findings to summarize. */
+  message?: string;
   totalSkills: number;
   totalFindings: number;
   findingsBySeverity: Record<Severity, number>;
@@ -217,16 +225,17 @@ export async function updateSkillCheck(
 ): Promise<void> {
   // Conclusion is based on confidence-filtered findings (consistent with CLI path)
   const filteredForConclusion = filterFindings(report.findings, undefined, options.minConfidence);
-  const conclusion = determineConclusion(filteredForConclusion, options.failOn, options.failCheck);
+  const conclusion =
+    options.conclusion ?? determineConclusion(filteredForConclusion, options.failOn, options.failCheck);
   // Annotations are filtered by reportOn threshold and confidence
   const annotations = findingsToAnnotations(report.findings, options.reportOn, options.minConfidence);
 
   const summary = buildSkillSummary(report);
 
   const filteredCount = filteredForConclusion.length;
-  const title = filteredCount === 0
+  const title = options.title ?? (filteredCount === 0
     ? 'No issues'
-    : `${filteredCount} issue${filteredCount === 1 ? '' : 's'}`;
+    : `${filteredCount} issue${filteredCount === 1 ? '' : 's'}`);
 
   await octokit.checks.update({
     owner: options.owner,
@@ -303,9 +312,11 @@ export async function updateCoreCheck(
 ): Promise<void> {
   const summary = buildCoreSummary(summaryData);
 
-  const title = summaryData.totalFindings === 0
-    ? 'No issues'
-    : `${summaryData.totalFindings} issue${summaryData.totalFindings === 1 ? '' : 's'}`;
+  const title = summaryData.title ?? (
+    summaryData.totalFindings === 0
+      ? 'No issues'
+      : `${summaryData.totalFindings} issue${summaryData.totalFindings === 1 ? '' : 's'}`
+  );
 
   await octokit.checks.update({
     owner: options.owner,
@@ -438,7 +449,7 @@ function buildCoreSummary(data: CoreCheckSummaryData): string {
       lines.push(`*...and ${remaining} more*`, '');
     }
   } else {
-    lines.push('No issues found.', '');
+    lines.push(data.message ? escapeHtml(data.message) : 'No issues found.', '');
   }
 
   // Skills table in collapsible section

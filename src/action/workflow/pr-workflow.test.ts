@@ -12,10 +12,12 @@ import type { ExistingComment } from '../../output/dedup.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const FIXTURES_DIR = join(__dirname, '__fixtures__');
+const ACTION_MISMATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'action-mismatch');
 const BASE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'base-only');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_MATCH_RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-runtime-claude');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
+const PARTIAL_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'partial-match');
 const RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'runtime-claude');
 const EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-auxiliary-model');
 const LAYERED_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-auxiliary-model');
@@ -150,6 +152,7 @@ function createMockOctokit(options: MockOctokitOptions = {}): Octokit {
   ];
 
   const files = options.prFiles ?? defaultFiles;
+  let nextCheckRunId = 1;
 
   return {
     paginate: vi.fn(() => Promise.resolve(files)),
@@ -162,7 +165,12 @@ function createMockOctokit(options: MockOctokitOptions = {}): Octokit {
     },
     checks: {
       create: vi.fn(() =>
-        Promise.resolve({ data: { id: 1, html_url: 'https://example.com/check' } })
+        Promise.resolve({
+          data: {
+            id: nextCheckRunId++,
+            html_url: `https://example.com/check/${nextCheckRunId - 1}`,
+          },
+        })
       ),
       update: vi.fn(() => Promise.resolve({ data: {} })),
     },
@@ -468,7 +476,25 @@ describe('runPRWorkflow', () => {
 
       // Core check should still be updated even when workflow fails
       const updateCheck = vi.mocked(mockOctokit.checks.update);
-      expect(updateCheck).toHaveBeenCalled();
+      expect(updateCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 2,
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Skill execution failed',
+            summary: expect.stringContaining('Skill failed'),
+          }),
+        })
+      );
+      expect(updateCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 1,
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            summary: expect.stringContaining('| test-skill | 0 |'),
+          }),
+        })
+      );
     });
   });
 
@@ -486,6 +512,29 @@ describe('runPRWorkflow', () => {
 
       expect(mockSetFailed).toHaveBeenCalledWith(
         expect.stringContaining('Authentication not found')
+      );
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'warden: test-skill' })
+      );
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 2,
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Skill execution failed',
+            summary: expect.stringContaining('Authentication not found'),
+          }),
+        })
+      );
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 1,
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('Authentication not found'),
+          }),
+        })
       );
       expect(mockRunSkillTask).not.toHaveBeenCalled();
     });
@@ -558,6 +607,24 @@ describe('runPRWorkflow', () => {
       expect(mockSetFailed).not.toHaveBeenCalled();
       // Should not run any skills
       expect(mockRunSkillTask).not.toHaveBeenCalled();
+      // Should not run cleanup without a config scope
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          head_sha: 'abc123def456',
+        })
+      );
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 1,
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'No warden.toml found',
+            summary: expect.stringContaining('No warden.toml found. Skipping analysis.'),
+          }),
+        })
+      );
       // Should log a warning
       expect(consoleLogSpy).toHaveBeenCalledWith(
         '::warning::No warden.toml found. Skipping analysis.'
@@ -678,6 +745,129 @@ describe('runPRWorkflow', () => {
       expect(createCheck).toHaveBeenCalledWith(
         expect.objectContaining({
           name: expect.stringContaining('test-skill'),
+        })
+      );
+    });
+
+    it('creates and completes the core check when no triggers match', async () => {
+      mockFetchExistingComments.mockResolvedValue([]);
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        NO_MATCH_FIXTURES_DIR
+      );
+
+      const createCheck = vi.mocked(mockOctokit.checks.create);
+      const updateCheck = vi.mocked(mockOctokit.checks.update);
+
+      expect(createCheck).toHaveBeenCalledTimes(2);
+      expect(createCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+          head_sha: 'abc123def456',
+          name: 'warden',
+        })
+      );
+      expect(createCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+          head_sha: 'abc123def456',
+          name: 'warden: test-skill',
+        })
+      );
+      expect(updateCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 2,
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'Skipped',
+            summary: expect.stringContaining('Trigger did not run for this event.'),
+          }),
+        })
+      );
+      expect(updateCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 1,
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'No triggers matched',
+            summary: expect.stringContaining('No triggers matched for this event.'),
+          }),
+        })
+      );
+      expect(updateCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          output: expect.objectContaining({
+            summary: expect.stringContaining('0 skills analyzed'),
+          }),
+        })
+      );
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+    });
+
+    it('creates neutral checks for skipped triggers while running matched triggers', async () => {
+      mockRunSkillTask.mockResolvedValue({
+        name: 'run-skill',
+        report: createSkillReport({ skill: 'run-skill' }),
+      });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        PARTIAL_MATCH_FIXTURES_DIR
+      );
+
+      const createCheck = vi.mocked(mockOctokit.checks.create);
+      const updateCheck = vi.mocked(mockOctokit.checks.update);
+
+      expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
+      expect(mockRunSkillTask.mock.calls[0]![0].displayName).toBe('run-skill');
+      expect(createCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'warden: skipped-skill' })
+      );
+      expect(createCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'warden: run-skill' })
+      );
+      expect(updateCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'Skipped',
+            summary: expect.stringContaining('Trigger did not run for this event.'),
+          }),
+        })
+      );
+    });
+
+    it('creates neutral checks for triggers skipped by pull request action', async () => {
+      mockFetchExistingComments.mockResolvedValue([]);
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        ACTION_MISMATCH_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'warden: labeled-skill' })
+      );
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'Skipped',
+            summary: expect.stringContaining('Trigger did not run for this event.'),
+          }),
         })
       );
     });
@@ -1006,6 +1196,16 @@ describe('runPRWorkflow', () => {
 
       expect(mockSetFailed).toHaveBeenCalledWith(
         expect.stringContaining('Authentication not found')
+      );
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 1,
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('Authentication not found'),
+          }),
+        })
       );
       expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
       expect(mockRunSkillTask).not.toHaveBeenCalled();

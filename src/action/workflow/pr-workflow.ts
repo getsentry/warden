@@ -43,9 +43,13 @@ import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
   createCoreCheck,
+  createSkillCheck,
+  failSkillCheck,
   updateCoreCheck,
+  updateSkillCheck,
   buildCoreSummaryData,
   determineCoreConclusion,
+  type CheckOptions,
 } from '../checks/manager.js';
 import {
   setOutput,
@@ -71,6 +75,8 @@ interface InitResult {
   runnerConcurrency?: number;
   auxiliaryOptions: AuxiliaryWorkflowOptions;
   matchedTriggers: ResolvedTrigger[];
+  skippedTriggers: ResolvedTrigger[];
+  skipCoreCheck?: SkippedCoreCheck;
 }
 
 interface GitHubSetupResult {
@@ -91,6 +97,30 @@ interface AuxiliaryWorkflowOptions {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
+}
+
+interface SkippedCoreCheck {
+  title: string;
+  message: string;
+}
+
+function reportsPullRequestCheck(trigger: ResolvedTrigger, context: EventContext): boolean {
+  return (
+    Boolean(context.pullRequest) &&
+    (trigger.type === 'pull_request' || trigger.type === '*')
+  );
+}
+
+function checkOptionsForPullRequest(context: EventContext): CheckOptions | undefined {
+  if (!context.pullRequest) {
+    return undefined;
+  }
+
+  return {
+    owner: context.repository.owner,
+    repo: context.repository.name,
+    headSha: context.pullRequest.headSha,
+  };
 }
 
 function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): AuxiliaryWorkflowOptions {
@@ -149,7 +179,7 @@ async function initializeWorkflow(
   eventName: string,
   eventPath: string,
   repoPath: string
-): Promise<InitResult | null> {
+): Promise<InitResult> {
   let eventPayload: unknown;
   try {
     eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
@@ -202,6 +232,9 @@ async function initializeWorkflow(
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
     const resolvedTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName);
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
+    const skippedTriggers = resolvedTriggers.filter(
+      (t) => reportsPullRequestCheck(t, context) && !matchedTriggers.includes(t)
+    );
 
     if (matchedTriggers.length > 0) {
       logGroup('Matched triggers');
@@ -213,15 +246,26 @@ async function initializeWorkflow(
       console.log('No triggers matched for this event');
     }
 
-    return { context, runnerConcurrency, auxiliaryOptions, matchedTriggers };
+    return { context, runnerConcurrency, auxiliaryOptions, matchedTriggers, skippedTriggers };
   } catch (error) {
     if (
       error instanceof ConfigLoadError &&
       error.message.includes('not found') &&
       !inputs.baseConfigPath
     ) {
-      console.log('::warning::No warden.toml found. Skipping analysis.');
-      return null;
+      const message = 'No warden.toml found. Skipping analysis.';
+      console.log(`::warning::${message}`);
+      return {
+        context,
+        runnerConcurrency,
+        auxiliaryOptions,
+        matchedTriggers: [],
+        skippedTriggers: [],
+        skipCoreCheck: {
+          title: 'No warden.toml found',
+          message,
+        },
+      };
     }
     throw error;
   }
@@ -601,7 +645,8 @@ async function finalizeWorkflow(
   reports: SkillReport[],
   shouldFailAction: boolean,
   failureReasons: string[],
-  canResolveStale: boolean
+  canResolveStale: boolean,
+  triggerErrors: string[]
 ): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, current run would not request changes,
@@ -650,7 +695,10 @@ async function finalizeWorkflow(
   if (coreCheckId && context.pullRequest) {
     try {
       const summaryData = buildCoreSummaryData(results, reports);
-      const coreConclusion = determineCoreConclusion(shouldFailAction, outputs.findingsCount);
+      const coreConclusion = determineCoreConclusion(
+        shouldFailAction || triggerErrors.length > 0,
+        outputs.findingsCount
+      );
 
       await updateCoreCheck(octokit, coreCheckId, summaryData, coreConclusion, {
         owner: context.repository.owner,
@@ -667,6 +715,162 @@ async function finalizeWorkflow(
   }
 
   logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
+}
+
+/** Complete the core check for a PR run that intentionally skipped analysis. */
+async function completeSkippedCoreCheck(
+  octokit: Octokit,
+  context: EventContext,
+  coreCheckId: number | undefined,
+  skipped: SkippedCoreCheck
+): Promise<void> {
+  const options = checkOptionsForPullRequest(context);
+  if (!coreCheckId || !options) {
+    return;
+  }
+
+  try {
+    await updateCoreCheck(
+      octokit,
+      coreCheckId,
+      {
+        ...buildCoreSummaryData([], []),
+        title: skipped.title,
+        message: skipped.message,
+      },
+      'neutral',
+      options
+    );
+  } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'update_core_check_skipped' } });
+    warnAction(`Failed to update core check: ${error}`);
+  }
+}
+
+/** Complete per-skill checks for configured PR triggers that did not run. */
+async function completeSkippedSkillChecks(
+  octokit: Octokit,
+  context: EventContext,
+  skippedTriggers: ResolvedTrigger[]
+): Promise<void> {
+  const options = checkOptionsForPullRequest(context);
+  if (!options || skippedTriggers.length === 0) {
+    return;
+  }
+
+  for (const trigger of skippedTriggers) {
+    try {
+      const skillCheck = await createSkillCheck(octokit, trigger.skill, options);
+
+      await updateSkillCheck(
+        octokit,
+        skillCheck.checkRunId,
+        {
+          skill: trigger.skill,
+          summary: 'Trigger did not run for this event.',
+          findings: [],
+        },
+        {
+          ...options,
+          failOn: trigger.failOn,
+          reportOn: trigger.reportOn,
+          minConfidence: trigger.minConfidence ?? 'medium',
+          failCheck: trigger.failCheck,
+          conclusion: 'neutral',
+          title: 'Skipped',
+        }
+      );
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'update_skipped_skill_check',
+          trigger_name: trigger.name,
+          skill_name: trigger.skill,
+        },
+      });
+      warnAction(`Failed to update skipped skill check for ${trigger.skill}: ${error}`);
+    }
+  }
+}
+
+/**
+ * Fail per-skill checks when workflow setup fails before triggers are dispatched.
+ */
+async function failUndispatchedSkillChecks(
+  octokit: Octokit,
+  context: EventContext,
+  triggers: ResolvedTrigger[],
+  error: unknown
+): Promise<void> {
+  const options = checkOptionsForPullRequest(context);
+  if (!options || triggers.length === 0) {
+    return;
+  }
+
+  for (const trigger of triggers) {
+    try {
+      const skillCheck = await createSkillCheck(octokit, trigger.skill, options);
+
+      await failSkillCheck(octokit, skillCheck.checkRunId, error, options);
+    } catch (checkError) {
+      Sentry.captureException(checkError, {
+        tags: {
+          operation: 'fail_undispatched_skill_check',
+          trigger_name: trigger.name,
+          skill_name: trigger.skill,
+        },
+      });
+      warnAction(`Failed to mark skill check as failed for ${trigger.skill}: ${checkError}`);
+    }
+  }
+}
+
+/**
+ * Mark the core check failed when an early PR workflow phase fails after check creation.
+ */
+async function failCoreCheck(
+  octokit: Octokit,
+  context: EventContext,
+  coreCheckId: number | undefined,
+  error: unknown
+): Promise<void> {
+  const options = checkOptionsForPullRequest(context);
+  if (!coreCheckId || !options) {
+    return;
+  }
+
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  try {
+    await updateCoreCheck(
+      octokit,
+      coreCheckId,
+      {
+        ...buildCoreSummaryData([], []),
+        title: 'Warden failed',
+        message: `Error: ${errorMessage}`,
+      },
+      'failure',
+      options
+    );
+  } catch (checkError) {
+    Sentry.captureException(checkError, { tags: { operation: 'fail_core_check' } });
+    warnAction(`Failed to mark core check as failed: ${checkError}`);
+  }
+}
+
+async function runOrFailCore<T>(
+  octokit: Octokit,
+  context: EventContext,
+  coreCheckId: number | undefined,
+  operation: () => Promise<T>
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    await failCoreCheck(octokit, context, coreCheckId, error);
+    throw error;
+  }
 }
 
 /**
@@ -757,24 +961,14 @@ export async function runPRWorkflow(
         () => initializeWorkflow(octokit, inputs, eventName, eventPath, repoPath),
       );
 
-      if (!initResult) {
-        setOutput('findings-count', 0);
-        setOutput('high-count', 0);
-        setOutput('summary', 'No warden.toml found');
-        try {
-          const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
-          const [o = '', n = ''] = fullName.split('/');
-          writeFindingsOutput([], {
-            eventType: 'pull_request',
-            action: '',
-            repository: { owner: o, name: n, fullName, defaultBranch: '' },
-            repoPath,
-          });
-        } catch { /* non-fatal */ }
-        return;
-      }
-
-      const { context, runnerConcurrency, auxiliaryOptions, matchedTriggers } = initResult;
+      const {
+        context,
+        runnerConcurrency,
+        auxiliaryOptions,
+        matchedTriggers,
+        skippedTriggers,
+        skipCoreCheck,
+      } = initResult;
       span.setAttribute('warden.trigger.count', matchedTriggers.length);
 
       // Set Sentry context after building event context
@@ -801,64 +995,96 @@ export async function runPRWorkflow(
         'trace.id': traceId,
       });
 
-      if (matchedTriggers.length === 0) {
-        await cleanupOrphanedComments(
-          octokit,
-          context,
-          inputs,
-          auxiliaryOptions
-        );
-        setOutput('findings-count', 0);
-        setOutput('high-count', 0);
-        setOutput('summary', 'No triggers matched');
-        try { writeFindingsOutput([], context); } catch { /* non-fatal */ }
-        return;
-      }
-
       const { coreCheckId, previousReviewInfo } = await Sentry.startSpan(
         { op: 'workflow.setup', name: 'setup github state' },
         () => setupGitHubState(octokit, context),
       );
 
-      const results = await Sentry.startSpan(
-        {
-          op: 'workflow.execute',
-          name: 'execute triggers',
-          attributes: { 'warden.trigger.count': matchedTriggers.length },
-        },
-        () => executeAllTriggers(matchedTriggers, octokit, context, runnerConcurrency, inputs),
-      );
+      await completeSkippedSkillChecks(octokit, context, skippedTriggers);
 
-      const reviewPhase = await Sentry.startSpan(
-        { op: 'workflow.review', name: 'post reviews' },
-        () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions),
+      if (skipCoreCheck) {
+        setOutput('findings-count', 0);
+        setOutput('high-count', 0);
+        setOutput('summary', skipCoreCheck.title);
+        try { writeFindingsOutput([], context); } catch { /* non-fatal */ }
+        await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck);
+        return;
+      }
+
+      if (matchedTriggers.length === 0) {
+        await runOrFailCore(octokit, context, coreCheckId, async () => {
+          await cleanupOrphanedComments(
+            octokit,
+            context,
+            inputs,
+            auxiliaryOptions
+          );
+          setOutput('findings-count', 0);
+          setOutput('high-count', 0);
+          setOutput('summary', 'No triggers matched');
+          try { writeFindingsOutput([], context); } catch { /* non-fatal */ }
+          await completeSkippedCoreCheck(octokit, context, coreCheckId, {
+            title: 'No triggers matched',
+            message: 'No triggers matched for this event.',
+          });
+        });
+        return;
+      }
+
+      let results: TriggerResult[];
+      try {
+        results = await Sentry.startSpan(
+          {
+            op: 'workflow.execute',
+            name: 'execute triggers',
+            attributes: { 'warden.trigger.count': matchedTriggers.length },
+          },
+          () => executeAllTriggers(matchedTriggers, octokit, context, runnerConcurrency, inputs),
+        );
+      } catch (error) {
+        await failUndispatchedSkillChecks(octokit, context, matchedTriggers, error);
+        await failCoreCheck(octokit, context, coreCheckId, error);
+        throw error;
+      }
+
+      const reviewPhase = await runOrFailCore(
+        octokit,
+        context,
+        coreCheckId,
+        () => Sentry.startSpan(
+          { op: 'workflow.review', name: 'post reviews' },
+          () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions),
+        ),
       );
 
       const triggerErrors = collectTriggerErrors(results);
-      handleTriggerErrors(triggerErrors, matchedTriggers.length);
-
       const canResolveStale = shouldResolveStaleComments(results);
       const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
       span.setAttribute('warden.finding.count', allFindings.length);
 
-      await Sentry.startSpan(
-        { op: 'workflow.resolve', name: 'resolve stale comments' },
-        async (resolveSpan) => {
-          const resolutionResult = await evaluateFixesAndResolveStale(
-            octokit, context, reviewPhase.fetchedComments,
-            allFindings, reviewPhase.activeWardenCommentIds,
-            canResolveStale, inputs.anthropicApiKey,
-            auxiliaryOptions,
-          );
-          resolveSpan.setAttribute(
-            'warden.feedback.auto_resolve.fix_eval_count',
-            resolutionResult.autoResolvedByFixEvaluation
-          );
-          resolveSpan.setAttribute(
-            'warden.feedback.auto_resolve.stale_count',
-            resolutionResult.autoResolvedByStaleCheck
-          );
-        },
+      await runOrFailCore(
+        octokit,
+        context,
+        coreCheckId,
+        () => Sentry.startSpan(
+          { op: 'workflow.resolve', name: 'resolve stale comments' },
+          async (resolveSpan) => {
+            const resolutionResult = await evaluateFixesAndResolveStale(
+              octokit, context, reviewPhase.fetchedComments,
+              allFindings, reviewPhase.activeWardenCommentIds,
+              canResolveStale, inputs.anthropicApiKey,
+              auxiliaryOptions,
+            );
+            resolveSpan.setAttribute(
+              'warden.feedback.auto_resolve.fix_eval_count',
+              resolutionResult.autoResolvedByFixEvaluation
+            );
+            resolveSpan.setAttribute(
+              'warden.feedback.auto_resolve.stale_count',
+              resolutionResult.autoResolvedByStaleCheck
+            );
+          },
+        ),
       );
 
       await finalizeWorkflow(
@@ -866,7 +1092,10 @@ export async function runPRWorkflow(
         results, reviewPhase.reports,
         reviewPhase.shouldFailAction, reviewPhase.failureReasons,
         canResolveStale,
+        triggerErrors,
       );
+
+      handleTriggerErrors(triggerErrors, matchedTriggers.length);
     },
   );
 }

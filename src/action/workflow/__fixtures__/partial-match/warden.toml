@@ -1,0 +1,16 @@
+version = 1
+
+[[skills]]
+name = "skipped-skill"
+paths = ["docs/**"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]
+
+[[skills]]
+name = "run-skill"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]

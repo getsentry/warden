@@ -92,6 +92,16 @@ If the target repo also has a root `warden.toml`, Warden loads it in the same
 run. Repo-local config can add skills and repo-local defaults, but it does not
 weaken org-enforced base skills.
 
+## Required Status Checks
+
+If Warden is a required status check, require the core `warden` check or a
+per-skill check like `warden: security-review`.
+
+Keep workflow-level `paths` and `paths-ignore` filters off required Warden
+workflows. Let Warden start, then let `warden.toml` decide which triggers match.
+For each configured pull request trigger, Warden creates a check run. Triggers
+that do not actually run for the current event complete as neutral.
+
 ## Action Inputs
 
 <dl class="sentry-key-value-list">
