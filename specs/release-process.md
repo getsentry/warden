@@ -30,7 +30,7 @@ The ncc bundle is built with `--no-source-map-register`. No sourcemaps, declarat
 main branch          Source + action.yml. No dist/.
 v0.7.0 tag           Source + action.yml + dist/action/ (ncc bundle only).
 v0 tag               Same commit as latest v0.x.y tag.
-npm tarball          packages/warden/dist/ (tsc output). No dist/action/, no source.
+npm tarball          packages/warden/dist/ (tsc output) plus runtime skill assets. No dist/action/.
 ```
 
 ## Gitignore Policy
@@ -67,7 +67,7 @@ CI (`ci.yml`) runs on the release branch push and again on merge to main:
 3. Creates a tarball (`pnpm --filter @sentry/warden pack`) which respects `packages/warden/.npmignore`
 4. Uploads the tarball as a GitHub Actions artifact
 
-The package `.npmignore` excludes `action.yml`, source files, tests, and dev config. The tarball contains only the tsc-compiled library and CLI plus runtime skill assets.
+The package `.npmignore` excludes `action.yml`, non-runtime source files, tests, and dev config. The tarball contains the tsc-compiled library and CLI plus runtime skill assets.
 
 ### 5. Merge
 

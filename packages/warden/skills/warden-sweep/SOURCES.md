@@ -4,11 +4,11 @@
 
 | Source | Trust tier | Confidence | Usage constraints |
 |--------|------------|------------|-------------------|
-| `skills/warden-sweep/SKILL.md` | canonical runtime | high | Keep as router and phase overview. |
-| `skills/warden-sweep/references/*.md` | bundled runtime references | high | Keep focused by phase or lookup need. |
-| `skills/warden-sweep/scripts/*.py` | executable workflow | high | Script interfaces in references must match these files. |
+| `packages/warden/skills/warden-sweep/SKILL.md` | canonical runtime | high | Keep as router and phase overview. |
+| `packages/warden/skills/warden-sweep/references/*.md` | bundled runtime references | high | Keep focused by phase or lookup need. |
+| `packages/warden/skills/warden-sweep/scripts/*.py` | executable workflow | high | Script interfaces in references must match these files. |
 | `packages/warden/src/cli/output/jsonl.ts` | Warden output contract | high | Verify JSONL parsing assumptions when Warden output changes. |
-| `src/output/renderer.ts` and `src/types/` | finding/report semantics | high | Verify severity, confidence, and finding fields here. |
+| `packages/warden/src/output/renderer.ts` and `packages/warden/src/types/` | finding/report semantics | high | Verify severity, confidence, and finding fields here. |
 | GitHub CLI commands used by scripts | external tool contract | medium | Confirm command flags when GitHub CLI behavior changes. |
 
 ## Coverage Matrix

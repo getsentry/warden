@@ -37,6 +37,7 @@ describe('npm package contents', () => {
     expect(ignored.ignores('src/builtin-skills/code-review/references/github-workflows.md')).toBe(false);
     expect(ignored.ignores('src/builtin-skills/code-review/references/python.md')).toBe(false);
     expect(ignored.ignores('skills/warden/SPEC.md')).toBe(false);
+    expect(ignored.ignores('src/internal-skills/skill-writer/scripts/quick_validate_test.py')).toBe(true);
     expect(ignored.ignores('.warden/skills/security/SKILL.md')).toBe(true);
     expect(ignored.ignores('.codex/config.toml')).toBe(true);
     expect(ignored.ignores('superwarden-bench/README.md')).toBe(true);
