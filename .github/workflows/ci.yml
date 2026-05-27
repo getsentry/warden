@@ -81,4 +81,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ github.sha }}
-          path: "*.tgz"
+          path: |
+            *.tgz
+            packages/warden/*.tgz
+          if-no-files-found: error
