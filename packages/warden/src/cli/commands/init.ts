@@ -100,7 +100,9 @@ reportOn = "medium"
 #
 # [[skills.triggers]]
 # type = "pull_request"
-# actions = ["opened", "synchronize", "reopened"]
+# actions = ["opened", "synchronize", "reopened", "labeled"]
+# draft = false
+# labels = ["Warden"]
 `;
 }
 
@@ -113,7 +115,7 @@ function generateWorkflowYaml(): string {
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 # contents: write required for resolving review threads via GraphQL
 # See: https://github.com/orgs/community/discussions/44650

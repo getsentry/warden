@@ -87,6 +87,8 @@ export const SkillTriggerSchema = z.object({
   actions: z.array(z.string()).min(1).optional(),
   /** Match pull_request triggers by draft state. Set false to run only on non-draft PRs. */
   draft: z.boolean().optional(),
+  /** Match pull_request triggers when any listed label is present. */
+  labels: z.array(z.string()).min(1).optional(),
   // Per-trigger overrides (flattened output fields)
   failOn: SeverityThresholdSchema.optional(),
   reportOn: SeverityThresholdSchema.optional(),
@@ -102,19 +104,23 @@ export const SkillTriggerSchema = z.object({
   minConfidence: ConfidenceThresholdSchema.optional(),
   /** Schedule-specific configuration. Only used when type is 'schedule'. */
   schedule: ScheduleConfigSchema.optional(),
-}).refine(
-  (data) => {
-    // actions is required for pull_request type
-    if (data.type === 'pull_request') {
-      return data.actions !== undefined && data.actions.length > 0;
-    }
-    return true;
-  },
-  {
-    message: "actions is required for pull_request triggers",
-    path: ["actions"],
+}).superRefine((data, ctx) => {
+  if (data.type === 'pull_request' && (!data.actions || data.actions.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "actions is required for pull_request triggers",
+      path: ["actions"],
+    });
   }
-);
+
+  if (data.type !== 'pull_request' && data.labels) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "labels is only supported for pull_request triggers",
+      path: ["labels"],
+    });
+  }
+});
 export type SkillTrigger = z.infer<typeof SkillTriggerSchema>;
 
 // Skill configuration (top-level [[skills]])

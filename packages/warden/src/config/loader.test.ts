@@ -294,6 +294,20 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.draft).toBe(false);
   });
 
+  it('preserves trigger label filters', () => {
+    const config: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'test-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened', 'labeled'], labels: ['trigger-warden'] }],
+      }],
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.labels).toEqual(['trigger-warden']);
+  });
+
   describe('ignorePaths merging', () => {
     it('uses defaults.ignorePaths when skill has none', () => {
       const config: WardenConfig = {
@@ -1179,6 +1193,33 @@ describe('trigger type config', () => {
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     expect(result.data?.skills[0]?.triggers?.[0]?.type).toBe('pull_request');
+  });
+
+  it('accepts pull_request label filters', () => {
+    const config = {
+      version: 1,
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'pull_request', actions: ['opened', 'labeled'], labels: ['trigger-warden'] }],
+      }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.skills[0]?.triggers?.[0]?.labels).toEqual(['trigger-warden']);
+  });
+
+  it('rejects label filters for non-pull_request triggers', () => {
+    const config = {
+      version: 1,
+      skills: [{
+        name: 'test',
+        triggers: [{ type: 'local', labels: ['Warden'] }],
+      }],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
   });
 
   it('accepts local trigger type', () => {

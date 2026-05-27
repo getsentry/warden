@@ -211,14 +211,18 @@ name = "security-review"
 
 [[skills.triggers]]
 type = "pull_request"
-actions = ["opened", "synchronize"]
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
 
 [[skills]]
 name = "code-review"
 
 [[skills.triggers]]
 type = "pull_request"
-actions = ["opened", "synchronize"]
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
 ```
 
 ### Skills
@@ -244,6 +248,8 @@ Triggers define when a skill runs. Each skill can have one or more triggers. Tri
 |-------|-------------|
 | `type` | `pull_request`, `local`, `schedule` |
 | `actions` | Event actions for `pull_request` type |
+| `draft` | Draft state for `pull_request` type |
+| `labels` | Pull request labels that can also match the trigger |
 | `failOn` | Override failure threshold |
 | `reportOn` | Override reporting threshold |
 | `maxFindings` | Override max findings |
@@ -253,7 +259,20 @@ Triggers define when a skill runs. Each skill can have one or more triggers. Tri
 | `model` | Override the main agent model for this trigger |
 | `maxTurns` | Override max agentic turns |
 
-Pull request actions: `opened`, `synchronize`, `reopened`, `closed`.
+Pull request actions: `opened`, `synchronize`, `reopened`, `closed`, `labeled`.
+
+Label opt-in example:
+
+```toml
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
+```
 
 ### Filters
 
@@ -537,7 +556,7 @@ permissions:
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 env:
   WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}

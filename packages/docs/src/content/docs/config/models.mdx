@@ -114,7 +114,9 @@ model = "anthropic/claude-opus-4-5"
 
 [[skills.triggers]]
 type = "pull_request"
-actions = ["opened", "synchronize"]
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
 model = "anthropic/claude-sonnet-4-6"
 ```
 

@@ -31,6 +31,10 @@ describe('buildEventContext', () => {
       title: 'Test PR',
       body: 'Test description',
       draft: false,
+      labels: [
+        { name: 'trigger-warden' },
+        { name: 'needs-review' },
+      ],
       user: {
         login: 'test-user',
       },
@@ -69,6 +73,7 @@ describe('buildEventContext', () => {
 
     expect(context.eventType).toBe('pull_request');
     expect(context.action).toBe('opened');
+    expect(context.label).toBeUndefined();
     expect(context.repository).toEqual({
       owner: 'test-owner',
       name: 'test-repo',
@@ -81,6 +86,7 @@ describe('buildEventContext', () => {
     expect(context.pullRequest?.body).toBe('Test description');
     expect(context.pullRequest?.author).toBe('test-user');
     expect(context.pullRequest?.draft).toBe(false);
+    expect(context.pullRequest?.labels).toEqual(['trigger-warden', 'needs-review']);
     expect(context.pullRequest?.baseBranch).toBe('main');
     expect(context.pullRequest?.headBranch).toBe('feature-branch');
     expect(context.pullRequest?.headSha).toBe('abc123def456');
@@ -126,6 +132,37 @@ describe('buildEventContext', () => {
     const context = await buildEventContext('pull_request', draftPayload, '/test/repo', mockOctokit);
 
     expect(context.pullRequest?.draft).toBe(true);
+  });
+
+  it('defaults pull request labels to an empty list', async () => {
+    const payloadWithoutLabels = {
+      ...validPayload,
+      pull_request: {
+        ...validPayload.pull_request,
+        labels: undefined,
+      },
+    };
+
+    mockPaginate.mockResolvedValue([]);
+
+    const context = await buildEventContext('pull_request', payloadWithoutLabels, '/test/repo', mockOctokit);
+
+    expect(context.pullRequest?.labels).toEqual([]);
+  });
+
+  it('captures labeled event label name', async () => {
+    const labeledPayload = {
+      ...validPayload,
+      action: 'labeled',
+      label: { name: 'trigger-warden' },
+    };
+
+    mockPaginate.mockResolvedValue([]);
+
+    const context = await buildEventContext('pull_request', labeledPayload, '/test/repo', mockOctokit);
+
+    expect(context.action).toBe('labeled');
+    expect(context.label).toBe('trigger-warden');
   });
 
   it('throws EventContextError for invalid payload', async () => {

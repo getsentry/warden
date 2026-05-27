@@ -33,6 +33,13 @@ Triggers can override output settings and the main agent model.
   </div>
   <div>
     <dt>
+      <code>labels</code>
+      <span class="sentry-property-meta">string[]</span>
+    </dt>
+    <dd>Pull request labels that can also match the trigger. Use with <code>draft = false</code> to let a label opt draft PRs into a run.</dd>
+  </div>
+  <div>
+    <dt>
       <code>failOn</code>
       <span class="sentry-property-meta">severity</span>
     </dt>
@@ -107,6 +114,31 @@ type = "pull_request"
 actions = ["opened", "synchronize"]
 draft = false
 ```
+
+## Label Opt-In
+
+Add the <code>labeled</code> pull request action in both GitHub Actions and
+<code>warden.toml</code> when labels should trigger Warden.
+
+```yaml title=".github/workflows/warden.yml"
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+```
+
+```toml title="warden.toml"
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
+```
+
+This runs on non-draft PRs as usual. Draft PRs stay quiet unless the
+<code>Warden</code> label is present.
 
 ## Schedule Triggers
 

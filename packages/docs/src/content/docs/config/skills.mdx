@@ -79,7 +79,9 @@ ignorePaths = ["**/*.test.ts"]
 
 [[skills.triggers]]
 type = "pull_request"
-actions = ["opened", "synchronize"]
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
 ```
 
 ## Skill References

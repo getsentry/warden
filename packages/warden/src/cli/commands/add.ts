@@ -232,7 +232,9 @@ async function resolveSkillName(
 const DEFAULT_TRIGGERS = [
   {
     type: 'pull_request' as const,
-    actions: ['opened', 'synchronize', 'reopened'],
+    actions: ['opened', 'synchronize', 'reopened', 'labeled'],
+    draft: false,
+    labels: ['Warden'],
   },
 ];
 

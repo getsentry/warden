@@ -69,6 +69,9 @@ describe('init command', () => {
       const content = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
       expect(content).toContain('version = 1');
       expect(content).toContain('runtime = "pi"');
+      expect(content).toContain('# actions = ["opened", "synchronize", "reopened", "labeled"]');
+      expect(content).toContain('# draft = false');
+      expect(content).toContain('# labels = ["Warden"]');
     });
 
     it('creates workflow with correct content', async () => {
@@ -78,6 +81,7 @@ describe('init command', () => {
       const content = readFileSync(join(tempDir, '.github', 'workflows', 'warden.yml'), 'utf-8');
       expect(content).toContain('name: Warden');
       expect(content).toContain('pull_request');
+      expect(content).toContain('types: [opened, synchronize, reopened, labeled]');
       expect(content).toContain('permissions:');
       expect(content).toContain('pull-requests: write');
       expect(content).toContain('checks: write');

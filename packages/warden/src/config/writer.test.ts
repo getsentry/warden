@@ -31,6 +31,17 @@ describe('generateSkillToml', () => {
     expect(result).toContain('draft = false');
   });
 
+  it('generates pull request label filters', () => {
+    const result = generateSkillToml({
+      name: 'test-skill',
+      triggers: [
+        { type: 'pull_request', actions: ['opened', 'labeled'], labels: ['trigger-warden'] },
+      ],
+    });
+
+    expect(result).toContain('labels = ["trigger-warden"]');
+  });
+
   it('includes remote field when present', () => {
     const skill: SkillConfig = {
       name: 'security-review',

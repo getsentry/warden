@@ -125,6 +125,28 @@ function matchPathFilters(
   return true;
 }
 
+function matchPullRequestState(trigger: ResolvedTrigger, context: EventContext): boolean {
+  const labels = context.pullRequest?.labels ?? [];
+  const labelMatches =
+    trigger.labels !== undefined &&
+    trigger.labels.some((label) => labels.includes(label));
+  const eventLabelMatches =
+    trigger.labels !== undefined &&
+    context.label !== undefined &&
+    trigger.labels.includes(context.label);
+
+  if (context.action === 'labeled' && trigger.labels !== undefined && !eventLabelMatches) {
+    return false;
+  }
+
+  if (trigger.draft === undefined) {
+    return trigger.labels === undefined || labelMatches;
+  }
+
+  const draftMatches = (context.pullRequest?.draft ?? false) === trigger.draft;
+  return draftMatches || labelMatches;
+}
+
 /**
  * Return a copy of the context with only files matching the path filters.
  * If no filters are set, returns the original context unchanged (no copy).
@@ -205,10 +227,7 @@ export function matchTrigger(
       if (!trigger.actions?.includes(context.action)) {
         return false;
       }
-      if (
-        trigger.draft !== undefined &&
-        (context.pullRequest?.draft ?? false) !== trigger.draft
-      ) {
+      if (!matchPullRequestState(trigger, context)) {
         return false;
       }
     }

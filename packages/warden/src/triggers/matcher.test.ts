@@ -123,6 +123,7 @@ describe('matchTrigger', () => {
       title: 'Test PR',
       body: 'Test body',
       author: 'user',
+      labels: [],
       baseBranch: 'main',
       headBranch: 'feature',
       headSha: 'abc123',
@@ -182,6 +183,106 @@ describe('matchTrigger', () => {
       },
     };
     const trigger = { ...baseTrigger, draft: false };
+    expect(matchTrigger(trigger, context, 'local')).toBe(true);
+  });
+
+  it('matches draft pull requests when a configured label is present', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        draft: true,
+        labels: ['trigger-warden'],
+      },
+    };
+    const trigger = { ...baseTrigger, draft: false, labels: ['trigger-warden'] };
+    expect(matchTrigger(trigger, context, 'github')).toBe(true);
+  });
+
+  it('does not match draft pull requests when configured labels are absent', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        draft: true,
+        labels: ['needs-review'],
+      },
+    };
+    const trigger = { ...baseTrigger, draft: false, labels: ['trigger-warden'] };
+    expect(matchTrigger(trigger, context, 'github')).toBe(false);
+  });
+
+  it('matches non-draft pull requests without requiring configured labels', () => {
+    const trigger = { ...baseTrigger, draft: false, labels: ['trigger-warden'] };
+    expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
+  });
+
+  it('matches label-only triggers when a configured label is present', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        labels: ['trigger-warden'],
+      },
+    };
+    const trigger = { ...baseTrigger, labels: ['trigger-warden'] };
+    expect(matchTrigger(trigger, context, 'github')).toBe(true);
+  });
+
+  it('matches labeled events when the event label is configured', () => {
+    const context = {
+      ...baseContext,
+      action: 'labeled',
+      label: 'trigger-warden',
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        draft: true,
+        labels: ['trigger-warden'],
+      },
+    };
+    const trigger = {
+      ...baseTrigger,
+      actions: ['opened', 'synchronize', 'labeled'],
+      draft: false,
+      labels: ['trigger-warden'],
+    };
+    expect(matchTrigger(trigger, context, 'github')).toBe(true);
+  });
+
+  it('does not match labeled events when the event label is not configured', () => {
+    const context = {
+      ...baseContext,
+      action: 'labeled',
+      label: 'needs-review',
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        labels: ['trigger-warden', 'needs-review'],
+      },
+    };
+    const trigger = {
+      ...baseTrigger,
+      actions: ['opened', 'synchronize', 'labeled'],
+      draft: false,
+      labels: ['trigger-warden'],
+    };
+    expect(matchTrigger(trigger, context, 'github')).toBe(false);
+  });
+
+  it('does not match label-only triggers when configured labels are absent', () => {
+    const trigger = { ...baseTrigger, labels: ['trigger-warden'] };
+    expect(matchTrigger(trigger, baseContext, 'github')).toBe(false);
+  });
+
+  it('ignores label filters in local environment', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        draft: true,
+        labels: [],
+      },
+    };
+    const trigger = { ...baseTrigger, draft: false, labels: ['trigger-warden'] };
     expect(matchTrigger(trigger, context, 'local')).toBe(true);
   });
 
@@ -302,6 +403,7 @@ describe('filterContextByPaths', () => {
       title: 'Test PR',
       body: 'Test body',
       author: 'user',
+      labels: [],
       baseBranch: 'main',
       headBranch: 'feature',
       headSha: 'abc123',

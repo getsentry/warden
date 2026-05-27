@@ -340,6 +340,7 @@ export const PullRequestContextSchema = z.object({
   body: z.string().nullable(),
   author: z.string(),
   draft: z.boolean().optional(),
+  labels: z.array(z.string()).optional(),
   baseBranch: z.string(),
   headBranch: z.string(),
   headSha: z.string(),
@@ -361,6 +362,7 @@ export type RepositoryContext = z.infer<typeof RepositoryContextSchema>;
 export const EventContextSchema = z.object({
   eventType: GitHubEventTypeSchema,
   action: z.string(),
+  label: z.string().optional(),
   repository: RepositoryContextSchema,
   pullRequest: PullRequestContextSchema.optional(),
   repoPath: z.string(),

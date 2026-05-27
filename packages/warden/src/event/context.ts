@@ -13,6 +13,10 @@ const GitHubUserSchema = z.object({
   login: z.string(),
 });
 
+const GitHubLabelSchema = z.object({
+  name: z.string(),
+});
+
 const GitHubRepoSchema = z.object({
   name: z.string(),
   full_name: z.string(),
@@ -25,6 +29,7 @@ const GitHubPullRequestSchema = z.object({
   title: z.string(),
   body: z.string().nullable(),
   draft: z.boolean().optional(),
+  labels: z.array(GitHubLabelSchema).optional(),
   user: GitHubUserSchema,
   base: z.object({
     ref: z.string(),
@@ -38,6 +43,7 @@ const GitHubPullRequestSchema = z.object({
 
 const GitHubEventPayloadSchema = z.object({
   action: z.string(),
+  label: GitHubLabelSchema.optional(),
   repository: GitHubRepoSchema,
   pull_request: GitHubPullRequestSchema.optional(),
 });
@@ -88,6 +94,7 @@ export async function buildEventContext(
       body: pr.body,
       author: pr.user.login,
       draft: pr.draft ?? false,
+      labels: pr.labels?.map((label) => label.name) ?? [],
       baseBranch: pr.base.ref,
       headBranch: pr.head.ref,
       headSha: pr.head.sha,
@@ -99,6 +106,7 @@ export async function buildEventContext(
   const context: EventContext = {
     eventType: eventName as EventContext['eventType'],
     action: payload.action,
+    label: payload.label?.name,
     repository,
     pullRequest,
     diffContextSource: { type: 'working-tree' },

@@ -75,6 +75,11 @@ export function generateSkillToml(skill: SkillConfig): string {
         lines.push(`draft = ${trigger.draft}`);
       }
 
+      if (trigger.labels && trigger.labels.length > 0) {
+        const labelsStr = trigger.labels.map((label) => `"${label}"`).join(', ');
+        lines.push(`labels = [${labelsStr}]`);
+      }
+
       // Trigger-level overrides
       if (trigger.model) {
         lines.push(`model = "${trigger.model}"`);

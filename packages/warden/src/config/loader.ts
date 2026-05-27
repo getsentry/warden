@@ -344,6 +344,8 @@ export interface ResolvedTrigger {
   actions?: string[];
   /** Draft state for pull_request triggers. false means non-draft only. */
   draft?: boolean;
+  /** Pull request labels that can match this trigger. */
+  labels?: string[];
   /** Remote repository reference */
   remote?: string;
   /** Repository root to use when resolving local skill names or paths */
@@ -496,6 +498,7 @@ export function resolveSkillConfigs(
           type: trigger.type,
           actions: trigger.actions,
           draft: trigger.draft,
+          labels: trigger.labels,
           remote: skill.remote,
           ...skillSource,
           filters,
