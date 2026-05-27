@@ -24,6 +24,7 @@ const GitHubPullRequestSchema = z.object({
   number: z.number(),
   title: z.string(),
   body: z.string().nullable(),
+  draft: z.boolean().optional(),
   user: GitHubUserSchema,
   base: z.object({
     ref: z.string(),
@@ -86,6 +87,7 @@ export async function buildEventContext(
       title: pr.title,
       body: pr.body,
       author: pr.user.login,
+      draft: pr.draft ?? false,
       baseBranch: pr.base.ref,
       headBranch: pr.head.ref,
       headSha: pr.head.sha,

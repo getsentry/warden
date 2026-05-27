@@ -30,6 +30,7 @@ describe('buildEventContext', () => {
       number: 1,
       title: 'Test PR',
       body: 'Test description',
+      draft: false,
       user: {
         login: 'test-user',
       },
@@ -79,6 +80,7 @@ describe('buildEventContext', () => {
     expect(context.pullRequest?.title).toBe('Test PR');
     expect(context.pullRequest?.body).toBe('Test description');
     expect(context.pullRequest?.author).toBe('test-user');
+    expect(context.pullRequest?.draft).toBe(false);
     expect(context.pullRequest?.baseBranch).toBe('main');
     expect(context.pullRequest?.headBranch).toBe('feature-branch');
     expect(context.pullRequest?.headSha).toBe('abc123def456');
@@ -108,6 +110,22 @@ describe('buildEventContext', () => {
     const context = await buildEventContext('pull_request', payloadWithNullBody, '/test/repo', mockOctokit);
 
     expect(context.pullRequest?.body).toBeNull();
+  });
+
+  it('captures draft pull request state', async () => {
+    const draftPayload = {
+      ...validPayload,
+      pull_request: {
+        ...validPayload.pull_request,
+        draft: true,
+      },
+    };
+
+    mockPaginate.mockResolvedValue([]);
+
+    const context = await buildEventContext('pull_request', draftPayload, '/test/repo', mockOctokit);
+
+    expect(context.pullRequest?.draft).toBe(true);
   });
 
   it('throws EventContextError for invalid payload', async () => {

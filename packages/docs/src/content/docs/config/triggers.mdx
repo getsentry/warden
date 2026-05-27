@@ -26,6 +26,13 @@ Triggers can override output settings and the main agent model.
   </div>
   <div>
     <dt>
+      <code>draft</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Draft state for <code>pull_request</code> triggers. Set <code>false</code> to run only on non-draft PRs.</dd>
+  </div>
+  <div>
+    <dt>
       <code>failOn</code>
       <span class="sentry-property-meta">severity</span>
     </dt>
@@ -98,6 +105,7 @@ name = "security-review"
 [[skills.triggers]]
 type = "pull_request"
 actions = ["opened", "synchronize"]
+draft = false
 ```
 
 ## Schedule Triggers

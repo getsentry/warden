@@ -85,6 +85,8 @@ export const SkillTriggerSchema = z.object({
   type: TriggerTypeSchema,
   /** Actions to trigger on (only for pull_request type) */
   actions: z.array(z.string()).min(1).optional(),
+  /** Match pull_request triggers by draft state. Set false to run only on non-draft PRs. */
+  draft: z.boolean().optional(),
   // Per-trigger overrides (flattened output fields)
   failOn: SeverityThresholdSchema.optional(),
   reportOn: SeverityThresholdSchema.optional(),

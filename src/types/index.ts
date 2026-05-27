@@ -339,6 +339,7 @@ export const PullRequestContextSchema = z.object({
   title: z.string(),
   body: z.string().nullable(),
   author: z.string(),
+  draft: z.boolean().optional(),
   baseBranch: z.string(),
   headBranch: z.string(),
   headSha: z.string(),

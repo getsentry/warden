@@ -205,6 +205,12 @@ export function matchTrigger(
       if (!trigger.actions?.includes(context.action)) {
         return false;
       }
+      if (
+        trigger.draft !== undefined &&
+        (context.pullRequest?.draft ?? false) !== trigger.draft
+      ) {
+        return false;
+      }
     }
   }
 

@@ -71,6 +71,10 @@ export function generateSkillToml(skill: SkillConfig): string {
         lines.push(`actions = [${actionsStr}]`);
       }
 
+      if (trigger.draft !== undefined) {
+        lines.push(`draft = ${trigger.draft}`);
+      }
+
       // Trigger-level overrides
       if (trigger.model) {
         lines.push(`model = "${trigger.model}"`);

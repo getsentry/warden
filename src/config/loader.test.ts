@@ -280,6 +280,20 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.filters.ignorePaths).toEqual(['*.test.ts']);
   });
 
+  it('preserves trigger draft filters', () => {
+    const config: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'test-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'], draft: false }],
+      }],
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.draft).toBe(false);
+  });
+
   describe('ignorePaths merging', () => {
     it('uses defaults.ignorePaths when skill has none', () => {
       const config: WardenConfig = {

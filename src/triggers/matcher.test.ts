@@ -156,6 +156,35 @@ describe('matchTrigger', () => {
     expect(matchTrigger(trigger, baseContext, 'github')).toBe(false);
   });
 
+  it('matches non-draft pull requests when draft is false', () => {
+    const trigger = { ...baseTrigger, draft: false };
+    expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
+  });
+
+  it('does not match draft pull requests when draft is false', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        draft: true,
+      },
+    };
+    const trigger = { ...baseTrigger, draft: false };
+    expect(matchTrigger(trigger, context, 'github')).toBe(false);
+  });
+
+  it('ignores draft filters in local environment', () => {
+    const context = {
+      ...baseContext,
+      pullRequest: {
+        ...baseContext.pullRequest!,
+        draft: true,
+      },
+    };
+    const trigger = { ...baseTrigger, draft: false };
+    expect(matchTrigger(trigger, context, 'local')).toBe(true);
+  });
+
   it('matches with path filter', () => {
     const trigger = { ...baseTrigger, filters: { paths: ['src/**/*.ts'] } };
     expect(matchTrigger(trigger, baseContext, 'github')).toBe(true);
