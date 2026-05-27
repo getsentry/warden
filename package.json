@@ -19,6 +19,7 @@
     "evals:scaffold": "pnpm -C packages/evals scaffold",
     "typecheck": "pnpm --filter @sentry/warden typecheck && pnpm -C packages/evals typecheck",
     "update-pricing": "pnpm --filter @sentry/warden update-pricing",
+    "update-pricing-pr": "pnpm --filter @sentry/warden update-pricing-pr",
     "generate:jsonl-schema": "pnpm --filter @sentry/warden generate:jsonl-schema",
     "docs": "pnpm --filter warden-docs dev",
     "prepare": "simple-git-hooks",

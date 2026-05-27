@@ -27,6 +27,7 @@
     "test:examples": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
     "update-pricing": "tsx scripts/update-pricing.ts",
+    "update-pricing-pr": "tsx scripts/create-pricing-update-pr.ts",
     "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts"
   },
   "keywords": [
