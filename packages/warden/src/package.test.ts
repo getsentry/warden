@@ -42,6 +42,7 @@ describe('npm package contents', () => {
     expect(ignored.ignores('.codex/config.toml')).toBe(true);
     expect(ignored.ignores('superwarden-bench/README.md')).toBe(true);
     expect(ignored.ignores('specs/generated-skills.md')).toBe(true);
+    expect(ignored.ignores('bin/debug-helper.js')).toBe(true);
     expect(ignored.ignores('bin/warden.js')).toBe(false);
   });
 });

@@ -49,8 +49,7 @@ conductor.json
 
 # Release tooling
 .craft.yml
-bin/
-!bin/
+bin/*
 !bin/warden.js
 
 # Documentation (README is kept)
