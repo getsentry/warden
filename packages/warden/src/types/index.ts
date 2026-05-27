@@ -301,6 +301,7 @@ export const PullRequestActionSchema = z.enum([
   'synchronize',
   'reopened',
   'closed',
+  'labeled',
 ]);
 export type PullRequestAction = z.infer<typeof PullRequestActionSchema>;
 

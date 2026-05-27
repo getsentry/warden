@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { filterFindingsByConfidence, ConfidenceThresholdSchema } from './index.js';
+import {
+  filterFindingsByConfidence,
+  ConfidenceThresholdSchema,
+  PullRequestActionSchema,
+} from './index.js';
 import type { Finding } from './index.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
@@ -23,6 +27,12 @@ describe('ConfidenceThresholdSchema', () => {
   it('rejects invalid values', () => {
     expect(() => ConfidenceThresholdSchema.parse('critical')).toThrow();
     expect(() => ConfidenceThresholdSchema.parse('')).toThrow();
+  });
+});
+
+describe('PullRequestActionSchema', () => {
+  it('accepts labeled pull request events', () => {
+    expect(PullRequestActionSchema.parse('labeled')).toBe('labeled');
   });
 });
 
