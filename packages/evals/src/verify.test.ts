@@ -4,20 +4,17 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveVerificationEvalMeta, runVerificationEval } from './verify.js';
 import type { EvalMeta } from './types.js';
-import type { Finding } from '../../../src/types/index.js';
+import type { Finding } from '@sentry/warden';
+import type * as WardenPublic from '@sentry/warden';
 
 const mocks = vi.hoisted(() => ({
-  resolveSkillAsync: vi.fn(),
   setupEvalRepo: vi.fn(),
-  verifyFindings: vi.fn(),
+  verifyLocalFindings: vi.fn(),
 }));
 
-vi.mock('../../../src/skills/loader.js', () => ({
-  resolveSkillAsync: mocks.resolveSkillAsync,
-}));
-
-vi.mock('../../../src/sdk/verify.js', () => ({
-  verifyFindings: mocks.verifyFindings,
+vi.mock('@sentry/warden', async (importOriginal) => ({
+  ...(await importOriginal<typeof WardenPublic>()),
+  verifyLocalFindings: mocks.verifyLocalFindings,
 }));
 
 vi.mock('./runner.js', () => ({
@@ -69,8 +66,7 @@ describe('resolveVerificationEvalMeta', () => {
       description: 'candidate description',
     };
     mocks.setupEvalRepo.mockReturnValue(repoDir);
-    mocks.resolveSkillAsync.mockResolvedValue({ name: 'security-review' });
-    mocks.verifyFindings.mockResolvedValue({ findings: [] });
+    mocks.verifyLocalFindings.mockResolvedValue({ skill: { name: 'security-review' }, findings: [] });
 
     await runVerificationEval({
       name: 'license-context',

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://warden.dev/schemas/jsonl-v1.json",
   "title": "Warden JSONL Output",
-  "description": "Schema for a single line in Warden's JSONL output. New run logs are homogeneous chunk records; legacy skill, summary, and fix-evaluation records remain parseable. Generated from src/cli/output/jsonl-schema-gen.ts — do not edit by hand.",
+  "description": "Schema for a single line in Warden's JSONL output. New run logs are homogeneous chunk records; legacy skill, summary, and fix-evaluation records remain parseable. Generated from packages/warden/src/cli/output/jsonl-schema-gen.ts — do not edit by hand.",
   "anyOf": [
     {
       "$ref": "#/$defs/ChunkRecord"

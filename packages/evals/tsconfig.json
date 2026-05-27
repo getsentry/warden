@@ -14,6 +14,9 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
+    "paths": {
+      "@sentry/warden": ["../warden/src/index.ts"]
+    },
     "types": ["node", "vitest"]
   },
   "include": ["src/**/*", "scripts/**/*"]

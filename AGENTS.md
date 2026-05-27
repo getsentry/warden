@@ -22,24 +22,23 @@ This is a pnpm workspace monorepo. Shared build tools (oxlint, lint-staged, simp
 TELEMETRY.md           # Sentry telemetry investigation map; points to Junior's shared spec
 
 packages/
+├── warden/            # @sentry/warden core package
+│   └── src/
+│       ├── index.ts   # Library entry point
+│       ├── types/     # Zod schemas and types
+│       ├── config/    # Config loading (warden.toml)
+│       ├── triggers/  # Event trigger matching
+│       ├── event/     # GitHub event parsing
+│       ├── diff/      # Diff parsing and context
+│       ├── output/    # Report rendering
+│       ├── skills/    # Skill discovery and loading
+│       ├── sdk/       # Agent SDK runner
+│       ├── cli/       # CLI entry and commands
+│       ├── action/    # GitHub Action entry
+│       ├── utils/     # Shared utilities
+│       └── examples/  # Example configurations
 ├── docs/              # Astro docs site (warden-docs), deployed via Vercel
 ├── evals/             # Private eval package: runner, scenarios, fixtures, test skills
-
-src/                   # @sentry/warden core (root package)
-├── index.ts           # Library entry point
-├── types/             # Zod schemas and types
-├── config/            # Config loading (warden.toml)
-├── triggers/          # Event trigger matching
-├── event/             # GitHub event parsing
-├── diff/              # Diff parsing and context
-├── output/            # Report rendering
-├── skills/            # Skill discovery and loading
-├── sdk/               # Claude Code SDK runner
-├── cli/               # CLI entry and commands
-│   └── output/        # CLI output formatting
-├── action/            # GitHub Action entry
-├── utils/             # Shared utilities
-└── examples/          # Example configurations
 ```
 
 ## Key Conventions
@@ -103,8 +102,8 @@ Use `/dex` to break down complex work, track progress across sessions, and coord
 - `/iterate-pr` — Fix CI failures and review feedback until checks pass
 
 ### Code Quality
-- `/warden` — Run Warden analysis before committing. See `.agents/skills/warden/SKILL.md`
-- `/warden-sweep` — Full-repo code sweep: scan, verify, patch, draft PRs. See `.agents/skills/warden-sweep/SKILL.md`
+- `/warden` — Run Warden analysis before committing. See `packages/warden/skills/warden/SKILL.md`
+- `/warden-sweep` — Full-repo code sweep: scan, verify, patch, draft PRs. See `packages/warden/skills/warden-sweep/SKILL.md`
 - `/code-simplifier` — Simplify and refine code
 - `/architecture-review` — Staff-level codebase health review. See `.agents/skills/architecture-review/SKILL.md`
 

@@ -20,7 +20,7 @@ describe('setupEvalRepo', () => {
       category: 'security-review',
       skillName: 'security-review',
       given: 'public size-analysis endpoint accepts a baseArtifactId',
-      skillPath: join(repoRoot, 'src', 'builtin-skills', 'security-review', 'SKILL.md'),
+      skillPath: join(repoRoot, 'packages', 'warden', 'src', 'builtin-skills', 'security-review', 'SKILL.md'),
       filePaths: [
         join(
           evalsDir,
@@ -86,7 +86,7 @@ describe('setupEvalRepo', () => {
       category: 'security-review',
       skillName: 'security-review',
       given: 'fixture source path carries repository context',
-      skillPath: join(repoRoot, 'src', 'builtin-skills', 'security-review', 'SKILL.md'),
+      skillPath: join(repoRoot, 'packages', 'warden', 'src', 'builtin-skills', 'security-review', 'SKILL.md'),
       filePaths: [fixturePath],
       supportingFilePaths: [licensePath],
       model: 'anthropic/claude-sonnet-4-6',

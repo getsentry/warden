@@ -4,15 +4,27 @@ import { toJsonValue, type JsonValue } from 'vitest-evals/harness';
 import { createWardenEvalJudge } from './harness.js';
 import { runJudge } from './judge.js';
 import { DEFAULT_EVAL_MODEL, DEFAULT_EVAL_RUNTIME } from './types.js';
-import { emptyUsage } from '../../../src/sdk/usage.js';
 import type { EvalMeta } from './types.js';
-import type { Finding } from '../../../src/types/index.js';
+import type { Finding, UsageStats } from '@sentry/warden';
 
 vi.mock('./judge.js', () => ({
   runJudge: vi.fn(),
 }));
 
 const mockedRunJudge = vi.mocked(runJudge);
+
+function emptyUsage(): UsageStats {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheCreation5mInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+    webSearchRequests: 0,
+    costUSD: 0,
+  };
+}
 
 function makeMeta(overrides: Partial<EvalMeta> = {}): EvalMeta {
   return {

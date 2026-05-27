@@ -17,7 +17,7 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 
 ## Initialization
 
-`initSentry(context)` in `src/sentry.ts`. Called once at process start in both CLI and Action entry points.
+`initSentry(context)` in `packages/warden/src/sentry.ts`. Called once at process start in both CLI and Action entry points.
 
 | Setting | Value |
 |---------|-------|
@@ -278,7 +278,7 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 
 Non-fatal errors (the workflow continues despite the failure) are still real errors. A GitHub API call that 500s is an error whether or not we can recover from it.
 
-`setFailed()` throws `ActionFailedError`, which propagates out of `Sentry.startSpan()` callbacks so spans end cleanly before the process exits. The top-level catch handler in `src/action/main.ts` distinguishes `ActionFailedError` (expected failure: threshold exceeded, missing env, CLI not found) from unexpected errors. Only unexpected errors call `captureException`. Both paths call `flushSentry()` then `process.exit(1)`.
+`setFailed()` throws `ActionFailedError`, which propagates out of `Sentry.startSpan()` callbacks so spans end cleanly before the process exits. The top-level catch handler in `packages/warden/src/action/main.ts` distinguishes `ActionFailedError` (expected failure: threshold exceeded, missing env, CLI not found) from unexpected errors. Only unexpected errors call `captureException`. Both paths call `flushSentry()` then `process.exit(1)`.
 
 ### Operation tags
 
@@ -298,7 +298,7 @@ All `captureException` calls include an `operation` tag for filtering in Sentry 
 | `update_core_check` | `finalizeWorkflow` | Updating check run with summary |
 | `fetch_fix_context` | `evaluateFixAttempts` | Fetching code at finding location |
 
-Untagged `captureException` calls exist at top-level catch handlers in `src/cli/index.ts`, `src/action/main.ts`, and `src/action/triggers/executor.ts` (tagged with `warden.trigger.name` and `gen_ai.agent.name` instead).
+Untagged `captureException` calls exist at top-level catch handlers in `packages/warden/src/cli/index.ts`, `packages/warden/src/action/main.ts`, and `packages/warden/src/action/triggers/executor.ts` (tagged with `warden.trigger.name` and `gen_ai.agent.name` instead).
 
 ---
 
@@ -412,10 +412,10 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emi
 
 | File | Role |
 |------|------|
-| `src/sentry.ts` | Init, integrations, global attributes, metric emission functions |
-| `src/sdk/analyze.ts` | `executeQuery` (gen AI span), `analyzeFile` / `analyzeHunk` (workflow spans), extraction + retry + dedup metrics |
-| `src/action/fix-evaluation/index.ts` | `evaluateFixAttempts` / per-comment spans, fix eval metrics |
-| `src/action/workflow/base.ts` | `ActionFailedError` sentinel, `setFailed()` |
-| `src/action/main.ts` | Top-level catch handler, Sentry flush, `process.exit` |
-| `src/action/workflow/pr-workflow.ts` | Error context tags, stale resolution metrics |
-| `src/cli/output/tasks.ts` | Dedup metrics (CLI code path) |
+| `packages/warden/src/sentry.ts` | Init, integrations, global attributes, metric emission functions |
+| `packages/warden/src/sdk/analyze.ts` | `executeQuery` (gen AI span), `analyzeFile` / `analyzeHunk` (workflow spans), extraction + retry + dedup metrics |
+| `packages/warden/src/action/fix-evaluation/index.ts` | `evaluateFixAttempts` / per-comment spans, fix eval metrics |
+| `packages/warden/src/action/workflow/base.ts` | `ActionFailedError` sentinel, `setFailed()` |
+| `packages/warden/src/action/main.ts` | Top-level catch handler, Sentry flush, `process.exit` |
+| `packages/warden/src/action/workflow/pr-workflow.ts` | Error context tags, stale resolution metrics |
+| `packages/warden/src/cli/output/tasks.ts` | Dedup metrics (CLI code path) |

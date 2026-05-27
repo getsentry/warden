@@ -1,0 +1,71 @@
+{
+  "name": "@sentry/warden",
+  "version": "0.34.0",
+  "description": "Event-driven agent that reacts to GitHub events and executes code-review skills",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "warden": "bin/warden.js"
+  },
+  "scripts": {
+    "cli": "tsx src/cli/index.ts",
+    "clean:dist": "rm -rf dist",
+    "build": "pnpm run clean:dist && tsc -p tsconfig.build.json",
+    "build:action": "rm -rf ../../dist/action && ncc build src/action/main.ts -o ../../dist/action --no-source-map-register --license licenses.txt",
+    "dev": "tsc --watch",
+    "test": "vitest run --config vitest.config.ts",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test:watch": "vitest --config vitest.config.ts",
+    "test:examples": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit",
+    "update-pricing": "tsx scripts/update-pricing.ts",
+    "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts"
+  },
+  "keywords": [
+    "github",
+    "automation",
+    "claude",
+    "ai",
+    "code-review",
+    "security"
+  ],
+  "author": "Sentry",
+  "license": "FSL-1.1-ALv2",
+  "repository": "https://github.com/getsentry/warden",
+  "bugs": {
+    "url": "https://github.com/getsentry/warden/issues"
+  },
+  "homepage": "https://warden.sentry.dev",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.150",
+    "@anthropic-ai/sdk": "^0.98.0",
+    "@earendil-works/pi-ai": "^0.75.5",
+    "@earendil-works/pi-coding-agent": "^0.75.5",
+    "@inquirer/select": "^5.1.5",
+    "@octokit/rest": "^22.0.1",
+    "@sentry/dotagents-lib": "^1.17.0",
+    "@sentry/node": "^10.53.1",
+    "chalk": "^5.6.2",
+    "dotenv": "^17.4.2",
+    "fast-glob": "^3.3.3",
+    "figures": "^6.1.0",
+    "ignore": "^7.0.5",
+    "ink": "^7.0.3",
+    "nanoid": "^5.1.11",
+    "react": "^19.2.6",
+    "smol-toml": "^1.6.1",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

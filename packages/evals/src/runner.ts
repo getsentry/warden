@@ -1,16 +1,12 @@
 import { basename, join, dirname } from 'node:path';
 import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { execGitNonInteractive } from '../../../src/utils/exec.js';
-import { buildLocalEventContext } from '../../../src/cli/context.js';
-import { resolveSkillAsync } from '../../../src/skills/loader.js';
-import { runSkill } from '../../../src/sdk/runner.js';
+import { execFileSync } from 'node:child_process';
+import { runLocalSkill } from '@sentry/warden';
 import { evalFixtureRepoPath, singleEvalFixtureSourceRepository } from './fixtures.js';
 import { formatEvalId } from './names.js';
 import type { EvalMeta } from './types.js';
-import type { Finding, SkillReport } from '../../../src/types/index.js';
-import type { FindingProcessingEvent } from '../../../src/sdk/runner.js';
-import type { RuntimeName } from '../../../src/sdk/runtimes/types.js';
+import type { Finding, FindingProcessingEvent, RuntimeName, SkillReport } from '@sentry/warden';
 
 export interface RunEvalOptions {
   /** Anthropic API key */
@@ -42,6 +38,14 @@ function copyFixtureIntoRepo(srcPath: string, repoDir: string): void {
   copyFileSync(srcPath, destPath);
 }
 
+function execGit(args: string[], cwd: string): string {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
 /**
  * Set up a temporary git repository for an eval scenario.
  *
@@ -54,7 +58,7 @@ export function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): strin
   const tmpDir = mkdtempSync(join(tmpdir(), `warden-eval-${meta.name}-`));
 
   try {
-    const git = (args: string[]) => execGitNonInteractive(args, { cwd: tmpDir });
+    const git = (args: string[]) => execGit(args, tmpDir);
 
     git(['init', '--initial-branch=main']);
     git(['config', 'user.email', 'eval@warden.dev']);
@@ -150,28 +154,23 @@ export async function runEvalSkill(
   try {
     repoDir = setupEvalRepo(meta, log);
 
-    const context = buildLocalEventContext({
-      base: 'main',
-      head: 'eval',
-      cwd: repoDir,
-      defaultBranch: 'main',
-    });
-    log(`Context built: ${context.pullRequest?.files.length ?? 0} file(s) from git diff`);
-
     // Resolve skill from where setupEvalRepo placed it
     const skillSrcDir = dirname(meta.skillPath);
     const isDirectorySkill = existsSync(join(skillSrcDir, 'SKILL.md'));
     const skillPath = isDirectorySkill
       ? join(repoDir, '.warden', 'skills', basename(skillSrcDir))
       : join(repoDir, '.warden', 'skills', basename(meta.skillPath));
-    const skill = await resolveSkillAsync(skillPath);
-    log(`Skill resolved: ${skill.name}`);
 
     const model = options.model ?? meta.model;
     const runtime = options.runtime ?? meta.runtime;
     log(`Running skill with model: ${model} [${runtime}]`);
 
-    const report = await runSkill(skill, context, {
+    const result = await runLocalSkill({
+      skillPath,
+      base: 'main',
+      head: 'eval',
+      cwd: repoDir,
+      defaultBranch: 'main',
       apiKey: options.apiKey,
       model,
       runtime,
@@ -185,7 +184,10 @@ export async function runEvalSkill(
           }
         : undefined,
     });
+    log(`Context built: ${result.context.pullRequest?.files.length ?? 0} file(s) from git diff`);
+    log(`Skill resolved: ${result.skill.name}`);
 
+    const { report } = result;
     log(`Skill complete: ${report.findings.length} finding(s)`);
     for (const finding of report.findings) {
       const loc = finding.location ? ` (${finding.location.path}:${finding.location.startLine})` : '';

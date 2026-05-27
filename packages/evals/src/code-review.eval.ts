@@ -11,7 +11,7 @@ import { formatEvalId, formatEvalTestName } from './names.js';
 const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 const evals = discoverEvalScenarios({
   category: 'code-review',
-  skill: '../../src/builtin-skills/code-review/SKILL.md',
+  skill: '../warden/src/builtin-skills/code-review/SKILL.md',
   runtime: 'pi',
   model: 'anthropic/claude-sonnet-4-6',
 });

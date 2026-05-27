@@ -249,7 +249,7 @@ to improve discovery, verification, merging, or judging later.
 If a new category needs a different test skill, add it to `packages/evals/skills/`.
 To exercise a built-in directory-format skill, point `skill` at its `SKILL.md`
 relative to `packages/evals/`, for example
-`../../src/builtin-skills/security-review/SKILL.md`.
+`../warden/src/builtin-skills/security-review/SKILL.md`.
 
 ### Scaffolding From GitHub
 

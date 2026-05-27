@@ -1,11 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Finding } from '../../../src/types/index.js';
-import { apiUsageToStats } from '../../../src/sdk/pricing.js';
-import { emptyUsage } from '../../../src/sdk/usage.js';
-import { extractJson } from '../../../src/sdk/haiku.js';
+import { anthropicUsageToStats, parseJsonFromOutput, type Finding, type UsageStats } from '@sentry/warden';
 import type { EvalMeta, JudgeResponse } from './types.js';
 import { DEFAULT_EVAL_MODEL, JudgeResponseSchema } from './types.js';
-import type { UsageStats } from '../../../src/types/index.js';
 
 const JUDGE_MODEL = DEFAULT_EVAL_MODEL;
 const JUDGE_MAX_TOKENS = 4096;
@@ -15,6 +11,19 @@ export interface JudgeResult {
   response: JudgeResponse;
   usage: UsageStats;
   error?: string;
+}
+
+function emptyUsage(): UsageStats {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    cacheCreation5mInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+    webSearchRequests: 0,
+    costUSD: 0,
+  };
 }
 
 /**
@@ -135,7 +144,7 @@ export async function runJudge(
     };
   }
 
-  const usage = apiUsageToStats(JUDGE_MODEL, response.usage);
+  const usage = anthropicUsageToStats(JUDGE_MODEL, response.usage);
 
   const textBlock = response.content.find(
     (b): b is Anthropic.TextBlock => b.type === 'text'
@@ -149,40 +158,22 @@ export async function runJudge(
     };
   }
 
-  const jsonStr = extractJson(textBlock.text);
+  const parsed = await parseJsonFromOutput({
+    output: textBlock.text,
+    schema: JudgeResponseSchema,
+  });
 
-  if (!jsonStr) {
+  if (!parsed.success) {
+    const reason = `Judge response parse failed: ${parsed.error}`;
     return {
-      response: buildFallbackResponse(meta, 'No JSON found in judge response'),
+      response: buildFallbackResponse(meta, reason),
       usage,
-      error: 'No JSON found in judge response',
-    };
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      response: buildFallbackResponse(meta, `Judge response JSON parse failed: ${message}`),
-      usage,
-      error: `Judge response JSON parse failed: ${message}`,
-    };
-  }
-
-  const validated = JudgeResponseSchema.safeParse(parsed);
-
-  if (!validated.success) {
-    return {
-      response: buildFallbackResponse(meta, `Judge response validation failed: ${validated.error.message}`),
-      usage,
-      error: `Judge response validation failed: ${validated.error.message}`,
+      error: reason,
     };
   }
 
   // Validate array lengths match assertions
-  const judgeResp = validated.data;
+  const judgeResp = parsed.data;
   if (judgeResp.expectations.length !== meta.should_find.length) {
     return {
       response: buildFallbackResponse(meta, `Judge returned ${judgeResp.expectations.length} verdicts, expected ${meta.should_find.length}`),

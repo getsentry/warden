@@ -586,7 +586,7 @@ After the run finalizes, `--json` reads the on-disk log file back and writes it 
 
 ## 5. Formatting Functions
 
-All reporters use shared formatters from `src/cli/output/formatters.ts`.
+All reporters use shared formatters from `packages/warden/src/cli/output/formatters.ts`.
 
 | Function | Input | Output | Example |
 |----------|-------|--------|---------|

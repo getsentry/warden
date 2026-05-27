@@ -1,39 +1,34 @@
 {
-  "name": "@sentry/warden",
-  "version": "0.34.0",
-  "description": "Event-driven agent that reacts to GitHub events and executes code-review skills",
+  "name": "warden-monorepo",
+  "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "warden": "dist/cli/index.js"
-  },
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "cli": "tsx src/cli/index.ts",
-    "clean:dist": "rm -rf dist",
-    "build": "pnpm run clean:dist && tsc -p tsconfig.build.json",
-    "build:action": "rm -rf dist/action && ncc build src/action/main.ts -o dist/action --no-source-map-register --license licenses.txt",
-    "dev": "tsc --watch",
+    "cli": "pnpm --filter @sentry/warden cli",
+    "clean:dist": "rm -rf dist packages/*/dist",
+    "build": "pnpm --filter @sentry/warden build",
+    "build:action": "pnpm --filter @sentry/warden build:action",
+    "dev": "pnpm --filter @sentry/warden dev",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest",
-    "test:examples": "vitest run --config vitest.integration.config.ts",
+    "test": "pnpm --filter @sentry/warden test",
+    "test:coverage": "pnpm --filter @sentry/warden test:coverage",
+    "test:watch": "pnpm --filter @sentry/warden test:watch",
+    "test:examples": "pnpm --filter @sentry/warden test:examples",
     "evals": "pnpm -C packages/evals evals",
     "evals:scaffold": "pnpm -C packages/evals scaffold",
-    "typecheck": "tsc --noEmit && pnpm -C packages/evals typecheck",
-    "update-pricing": "tsx scripts/update-pricing.ts",
-    "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts",
+    "typecheck": "pnpm --filter @sentry/warden typecheck && pnpm -C packages/evals typecheck",
+    "update-pricing": "pnpm --filter @sentry/warden update-pricing",
+    "generate:jsonl-schema": "pnpm --filter @sentry/warden generate:jsonl-schema",
     "docs": "pnpm --filter warden-docs dev",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "pack:warden": "pnpm --filter @sentry/warden pack"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged && pnpm typecheck"
   },
   "lint-staged": {
-    "src/**/*.ts": [
+    "packages/warden/src/**/*.ts": [
       "oxlint --fix"
     ],
     "packages/evals/src/**/*.ts": [
@@ -48,42 +43,6 @@
     "packages/docs/**/*.astro": [
       "pnpm -C packages/docs build"
     ]
-  },
-  "keywords": [
-    "github",
-    "automation",
-    "claude",
-    "ai",
-    "code-review",
-    "security"
-  ],
-  "author": "Sentry",
-  "license": "FSL-1.1-ALv2",
-  "repository": "https://github.com/getsentry/warden",
-  "bugs": {
-    "url": "https://github.com/getsentry/warden/issues"
-  },
-  "homepage": "https://warden.sentry.dev",
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.150",
-    "@anthropic-ai/sdk": "^0.98.0",
-    "@earendil-works/pi-ai": "^0.75.5",
-    "@earendil-works/pi-coding-agent": "^0.75.5",
-    "@inquirer/select": "^5.1.5",
-    "@octokit/rest": "^22.0.1",
-    "@sentry/dotagents-lib": "^1.17.0",
-    "@sentry/node": "^10.53.1",
-    "chalk": "^5.6.2",
-    "dotenv": "^17.4.2",
-    "fast-glob": "^3.3.3",
-    "figures": "^6.1.0",
-    "ignore": "^7.0.5",
-    "ink": "^7.0.3",
-    "nanoid": "^5.1.11",
-    "react": "^19.2.6",
-    "smol-toml": "^1.6.1",
-    "yaml": "^2.9.0",
-    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

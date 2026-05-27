@@ -46,7 +46,7 @@ jobs:
         env:
           BUMP: ${{ inputs.bump }}
         run: |
-          CURRENT=$(node -p "require('./package.json').version")
+          CURRENT=$(node -p "require('./packages/warden/package.json').version")
           NEW=$(npx semver -i "$BUMP" $CURRENT)
           echo "current=$CURRENT" >> $GITHUB_OUTPUT
           echo "new=$NEW" >> $GITHUB_OUTPUT

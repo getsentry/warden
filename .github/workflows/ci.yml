@@ -67,7 +67,7 @@ jobs:
       - run: pnpm build
       - run: pnpm build:action
 
-      - run: pnpm pack
+      - run: pnpm --filter @sentry/warden pack
 
       - uses: actions/upload-artifact@v4
         with:

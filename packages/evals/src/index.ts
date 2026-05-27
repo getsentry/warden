@@ -8,7 +8,7 @@ import {
   EvalScenarioFileSchema,
 } from './types.js';
 import type { EvalFile, EvalMeta, EvalScenarioFile } from './types.js';
-import type { RuntimeName } from '../../../src/sdk/runtimes/types.js';
+import type { RuntimeName } from '@sentry/warden';
 
 export type { EvalMeta };
 
