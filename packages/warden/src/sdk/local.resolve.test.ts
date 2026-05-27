@@ -46,8 +46,10 @@ const report: SkillReport = {
 
 describe('local SDK skill resolution', () => {
   let tempDir: string | undefined;
+  const originalCwd = process.cwd();
 
   afterEach(() => {
+    process.chdir(originalCwd);
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true });
       tempDir = undefined;
@@ -86,6 +88,41 @@ describe('local SDK skill resolution', () => {
       rootDir: skillDir,
     });
     expect(runSkill).toHaveBeenCalledWith(result.skill, expect.objectContaining({ repoPath: tempDir }), expect.any(Object));
+  });
+
+  it('resolves relative skill paths against process cwd when cwd is omitted', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'warden-local-sdk-'));
+    const skillDir = join(tempDir, '.warden', 'skills', 'local-skill');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: local-skill',
+        'description: Review local changes',
+        '---',
+        'Review the diff.',
+        '',
+      ].join('\n')
+    );
+
+    process.chdir(tempDir);
+    vi.mocked(buildLocalEventContext).mockReturnValue({ ...context, repoPath: tempDir });
+    vi.mocked(runSkill).mockResolvedValue(report);
+
+    const result = await runLocalSkill({
+      skillPath: '.warden/skills/local-skill',
+      apiKey: 'test-key',
+      runtime: 'claude',
+    });
+
+    expect(buildLocalEventContext).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: undefined,
+    }));
+    expect(result.skill).toMatchObject({
+      name: 'local-skill',
+      rootDir: skillDir,
+    });
   });
 
   it('resolves named skills against the local git repo root', async () => {

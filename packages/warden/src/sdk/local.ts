@@ -52,7 +52,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     defaultBranch,
     staged,
   });
-  const skillRoot = isPathLike(skillPath) ? cwd : context.repoPath;
+  const skillRoot = isPathLike(skillPath) ? cwd ?? process.cwd() : context.repoPath;
   const skill = await resolveSkillAsync(skillPath, skillRoot);
   const report = await runSkill(skill, context, runnerOptions);
 
