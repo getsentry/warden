@@ -1,0 +1,79 @@
+name: Update model pricing
+
+# Refreshes packages/warden/src/sdk/model-pricing.json from
+# pydantic/genai-prices and opens/refreshes a PR when it changes.
+
+on:
+  schedule:
+    # Nightly at 04:17 UTC. Off the top of the hour to avoid GitHub's
+    # scheduler hot zones.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-pricing
+  cancel-in-progress: false
+
+jobs:
+  update-pricing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Refresh pricing data
+        run: pnpm update-pricing
+
+      - name: Validate pricing
+        run: pnpm --filter @sentry/warden test src/sdk/pricing.test.ts
+
+      - name: Check for pricing diff
+        id: diff
+        run: |
+          if git diff --quiet -- packages/warden/src/sdk/model-pricing.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No pricing changes; skipping PR step."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only mint a write-capable token when we actually need to push.
+      - name: Get auth token
+        if: steps.diff.outputs.changed == 'true'
+        id: token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Open or refresh pricing PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          APP_SLUG: ${{ steps.token.outputs.app-slug }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Derive a stable bot identity for the commit. The user id keeps
+          # GitHub's "verified bot" attribution working when present.
+          BOT_USER="${APP_SLUG}[bot]"
+          BOT_USER_ID=$(gh api "/users/${BOT_USER}" --jq .id)
+          export GIT_AUTHOR_NAME="$BOT_USER"
+          export GIT_COMMITTER_NAME="$BOT_USER"
+          export GIT_AUTHOR_EMAIL="${BOT_USER_ID}+${BOT_USER}@users.noreply.github.com"
+          export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+
+          # Swap the origin remote over to the app-token credential so
+          # both git push and gh CLI use the write-capable identity.
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GH_REPO}.git"
+          pnpm --filter @sentry/warden update-pricing-pr
