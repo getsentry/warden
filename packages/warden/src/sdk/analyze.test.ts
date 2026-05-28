@@ -269,6 +269,31 @@ describe('buildSourceSnippet', () => {
       ],
     });
   });
+
+  it('ignores trailing empty diff parser lines when numbering source snippets', () => {
+    const hunk: HunkWithContext = {
+      filename: 'src/example.ts',
+      hunk: {
+        oldStart: 10,
+        oldCount: 1,
+        newStart: 10,
+        newCount: 1,
+        content: '@@ -10,1 +10,1 @@\n+newCall();\n',
+        lines: ['+newCall();', ''],
+      },
+      contextBefore: [],
+      contextAfter: ['after();'],
+      contextStartLine: 10,
+      language: 'typescript',
+    };
+
+    const snippet = buildSourceSnippet(makeFinding(10), hunk, 1);
+
+    expect(snippet?.lines).toEqual([
+      { line: 10, content: 'newCall();', highlighted: true },
+      { line: 11, content: 'after();', highlighted: false },
+    ]);
+  });
 });
 
 describe('analyzeFile', () => {

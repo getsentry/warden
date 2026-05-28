@@ -182,9 +182,8 @@ function hunkSourceLines(hunkCtx: HunkWithContext): SourceSnippetLine[] {
   let newLine = hunkCtx.hunk.newStart;
   for (const diffLine of hunkCtx.hunk.lines) {
     if (diffLine.startsWith('-')) continue;
-    const content = diffLine.startsWith('+') || diffLine.startsWith(' ')
-      ? diffLine.slice(1)
-      : diffLine;
+    if (!diffLine.startsWith('+') && !diffLine.startsWith(' ')) continue;
+    const content = diffLine.slice(1);
     lines.push({ line: newLine, content });
     newLine += 1;
   }
