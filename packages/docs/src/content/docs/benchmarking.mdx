@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: Stable Sentry benchmark comparisons for Warden.
+description: Current Sentry benchmark results for Warden.
 editUrl: false
 ---
 
@@ -24,85 +24,31 @@ That keeps the run focused. We are measuring whether Warden can recognize the
 same root causes, not whether it can discover unrelated issues across the whole
 Sentry repository.
 
-## Comparison Matrix
-
-The score table is the headline. The cost and timing tables below it are
-operational context for understanding why two runs with similar scores may look
-very different to operate. This matrix only shows stable comparison runs with
-per-chunk timing metadata; older incomplete runs remain in the result data but
-are hidden here.
+## Latest Runs
 
 <BenchmarkRuns />
 
 ## Reading Results
 
-Known found is the useful number. It counts corpus entries where an agent
-verified that Warden found the same bug in roughly the same location as an
-existing corpus finding. Exact wording, line numbers, and exploit framing can
-drift.
-
-Scoring is a review judgment, not a deterministic formula. Same-file findings
-about different bugs do not count. One emitted finding can count for more than
-one corpus entry when it clearly covers multiple existing entries for the same
-bug, and duplicate emitted findings do not double-count the same corpus entry.
-Result JSON files with `scores` include the per-finding agent verification
-records used for that row.
-
-Benchmark runs use Warden's post-analysis finding verifier unless the run
-explicitly opts out. That verifier is separate from benchmark scoring: it runs
-during Warden analysis to filter candidate findings, while scoring later checks
-whether each emitted finding semantically matches an existing corpus entry.
-Verifier calls add provider cost, and runs that produce more findings generally
-cost more because there is more verifier work to do.
+Known found is the useful number. It counts corpus entries where Warden found
+the same root cause, even if the exact line number or wording drifted.
 
 Total findings is the amount of review output Warden produced before scoring.
 A higher number can be good if it finds more real vulnerabilities, but it also
 means more human review.
 
-Cost is the provider-reported cost persisted in the result metadata, not cost
-per finding. The cost table shows one run-cost column plus the persisted input
-and output token totals. Total cost can include Warden's post-analysis verifier
-and other auxiliary model calls, but those calls may use auxiliary or synthesis
-models rather than the model being benchmarked. Because of that, auxiliary cost
-is operational context, not a useful comparison dimension for this matrix. The
-raw JSONL logs are kept outside the docs until they have been reviewed for
-sensitive data. Current runs scan the same 156 analysis chunks; failed chunks
-are shown in the run table when present. When the raw artifacts preserve
-verifier usage, it is included under `auxiliaryUsage.verification`; some run
-shapes only persist the final total or per-chunk analysis usage.
+Cost and duration are recorded from the run summaries derived from the raw
+JSONL artifacts. The raw JSONL logs are kept outside the docs until they have
+been reviewed for sensitive data. Both current runs completed the same 156
+analysis chunks with no failed chunks.
 
-Some run shapes persist only per-chunk analysis usage. The Opus 4.6 high-effort
-Pi run completed with no failed chunks, but its live CLI shard
-summaries showed approximately $38.43 total including auxiliary/post-processing
-work while the persisted JSONL artifacts contain $30.89 of scan cost. Until
-the artifact format preserves that auxiliary usage exactly, the table uses the
-persisted JSONL cost and the run note records the gap.
-
-Treat duration as an operational measurement, not a stable model quality
-metric. P50 and P90 come from per-analysis-chunk `durationMs` records in the
-raw JSONL artifacts when those artifacts are available. Total is included as
-operational context, but it is flaky: it includes post-analysis work such as
-finding verification, upstream provider latency, queueing, retries, and
-transient service reliability. That matters most when comparing the same model
-across different runtimes.
-
-Treat cost the same way. It is useful for operating Warden, but it is not a
-normalized model-efficiency metric. Provider defaults, runtime defaults,
-explicit reasoning effort, cache behavior, output verbosity, retries, runtime
-accounting, and Warden's finding verifier can all move the total even when the
-corpus and target files are identical.
-
-Pi runs without an explicit Warden `--effort` use Pi's default thinking level,
-which is currently medium.
+The GPT 5.5 run used Pi/OpenAI's default behavior. No explicit reasoning level
+was configured in `warden.toml` or the CLI.
 
 ## Current Takeaway
 
-In the current agent-verified rows, GPT 5.5 on Pi with explicit high effort
-found 41 of 86. Sonnet 4.6 found 23 of 86 through the Claude SDK, and Opus 4.6
-on Pi with explicit high effort also found 23 of 86. Opus 4.8 found 16 of 86 on
-Pi at Pi's default level, 14 of 86 on Pi with explicit high effort,
-and 17 of 86 through the Claude SDK. Opus 4.7 on Pi found 6 of 86 at Pi's
-default level.
+GPT 5.5 found 46 of 86 known corpus vulnerabilities. Sonnet 4.6 found 23 of
+86. GPT 5.5 also emitted more total findings and cost substantially more.
 
 Use those numbers as a relative comparison for this corpus. They are not a
 general pass rate for Sentry.

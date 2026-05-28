@@ -6,7 +6,7 @@
   "skill": "@sentry/warden:security-review@0.34.0",
   "model": "anthropic/claude-sonnet-4-6",
   "runtime": "pi",
-  "reasoningLevel": "pi-default-medium",
+  "reasoningLevel": "provider-default",
   "reportOn": "low",
   "minConfidence": "low",
   "targetMode": "all-corpus-files-by-sha",
@@ -136,18 +136,6 @@
     "auxiliaryCostUSD": 0.131235,
     "costUSD": 14.56209735
   },
-  "timing": {
-    "shardWallMs": {
-      "source": "result-shard-durationMs",
-      "total": 3363010,
-      "count": 6,
-      "p50": 319874,
-      "p75": 944826,
-      "p90": 1179658,
-      "p95": 1203772,
-      "max": 1227886
-    }
-  },
   "auxiliaryUsage": {
     "extraction": {
       "inputTokens": 5622,
@@ -155,5 +143,16 @@
       "costUSD": 0.131235
     }
   },
-  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. The previous manual score was removed pending agent-verified semantic rescoring from raw findings."
+  "scoring": {
+    "reviewer": "manual-root-cause-pass",
+    "scoredAt": "2026-05-28",
+    "knownFindingCount": 86,
+    "knownFound": 23,
+    "knownMissed": 63,
+    "knownPartial": 0,
+    "knownFoundRate": 0.2674,
+    "notes": "Counts corpus entries where the run identified the same root cause. Raw findings may include unexpected findings and duplicates."
+  },
+  "scores": [],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository."
 }

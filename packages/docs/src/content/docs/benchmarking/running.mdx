@@ -18,31 +18,23 @@ comparison against known vulnerable files.
 
 ## Setup
 
-Clone Sentry and pick a runtime/model pair:
+Clone Sentry and pick a model:
 
 ```bash
 git clone git@github.com:getsentry/sentry.git /tmp/sentry-benchmark
 
 export BENCH_MODEL="openai/gpt-5.5"
 export BENCH_MODEL_SLUG="gpt-5-5"
-export BENCH_RUNTIME="pi"
-export BENCH_RUNTIME_SLUG="pi"
-export BENCH_EFFORT="high"
-export BENCH_RUN_SLUG="pi-gpt-5-5-high"
-export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_RUN_SLUG}"
+export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_MODEL_SLUG}"
 mkdir -p "$BENCH_ROOT"
 ```
 
 Set the provider API key required by the model. For GPT 5.5 through Pi, set
 `WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
-For the Claude SDK runtime, use Claude Code model IDs such as
-`claude-sonnet-4-6` instead of Pi provider/model selectors.
 
-The older GPT 5.5 run used `openai/gpt-5.5`. The installed Pi registry did not
-expose `openai/gpt-5.5-codex`. It did not pass an explicit effort flag, so the
-run used the runtime/provider default. New benchmark runs should pass
-`--effort high` or `--effort low` when testing reasoning behavior, and omit
-`--effort` only when intentionally measuring the runtime default.
+The GPT 5.5 run used `openai/gpt-5.5`. The installed Pi registry did not expose
+`openai/gpt-5.5-codex`. No explicit reasoning level was configured, so the run
+used Pi/OpenAI's default model behavior.
 
 ## Target Lists
 
@@ -91,19 +83,20 @@ The current corpus produces 79 target files across 6 commits.
 
 ## Warden Config
 
-Write the config outside the Sentry checkout. Keep runtime, model, and effort
-explicit on the CLI so the invocation captures the run shape. The config keeps
-the benchmark skill, thresholds, concurrency, and verifier policy stable.
+Write the config outside the Sentry checkout. Warden config can override CLI
+model selection, so make the model explicit in this file and keep one benchmark
+workspace per model.
 
 ```bash
 cat > "$BENCH_ROOT/warden.toml" <<EOF
 version = 1
 
 [defaults]
+runtime = "pi"
 reportOn = "low"
 
-[defaults.verification]
-enabled = true
+[defaults.agent]
+model = "$BENCH_MODEL"
 
 [runner]
 concurrency = 4
@@ -118,11 +111,6 @@ EOF
 Run from the Warden repository:
 
 ```bash
-effort_args=()
-if [ -n "${BENCH_EFFORT:-}" ]; then
-  effort_args=(--effort "$BENCH_EFFORT")
-fi
-
 for target in "$BENCH_ROOT"/targets-*.txt; do
   sha=${target##*/targets-}
   sha=${sha%.txt}
@@ -134,15 +122,12 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
     -C /tmp/sentry-benchmark \
     @"$target" \
     --skill security-review \
-    --config-path "$BENCH_ROOT/warden.toml" \
-    --runtime "$BENCH_RUNTIME" \
+    --config "$BENCH_ROOT/warden.toml" \
     --model "$BENCH_MODEL" \
-    "${effort_args[@]}" \
-    --traces \
     --report-on low \
     --min-confidence low \
     --parallel 4 \
-    -o "$BENCH_ROOT/sentry-security-review-${BENCH_RUN_SLUG}-corpus-${short}.jsonl" \
+    -o "$BENCH_ROOT/sentry-security-review-pi-${BENCH_MODEL_SLUG}-corpus-${short}.jsonl" \
     -v \
     --log
 done
@@ -151,7 +136,7 @@ done
 Inspect the stitched output:
 
 ```bash
-pnpm cli -- runs show "$BENCH_ROOT"/sentry-security-review-"$BENCH_RUN_SLUG"-corpus-*.jsonl \
+pnpm cli -- runs show "$BENCH_ROOT"/sentry-security-review-pi-"$BENCH_MODEL_SLUG"-corpus-*.jsonl \
   -C /tmp/sentry-benchmark \
   --report-on low \
   --min-confidence low
@@ -174,60 +159,17 @@ Record:
 - skill
 - model
 - runtime
-- effort level, or `provider-default`
-- whether Warden's post-analysis finding verifier was enabled
-- whether `--traces` was enabled, plus any run-level trace IDs preserved in
-  the JSONL metadata
+- reasoning level, or `provider-default`
 - report and confidence thresholds
 - one shard per corpus commit, including SHA, target list, raw JSONL artifact
   name, and raw artifact review status
 - total files, chunks, failed chunks, findings, cost, duration, and tokens
-- `timing.analysisChunkMs` from top-level per-record `durationMs` values in
-  the raw JSONL artifacts, when all raw shard artifacts are available
-- total wall duration from the stitched run summary
 - scoring summary once a reviewer matches findings back to the corpus
-
-Warden's finding verifier is enabled by default. Benchmark runs should leave it
-enabled unless they are deliberately testing verifier-off behavior. It is
-disabled only when `defaults.verification.enabled = false` is set in
-`warden.toml`. Record this as `findingVerification.enabled` in the result JSON.
-
-Verifier calls are part of Warden's analysis pipeline, not benchmark scoring.
-They can add provider cost, and runs with more candidate findings generally do
-more verifier work. Keep this separate from the benchmark `scores` field, which
-is the later semantic match against the corpus.
-
-The timing breakdown has the same separation. Per-chunk P50 and P90 timing is
-recorded before Warden's post-analysis verifier runs. Total timing includes
-post-analysis work and upstream provider latency, so treat it as flaky
-operational context rather than a stable comparison metric.
 
 ## Score
 
-Score by agent-verified semantic match, not exact wording or line number. A
-result counts as found when it identifies the same bug in roughly the same
-location as an existing corpus finding.
-
-This is not deterministic. An agent reviews every emitted finding against the
-existing corpus findings for that commit. Same-file findings about different
-bugs do not count. One emitted finding may count for multiple corpus entries
-when it clearly covers the same bug represented by multiple existing entries.
-Duplicate emitted findings do not double-count the same corpus entry.
-
-Use this scoring checklist:
-
-- Read every emitted finding from the raw JSONL shards for the run.
-- For each finding, compare it against corpus entries from the same commit.
-- Use same path and nearby line range as the first candidate filter, but make
-  the final decision semantically.
-- Count `known-found` only when the finding would lead a reviewer to the same
-  bug in roughly the same code location.
-- Mark same-file findings about different bugs as `not-known`.
-- Record one `scores` entry for every emitted finding, including non-matches.
-- Set `scoring.knownFound` to the number of unique matched corpus entries, not
-  the number of emitted findings.
-- Leave the run unscored when the raw findings are missing or cannot be
-  semantically verified.
+Score by root cause, not exact wording or line number. A result counts as found
+when it points a reviewer to the same vulnerability with enough detail to act.
 
 Keep the distinction clear:
 
