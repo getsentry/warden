@@ -3,7 +3,7 @@ type HelpOptionId =
   | 'help'
   | 'version'
   | 'skill'
-  | 'config'
+  | 'configPath'
   | 'model'
   | 'json'
   | 'output'
@@ -87,9 +87,9 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
     label: '--skill <name|path>',
     description: 'Run only this skill by name or path; names fall back to built-ins',
   },
-  config: {
-    label: '--config <path>',
-    description: 'Path to warden.toml',
+  configPath: {
+    label: '--config-path <path>',
+    description: 'Path to warden.toml (--config is a deprecated alias)',
   },
   model: {
     label: '-m, --model <model>',
@@ -234,7 +234,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     options: [
       'cwd',
       'skill',
-      'config',
+      'configPath',
       'model',
       'json',
       'output',
@@ -306,7 +306,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     ],
     options: [
       'cwd',
-      'config',
+      'configPath',
       'model',
       'json',
       'regenerate',
@@ -331,7 +331,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     ],
     options: [
       'cwd',
-      'config',
+      'configPath',
       'model',
       'json',
       'prompt',

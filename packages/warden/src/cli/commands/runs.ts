@@ -1,7 +1,7 @@
 import { existsSync, openSync, closeSync, fstatSync, readSync, readdirSync, readFileSync, unlinkSync, watch } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import chalk from 'chalk';
-import { loadWardenConfig } from '../../config/loader.js';
+import { loadWardenConfigFile } from '../../config/loader.js';
 import { isExtractionErrorCode, type ConfidenceThreshold, type Severity, type SkillReport } from '../../types/index.js';
 import type { CLIOptions, RunsOptions } from '../args.js';
 import { getRepoRoot } from '../git.js';
@@ -468,7 +468,7 @@ export async function runRunsShow(
     try {
       const configPath = resolve(resolved.repoPath, 'warden.toml');
       if (existsSync(configPath)) {
-        const config = loadWardenConfig(dirname(configPath));
+        const config = loadWardenConfigFile(configPath);
         configMinConfidence = config.defaults?.minConfidence;
       }
     } catch {
@@ -519,7 +519,7 @@ export async function runRunsGc(_options: CLIOptions, reporter: Reporter): Promi
   try {
     const configPath = resolve(repoPath, 'warden.toml');
     if (existsSync(configPath)) {
-      const config = loadWardenConfig(dirname(configPath));
+      const config = loadWardenConfigFile(configPath);
       retentionDays = config.logs?.retentionDays ?? 30;
     }
   } catch {

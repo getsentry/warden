@@ -11,7 +11,7 @@ export const CLIOptionsSchema = z.object({
   targets: z.array(z.string()).optional(),
   skill: z.string().optional(),
   cwd: z.string().optional(),
-  config: z.string().optional(),
+  configPath: z.string().optional(),
   json: z.boolean().default(false),
   /** Write full run output to a JSONL file */
   output: z.string().optional(),
@@ -308,7 +308,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     options: {
       cwd: { type: 'string', short: 'C' },
       skill: { type: 'string' },
-      config: { type: 'string' },
+      'config-path': { type: 'string' },
+      config: { type: 'string' }, // deprecated alias for --config-path
       model: { type: 'string', short: 'm' },
       json: { type: 'boolean', default: false },
       output: { type: 'string', short: 'o' },
@@ -420,7 +421,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       options: parseCliOptions({
         ...sharedOptions(values, verboseCount),
         skill: typeof values.skill === 'string' ? values.skill : rest[0],
-        config: typeof values.config === 'string' ? values.config : undefined,
+        configPath: typeof values['config-path'] === 'string' ? values['config-path'] :
+          typeof values.config === 'string' ? values.config : undefined,
         model: typeof values.model === 'string' ? values.model : undefined,
         json: Boolean(values.json),
         regenerate: Boolean(values.regenerate),
@@ -437,7 +439,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       options: parseCliOptions({
         ...sharedOptions(values, verboseCount),
         skill: typeof values.skill === 'string' ? values.skill : rest[0],
-        config: typeof values.config === 'string' ? values.config : undefined,
+        configPath: typeof values['config-path'] === 'string' ? values['config-path'] :
+          typeof values.config === 'string' ? values.config : undefined,
         model: typeof values.model === 'string' ? values.model : undefined,
         json: Boolean(values.json),
         regenerate: true,
@@ -505,7 +508,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       ...sharedOptions(values, verboseCount),
       targets: targets.length > 0 ? targets : undefined,
       skill: typeof values.skill === 'string' ? values.skill : undefined,
-      config: typeof values.config === 'string' ? values.config : undefined,
+      configPath: typeof values['config-path'] === 'string' ? values['config-path'] :
+        typeof values.config === 'string' ? values.config : undefined,
       model: typeof values.model === 'string' ? values.model : undefined,
       json: Boolean(values.json),
       output: typeof values.output === 'string' ? values.output : undefined,

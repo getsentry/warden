@@ -77,9 +77,19 @@ describe('parseCliArgs', () => {
     expect(result.options.skill).toBe('security-review');
   });
 
-  it('parses --config option', () => {
+  it('parses --config-path option', () => {
+    const result = parseCliArgs(['--config-path', './custom.toml']);
+    expect(result.options.configPath).toBe('./custom.toml');
+  });
+
+  it('parses --config as deprecated alias for --config-path', () => {
     const result = parseCliArgs(['--config', './custom.toml']);
-    expect(result.options.config).toBe('./custom.toml');
+    expect(result.options.configPath).toBe('./custom.toml');
+  });
+
+  it('--config-path takes precedence over --config when both given', () => {
+    const result = parseCliArgs(['--config-path', './primary.toml', '--config', './secondary.toml']);
+    expect(result.options.configPath).toBe('./primary.toml');
   });
 
   it('parses -C/--cwd option', () => {

@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import chalk from 'chalk';
 import { emptyToUndefined, loadWardenConfigFile } from '../../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../../config/schema.js';
@@ -305,13 +305,21 @@ async function runGeneratedSkillCommand(
     return 1;
   }
 
-  const configPath = options.config
-    ? resolve(process.cwd(), options.config)
-    : resolve(repoRoot, 'warden.toml');
+  let configPath: string;
+  if (options.configPath) {
+    const p = resolve(process.cwd(), options.configPath);
+    try {
+      configPath = statSync(p).isDirectory() ? join(p, 'warden.toml') : p;
+    } catch {
+      configPath = p;
+    }
+  } else {
+    configPath = resolve(repoRoot, 'warden.toml');
+  }
   let config: WardenConfig | undefined;
   if (existsSync(configPath)) {
     config = loadWardenConfigFile(configPath);
-  } else if (options.config) {
+  } else if (options.configPath) {
     reporter.error(`Configuration file not found: ${configPath}`);
     return 1;
   }

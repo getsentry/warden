@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId } from '../sentry.js';
-import { emptyToUndefined, loadWardenConfig, resolveSkillConfigs } from '../config/loader.js';
+import { emptyToUndefined, loadWardenConfigFile, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../config/schema.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import {
@@ -112,8 +112,14 @@ export function resolveInvocationCwd(baseCwd: string, cliCwd: string | undefined
 }
 
 function resolveConfigPath(options: CLIOptions, repoPath: string): string {
-  const cwd = process.cwd();
-  return options.config ? resolve(cwd, options.config) : resolve(repoPath, 'warden.toml');
+  if (!options.configPath) return resolve(repoPath, 'warden.toml');
+  const p = resolve(process.cwd(), options.configPath);
+  try {
+    if (statSync(p).isDirectory()) return join(p, 'warden.toml');
+  } catch {
+    // Path doesn't exist or isn't accessible — treat as direct file path
+  }
+  return p;
 }
 
 function resolveLocalReviewBase(configDefaultBranch: string | undefined, repoPath: string): {
@@ -936,15 +942,20 @@ export async function runSkills(
 
   // Resolve config path
   let configPath: string | null = null;
-  if (options.config) {
-    configPath = resolve(cwd, options.config);
+  if (options.configPath) {
+    const p = resolve(cwd, options.configPath);
+    try {
+      configPath = statSync(p).isDirectory() ? join(p, 'warden.toml') : p;
+    } catch {
+      configPath = p;
+    }
   } else if (repoPath) {
     configPath = resolve(repoPath, 'warden.toml');
   }
 
   // Load config if available
   const config = configPath && existsSync(configPath)
-    ? loadWardenConfig(dirname(configPath))
+    ? loadWardenConfigFile(configPath)
     : null;
   const defaultModel = resolveCliDefaultModel(config, options.model);
   const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
@@ -1205,7 +1216,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
 
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
-  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
+  const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
 
   // Build context from local git
   reporter.startContext(`Analyzing changes from ${gitRef}...`);
@@ -1259,7 +1270,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   // Load config
-  const config = loadWardenConfig(dirname(configPath));
+  const config = loadWardenConfigFile(configPath);
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -1467,7 +1478,7 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
 
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
-  const config = existsSync(configPath) ? loadWardenConfig(dirname(configPath)) : null;
+  const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -1659,7 +1670,7 @@ export async function main(): Promise<void> {
       cleanupRoot = cwd;
     }
     const cfgPath = resolve(cleanupRoot, 'warden.toml');
-    const cfg = existsSync(cfgPath) ? loadWardenConfig(dirname(cfgPath)) : undefined;
+    const cfg = existsSync(cfgPath) ? loadWardenConfigFile(cfgPath) : undefined;
     await cleanupArtifacts({
       dir: join(cleanupRoot, '.warden', 'logs'),
       retentionDays: cfg?.logs?.retentionDays ?? 30,
