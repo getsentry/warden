@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
 import chalk from 'chalk';
 import { emptyToUndefined, loadWardenConfigFile } from '../../config/loader.js';
 import type { SkillDefinition, WardenConfig } from '../../config/schema.js';
@@ -9,6 +9,7 @@ import type { Reporter } from '../output/reporter.js';
 import { formatBytes, formatCost, formatDuration, formatTokens } from '../output/formatters.js';
 import { runWithLiveStatus } from '../output/live-status.js';
 import { getAnthropicApiKey } from '../../utils/index.js';
+import { resolveConfigInput } from '../../utils/path.js';
 import { promptLine, promptMultiline } from '../input.js';
 import { getRepoRoot } from '../git.js';
 import {
@@ -305,17 +306,9 @@ async function runGeneratedSkillCommand(
     return 1;
   }
 
-  let configPath: string;
-  if (options.configPath) {
-    const p = resolve(process.cwd(), options.configPath);
-    try {
-      configPath = statSync(p).isDirectory() ? join(p, 'warden.toml') : p;
-    } catch {
-      configPath = p;
-    }
-  } else {
-    configPath = resolve(repoRoot, 'warden.toml');
-  }
+  const configPath = options.configPath
+    ? resolveConfigInput(options.configPath)
+    : resolve(repoRoot, 'warden.toml');
   let config: WardenConfig | undefined;
   if (existsSync(configPath)) {
     config = loadWardenConfigFile(configPath);

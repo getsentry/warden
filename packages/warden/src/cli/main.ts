@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId } from '../sentry.js';
@@ -17,7 +17,7 @@ import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove 
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
-import { isRepoRelativePath, normalizePath } from '../utils/path.js';
+import { isRepoRelativePath, normalizePath, resolveConfigInput } from '../utils/path.js';
 import { parseCliArgs, showVersion, classifyTargets, expandTargetFileReferences, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
@@ -109,21 +109,6 @@ function createReporter(options: CLIOptions): Reporter {
 /** Resolve the directory Warden should treat as the invocation root. */
 export function resolveInvocationCwd(baseCwd: string, cliCwd: string | undefined): string {
   return cliCwd ? resolve(baseCwd, cliCwd) : baseCwd;
-}
-
-/**
- * Resolve a user-supplied config input string to the absolute path of a
- * warden.toml file. If the resolved path is a directory, appends warden.toml;
- * otherwise treats it as a direct file path.
- */
-function resolveConfigInput(input: string): string {
-  const p = resolve(process.cwd(), input);
-  try {
-    if (statSync(p).isDirectory()) return join(p, 'warden.toml');
-  } catch {
-    // Path doesn't exist or isn't accessible — treat as direct file path
-  }
-  return p;
 }
 
 function resolveConfigPath(options: CLIOptions, repoPath: string): string {
