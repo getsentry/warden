@@ -20,6 +20,7 @@ import {
   prepareRuntimeEnvironment,
   writeFindingsOutput,
 } from './base.js';
+import { FindingsOutputSchema } from '../reporting/output.js';
 
 const mockExecFile = vi.mocked(execFileNonInteractive);
 const mockExec = vi.mocked(execNonInteractive);
@@ -81,11 +82,7 @@ describe('findings output', () => {
       'findings-file=warden-findings.json\n'
     );
 
-    const payload = JSON.parse(readFileSync(filePath, 'utf-8')) as {
-      summary: { totalFindings: number };
-      skills: { findings: { sourceSnippet?: unknown }[] }[];
-      findingObservations: unknown[];
-    };
+    const payload = FindingsOutputSchema.parse(JSON.parse(readFileSync(filePath, 'utf-8')));
     expect(payload.summary.totalFindings).toBe(1);
     expect(payload.skills[0]?.findings[0]?.sourceSnippet).toEqual({
       path: 'src/index.ts',

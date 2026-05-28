@@ -107,7 +107,9 @@ async function runScheduleWorkflowInner(
           repository: { owner: o, name: n, fullName, defaultBranch: '' },
           repoPath,
         });
-      } catch { /* non-fatal */ }
+      } catch (writeError) {
+        console.error(`::warning::Failed to write findings output: ${writeError}`);
+      }
       return;
     }
     throw error;
@@ -136,7 +138,9 @@ async function runScheduleWorkflowInner(
         repository: { owner: o, name: n, fullName, defaultBranch: '' },
         repoPath,
       });
-    } catch { /* non-fatal */ }
+    } catch (writeError) {
+      console.error(`::warning::Failed to write findings output: ${writeError}`);
+    }
     return;
   }
 

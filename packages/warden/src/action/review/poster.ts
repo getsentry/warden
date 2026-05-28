@@ -244,6 +244,8 @@ export async function postTriggerReview(
     return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
   }
 
+  let findingsToMarkFailed = filteredFindings;
+
   try {
     // Cross-location merging already happened in runSkillTask().
     // Consolidate findings within this batch (intra-batch dedup).
@@ -260,6 +262,7 @@ export async function postTriggerReview(
         agentName: result.report.skill,
       });
       findingsToPost = consolidateResult.findings;
+      findingsToMarkFailed = findingsToPost;
 
       if (consolidateResult.usage) {
         const consolidateAux = { consolidate: consolidateResult.usage };
@@ -286,6 +289,7 @@ export async function postTriggerReview(
       });
       result.report.findings = recenterReportFindingIds(result.report.findings, dedupResult.duplicateActions);
       findingsToPost = dedupResult.newFindings;
+      findingsToMarkFailed = findingsToPost;
       findingObservations.push(...buildDedupeObservations(dedupResult.duplicateActions, result.report.skill));
 
       // Merge dedup usage into the report's auxiliary usage
@@ -407,7 +411,7 @@ export async function postTriggerReview(
       activeWardenCommentIds,
       findingObservations: [
         ...findingObservations,
-        ...filteredFindings.map((finding) => ({ outcome: 'failed' as const, finding, skill: result.report?.skill })),
+        ...findingsToMarkFailed.map((finding) => ({ outcome: 'failed' as const, finding, skill: result.report?.skill })),
       ],
       shouldFail: false,
     };

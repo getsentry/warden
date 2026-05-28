@@ -13,6 +13,7 @@ import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js'
 import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
+import { buildFindingsOutput } from '../reporting/output.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
@@ -376,57 +377,7 @@ export function writeFindingsOutput(
   findingObservations: FindingObservation[] = []
 ): string {
   const filePath = getFindingsOutputPath(context.repoPath);
-  const allFindings = reports.flatMap((r) => r.findings);
-
-  const output = {
-    version: '1',
-    timestamp: new Date().toISOString(),
-    repository: {
-      owner: context.repository.owner,
-      name: context.repository.name,
-      fullName: context.repository.fullName,
-    },
-    event: context.eventType,
-    ...(context.pullRequest && {
-      pullRequest: {
-        number: context.pullRequest.number,
-        author: context.pullRequest.author,
-        title: context.pullRequest.title,
-        baseBranch: context.pullRequest.baseBranch,
-        headBranch: context.pullRequest.headBranch,
-        headSha: context.pullRequest.headSha,
-      },
-    }),
-    runId: process.env['GITHUB_RUN_ID'] ?? '',
-    summary: {
-      totalFindings: allFindings.length,
-      findingsBySeverity: {
-        high: allFindings.filter((f) => f.severity === 'high').length,
-        medium: allFindings.filter((f) => f.severity === 'medium').length,
-        low: allFindings.filter((f) => f.severity === 'low').length,
-      },
-      totalSkills: reports.length,
-    },
-    skills: reports.map((r) => ({
-      name: r.skill,
-      summary: r.summary,
-      model: r.model,
-      durationMs: r.durationMs,
-      usage: r.usage,
-      findings: r.findings.map((f) => ({
-        id: f.id,
-        severity: f.severity,
-        confidence: f.confidence,
-        title: f.title,
-        description: f.description,
-        location: f.location,
-        additionalLocations: f.additionalLocations,
-        suggestedFix: f.suggestedFix,
-        sourceSnippet: f.sourceSnippet,
-      })),
-    })),
-    findingObservations,
-  };
+  const output = buildFindingsOutput(reports, context, findingObservations);
 
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, JSON.stringify(output, null, 2));

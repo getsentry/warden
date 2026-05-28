@@ -251,6 +251,72 @@ describe('postTriggerReview', () => {
     ]);
   });
 
+  it('does not mark deduped findings as failed when later duplicate handling errors', async () => {
+    const duplicateFinding = createFinding({ id: 'duplicate-finding' });
+    const newFinding = createFinding({ id: 'new-finding', location: { path: 'test.ts', startLine: 20 } });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 2 issues',
+        findings: [duplicateFinding, newFinding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [
+            { path: 'test.ts', line: 10, body: 'Duplicate comment' },
+            { path: 'test.ts', line: 20, body: 'New comment' },
+          ],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    const existingComment = createExistingComment({
+      isWarden: false,
+      actor: 'coderabbitai',
+      threadId: 'thread-1',
+    });
+    const duplicateAction = {
+      type: 'react_external' as const,
+      originalFindingId: duplicateFinding.id,
+      finding: duplicateFinding,
+      existingComment,
+      matchType: 'hash' as const,
+    };
+
+    vi.mocked(deduplicateFindings).mockResolvedValue({
+      newFindings: [newFinding],
+      duplicateActions: [duplicateAction],
+    });
+    vi.mocked(processDuplicateActions).mockRejectedValue(new Error('Duplicate action failed'));
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [existingComment],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(postResult.findingObservations).toEqual([
+      expect.objectContaining({
+        outcome: 'deduped',
+        finding: duplicateFinding,
+        skill: 'test-skill',
+      }),
+      {
+        outcome: 'failed',
+        finding: newFinding,
+        skill: 'test-skill',
+      },
+    ]);
+  });
+
   it('posts REQUEST_CHANGES when all findings deduplicated but failOn threshold met', async () => {
     const finding = createFinding({ severity: 'high' });
     const result: TriggerResult = {

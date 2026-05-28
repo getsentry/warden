@@ -1052,7 +1052,11 @@ export async function runPRWorkflow(
         setOutput('findings-count', 0);
         setOutput('high-count', 0);
         setOutput('summary', skipCoreCheck.title);
-        try { writeFindingsOutput([], context); } catch { /* non-fatal */ }
+        try {
+          writeFindingsOutput([], context);
+        } catch (error) {
+          warnAction(`Failed to write findings output: ${error}`);
+        }
         await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck);
         return;
       }
@@ -1068,7 +1072,11 @@ export async function runPRWorkflow(
           setOutput('findings-count', 0);
           setOutput('high-count', 0);
           setOutput('summary', 'No triggers matched');
-          try { writeFindingsOutput([], context); } catch { /* non-fatal */ }
+          try {
+            writeFindingsOutput([], context);
+          } catch (error) {
+            warnAction(`Failed to write findings output: ${error}`);
+          }
           await completeSkippedCoreCheck(octokit, context, coreCheckId, {
             title: 'No triggers matched',
             message: 'No triggers matched for this event.',
