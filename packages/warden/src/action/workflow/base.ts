@@ -12,6 +12,7 @@ import type { Octokit } from '@octokit/rest';
 import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
+import type { FindingObservation } from '../reporting/outcomes.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
@@ -371,7 +372,8 @@ export function getFindingsOutputPath(repoPath?: string): string {
  */
 export function writeFindingsOutput(
   reports: SkillReport[],
-  context: EventContext
+  context: EventContext,
+  findingObservations: FindingObservation[] = []
 ): string {
   const filePath = getFindingsOutputPath(context.repoPath);
   const allFindings = reports.flatMap((r) => r.findings);
@@ -420,8 +422,10 @@ export function writeFindingsOutput(
         location: f.location,
         additionalLocations: f.additionalLocations,
         suggestedFix: f.suggestedFix,
+        sourceSnippet: f.sourceSnippet,
       })),
     })),
+    findingObservations,
   };
 
   mkdirSync(dirname(filePath), { recursive: true });

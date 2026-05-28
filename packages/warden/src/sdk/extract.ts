@@ -14,6 +14,8 @@ import {
   joinPromptSections,
 } from './prompt-sections.js';
 
+const ExtractedFindingSchema = FindingSchema.omit({ sourceSnippet: true });
+
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
 
@@ -270,26 +272,34 @@ export function generateShortId(): string {
 
 /**
  * Validate and normalize findings from extracted JSON.
- * Replaces the LLM-provided ID with a short nanoid for stable cross-referencing.
+ * Replaces the LLM-provided ID with a short ID for cross-referencing.
  */
 export function validateFindings(findings: unknown[], filename: string): Finding[] {
   const validated: Finding[] = [];
 
   for (const f of findings) {
+    const candidate = typeof f === 'object' && f !== null
+      ? { ...(f as Record<string, unknown>) }
+      : f;
+
     // Normalize location path before validation
-    if (typeof f === 'object' && f !== null && 'location' in f) {
-      const loc = (f as Record<string, unknown>)['location'];
+    if (typeof candidate === 'object' && candidate !== null && 'location' in candidate) {
+      const loc = (candidate as Record<string, unknown>)['location'];
       if (loc && typeof loc === 'object') {
-        (loc as Record<string, unknown>)['path'] = filename;
+        (candidate as Record<string, unknown>)['location'] = {
+          ...(loc as Record<string, unknown>),
+          path: filename,
+        };
       }
     }
 
-    const result = FindingSchema.safeParse(f);
+    const result = ExtractedFindingSchema.safeParse(candidate);
     if (result.success) {
+      const location = result.data.location ? { ...result.data.location, path: filename } : undefined;
       validated.push({
         ...result.data,
         id: generateShortId(),
-        location: result.data.location ? { ...result.data.location, path: filename } : undefined,
+        location,
       });
     }
   }

@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Octokit } from '@octokit/rest';
 import {
   generateContentHash,
+  generateFindingMetadata,
   generateMarker,
+  parseWardenFindingMetadata,
   parseMarker,
   parseWardenComment,
   parseWardenFindingId,
@@ -233,6 +235,7 @@ User input reaches a query.
                       path: 'src/db.ts',
                       line: 42,
                       originalLine: 40,
+                      author: { login: 'warden-bot' },
                     },
                   ],
                 },
@@ -259,6 +262,7 @@ User input reaches a query.
       isWarden: true,
       skills: ['security-review'],
       threadId: 'thread-1',
+      actor: 'warden-bot',
     });
   });
 });
@@ -310,6 +314,7 @@ describe('deduplicateFindings', () => {
         description: 'User input passed to query',
         contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
         isWarden: true,
+        findingId: 'WRZ-XPL',
       },
     ];
 
@@ -318,6 +323,7 @@ describe('deduplicateFindings', () => {
     expect(result.duplicateActions).toHaveLength(1);
     expect(result.duplicateActions[0]!.type).toBe('update_warden');
     expect(result.duplicateActions[0]!.matchType).toBe('hash');
+    expect(result.duplicateActions[0]!.finding.id).toBe('WRZ-XPL');
   });
 
   it('keeps findings with different content', async () => {
@@ -688,6 +694,7 @@ describe('findingToExistingComment', () => {
       contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
       isWarden: true,
       skills: [],
+      severity: 'high',
     });
   });
 
@@ -756,6 +763,18 @@ ${marker}`;
 
     const parsed = parseMarker(body);
     expect(parsed).toEqual({ path, line, contentHash: hash });
+  });
+});
+
+describe('finding metadata', () => {
+  it('round-trips severity and confidence from hidden metadata', () => {
+    const metadata = generateFindingMetadata({ severity: 'high', confidence: 'medium' });
+    const body = `**Issue**\n\nDetails\n${metadata}`;
+
+    expect(parseWardenFindingMetadata(body)).toEqual({
+      severity: 'high',
+      confidence: 'medium',
+    });
   });
 });
 

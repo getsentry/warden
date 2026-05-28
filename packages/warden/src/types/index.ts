@@ -101,6 +101,24 @@ export const SuggestedFixSchema = z.object({
 });
 export type SuggestedFix = z.infer<typeof SuggestedFixSchema>;
 
+export const SourceSnippetLineSchema = z.object({
+  line: z.number().int().positive(),
+  content: z.string(),
+  highlighted: z.boolean().optional(),
+});
+export type SourceSnippetLine = z.infer<typeof SourceSnippetLineSchema>;
+
+export const SourceSnippetSchema = z.object({
+  path: z.string(),
+  language: z.string().optional(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  targetStartLine: z.number().int().positive(),
+  targetEndLine: z.number().int().positive(),
+  lines: z.array(SourceSnippetLineSchema),
+});
+export type SourceSnippet = z.infer<typeof SourceSnippetSchema>;
+
 // Individual finding from a skill
 export const FindingSchema = z.object({
   id: z.string(),
@@ -112,6 +130,7 @@ export const FindingSchema = z.object({
   location: LocationSchema.optional(),
   additionalLocations: z.array(LocationSchema).optional(),
   suggestedFix: SuggestedFixSchema.optional(),
+  sourceSnippet: SourceSnippetSchema.optional(),
   elapsedMs: z.number().nonnegative().optional(),
 });
 export type Finding = z.infer<typeof FindingSchema>;

@@ -321,6 +321,7 @@ describe('runPRWorkflow', () => {
         duplicateActions: [
           {
             type: 'react_external',
+            originalFindingId: finding.id,
             finding,
             existingComment: {
               id: 1,
@@ -1148,6 +1149,7 @@ describe('runPRWorkflow', () => {
         duplicateActions: [
           {
             type: 'update_warden',
+            originalFindingId: finding.id,
             finding,
             existingComment,
             matchType: 'semantic',

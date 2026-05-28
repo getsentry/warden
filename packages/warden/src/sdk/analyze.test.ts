@@ -3,7 +3,7 @@ import { APIError } from '@anthropic-ai/sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { HunkWithContext } from '../diff/index.js';
 import type { EventContext, Finding, UsageStats } from '../types/index.js';
-import { analyzeFile, filterOutOfRangeFindings, runSkill } from './analyze.js';
+import { analyzeFile, buildSourceSnippet, filterOutOfRangeFindings, runSkill } from './analyze.js';
 import type { PreparedFile } from './types.js';
 import { getRuntime, type Runtime } from './runtimes/index.js';
 import { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
@@ -224,6 +224,50 @@ describe('filterOutOfRangeFindings', () => {
     const { filtered, dropped } = filterOutOfRangeFindings([], hunkRange);
     expect(filtered).toEqual([]);
     expect(dropped).toEqual([]);
+  });
+});
+
+describe('buildSourceSnippet', () => {
+  it('captures the target line and surrounding reviewed context', () => {
+    const hunk: HunkWithContext = {
+      filename: 'src/example.ts',
+      hunk: {
+        oldStart: 10,
+        oldCount: 3,
+        newStart: 10,
+        newCount: 4,
+        content: '@@ -10,3 +10,4 @@\n const before = true;\n-oldCall();\n+newCall(userInput);\n+audit();\n const after = true;',
+        lines: [
+          ' const before = true;',
+          '-oldCall();',
+          '+newCall(userInput);',
+          '+audit();',
+          ' const after = true;',
+        ],
+      },
+      contextBefore: ['function release() {', '  const userInput = title;'],
+      contextAfter: ['  return true;', '}'],
+      contextStartLine: 8,
+      language: 'typescript',
+    };
+
+    const snippet = buildSourceSnippet(makeFinding(11), hunk, 2);
+
+    expect(snippet).toEqual({
+      path: 'file.ts',
+      language: 'typescript',
+      startLine: 9,
+      endLine: 13,
+      targetStartLine: 11,
+      targetEndLine: 11,
+      lines: [
+        { line: 9, content: '  const userInput = title;', highlighted: false },
+        { line: 10, content: 'const before = true;', highlighted: false },
+        { line: 11, content: 'newCall(userInput);', highlighted: true },
+        { line: 12, content: 'audit();', highlighted: false },
+        { line: 13, content: 'const after = true;', highlighted: false },
+      ],
+    });
   });
 });
 

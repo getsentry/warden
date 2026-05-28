@@ -38,6 +38,7 @@ import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
+import type { FindingObservation } from '../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
@@ -89,6 +90,7 @@ interface ReviewPhaseResult {
   fetchedComments: ExistingComment[];
   existingComments: ExistingComment[];
   activeWardenCommentIds: Set<number>;
+  findingObservations: FindingObservation[];
   shouldFailAction: boolean;
   failureReasons: string[];
 }
@@ -102,6 +104,25 @@ interface AuxiliaryWorkflowOptions {
 interface SkippedCoreCheck {
   title: string;
   message: string;
+}
+
+function existingCommentToFinding(comment: ExistingComment): Finding {
+  const location = comment.path && comment.line > 0
+    ? {
+        path: comment.path,
+        startLine: comment.line,
+        endLine: comment.line,
+      }
+    : undefined;
+
+  return {
+    id: comment.findingId ?? `comment-${comment.id}`,
+    severity: comment.severity ?? 'low',
+    title: comment.title,
+    description: comment.description,
+    ...(comment.confidence ? { confidence: comment.confidence } : {}),
+    ...(location ? { location } : {}),
+  };
 }
 
 function reportsPullRequestCheck(trigger: ResolvedTrigger, context: EventContext): boolean {
@@ -425,6 +446,7 @@ async function postReviewsAndTrackFailures(
   // Post reviews to GitHub (sequentially to avoid rate limits)
   const reports: SkillReport[] = [];
   const activeWardenCommentIds = new Set<number>();
+  const findingObservations: FindingObservation[] = [];
   let shouldFailAction = false;
   const failureReasons: string[] = [];
 
@@ -448,6 +470,7 @@ async function postReviewsAndTrackFailures(
       // Add newly posted comments to existing comments for cross-trigger deduplication
       existingComments.push(...postResult.newComments);
       postResult.activeWardenCommentIds.forEach((id) => activeWardenCommentIds.add(id));
+      findingObservations.push(...postResult.findingObservations);
 
       // Check if we should fail based on this trigger's config
       // Filter by confidence first so low-confidence findings don't cause failure
@@ -466,6 +489,7 @@ async function postReviewsAndTrackFailures(
     fetchedComments,
     existingComments,
     activeWardenCommentIds,
+    findingObservations,
     shouldFailAction,
     failureReasons,
   };
@@ -489,11 +513,13 @@ async function evaluateFixesAndResolveStale(
   allResolved: boolean;
   autoResolvedByFixEvaluation: number;
   autoResolvedByStaleCheck: number;
+  findingObservations: FindingObservation[];
 }> {
   const wardenComments = fetchedComments.filter((c) => c.isWarden);
   const commentsResolvedByFixEval = new Set<number>();
   const commentsEvaluatedByFixEval = new Set<number>();
   const commentsResolvedByStale = new Set<number>();
+  const findingObservations: FindingObservation[] = [];
   const commentsForFixEvaluation = wardenComments.filter(
     (c) => !activeWardenCommentIds.has(c.id)
   );
@@ -544,6 +570,15 @@ async function evaluateFixesAndResolveStale(
         }
         // Track only actually resolved comments for allResolved check
         resolvedIds.forEach((id) => commentsResolvedByFixEval.add(id));
+        for (const comment of fixEvaluation.toResolve) {
+          if (!resolvedIds.has(comment.id)) continue;
+          findingObservations.push({
+            outcome: 'resolved',
+            finding: existingCommentToFinding(comment),
+            skill: comment.skills?.[0],
+            resolvedReason: 'fix_evaluation',
+          });
+        }
       }
 
       // Post replies for failed fixes and track them so stale pass doesn't override
@@ -611,6 +646,15 @@ async function evaluateFixesAndResolveStale(
           }
         }
         resolvedIds.forEach((id) => commentsResolvedByStale.add(id));
+        for (const comment of staleComments) {
+          if (!resolvedIds.has(comment.id)) continue;
+          findingObservations.push({
+            outcome: 'resolved',
+            finding: existingCommentToFinding(comment),
+            skill: comment.skills?.[0],
+            resolvedReason: 'stale_check',
+          });
+        }
       }
     } catch (error) {
       Sentry.captureException(error, { tags: { operation: 'resolve_stale_comments' } });
@@ -630,6 +674,7 @@ async function evaluateFixesAndResolveStale(
     allResolved,
     autoResolvedByFixEvaluation: commentsResolvedByFixEval.size,
     autoResolvedByStaleCheck: commentsResolvedByStale.size,
+    findingObservations,
   };
 }
 
@@ -643,6 +688,7 @@ async function finalizeWorkflow(
   coreCheckId: number | undefined,
   results: TriggerResult[],
   reports: SkillReport[],
+  findingObservations: FindingObservation[],
   shouldFailAction: boolean,
   failureReasons: string[],
   canResolveStale: boolean,
@@ -685,7 +731,7 @@ async function finalizeWorkflow(
 
   // Write structured findings to file for external export (GCS, S3, etc.)
   try {
-    const findingsPath = writeFindingsOutput(reports, context);
+    const findingsPath = writeFindingsOutput(reports, context, findingObservations);
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
     warnAction(`Failed to write findings output: ${error}`);
@@ -1083,6 +1129,7 @@ export async function runPRWorkflow(
               'warden.feedback.auto_resolve.stale_count',
               resolutionResult.autoResolvedByStaleCheck
             );
+            reviewPhase.findingObservations.push(...resolutionResult.findingObservations);
           },
         ),
       );
@@ -1090,6 +1137,7 @@ export async function runPRWorkflow(
       await finalizeWorkflow(
         octokit, context, previousReviewInfo, coreCheckId,
         results, reviewPhase.reports,
+        reviewPhase.findingObservations,
         reviewPhase.shouldFailAction, reviewPhase.failureReasons,
         canResolveStale,
         triggerErrors,

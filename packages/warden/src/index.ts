@@ -21,6 +21,9 @@ export {
   LocationSchema,
   // Suggested Fix
   SuggestedFixSchema,
+  // Source Snippet
+  SourceSnippetLineSchema,
+  SourceSnippetSchema,
   // Finding
   FindingSchema,
   UsageStatsSchema,
@@ -50,6 +53,8 @@ export type {
   ConfidenceThreshold,
   Location,
   SuggestedFix,
+  SourceSnippetLine,
+  SourceSnippet,
   Finding,
   UsageStats,
   AuxiliaryUsageMap,

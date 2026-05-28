@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
-import type { Finding, UsageStats } from '../types/index.js';
+import type { Confidence, Finding, Severity, UsageStats } from '../types/index.js';
 import { findingLine } from '../types/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import { applyMergeGroups, canUseRuntimeAuth } from '../sdk/extract.js';
@@ -41,10 +41,16 @@ export interface ExistingComment {
   isWarden?: boolean;
   /** Skills that have already detected this issue (for Warden comments) */
   skills?: string[];
+  /** Original finding severity, when emitted by a recent Warden comment */
+  severity?: Severity;
+  /** Original finding confidence, when emitted by a recent Warden comment */
+  confidence?: Confidence;
   /** The raw comment body (needed for updating Warden comments) */
   body?: string;
   /** GraphQL node ID for the comment (needed for adding reactions) */
   commentNodeId?: string;
+  /** Login of the actor that authored the comment, when available */
+  actor?: string;
 }
 
 /**
@@ -57,6 +63,8 @@ export type DuplicateActionType = 'update_warden' | 'react_external';
  */
 export interface DuplicateAction {
   type: DuplicateActionType;
+  /** ID produced by the current run before any Warden ID recentering */
+  originalFindingId: string;
   finding: Finding;
   existingComment: ExistingComment;
   /** Whether this was a hash match or semantic match */
@@ -92,6 +100,14 @@ export function generateMarker(path: string, line: number, contentHash: string):
   return `<!-- warden:v1:${path}:${line}:${contentHash} -->`;
 }
 
+export function generateFindingMetadata(finding: Pick<Finding, 'severity' | 'confidence'>): string {
+  const metadata = {
+    severity: finding.severity,
+    confidence: finding.confidence,
+  };
+  return `<!-- warden:finding:v1:${Buffer.from(JSON.stringify(metadata), 'utf8').toString('base64url')} -->`;
+}
+
 /**
  * Parse a Warden marker from a comment body.
  * Returns null if no valid marker is found.
@@ -116,6 +132,32 @@ export function parseMarker(body: string): WardenMarker | null {
     line: parseInt(lineStr, 10),
     contentHash,
   };
+}
+
+export function parseWardenFindingMetadata(body: string): Pick<Finding, 'severity' | 'confidence'> | null {
+  const match = body.match(/<!-- warden:finding:v1:([A-Za-z0-9_-]+) -->/);
+  const encoded = match?.[1];
+  if (!encoded) return null;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Partial<Finding>;
+    const severity = parsed.severity;
+    if (severity !== 'high' && severity !== 'medium' && severity !== 'low') return null;
+
+    const confidence = parsed.confidence;
+    if (
+      confidence !== undefined &&
+      confidence !== 'high' &&
+      confidence !== 'medium' &&
+      confidence !== 'low'
+    ) {
+      return null;
+    }
+
+    return { severity, confidence };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -333,6 +375,9 @@ interface ReviewThreadNode {
       path: string;
       line: number | null;
       originalLine: number | null;
+      author?: {
+        login: string;
+      } | null;
     }[];
   };
 }
@@ -371,6 +416,9 @@ const REVIEW_THREADS_QUERY = `
                 path
                 line
                 originalLine
+                author {
+                  login
+                }
               }
             }
           }
@@ -422,6 +470,7 @@ export async function fetchExistingComments(
       const isWarden = isWardenComment(firstComment.body);
       const marker = isWarden ? parseMarker(firstComment.body) : null;
       const parsed = parseWardenComment(firstComment.body);
+      const findingMetadata = isWarden ? parseWardenFindingMetadata(firstComment.body) : null;
 
       // For Warden comments, we need parsed title/description
       // For external comments, we extract what we can or use body as description
@@ -440,8 +489,11 @@ export async function fetchExistingComments(
         isResolved: thread.isResolved,
         isWarden,
         skills: isWarden ? parseWardenSkills(firstComment.body) : undefined,
+        severity: findingMetadata?.severity,
+        confidence: findingMetadata?.confidence,
         body: firstComment.body,
         commentNodeId: firstComment.id,
+        actor: firstComment.author?.login,
       });
     }
 
@@ -676,6 +728,8 @@ export function findingToExistingComment(finding: Finding, skill?: string): Exis
     contentHash: generateContentHash(finding.title, finding.description),
     isWarden: true,
     skills: skill ? [skill] : [],
+    severity: finding.severity,
+    ...(finding.confidence ? { confidence: finding.confidence } : {}),
   };
 }
 
@@ -909,9 +963,13 @@ export async function deduplicateFindings(
     }
 
     if (matchingComment) {
+      const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
+        ? { ...finding, id: matchingComment.findingId }
+        : finding;
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',
-        finding,
+        originalFindingId: finding.id,
+        finding: duplicateFinding,
         existingComment: matchingComment,
         matchType: 'hash',
       });
@@ -940,9 +998,13 @@ export async function deduplicateFindings(
   for (const finding of hashDedupedFindings) {
     const matchingComment = semanticResult.matches.get(finding.id);
     if (matchingComment) {
+      const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
+        ? { ...finding, id: matchingComment.findingId }
+        : finding;
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',
-        finding,
+        originalFindingId: finding.id,
+        finding: duplicateFinding,
         existingComment: matchingComment,
         matchType: 'semantic',
       });

@@ -23,6 +23,7 @@ import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
+import type { FindingObservation } from '../reporting/outcomes.js';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -50,6 +51,8 @@ export interface ReviewPostResult {
   newComments: ExistingComment[];
   /** Existing Warden comment IDs matched by current findings */
   activeWardenCommentIds: Set<number>;
+  /** Structured finding outcomes produced while posting this review */
+  findingObservations: FindingObservation[];
   /** Whether this trigger should cause the action to fail */
   shouldFail: boolean;
   /** Reason for failure, if any */
@@ -62,6 +65,55 @@ export interface ReviewPostResult {
 export interface ReviewPosterDeps {
   octokit: Octokit;
   context: EventContext;
+}
+
+function emptyReviewPostResult(
+  newComments: ExistingComment[],
+  activeWardenCommentIds: Set<number>,
+  findingObservations: FindingObservation[] = []
+): ReviewPostResult {
+  return { posted: false, newComments, activeWardenCommentIds, findingObservations, shouldFail: false };
+}
+
+function buildDedupeObservations(
+  actions: DeduplicateResult['duplicateActions'],
+  skill: string
+): FindingObservation[] {
+  return actions.map((action) => ({
+    outcome: 'deduped',
+    finding: action.finding,
+    skill,
+    dedupe: {
+      source: action.existingComment.isWarden ? 'warden' : 'external',
+      matchType: action.matchType,
+      existingFindingId: action.existingComment.findingId,
+      existingCommentId: action.existingComment.id,
+      existingThreadId: action.existingComment.threadId,
+      existingResolved: action.existingComment.isResolved,
+      actor: action.existingComment.actor,
+    },
+  }));
+}
+
+function recenterReportFindingIds(reportFindings: Finding[], actions: DeduplicateResult['duplicateActions']): Finding[] {
+  if (actions.length === 0) {
+    return reportFindings;
+  }
+
+  const ids = new Map(
+    actions
+      .filter((action) => action.originalFindingId !== action.finding.id)
+      .map((action) => [action.originalFindingId, action.finding.id])
+  );
+
+  if (ids.size === 0) {
+    return reportFindings;
+  }
+
+  return reportFindings.map((finding) => {
+    const recenteredId = ids.get(finding.id);
+    return recenteredId ? { ...finding, id: recenteredId } : finding;
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -166,18 +218,30 @@ export async function postTriggerReview(
 
   const newComments: ExistingComment[] = [];
   const activeWardenCommentIds = new Set<number>();
+  const findingObservations: FindingObservation[] = [];
 
   if (!result.report) {
-    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
+    return emptyReviewPostResult(newComments, activeWardenCommentIds);
   }
 
   // Filter findings by reportOn threshold and confidence
   const filteredFindings = filterFindings(result.report.findings, result.reportOn, result.minConfidence);
+  const filteredIds = new Set(filteredFindings.map((finding) => finding.id));
+  for (const finding of result.report.findings) {
+    if (!filteredIds.has(finding.id)) {
+      findingObservations.push({
+        outcome: 'filtered',
+        finding,
+        skill: result.report.skill,
+        filteredReason: 'report_threshold',
+      });
+    }
+  }
   const reportOnSuccess = result.reportOnSuccess ?? false;
 
   // Skip if nothing to post
   if (!result.renderResult || (filteredFindings.length === 0 && !reportOnSuccess)) {
-    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
+    return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
   }
 
   try {
@@ -220,7 +284,9 @@ export async function postTriggerReview(
         currentSkill: result.report.skill,
         maxRetries: ctx.maxRetries,
       });
+      result.report.findings = recenterReportFindingIds(result.report.findings, dedupResult.duplicateActions);
       findingsToPost = dedupResult.newFindings;
+      findingObservations.push(...buildDedupeObservations(dedupResult.duplicateActions, result.report.skill));
 
       // Merge dedup usage into the report's auxiliary usage
       if (dedupResult.dedupUsage) {
@@ -293,6 +359,9 @@ export async function postTriggerReview(
       const postedFindings = result.maxFindings
         ? findingsToPost.slice(0, result.maxFindings)
         : findingsToPost;
+      const skippedFindings = result.maxFindings
+        ? findingsToPost.slice(result.maxFindings)
+        : [];
 
       try {
         await postReviewToGitHub(octokit, context, renderResultToPost);
@@ -305,18 +374,42 @@ export async function postTriggerReview(
         await postReviewToGitHub(octokit, context, fallback);
       }
       for (const finding of postedFindings) {
+        findingObservations.push({ outcome: 'posted', finding, skill: result.report.skill });
         const comment = findingToExistingComment(finding, result.report.skill);
         if (comment) {
           newComments.push(comment);
         }
       }
+      for (const finding of skippedFindings) {
+        findingObservations.push({
+          outcome: 'skipped',
+          finding,
+          skill: result.report.skill,
+          skippedReason: 'max_findings',
+        });
+      }
 
-      return { posted: true, newComments, activeWardenCommentIds, shouldFail: false };
+      return {
+        posted: true,
+        newComments,
+        activeWardenCommentIds,
+        findingObservations,
+        shouldFail: false,
+      };
     }
 
-    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
+    return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
   } catch (error) {
     warnAction(`Failed to post review for ${result.triggerName}: ${error}`);
-    return { posted: false, newComments, activeWardenCommentIds, shouldFail: false };
+    return {
+      posted: false,
+      newComments,
+      activeWardenCommentIds,
+      findingObservations: [
+        ...findingObservations,
+        ...filteredFindings.map((finding) => ({ outcome: 'failed' as const, finding, skill: result.report?.skill })),
+      ],
+      shouldFail: false,
+    };
   }
 }

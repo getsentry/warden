@@ -65,7 +65,15 @@ describe('findings output', () => {
   it('writes findings to the workspace and exposes a repo-relative output path', () => {
     process.env['GITHUB_WORKSPACE'] = tempDir;
 
-    const filePath = writeFindingsOutput([createReport()], createContext(tempDir));
+    const filePath = writeFindingsOutput(
+      [createReport()],
+      createContext(tempDir),
+      [{
+        outcome: 'posted',
+        skill: 'test-skill',
+        finding: createReport().findings[0]!,
+      }],
+    );
 
     expect(filePath).toBe(join(tempDir, 'warden-findings.json'));
     expect(existsSync(filePath)).toBe(true);
@@ -75,8 +83,23 @@ describe('findings output', () => {
 
     const payload = JSON.parse(readFileSync(filePath, 'utf-8')) as {
       summary: { totalFindings: number };
+      skills: { findings: { sourceSnippet?: unknown }[] }[];
+      findingObservations: unknown[];
     };
     expect(payload.summary.totalFindings).toBe(1);
+    expect(payload.skills[0]?.findings[0]?.sourceSnippet).toEqual({
+      path: 'src/index.ts',
+      startLine: 1,
+      endLine: 3,
+      targetStartLine: 1,
+      targetEndLine: 1,
+      lines: [
+        { line: 1, content: 'const value = input;', highlighted: true },
+        { line: 2, content: 'return value;' },
+        { line: 3, content: '}' },
+      ],
+    });
+    expect(payload.findingObservations).toHaveLength(1);
   });
 
   it('falls back to RUNNER_TEMP when no repo path is provided', () => {
@@ -194,6 +217,18 @@ function createReport(): SkillReport {
         title: 'Example finding',
         description: 'A test finding',
         location: { path: 'src/index.ts', startLine: 1 },
+        sourceSnippet: {
+          path: 'src/index.ts',
+          startLine: 1,
+          endLine: 3,
+          targetStartLine: 1,
+          targetEndLine: 1,
+          lines: [
+            { line: 1, content: 'const value = input;', highlighted: true },
+            { line: 2, content: 'return value;' },
+            { line: 3, content: '}' },
+          ],
+        },
       },
     ],
   };

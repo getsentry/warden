@@ -186,6 +186,70 @@
         "suggestedFix": {
           "$ref": "#/$defs/SuggestedFix"
         },
+        "sourceSnippet": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string"
+            },
+            "startLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "endLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "targetStartLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "targetEndLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "line": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "highlighted": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "line",
+                  "content"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "path",
+            "startLine",
+            "endLine",
+            "targetStartLine",
+            "targetEndLine",
+            "lines"
+          ],
+          "additionalProperties": false
+        },
         "elapsedMs": {
           "type": "number",
           "minimum": 0

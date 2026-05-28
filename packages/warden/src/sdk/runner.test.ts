@@ -963,6 +963,29 @@ describe('validateFindings', () => {
     expect(validated[0]!.location!.path).toBe('correct-path.ts');
   });
 
+  it('strips model-provided source snippets during extraction', () => {
+    const rawFindings = [
+      {
+        id: 'id-1',
+        severity: 'medium',
+        title: 'Issue',
+        description: 'Details',
+        sourceSnippet: {
+          path: 'made-up.ts',
+          startLine: 1,
+          endLine: 1,
+          targetStartLine: 1,
+          targetEndLine: 1,
+          lines: [{ line: 1, content: 'hallucinated', highlighted: true }],
+        },
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, 'file.ts');
+    expect(validated).toHaveLength(1);
+    expect(validated[0]!.sourceSnippet).toBeUndefined();
+  });
+
   it('filters out invalid findings', () => {
     const rawFindings = [
       {

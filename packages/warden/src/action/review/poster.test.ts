@@ -201,12 +201,16 @@ describe('postTriggerReview', () => {
       reportOn: 'low',
     };
 
-    const existingComment = createExistingComment({ isWarden: false });
+    const existingComment = createExistingComment({
+      isWarden: false,
+      actor: 'coderabbitai',
+      threadId: 'thread-1',
+    });
 
     // Mock that the finding is a duplicate
     vi.mocked(deduplicateFindings).mockResolvedValue({
       newFindings: [],
-      duplicateActions: [{ type: 'react_external', finding, existingComment, matchType: 'hash' }],
+      duplicateActions: [{ type: 'react_external', originalFindingId: finding.id, finding, existingComment, matchType: 'hash' }],
     });
     vi.mocked(processDuplicateActions).mockResolvedValue({ updated: 0, reacted: 1, skipped: 0, failed: 0 });
 
@@ -225,12 +229,26 @@ describe('postTriggerReview', () => {
     });
     expect(processDuplicateActions).toHaveBeenCalledWith(
       mockOctokit, 'test-owner', 'test-repo',
-      [{ type: 'react_external', finding, existingComment, matchType: 'hash' }],
+      [{ type: 'react_external', originalFindingId: finding.id, finding, existingComment, matchType: 'hash' }],
       'test-skill'
     );
     // Since all findings were duplicates and failOn not triggered, nothing new to post
     expect(postResult.posted).toBe(false);
     expect(postResult.activeWardenCommentIds.size).toBe(0);
+    expect(postResult.findingObservations).toEqual([
+      expect.objectContaining({
+        outcome: 'deduped',
+        finding,
+        skill: 'test-skill',
+        dedupe: expect.objectContaining({
+          source: 'external',
+          matchType: 'hash',
+          existingCommentId: 1,
+          existingThreadId: 'thread-1',
+          actor: 'coderabbitai',
+        }),
+      }),
+    ]);
   });
 
   it('posts REQUEST_CHANGES when all findings deduplicated but failOn threshold met', async () => {
@@ -255,12 +273,13 @@ describe('postTriggerReview', () => {
       requestChanges: true,
     };
 
-    const existingComment = createExistingComment({ isWarden: true });
+    const existingComment = createExistingComment({ isWarden: true, findingId: 'WRZ-XPL' });
+    const recenteredFinding = { ...finding, id: 'WRZ-XPL' };
 
     // Mock that the finding is a duplicate (already posted in previous run)
     vi.mocked(deduplicateFindings).mockResolvedValue({
       newFindings: [],
-      duplicateActions: [{ type: 'update_warden', finding, existingComment, matchType: 'hash' }],
+      duplicateActions: [{ type: 'update_warden', originalFindingId: finding.id, finding: recenteredFinding, existingComment, matchType: 'hash' }],
     });
     vi.mocked(processDuplicateActions).mockResolvedValue({ updated: 1, reacted: 0, skipped: 0, failed: 0 });
 
@@ -289,12 +308,24 @@ describe('postTriggerReview', () => {
     });
     expect(processDuplicateActions).toHaveBeenCalledWith(
       mockOctokit, 'test-owner', 'test-repo',
-      [{ type: 'update_warden', finding, existingComment, matchType: 'hash' }],
+      [{ type: 'update_warden', originalFindingId: finding.id, finding: recenteredFinding, existingComment, matchType: 'hash' }],
       'test-skill'
     );
     // Even though all findings were deduplicated, REQUEST_CHANGES should still be posted
     expect(postResult.posted).toBe(true);
     expect([...postResult.activeWardenCommentIds]).toEqual([1]);
+    expect(result.report?.findings[0]?.id).toBe('WRZ-XPL');
+    expect(postResult.findingObservations).toEqual([
+      expect.objectContaining({
+        outcome: 'deduped',
+        finding: recenteredFinding,
+        skill: 'test-skill',
+        dedupe: expect.objectContaining({
+          source: 'warden',
+          existingFindingId: 'WRZ-XPL',
+        }),
+      }),
+    ]);
     expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'REQUEST_CHANGES',

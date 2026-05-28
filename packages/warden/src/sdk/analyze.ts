@@ -26,6 +26,7 @@ import {
 } from './types.js';
 import { prepareFiles } from './prepare.js';
 import type { EventContext, SkillReport, UsageStats, HunkFailure } from '../types/index.js';
+import type { SourceSnippet, SourceSnippetLine } from '../types/index.js';
 import { runPool } from '../utils/index.js';
 
 /** Result from parsing hunk output */
@@ -170,6 +171,72 @@ export function filterOutOfRangeFindings(
     }
   }
   return { filtered, dropped };
+}
+
+function hunkSourceLines(hunkCtx: HunkWithContext): SourceSnippetLine[] {
+  const lines: SourceSnippetLine[] = [];
+  for (const [index, content] of hunkCtx.contextBefore.entries()) {
+    lines.push({ line: hunkCtx.contextStartLine + index, content });
+  }
+
+  let newLine = hunkCtx.hunk.newStart;
+  for (const diffLine of hunkCtx.hunk.lines) {
+    if (diffLine.startsWith('-')) continue;
+    const content = diffLine.startsWith('+') || diffLine.startsWith(' ')
+      ? diffLine.slice(1)
+      : diffLine;
+    lines.push({ line: newLine, content });
+    newLine += 1;
+  }
+
+  const afterStart = hunkCtx.hunk.newStart + hunkCtx.hunk.newCount;
+  for (const [index, content] of hunkCtx.contextAfter.entries()) {
+    lines.push({ line: afterStart + index, content });
+  }
+
+  return lines;
+}
+
+export function buildSourceSnippet(
+  finding: Finding,
+  hunkCtx: HunkWithContext,
+  contextLines = 3
+): SourceSnippet | undefined {
+  if (!finding.location) return undefined;
+
+  const targetStartLine = finding.location.startLine;
+  const targetEndLine = finding.location.endLine ?? targetStartLine;
+  const startLine = Math.max(1, targetStartLine - contextLines);
+  const endLine = targetEndLine + contextLines;
+  const lines = hunkSourceLines(hunkCtx)
+    .filter((line) => line.line >= startLine && line.line <= endLine)
+    .map((line) => ({
+      ...line,
+      highlighted: line.line >= targetStartLine && line.line <= targetEndLine,
+    }));
+
+  if (lines.length === 0) return undefined;
+  const firstLine = lines[0];
+  const lastLine = lines.at(-1);
+  if (!firstLine || !lastLine) return undefined;
+
+  return {
+    path: finding.location.path,
+    language: hunkCtx.language,
+    startLine: firstLine.line,
+    endLine: lastLine.line,
+    targetStartLine,
+    targetEndLine,
+    lines,
+  };
+}
+
+function attachSourceSnippets(findings: Finding[], hunkCtx: HunkWithContext): Finding[] {
+  return findings.map((finding) => {
+    if (!finding.location) return finding;
+    const sourceSnippet = buildSourceSnippet(finding, hunkCtx);
+    return sourceSnippet ? { ...finding, sourceSnippet } : finding;
+  });
 }
 
 /**
@@ -334,7 +401,8 @@ async function analyzeHunk(
 
           // Filter findings outside hunk line range (defense-in-depth)
           const hunkRange = getHunkLineRange(hunkCtx.hunk);
-          const { filtered: filteredFindings, dropped } = filterOutOfRangeFindings(parseResult.findings, hunkRange);
+          const { filtered, dropped } = filterOutOfRangeFindings(parseResult.findings, hunkRange);
+          const filteredFindings = attachSourceSnippets(filtered, hunkCtx);
           if (dropped.length > 0) {
             Sentry.addBreadcrumb({
               category: 'finding.out_of_range',

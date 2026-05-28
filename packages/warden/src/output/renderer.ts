@@ -2,7 +2,7 @@ import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
 import type { SkillReport, Finding, Severity, SeverityThreshold } from '../types/index.js';
 import type { RenderResult, RenderOptions, GitHubReview, GitHubComment } from './types.js';
 import { capitalize, formatStatsCompact, countBySeverity, pluralize } from '../cli/output/formatters.js';
-import { generateContentHash, generateMarker } from './dedup.js';
+import { generateContentHash, generateFindingMetadata, generateMarker } from './dedup.js';
 import { escapeHtml } from '../utils/index.js';
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
@@ -98,6 +98,7 @@ function renderReview(
     const contentHash = generateContentHash(finding.title, finding.description);
     const line = location.endLine ?? location.startLine;
     body += `\n${generateMarker(location.path, line, contentHash)}`;
+    body += `\n${generateFindingMetadata(finding)}`;
 
     const isMultiLine = location.endLine && location.startLine !== location.endLine;
 
