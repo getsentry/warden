@@ -43,7 +43,7 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 | Option | Description |
 |--------|-------------|
 | `--skill <name>` | Run only this skill by name or path; names fall back to built-ins |
-| `--config <path>` | Path to warden.toml (default: `./warden.toml`) |
+| `--config-path <path>` | Path to warden.toml or a directory containing it (default: `./warden.toml`). `--config` is a deprecated alias. |
 | `-m, --model <model>` | Model to use (fallback when not set in config) |
 | `--json` | Output results as JSON |
 | `-o, --output <path>` | Write full run output to a JSONL file |
