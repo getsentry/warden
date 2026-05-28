@@ -931,9 +931,9 @@ async function cleanupOrphanedComments(
   context: EventContext,
   inputs: ActionInputs,
   auxiliaryOptions: AuxiliaryWorkflowOptions
-): Promise<void> {
+): Promise<FindingObservation[]> {
   if (!context.pullRequest) {
-    return;
+    return [];
   }
 
   let existingComments: ExistingComment[];
@@ -946,12 +946,12 @@ async function cleanupOrphanedComments(
     );
   } catch (error) {
     warnAction(`Failed to fetch existing comments for cleanup: ${error}`);
-    return;
+    return [];
   }
 
   const wardenComments = existingComments.filter((c) => c.isWarden);
   if (wardenComments.length === 0) {
-    return;
+    return [];
   }
 
   if ((auxiliaryOptions.runtime ?? 'pi') === 'claude') {
@@ -960,7 +960,7 @@ async function cleanupOrphanedComments(
 
   logAction(`No triggers matched, but found ${wardenComments.length} existing Warden comments. Running cleanup.`);
 
-  const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck } =
+  const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck, findingObservations } =
     await evaluateFixesAndResolveStale(
       octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, auxiliaryOptions
     );
@@ -986,6 +986,8 @@ async function cleanupOrphanedComments(
       }
     }
   }
+
+  return findingObservations;
 }
 
 // -----------------------------------------------------------------------------
@@ -1063,7 +1065,7 @@ export async function runPRWorkflow(
 
       if (matchedTriggers.length === 0) {
         await runOrFailCore(octokit, context, coreCheckId, async () => {
-          await cleanupOrphanedComments(
+          const cleanupFindingObservations = await cleanupOrphanedComments(
             octokit,
             context,
             inputs,
@@ -1073,7 +1075,7 @@ export async function runPRWorkflow(
           setOutput('high-count', 0);
           setOutput('summary', 'No triggers matched');
           try {
-            writeFindingsOutput([], context);
+            writeFindingsOutput([], context, cleanupFindingObservations);
           } catch (error) {
             warnAction(`Failed to write findings output: ${error}`);
           }

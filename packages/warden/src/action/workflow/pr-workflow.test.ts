@@ -5,6 +5,7 @@ import type { Octokit } from '@octokit/rest';
 import type { ActionInputs } from '../inputs.js';
 import type { SkillReport, Finding } from '../../types/index.js';
 import type { ExistingComment } from '../../output/dedup.js';
+import type * as BaseWorkflow from './base.js';
 
 // -----------------------------------------------------------------------------
 // Fixtures Directory
@@ -73,7 +74,7 @@ vi.mock('../fix-evaluation/index.js', () => ({
 
 // Mock base utilities that call process.exit or need system access
 vi.mock('./base.js', async () => {
-  const actual = await vi.importActual('./base.js');
+  const actual = await vi.importActual<typeof BaseWorkflow>('./base.js');
   const mockedSetFailed = vi.fn((msg: string): never => {
     throw new Error(`setFailed: ${msg}`);
   });
@@ -104,6 +105,7 @@ vi.mock('./base.js', async () => {
       return Promise.resolve({ pathToClaudeCodeExecutable: '/usr/local/bin/claude' });
     }),
     getAuthenticatedBotLogin: vi.fn(() => Promise.resolve('warden[bot]')),
+    writeFindingsOutput: vi.fn(actual.writeFindingsOutput),
   };
 });
 
@@ -111,7 +113,7 @@ vi.mock('./base.js', async () => {
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings } from '../../output/dedup.js';
 import { evaluateFixAttempts } from '../fix-evaluation/index.js';
-import { setFailed } from './base.js';
+import { setFailed, writeFindingsOutput } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { Semaphore } from '../../utils/index.js';
@@ -122,6 +124,7 @@ const mockFetchExistingComments = vi.mocked(fetchExistingComments);
 const mockDeduplicateFindings = vi.mocked(deduplicateFindings);
 const mockEvaluateFixAttempts = vi.mocked(evaluateFixAttempts);
 const mockSetFailed = vi.mocked(setFailed);
+const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
 
 // Type helper for mocking Octokit responses
 type ListReviewsResponse = Awaited<ReturnType<Octokit['pulls']['listReviews']>>;
@@ -248,6 +251,7 @@ describe('runPRWorkflow', () => {
 
     // Default: skill runs successfully with no findings
     mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+    mockWriteFindingsOutput.mockReturnValue('/tmp/warden-findings.json');
 
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -1352,6 +1356,17 @@ describe('runPRWorkflow', () => {
           review_id: 42,
           message: expect.stringContaining('resolved'),
         })
+      );
+      expect(mockWriteFindingsOutput).toHaveBeenLastCalledWith(
+        [],
+        expect.any(Object),
+        [
+          expect.objectContaining({
+            outcome: 'resolved',
+            skill: undefined,
+            resolvedReason: 'fix_evaluation',
+          }),
+        ]
       );
     });
 
