@@ -240,7 +240,19 @@ export async function postTriggerReview(
   const reportOnSuccess = result.reportOnSuccess ?? false;
 
   // Skip if nothing to post
-  if (!result.renderResult || (filteredFindings.length === 0 && !reportOnSuccess)) {
+  if (!result.renderResult) {
+    for (const finding of filteredFindings) {
+      findingObservations.push({
+        outcome: 'skipped',
+        finding,
+        skill: result.report.skill,
+        skippedReason: 'no_renderable_review',
+      });
+    }
+    return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
+  }
+
+  if (filteredFindings.length === 0 && !reportOnSuccess) {
     return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
   }
 

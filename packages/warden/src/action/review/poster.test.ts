@@ -137,6 +137,40 @@ describe('postTriggerReview', () => {
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
   });
 
+  it('marks renderable findings skipped when no review render result exists', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: undefined,
+      reportOn: 'low',
+    };
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+    expect(postResult.findingObservations).toEqual([
+      {
+        outcome: 'skipped',
+        finding,
+        skill: 'test-skill',
+        skippedReason: 'no_renderable_review',
+      },
+    ]);
+  });
+
   it('posts a review with findings', async () => {
     const finding = createFinding();
     const result: TriggerResult = {
