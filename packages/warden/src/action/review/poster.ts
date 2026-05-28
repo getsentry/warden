@@ -87,7 +87,7 @@ function buildDedupeObservations(
       source: action.existingComment.isWarden ? 'warden' : 'external',
       matchType: action.matchType,
       existingFindingId: action.existingComment.findingId,
-      existingCommentId: action.existingComment.id,
+      ...(action.existingComment.id > 0 ? { existingCommentId: action.existingComment.id } : {}),
       existingThreadId: action.existingComment.threadId,
       existingResolved: action.existingComment.isResolved,
       actor: action.existingComment.actor,

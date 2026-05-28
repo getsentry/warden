@@ -42,6 +42,32 @@ describe('findings output schema', () => {
       })
     ).toThrow();
   });
+
+  it('rejects sentinel dedupe comment IDs', () => {
+    const output = buildFindingsOutput([createReport()], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+    });
+
+    expect(() =>
+      FindingsOutputSchema.parse({
+        ...output,
+        findingObservations: [
+          {
+            outcome: 'deduped',
+            finding: createFinding(),
+            skill: 'test-skill',
+            dedupe: {
+              source: 'warden',
+              matchType: 'hash',
+              existingFindingId: 'WRD-001',
+              existingCommentId: -1,
+            },
+          },
+        ],
+      })
+    ).toThrow();
+  });
 });
 
 function createFinding(): Finding {

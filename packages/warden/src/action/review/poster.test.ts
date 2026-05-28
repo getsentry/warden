@@ -285,6 +285,66 @@ describe('postTriggerReview', () => {
     ]);
   });
 
+  it('omits sentinel comment IDs from dedupe observations', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    const existingComment = createExistingComment({
+      id: -1,
+      isWarden: true,
+      findingId: finding.id,
+    });
+
+    vi.mocked(deduplicateFindings).mockResolvedValue({
+      newFindings: [],
+      duplicateActions: [{ type: 'update_warden', originalFindingId: finding.id, finding, existingComment, matchType: 'hash' }],
+    });
+    vi.mocked(processDuplicateActions).mockResolvedValue({ updated: 0, reacted: 0, skipped: 1, failed: 0 });
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [existingComment],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+    const [observation] = postResult.findingObservations;
+
+    expect(observation).toEqual(
+      expect.objectContaining({
+        outcome: 'deduped',
+        finding,
+        skill: 'test-skill',
+        dedupe: expect.objectContaining({
+          source: 'warden',
+          matchType: 'hash',
+          existingFindingId: finding.id,
+        }),
+      })
+    );
+    if (observation?.outcome !== 'deduped') {
+      throw new Error('Expected deduped observation');
+    }
+    expect(observation.dedupe).not.toHaveProperty('existingCommentId');
+    expect(postResult.activeWardenCommentIds.size).toBe(0);
+  });
+
   it('does not mark deduped findings as failed when later duplicate handling errors', async () => {
     const duplicateFinding = createFinding({ id: 'duplicate-finding' });
     const newFinding = createFinding({ id: 'new-finding', location: { path: 'test.ts', startLine: 20 } });
