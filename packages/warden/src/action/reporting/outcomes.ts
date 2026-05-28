@@ -12,7 +12,7 @@ export type FindingOutcome =
 
 export type DedupeSource = 'warden' | 'external';
 export type DedupeMatchType = 'hash' | 'semantic';
-export type SkippedReason = 'max_findings' | 'no_renderable_review' | 'consolidated';
+export type SkippedReason = 'max_findings' | 'consolidated';
 export type FilteredReason = 'report_threshold';
 export type ResolvedReason = 'fix_evaluation' | 'stale_check';
 
@@ -91,7 +91,7 @@ export const FindingObservationSchema = z.discriminatedUnion('outcome', [
     outcome: z.literal('skipped'),
     finding: FindingSchema,
     skill: z.string().optional(),
-    skippedReason: z.enum(['max_findings', 'no_renderable_review', 'consolidated']),
+    skippedReason: z.enum(['max_findings', 'consolidated']),
   }),
   z.object({
     outcome: z.literal('resolved'),

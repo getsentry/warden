@@ -239,15 +239,13 @@ export async function postTriggerReview(
   }
   const reportOnSuccess = result.reportOnSuccess ?? false;
 
-  // Skip if nothing to post
+  // Skip if review rendering is disabled. In the normal action path this is
+  // only possible when reportOn is "off", which leaves no filtered findings.
   if (!result.renderResult) {
-    for (const finding of filteredFindings) {
-      findingObservations.push({
-        outcome: 'skipped',
-        finding,
-        skill: result.report.skill,
-        skippedReason: 'no_renderable_review',
-      });
+    if (filteredFindings.length > 0) {
+      console.warn(
+        `::warning::Trigger ${result.triggerName} produced reportable findings without a render result`
+      );
     }
     return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
   }

@@ -137,7 +137,7 @@ describe('postTriggerReview', () => {
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
   });
 
-  it('marks renderable findings skipped when no review render result exists', async () => {
+  it('does not emit a public skipped reason when no review render result exists', async () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
@@ -161,14 +161,10 @@ describe('postTriggerReview', () => {
 
     expect(postResult.posted).toBe(false);
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
-    expect(postResult.findingObservations).toEqual([
-      {
-        outcome: 'skipped',
-        finding,
-        skill: 'test-skill',
-        skippedReason: 'no_renderable_review',
-      },
-    ]);
+    expect(console.warn).toHaveBeenCalledWith(
+      '::warning::Trigger test-trigger produced reportable findings without a render result'
+    );
+    expect(postResult.findingObservations).toEqual([]);
   });
 
   it('posts a review with findings', async () => {
