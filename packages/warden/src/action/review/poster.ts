@@ -409,6 +409,8 @@ export async function postTriggerReview(
       const skippedFindings = result.maxFindings
         ? findingsToPost.slice(result.maxFindings)
         : [];
+      // Only overflow-eligible findings should be marked failed if posting throws
+      findingsToMarkFailed = postedFindings;
 
       try {
         await postReviewToGitHub(octokit, context, renderResultToPost);

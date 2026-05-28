@@ -851,7 +851,7 @@ export async function consolidateBatchFindings(
   options: ConsolidateOptions = {}
 ): Promise<ConsolidateResult> {
   if (findings.length <= 1) {
-    return { findings, removedCount: 0 };
+    return { findings, removedCount: 0, removedFindings: [] };
   }
 
   // Phase 1: Hash dedup within batch
