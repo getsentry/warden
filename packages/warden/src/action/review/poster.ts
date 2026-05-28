@@ -6,8 +6,8 @@
  */
 
 import type { Octokit } from '@octokit/rest';
-import type { EventContext, Finding } from '../../types/index.js';
-import { filterFindings } from '../../types/index.js';
+import type { ConfidenceThreshold, EventContext, Finding, SeverityThreshold } from '../../types/index.js';
+import { CONFIDENCE_ORDER, filterFindings, SEVERITY_ORDER } from '../../types/index.js';
 import { shouldFail } from '../../triggers/matcher.js';
 import type { RenderResult } from '../../output/types.js';
 import { renderSkillReport, renderFindingsBody } from '../../output/renderer.js';
@@ -23,7 +23,7 @@ import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
-import type { FindingObservation } from '../reporting/outcomes.js';
+import type { FilteredReason, FindingObservation } from '../reporting/outcomes.js';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -114,6 +114,31 @@ function recenterReportFindingIds(reportFindings: Finding[], actions: Deduplicat
     const recenteredId = ids.get(finding.id);
     return recenteredId ? { ...finding, id: recenteredId } : finding;
   });
+}
+
+function findingFilterReason(
+  finding: Finding,
+  reportOn?: SeverityThreshold,
+  minConfidence?: ConfidenceThreshold
+): FilteredReason | undefined {
+  if (reportOn === 'off') {
+    return 'reporting_disabled';
+  }
+
+  if (reportOn && SEVERITY_ORDER[finding.severity] > SEVERITY_ORDER[reportOn]) {
+    return 'below_severity_threshold';
+  }
+
+  if (
+    minConfidence &&
+    minConfidence !== 'off' &&
+    finding.confidence &&
+    CONFIDENCE_ORDER[finding.confidence] > CONFIDENCE_ORDER[minConfidence]
+  ) {
+    return 'below_confidence_threshold';
+  }
+
+  return undefined;
 }
 
 // -----------------------------------------------------------------------------
@@ -233,7 +258,7 @@ export async function postTriggerReview(
         outcome: 'filtered',
         finding,
         skill: result.report.skill,
-        filteredReason: 'report_threshold',
+        filteredReason: findingFilterReason(finding, result.reportOn, result.minConfidence) ?? 'below_severity_threshold',
       });
     }
   }
@@ -278,7 +303,7 @@ export async function postTriggerReview(
           outcome: 'skipped',
           finding,
           skill: result.report.skill,
-          skippedReason: 'consolidated',
+          skippedReason: 'duplicate_in_batch',
         });
       }
 

@@ -137,6 +137,59 @@ describe('postTriggerReview', () => {
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
   });
 
+  it('records severity threshold as the filter reason', async () => {
+    const finding = createFinding({ severity: 'low' });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult(),
+      reportOn: 'medium',
+    };
+
+    const postResult = await postTriggerReview({ result, existingComments: [], apiKey: 'test-key' }, mockDeps);
+
+    expect(postResult.findingObservations).toEqual([
+      {
+        outcome: 'filtered',
+        finding,
+        skill: 'test-skill',
+        filteredReason: 'below_severity_threshold',
+      },
+    ]);
+  });
+
+  it('records confidence threshold as the filter reason', async () => {
+    const finding = createFinding({ confidence: 'low' });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult(),
+      reportOn: 'low',
+      minConfidence: 'medium',
+    };
+
+    const postResult = await postTriggerReview({ result, existingComments: [], apiKey: 'test-key' }, mockDeps);
+
+    expect(postResult.findingObservations).toEqual([
+      {
+        outcome: 'filtered',
+        finding,
+        skill: 'test-skill',
+        filteredReason: 'below_confidence_threshold',
+      },
+    ]);
+  });
+
   it('does not emit a public skipped reason when no review render result exists', async () => {
     const finding = createFinding();
     const result: TriggerResult = {
@@ -667,7 +720,7 @@ describe('postTriggerReview', () => {
         outcome: 'skipped',
         finding: finding2,
         skill: 'test-skill',
-        skippedReason: 'consolidated',
+        skippedReason: 'duplicate_in_batch',
       },
       {
         outcome: 'posted',
