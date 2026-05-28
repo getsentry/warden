@@ -31,11 +31,41 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Run pricing tests against the committed (known-good) snapshot before
+      # updating so that exact-value assertions don't fail on legitimate price
+      # changes from upstream.
+      - name: Test pricing logic
+        run: pnpm --filter @sentry/warden test src/sdk/pricing.test.ts
+
       - name: Refresh pricing data
         run: pnpm update-pricing
 
-      - name: Validate pricing
-        run: pnpm --filter @sentry/warden test src/sdk/pricing.test.ts
+      # Validate the generated file is structurally sound without asserting
+      # specific prices (which will differ whenever upstream changes them).
+      - name: Validate pricing output
+        run: |
+          node -e "
+            const p = JSON.parse(require('fs').readFileSync('packages/warden/src/sdk/model-pricing.json', 'utf8'));
+            const entries = Object.entries(p);
+            if (entries.length === 0) {
+              process.stderr.write('error: pricing file is empty\n');
+              process.exit(1);
+            }
+            const required = ['inputPerMTok', 'outputPerMTok', 'cacheReadPerMTok', 'cacheWritePerMTok', 'cacheWrite1hPerMTok', 'webSearchPer1K'];
+            for (const [model, v] of entries) {
+              if (!v || typeof v !== 'object' || Array.isArray(v)) {
+                process.stderr.write('error: invalid entry for ' + model + '\n');
+                process.exit(1);
+              }
+              for (const field of required) {
+                if (typeof v[field] !== 'number' || !Number.isFinite(v[field]) || v[field] < 0) {
+                  process.stderr.write('error: invalid ' + field + ' for ' + model + '\n');
+                  process.exit(1);
+                }
+              }
+            }
+            console.log('Pricing output valid: ' + entries.length + ' entries');
+          "
 
       - name: Check for pricing diff
         id: diff

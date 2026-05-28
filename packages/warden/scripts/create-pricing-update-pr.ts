@@ -189,13 +189,15 @@ async function main(): Promise<void> {
 
   // Use an explicit lease value so behavior is predictable regardless of
   // whether the local branch has an upstream configured. On first run there
-  // is no remote ref, so we additionally pass --force-if-includes via a
-  // missing-lease ("=<ref>:" with no value) to require the remote branch to
-  // not exist.
+  // is no remote ref; the empty expected SHA ("=<ref>:") tells git the remote
+  // branch must be absent, preventing accidental clobber of concurrent runs.
+  // Use the full ref path so the lease is unambiguous regardless of git
+  // refname resolution order.
+  const remoteRef = `refs/heads/${AUTOMATION_BRANCH}`;
   const leaseArg =
     automationSha !== null
-      ? `--force-with-lease=${AUTOMATION_BRANCH}:${automationSha}`
-      : `--force-with-lease=${AUTOMATION_BRANCH}:`;
+      ? `--force-with-lease=${remoteRef}:${automationSha}`
+      : `--force-with-lease=${remoteRef}:`;
   const push = runAllowFail('git', [
     'push',
     leaseArg,
