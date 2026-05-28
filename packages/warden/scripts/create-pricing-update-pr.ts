@@ -103,11 +103,12 @@ function fetchRefs(): { automationSha: string | null } {
 }
 
 function readFileFromRef(ref: string, path: string): string | null {
-  const result = runAllowFail('git', ['show', `${ref}:${path}`]);
+  // Do not trim stdout: this returns raw file content, not command output.
+  const result = spawnSync('git', ['show', `${ref}:${path}`], { encoding: 'utf8' });
   if (result.status !== 0) {
     return null;
   }
-  return result.stdout;
+  return result.stdout ?? '';
 }
 
 function findOpenPrNumber(): number | null {
@@ -149,6 +150,10 @@ function configureGitIdentity(): void {
 }
 
 async function main(): Promise<void> {
+  // Normalize CWD to repo root so all repo-root-relative paths work correctly
+  // regardless of where pnpm sets the working directory (e.g. packages/warden/).
+  process.chdir(run('git', ['rev-parse', '--show-toplevel']));
+
   assertCleanExceptPricing();
 
   const generated = readFileSync(PRICING_FILE, 'utf8');
