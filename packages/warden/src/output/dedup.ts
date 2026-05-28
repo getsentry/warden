@@ -186,6 +186,39 @@ export function parseWardenComment(body: string): { title: string; description: 
   return { title, description };
 }
 
+function sanitizeReviewCommentText(body: string): string {
+  return body
+    .replaceAll(/<details[\s\S]*?<\/details>/gi, ' ')
+    .replaceAll(/<!--[\s\S]*?-->/g, ' ')
+    .replaceAll(/<[^>]+>/g, ' ')
+    .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replaceAll(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replaceAll(/[*_`>#~-]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return value.slice(0, maxLength - 3).trimEnd() + '...';
+}
+
+function fallbackCommentDescription(body: string): string {
+  return truncateText(sanitizeReviewCommentText(body), 500);
+}
+
+function fallbackCommentTitle(body: string, commentId: number): string {
+  const description = sanitizeReviewCommentText(body);
+  if (!description) {
+    return `Review comment ${commentId}`;
+  }
+
+  return truncateText(description, 80);
+}
+
 /**
  * Parse the finding ID from a Warden comment's attribution or legacy title.
  */
@@ -469,13 +502,13 @@ export async function fetchExistingComments(
 
       const isWarden = isWardenComment(firstComment.body);
       const marker = isWarden ? parseMarker(firstComment.body) : null;
-      const parsed = parseWardenComment(firstComment.body);
+      const parsed = isWarden ? parseWardenComment(firstComment.body) : null;
       const findingMetadata = isWarden ? parseWardenFindingMetadata(firstComment.body) : null;
 
       // For Warden comments, we need parsed title/description
       // For external comments, we extract what we can or use body as description
-      const title = parsed?.title ?? '';
-      const description = parsed?.description ?? firstComment.body.slice(0, 500);
+      const title = parsed?.title ?? fallbackCommentTitle(firstComment.body, firstComment.databaseId);
+      const description = parsed?.description ?? fallbackCommentDescription(firstComment.body);
 
       comments.push({
         id: firstComment.databaseId,

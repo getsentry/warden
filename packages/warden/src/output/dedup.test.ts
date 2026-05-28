@@ -265,6 +265,57 @@ User input reaches a query.
       actor: 'warden-bot',
     });
   });
+
+  it('derives plain-text title and description for external review comments', async () => {
+    const graphql = vi.fn().mockResolvedValue({
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [
+              {
+                id: 'thread-1',
+                isResolved: true,
+                comments: {
+                  nodes: [
+                    {
+                      id: 'comment-node-1',
+                      databaseId: 456,
+                      body: `<!-- metadata -->
+<details><summary>Trace</summary>Hidden marker</details>
+
+**Needs guard**
+
+Use \`Number.isFinite\` before saving [the value](https://example.com).`,
+                      path: 'src/db.ts',
+                      line: 42,
+                      originalLine: 40,
+                      author: { login: 'reviewer' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const comments = await fetchExistingComments(
+      { graphql } as unknown as Octokit,
+      'getsentry',
+      'warden',
+      123
+    );
+
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toMatchObject({
+      id: 456,
+      isWarden: false,
+      title: 'Needs guard Use Number.isFinite before saving the value.',
+      description: 'Needs guard Use Number.isFinite before saving the value.',
+    });
+  });
 });
 
 describe('deduplicateFindings', () => {
