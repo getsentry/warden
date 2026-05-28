@@ -1,0 +1,15 @@
+{
+  "given": "fetchAllItems computes total pages for a paginated API where the final page can be partially full",
+  "files": [
+    "fixtures/pagination-floor-total-pages/paginator.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "fetchAllItems uses Math.floor(totalItems / pageSize), so it skips the final partial page when totalItems is not evenly divisible by pageSize"
+    }
+  ],
+  "should_not_find": [
+    "style, formatting, or naming issues",
+    "missing retry handling"
+  ]
+}

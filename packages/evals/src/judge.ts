@@ -5,7 +5,7 @@ import { DEFAULT_EVAL_MODEL, JudgeResponseSchema } from './types.js';
 
 const JUDGE_MODEL = DEFAULT_EVAL_MODEL;
 const JUDGE_MAX_TOKENS = 4096;
-const JUDGE_TIMEOUT_MS = 60_000;
+const JUDGE_TIMEOUT_MS = 30_000;
 
 export interface JudgeResult {
   response: JudgeResponse;
@@ -109,7 +109,7 @@ export async function runJudge(
   findings: Finding[],
   apiKey: string
 ): Promise<JudgeResult> {
-  const client = new Anthropic({ apiKey, timeout: JUDGE_TIMEOUT_MS });
+  const client = new Anthropic({ apiKey, timeout: JUDGE_TIMEOUT_MS, maxRetries: 0 });
 
   const prompt = buildJudgePrompt(meta, findings);
 

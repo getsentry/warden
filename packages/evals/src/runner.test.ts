@@ -47,6 +47,7 @@ describe('setupEvalRepo', () => {
 
       expect(changedFiles).toEqual(['sentry-preprod-size-analysis-base-artifact-access/organization_preprod_size_analysis.py']);
       expect(existsSync(join(repoDir, '.warden', 'skills', 'security-review', 'SKILL.md'))).toBe(true);
+      expect(git(repoDir, ['config', '--get', 'commit.gpgsign']).trim()).toBe('false');
     } finally {
       rmSync(repoDir, { recursive: true, force: true });
     }

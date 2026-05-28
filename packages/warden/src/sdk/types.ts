@@ -128,6 +128,8 @@ export interface SkillRunnerOptions {
   auxiliaryMaxRetries?: number;
   /** Verify candidate findings in a second read-only pass. Defaults to true. */
   verifyFindings?: boolean;
+  /** Run post-analysis verification, merge, and suggested-fix quality gates. Defaults to true. */
+  postProcessFindings?: boolean;
   /** Trigger name to attach to skill-level telemetry when the caller has one. */
   telemetryTriggerName?: string;
 }

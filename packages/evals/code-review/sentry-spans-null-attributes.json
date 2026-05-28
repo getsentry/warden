@@ -1,0 +1,32 @@
+{
+  "given": "Sentry span buffering receives spans with null attributes",
+  "files": [
+    "fixtures/sentry-spans-null-attributes/buffer.py"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-spans-null-attributes/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "span buffer handling assumes span attributes are non-null, so spans with null attributes can crash or be processed incorrectly instead of being accepted safely"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/8a40a128b581e8d311869b6574598347e097b581",
+    "repository": "getsentry/sentry",
+    "source_ref": "9f90bf49b54a25725005b0ca5ba822ce9483da87",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-spans-null-attributes/buffer.py",
+        "sourcePath": "src/sentry/spans/buffer.py",
+        "ref": "9f90bf49b54a25725005b0ca5ba822ce9483da87"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix 8a40a128b581e8d311869b6574598347e097b581. span buffer handling assumes span attributes are non-null, so spans with null attributes can crash or be processed incorrectly instead of being accepted safely"
+  }
+}

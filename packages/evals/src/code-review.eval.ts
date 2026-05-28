@@ -15,12 +15,17 @@ const evals = discoverEvalScenarios({
   runtime: 'pi',
   model: 'anthropic/claude-sonnet-4-6',
 });
+const CODE_REVIEW_RUN_TIMEOUT_MS = 120_000;
+const CODE_REVIEW_EVAL_TIMEOUT_MS = CODE_REVIEW_RUN_TIMEOUT_MS + 60_000;
 
 describeEval(
   'code-review',
   {
     harness: createWardenEvalHarness({
       apiKey,
+      maxTurns: 8,
+      timeoutMs: CODE_REVIEW_RUN_TIMEOUT_MS,
+      postProcessFindings: false,
       verbose: true,
     }),
     judges: [createWardenEvalJudge(apiKey)],
@@ -31,7 +36,7 @@ describeEval(
     for (const meta of evals) {
       it(
         formatEvalTestName(meta),
-        { timeout: 180_000 },
+        { timeout: CODE_REVIEW_EVAL_TIMEOUT_MS },
         async ({ run }) => {
           const result = await run(meta);
           const output = WardenEvalOutputSchema.parse(result.output);

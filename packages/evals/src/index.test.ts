@@ -202,7 +202,7 @@ describe('standalone scenario files', () => {
       baseDir: evalsDir,
     });
 
-    expect(metas.length).toBe(10);
+    expect(metas.length).toBe(11);
     expect(metas.map((meta) => meta.name)).toContain('sentry-replay-delete-read-scope');
   });
 

@@ -98,4 +98,18 @@ describe('runSkill verification', () => {
       expect.objectContaining({ model: 'claude-haiku-4-5' })
     );
   });
+
+  it('can skip post-processing for raw skill benchmarks', async () => {
+    const report = await runSkill(makeSkill(), makeContext(), {
+      postProcessFindings: false,
+    });
+
+    expect(report.findings).toEqual([
+      expect.objectContaining({
+        title: 'Candidate',
+        location: { path: 'src/app.ts', startLine: 10 },
+      }),
+    ]);
+    expect(verifyFindings).not.toHaveBeenCalled();
+  });
 });

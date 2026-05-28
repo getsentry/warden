@@ -191,7 +191,7 @@ positive.
 ## Running Evals
 
 ```bash
-# Run all evals (requires ANTHROPIC_API_KEY)
+# Run all evals (requires ANTHROPIC_API_KEY or WARDEN_ANTHROPIC_API_KEY)
 pnpm evals
 
 # Run evals for a specific skill
@@ -214,6 +214,8 @@ pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
 Evals make real API calls and are skipped when `ANTHROPIC_API_KEY` is not set.
+`WARDEN_ANTHROPIC_API_KEY` is bridged into `ANTHROPIC_API_KEY` during eval
+setup, so the usual Warden-prefixed environment works too.
 Suites choose the runtime and model. The checked-in full-pipeline suites
 currently run Pi with `anthropic/claude-sonnet-4-6`.
 

@@ -1,0 +1,32 @@
+{
+  "given": "Sentry global modal has a child overlay such as CompactSelect that handles Escape before the document-level modal listener",
+  "files": [
+    "fixtures/sentry-global-modal-escape-child-overlay/index.tsx"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-global-modal-escape-child-overlay/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "handleEscapeClose ignores e.defaultPrevented, so pressing Escape inside a child overlay that already consumed the key still closes the entire modal"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/98349bd88adc847b39d2a758c89c36770ad49815",
+    "repository": "getsentry/sentry",
+    "source_ref": "acd049bee68e463e7d7af339ccdc721ad8654da5",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-global-modal-escape-child-overlay/index.tsx",
+        "sourcePath": "static/app/components/globalModal/index.tsx",
+        "ref": "acd049bee68e463e7d7af339ccdc721ad8654da5"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix 98349bd88adc847b39d2a758c89c36770ad49815. handleEscapeClose ignores e.defaultPrevented, so pressing Escape inside a child overlay that already consumed the key still closes the entire modal"
+  }
+}

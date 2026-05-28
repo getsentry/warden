@@ -915,23 +915,26 @@ async function runSkillAnalysis(
     );
   }
 
-  const processed = await postProcessFindings(allFindings, {
-    skill,
-    repoPath: context.repoPath,
-    apiKey: options.apiKey,
-    runtime: options.runtime,
-    auxiliaryModel: options.auxiliaryModel,
-    synthesisModel: options.synthesisModel,
-    auxiliaryMaxRetries: options.auxiliaryMaxRetries,
-    verifyFindings: options.verifyFindings,
-    maxTurns: options.maxTurns,
-    abortController: options.abortController,
-    pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
-    prContext,
-    onFindingProcessing: options.callbacks?.onFindingProcessing,
-  });
-  const finalFindings = processed.findings;
-  allAuxiliaryUsage.push(...processed.auxiliaryUsage);
+  let finalFindings = allFindings;
+  if (options.postProcessFindings !== false) {
+    const processed = await postProcessFindings(allFindings, {
+      skill,
+      repoPath: context.repoPath,
+      apiKey: options.apiKey,
+      runtime: options.runtime,
+      auxiliaryModel: options.auxiliaryModel,
+      synthesisModel: options.synthesisModel,
+      auxiliaryMaxRetries: options.auxiliaryMaxRetries,
+      verifyFindings: options.verifyFindings,
+      maxTurns: options.maxTurns,
+      abortController: options.abortController,
+      pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+      prContext,
+      onFindingProcessing: options.callbacks?.onFindingProcessing,
+    });
+    finalFindings = processed.findings;
+    allAuxiliaryUsage.push(...processed.auxiliaryUsage);
+  }
 
   // Generate summary
   const summary = generateSummary(skill.name, finalFindings);

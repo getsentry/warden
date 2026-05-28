@@ -1,0 +1,32 @@
+{
+  "given": "Sentry Perforce integration opens multiple tenant connections concurrently",
+  "files": [
+    "fixtures/sentry-perforce-shared-trust-locks/client.py"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-perforce-shared-trust-locks/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "the Perforce client uses shared global P4TRUST and P4TICKETS paths, so concurrent tenant connections contend on the same .p4trust lock and can fail each other"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/bc7c26f2fc40f2c9e6861ca7e6d0918fa73a6214",
+    "repository": "getsentry/sentry",
+    "source_ref": "70ef2549cde90a8ff0ada2110239c7daed6883ad",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-perforce-shared-trust-locks/client.py",
+        "sourcePath": "src/sentry/integrations/perforce/client.py",
+        "ref": "70ef2549cde90a8ff0ada2110239c7daed6883ad"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix bc7c26f2fc40f2c9e6861ca7e6d0918fa73a6214. the Perforce client uses shared global P4TRUST and P4TICKETS paths, so concurrent tenant connections contend on the same .p4trust lock and can fail each other"
+  }
+}

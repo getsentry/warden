@@ -15,6 +15,14 @@ export interface RunEvalOptions {
   model?: string;
   /** Override the runtime from the YAML spec */
   runtime?: RuntimeName;
+  /** Maximum turns per agent invocation. Keeps live evals bounded. */
+  maxTurns?: number;
+  /** Maximum wall-clock time for one Warden skill run before aborting. */
+  timeoutMs?: number;
+  /** Whether to run Warden's second-pass finding verifier. */
+  verifyFindings?: boolean;
+  /** Whether to run Warden post-processing. Disable for raw skill benchmarks. */
+  postProcessFindings?: boolean;
   /** Enable verbose logging */
   verbose?: boolean;
 }
@@ -64,6 +72,7 @@ export function setupEvalRepo(meta: EvalMeta, log: (msg: string) => void): strin
     git(['config', 'user.email', 'eval@warden.dev']);
     git(['config', 'user.name', 'Warden Eval']);
     git(['config', 'commit.gpgsign', 'false']);
+    git(['config', 'tag.gpgsign', 'false']);
     const sourceRepository = singleEvalFixtureSourceRepository(meta.filePaths);
     if (sourceRepository) {
       git(['remote', 'add', 'origin', `https://github.com/${sourceRepository}.git`]);
@@ -165,25 +174,43 @@ export async function runEvalSkill(
     const runtime = options.runtime ?? meta.runtime;
     log(`Running skill with model: ${model} [${runtime}]`);
 
-    const result = await runLocalSkill({
-      skillPath,
-      base: 'main',
-      head: 'eval',
-      cwd: repoDir,
-      defaultBranch: 'main',
-      apiKey: options.apiKey,
-      model,
-      runtime,
-      verbose: options.verbose,
-      parallel: false,
-      callbacks: options.verbose
-        ? {
-            onFindingProcessing: (event) => {
-              log(formatFindingProcessingEvent(event));
-            },
-          }
-        : undefined,
-    });
+    const abortController = options.timeoutMs ? new AbortController() : undefined;
+    const timeout = options.timeoutMs
+      ? setTimeout(() => {
+          log(`Run timeout reached after ${options.timeoutMs}ms; aborting skill`);
+          abortController?.abort();
+        }, options.timeoutMs)
+      : undefined;
+
+    const result = await (async () => {
+      try {
+        return await runLocalSkill({
+          skillPath,
+          base: 'main',
+          head: 'eval',
+          cwd: repoDir,
+          defaultBranch: 'main',
+          apiKey: options.apiKey,
+          model,
+          runtime,
+          maxTurns: options.maxTurns,
+          abortController,
+          verifyFindings: options.verifyFindings,
+          postProcessFindings: options.postProcessFindings,
+          verbose: options.verbose,
+          parallel: false,
+          callbacks: options.verbose
+            ? {
+                onFindingProcessing: (event) => {
+                  log(formatFindingProcessingEvent(event));
+                },
+              }
+            : undefined,
+        });
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
+    })();
     log(`Context built: ${result.context.pullRequest?.files.length ?? 0} file(s) from git diff`);
     log(`Skill resolved: ${result.skill.name}`);
 

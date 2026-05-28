@@ -1,0 +1,51 @@
+{
+  "given": "sandbox credential egress proxy relies on command-scoped session state keyed only by sandbox_id instead of a signed requester context on each forwarded request",
+  "files": [
+    "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/egress-policy.ts",
+    "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/egress-proxy.ts",
+    "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/egress-session.ts",
+    "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/sandbox.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "sandbox egress credential activation is authorized by a persisted session keyed only by the Vercel sandbox_id, so forwarded requests do not have to present a signed requester-bound context before Junior mints provider credentials for the cached requester"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style or formatting issues",
+    "lazy credential activation failing after command cleanup as the primary security issue",
+    "forwarded path normalization as the primary issue"
+  ],
+  "supporting_files": [
+    "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/LICENSE"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/junior/pull/399",
+    "repository": "getsentry/junior",
+    "source_ref": "15c62c9cddb85d5cd73dd4f1400d2d5b1ca5000b",
+    "side": "base",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/egress-policy.ts",
+        "sourcePath": "packages/junior/src/chat/sandbox/egress-policy.ts",
+        "ref": "15c62c9cddb85d5cd73dd4f1400d2d5b1ca5000b"
+      },
+      {
+        "fixturePath": "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/egress-proxy.ts",
+        "sourcePath": "packages/junior/src/chat/sandbox/egress-proxy.ts",
+        "ref": "15c62c9cddb85d5cd73dd4f1400d2d5b1ca5000b"
+      },
+      {
+        "fixturePath": "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/egress-session.ts",
+        "sourcePath": "packages/junior/src/chat/sandbox/egress-session.ts",
+        "ref": "15c62c9cddb85d5cd73dd4f1400d2d5b1ca5000b"
+      },
+      {
+        "fixturePath": "fixtures/junior-sandbox-egress-requester-context/github/getsentry/junior/packages/junior/src/chat/sandbox/sandbox.ts",
+        "sourcePath": "packages/junior/src/chat/sandbox/sandbox.ts",
+        "ref": "15c62c9cddb85d5cd73dd4f1400d2d5b1ca5000b"
+      }
+    ]
+  }
+}
