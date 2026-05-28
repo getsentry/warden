@@ -41,7 +41,9 @@ export function setGenAiResponseAttrs(
   span: Span,
   usage: ApiResponseUsage,
   stopReason?: string | null,
-  responseText?: string
+  responseText?: string,
+  responseId?: string,
+  responseModel?: string,
 ): void {
   const cacheRead = usage.cache_read_input_tokens ?? 0;
   const rawCacheWrite = usage.cache_creation_input_tokens ?? 0;
@@ -61,6 +63,12 @@ export function setGenAiResponseAttrs(
   });
   if (stopReason) {
     span.setAttribute('gen_ai.response.finish_reasons', [stopReason]);
+  }
+  if (responseId) {
+    span.setAttribute('gen_ai.response.id', responseId);
+  }
+  if (responseModel) {
+    span.setAttribute('gen_ai.response.model', responseModel);
   }
   if (responseText !== undefined) {
     setGenAiOutputMessagesAttr(span, responseText, stopReason);
@@ -225,7 +233,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
 
         const content = response.content[0];
         if (!content || content.type !== 'text') {
-          setGenAiResponseAttrs(span, response.usage, response.stop_reason);
+          setGenAiResponseAttrs(span, response.usage, response.stop_reason, undefined, response.id, response.model);
           span.setAttribute('error.type', 'empty_response');
           return { success: false, error: 'Empty response from model', usage };
         }
@@ -234,7 +242,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         if (prefill) {
           fullText = prefill + fullText;
         }
-        setGenAiResponseAttrs(span, response.usage, response.stop_reason, fullText);
+        setGenAiResponseAttrs(span, response.usage, response.stop_reason, fullText, response.id, response.model);
         const jsonStr = extractJson(fullText);
         if (!jsonStr) {
           span.setAttribute('error.type', 'invalid_json');
@@ -324,8 +332,6 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
       setGenAiInputMessagesAttr(span, messages);
 
       const usages: UsageStats[] = [];
-      // Accumulate raw API usage across iterations so setGenAiResponseAttrs
-      // can compute totals consistently (input_tokens + cache subsets).
       const cumulativeUsage = {
         input_tokens: 0,
         output_tokens: 0,
@@ -336,9 +342,11 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
           ephemeral_1h_input_tokens: 0,
         },
       };
+      let lastResponseId: string | undefined;
+      let lastResponseModel: string | undefined;
 
       function setFinalSpanAttrs(stopReason?: string | null, responseText?: string): void {
-        setGenAiResponseAttrs(span, cumulativeUsage, stopReason, responseText);
+        setGenAiResponseAttrs(span, cumulativeUsage, stopReason, responseText, lastResponseId, lastResponseModel);
       }
 
       function currentUsage(): UsageStats {
@@ -369,6 +377,8 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
           response.usage.cache_creation?.ephemeral_5m_input_tokens ?? 0;
         cumulativeUsage.cache_creation.ephemeral_1h_input_tokens +=
           response.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+        lastResponseId = response.id;
+        lastResponseModel = response.model;
 
         // Handle tool use
         if (response.stop_reason === 'tool_use') {
@@ -392,14 +402,20 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
                   ...(agentName ? { 'gen_ai.agent.name': agentName } : {}),
                   ...(task ? { 'warden.ai.task': task } : {}),
                   'gen_ai.tool.name': block.name,
+                  'gen_ai.tool.type': 'function',
+                  'gen_ai.tool.call.id': block.id,
+                  'gen_ai.tool.call.arguments': JSON.stringify(block.input),
                 },
               },
-              async () => {
+              async (toolSpan) => {
                 try {
                   const result = await executeTool(block.name, block.input as Record<string, unknown>);
+                  toolSpan.setAttribute('gen_ai.tool.call.result', result);
                   toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
                 } catch (error) {
                   const errMsg = error instanceof Error ? error.message : String(error);
+                  toolSpan.setAttribute('gen_ai.tool.call.result', errMsg);
+                  toolSpan.setAttribute('error.type', 'tool_execution_failed');
                   toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: errMsg, is_error: true });
                 }
               },

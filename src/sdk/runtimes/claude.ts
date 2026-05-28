@@ -23,8 +23,8 @@ import { callHaiku, callHaikuWithTools } from '../haiku.js';
 import {
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
+  setGenAiOutputMessagesFromContent,
   setGenAiSystemInstructionsAttr,
-  setGenAiUsageAttrs,
 } from '../otel.js';
 import { apiUsageToStats } from '../pricing.js';
 import { aggregateUsage, emptyUsage, estimateTokens, extractUsage } from '../usage.js';
@@ -44,7 +44,11 @@ import type {
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
 interface TurnData {
-  toolUses: { id: string; name: string }[];
+  toolUses: { id: string; name: string; input: unknown }[];
+  content: unknown[];
+  stopReason?: string | null;
+  id?: string;
+  sessionId?: string;
   inputTokens: number;
   outputTokens: number;
   cacheRead: number;
@@ -345,6 +349,7 @@ export const claudeRuntime: Runtime = {
         const turnUsages: ReturnType<typeof turnUsageToStats>[] = [];
         const responseModels = new Set<string>();
         const pendingToolProgress = new Map<string, number>();
+        const toolResults = new Map<string, unknown>();
 
         function flushPendingTurn(): void {
           if (!pendingTurn) return;
@@ -358,32 +363,53 @@ export const claudeRuntime: Runtime = {
 
           try {
             const totalInput = turn.inputTokens + turn.cacheRead + turn.cacheWrite;
+            const chatAttributes: Record<string, string | number | boolean> = {
+              'gen_ai.operation.name': 'chat',
+              'gen_ai.provider.name': 'anthropic',
+              'gen_ai.agent.name': skillName,
+              'gen_ai.request.model': modelId,
+              'gen_ai.response.model': turn.model,
+              'gen_ai.usage.input_tokens': totalInput,
+              'gen_ai.usage.output_tokens': turn.outputTokens,
+              'gen_ai.usage.input_tokens.cached': turn.cacheRead,
+              'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
+              'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
+            };
+            if (turn.id) {
+              chatAttributes['gen_ai.response.id'] = turn.id;
+            }
+            if (turn.sessionId) {
+              chatAttributes['gen_ai.conversation.id'] = turn.sessionId;
+            }
+            if (turn.stopReason) {
+              chatAttributes['gen_ai.response.finish_reasons'] = JSON.stringify([turn.stopReason]);
+            }
 
             Sentry.startSpan(
               {
                 op: 'gen_ai.chat',
                 name: `chat ${skillName} turn ${turnCount}`,
-                attributes: {
-                  'gen_ai.operation.name': 'chat',
-                  'gen_ai.provider.name': 'anthropic',
-                  'gen_ai.agent.name': skillName,
-                  'gen_ai.request.model': modelId,
-                  'gen_ai.response.model': turn.model,
-                  'gen_ai.usage.input_tokens': totalInput,
-                  'gen_ai.usage.output_tokens': turn.outputTokens,
-                  'gen_ai.usage.input_tokens.cached': turn.cacheRead,
-                  'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
-                  'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
-                },
+                attributes: chatAttributes,
               },
-              () => {
+              (chatSpan) => {
+                setGenAiOutputMessagesFromContent(chatSpan, turn.content, turn.stopReason);
+
                 for (const toolUse of turn.toolUses) {
                   const elapsed = toolProgress.get(toolUse.id);
-                  const attributes = {
+                  const attributes: Record<string, string | number | boolean> = {
                     'gen_ai.operation.name': 'execute_tool',
                     'gen_ai.agent.name': skillName,
                     'gen_ai.tool.name': toolUse.name,
+                    'gen_ai.tool.type': 'function',
+                    'gen_ai.tool.call.id': toolUse.id,
+                    'gen_ai.tool.call.arguments': JSON.stringify(toolUse.input ?? {}),
                   };
+                  const result = toolResults.get(toolUse.id);
+                  if (result !== undefined) {
+                    attributes['gen_ai.tool.call.result'] = typeof result === 'string'
+                      ? result
+                      : JSON.stringify(result);
+                  }
 
                   if (elapsed !== undefined) {
                     const endTime = Date.now() / 1000;
@@ -414,18 +440,27 @@ export const claudeRuntime: Runtime = {
           }
         }
 
+        let conversationIdSet = false;
         try {
           for await (const message of stream) {
             if (message.type === 'assistant') {
               flushPendingTurn();
               const msg = message.message;
+              if (!conversationIdSet) {
+                Sentry.setConversationId(message.session_id);
+                conversationIdSet = true;
+              }
               const cacheWrite5m = msg.usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0;
               const cacheWrite1h = msg.usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0;
               const toolUses = msg.content
                 .filter((block): block is typeof block & { type: 'tool_use' } => block.type === 'tool_use')
-                .map(({ id, name }) => ({ id, name }));
+                .map(({ id, name, input }) => ({ id, name, input }));
               pendingTurn = {
                 toolUses,
+                content: [...msg.content],
+                stopReason: msg.stop_reason,
+                id: msg.id,
+                sessionId: message.session_id,
                 inputTokens: msg.usage?.input_tokens ?? 0,
                 outputTokens: msg.usage?.output_tokens ?? 0,
                 cacheRead: msg.usage?.cache_read_input_tokens ?? 0,
@@ -435,6 +470,19 @@ export const claudeRuntime: Runtime = {
                 webSearchRequests: msg.usage?.server_tool_use?.web_search_requests ?? 0,
                 model: msg.model,
               };
+            } else if (message.type === 'user') {
+              const content = message.message?.content;
+              if (Array.isArray(content)) {
+                for (const block of content) {
+                  if (block && typeof block === 'object' && (block as { type?: unknown }).type === 'tool_result') {
+                    const id = (block as { tool_use_id?: unknown }).tool_use_id;
+                    const result = (block as { content?: unknown }).content;
+                    if (typeof id === 'string') {
+                      toolResults.set(id, result);
+                    }
+                  }
+                }
+              }
             } else if (message.type === 'tool_progress') {
               pendingToolProgress.set(message.tool_use_id, message.elapsed_time_seconds);
             } else if (message.type === 'result') {
@@ -455,26 +503,6 @@ export const claudeRuntime: Runtime = {
         }
 
         if (resultMessage) {
-          const usage = resultMessage.usage;
-          if (usage) {
-            const inputTokens = usage.input_tokens ?? 0;
-            const outputTokens = usage.output_tokens ?? 0;
-            const cacheRead = usage.cache_read_input_tokens ?? 0;
-            const cacheWrite5m = usage.cache_creation?.ephemeral_5m_input_tokens ?? 0;
-            const cacheWrite1h = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
-            const cacheWrite = Math.max(usage.cache_creation_input_tokens ?? 0, cacheWrite5m + cacheWrite1h);
-            const totalInputTokens = inputTokens + cacheRead + cacheWrite;
-            setGenAiUsageAttrs(span, {
-              inputTokens: totalInputTokens,
-              outputTokens,
-              cacheReadInputTokens: cacheRead,
-              cacheCreationInputTokens: cacheWrite,
-              cacheCreation5mInputTokens: cacheWrite5m,
-              cacheCreation1hInputTokens: cacheWrite1h,
-              webSearchRequests: usage.server_tool_use?.web_search_requests ?? 0,
-              costUSD: resultMessage.total_cost_usd ?? 0,
-            });
-          }
           if (resultMessage.uuid) {
             span.setAttribute('gen_ai.response.id', resultMessage.uuid);
           }
@@ -492,7 +520,6 @@ export const claudeRuntime: Runtime = {
           }
 
           const optionalAttrs: Record<string, string | number | undefined> = {
-            'gen_ai.conversation.id': resultMessage.session_id,
             'warden.sdk.duration_ms': resultMessage.duration_ms,
             'warden.sdk.duration_api_ms': resultMessage.duration_api_ms,
             'warden.sdk.num_turns': resultMessage.num_turns,

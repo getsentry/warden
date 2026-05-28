@@ -100,17 +100,36 @@ export function setGenAiInputMessagesAttr(span: SpanLike, messages: GenAiMessage
   span.setAttribute('gen_ai.input.messages', JSON.stringify(messages.map(normalizeMessage)));
 }
 
-/** Set OpenTelemetry GenAI output message attributes for text responses. */
+function serializeOutputMessage(parts: unknown[], finishReason?: string | null): string {
+  return JSON.stringify([
+    {
+      role: 'assistant',
+      parts,
+      ...(finishReason ? { finish_reason: finishReason } : {}),
+    },
+  ]);
+}
+
+/** Set `gen_ai.output.messages` for a plain-text assistant response. */
 export function setGenAiOutputMessagesAttr(
   span: SpanLike,
   responseText: string,
   finishReason?: string | null,
 ): void {
-  span.setAttribute('gen_ai.output.messages', JSON.stringify([
-    {
-      role: 'assistant',
-      parts: [{ type: 'text', content: responseText }],
-      ...(finishReason ? { finish_reason: finishReason } : {}),
-    },
-  ]));
+  span.setAttribute(
+    'gen_ai.output.messages',
+    serializeOutputMessage([{ type: 'text', content: responseText }], finishReason),
+  );
+}
+
+/** Set `gen_ai.output.messages` from raw assistant content blocks (text + tool_use). */
+export function setGenAiOutputMessagesFromContent(
+  span: SpanLike,
+  content: unknown[],
+  finishReason?: string | null,
+): void {
+  span.setAttribute(
+    'gen_ai.output.messages',
+    serializeOutputMessage(content.map(normalizeContentPart), finishReason),
+  );
 }

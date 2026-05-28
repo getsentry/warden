@@ -360,6 +360,9 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     if (result.modelFallbackMessage) {
       warnings.push(result.modelFallbackMessage);
     }
+    if (session.sessionId) {
+      Sentry.setConversationId(session.sessionId);
+    }
 
     const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
       if (event.type === 'message_end' && isAssistantMessage(event.message)) {
@@ -536,6 +539,9 @@ async function runStructured<T>(
         if (result.responseModel) {
           span.setAttribute('gen_ai.response.model', result.responseModel);
         }
+        if (result.sessionId) {
+          span.setAttribute('gen_ai.conversation.id', result.sessionId);
+        }
         span.setAttribute('gen_ai.response.finish_reasons', [run.lastAssistant?.stopReason ?? result.status]);
         setGenAiOutputMessagesAttr(span, result.text, run.lastAssistant?.stopReason ?? result.status);
 
@@ -621,7 +627,6 @@ export const piRuntime: Runtime = {
             if (run.lastAssistant?.provider) {
               span.setAttribute('gen_ai.provider.name', run.lastAssistant.provider);
             }
-            setGenAiUsageAttrs(span, result.usage);
             if (result.responseId) {
               span.setAttribute('gen_ai.response.id', result.responseId);
             }
@@ -634,9 +639,6 @@ export const piRuntime: Runtime = {
             }
             if (result.status !== 'success') {
               span.setAttribute('error.type', result.status);
-            }
-            if (result.sessionId) {
-              span.setAttribute('gen_ai.conversation.id', result.sessionId);
             }
             if (result.durationMs !== undefined) {
               span.setAttribute('warden.sdk.duration_ms', result.durationMs);
