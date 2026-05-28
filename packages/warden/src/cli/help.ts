@@ -88,7 +88,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
     description: 'Run only this skill by name or path; names fall back to built-ins',
   },
   configPath: {
-    label: '--config-path <path>',
+    label: '-c, --config-path <path>',
     description: 'Path to warden.toml (--config is a deprecated alias)',
   },
   model: {

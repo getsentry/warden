@@ -308,7 +308,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     options: {
       cwd: { type: 'string', short: 'C' },
       skill: { type: 'string' },
-      'config-path': { type: 'string' },
+      'config-path': { type: 'string', short: 'c' },
       config: { type: 'string' }, // deprecated alias for --config-path
       model: { type: 'string', short: 'm' },
       json: { type: 'boolean', default: false },

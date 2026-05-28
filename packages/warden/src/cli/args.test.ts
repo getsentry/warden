@@ -82,6 +82,11 @@ describe('parseCliArgs', () => {
     expect(result.options.configPath).toBe('./custom.toml');
   });
 
+  it('parses -c as alias for --config-path', () => {
+    const result = parseCliArgs(['-c', './custom.toml']);
+    expect(result.options.configPath).toBe('./custom.toml');
+  });
+
   it('parses --config as deprecated alias for --config-path', () => {
     const result = parseCliArgs(['--config', './custom.toml']);
     expect(result.options.configPath).toBe('./custom.toml');
