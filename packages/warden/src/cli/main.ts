@@ -111,15 +111,23 @@ export function resolveInvocationCwd(baseCwd: string, cliCwd: string | undefined
   return cliCwd ? resolve(baseCwd, cliCwd) : baseCwd;
 }
 
-function resolveConfigPath(options: CLIOptions, repoPath: string): string {
-  if (!options.configPath) return resolve(repoPath, 'warden.toml');
-  const p = resolve(process.cwd(), options.configPath);
+/**
+ * Resolve a user-supplied config input string to the absolute path of a
+ * warden.toml file. If the resolved path is a directory, appends warden.toml;
+ * otherwise treats it as a direct file path.
+ */
+function resolveConfigInput(input: string): string {
+  const p = resolve(process.cwd(), input);
   try {
     if (statSync(p).isDirectory()) return join(p, 'warden.toml');
   } catch {
     // Path doesn't exist or isn't accessible — treat as direct file path
   }
   return p;
+}
+
+function resolveConfigPath(options: CLIOptions, repoPath: string): string {
+  return options.configPath ? resolveConfigInput(options.configPath) : resolve(repoPath, 'warden.toml');
 }
 
 function resolveLocalReviewBase(configDefaultBranch: string | undefined, repoPath: string): {
@@ -943,12 +951,7 @@ export async function runSkills(
   // Resolve config path
   let configPath: string | null = null;
   if (options.configPath) {
-    const p = resolve(cwd, options.configPath);
-    try {
-      configPath = statSync(p).isDirectory() ? join(p, 'warden.toml') : p;
-    } catch {
-      configPath = p;
-    }
+    configPath = resolveConfigInput(options.configPath);
   } else if (repoPath) {
     configPath = resolve(repoPath, 'warden.toml');
   }
