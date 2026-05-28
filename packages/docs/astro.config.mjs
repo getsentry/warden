@@ -97,6 +97,17 @@ export default defineConfig({
             },
           ],
         },
+        {
+          label: "Benchmarks",
+          items: [
+            { label: "Overview", link: "/benchmarking" },
+            { label: "Running Benchmarks", link: "/benchmarking/running" },
+            {
+              label: "Sentry Vulnerability Corpus",
+              link: "/benchmarking/sentry-vulnerability-corpus",
+            },
+          ],
+        },
       ],
       social: [
         {

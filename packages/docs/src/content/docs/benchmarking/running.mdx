@@ -1,0 +1,182 @@
+---
+title: Running Benchmarks
+description: How to reproduce and record Sentry benchmark runs.
+editUrl: false
+---
+
+This page is the runbook for the Sentry benchmark. The overview page is the
+readout. This page is for creating a new result.
+
+## Shape
+
+Run one Warden shard per corpus commit. Each shard checks out the public
+`getsentry/sentry` repository at that commit and scans only the files referenced
+by corpus entries for that commit.
+
+Do not run this benchmark against all of Sentry. The point is a repeatable
+comparison against known vulnerable files.
+
+## Setup
+
+Clone Sentry and pick a model:
+
+```bash
+git clone git@github.com:getsentry/sentry.git /tmp/sentry-benchmark
+
+export BENCH_MODEL="openai/gpt-5.5"
+export BENCH_MODEL_SLUG="gpt-5-5"
+export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_MODEL_SLUG}"
+mkdir -p "$BENCH_ROOT"
+```
+
+Set the provider API key required by the model. For GPT 5.5 through Pi, set
+`WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
+
+The GPT 5.5 run used `openai/gpt-5.5`. The installed Pi registry did not expose
+`openai/gpt-5.5-codex`. No explicit reasoning level was configured, so the run
+used Pi/OpenAI's default model behavior.
+
+## Target Lists
+
+From the Warden repository, write one target list per corpus commit:
+
+```bash
+node <<'NODE'
+const {execFileSync} = require("node:child_process");
+const {mkdirSync, readFileSync, writeFileSync} = require("node:fs");
+
+const corpus = JSON.parse(
+  readFileSync("packages/docs/src/data/benchmarking/sentry-vulnerability-corpus.json", "utf8"),
+);
+const repo = "/tmp/sentry-benchmark";
+const outDir = process.env.BENCH_ROOT;
+mkdirSync(outDir, {recursive: true});
+
+const bySha = new Map();
+for (const finding of corpus.findings) {
+  const entry = bySha.get(finding.sha) ?? {findings: 0, paths: new Set()};
+  entry.findings += 1;
+  entry.paths.add(finding.code.path);
+  bySha.set(finding.sha, entry);
+}
+
+for (const [sha, entry] of [...bySha.entries()].sort()) {
+  const paths = [...entry.paths].sort();
+  const missing = [];
+  for (const path of paths) {
+    try {
+      execFileSync("git", ["-C", repo, "cat-file", "-e", `${sha}:${path}`], {stdio: "ignore"});
+    } catch {
+      missing.push(path);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`${sha} missing corpus paths:\n${missing.join("\n")}`);
+  }
+  writeFileSync(`${outDir}/targets-${sha}.txt`, `${paths.join("\n")}\n`);
+  console.error(`${sha}: ${paths.length} target files for ${entry.findings} corpus findings`);
+}
+NODE
+```
+
+The current corpus produces 79 target files across 6 commits.
+
+## Warden Config
+
+Write the config outside the Sentry checkout. Warden config can override CLI
+model selection, so make the model explicit in this file and keep one benchmark
+workspace per model.
+
+```bash
+cat > "$BENCH_ROOT/warden.toml" <<EOF
+version = 1
+
+[defaults]
+runtime = "pi"
+reportOn = "low"
+
+[defaults.agent]
+model = "$BENCH_MODEL"
+
+[runner]
+concurrency = 4
+
+[[skills]]
+name = "security-review"
+EOF
+```
+
+## Run
+
+Run from the Warden repository:
+
+```bash
+for target in "$BENCH_ROOT"/targets-*.txt; do
+  sha=${target##*/targets-}
+  sha=${sha%.txt}
+  short=${sha:0:8}
+
+  git -C /tmp/sentry-benchmark checkout "$sha"
+
+  pnpm cli -- run \
+    -C /tmp/sentry-benchmark \
+    @"$target" \
+    --skill security-review \
+    --config "$BENCH_ROOT/warden.toml" \
+    --model "$BENCH_MODEL" \
+    --report-on low \
+    --min-confidence low \
+    --parallel 4 \
+    -o "$BENCH_ROOT/sentry-security-review-pi-${BENCH_MODEL_SLUG}-corpus-${short}.jsonl" \
+    -v \
+    --log
+done
+```
+
+Inspect the stitched output:
+
+```bash
+pnpm cli -- runs show "$BENCH_ROOT"/sentry-security-review-pi-"$BENCH_MODEL_SLUG"-corpus-*.jsonl \
+  -C /tmp/sentry-benchmark \
+  --report-on low \
+  --min-confidence low
+```
+
+## Record Results
+
+Keep every raw JSONL shard with the result summary, but do not commit raw
+JSONL until it has been reviewed for sensitive data. The raw artifacts are the
+source of truth for cost, duration, token counts, and future rescoring.
+
+Store results in `packages/docs/src/data/benchmarking/results/`.
+
+Record:
+
+- stable `runId`
+- corpus ID
+- repository
+- Warden version
+- skill
+- model
+- runtime
+- reasoning level, or `provider-default`
+- report and confidence thresholds
+- one shard per corpus commit, including SHA, target list, raw JSONL artifact
+  name, and raw artifact review status
+- total files, chunks, failed chunks, findings, cost, duration, and tokens
+- scoring summary once a reviewer matches findings back to the corpus
+
+## Score
+
+Score by root cause, not exact wording or line number. A result counts as found
+when it points a reviewer to the same vulnerability with enough detail to act.
+
+Keep the distinction clear:
+
+- known found: corpus vulnerabilities Warden found
+- total findings: all findings Warden emitted before scoring
+- unexpected valid: real vulnerabilities not already in the corpus
+- false positives: findings rejected by review
+
+Do not treat the score as a universal pass rate. It is a relative comparison
+for this corpus and this run shape.

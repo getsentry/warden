@@ -1,0 +1,66 @@
+---
+title: Overview
+description: Current Sentry benchmark results for Warden.
+editUrl: false
+---
+
+import BenchmarkRuns from "../../components/BenchmarkRuns.astro";
+
+The Sentry benchmark is a small, qualitative readout for Warden's security
+review behavior. It compares runs against known vulnerabilities from the public
+`getsentry/sentry` repository.
+
+This is not an exhaustive eval and it is not a proof that Warden will catch
+every future issue. It is a way to compare implementations, prompts, models,
+and runtimes against the same historical security corpus.
+
+## What It Is
+
+The corpus currently contains 86 validated vulnerabilities across 79 files and
+6 historical Sentry commits. A benchmark run checks out each commit and scans
+only the files tied to known vulnerabilities at that commit.
+
+That keeps the run focused. We are measuring whether Warden can recognize the
+same root causes, not whether it can discover unrelated issues across the whole
+Sentry repository.
+
+## Latest Runs
+
+<BenchmarkRuns />
+
+## Reading Results
+
+Known found is the useful number. It counts corpus entries where Warden found
+the same root cause, even if the exact line number or wording drifted.
+
+Total findings is the amount of review output Warden produced before scoring.
+A higher number can be good if it finds more real vulnerabilities, but it also
+means more human review.
+
+Cost and duration are recorded from the run summaries derived from the raw
+JSONL artifacts. The raw JSONL logs are kept outside the docs until they have
+been reviewed for sensitive data. Both current runs completed the same 156
+analysis chunks with no failed chunks.
+
+The GPT 5.5 run used Pi/OpenAI's default behavior. No explicit reasoning level
+was configured in `warden.toml` or the CLI.
+
+## Current Takeaway
+
+GPT 5.5 found 46 of 86 known corpus vulnerabilities. Sonnet 4.6 found 23 of
+86. GPT 5.5 also emitted more total findings and cost substantially more.
+
+Use those numbers as a relative comparison for this corpus. They are not a
+general pass rate for Sentry.
+
+## Corpus
+
+The [Sentry vulnerability corpus](/benchmarking/sentry-vulnerability-corpus/)
+lists the known issues used for scoring. Each entry includes the repository
+SHA, the affected file, a short vulnerability description, and the relevant
+code snippet.
+
+## Run It
+
+Use the [running guide](/benchmarking/running/) to reproduce the benchmark,
+add a new model run, and record sanitized result metadata.

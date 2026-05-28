@@ -1,0 +1,250 @@
+---
+type BenchmarkScoring = {
+  knownFindingCount: number;
+  knownFound: number;
+  knownFoundRate: number;
+  knownMissed: number;
+};
+
+type BenchmarkResult = {
+  corpusId: string;
+  model: string;
+  reasoningLevel?: string;
+  repository: string;
+  runId: string;
+  runtime: string;
+  scoring?: BenchmarkScoring;
+  shardCount: number;
+  skill: string;
+  summary: {
+    chunksFailed: number;
+    chunksTotal: number;
+    costUSD: number;
+    durationMs: number;
+    findingsTotal: number;
+  };
+  targetMode: string;
+};
+
+const resultModules = import.meta.glob<BenchmarkResult>(
+  "../data/benchmarking/results/*.json",
+  {eager: true, import: "default"},
+);
+
+const results = Object.values(resultModules)
+  .filter(
+    (result) =>
+      result.corpusId === "sentry-vulnerability-corpus" &&
+      result.targetMode === "all-corpus-files-by-sha",
+  )
+  .sort((a, b) => {
+    const aRate = a.scoring?.knownFoundRate ?? -1;
+    const bRate = b.scoring?.knownFoundRate ?? -1;
+    if (aRate !== bRate) {
+      return bRate - aRate;
+    }
+    return a.model.localeCompare(b.model);
+  });
+
+const runDate = (runId: string) => {
+  const match = runId.match(/\d{4}-\d{2}-\d{2}/);
+  return match?.[0] ?? "unknown";
+};
+
+const formatCost = (value: number) => `$${value.toFixed(2)}`;
+
+const formatDuration = (durationMs: number) => {
+  const totalSeconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+};
+
+const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
+
+const resultPath = (result: BenchmarkResult) =>
+  `https://github.com/getsentry/warden/blob/main/packages/docs/src/data/benchmarking/results/${result.runId}.json`;
+
+const reasoningLabel = (reasoningLevel?: string) =>
+  reasoningLevel === "provider-default" || !reasoningLevel
+    ? "Provider default"
+    : reasoningLevel;
+
+const modelLabel = (model: string) => {
+  if (model === "openai/gpt-5.5") {
+    return "GPT 5.5";
+  }
+  if (model === "anthropic/claude-sonnet-4-6") {
+    return "Claude Sonnet 4.6";
+  }
+  return model;
+};
+---
+
+<section class="benchmark-runs" aria-label="Latest benchmark runs">
+  {results.length === 0 ? (
+    <p>No benchmark runs recorded yet.</p>
+  ) : (
+    <div class="run-grid" role="table" aria-label="Latest benchmark runs">
+      <div class="run-grid-header" role="row">
+        <span>Run</span>
+        <span>Known</span>
+        <span>Findings</span>
+        <span>Cost</span>
+        <span>Duration</span>
+        <span>Chunks</span>
+        <span>Reasoning</span>
+      </div>
+      {results.map((result) => {
+        const scoring = result.scoring;
+        return (
+          <article class="run-row" role="row">
+            <div class="run-name" role="cell">
+              <h3>{modelLabel(result.model)}</h3>
+              <p>
+                {result.model} · {runDate(result.runId)} · {result.runtime} ·{" "}
+                {result.skill.replace("@sentry/warden:", "").replace(/@\d.+$/, "")} ·{" "}
+                <a href={resultPath(result)}>JSON</a>
+              </p>
+            </div>
+            <div class="run-cell" role="cell">
+              <span class="cell-label">Known corpus</span>
+              <strong>
+                {scoring
+                  ? `${scoring.knownFound}/${scoring.knownFindingCount}`
+                  : "Not scored"}
+              </strong>
+              {scoring && <span>{formatPercent(scoring.knownFoundRate)}</span>}
+            </div>
+            <div class="run-cell" role="cell">
+              <span class="cell-label">Total findings</span>
+              <strong>{result.summary.findingsTotal}</strong>
+            </div>
+            <div class="run-cell" role="cell">
+              <span class="cell-label">Cost</span>
+              <strong>{formatCost(result.summary.costUSD)}</strong>
+            </div>
+            <div class="run-cell" role="cell">
+              <span class="cell-label">Duration</span>
+              <strong>{formatDuration(result.summary.durationMs)}</strong>
+            </div>
+            <div class="run-cell" role="cell">
+              <span class="cell-label">Chunks</span>
+              <strong>{result.summary.chunksTotal}</strong>
+              {result.summary.chunksFailed > 0 && (
+                <span>{result.summary.chunksFailed} failed</span>
+              )}
+            </div>
+            <div class="run-cell" role="cell">
+              <span class="cell-label">Reasoning</span>
+              <strong>{reasoningLabel(result.reasoningLevel)}</strong>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  )}
+</section>
+
+<style>
+  .benchmark-runs {
+    margin: 1rem 0 1.5rem;
+  }
+
+  .run-grid {
+    border: 1px solid var(--sl-color-gray-6);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .run-grid-header,
+  .run-row {
+    display: grid;
+    grid-template-columns:
+      minmax(11.5rem, 1.45fr)
+      minmax(5.8rem, 0.8fr)
+      minmax(4.4rem, 0.62fr)
+      minmax(4.4rem, 0.62fr)
+      minmax(5.2rem, 0.68fr)
+      minmax(3.8rem, 0.5fr)
+      minmax(5.5rem, 0.7fr);
+  }
+
+  .run-grid-header {
+    background: color-mix(in srgb, var(--sl-color-gray-6) 58%, transparent);
+    color: var(--sl-color-gray-3);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    padding: 0.55rem 0.7rem;
+    text-transform: uppercase;
+  }
+
+  .run-grid-header span,
+  .run-row > * {
+    min-width: 0;
+  }
+
+  .run-row {
+    align-items: start;
+    border-top: 1px solid var(--sl-color-gray-6);
+    padding: 0.75rem 0.7rem;
+  }
+
+  .run-name,
+  .run-cell {
+    display: grid;
+    gap: 0.12rem;
+  }
+
+  .run-name h3,
+  .run-name p {
+    margin: 0;
+  }
+
+  .run-name h3 {
+    color: var(--sl-color-white);
+    font-size: 0.94rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .run-name p,
+  .run-cell span,
+  .cell-label {
+    color: var(--sl-color-gray-3);
+    font-size: 0.76rem;
+  }
+
+  .run-cell strong {
+    color: var(--sl-color-white);
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .cell-label {
+    display: none;
+  }
+
+  @media (max-width: 58rem) {
+    .run-grid-header {
+      display: none;
+    }
+
+    .run-row {
+      gap: 0.65rem 0.9rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: 0.85rem;
+    }
+
+    .run-name {
+      grid-column: 1 / -1;
+    }
+
+    .cell-label {
+      display: inline;
+    }
+  }
+</style>
