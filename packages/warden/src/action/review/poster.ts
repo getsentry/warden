@@ -275,6 +275,14 @@ export async function postTriggerReview(
       });
       findingsToPost = consolidateResult.findings;
       findingsToMarkFailed = findingsToPost;
+      for (const finding of consolidateResult.removedFindings ?? []) {
+        findingObservations.push({
+          outcome: 'skipped',
+          finding,
+          skill: result.report.skill,
+          skippedReason: 'consolidated',
+        });
+      }
 
       if (consolidateResult.usage) {
         const consolidateAux = { consolidate: consolidateResult.usage };

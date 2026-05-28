@@ -745,6 +745,7 @@ const PROXIMITY_THRESHOLD = 5;
 export interface ConsolidateResult {
   findings: Finding[];
   removedCount: number;
+  removedFindings?: Finding[];
   usage?: UsageStats;
 }
 
@@ -823,6 +824,7 @@ export async function consolidateBatchFindings(
   // Phase 1: Hash dedup within batch
   const seen = new Set<string>();
   const hashDeduped: Finding[] = [];
+  const hashRemovedFindings: Finding[] = [];
 
   for (const f of findings) {
     const hash = generateContentHash(f.title, f.description);
@@ -830,7 +832,10 @@ export async function consolidateBatchFindings(
     const path = f.location?.path ?? '';
     const key = `${path}:${line}:${hash}`;
 
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      hashRemovedFindings.push(f);
+      continue;
+    }
     seen.add(key);
     hashDeduped.push(f);
   }
@@ -846,7 +851,7 @@ export async function consolidateBatchFindings(
 
   // If no proximity clusters, hash-only mode, or no runtime auth, return hash-deduped results.
   if (clusters.length === 0 || options.hashOnly || !canUseRuntimeAuth(options)) {
-    return { findings: hashDeduped, removedCount: hashRemovedCount };
+    return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings };
   }
 
   // Phase 3: LLM consolidation for proximity clusters
@@ -884,13 +889,13 @@ Singletons (findings with no duplicates) should not appear in any group.
 
   if (!result.success) {
     console.warn(`LLM batch consolidation failed, keeping all findings: ${result.error}`);
-    return { findings: hashDeduped, removedCount: hashRemovedCount, usage: result.usage };
+    return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
   }
 
   const { absorbed, replacements } = applyMergeGroups(clusteredList, result.data);
 
   if (absorbed.size === 0) {
-    return { findings: hashDeduped, removedCount: hashRemovedCount, usage: result.usage };
+    return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
   }
 
   const consolidated = hashDeduped
@@ -900,7 +905,7 @@ Singletons (findings with no duplicates) should not appear in any group.
 
   console.log(`Consolidate: ${absorbed.size} findings merged by LLM (same root cause)`);
 
-  return { findings: consolidated, removedCount: totalRemoved, usage: result.usage };
+  return { findings: consolidated, removedCount: totalRemoved, removedFindings: [...hashRemovedFindings, ...absorbed], usage: result.usage };
 }
 
 /**

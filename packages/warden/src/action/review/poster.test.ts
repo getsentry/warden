@@ -635,6 +635,7 @@ describe('postTriggerReview', () => {
     vi.mocked(consolidateBatchFindings).mockResolvedValue({
       findings: [finding1],
       removedCount: 1,
+      removedFindings: [finding2],
     });
 
     vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
@@ -665,6 +666,19 @@ describe('postTriggerReview', () => {
     expect(postResult.posted).toBe(true);
     // Only the consolidated finding should be posted
     expect(postResult.newComments).toHaveLength(1);
+    expect(postResult.findingObservations).toEqual([
+      {
+        outcome: 'skipped',
+        finding: finding2,
+        skill: 'test-skill',
+        skippedReason: 'consolidated',
+      },
+      {
+        outcome: 'posted',
+        finding: finding1,
+        skill: 'test-skill',
+      },
+    ]);
   });
 
   it('skips consolidation when only one finding exists', async () => {

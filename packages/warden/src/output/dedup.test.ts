@@ -830,6 +830,7 @@ describe('consolidateBatchFindings', () => {
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toBe(finding1);
     expect(result.removedCount).toBe(1);
+    expect(result.removedFindings).toEqual([finding2]);
   });
 
   it('keeps findings with different hashes at same location in hashOnly mode', async () => {
