@@ -327,6 +327,7 @@ runtime = "pi"
 [defaults.agent]
 model = "anthropic/claude-sonnet-4-6"
 maxTurns = 30
+reasoningEffort = "medium"
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"
@@ -346,6 +347,7 @@ Runtime selection is global within a config layer. `runtime` is not currently a 
 Model lanes:
 
 - `defaults.agent.model` - main repo-aware skill analysis. Preferred default model field.
+- `defaults.agent.reasoningEffort` - optional repo-aware skill reasoning effort. Supported values are `off`, `low`, `medium`, `high`, and `xhigh`.
 - `defaults.auxiliary.model` - structured helper calls such as extraction, repair, merging, dedupe, and fix evaluation.
 - `defaults.synthesis.model` - post-analysis synthesis and consolidation. Falls back to `defaults.auxiliary.model` when unset.
 

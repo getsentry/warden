@@ -38,6 +38,7 @@ ignorePaths = ["*.test.ts"]           # Exclude matching files
 [defaults.agent]
 model = "openai/gpt-5.5"              # Default repo-aware analysis model
 maxTurns = 50                         # Max agentic turns per hunk
+reasoningEffort = "medium"            # off | low | medium | high | xhigh
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"  # Helper model for extraction and fix gates
@@ -58,6 +59,8 @@ maxChunkSize = 8000            # Max chars per chunk
 pattern = "*.config.*"         # Glob pattern
 mode = "whole-file"            # per-hunk | whole-file | skip
 ```
+
+`[defaults.agent].reasoningEffort` controls repo-aware skill reasoning across runtimes. When omitted, each runtime uses its own default.
 
 `[defaults.synthesis].model` falls back to `[defaults.auxiliary].model` when omitted. Legacy `[defaults].model` and `[defaults].maxTurns` are still supported as analysis fallbacks.
 
