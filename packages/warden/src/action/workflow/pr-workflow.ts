@@ -560,11 +560,11 @@ async function evaluateFixesAndResolveStale(
       // evaluate each group against only the changes made after that commit.
       const commentsByOriginalCommit = new Map<string, typeof eligibleComments>();
       for (const c of eligibleComments) {
-        const base = c.originalCommitSha!;
+        const base = c.originalCommitSha as string;
         if (!commentsByOriginalCommit.has(base)) {
           commentsByOriginalCommit.set(base, []);
         }
-        commentsByOriginalCommit.get(base)!.push(c);
+        commentsByOriginalCommit.get(base)?.push(c);
       }
 
       // Merge results from all per-group fix evaluation calls
