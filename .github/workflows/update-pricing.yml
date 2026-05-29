@@ -102,19 +102,14 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           GITHUB_TOKEN: ${{ steps.token.outputs.token }}
-          APP_SLUG: ${{ steps.token.outputs.app-slug }}
           GH_REPO: ${{ github.repository }}
+          GIT_AUTHOR_NAME: Warden Pricing Workflow
+          GIT_AUTHOR_EMAIL: actions@github.com
+          GIT_COMMITTER_NAME: Warden Pricing Workflow
+          GIT_COMMITTER_EMAIL: actions@github.com
         run: |
-          # Derive a stable bot identity for the commit. The user id keeps
-          # GitHub's "verified bot" attribution working when present.
-          BOT_USER="${APP_SLUG}[bot]"
-          BOT_USER_ID=$(gh api "/users/${BOT_USER}" --jq .id)
-          export GIT_AUTHOR_NAME="$BOT_USER"
-          export GIT_COMMITTER_NAME="$BOT_USER"
-          export GIT_AUTHOR_EMAIL="${BOT_USER_ID}+${BOT_USER}@users.noreply.github.com"
-          export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
-
           # Swap the origin remote over to the app-token credential so
-          # both git push and gh CLI use the write-capable identity.
+          # both git push and gh CLI use write-capable auth. Commit identity
+          # stays the explicit workflow identity above, not the app credential.
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GH_REPO}.git"
           pnpm --filter @sentry/warden update-pricing-pr

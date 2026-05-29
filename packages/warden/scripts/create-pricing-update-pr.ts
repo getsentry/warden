@@ -142,8 +142,8 @@ function findOpenPrNumber(): number | null {
 }
 
 function configureGitIdentity(): void {
-  // Honour CI-provided identity (e.g. from actions/create-github-app-token);
-  // otherwise leave whatever the local config has.
+  // Honour caller-provided commit identity; otherwise leave whatever the local
+  // config has.
   const name = process.env.GIT_AUTHOR_NAME ?? process.env.GIT_COMMITTER_NAME;
   const email = process.env.GIT_AUTHOR_EMAIL ?? process.env.GIT_COMMITTER_EMAIL;
   if (name) {
