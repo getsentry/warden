@@ -144,6 +144,25 @@ describe('classifyError', () => {
   });
 });
 
+describe('WardenAuthenticationError', () => {
+  it('uses Claude guidance by default', () => {
+    const error = new WardenAuthenticationError();
+
+    expect(error.message).toContain('claude login');
+    expect(error.message).toContain('WARDEN_ANTHROPIC_API_KEY');
+    expect(error.message).not.toContain('WARDEN_{PROVIDER}_API_KEY');
+  });
+
+  it('uses Pi provider guidance for Pi runtime authentication failures', () => {
+    const error = new WardenAuthenticationError('invalid key', { runtime: 'pi' });
+
+    expect(error.message).toContain('invalid key');
+    expect(error.message).toContain('WARDEN_MODEL=provider/model-id');
+    expect(error.message).toContain('WARDEN_{PROVIDER}_API_KEY');
+    expect(error.message).not.toContain('claude login');
+  });
+});
+
 describe('sanitizeErrorMessage', () => {
   it('redacts Anthropic and generic secret-looking keys', () => {
     const sanitized = sanitizeErrorMessage(
