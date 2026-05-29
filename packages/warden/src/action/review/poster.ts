@@ -223,6 +223,7 @@ export async function postTriggerReview(
   if (!result.report) {
     return emptyReviewPostResult(newComments, activeWardenCommentIds);
   }
+  const skill = result.report.skill;
 
   // Filter findings by reportOn threshold and confidence
   const filteredFindings = filterFindings(result.report.findings, result.reportOn, result.minConfidence);
@@ -258,7 +259,7 @@ export async function postTriggerReview(
         model: ctx.model,
         hashOnly: !canUseAuxiliaryRuntime,
         maxRetries: ctx.maxRetries,
-        agentName: result.report.skill,
+        agentName: skill,
       });
       findingsToPost = consolidateResult.findings;
       findingsToMarkFailed = findingsToPost;
@@ -266,7 +267,7 @@ export async function postTriggerReview(
         findingObservations.push({
           outcome: 'skipped',
           finding,
-          skill: result.report.skill,
+          skill,
           skippedReason: 'duplicate_in_batch',
         });
       }
@@ -291,13 +292,13 @@ export async function postTriggerReview(
         apiKey,
         runtime: ctx.runtime,
         model: ctx.model,
-        currentSkill: result.report.skill,
+        currentSkill: skill,
         maxRetries: ctx.maxRetries,
       });
       result.report.findings = recenterReportFindingIds(result.report.findings, dedupResult.duplicateActions);
       findingsToPost = dedupResult.newFindings;
       findingsToMarkFailed = findingsToPost;
-      findingObservations.push(...buildDedupeObservations(dedupResult.duplicateActions, result.report.skill));
+      findingObservations.push(...buildDedupeObservations(dedupResult.duplicateActions, skill));
 
       // Merge dedup usage into the report's auxiliary usage
       if (dedupResult.dedupUsage) {
@@ -325,7 +326,7 @@ export async function postTriggerReview(
         context.repository.owner,
         context.repository.name,
         dedupResult.duplicateActions,
-        result.report.skill
+        skill
       );
 
       if (actionCounts.updated > 0) {
@@ -379,7 +380,7 @@ export async function postTriggerReview(
         findingObservations.push({
           outcome: 'skipped',
           finding,
-          skill: result.report.skill,
+          skill,
           skippedReason: 'max_findings',
         });
       }
@@ -391,12 +392,12 @@ export async function postTriggerReview(
           throw error;
         }
         warnAction(`Inline comments failed for ${result.triggerName}, posting findings in review body`);
-        const fallback = moveCommentsToBody(renderResultToPost, postedFindings, result.report.skill);
+        const fallback = moveCommentsToBody(renderResultToPost, postedFindings, skill);
         await postReviewToGitHub(octokit, context, fallback);
       }
       for (const finding of postedFindings) {
-        findingObservations.push({ outcome: 'posted', finding, skill: result.report.skill });
-        const comment = findingToExistingComment(finding, result.report.skill);
+        findingObservations.push({ outcome: 'posted', finding, skill });
+        const comment = findingToExistingComment(finding, skill);
         if (comment) {
           newComments.push(comment);
         }
@@ -419,7 +420,7 @@ export async function postTriggerReview(
       activeWardenCommentIds,
       findingObservations: [
         ...findingObservations,
-        ...findingsToMarkFailed.map((finding) => ({ outcome: 'failed' as const, finding, skill: result.report?.skill })),
+        ...findingsToMarkFailed.map((finding) => ({ outcome: 'failed' as const, finding, skill })),
       ],
       shouldFail: false,
     };
