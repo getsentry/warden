@@ -33,6 +33,7 @@ describe('postTriggerReview', () => {
     vi.mocked(consolidateBatchFindings).mockImplementation(async (findings) => ({
       findings,
       removedCount: 0,
+      removedFindings: [],
     }));
   });
 
@@ -137,7 +138,7 @@ describe('postTriggerReview', () => {
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
   });
 
-  it('records severity threshold as the filter reason', async () => {
+  it('does not emit posting observations for threshold-suppressed findings', async () => {
     const finding = createFinding({ severity: 'low' });
     const result: TriggerResult = {
       triggerName: 'test-trigger',
@@ -153,41 +154,7 @@ describe('postTriggerReview', () => {
 
     const postResult = await postTriggerReview({ result, existingComments: [], apiKey: 'test-key' }, mockDeps);
 
-    expect(postResult.findingObservations).toEqual([
-      {
-        outcome: 'filtered',
-        finding,
-        skill: 'test-skill',
-        filteredReason: 'below_severity_threshold',
-      },
-    ]);
-  });
-
-  it('records confidence threshold as the filter reason', async () => {
-    const finding = createFinding({ confidence: 'low' });
-    const result: TriggerResult = {
-      triggerName: 'test-trigger',
-      report: {
-        skill: 'test-skill',
-        summary: 'Found 1 issue',
-        findings: [finding],
-        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
-      },
-      renderResult: createRenderResult(),
-      reportOn: 'low',
-      minConfidence: 'medium',
-    };
-
-    const postResult = await postTriggerReview({ result, existingComments: [], apiKey: 'test-key' }, mockDeps);
-
-    expect(postResult.findingObservations).toEqual([
-      {
-        outcome: 'filtered',
-        finding,
-        skill: 'test-skill',
-        filteredReason: 'below_confidence_threshold',
-      },
-    ]);
+    expect(postResult.findingObservations).toEqual([]);
   });
 
   it('does not emit a public skipped reason when no review render result exists', async () => {
@@ -653,6 +620,55 @@ describe('postTriggerReview', () => {
 
     expect(postResult.posted).toBe(false);
     expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves max findings skipped observations when posting fails', async () => {
+    const finding1 = createFinding({ id: 'f1' });
+    const finding2 = createFinding({ id: 'f2', location: { path: 'test.ts', startLine: 20 } });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 2 issues',
+        findings: [finding1, finding2],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: '',
+          comments: [
+            { path: 'test.ts', line: 10, body: 'Comment 1' },
+            { path: 'test.ts', line: 20, body: 'Comment 2' },
+          ],
+        },
+      }),
+      reportOn: 'low',
+      maxFindings: 1,
+    };
+
+    vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('Resource not accessible by integration'));
+
+    const postResult = await postTriggerReview({
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    }, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(postResult.findingObservations).toEqual([
+      {
+        outcome: 'skipped',
+        finding: finding2,
+        skill: 'test-skill',
+        skippedReason: 'max_findings',
+      },
+      {
+        outcome: 'failed',
+        finding: finding1,
+        skill: 'test-skill',
+      },
+    ]);
   });
 
   it('consolidates batch findings before dedup when multiple findings exist', async () => {

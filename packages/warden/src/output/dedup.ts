@@ -778,7 +778,7 @@ const PROXIMITY_THRESHOLD = 5;
 export interface ConsolidateResult {
   findings: Finding[];
   removedCount: number;
-  removedFindings?: Finding[];
+  removedFindings: Finding[];
   usage?: UsageStats;
 }
 

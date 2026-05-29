@@ -6,8 +6,8 @@
  */
 
 import type { Octokit } from '@octokit/rest';
-import type { ConfidenceThreshold, EventContext, Finding, SeverityThreshold } from '../../types/index.js';
-import { CONFIDENCE_ORDER, filterFindings, SEVERITY_ORDER } from '../../types/index.js';
+import type { EventContext, Finding } from '../../types/index.js';
+import { filterFindings } from '../../types/index.js';
 import { shouldFail } from '../../triggers/matcher.js';
 import type { RenderResult } from '../../output/types.js';
 import { renderSkillReport, renderFindingsBody } from '../../output/renderer.js';
@@ -23,7 +23,7 @@ import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
-import type { FilteredReason, FindingObservation } from '../reporting/outcomes.js';
+import type { FindingObservation } from '../reporting/outcomes.js';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -114,31 +114,6 @@ function recenterReportFindingIds(reportFindings: Finding[], actions: Deduplicat
     const recenteredId = ids.get(finding.id);
     return recenteredId ? { ...finding, id: recenteredId } : finding;
   });
-}
-
-function findingFilterReason(
-  finding: Finding,
-  reportOn?: SeverityThreshold,
-  minConfidence?: ConfidenceThreshold
-): FilteredReason | undefined {
-  if (reportOn === 'off') {
-    return 'reporting_disabled';
-  }
-
-  if (reportOn && SEVERITY_ORDER[finding.severity] > SEVERITY_ORDER[reportOn]) {
-    return 'below_severity_threshold';
-  }
-
-  if (
-    minConfidence &&
-    minConfidence !== 'off' &&
-    finding.confidence &&
-    CONFIDENCE_ORDER[finding.confidence] > CONFIDENCE_ORDER[minConfidence]
-  ) {
-    return 'below_confidence_threshold';
-  }
-
-  return undefined;
 }
 
 // -----------------------------------------------------------------------------
@@ -251,17 +226,6 @@ export async function postTriggerReview(
 
   // Filter findings by reportOn threshold and confidence
   const filteredFindings = filterFindings(result.report.findings, result.reportOn, result.minConfidence);
-  const filteredIds = new Set(filteredFindings.map((finding) => finding.id));
-  for (const finding of result.report.findings) {
-    if (!filteredIds.has(finding.id)) {
-      findingObservations.push({
-        outcome: 'filtered',
-        finding,
-        skill: result.report.skill,
-        filteredReason: findingFilterReason(finding, result.reportOn, result.minConfidence) ?? 'below_severity_threshold',
-      });
-    }
-  }
   const reportOnSuccess = result.reportOnSuccess ?? false;
 
   // Skip if review rendering is disabled. In the normal action path this is
@@ -411,6 +375,14 @@ export async function postTriggerReview(
         : [];
       // Only overflow-eligible findings should be marked failed if posting throws
       findingsToMarkFailed = postedFindings;
+      for (const finding of skippedFindings) {
+        findingObservations.push({
+          outcome: 'skipped',
+          finding,
+          skill: result.report.skill,
+          skippedReason: 'max_findings',
+        });
+      }
 
       try {
         await postReviewToGitHub(octokit, context, renderResultToPost);
@@ -429,15 +401,6 @@ export async function postTriggerReview(
           newComments.push(comment);
         }
       }
-      for (const finding of skippedFindings) {
-        findingObservations.push({
-          outcome: 'skipped',
-          finding,
-          skill: result.report.skill,
-          skippedReason: 'max_findings',
-        });
-      }
-
       return {
         posted: true,
         newComments,

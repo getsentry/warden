@@ -5,7 +5,6 @@ import { FindingSchema } from '../../types/index.js';
 export type FindingOutcome =
   | 'posted'
   | 'deduped'
-  | 'filtered'
   | 'skipped'
   | 'resolved'
   | 'failed';
@@ -13,10 +12,6 @@ export type FindingOutcome =
 export type DedupeSource = 'warden' | 'external';
 export type DedupeMatchType = 'hash' | 'semantic';
 export type SkippedReason = 'max_findings' | 'duplicate_in_batch';
-export type FilteredReason =
-  | 'reporting_disabled'
-  | 'below_severity_threshold'
-  | 'below_confidence_threshold';
 export type ResolvedReason = 'fix_evaluation' | 'stale_check';
 
 export const DedupeDetailSchema = z.object({
@@ -45,11 +40,6 @@ export interface DedupedFindingObservation extends BaseFindingObservation {
   dedupe: DedupeDetail;
 }
 
-export interface FilteredFindingObservation extends BaseFindingObservation {
-  outcome: 'filtered';
-  filteredReason: FilteredReason;
-}
-
 export interface SkippedFindingObservation extends BaseFindingObservation {
   outcome: 'skipped';
   skippedReason: SkippedReason;
@@ -67,7 +57,6 @@ export interface FailedFindingObservation extends BaseFindingObservation {
 export type FindingObservation =
   | PostedFindingObservation
   | DedupedFindingObservation
-  | FilteredFindingObservation
   | SkippedFindingObservation
   | ResolvedFindingObservation
   | FailedFindingObservation;
@@ -83,16 +72,6 @@ export const FindingObservationSchema = z.discriminatedUnion('outcome', [
     finding: FindingSchema,
     skill: z.string().optional(),
     dedupe: DedupeDetailSchema,
-  }),
-  z.object({
-    outcome: z.literal('filtered'),
-    finding: FindingSchema,
-    skill: z.string().optional(),
-    filteredReason: z.enum([
-      'reporting_disabled',
-      'below_severity_threshold',
-      'below_confidence_threshold',
-    ]),
   }),
   z.object({
     outcome: z.literal('skipped'),

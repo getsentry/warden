@@ -852,12 +852,14 @@ describe('consolidateBatchFindings', () => {
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0]).toBe(finding);
     expect(result.removedCount).toBe(0);
+    expect(result.removedFindings).toEqual([]);
   });
 
   it('returns empty array unchanged', async () => {
     const result = await consolidateBatchFindings([]);
     expect(result.findings).toHaveLength(0);
     expect(result.removedCount).toBe(0);
+    expect(result.removedFindings).toEqual([]);
   });
 
   it('removes exact hash duplicates within batch', async () => {
