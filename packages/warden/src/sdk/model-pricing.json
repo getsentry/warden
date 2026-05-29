@@ -103,6 +103,14 @@
     "cacheWrite1hPerMTok": 10,
     "webSearchPer1K": 10
   },
+  "claude-opus-4-8": {
+    "inputPerMTok": 5,
+    "outputPerMTok": 25,
+    "cacheReadPerMTok": 0.5,
+    "cacheWritePerMTok": 6.25,
+    "cacheWrite1hPerMTok": 10,
+    "webSearchPer1K": 10
+  },
   "claude-sonnet-4-0": {
     "inputPerMTok": 3,
     "outputPerMTok": 15,
