@@ -25,10 +25,11 @@ import { fetchExistingComments } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
 import { filterFindings } from '../../types/index.js';
-import type { EventContext, SkillReport, Finding } from '../../types/index.js';
+import type { EventContext, SkillReport, Finding, UsageStats } from '../../types/index.js';
 import { runPool, Semaphore } from '../../utils/index.js';
 import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
-import type { FixEvaluation } from '../fix-evaluation/index.js';
+import type { EvaluateFixAttemptsResult, FixEvaluation } from '../fix-evaluation/index.js';
+import { aggregateUsage, emptyUsage } from '../../sdk/usage.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
 import { formatCost, formatTokens, formatDuration } from '../../cli/output/formatters.js';
 import { findBotReviewState } from '../review-state.js';
@@ -538,24 +539,81 @@ async function evaluateFixesAndResolveStale(
   ) {
     try {
       logGroup('Fix evaluation');
-      const unresolvedCount = commentsForFixEvaluation.filter((c) => !c.isResolved && c.threadId).length;
+
+      // Only evaluate comments that were posted on an earlier commit — if a comment was
+      // posted on the current headSha there are no follow-up changes to evaluate yet, and
+      // running fix evaluation would compare the entire PR diff (PR base → head) against a
+      // finding from this same run, producing spurious "Fix attempt detected" replies.
+      const headSha = context.pullRequest.headSha;
+      const eligibleComments = commentsForFixEvaluation.filter(
+        (c) => c.originalCommitSha !== undefined && c.originalCommitSha !== headSha
+      );
+
+      const unresolvedCount = eligibleComments.filter((c) => !c.isResolved && c.threadId).length;
       if (unresolvedCount > 0) {
         logAction(`Fix evaluation: evaluating ${unresolvedCount} unresolved comments`);
+      } else {
+        logAction('Fix evaluation: no eligible comments (all posted on current head)');
       }
 
-      const fixEvaluation = await evaluateFixAttempts(
-        octokit,
-        commentsForFixEvaluation,
-        {
-          owner: context.repository.owner,
-          repo: context.repository.name,
-          baseSha: context.pullRequest.baseSha,
-          headSha: context.pullRequest.headSha,
-        },
-        allFindings,
-        anthropicApiKey,
-        { ...auxiliaryOptions, runtime: fixEvaluationRuntime }
-      );
+      // Group eligible comments by the commit at which they were originally posted so we
+      // evaluate each group against only the changes made after that commit.
+      const commentsByOriginalCommit = new Map<string, typeof eligibleComments>();
+      for (const c of eligibleComments) {
+        const base = c.originalCommitSha!;
+        if (!commentsByOriginalCommit.has(base)) {
+          commentsByOriginalCommit.set(base, []);
+        }
+        commentsByOriginalCommit.get(base)!.push(c);
+      }
+
+      // Merge results from all per-group fix evaluation calls
+      const mergedFixEvaluation: EvaluateFixAttemptsResult = {
+        toResolve: [],
+        toReply: [],
+        skipped: 0,
+        evaluated: 0,
+        failedEvaluations: 0,
+        uniqueFindingsEvaluated: 0,
+        uniqueFindingsCodeChanged: 0,
+        uniqueFindingsResolved: 0,
+        usage: emptyUsage(),
+        evaluations: [],
+      };
+      const usagesFromGroups: UsageStats[] = [];
+
+      for (const [commentBaseSha, groupComments] of commentsByOriginalCommit) {
+        const groupResult = await evaluateFixAttempts(
+          octokit,
+          groupComments,
+          {
+            owner: context.repository.owner,
+            repo: context.repository.name,
+            baseSha: commentBaseSha,
+            headSha,
+          },
+          allFindings,
+          anthropicApiKey,
+          { ...auxiliaryOptions, runtime: fixEvaluationRuntime }
+        );
+        mergedFixEvaluation.toResolve.push(...groupResult.toResolve);
+        mergedFixEvaluation.toReply.push(...groupResult.toReply);
+        mergedFixEvaluation.skipped += groupResult.skipped;
+        mergedFixEvaluation.evaluated += groupResult.evaluated;
+        mergedFixEvaluation.failedEvaluations += groupResult.failedEvaluations;
+        mergedFixEvaluation.uniqueFindingsEvaluated += groupResult.uniqueFindingsEvaluated;
+        mergedFixEvaluation.uniqueFindingsCodeChanged += groupResult.uniqueFindingsCodeChanged;
+        mergedFixEvaluation.uniqueFindingsResolved += groupResult.uniqueFindingsResolved;
+        mergedFixEvaluation.evaluations.push(...groupResult.evaluations);
+        if (groupResult.usage.inputTokens > 0 || groupResult.usage.outputTokens > 0) {
+          usagesFromGroups.push(groupResult.usage);
+        }
+      }
+      if (usagesFromGroups.length > 0) {
+        mergedFixEvaluation.usage = aggregateUsage(usagesFromGroups);
+      }
+
+      const fixEvaluation = mergedFixEvaluation;
 
       // Log per-evaluation details
       fixEvaluation.evaluations.forEach((ev, i) =>

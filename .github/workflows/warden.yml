@@ -12,6 +12,12 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    # Cancel duplicate runs for the same PR head commit (e.g. both 'opened' and 'synchronize'
+    # events firing when a PR is created programmatically) so fix evaluation in a second run
+    # does not see findings from the first run and post spurious 'Fix attempt detected' replies.
+    concurrency:
+      group: warden-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      cancel-in-progress: true
     env:
       WARDEN_MODEL: anthropic/claude-sonnet-4-6
       WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}

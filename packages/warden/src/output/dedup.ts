@@ -51,6 +51,8 @@ export interface ExistingComment {
   commentNodeId?: string;
   /** Login of the actor that authored the comment, when available */
   actor?: string;
+  /** The commit SHA at which this comment was originally created */
+  originalCommitSha?: string;
 }
 
 /**
@@ -411,6 +413,7 @@ interface ReviewThreadNode {
       author?: {
         login: string;
       } | null;
+      originalCommit: { oid: string } | null;
     }[];
   };
 }
@@ -451,6 +454,9 @@ const REVIEW_THREADS_QUERY = `
                 originalLine
                 author {
                   login
+                }
+                originalCommit {
+                  oid
                 }
               }
             }
@@ -527,6 +533,7 @@ export async function fetchExistingComments(
         body: firstComment.body,
         commentNodeId: firstComment.id,
         actor: firstComment.author?.login,
+        originalCommitSha: firstComment.originalCommit?.oid,
       });
     }
 
