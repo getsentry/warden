@@ -130,8 +130,12 @@ jobs:
     env:
       WARDEN_MODEL: \${{ secrets.WARDEN_MODEL }}
       WARDEN_SENTRY_DSN: \${{ secrets.WARDEN_SENTRY_DSN }}
+      # Add the WARDEN_<PROVIDER>_API_KEY that matches your WARDEN_MODEL provider:
       WARDEN_OPENAI_API_KEY: \${{ secrets.WARDEN_OPENAI_API_KEY }}
       WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      # WARDEN_FIREWORKS_API_KEY: \${{ secrets.WARDEN_FIREWORKS_API_KEY }}
+      # WARDEN_GROQ_API_KEY: \${{ secrets.WARDEN_GROQ_API_KEY }}
+      # WARDEN_OPENROUTER_API_KEY: \${{ secrets.WARDEN_OPENROUTER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:

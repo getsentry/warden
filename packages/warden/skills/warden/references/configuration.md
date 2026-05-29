@@ -109,10 +109,17 @@ From highest to lowest priority:
 | Variable | Purpose |
 |----------|---------|
 | `WARDEN_MODEL` | Default model (lowest priority) |
+| `WARDEN_{PROVIDER}_API_KEY` | API key for the named Pi provider (e.g. `WARDEN_OPENAI_API_KEY`, `WARDEN_FIREWORKS_API_KEY`). Mirrored to the native `{PROVIDER}_API_KEY` at runtime. |
 | `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
+| `WARDEN_FIREWORKS_API_KEY` | Fireworks API key for Fireworks Pi models |
+| `WARDEN_GROQ_API_KEY` | Groq API key for Groq Pi models |
+| `WARDEN_OPENROUTER_API_KEY` | OpenRouter API key for OpenRouter Pi models |
 | `WARDEN_STATE_DIR` | Override cache location (default: `~/.local/warden`) |
 | `WARDEN_SKILL_CACHE_TTL` | Cache TTL in seconds for unpinned remotes (default: 86400) |
+
+Native provider env vars (e.g. `OPENAI_API_KEY`) also work. The `WARDEN_`-prefixed forms are
+preferred in CI so they do not collide with locally-set provider keys.
 
 ## Troubleshooting
 

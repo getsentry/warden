@@ -58,12 +58,19 @@ export function isAuthenticationErrorMessage(message: string): boolean {
   return AUTH_ERROR_PATTERNS.some((pattern) => new RegExp(pattern, 'i').test(message));
 }
 
-/** User-friendly error message for authentication failures */
-const AUTH_ERROR_GUIDANCE = `
+/** User-friendly error message for authentication failures (Claude runtime) */
+const CLAUDE_AUTH_GUIDANCE = `
   claude login                             # Use local Claude Code auth
   export WARDEN_ANTHROPIC_API_KEY=sk-...   # Or use API key
 
 https://console.anthropic.com/ for API keys`;
+
+/** User-friendly error message for authentication failures (Pi runtime) */
+const PI_AUTH_GUIDANCE = `
+  export WARDEN_MODEL=provider/model-id    # e.g. openai/gpt-5.5
+  export WARDEN_{PROVIDER}_API_KEY=...     # WARDEN-prefixed key for that provider
+
+See https://warden.sentry.dev/config/models for provider selectors and credential names.`;
 
 /** IPC/subprocess failure error codes (EPIPE, ECONNRESET, etc.) */
 const IPC_ERROR_CODES = ['EPIPE', 'ECONNRESET', 'ECONNREFUSED', 'ENOTCONN'];
@@ -86,11 +93,13 @@ export function isSubprocessError(error: unknown): boolean {
 }
 
 export class WardenAuthenticationError extends Error {
-  constructor(sdkError?: string, options?: { cause?: unknown }) {
+  constructor(sdkError?: string, options?: { cause?: unknown; runtime?: string }) {
+    const { cause, runtime } = options ?? {};
+    const guidance = runtime === 'pi' ? PI_AUTH_GUIDANCE : CLAUDE_AUTH_GUIDANCE;
     const message = sdkError
-      ? `Authentication failed: ${sdkError}\n${AUTH_ERROR_GUIDANCE}`
-      : `Authentication required.${AUTH_ERROR_GUIDANCE}`;
-    super(message, options);
+      ? `Authentication failed: ${sdkError}\n${guidance}`
+      : `Authentication required.${guidance}`;
+    super(message, { cause });
     this.name = 'WardenAuthenticationError';
   }
 }

@@ -268,7 +268,7 @@ async function analyzeHunk(
           // Check for authentication errors from auth_status messages
           // auth_status errors are always auth-related - throw immediately
           if (authError) {
-            throw new WardenAuthenticationError(authError);
+            throw new WardenAuthenticationError(authError, { runtime: runtimeName });
           }
 
           if (!resultMessage) {
@@ -298,7 +298,7 @@ async function analyzeHunk(
             // Check if any error indicates authentication failure
             for (const err of errorMessages) {
               if (isAuthenticationErrorMessage(err)) {
-                throw new WardenAuthenticationError();
+                throw new WardenAuthenticationError(undefined, { runtime: runtimeName });
               }
             }
 

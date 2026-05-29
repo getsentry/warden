@@ -41,10 +41,18 @@ Examples:
 | `openai/gpt-5.5` | `WARDEN_OPENAI_API_KEY` |
 | `anthropic/claude-sonnet-4-6` | `WARDEN_ANTHROPIC_API_KEY` |
 | `fireworks/accounts/fireworks/models/kimi-k2p6` | `WARDEN_FIREWORKS_API_KEY` |
+| `groq/llama-3.3-70b-versatile` | `WARDEN_GROQ_API_KEY` |
+| `openrouter/meta-llama/llama-3.3-70b-instruct` | `WARDEN_OPENROUTER_API_KEY` |
+| `together/meta-llama/Llama-3.3-70B-Instruct-Turbo` | `WARDEN_TOGETHER_API_KEY` |
 
 Warden splits Pi selectors at the first `/`. The provider comes before it and the
 provider-specific model ID comes after it, so model IDs may contain additional
 slashes.
+
+**Credential convention:** Set `WARDEN_{PROVIDER}_API_KEY` to authenticate with a provider.
+Warden mirrors these to the native `{PROVIDER}_API_KEY` expected by each SDK at runtime.
+If you already have a native provider key set (e.g. `OPENAI_API_KEY`), Warden will use it
+directly and the `WARDEN_`-prefixed form is not required.
 
 ## Claude Runtime Models
 
