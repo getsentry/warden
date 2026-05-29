@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -57,11 +57,17 @@ jobs:
                 process.stderr.write('error: invalid entry for ' + model + '\n');
                 process.exit(1);
               }
+              let hasPositivePrice = false;
               for (const field of required) {
                 if (typeof v[field] !== 'number' || !Number.isFinite(v[field]) || v[field] < 0) {
                   process.stderr.write('error: invalid ' + field + ' for ' + model + '\n');
                   process.exit(1);
                 }
+                hasPositivePrice ||= v[field] > 0;
+              }
+              if (!hasPositivePrice) {
+                process.stderr.write('error: zero pricing entry for ' + model + '\n');
+                process.exit(1);
               }
             }
             console.log('Pricing output valid: ' + entries.length + ' entries');
@@ -81,10 +87,12 @@ jobs:
       - name: Get auth token
         if: steps.diff.outputs.changed == 'true'
         id: token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
-          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Open or refresh pricing PR
         if: steps.diff.outputs.changed == 'true'

@@ -5,6 +5,8 @@
  * Usage: pnpm update-pricing
  */
 
+import { pathToFileURL } from 'node:url';
+
 const SOURCE_URL =
   'https://raw.githubusercontent.com/pydantic/genai-prices/main/prices/data.json';
 const OUTPUT_PATH = new URL('../src/sdk/model-pricing.json', import.meta.url);
@@ -18,6 +20,13 @@ interface PriceEntry {
   cache_write_mtok?: PriceValue;
 }
 
+interface PriceAlternative {
+  constraint?: {
+    start_date?: string;
+  };
+  prices: PriceEntry;
+}
+
 /** Extract the base price from a flat number or tiered pricing object. */
 function basePrice(v: PriceValue | undefined): number {
   if (v == null) return 0;
@@ -28,7 +37,7 @@ function basePrice(v: PriceValue | undefined): number {
 interface ModelEntry {
   id: string;
   name: string;
-  prices: PriceEntry;
+  prices: PriceEntry | PriceAlternative[];
 }
 
 interface ProviderEntry {
@@ -72,13 +81,33 @@ function fillPricingFallbacks(pricing: Record<string, ModelPricingRecord>): void
   }
 }
 
-async function main() {
-  const res = await fetch(SOURCE_URL);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch pricing data: ${res.status} ${res.statusText}`);
+function startDateMs(alternative: PriceAlternative): number {
+  const startDate = alternative.constraint?.start_date;
+  if (!startDate) return Number.NEGATIVE_INFINITY;
+  const parsed = Date.parse(`${startDate}T00:00:00Z`);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
+
+function selectPriceEntry(
+  prices: PriceEntry | PriceAlternative[],
+  asOf = new Date(),
+): PriceEntry | null {
+  if (!Array.isArray(prices)) {
+    return prices;
   }
 
-  const providers: ProviderEntry[] = await res.json();
+  const asOfMs = asOf.getTime();
+  const applicable = prices
+    .filter((alternative) => alternative.prices && startDateMs(alternative) <= asOfMs)
+    .sort((a, b) => startDateMs(b) - startDateMs(a));
+
+  return applicable[0]?.prices ?? null;
+}
+
+export function buildAnthropicPricing(
+  providers: ProviderEntry[],
+  asOf = new Date(),
+): Record<string, ModelPricingRecord> {
   const anthropic = providers.find((p) => p.id === 'anthropic');
   if (!anthropic) {
     throw new Error('Anthropic provider not found in pricing data');
@@ -91,7 +120,7 @@ async function main() {
   }
 
   for (const model of anthropic.models) {
-    const p = model.prices;
+    const p = selectPriceEntry(model.prices, asOf);
     if (!p || typeof p !== 'object') {
       continue;
     }
@@ -107,6 +136,18 @@ async function main() {
 
   fillPricingFallbacks(pricing);
 
+  return pricing;
+}
+
+async function main() {
+  const res = await fetch(SOURCE_URL);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch pricing data: ${res.status} ${res.statusText}`);
+  }
+
+  const providers: ProviderEntry[] = await res.json();
+  const pricing = buildAnthropicPricing(providers);
+
   const { writeFileSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   writeFileSync(fileURLToPath(OUTPUT_PATH), JSON.stringify(pricing, null, 2) + '\n');
@@ -115,7 +156,9 @@ async function main() {
   console.log(`Wrote ${count} model(s) to packages/warden/src/sdk/model-pricing.json`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

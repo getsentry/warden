@@ -18,6 +18,10 @@
  *     branch updates it automatically. Otherwise a new PR is opened.
  *
  * Usage: pnpm --filter @sentry/warden update-pricing-pr
+ *
+ * Local safety check:
+ *   - Set WARDEN_PRICING_PR_DRY_RUN=1 to exercise the local branch and
+ *     commit path without pushing or creating/updating a PR.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -30,6 +34,7 @@ const BASE_BRANCH = 'main';
 const PRICING_FILE = 'packages/warden/src/sdk/model-pricing.json';
 const COMMIT_MESSAGE = 'chore: update model pricing';
 const PR_TITLE = 'chore: update model pricing';
+const DRY_RUN = process.env.WARDEN_PRICING_PR_DRY_RUN === '1';
 const PR_BODY =
   'Automated update of model pricing from [`pydantic/genai-prices`](https://github.com/pydantic/genai-prices).\n' +
   '\n' +
@@ -186,6 +191,14 @@ async function main(): Promise<void> {
   copyFileSync(tmpFile, PRICING_FILE);
   run('git', ['add', '--', PRICING_FILE]);
   run('git', ['commit', '-m', COMMIT_MESSAGE]);
+
+  if (DRY_RUN) {
+    console.log(
+      `Dry run: committed ${PRICING_FILE} on ${AUTOMATION_BRANCH}; ` +
+        'skipping push and PR update.',
+    );
+    return;
+  }
 
   // Use an explicit lease value so behavior is predictable regardless of
   // whether the local branch has an upstream configured. On first run there
