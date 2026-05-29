@@ -98,6 +98,7 @@ interface PiPromptOptions {
   maxRetries?: number;
   timeout?: number;
   abortController?: AbortController;
+  agentName?: string;
 }
 
 function errorMessage(error: unknown): string {
@@ -203,6 +204,67 @@ function textFromAssistant(message: AssistantMessage): string {
     .filter((content): content is TextContent => content.type === 'text')
     .map((content) => content.text)
     .join('');
+}
+
+interface PiToolCall {
+  type: 'toolCall';
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+interface PiToolResult {
+  toolCallId: string;
+  content: { type: string; text?: string }[];
+  isError: boolean;
+}
+
+function isToolCall(content: unknown): content is PiToolCall {
+  return Boolean(content && typeof content === 'object'
+    && (content as { type?: unknown }).type === 'toolCall');
+}
+
+function toolResultText(result: PiToolResult): string {
+  return result.content
+    .filter((c) => c.type === 'text' && typeof c.text === 'string')
+    .map((c) => c.text as string)
+    .join('');
+}
+
+/**
+ * Emit one `gen_ai.execute_tool` span per tool call in a Pi turn, pairing
+ * the assistant's `toolCall` content blocks with the matching `toolResults`
+ * by `toolCallId`. Pi runs tools inside its own session, so without this we
+ * see no tool execution in traces.
+ */
+function emitPiToolSpans(
+  toolCalls: PiToolCall[],
+  toolResults: readonly PiToolResult[],
+  agentName: string | undefined,
+): void {
+  for (const call of toolCalls) {
+    const result = toolResults.find((r) => r.toolCallId === call.id);
+    const attrs: Record<string, string | number | boolean> = {
+      'gen_ai.operation.name': 'execute_tool',
+      'gen_ai.tool.name': call.name,
+      'gen_ai.tool.type': 'function',
+      'gen_ai.tool.call.id': call.id,
+      'gen_ai.tool.call.arguments': JSON.stringify(call.arguments ?? {}),
+    };
+    if (agentName) attrs['gen_ai.agent.name'] = agentName;
+    if (result) {
+      attrs['gen_ai.tool.call.result'] = toolResultText(result);
+      if (result.isError) attrs['error.type'] = 'tool_execution_failed';
+    }
+    try {
+      Sentry.startSpan(
+        { op: 'gen_ai.execute_tool', name: call.name, attributes: attrs },
+        () => undefined,
+      );
+    } catch {
+      // Telemetry must never break the run.
+    }
+  }
 }
 
 function piUsageToStats(usage: Usage): UsageStats {
@@ -378,6 +440,12 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       } else if (event.type === 'agent_end') {
         agentEndMessages = [...event.messages];
       } else if (event.type === 'turn_end') {
+        if (isAssistantMessage(event.message)) {
+          const toolCalls = event.message.content.filter(isToolCall);
+          if (toolCalls.length > 0) {
+            emitPiToolSpans(toolCalls, event.toolResults as readonly PiToolResult[], options.agentName);
+          }
+        }
         numTurns++;
         if (
           options.maxTurns !== undefined
@@ -522,6 +590,7 @@ async function runStructured<T>(
           maxTurns: request.maxIterations,
           maxRetries: request.maxRetries,
           timeout: request.timeout,
+          agentName: request.agentName,
         });
         const result = normalizePiResult(run);
         if (!result) {
@@ -619,6 +688,7 @@ export const piRuntime: Runtime = {
             toolNames: skillTools.toolNames,
             maxTurns,
             abortController,
+            agentName: skillName,
           });
           run.warnings.unshift(...skillTools.warnings);
           const result = normalizePiResult(run);
