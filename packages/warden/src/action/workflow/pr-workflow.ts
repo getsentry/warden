@@ -540,9 +540,9 @@ async function evaluateFixesAndResolveStale(
     try {
       logGroup('Fix evaluation');
 
-      // Only evaluate comments that were posted on an earlier commit — if a comment was
+      // Only evaluate comments that were posted on an earlier commit. If a comment was
       // posted on the current headSha there are no follow-up changes to evaluate yet, and
-      // running fix evaluation would compare the entire PR diff (PR base → head) against a
+      // running fix evaluation would compare the entire PR diff (PR base to head) against a
       // finding from this same run, producing spurious "Fix attempt detected" replies.
       const headSha = context.pullRequest.headSha;
       const eligibleComments = commentsForFixEvaluation.filter(

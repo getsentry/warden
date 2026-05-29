@@ -24,6 +24,8 @@ const EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-auxiliary-m
 const LAYERED_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-auxiliary-model');
 const NO_MATCH_EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-auxiliary-model');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
+const PR_HEAD_SHA = 'abc123def456';
+const PREVIOUS_HEAD_SHA = 'previous123sha456';
 
 // -----------------------------------------------------------------------------
 // Mocks - ONLY external boundaries: LLM calls
@@ -1011,6 +1013,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
@@ -1024,8 +1027,8 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({
           owner: 'test-owner',
           repo: 'test-repo',
-          baseSha: 'base123sha456',
-          headSha: 'abc123def456',
+          baseSha: PREVIOUS_HEAD_SHA,
+          headSha: PR_HEAD_SHA,
         }),
         expect.any(Array),
         'test-api-key',
@@ -1045,6 +1048,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
@@ -1080,6 +1084,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
@@ -1102,8 +1107,8 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({
           owner: 'test-owner',
           repo: 'test-repo',
-          baseSha: 'base123sha456',
-          headSha: 'abc123def456',
+          baseSha: PREVIOUS_HEAD_SHA,
+          headSha: PR_HEAD_SHA,
         }),
         expect.any(Array),
         'test-api-key',
@@ -1124,6 +1129,29 @@ describe('runPRWorkflow', () => {
       expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
     });
 
+    it('skips fix evaluation for comments posted on the current head commit', async () => {
+      mockFetchExistingComments.mockResolvedValue([
+        {
+          id: 1,
+          path: 'src/test.ts',
+          line: 10,
+          title: 'SQL injection',
+          description: 'User input in query',
+          contentHash: 'abc',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+          originalCommitSha: PR_HEAD_SHA,
+        },
+      ]);
+
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+    });
+
     it('does not auto-resolve comments matched by current-run deduplication', async () => {
       const existingComment: ExistingComment = {
         id: 1,
@@ -1135,6 +1163,7 @@ describe('runPRWorkflow', () => {
         isWarden: true,
         isResolved: false,
         threadId: 'thread-1',
+        originalCommitSha: PREVIOUS_HEAD_SHA,
       };
       const finding = createFinding({
         severity: 'high',
@@ -1187,6 +1216,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
@@ -1231,6 +1261,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
@@ -1273,6 +1304,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
@@ -1315,6 +1347,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
@@ -1388,6 +1421,7 @@ describe('runPRWorkflow', () => {
           isWarden: true,
           isResolved: false,
           threadId: 'thread-1',
+          originalCommitSha: PREVIOUS_HEAD_SHA,
         },
       ]);
 
