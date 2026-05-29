@@ -306,6 +306,20 @@ describe('piRuntime.runSkill', () => {
     expect(piMocks.authStorage.setRuntimeApiKey).not.toHaveBeenCalled();
   });
 
+  it('resolves provider-specific Pi model IDs that contain slashes', async () => {
+    await piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'fireworks/accounts/fireworks/models/kimi-k2p6',
+      },
+    });
+
+    expect(piMocks.registry.find).toHaveBeenCalledWith(
+      'fireworks',
+      'accounts/fireworks/models/kimi-k2p6'
+    );
+  });
+
   it('requires configured Pi models to use provider/model selectors', async () => {
     await expect(piRuntime.runSkill({
       ...baseSkillRequest(),
