@@ -134,7 +134,6 @@ jobs:
       WARDEN_OPENAI_API_KEY: \${{ secrets.WARDEN_OPENAI_API_KEY }}
       WARDEN_ANTHROPIC_API_KEY: \${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
       # WARDEN_FIREWORKS_API_KEY: \${{ secrets.WARDEN_FIREWORKS_API_KEY }}
-      # WARDEN_GROQ_API_KEY: \${{ secrets.WARDEN_GROQ_API_KEY }}
       # WARDEN_OPENROUTER_API_KEY: \${{ secrets.WARDEN_OPENROUTER_API_KEY }}
     steps:
       - uses: actions/checkout@v4
