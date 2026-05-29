@@ -52,21 +52,20 @@ jobs:
               process.exit(1);
             }
             const required = ['inputPerMTok', 'outputPerMTok', 'cacheReadPerMTok', 'cacheWritePerMTok', 'cacheWrite1hPerMTok', 'webSearchPer1K'];
+            const tokenPriceFields = ['inputPerMTok', 'outputPerMTok', 'cacheReadPerMTok', 'cacheWritePerMTok', 'cacheWrite1hPerMTok'];
             for (const [model, v] of entries) {
               if (!v || typeof v !== 'object' || Array.isArray(v)) {
                 process.stderr.write('error: invalid entry for ' + model + '\n');
                 process.exit(1);
               }
-              let hasPositivePrice = false;
               for (const field of required) {
                 if (typeof v[field] !== 'number' || !Number.isFinite(v[field]) || v[field] < 0) {
                   process.stderr.write('error: invalid ' + field + ' for ' + model + '\n');
                   process.exit(1);
                 }
-                hasPositivePrice ||= v[field] > 0;
               }
-              if (!hasPositivePrice) {
-                process.stderr.write('error: zero pricing entry for ' + model + '\n');
+              if (!tokenPriceFields.some((field) => v[field] > 0)) {
+                process.stderr.write('error: zero token pricing entry for ' + model + '\n');
                 process.exit(1);
               }
             }

@@ -71,6 +71,15 @@ function hasPrice(record: ModelPricingRecord | undefined): record is ModelPricin
   );
 }
 
+function hasTokenPrice(p: PriceEntry): boolean {
+  return (
+    basePrice(p.input_mtok) > 0 ||
+    basePrice(p.output_mtok) > 0 ||
+    basePrice(p.cache_read_mtok) > 0 ||
+    basePrice(p.cache_write_mtok) > 0
+  );
+}
+
 function fillPricingFallbacks(pricing: Record<string, ModelPricingRecord>): void {
   for (const [target, source] of Object.entries(PRICE_FALLBACKS)) {
     const sourcePricing = pricing[source];
@@ -122,6 +131,9 @@ export function buildAnthropicPricing(
   for (const model of anthropic.models) {
     const p = selectPriceEntry(model.prices, asOf);
     if (!p || typeof p !== 'object') {
+      continue;
+    }
+    if (!hasTokenPrice(p)) {
       continue;
     }
     pricing[model.id] = {

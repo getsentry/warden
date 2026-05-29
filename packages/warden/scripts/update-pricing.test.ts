@@ -43,4 +43,21 @@ describe('buildAnthropicPricing', () => {
       webSearchPer1K: 10,
     });
   });
+
+  it('skips upstream entries without token prices', () => {
+    const pricing = buildAnthropicPricing([
+      {
+        id: 'anthropic',
+        models: [
+          {
+            id: 'claude-empty-price',
+            name: 'Claude Empty Price',
+            prices: {},
+          },
+        ],
+      },
+    ], new Date('2026-05-29T00:00:00Z'));
+
+    expect(pricing).not.toHaveProperty('claude-empty-price');
+  });
 });
