@@ -162,6 +162,52 @@ describe('claudeRuntime.runSkill', () => {
     });
   });
 
+  it('passes reasoning effort to Claude adaptive thinking', async () => {
+    mockQuery.mockReturnValue(mockStream([successResult()]));
+
+    await claudeRuntime.runSkill({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo',
+      skillName: 'test-skill',
+      options: {
+        model: 'claude-test',
+        reasoningEffort: 'medium',
+      },
+    });
+
+    expect(mockQuery).toHaveBeenCalledWith({
+      prompt: 'user',
+      options: expect.objectContaining({
+        effort: 'medium',
+        thinking: { type: 'adaptive' },
+      }),
+    });
+  });
+
+  it('can disable Claude thinking', async () => {
+    mockQuery.mockReturnValue(mockStream([successResult()]));
+
+    await claudeRuntime.runSkill({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo',
+      skillName: 'test-skill',
+      options: {
+        model: 'claude-test',
+        reasoningEffort: 'off',
+      },
+    });
+
+    expect(mockQuery).toHaveBeenCalledWith({
+      prompt: 'user',
+      options: expect.objectContaining({
+        thinking: { type: 'disabled' },
+      }),
+    });
+    expect(mockQuery.mock.calls[0]?.[0].options).not.toHaveProperty('effort');
+  });
+
   it('computes run cost from streamed assistant turns instead of cumulative SDK cost', async () => {
     mockQuery.mockReturnValue(mockStream([
       {

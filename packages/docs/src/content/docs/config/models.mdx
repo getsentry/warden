@@ -96,6 +96,7 @@ runtime = "pi"
 [defaults.agent]
 model = "anthropic/claude-sonnet-4-6"
 maxTurns = 30
+reasoningEffort = "medium"
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"
@@ -107,6 +108,10 @@ model = "anthropic/claude-opus-4-5"
 
 `defaults.model` and `defaults.maxTurns` are legacy shorthand for the agent
 lane. Prefer `defaults.agent.model` and `defaults.agent.maxTurns` in new config.
+
+`defaults.agent.reasoningEffort` optionally controls repo-aware skill reasoning
+across runtimes. Supported values are `off`, `low`, `medium`, `high`, and
+`xhigh`. When omitted, each runtime uses its own default.
 
 ## Overrides
 

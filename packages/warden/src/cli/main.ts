@@ -486,6 +486,7 @@ interface SkillToRun {
   filters: { paths?: string[]; ignorePaths?: string[] };
   model?: string;
   maxTurns?: number;
+  reasoningEffort?: SkillRunnerOptions['reasoningEffort'];
   runtime?: SkillRunnerOptions['runtime'];
   auxiliaryModel?: string;
   synthesisModel?: string;
@@ -514,7 +515,7 @@ interface ProcessedResults {
 
 type SkillRunnerOptionOverrides = Pick<
   SkillRunnerOptions,
-  'model' | 'maxTurns' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries' | 'verifyFindings'
+  'model' | 'maxTurns' | 'reasoningEffort' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries' | 'verifyFindings'
 >;
 
 const BUILTIN_SKILL_SOURCE = 'built-in (@sentry/warden)';
@@ -575,6 +576,7 @@ export function mergeSkillRunnerOptions(
 
   if (overrides.model !== undefined) merged.model = overrides.model;
   if (overrides.maxTurns !== undefined) merged.maxTurns = overrides.maxTurns;
+  if (overrides.reasoningEffort !== undefined) merged.reasoningEffort = overrides.reasoningEffort;
   if (overrides.runtime !== undefined) merged.runtime = overrides.runtime;
   if (overrides.auxiliaryModel !== undefined) merged.auxiliaryModel = overrides.auxiliaryModel;
   if (overrides.synthesisModel !== undefined) merged.synthesisModel = overrides.synthesisModel;
@@ -967,6 +969,7 @@ export async function runSkills(
       filters: match?.filters ?? fallbackFilters,
       model: match?.model ?? defaultModel,
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
+      reasoningEffort: match?.reasoningEffort ?? config?.defaults?.agent?.reasoningEffort,
       runtime: match?.runtime ?? config?.defaults?.runtime ?? 'pi',
       auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
       synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
@@ -994,6 +997,7 @@ export async function runSkills(
         filters: t.filters,
         model: t.model,
         maxTurns: t.maxTurns,
+        reasoningEffort: t.reasoningEffort,
         runtime: t.runtime,
         auxiliaryModel: t.auxiliaryModel,
         synthesisModel: t.synthesisModel,
@@ -1041,6 +1045,7 @@ export async function runSkills(
     synthesisModel: defaultSynthesisModel,
     abortController,
     maxTurns: config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
+    reasoningEffort: config?.defaults?.agent?.reasoningEffort,
     batchDelayMs: config?.defaults?.batchDelayMs,
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
     auxiliaryMaxRetries:
@@ -1369,6 +1374,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       apiKey,
       model: trigger.model,
       runtime: trigger.runtime,
+      reasoningEffort: trigger.reasoningEffort,
       auxiliaryModel: trigger.auxiliaryModel,
       synthesisModel: trigger.synthesisModel,
       abortController,

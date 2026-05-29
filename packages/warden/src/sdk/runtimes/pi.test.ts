@@ -256,6 +256,20 @@ describe('piRuntime.runSkill', () => {
     });
   });
 
+  it('passes reasoning effort as Pi thinking level', async () => {
+    await piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        ...baseSkillRequest().options,
+        reasoningEffort: 'medium',
+      },
+    });
+
+    expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
+      thinkingLevel: 'medium',
+    }));
+  });
+
   it('warns when requested tools cannot be mapped safely to Pi', async () => {
     const result = await piRuntime.runSkill({
       ...baseSkillRequest(),

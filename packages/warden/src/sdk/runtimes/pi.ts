@@ -29,7 +29,7 @@ import {
   type Usage,
 } from '@earendil-works/pi-ai';
 import { z } from 'zod';
-import type { ToolConfig, ToolName } from '../../config/schema.js';
+import type { ReasoningEffort, ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
 import type { UsageStats } from '../../types/index.js';
 import { bridgeWardenProviderApiKeyEnv } from '../../utils/index.js';
@@ -95,6 +95,7 @@ interface PiPromptOptions {
   toolNames: string[];
   customTools?: ToolDefinition[];
   maxTurns?: number;
+  reasoningEffort?: ReasoningEffort;
   maxRetries?: number;
   timeout?: number;
   abortController?: AbortController;
@@ -349,6 +350,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       authStorage,
       modelRegistry,
       model,
+      thinkingLevel: options.reasoningEffort,
       tools: options.toolNames,
       noTools: options.toolNames.length === 0 ? 'all' : undefined,
       customTools: options.customTools,
@@ -584,7 +586,7 @@ export const piRuntime: Runtime = {
       tools,
       allowMutatingTools,
     } = request;
-    const { maxTurns = 50, model, abortController } = options;
+    const { maxTurns = 50, model, reasoningEffort, abortController } = options;
     const skillTools = resolvePiSkillTools(tools, allowMutatingTools);
 
     return Sentry.startSpan(
@@ -612,6 +614,7 @@ export const piRuntime: Runtime = {
             legacyAnthropicApiKey: apiKey,
             toolNames: skillTools.toolNames,
             maxTurns,
+            reasoningEffort,
             abortController,
           });
           run.warnings.unshift(...skillTools.warnings);

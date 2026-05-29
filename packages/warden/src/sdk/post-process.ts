@@ -1,4 +1,4 @@
-import type { SkillDefinition } from '../config/schema.js';
+import type { ReasoningEffort, SkillDefinition } from '../config/schema.js';
 import { emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
 import type { Finding } from '../types/index.js';
 import { deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
@@ -18,6 +18,7 @@ export interface PostProcessFindingsOptions {
   auxiliaryMaxRetries?: number;
   verifyFindings?: boolean;
   maxTurns?: number;
+  reasoningEffort?: ReasoningEffort;
   abortController?: AbortController;
   pathToClaudeCodeExecutable?: string;
   prContext?: PromptPRContext;
@@ -50,6 +51,7 @@ export async function postProcessFindings(
       runtime: options.runtime,
       model: options.auxiliaryModel,
       maxTurns: options.maxTurns,
+      reasoningEffort: options.reasoningEffort,
       abortController: options.abortController,
       pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
       prContext: options.prContext,

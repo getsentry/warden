@@ -1,6 +1,6 @@
 import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
-import type { ChunkingConfig } from '../config/schema.js';
+import type { ChunkingConfig, ReasoningEffort } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
 import type { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
 
@@ -104,6 +104,8 @@ export interface SkillRunnerOptions {
   batchDelayMs?: number;
   /** Model to use for analysis (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model?: string;
+  /** Reasoning effort to use for analysis. Uses SDK default if not specified. */
+  reasoningEffort?: ReasoningEffort;
   /** Runtime backend for all model-backed execution. Defaults to Pi. */
   runtime?: RuntimeName;
   /** Model to use for auxiliary structured model calls. Uses runtime default if not specified. */

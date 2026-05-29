@@ -16,7 +16,7 @@
  * - Claude-specific result subtypes normalize to Warden-owned statuses.
  */
 import type Anthropic from '@anthropic-ai/sdk';
-import { query, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type EffortLevel, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
@@ -75,6 +75,19 @@ function getClaudeProviderOptions(providerOptions: unknown): ClaudeProviderOptio
       ? pathToClaudeCodeExecutable
       : undefined,
   };
+}
+
+function reasoningOptions(reasoningEffort: SkillRunRequest['options']['reasoningEffort']): {
+  thinking?: { type: 'adaptive' } | { type: 'disabled' };
+  effort?: EffortLevel;
+} {
+  if (!reasoningEffort) {
+    return {};
+  }
+  if (reasoningEffort === 'off') {
+    return { thinking: { type: 'disabled' } };
+  }
+  return { thinking: { type: 'adaptive' }, effort: reasoningEffort };
 }
 
 function missingApiKeyResult<T>(kind: 'auxiliary' | 'synthesis'): AuxiliaryRunResult<T> {
@@ -290,7 +303,7 @@ export const claudeRuntime: Runtime = {
       tools,
       allowMutatingTools,
     } = request;
-    const { maxTurns = 50, model, abortController } = options;
+    const { maxTurns = 50, model, reasoningEffort, abortController } = options;
     const { pathToClaudeCodeExecutable } = getClaudeProviderOptions(providerOptions);
     const skillTools = resolveClaudeSkillTools(tools, allowMutatingTools);
     const modelId = model ?? 'unknown';
@@ -327,6 +340,7 @@ export const claudeRuntime: Runtime = {
             // Prevent SDK from writing session .jsonl files and polluting Claude Code's session index.
             persistSession: false,
             model,
+            ...reasoningOptions(reasoningEffort),
             abortController,
             pathToClaudeCodeExecutable,
             stderr: (data: string) => {

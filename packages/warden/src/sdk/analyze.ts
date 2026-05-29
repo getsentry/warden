@@ -258,6 +258,7 @@ async function analyzeHunk(
             options: {
               maxTurns: options.maxTurns,
               model: options.model,
+              reasoningEffort: options.reasoningEffort,
               abortController: options.abortController,
             },
             providerOptions: getRuntimeProviderOptions(runtimeName, {
@@ -927,6 +928,7 @@ async function runSkillAnalysis(
       auxiliaryMaxRetries: options.auxiliaryMaxRetries,
       verifyFindings: options.verifyFindings,
       maxTurns: options.maxTurns,
+      reasoningEffort: options.reasoningEffort,
       abortController: options.abortController,
       pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
       prContext,

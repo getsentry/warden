@@ -241,6 +241,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: 'global-aux-model',
         synthesisModel: 'global-synth-model',
         maxTurns: 20,
+        reasoningEffort: 'medium',
         auxiliaryMaxRetries: 4,
       },
       {
@@ -249,6 +250,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: undefined,
         synthesisModel: undefined,
         maxTurns: undefined,
+        reasoningEffort: undefined,
         auxiliaryMaxRetries: undefined,
       }
     );
@@ -260,6 +262,7 @@ describe('mergeSkillRunnerOptions', () => {
       auxiliaryModel: 'global-aux-model',
       synthesisModel: 'global-synth-model',
       maxTurns: 20,
+      reasoningEffort: 'medium',
       auxiliaryMaxRetries: 4,
     });
   });
@@ -273,6 +276,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: 'global-aux-model',
         synthesisModel: 'global-synth-model',
         maxTurns: 20,
+        reasoningEffort: 'medium',
         auxiliaryMaxRetries: 4,
       },
       {
@@ -280,6 +284,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: 'skill-aux-model',
         synthesisModel: 'skill-synth-model',
         maxTurns: 8,
+        reasoningEffort: 'low',
         auxiliaryMaxRetries: 2,
       }
     );
@@ -291,6 +296,7 @@ describe('mergeSkillRunnerOptions', () => {
       auxiliaryModel: 'skill-aux-model',
       synthesisModel: 'skill-synth-model',
       maxTurns: 8,
+      reasoningEffort: 'low',
       auxiliaryMaxRetries: 2,
     });
   });
