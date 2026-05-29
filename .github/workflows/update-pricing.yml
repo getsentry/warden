@@ -22,6 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Keep the default read-only GITHUB_TOKEN out of git config so the
+          # later app-token remote URL is used for the automation branch push.
+          persist-credentials: false
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
       - uses: actions/setup-node@v4
