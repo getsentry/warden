@@ -301,7 +301,7 @@ export async function verifyFindings(
         }
 
         if (isAuthenticationError(error)) {
-          throw new WardenAuthenticationError(undefined, { cause: error });
+          throw new WardenAuthenticationError(undefined, { runtime: runtimeName, cause: error });
         }
 
         return { finding };

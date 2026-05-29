@@ -421,7 +421,7 @@ async function analyzeHunk(
           if (isAuthenticationError(error)) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             options.circuitBreaker?.recordFailure('auth_failed', sanitizeErrorMessage(errorMessage));
-            throw new WardenAuthenticationError(undefined, { cause: error });
+            throw new WardenAuthenticationError(undefined, { runtime: options.runtime ?? 'pi', cause: error });
           }
 
           // Don't retry if not a retryable error or we've exhausted retries
