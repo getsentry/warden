@@ -19,7 +19,7 @@
     "cli": "tsx src/cli/index.ts",
     "clean:dist": "rm -rf dist",
     "build": "pnpm run clean:dist && tsc -p tsconfig.build.json",
-    "build:action": "rm -rf ../../dist/action && ncc build src/action/main.ts -o ../../dist/action --no-source-map-register --license licenses.txt",
+    "build:action": "tsx scripts/validate-action-layout.ts && rm -rf ../../dist/action && ncc build src/action/main.ts -o ../../dist/action --no-source-map-register --license licenses.txt && tsx scripts/validate-action-layout.ts --require-dist",
     "dev": "tsc --watch",
     "test": "vitest run --config vitest.config.ts",
     "test:coverage": "vitest run --config vitest.config.ts --coverage",
