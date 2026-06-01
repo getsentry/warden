@@ -198,7 +198,7 @@ function installBundledSkills(
   const entries = readdirSync(bundledDir, { withFileTypes: true });
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
 
     const skillName = entry.name;
     if (!INSTALLABLE_BUNDLED_SKILLS.has(skillName)) continue;
@@ -239,7 +239,7 @@ function listBundledSkillNames(): string[] {
   const bundledDir = resolveBundledSkillsDir();
   if (!bundledDir) return [];
   return readdirSync(bundledDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && INSTALLABLE_BUNDLED_SKILLS.has(e.name))
+    .filter((e) => (e.isDirectory() || e.isSymbolicLink()) && INSTALLABLE_BUNDLED_SKILLS.has(e.name))
     .map((e) => e.name);
 }
 
