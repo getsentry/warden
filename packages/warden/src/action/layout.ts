@@ -16,29 +16,31 @@ export function validateActionLayout(options: ValidateActionLayoutOptions): stri
   expectFile(join(options.repoRoot, 'action.yml'), errors);
   validateTrackedSymlinks(options.repoRoot, errors);
 
-  const pluginSkillPath = join(options.repoRoot, 'plugins/warden/skills/warden');
-  const expectedSkillPath = join(options.repoRoot, 'packages/warden/skills/warden');
+  for (const skillName of ['warden', 'warden-sweep']) {
+    const pluginSkillPath = join(options.repoRoot, `plugins/warden/skills/${skillName}`);
+    const expectedSkillPath = join(options.repoRoot, `packages/warden/skills/${skillName}`);
 
-  try {
-    const stat = lstatSync(pluginSkillPath);
-    if (!stat.isSymbolicLink()) {
-      errors.push('plugins/warden/skills/warden must be a symlink');
-    } else {
-      const target = readlinkSync(pluginSkillPath);
-      const resolvedTarget = realpathSync(pluginSkillPath);
-      const expectedTarget = realpathSync(expectedSkillPath);
+    try {
+      const stat = lstatSync(pluginSkillPath);
+      if (!stat.isSymbolicLink()) {
+        errors.push(`plugins/warden/skills/${skillName} must be a symlink`);
+      } else {
+        const target = readlinkSync(pluginSkillPath);
+        const resolvedTarget = realpathSync(pluginSkillPath);
+        const expectedTarget = realpathSync(expectedSkillPath);
 
-      if (resolvedTarget !== expectedTarget) {
-        errors.push(
-          `plugins/warden/skills/warden points to ${target}, expected packages/warden/skills/warden`,
-        );
+        if (resolvedTarget !== expectedTarget) {
+          errors.push(
+            `plugins/warden/skills/${skillName} points to ${target}, expected packages/warden/skills/${skillName}`,
+          );
+        }
       }
-    }
 
-    expectFile(join(pluginSkillPath, 'SKILL.md'), errors);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    errors.push(`plugins/warden/skills/warden is not usable: ${reason}`);
+      expectFile(join(pluginSkillPath, 'SKILL.md'), errors);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      errors.push(`plugins/warden/skills/${skillName} is not usable: ${reason}`);
+    }
   }
 
   if (options.requireDist) {

@@ -65,7 +65,10 @@ describe('GitHub Action layout', () => {
       mkdirSync(join(tempDir, 'plugins/warden/skills'), { recursive: true });
       mkdirSync(join(tempDir, 'packages/warden/skills/warden'), { recursive: true });
       writeFileSync(join(tempDir, 'packages/warden/skills/warden/SKILL.md'), '---\nname: warden\n---\n');
+      mkdirSync(join(tempDir, 'packages/warden/skills/warden-sweep'), { recursive: true });
+      writeFileSync(join(tempDir, 'packages/warden/skills/warden-sweep/SKILL.md'), '---\nname: warden-sweep\n---\n');
       symlinkSync('../../../packages/warden/skills/warden', join(tempDir, 'plugins/warden/skills/warden'));
+      symlinkSync('../../../packages/warden/skills/warden-sweep', join(tempDir, 'plugins/warden/skills/warden-sweep'));
       symlinkSync('missing-target', join(tempDir, 'broken-link'));
       symlinkSync('target', join(tempDir, 'missing-link'));
       execFileSync('git', ['add', 'action.yml', 'plugins', 'packages', 'broken-link', 'missing-link'], {
