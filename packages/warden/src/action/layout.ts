@@ -1,4 +1,4 @@
-import { accessSync, existsSync, lstatSync, readlinkSync, realpathSync } from 'node:fs';
+import { accessSync, existsSync, lstatSync, readlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -16,29 +16,11 @@ export function validateActionLayout(options: ValidateActionLayoutOptions): stri
   expectFile(join(options.repoRoot, 'action.yml'), errors);
   validateTrackedSymlinks(options.repoRoot, errors);
 
-  const pluginSkillPath = join(options.repoRoot, 'plugins/warden/skills/warden');
-  const expectedSkillPath = join(options.repoRoot, 'packages/warden/skills/warden');
-
-  try {
-    const stat = lstatSync(pluginSkillPath);
-    if (!stat.isSymbolicLink()) {
-      errors.push('plugins/warden/skills/warden must be a symlink');
-    } else {
-      const target = readlinkSync(pluginSkillPath);
-      const resolvedTarget = realpathSync(pluginSkillPath);
-      const expectedTarget = realpathSync(expectedSkillPath);
-
-      if (resolvedTarget !== expectedTarget) {
-        errors.push(
-          `plugins/warden/skills/warden points to ${target}, expected packages/warden/skills/warden`,
-        );
-      }
-    }
-
-    expectFile(join(pluginSkillPath, 'SKILL.md'), errors);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    errors.push(`plugins/warden/skills/warden is not usable: ${reason}`);
+  // skills/ at the repo root is the canonical discovery location for both
+  // dotagents (default scan dir) and the Claude Code marketplace plugin.
+  // Validate that each skill dir exists and is readable.
+  for (const skillName of ['warden', 'warden-sweep']) {
+    expectFile(join(options.repoRoot, `skills/${skillName}/SKILL.md`), errors);
   }
 
   if (options.requireDist) {

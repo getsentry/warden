@@ -62,13 +62,15 @@ describe('GitHub Action layout', () => {
     try {
       execFileSync('git', ['init'], { cwd: tempDir });
       writeFileSync(join(tempDir, 'action.yml'), 'name: test\nruns:\n  using: composite\n  steps: []\n');
+      mkdirSync(join(tempDir, 'skills/warden'), { recursive: true });
+      mkdirSync(join(tempDir, 'skills/warden-sweep'), { recursive: true });
+      writeFileSync(join(tempDir, 'skills/warden/SKILL.md'), '---\nname: warden\n---\n');
+      writeFileSync(join(tempDir, 'skills/warden-sweep/SKILL.md'), '---\nname: warden-sweep\n---\n');
       mkdirSync(join(tempDir, 'plugins/warden/skills'), { recursive: true });
-      mkdirSync(join(tempDir, 'packages/warden/skills/warden'), { recursive: true });
-      writeFileSync(join(tempDir, 'packages/warden/skills/warden/SKILL.md'), '---\nname: warden\n---\n');
-      symlinkSync('../../../packages/warden/skills/warden', join(tempDir, 'plugins/warden/skills/warden'));
+      symlinkSync('../../../skills/warden', join(tempDir, 'plugins/warden/skills/warden'));
       symlinkSync('missing-target', join(tempDir, 'broken-link'));
       symlinkSync('target', join(tempDir, 'missing-link'));
-      execFileSync('git', ['add', 'action.yml', 'plugins', 'packages', 'broken-link', 'missing-link'], {
+      execFileSync('git', ['add', 'action.yml', 'skills', 'plugins', 'broken-link', 'missing-link'], {
         cwd: tempDir,
       });
       rmSync(join(tempDir, 'missing-link'));
