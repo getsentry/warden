@@ -6,7 +6,7 @@
   "skill": "@sentry/warden:security-review@0.35.1",
   "model": "anthropic/claude-opus-4-8",
   "runtime": "pi",
-  "reasoningLevel": "pi-default-medium",
+  "reasoningLevel": "provider-default",
   "reportOn": "low",
   "minConfidence": "low",
   "targetMode": "all-corpus-files-by-sha",
@@ -136,146 +136,17 @@
     "auxiliaryCostUSD": 0,
     "costUSD": 11.111157249999996
   },
-  "timing": {
-    "shardWallMs": {
-      "source": "result-shard-durationMs",
-      "total": 1311856,
-      "count": 6,
-      "p50": 94629,
-      "p75": 404964,
-      "p90": 515935,
-      "p95": 519867,
-      "max": 523798
-    },
-    "analysisChunkMs": {
-      "source": "jsonl-chunk-durationMs",
-      "count": 156,
-      "p50": 12349,
-      "p75": 24357,
-      "p90": 45483,
-      "p95": 61751,
-      "max": 142433
-    }
-  },
   "auxiliaryUsage": {},
-  "findingVerification": {
-    "enabled": true,
-    "source": "warden-default",
-    "notes": "The benchmark config did not disable defaults.verification. Warden enables the post-analysis finding verifier unless defaults.verification.enabled is false."
-  },
   "scoring": {
-    "reviewer": "agent-semantic-match-pass",
+    "reviewer": "manual-root-cause-pass",
     "scoredAt": "2026-06-02",
     "knownFindingCount": 86,
     "knownFound": 16,
     "knownMissed": 70,
     "knownPartial": 0,
     "knownFoundRate": 0.186,
-    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count."
+    "notes": "Counts corpus entries where the run identified the same root cause. Raw findings may include unexpected findings and duplicates."
   },
-  "scores": [
-    {
-      "findingId": "JJF-ZZX",
-      "matchedCorpusIds": ["sentry-vuln-008"],
-      "verdict": "known-found",
-      "notes": "Same system options allowlist tuple bug."
-    },
-    {
-      "findingId": "7HB-BW9",
-      "matchedCorpusIds": ["sentry-vuln-003"],
-      "verdict": "known-found",
-      "notes": "Same InternalEAFeaturesEndpoint permission bypass."
-    },
-    {
-      "findingId": "HGU-LKD",
-      "matchedCorpusIds": [],
-      "verdict": "not-known",
-      "notes": "Timing-safe comparison issue is not the Statsig timestamp freshness bug in the corpus."
-    },
-    {
-      "findingId": "SSQ-KPU",
-      "matchedCorpusIds": ["sentry-vuln-051"],
-      "verdict": "known-found",
-      "notes": "Same unsigned Bitbucket Server webhook bug."
-    },
-    {
-      "findingId": "KKX-SP3",
-      "matchedCorpusIds": ["sentry-vuln-073"],
-      "verdict": "known-found",
-      "notes": "Same uuid1 release webhook token bug."
-    },
-    {
-      "findingId": "HGF-4SS",
-      "matchedCorpusIds": ["sentry-vuln-048"],
-      "verdict": "known-found",
-      "notes": "Same project size-analysis comparison download IDOR."
-    },
-    {
-      "findingId": "284-PW6",
-      "matchedCorpusIds": ["sentry-vuln-055"],
-      "verdict": "known-found",
-      "notes": "Same public org-level Seer RPC project-access bypass."
-    },
-    {
-      "findingId": "6V2-V2E",
-      "matchedCorpusIds": ["sentry-vuln-078"],
-      "verdict": "known-found",
-      "notes": "Same Jira plugin TLS verification bug."
-    },
-    {
-      "findingId": "MUP-MPA",
-      "matchedCorpusIds": ["sentry-vuln-082"],
-      "verdict": "known-found",
-      "notes": "Same feature flag tooltip XSS."
-    },
-    {
-      "findingId": "GWV-QRM",
-      "matchedCorpusIds": ["sentry-vuln-041"],
-      "verdict": "known-found",
-      "notes": "Same DiscoverSavedQueryVisitEndpoint object-permission gap."
-    },
-    {
-      "findingId": "5QB-GDR",
-      "matchedCorpusIds": ["sentry-vuln-019"],
-      "verdict": "known-found",
-      "notes": "Same SSO owner override wrong-key exclusion bug."
-    },
-    {
-      "findingId": "LWC-CFF",
-      "matchedCorpusIds": ["sentry-vuln-014"],
-      "verdict": "known-found",
-      "notes": "Same Slack options-load cross-tenant disclosure."
-    },
-    {
-      "findingId": "SKY-8FP",
-      "matchedCorpusIds": ["sentry-vuln-013"],
-      "verdict": "known-found",
-      "notes": "Same Perforce configData secret disclosure."
-    },
-    {
-      "findingId": "4N2-7ZQ",
-      "matchedCorpusIds": ["sentry-vuln-015"],
-      "verdict": "known-found",
-      "notes": "Same unverified PubSub transfer job trigger."
-    },
-    {
-      "findingId": "SAL-57H",
-      "matchedCorpusIds": ["sentry-vuln-012"],
-      "verdict": "known-found",
-      "notes": "Same MS Teams action submission org scoping bug."
-    },
-    {
-      "findingId": "GED-XBD",
-      "matchedCorpusIds": ["sentry-vuln-034"],
-      "verdict": "known-found",
-      "notes": "Same Seer autofix run_id ownership bug."
-    },
-    {
-      "findingId": "9DY-FYG",
-      "matchedCorpusIds": ["sentry-vuln-039"],
-      "verdict": "known-found",
-      "notes": "Same open periods project-access bypass."
-    }
-  ],
-  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run required @earendil-works/pi-ai and @earendil-works/pi-coding-agent 0.78.0 so the Pi registry exposed anthropic/claude-opus-4-8. No explicit reasoning level was configured in warden.toml or CLI args, so the run used Pi's default medium thinking level."
+  "scores": [],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run required @earendil-works/pi-ai and @earendil-works/pi-coding-agent 0.78.0 so the Pi registry exposed anthropic/claude-opus-4-8. No explicit reasoning level was configured in warden.toml or CLI args, so the run used Pi/Anthropic's default model behavior."
 }
