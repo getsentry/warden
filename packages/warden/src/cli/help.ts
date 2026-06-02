@@ -5,6 +5,7 @@ type HelpOptionId =
   | 'skill'
   | 'configPath'
   | 'model'
+  | 'reasoningEffort'
   | 'json'
   | 'output'
   | 'failOn'
@@ -94,6 +95,11 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   model: {
     label: '-m, --model <model>',
     description: 'Model fallback when config does not specify one',
+  },
+  reasoningEffort: {
+    label: '--reasoning-effort <level>',
+    description: 'Override reasoning effort for this run',
+    continuation: 'Values: off, low, medium, high, xhigh',
   },
   json: {
     label: '--json',
@@ -236,6 +242,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'skill',
       'configPath',
       'model',
+      'reasoningEffort',
       'json',
       'output',
       'failOn',

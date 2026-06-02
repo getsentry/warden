@@ -14,6 +14,7 @@ import {
   resolveCliDefaultSynthesisModel,
   resolveCliDefaultModel,
   resolveCliLogModel,
+  resolveCliReasoningEffort,
   type RunSkillSpec,
 } from './main.js';
 import { MODEL_DEFAULT_SENTINEL, Reporter, Verbosity } from './output/index.js';
@@ -299,6 +300,24 @@ describe('mergeSkillRunnerOptions', () => {
       reasoningEffort: 'low',
       auxiliaryMaxRetries: 2,
     });
+  });
+});
+
+describe('resolveCliReasoningEffort', () => {
+  it('uses the CLI reasoning effort over config defaults', () => {
+    expect(resolveCliReasoningEffort({
+      defaults: {
+        agent: { reasoningEffort: 'medium' },
+      },
+    }, 'high')).toBe('high');
+  });
+
+  it('uses config reasoning effort when no CLI override is provided', () => {
+    expect(resolveCliReasoningEffort({
+      defaults: {
+        agent: { reasoningEffort: 'medium' },
+      },
+    })).toBe('medium');
   });
 });
 

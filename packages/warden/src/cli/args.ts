@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
+import { ReasoningEffortSchema, type ReasoningEffort } from '../config/schema.js';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 import { getVersion } from '../utils/index.js';
@@ -25,6 +26,8 @@ export const CLIOptionsSchema = z.object({
   parallel: z.number().int().positive().optional(),
   /** Model to use for analysis (fallback when not set in config) */
   model: z.string().optional(),
+  /** Reasoning effort to use for this run */
+  reasoningEffort: ReasoningEffortSchema.optional(),
   // Verbosity options
   quiet: z.boolean().default(false),
   verbose: z.number().default(0),
@@ -311,6 +314,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'config-path': { type: 'string', short: 'c' },
       config: { type: 'string' }, // deprecated alias for --config-path
       model: { type: 'string', short: 'm' },
+      'reasoning-effort': { type: 'string' },
       json: { type: 'boolean', default: false },
       output: { type: 'string', short: 'o' },
       'fail-on': { type: 'string' },
@@ -511,6 +515,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       configPath: typeof values['config-path'] === 'string' ? values['config-path'] :
         typeof values.config === 'string' ? values.config : undefined,
       model: typeof values.model === 'string' ? values.model : undefined,
+      reasoningEffort: values['reasoning-effort'] as ReasoningEffort | undefined,
       json: Boolean(values.json),
       output: typeof values.output === 'string' ? values.output : undefined,
       failOn: values['fail-on'] as SeverityThreshold | undefined,

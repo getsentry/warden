@@ -156,6 +156,10 @@ Main agent model precedence, from highest to lowest:
 Auxiliary and synthesis models only come from `[defaults.auxiliary]` and
 `[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
 
+Reasoning effort is separate from model selection. For local runs,
+`--reasoning-effort` overrides `defaults.agent.reasoningEffort` for that
+invocation. Without either setting, each runtime uses its own default.
+
 ## Generated Skill Commands
 
 `warden build` and `warden improve` use the synthesis lane because they generate

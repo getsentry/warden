@@ -187,6 +187,7 @@ Create a GitHub App for Warden. Gives you a custom bot identity instead of the g
 - `--config <path>` - Path to config file (default: `warden.toml`)
 - `--verbose` - Show detailed output
 - `-m, --model <model>` - Model to use (fallback when not set in config)
+- `--reasoning-effort <level>` - Override reasoning effort for this run: `off`, `low`, `medium`, `high`, `xhigh`
 - `-o, --output <path>` - Write full run output to a JSONL file
 - `--report-on <severity>` - Only show findings at or above this severity
 - `--parallel <n>` - Max concurrent trigger/skill executions (default: 4)
@@ -356,6 +357,8 @@ Model lanes:
 Main agent model precedence: trigger `model` > skill `model` > `defaults.agent.model` > legacy `defaults.model` > CLI flag (`-m`) > env var (`WARDEN_MODEL`) > SDK/runtime default.
 
 Auxiliary and synthesis models only come from `[defaults.auxiliary]` and `[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
+
+Reasoning effort is separate from model selection. For local runs, `--reasoning-effort` overrides `defaults.agent.reasoningEffort` for that invocation. Without either setting, each runtime uses its own default.
 
 Generated skill commands (`warden build` and `warden improve`) use the synthesis lane. Their model fallback order is `defaults.synthesis.model` > `defaults.auxiliary.model` > CLI flag (`-m`) > env var (`WARDEN_MODEL`) > SDK/runtime default.
 

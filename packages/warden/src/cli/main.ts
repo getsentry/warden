@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfigFile, resolveSkillConfigs } from '../config/loader.js';
-import type { SkillDefinition, WardenConfig } from '../config/schema.js';
+import type { SkillDefinition, WardenConfig, ReasoningEffort } from '../config/schema.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import {
   findInvalidPiModelSelector as findInvalidPiModelSelectorTarget,
@@ -774,6 +774,14 @@ export function resolveCliLogModel(
   return resolveCliDefaultModel(config, cliModel) ?? MODEL_DEFAULT_SENTINEL;
 }
 
+/** Resolve run-scoped reasoning effort, with the CLI flag overriding config. */
+export function resolveCliReasoningEffort(
+  config: Pick<WardenConfig, 'defaults'> | null | undefined,
+  cliReasoningEffort?: ReasoningEffort
+): ReasoningEffort | undefined {
+  return cliReasoningEffort ?? config?.defaults?.agent?.reasoningEffort;
+}
+
 /**
  * Process skill task results into reports and check for failures.
  * Exported for testing; callers inside main.ts use it directly.
@@ -950,6 +958,7 @@ export async function runSkills(
   const defaultModel = resolveCliDefaultModel(config, options.model);
   const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
   const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
+  const defaultReasoningEffort = resolveCliReasoningEffort(config, options.reasoningEffort);
 
   // Determine which triggers/skills to run
   let skillsToRun: SkillToRun[];
@@ -969,7 +978,7 @@ export async function runSkills(
       filters: match?.filters ?? fallbackFilters,
       model: match?.model ?? defaultModel,
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
-      reasoningEffort: match?.reasoningEffort ?? config?.defaults?.agent?.reasoningEffort,
+      reasoningEffort: options.reasoningEffort ?? match?.reasoningEffort ?? defaultReasoningEffort,
       runtime: match?.runtime ?? config?.defaults?.runtime ?? 'pi',
       auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
       synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
@@ -997,7 +1006,7 @@ export async function runSkills(
         filters: t.filters,
         model: t.model,
         maxTurns: t.maxTurns,
-        reasoningEffort: t.reasoningEffort,
+        reasoningEffort: options.reasoningEffort ?? t.reasoningEffort,
         runtime: t.runtime,
         auxiliaryModel: t.auxiliaryModel,
         synthesisModel: t.synthesisModel,
@@ -1045,7 +1054,7 @@ export async function runSkills(
     synthesisModel: defaultSynthesisModel,
     abortController,
     maxTurns: config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
-    reasoningEffort: config?.defaults?.agent?.reasoningEffort,
+    reasoningEffort: defaultReasoningEffort,
     batchDelayMs: config?.defaults?.batchDelayMs,
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
     auxiliaryMaxRetries:
@@ -1374,7 +1383,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       apiKey,
       model: trigger.model,
       runtime: trigger.runtime,
-      reasoningEffort: trigger.reasoningEffort,
+      reasoningEffort: options.reasoningEffort ?? trigger.reasoningEffort,
       auxiliaryModel: trigger.auxiliaryModel,
       synthesisModel: trigger.synthesisModel,
       abortController,

@@ -182,6 +182,11 @@ describe('parseCliArgs', () => {
     expect(result.options.parallel).toBe(8);
   });
 
+  it('parses --reasoning-effort option', () => {
+    const result = parseCliArgs(['--reasoning-effort', 'high']);
+    expect(result.options.reasoningEffort).toBe('high');
+  });
+
   it('does not set parallel when not provided', () => {
     const result = parseCliArgs([]);
     expect(result.options.parallel).toBeUndefined();
@@ -603,6 +608,18 @@ describe('CLIOptionsSchema', () => {
 
   it('rejects invalid severity levels', () => {
     const result = CLIOptionsSchema.safeParse({ failOn: 'invalid' });
+    expect(result.success).toBe(false);
+  });
+
+  it('validates valid reasoning effort levels', () => {
+    for (const reasoningEffort of ['off', 'low', 'medium', 'high', 'xhigh']) {
+      const result = CLIOptionsSchema.safeParse({ reasoningEffort });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('rejects invalid reasoning effort levels', () => {
+    const result = CLIOptionsSchema.safeParse({ reasoningEffort: 'extreme' });
     expect(result.success).toBe(false);
   });
 

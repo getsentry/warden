@@ -16,8 +16,16 @@ describe('renderHelp', () => {
 
     expect(output).toContain('warden build <skill> [options]');
     expect(output).toContain('-p, --prompt <value>');
+    expect(output).not.toContain('--reasoning-effort');
     expect(output).not.toContain('--description');
     expect(output).not.toContain('--org <name>');
+  });
+
+  it('renders reasoning effort in run help', () => {
+    const output = renderHelp('run');
+
+    expect(output).toContain('--reasoning-effort <level>');
+    expect(output).toContain('Values: off, low, medium, high, xhigh');
   });
 
   it('renders improve help', () => {
