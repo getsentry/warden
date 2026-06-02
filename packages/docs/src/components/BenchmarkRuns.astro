@@ -9,11 +9,9 @@ type BenchmarkScoring = {
 type BenchmarkResult = {
   corpusId: string;
   model: string;
-  repository: string;
   runId: string;
   runtime: string;
   scoring?: BenchmarkScoring;
-  shardCount: number;
   skill: string;
   summary: {
     costUSD: number;
@@ -91,51 +89,48 @@ const skillLabel = (skill: string) =>
   {results.length === 0 ? (
     <p>No benchmark runs recorded yet.</p>
   ) : (
-    <table class="run-table">
-      <thead>
-        <tr>
-          <th scope="col">Run</th>
-          <th scope="col">Known</th>
-          <th scope="col">Findings</th>
-          <th scope="col">Cost</th>
-        </tr>
-      </thead>
+    <div class="run-table" role="table" aria-label="Latest benchmark runs">
+      <div class="run-header" role="row">
+        <span role="columnheader">Run</span>
+        <span role="columnheader">Known</span>
+        <span role="columnheader">Findings</span>
+        <span role="columnheader">Cost</span>
+      </div>
       {results.map((result) => {
         const scoring = result.scoring;
         return (
-          <tbody class="run-group">
-            <tr class="run-row">
-              <td class="run-name">
-                <h3>{modelLabel(result.model)} · {runtimeLabel(result.runtime)}</h3>
-              </td>
-              <td class="run-cell">
-                <span class="cell-label">Known corpus</span>
-                <strong>
-                  {scoring
-                    ? `${scoring.knownFound}/${scoring.knownFindingCount}`
-                    : "Not scored"}
-                </strong>
-                {scoring && <span>{formatPercent(scoring.knownFoundRate)}</span>}
-              </td>
-              <td class="run-cell">
-                <span class="cell-label">Total findings</span>
-                <strong>{result.summary.findingsTotal}</strong>
-              </td>
-              <td class="run-cell">
-                <span class="cell-label">Cost</span>
-                <strong>{formatCost(result.summary.costUSD)}</strong>
-              </td>
-            </tr>
-            <tr class="run-meta-row">
-              <td colspan="4">
-                {result.model} · {runDate(result.runId)} · {skillLabel(result.skill)} ·{" "}
+          <article class="run-row" role="row">
+            <div class="run-name" role="cell">
+              <h3>
+                {modelLabel(result.model)}{" "}
+                <span>({runtimeLabel(result.runtime)})</span>
+              </h3>
+              <p>
+                {runDate(result.runId)} · {skillLabel(result.skill)} ·{" "}
                 <a href={resultPath(result)}>JSON</a>
-              </td>
-            </tr>
-          </tbody>
+              </p>
+            </div>
+            <div class="metric-cell" role="cell">
+              <span class="cell-label">Known corpus</span>
+              <strong class="metric-value">
+                {scoring
+                  ? `${scoring.knownFound}/${scoring.knownFindingCount}`
+                  : "Not scored"}
+              </strong>
+              {scoring && <span class="metric-detail">{formatPercent(scoring.knownFoundRate)}</span>}
+            </div>
+            <div class="metric-cell" role="cell">
+              <span class="cell-label">Total findings</span>
+              <strong class="metric-value">{result.summary.findingsTotal}</strong>
+            </div>
+            <div class="metric-cell" role="cell">
+              <span class="cell-label">Cost</span>
+              <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
+            </div>
+          </article>
         );
       })}
-    </table>
+    </div>
   )}
 </section>
 
@@ -147,24 +142,18 @@ const skillLabel = (skill: string) =>
   .run-table {
     border: 1px solid var(--sl-color-gray-6);
     border-radius: 8px;
-    border-spacing: 0;
     overflow: hidden;
     width: 100%;
   }
 
-  .run-table th,
-  .run-table td {
-    min-width: 0;
-    padding: 0.55rem 0.7rem;
-    text-align: left;
-    vertical-align: top;
+  .run-header,
+  .run-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 80px);
   }
 
-  .run-table thead {
+  .run-header {
     background: color-mix(in srgb, var(--sl-color-gray-6) 58%, transparent);
-  }
-
-  .run-table th {
     color: var(--sl-color-gray-3);
     font-size: 0.74rem;
     font-weight: 700;
@@ -172,101 +161,111 @@ const skillLabel = (skill: string) =>
     text-transform: uppercase;
   }
 
-  .run-table th:first-child,
-  .run-name {
-    width: 52%;
+  .run-header > *,
+  .run-row > * {
+    align-self: start;
+    margin-top: 0;
+    min-width: 0;
+    padding: 0.55rem 0.7rem;
+    vertical-align: top;
   }
 
-  .run-table th:not(:first-child),
-  .run-cell {
-    width: 16%;
+  .run-header > :not(:first-child) {
+    text-align: center;
+    white-space: nowrap;
   }
 
-  .run-group .run-row > td {
+  .run-row {
     border-top: 1px solid var(--sl-color-gray-6);
-    padding-bottom: 0.1rem;
   }
 
-  .run-group:first-of-type .run-row > td {
+  .run-row:first-of-type {
     border-top: 0;
   }
 
-  .run-meta-row td {
-    color: var(--sl-color-gray-3);
-    font-size: 0.76rem;
-    padding-top: 0;
+  .run-name {
+    display: grid;
+    gap: 0.12rem;
+  }
+
+  .metric-cell {
+    display: grid;
+    gap: 0.12rem;
+    justify-items: center;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .run-name h3,
+  .run-name p {
+    margin: 0;
   }
 
   .run-name h3 {
     color: var(--sl-color-white);
     font-size: 0.94rem;
     line-height: 1.3;
-    margin: 0;
     overflow-wrap: anywhere;
   }
 
-  .run-cell span,
+  .run-name h3 span {
+    color: var(--sl-color-gray-3);
+    font-weight: 500;
+  }
+
+  .run-name p,
+  .metric-detail,
   .cell-label {
     color: var(--sl-color-gray-3);
     font-size: 0.76rem;
   }
 
-  .run-cell strong {
+  .metric-value {
     color: var(--sl-color-white);
     display: block;
     font-size: 0.9rem;
     font-weight: 700;
     line-height: 1.35;
-    overflow-wrap: anywhere;
+    text-align: center;
+    white-space: nowrap;
   }
 
   .cell-label {
     display: none;
   }
 
-  @media (max-width: 58rem) {
-    .run-table thead {
+  @media (max-width: 38rem) {
+    .run-header {
       display: none;
     }
 
-    .run-table,
-    .run-group,
-    .run-row,
-    .run-row > td,
-    .run-meta-row,
-    .run-meta-row > td {
+    .run-row {
       display: block;
-      width: auto;
+      padding: 0.85rem;
     }
 
     .run-row {
-      padding: 0.85rem 0.85rem 0;
-    }
-
-    .run-group {
       border-top: 1px solid var(--sl-color-gray-6);
     }
 
-    .run-group:first-of-type {
+    .run-row:first-child {
       border-top: 0;
     }
 
-    .run-group .run-row > td {
-      border-top: 0;
-    }
-
-    .run-row > td {
+    .run-row > * {
       padding: 0;
     }
 
-    .run-row > .run-cell {
+    .metric-cell {
       display: inline-grid;
+      justify-items: start;
       margin: 0.65rem 0.9rem 0 0;
       min-width: 6rem;
+      text-align: left;
     }
 
-    .run-meta-row td {
-      padding: 0.35rem 0.85rem 0.85rem;
+    .metric-value {
+      text-align: left;
     }
 
     .cell-label {
