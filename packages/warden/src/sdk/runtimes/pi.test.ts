@@ -256,12 +256,12 @@ describe('piRuntime.runSkill', () => {
     });
   });
 
-  it('passes reasoning effort as Pi thinking level', async () => {
+  it('passes effort as Pi thinking level', async () => {
     await piRuntime.runSkill({
       ...baseSkillRequest(),
       options: {
         ...baseSkillRequest().options,
-        reasoningEffort: 'medium',
+        effort: 'medium',
       },
     });
 

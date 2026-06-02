@@ -162,7 +162,7 @@ describe('claudeRuntime.runSkill', () => {
     });
   });
 
-  it('passes reasoning effort to Claude adaptive thinking', async () => {
+  it('passes effort to Claude adaptive thinking', async () => {
     mockQuery.mockReturnValue(mockStream([successResult()]));
 
     await claudeRuntime.runSkill({
@@ -172,7 +172,7 @@ describe('claudeRuntime.runSkill', () => {
       skillName: 'test-skill',
       options: {
         model: 'claude-test',
-        reasoningEffort: 'medium',
+        effort: 'medium',
       },
     });
 
@@ -195,7 +195,7 @@ describe('claudeRuntime.runSkill', () => {
       skillName: 'test-skill',
       options: {
         model: 'claude-test',
-        reasoningEffort: 'off',
+        effort: 'off',
       },
     });
 

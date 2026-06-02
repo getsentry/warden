@@ -443,7 +443,7 @@ describe('resolveSkillConfigs', () => {
         ...baseConfig,
         defaults: {
           runtime: 'claude',
-          agent: { model: 'claude-main', maxTurns: 12, reasoningEffort: 'medium' },
+          agent: { model: 'claude-main', maxTurns: 12, effort: 'medium' },
           auxiliary: { model: 'claude-haiku-4-5', maxRetries: 2 },
           synthesis: { model: 'claude-opus-4-5' },
           auxiliaryMaxRetries: 5,
@@ -455,7 +455,7 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.runtime).toBe('claude');
       expect(resolved?.model).toBe('claude-main');
       expect(resolved?.maxTurns).toBe(12);
-      expect(resolved?.reasoningEffort).toBe('medium');
+      expect(resolved?.effort).toBe('medium');
       expect(resolved?.auxiliaryModel).toBe('claude-haiku-4-5');
       expect(resolved?.synthesisModel).toBe('claude-opus-4-5');
       expect(resolved?.auxiliaryMaxRetries).toBe(2);
@@ -1034,25 +1034,25 @@ describe('maxTurns config', () => {
     expect(result.data?.defaults?.synthesis?.model).toBe('claude-opus-4-5');
   });
 
-  it('accepts reasoning effort in agent defaults', () => {
+  it('accepts effort in agent defaults', () => {
     const config = {
       version: 1,
       defaults: {
-        agent: { reasoningEffort: 'medium' },
+        agent: { effort: 'medium' },
       },
       skills: [],
     };
 
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
-    expect(result.data?.defaults?.agent?.reasoningEffort).toBe('medium');
+    expect(result.data?.defaults?.agent?.effort).toBe('medium');
   });
 
-  it('rejects unknown reasoning efforts', () => {
+  it('rejects unknown effort levels', () => {
     const config = {
       version: 1,
       defaults: {
-        agent: { reasoningEffort: 'extreme' },
+        agent: { effort: 'extreme' },
       },
       skills: [],
     };

@@ -78,17 +78,17 @@ function getClaudeProviderOptions(providerOptions: unknown): ClaudeProviderOptio
   };
 }
 
-function reasoningOptions(reasoningEffort: SkillRunRequest['options']['reasoningEffort']): {
+function effortOptions(effort: SkillRunRequest['options']['effort']): {
   thinking?: { type: 'adaptive' } | { type: 'disabled' };
   effort?: EffortLevel;
 } {
-  if (!reasoningEffort) {
+  if (!effort) {
     return {};
   }
-  if (reasoningEffort === 'off') {
+  if (effort === 'off') {
     return { thinking: { type: 'disabled' } };
   }
-  return { thinking: { type: 'adaptive' }, effort: reasoningEffort };
+  return { thinking: { type: 'adaptive' }, effort };
 }
 
 function missingApiKeyResult<T>(kind: 'auxiliary' | 'synthesis'): AuxiliaryRunResult<T> {
@@ -304,7 +304,7 @@ export const claudeRuntime: Runtime = {
       tools,
       allowMutatingTools,
     } = request;
-    const { maxTurns = 50, model, reasoningEffort, abortController } = options;
+    const { maxTurns = 50, model, effort, abortController } = options;
     const { pathToClaudeCodeExecutable } = getClaudeProviderOptions(providerOptions);
     const skillTools = resolveClaudeSkillTools(tools, allowMutatingTools);
     const modelId = model ?? 'unknown';
@@ -341,7 +341,7 @@ export const claudeRuntime: Runtime = {
             // Prevent SDK from writing session .jsonl files and polluting Claude Code's session index.
             persistSession: false,
             model,
-            ...reasoningOptions(reasoningEffort),
+            ...effortOptions(effort),
             abortController,
             pathToClaudeCodeExecutable,
             stderr: (data: string) => {

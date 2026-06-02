@@ -14,7 +14,7 @@ import {
   resolveCliDefaultSynthesisModel,
   resolveCliDefaultModel,
   resolveCliLogModel,
-  resolveCliReasoningEffort,
+  resolveCliEffort,
   type RunSkillSpec,
 } from './main.js';
 import { MODEL_DEFAULT_SENTINEL, Reporter, Verbosity } from './output/index.js';
@@ -242,7 +242,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: 'global-aux-model',
         synthesisModel: 'global-synth-model',
         maxTurns: 20,
-        reasoningEffort: 'medium',
+        effort: 'medium',
         auxiliaryMaxRetries: 4,
       },
       {
@@ -251,7 +251,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: undefined,
         synthesisModel: undefined,
         maxTurns: undefined,
-        reasoningEffort: undefined,
+        effort: undefined,
         auxiliaryMaxRetries: undefined,
       }
     );
@@ -263,7 +263,7 @@ describe('mergeSkillRunnerOptions', () => {
       auxiliaryModel: 'global-aux-model',
       synthesisModel: 'global-synth-model',
       maxTurns: 20,
-      reasoningEffort: 'medium',
+      effort: 'medium',
       auxiliaryMaxRetries: 4,
     });
   });
@@ -277,7 +277,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: 'global-aux-model',
         synthesisModel: 'global-synth-model',
         maxTurns: 20,
-        reasoningEffort: 'medium',
+        effort: 'medium',
         auxiliaryMaxRetries: 4,
       },
       {
@@ -285,7 +285,7 @@ describe('mergeSkillRunnerOptions', () => {
         auxiliaryModel: 'skill-aux-model',
         synthesisModel: 'skill-synth-model',
         maxTurns: 8,
-        reasoningEffort: 'low',
+        effort: 'low',
         auxiliaryMaxRetries: 2,
       }
     );
@@ -297,25 +297,25 @@ describe('mergeSkillRunnerOptions', () => {
       auxiliaryModel: 'skill-aux-model',
       synthesisModel: 'skill-synth-model',
       maxTurns: 8,
-      reasoningEffort: 'low',
+      effort: 'low',
       auxiliaryMaxRetries: 2,
     });
   });
 });
 
-describe('resolveCliReasoningEffort', () => {
-  it('uses the CLI reasoning effort over config defaults', () => {
-    expect(resolveCliReasoningEffort({
+describe('resolveCliEffort', () => {
+  it('uses the CLI effort over config defaults', () => {
+    expect(resolveCliEffort({
       defaults: {
-        agent: { reasoningEffort: 'medium' },
+        agent: { effort: 'medium' },
       },
     }, 'high')).toBe('high');
   });
 
-  it('uses config reasoning effort when no CLI override is provided', () => {
-    expect(resolveCliReasoningEffort({
+  it('uses config effort when no CLI override is provided', () => {
+    expect(resolveCliEffort({
       defaults: {
-        agent: { reasoningEffort: 'medium' },
+        agent: { effort: 'medium' },
       },
     })).toBe('medium');
   });

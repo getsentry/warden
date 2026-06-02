@@ -13,7 +13,7 @@
  * hunk parsing, extraction repair, deduplication, fix gates, or reporting.
  */
 import { z } from 'zod';
-import type { ReasoningEffort, ToolConfig } from '../../config/schema.js';
+import type { Effort, ToolConfig } from '../../config/schema.js';
 import type { UsageStats } from '../../types/index.js';
 
 export const RuntimeNameSchema = z.enum(['claude', 'pi']);
@@ -31,7 +31,7 @@ export type SkillRunStatus =
 export interface SkillRunOptions {
   maxTurns?: number;
   model?: string;
-  reasoningEffort?: ReasoningEffort;
+  effort?: Effort;
   abortController?: AbortController;
 }
 

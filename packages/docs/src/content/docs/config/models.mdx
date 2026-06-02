@@ -104,7 +104,7 @@ runtime = "pi"
 [defaults.agent]
 model = "anthropic/claude-sonnet-4-6"
 maxTurns = 30
-reasoningEffort = "medium"
+effort = "medium"
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"
@@ -117,7 +117,7 @@ model = "anthropic/claude-opus-4-5"
 `defaults.model` and `defaults.maxTurns` are legacy shorthand for the agent
 lane. Prefer `defaults.agent.model` and `defaults.agent.maxTurns` in new config.
 
-`defaults.agent.reasoningEffort` optionally controls repo-aware skill reasoning
+`defaults.agent.effort` optionally controls repo-aware skill effort
 across runtimes. Supported values are `off`, `low`, `medium`, `high`, and
 `xhigh`. When omitted, each runtime uses its own default.
 
@@ -156,8 +156,8 @@ Main agent model precedence, from highest to lowest:
 Auxiliary and synthesis models only come from `[defaults.auxiliary]` and
 `[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
 
-Reasoning effort is separate from model selection. For local runs,
-`--reasoning-effort` overrides `defaults.agent.reasoningEffort` for that
+Effort is separate from model selection. For local runs,
+`--effort` overrides `defaults.agent.effort` for that
 invocation. Without either setting, each runtime uses its own default.
 
 ## Generated Skill Commands

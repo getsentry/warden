@@ -187,7 +187,7 @@ Create a GitHub App for Warden. Gives you a custom bot identity instead of the g
 - `--config <path>` - Path to config file (default: `warden.toml`)
 - `--verbose` - Show detailed output
 - `-m, --model <model>` - Model to use (fallback when not set in config)
-- `--reasoning-effort <level>` - Override reasoning effort for this run: `off`, `low`, `medium`, `high`, `xhigh`
+- `--effort <level>` - Override effort level for this run: `off`, `low`, `medium`, `high`, `xhigh`
 - `-o, --output <path>` - Write full run output to a JSONL file
 - `--report-on <severity>` - Only show findings at or above this severity
 - `--parallel <n>` - Max concurrent trigger/skill executions (default: 4)
@@ -328,7 +328,7 @@ runtime = "pi"
 [defaults.agent]
 model = "anthropic/claude-sonnet-4-6"
 maxTurns = 30
-reasoningEffort = "medium"
+effort = "medium"
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"
@@ -348,7 +348,7 @@ Runtime selection is global within a config layer. `runtime` is not currently a 
 Model lanes:
 
 - `defaults.agent.model` - main repo-aware skill analysis. Preferred default model field.
-- `defaults.agent.reasoningEffort` - optional repo-aware skill reasoning effort. Supported values are `off`, `low`, `medium`, `high`, and `xhigh`.
+- `defaults.agent.effort` - optional repo-aware skill effort. Supported values are `off`, `low`, `medium`, `high`, and `xhigh`.
 - `defaults.auxiliary.model` - structured helper calls such as extraction, repair, merging, dedupe, and fix evaluation.
 - `defaults.synthesis.model` - post-analysis synthesis and consolidation. Falls back to `defaults.auxiliary.model` when unset.
 
@@ -358,7 +358,7 @@ Main agent model precedence: trigger `model` > skill `model` > `defaults.agent.m
 
 Auxiliary and synthesis models only come from `[defaults.auxiliary]` and `[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
 
-Reasoning effort is separate from model selection. For local runs, `--reasoning-effort` overrides `defaults.agent.reasoningEffort` for that invocation. Without either setting, each runtime uses its own default.
+Effort is separate from model selection. For local runs, `--effort` overrides `defaults.agent.effort` for that invocation. Without either setting, each runtime uses its own default.
 
 Generated skill commands (`warden build` and `warden improve`) use the synthesis lane. Their model fallback order is `defaults.synthesis.model` > `defaults.auxiliary.model` > CLI flag (`-m`) > env var (`WARDEN_MODEL`) > SDK/runtime default.
 

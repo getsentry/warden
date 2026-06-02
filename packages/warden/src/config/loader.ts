@@ -368,8 +368,8 @@ export interface ResolvedTrigger {
   model?: string;
   /** Max agentic turns (merged: trigger > skill > defaults) */
   maxTurns?: number;
-  /** Reasoning effort for repo-aware skill execution. */
-  reasoningEffort?: AgentRuntimeConfig['reasoningEffort'];
+  /** Effort level for repo-aware skill execution. */
+  effort?: AgentRuntimeConfig['effort'];
   /** Runtime backend for all model-backed execution. */
   runtime?: RuntimeName;
   /** Model for auxiliary structured model calls. */
@@ -455,7 +455,7 @@ export function resolveSkillConfigs(
       emptyToUndefined(cliModel) ??
       envModel;
     const baseMaxTurns = skill.maxTurns ?? defaults?.agent?.maxTurns ?? defaults?.maxTurns;
-    const reasoningEffort = defaults?.agent?.reasoningEffort;
+    const effort = defaults?.agent?.effort;
 
     // Merge ignorePaths: skill-level + defaults (additive, not override)
     const mergedIgnorePaths = [
@@ -485,7 +485,7 @@ export function resolveSkillConfigs(
         failCheck: skill.failCheck ?? defaults?.failCheck,
         model: baseModel,
         maxTurns: baseMaxTurns,
-        reasoningEffort,
+        effort,
         runtime,
         auxiliaryModel,
         synthesisModel,
@@ -516,7 +516,7 @@ export function resolveSkillConfigs(
           failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
-          reasoningEffort,
+          effort,
           runtime,
           auxiliaryModel,
           synthesisModel,

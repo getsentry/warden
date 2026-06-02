@@ -51,16 +51,16 @@ export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 export { RuntimeNameSchema };
 export type { RuntimeName };
 
-export const ReasoningEffortSchema = z.enum(['off', 'low', 'medium', 'high', 'xhigh']);
-export type ReasoningEffort = z.infer<typeof ReasoningEffortSchema>;
+export const EffortSchema = z.enum(['off', 'low', 'medium', 'high', 'xhigh']);
+export type Effort = z.infer<typeof EffortSchema>;
 
 export const AgentRuntimeConfigSchema = z.object({
   /** Model for repo-aware skill execution. Overrides legacy defaults.model. */
   model: z.string().optional(),
   /** Maximum agentic turns for repo-aware skill execution. Overrides legacy defaults.maxTurns. */
   maxTurns: z.number().int().positive().optional(),
-  /** Reasoning effort to use for repo-aware skill execution. Uses runtime default when omitted. */
-  reasoningEffort: ReasoningEffortSchema.optional(),
+  /** Effort level to use for repo-aware skill execution. Uses runtime default when omitted. */
+  effort: EffortSchema.optional(),
 }).strict();
 export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeConfigSchema>;
 

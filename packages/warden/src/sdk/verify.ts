@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ReasoningEffort, SkillDefinition } from '../config/schema.js';
+import type { Effort, SkillDefinition } from '../config/schema.js';
 import { FindingSchema, type Finding, type UsageStats } from '../types/index.js';
 import { aggregateUsage } from './usage.js';
 import { extractBalancedJson } from './extract.js';
@@ -34,7 +34,7 @@ export interface VerifyFindingsOptions {
   runtime?: RuntimeName;
   model?: string;
   maxTurns?: number;
-  reasoningEffort?: ReasoningEffort;
+  effort?: Effort;
   abortController?: AbortController;
   pathToClaudeCodeExecutable?: string;
   prContext?: PromptPRContext;
@@ -267,7 +267,7 @@ export async function verifyFindings(
           options: {
             model: options.model,
             maxTurns: options.maxTurns,
-            reasoningEffort: options.reasoningEffort,
+            effort: options.effort,
             abortController: options.abortController,
           },
           tools: options.skill.tools,
