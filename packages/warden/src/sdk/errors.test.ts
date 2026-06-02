@@ -120,6 +120,20 @@ describe('classifyError', () => {
     expect(classifyError(err).code).toBe('provider_unavailable');
   });
 
+  it('humanizes retryable API errors from their provider type', () => {
+    const err = new APIError(
+      529,
+      { error: { type: 'api_error', message: 'Rate limit exceeded' } },
+      'Rate limit exceeded',
+      undefined
+    );
+
+    expect(classifyError(err)).toEqual({
+      code: 'provider_unavailable',
+      message: 'Anthropic API error \u2014 try again later.',
+    });
+  });
+
   it('tags Claude Code process exits as provider_unavailable', () => {
     expect(classifyError(new Error('Claude Code process exited with code 1')).code).toBe('provider_unavailable');
   });
@@ -218,6 +232,27 @@ describe('humanizeProviderError', () => {
   it('returns friendly message for api_error', () => {
     const raw = '{"type":"error","error":{"type":"api_error","message":"Internal server error"}}';
     expect(humanizeProviderError(raw)).toBe('Anthropic API error \u2014 try again later.');
+  });
+
+  it('uses provider type before message text for structured API errors', () => {
+    const err = new APIError(
+      529,
+      { error: { type: 'api_error', message: 'Rate limit exceeded' } },
+      'Rate limit exceeded',
+      undefined
+    );
+
+    expect(humanizeProviderError(err)).toBe('Anthropic API error \u2014 try again later.');
+  });
+
+  it('uses provider type before embedded error message text', () => {
+    const raw = '{"type":"error","error":{"type":"api_error","message":"Rate limit exceeded"}}';
+    expect(humanizeProviderError(raw)).toBe('Anthropic API error \u2014 try again later.');
+  });
+
+  it('finds provider error payloads after unrelated JSON objects', () => {
+    const raw = 'Runtime execution failed: {"status":500} details {"type":"error","error":{"type":"rate_limit_error","message":"Rate limit exceeded"}}';
+    expect(humanizeProviderError(raw)).toBe('Anthropic rate limit reached \u2014 try again later.');
   });
 
   it('falls back to error.message for unknown Anthropic error types', () => {
