@@ -9,7 +9,6 @@ type BenchmarkScoring = {
 type BenchmarkResult = {
   corpusId: string;
   model: string;
-  reasoningLevel?: string;
   repository: string;
   runId: string;
   runtime: string;
@@ -17,10 +16,7 @@ type BenchmarkResult = {
   shardCount: number;
   skill: string;
   summary: {
-    chunksFailed: number;
-    chunksTotal: number;
     costUSD: number;
-    durationMs: number;
     findingsTotal: number;
   };
   targetMode: string;
@@ -53,22 +49,10 @@ const runDate = (runId: string) => {
 
 const formatCost = (value: number) => `$${value.toFixed(2)}`;
 
-const formatDuration = (durationMs: number) => {
-  const totalSeconds = Math.round(durationMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
-};
-
 const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
 
 const resultPath = (result: BenchmarkResult) =>
   `https://github.com/getsentry/warden/blob/main/packages/docs/src/data/benchmarking/results/${result.runId}.json`;
-
-const reasoningLabel = (reasoningLevel?: string) =>
-  reasoningLevel === "provider-default" || !reasoningLevel
-    ? "Provider default"
-    : reasoningLevel;
 
 const modelLabel = (model: string) => {
   if (model === "openai/gpt-5.5") {
@@ -88,70 +72,70 @@ const modelLabel = (model: string) => {
   }
   return model;
 };
+
+const runtimeLabel = (runtime: string) => {
+  if (runtime === "claude") {
+    return "Claude SDK";
+  }
+  if (runtime === "pi") {
+    return "Pi";
+  }
+  return runtime;
+};
+
+const skillLabel = (skill: string) =>
+  skill.replace("@sentry/warden:", "").replace(/@\d.+$/, "");
 ---
 
 <section class="benchmark-runs" aria-label="Latest benchmark runs">
   {results.length === 0 ? (
     <p>No benchmark runs recorded yet.</p>
   ) : (
-    <div class="run-grid" role="table" aria-label="Latest benchmark runs">
-      <div class="run-grid-header" role="row">
-        <span>Run</span>
-        <span>Known</span>
-        <span>Findings</span>
-        <span>Cost</span>
-        <span>Duration</span>
-        <span>Chunks</span>
-        <span>Reasoning</span>
-      </div>
+    <table class="run-table">
+      <thead>
+        <tr>
+          <th scope="col">Run</th>
+          <th scope="col">Known</th>
+          <th scope="col">Findings</th>
+          <th scope="col">Cost</th>
+        </tr>
+      </thead>
       {results.map((result) => {
         const scoring = result.scoring;
         return (
-          <article class="run-row" role="row">
-            <div class="run-name" role="cell">
-              <h3>{modelLabel(result.model)}</h3>
-              <p>
-                {result.model} · {runDate(result.runId)} · {result.runtime} ·{" "}
-                {result.skill.replace("@sentry/warden:", "").replace(/@\d.+$/, "")} ·{" "}
+          <tbody class="run-group">
+            <tr class="run-row">
+              <td class="run-name">
+                <h3>{modelLabel(result.model)} · {runtimeLabel(result.runtime)}</h3>
+              </td>
+              <td class="run-cell">
+                <span class="cell-label">Known corpus</span>
+                <strong>
+                  {scoring
+                    ? `${scoring.knownFound}/${scoring.knownFindingCount}`
+                    : "Not scored"}
+                </strong>
+                {scoring && <span>{formatPercent(scoring.knownFoundRate)}</span>}
+              </td>
+              <td class="run-cell">
+                <span class="cell-label">Total findings</span>
+                <strong>{result.summary.findingsTotal}</strong>
+              </td>
+              <td class="run-cell">
+                <span class="cell-label">Cost</span>
+                <strong>{formatCost(result.summary.costUSD)}</strong>
+              </td>
+            </tr>
+            <tr class="run-meta-row">
+              <td colspan="4">
+                {result.model} · {runDate(result.runId)} · {skillLabel(result.skill)} ·{" "}
                 <a href={resultPath(result)}>JSON</a>
-              </p>
-            </div>
-            <div class="run-cell" role="cell">
-              <span class="cell-label">Known corpus</span>
-              <strong>
-                {scoring
-                  ? `${scoring.knownFound}/${scoring.knownFindingCount}`
-                  : "Not scored"}
-              </strong>
-              {scoring && <span>{formatPercent(scoring.knownFoundRate)}</span>}
-            </div>
-            <div class="run-cell" role="cell">
-              <span class="cell-label">Total findings</span>
-              <strong>{result.summary.findingsTotal}</strong>
-            </div>
-            <div class="run-cell" role="cell">
-              <span class="cell-label">Cost</span>
-              <strong>{formatCost(result.summary.costUSD)}</strong>
-            </div>
-            <div class="run-cell" role="cell">
-              <span class="cell-label">Duration</span>
-              <strong>{formatDuration(result.summary.durationMs)}</strong>
-            </div>
-            <div class="run-cell" role="cell">
-              <span class="cell-label">Chunks</span>
-              <strong>{result.summary.chunksTotal}</strong>
-              {result.summary.chunksFailed > 0 && (
-                <span>{result.summary.chunksFailed} failed</span>
-              )}
-            </div>
-            <div class="run-cell" role="cell">
-              <span class="cell-label">Reasoning</span>
-              <strong>{reasoningLabel(result.reasoningLevel)}</strong>
-            </div>
-          </article>
+              </td>
+            </tr>
+          </tbody>
         );
       })}
-    </div>
+    </table>
   )}
 </section>
 
@@ -160,65 +144,67 @@ const modelLabel = (model: string) => {
     margin: 1rem 0 1.5rem;
   }
 
-  .run-grid {
+  .run-table {
     border: 1px solid var(--sl-color-gray-6);
     border-radius: 8px;
+    border-spacing: 0;
     overflow: hidden;
+    width: 100%;
   }
 
-  .run-grid-header,
-  .run-row {
-    display: grid;
-    grid-template-columns:
-      minmax(11.5rem, 1.45fr)
-      minmax(5.8rem, 0.8fr)
-      minmax(4.4rem, 0.62fr)
-      minmax(4.4rem, 0.62fr)
-      minmax(5.2rem, 0.68fr)
-      minmax(3.8rem, 0.5fr)
-      minmax(5.5rem, 0.7fr);
+  .run-table th,
+  .run-table td {
+    min-width: 0;
+    padding: 0.55rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
   }
 
-  .run-grid-header {
+  .run-table thead {
     background: color-mix(in srgb, var(--sl-color-gray-6) 58%, transparent);
+  }
+
+  .run-table th {
     color: var(--sl-color-gray-3);
     font-size: 0.74rem;
     font-weight: 700;
     letter-spacing: 0;
-    padding: 0.55rem 0.7rem;
     text-transform: uppercase;
   }
 
-  .run-grid-header span,
-  .run-row > * {
-    min-width: 0;
+  .run-table th:first-child,
+  .run-name {
+    width: 52%;
   }
 
-  .run-row {
-    align-items: start;
-    border-top: 1px solid var(--sl-color-gray-6);
-    padding: 0.75rem 0.7rem;
-  }
-
-  .run-name,
+  .run-table th:not(:first-child),
   .run-cell {
-    display: grid;
-    gap: 0.12rem;
+    width: 16%;
   }
 
-  .run-name h3,
-  .run-name p {
-    margin: 0;
+  .run-group .run-row > td {
+    border-top: 1px solid var(--sl-color-gray-6);
+    padding-bottom: 0.1rem;
+  }
+
+  .run-group:first-of-type .run-row > td {
+    border-top: 0;
+  }
+
+  .run-meta-row td {
+    color: var(--sl-color-gray-3);
+    font-size: 0.76rem;
+    padding-top: 0;
   }
 
   .run-name h3 {
     color: var(--sl-color-white);
     font-size: 0.94rem;
     line-height: 1.3;
+    margin: 0;
     overflow-wrap: anywhere;
   }
 
-  .run-name p,
   .run-cell span,
   .cell-label {
     color: var(--sl-color-gray-3);
@@ -227,6 +213,7 @@ const modelLabel = (model: string) => {
 
   .run-cell strong {
     color: var(--sl-color-white);
+    display: block;
     font-size: 0.9rem;
     font-weight: 700;
     line-height: 1.35;
@@ -238,18 +225,48 @@ const modelLabel = (model: string) => {
   }
 
   @media (max-width: 58rem) {
-    .run-grid-header {
+    .run-table thead {
       display: none;
     }
 
-    .run-row {
-      gap: 0.65rem 0.9rem;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      padding: 0.85rem;
+    .run-table,
+    .run-group,
+    .run-row,
+    .run-row > td,
+    .run-meta-row,
+    .run-meta-row > td {
+      display: block;
+      width: auto;
     }
 
-    .run-name {
-      grid-column: 1 / -1;
+    .run-row {
+      padding: 0.85rem 0.85rem 0;
+    }
+
+    .run-group {
+      border-top: 1px solid var(--sl-color-gray-6);
+    }
+
+    .run-group:first-of-type {
+      border-top: 0;
+    }
+
+    .run-group .run-row > td {
+      border-top: 0;
+    }
+
+    .run-row > td {
+      padding: 0;
+    }
+
+    .run-row > .run-cell {
+      display: inline-grid;
+      margin: 0.65rem 0.9rem 0 0;
+      min-width: 6rem;
+    }
+
+    .run-meta-row td {
+      padding: 0.35rem 0.85rem 0.85rem;
     }
 
     .cell-label {
