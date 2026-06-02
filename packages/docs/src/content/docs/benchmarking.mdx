@@ -39,16 +39,17 @@ means more human review.
 
 Cost and duration are recorded from the run summaries derived from the raw
 JSONL artifacts. The raw JSONL logs are kept outside the docs until they have
-been reviewed for sensitive data. Both current runs completed the same 156
-analysis chunks with no failed chunks.
+been reviewed for sensitive data. Current runs scan the same 156 analysis
+chunks; failed chunks are shown in the run table when present.
 
 The GPT 5.5 run used Pi/OpenAI's default behavior. No explicit reasoning level
 was configured in `warden.toml` or the CLI.
 
 ## Current Takeaway
 
-GPT 5.5 found 46 of 86 known corpus vulnerabilities. Sonnet 4.6 found 23 of
-86. GPT 5.5 also emitted more total findings and cost substantially more.
+GPT 5.5 on Pi found 46 of 86 known corpus vulnerabilities. Sonnet 4.6 found
+23 of 86 on Pi and 21 of 86 through the Claude SDK. GPT 5.5 also emitted more
+total findings and cost substantially more.
 
 Use those numbers as a relative comparison for this corpus. They are not a
 general pass rate for Sentry.
