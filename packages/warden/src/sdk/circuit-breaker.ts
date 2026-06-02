@@ -1,5 +1,5 @@
 import type { ErrorCode } from '../types/index.js';
-import { sanitizeErrorMessage } from './errors.js';
+import { sanitizeErrorMessage, humanizeProviderError } from './errors.js';
 
 const DEFAULT_MAX_CONSECUTIVE_PROVIDER_FAILURES = 5;
 
@@ -16,8 +16,8 @@ interface ProviderFailureCircuitBreakerOptions {
 }
 
 function providerUnavailableMessage(count: number, lastMessage: string): string {
-  const detail = sanitizeErrorMessage(lastMessage).trim();
-  const suffix = detail ? ` Last error: ${detail}` : '';
+  const detail = humanizeProviderError(sanitizeErrorMessage(lastMessage)).trim();
+  const suffix = detail ? ` ${detail}` : '';
   return `Provider unavailable after ${count} consecutive failures. Warden stopped early.${suffix}`;
 }
 

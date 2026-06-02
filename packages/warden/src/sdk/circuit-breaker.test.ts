@@ -40,6 +40,17 @@ describe('ProviderFailureCircuitBreaker', () => {
 
     expect(breaker.reason?.code).toBe('provider_unavailable');
     expect(breaker.reason?.message).toContain('Provider unavailable after 2 consecutive failures');
+    expect(breaker.reason?.message).toContain('third outage');
     expect(controller.signal.aborted).toBe(true);
+  });
+
+  it('humanizes Anthropic overloaded errors in the circuit message', () => {
+    const breaker = new ProviderFailureCircuitBreaker({ maxConsecutiveProviderFailures: 1 });
+    const raw = 'Runtime execution failed: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}';
+
+    breaker.recordFailure('provider_unavailable', raw);
+
+    expect(breaker.reason?.message).toContain('Anthropic is overloaded');
+    expect(breaker.reason?.message).not.toContain('{');
   });
 });

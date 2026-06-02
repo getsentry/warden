@@ -183,6 +183,57 @@ export function classifyError(error: unknown): { code: ErrorCode; message: strin
   return { code: 'unknown', message };
 }
 
+/** Human-friendly messages for known Anthropic API error types. */
+const ANTHROPIC_ERROR_LABELS: Record<string, string> = {
+  overloaded_error: 'Anthropic is overloaded — try again later.',
+  rate_limit_error: 'Anthropic rate limit reached — try again later.',
+  api_error: 'Anthropic API error — try again later.',
+  authentication_error: 'Anthropic authentication error.',
+};
+
+/**
+ * Extract a human-readable summary from a raw provider error string.
+ *
+ * Tries to find and parse an embedded JSON payload (e.g., Anthropic API error
+ * bodies). When a known error type is recognised, a friendly message is
+ * returned. Falls back to stripping the JSON blob and returning the text
+ * prefix, or the original string when no JSON is present.
+ */
+export function humanizeProviderError(message: string): string {
+  const jsonMatch = message.match(/(\{[\s\S]*\})/);
+  const jsonBlob = jsonMatch?.[1];
+  if (!jsonBlob) return message;
+
+  try {
+    const parsed: unknown = JSON.parse(jsonBlob);
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      (parsed as Record<string, unknown>)['type'] === 'error'
+    ) {
+      const inner = (parsed as Record<string, unknown>)['error'];
+      if (inner !== null && typeof inner === 'object') {
+        const errorObj = inner as Record<string, unknown>;
+        const errorType = errorObj['type'];
+        const label = typeof errorType === 'string'
+          ? ANTHROPIC_ERROR_LABELS[errorType]
+          : undefined;
+        if (label) return label;
+        const errorMessage = errorObj['message'];
+        if (typeof errorMessage === 'string' && errorMessage) {
+          return errorMessage;
+        }
+      }
+    }
+  } catch {
+    // Not valid JSON — fall through
+  }
+
+  // Strip the JSON blob and return any text prefix, or the original.
+  const prefix = message.slice(0, jsonMatch.index).replace(/[:\s]+$/, '').trim();
+  return prefix || message;
+}
+
 /** Map an internal extract.ts error string to a stable public ErrorCode. */
 export function mapExtractionErrorCode(raw: string | undefined): ErrorCode {
   if (!raw) return 'unknown';
