@@ -5,20 +5,27 @@ import { WardenAuthenticationError } from './errors.js';
  * Pre-flight auth check: verify that authentication will work before starting analysis.
  *
  * - If an API key is provided, returns immediately (direct API auth).
- * - If no API key, verifies the `claude` binary exists on PATH so the SDK
- *   can use local Claude Code auth. Throws WardenAuthenticationError
- *   if the binary is missing.
+ * - If no API key, verifies the configured Claude Code executable, or the
+ *   `claude` binary on PATH, so the SDK can use local Claude Code auth.
+ *   Throws WardenAuthenticationError if the binary is missing.
  *
  * This catches the most common failure mode (binary not installed) early.
  * Subtler failures (binary exists but sandbox blocks IPC) are caught by the
  * isSubprocessError() handler in analyzeHunk().
  */
-export function verifyAuth({ apiKey }: { apiKey?: string }): void {
+export function verifyAuth({
+  apiKey,
+  pathToClaudeCodeExecutable,
+}: {
+  apiKey?: string;
+  pathToClaudeCodeExecutable?: string;
+}): void {
   // Direct API auth — no subprocess needed
   if (apiKey) return;
 
+  const executable = pathToClaudeCodeExecutable ?? 'claude';
   try {
-    execFileNonInteractive('claude', ['--version'], { timeout: 5000 });
+    execFileNonInteractive(executable, ['--version'], { timeout: 5000 });
   } catch (error) {
     // execFileNonInteractive wraps spawn failures in ExecError.
     // The original error message (e.g., "spawn claude ENOENT") is in ExecError.stderr.
@@ -28,8 +35,9 @@ export function verifyAuth({ apiKey }: { apiKey?: string }): void {
         : (error as NodeJS.ErrnoException).code === 'ENOENT';
     if (isNotFound) {
       throw new WardenAuthenticationError(
-        'Claude Code CLI not found on PATH.\n' +
-        'Either install Claude Code (https://claude.ai/install.sh) or set an API key.',
+        'Claude Code CLI not found on PATH or configured path.\n' +
+        'Either install Claude Code (https://claude.ai/install.sh), ' +
+        'set WARDEN_ANTHROPIC_API_KEY, or set ANTHROPIC_API_KEY.',
         { cause: error }
       );
     }

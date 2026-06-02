@@ -6,6 +6,7 @@ type HelpOptionId =
   | 'configPath'
   | 'model'
   | 'effort'
+  | 'runtime'
   | 'json'
   | 'output'
   | 'failOn'
@@ -100,6 +101,10 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
     label: '--effort <level>',
     description: 'Override effort level for this run',
     continuation: 'Values: off, low, medium, high, xhigh',
+  },
+  runtime: {
+    label: '--runtime <claude|pi>',
+    description: 'Runtime backend for model-backed execution',
   },
   json: {
     label: '--json',
@@ -243,6 +248,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'configPath',
       'model',
       'effort',
+      'runtime',
       'json',
       'output',
       'failOn',

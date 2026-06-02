@@ -77,6 +77,13 @@ describe('parseCliArgs', () => {
     expect(result.options.skill).toBe('security-review');
   });
 
+  it('parses --runtime option', () => {
+    const result = parseCliArgs(['src/auth.ts', '--skill', 'code-review', '--runtime', 'claude']);
+    expect(result.options.targets).toEqual(['src/auth.ts']);
+    expect(result.options.skill).toBe('code-review');
+    expect(result.options.runtime).toBe('claude');
+  });
+
   it('parses --config-path option', () => {
     const result = parseCliArgs(['--config-path', './custom.toml']);
     expect(result.options.configPath).toBe('./custom.toml');

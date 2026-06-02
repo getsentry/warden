@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EventContext } from '../types/index.js';
 import { verifyAuth } from '../sdk/runner.js';
 import type * as RunnerModule from '../sdk/runner.js';
+import { WardenAuthenticationError } from '../sdk/errors.js';
 import { CLIOptionsSchema } from './args.js';
 import { runSkills } from './main.js';
 import { Reporter, Verbosity } from './output/index.js';
@@ -57,6 +58,7 @@ describe('runSkills auth flow', () => {
     process.env = { ...originalEnv };
     delete process.env['WARDEN_ANTHROPIC_API_KEY'];
     delete process.env['ANTHROPIC_API_KEY'];
+    delete process.env['CLAUDE_CODE_PATH'];
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     verifyAuthMock.mockReset();
   });
@@ -112,5 +114,64 @@ describe('runSkills auth flow', () => {
       message: 'Pi runtime model for security-review must use provider/model format: claude-sonnet-4-5',
     });
     expect(verifyAuthMock).not.toHaveBeenCalled();
+  });
+
+  it('checks Claude auth for CLI runtime override and forwards CLAUDE_CODE_PATH', async () => {
+    const fakeClaudePath = join(tempDir, 'fake-claude');
+    process.env['CLAUDE_CODE_PATH'] = fakeClaudePath;
+    verifyAuthMock.mockImplementation(() => {
+      throw new WardenAuthenticationError('missing auth');
+    });
+
+    const exitCode = await runSkills(
+      makeContext(tempDir),
+      CLIOptionsSchema.parse({
+        targets: ['src/example.ts'],
+        skill: 'security-review',
+        runtime: 'claude',
+        quiet: true,
+      }),
+      new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet)
+    );
+
+    expect(exitCode).toBe(1);
+    expect(verifyAuthMock).toHaveBeenCalledWith({
+      apiKey: undefined,
+      pathToClaudeCodeExecutable: fakeClaudePath,
+    });
+  });
+
+  it('checks Claude auth for config default runtime', async () => {
+    const configPath = join(tempDir, 'warden.toml');
+    writeFileSync(configPath, [
+      'version = 1',
+      '',
+      '[defaults]',
+      'runtime = "claude"',
+      '',
+      '[[skills]]',
+      'name = "security-review"',
+      '',
+    ].join('\n'));
+    verifyAuthMock.mockImplementation(() => {
+      throw new WardenAuthenticationError('missing auth');
+    });
+
+    const exitCode = await runSkills(
+      makeContext(tempDir),
+      CLIOptionsSchema.parse({
+        targets: ['src/example.ts'],
+        skill: 'security-review',
+        configPath,
+        quiet: true,
+      }),
+      new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet)
+    );
+
+    expect(exitCode).toBe(1);
+    expect(verifyAuthMock).toHaveBeenCalledWith({
+      apiKey: undefined,
+      pathToClaudeCodeExecutable: undefined,
+    });
   });
 });

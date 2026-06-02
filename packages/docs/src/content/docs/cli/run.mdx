@@ -27,6 +27,7 @@ The bare `warden` command is an alias for this command.
 | `--config-path <path>` | Path to `warden.toml`, or a directory containing it. `--config` is a deprecated alias. |
 | `-m, --model <model>` | Model fallback when `warden.toml` does not specify one. See [Models and Runtimes](/config/models/). |
 | `--effort <level>` | Override effort level for this run. Values: `off`, `low`, `medium`, `high`, `xhigh`. |
+| `--runtime <claude\|pi>` | Runtime backend for model-backed execution. |
 | `--json` | Output results as JSON. |
 | `-o, --output <path>` | Write full run output to a JSONL file. |
 | `--fail-on <severity>` | Exit with code 1 if findings meet this severity. |

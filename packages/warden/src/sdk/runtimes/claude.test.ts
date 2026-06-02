@@ -185,6 +185,28 @@ describe('claudeRuntime.runSkill', () => {
     });
   });
 
+  it('uses explicit high Claude adaptive thinking when reasoning effort is omitted', async () => {
+    mockQuery.mockReturnValue(mockStream([successResult()]));
+
+    await claudeRuntime.runSkill({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo',
+      skillName: 'test-skill',
+      options: {
+        model: 'claude-test',
+      },
+    });
+
+    expect(mockQuery).toHaveBeenCalledWith({
+      prompt: 'user',
+      options: expect.objectContaining({
+        effort: 'high',
+        thinking: { type: 'adaptive' },
+      }),
+    });
+  });
+
   it('can disable Claude thinking', async () => {
     mockQuery.mockReturnValue(mockStream([successResult()]));
 

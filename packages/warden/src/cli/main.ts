@@ -625,17 +625,18 @@ function emitInvalidPiModelSelectorRunLog(
 
 function verifyClaudeAuthForRun(args: {
   apiKey?: string;
+  pathToClaudeCodeExecutable?: string;
   reporter: Reporter;
   repoPath: string;
   options: CLIOptions;
 }): boolean {
-  const { apiKey, reporter, repoPath, options } = args;
+  const { apiKey, pathToClaudeCodeExecutable, reporter, repoPath, options } = args;
   if (!apiKey) {
     reporter.debug('No API key found. Using Claude Code local auth.');
   }
 
   try {
-    verifyAuth({ apiKey });
+    verifyAuth({ apiKey, pathToClaudeCodeExecutable });
     return true;
   } catch (error: unknown) {
     const message = (error as WardenAuthenticationError).message;
@@ -764,6 +765,10 @@ export function resolveCliDefaultSynthesisModel(
     emptyToUndefined(config?.defaults?.synthesis?.model) ??
     resolveCliDefaultAuxiliaryModel(config)
   );
+}
+
+function resolveClaudeCodeExecutablePath(): string | undefined {
+  return emptyToUndefined(process.env['CLAUDE_CODE_PATH']);
 }
 
 /** Resolve the model label recorded in JSONL output, including the default sentinel. */
@@ -959,6 +964,8 @@ export async function runSkills(
   const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
   const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
   const defaultEffort = resolveCliEffort(config, options.effort);
+  const defaultRuntime = options.runtime ?? config?.defaults?.runtime ?? 'pi';
+  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutablePath();
 
   // Determine which triggers/skills to run
   let skillsToRun: SkillToRun[];
@@ -979,7 +986,7 @@ export async function runSkills(
       model: match?.model ?? defaultModel,
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
       effort: options.effort ?? match?.effort ?? defaultEffort,
-      runtime: match?.runtime ?? config?.defaults?.runtime ?? 'pi',
+      runtime: options.runtime ?? match?.runtime ?? config?.defaults?.runtime ?? 'pi',
       auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
       synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
       auxiliaryMaxRetries:
@@ -1006,8 +1013,8 @@ export async function runSkills(
         filters: t.filters,
         model: t.model,
         maxTurns: t.maxTurns,
+        runtime: options.runtime ?? t.runtime,
         effort: options.effort ?? t.effort,
-        runtime: t.runtime,
         auxiliaryModel: t.auxiliaryModel,
         synthesisModel: t.synthesisModel,
         auxiliaryMaxRetries: t.auxiliaryMaxRetries,
@@ -1033,6 +1040,7 @@ export async function runSkills(
 
   if (needsClaudeAuth(skillsToRun) && !verifyClaudeAuthForRun({
     apiKey,
+    pathToClaudeCodeExecutable,
     reporter,
     repoPath: repoPath ?? cwd,
     options,
@@ -1049,7 +1057,8 @@ export async function runSkills(
   const runnerOptions: SkillRunnerOptions = {
     apiKey,
     model: sdkModel,
-    runtime: config?.defaults?.runtime ?? 'pi',
+    runtime: defaultRuntime,
+    pathToClaudeCodeExecutable,
     auxiliaryModel: defaultAuxiliaryModel,
     synthesisModel: defaultSynthesisModel,
     abortController,
@@ -1358,9 +1367,14 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Claude runtime can fall back to local Claude Code auth.
   const apiKey = getAnthropicApiKey();
+  const pathToClaudeCodeExecutable = resolveClaudeCodeExecutablePath();
 
-  if (needsClaudeAuth(triggersToRun) && !verifyClaudeAuthForRun({
+  const triggerRuntimes = triggersToRun.map((trigger) => ({
+    runtime: options.runtime ?? trigger.runtime,
+  }));
+  if (needsClaudeAuth(triggerRuntimes) && !verifyClaudeAuthForRun({
     apiKey,
+    pathToClaudeCodeExecutable,
     reporter,
     repoPath,
     options,
@@ -1382,7 +1396,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     runnerOptions: {
       apiKey,
       model: trigger.model,
-      runtime: trigger.runtime,
+      runtime: options.runtime ?? trigger.runtime,
+      pathToClaudeCodeExecutable,
       effort: options.effort ?? trigger.effort,
       auxiliaryModel: trigger.auxiliaryModel,
       synthesisModel: trigger.synthesisModel,

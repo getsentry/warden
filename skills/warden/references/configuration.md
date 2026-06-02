@@ -21,7 +21,7 @@ version = 1
 
 [defaults.agent]
 model = "openai/gpt-5.5"
-reasoningEffort = "medium"
+effort = "medium"
 
 [[skills]]
 name = "my-skill"           # matches .agents/skills/my-skill/SKILL.md
@@ -94,7 +94,7 @@ Warden uses different model lanes for different kinds of work:
 
 If `[defaults.synthesis].model` is omitted, synthesis falls back to `[defaults.auxiliary].model`.
 
-`[defaults.agent].reasoningEffort` optionally controls repo-aware skill reasoning across runtimes. Supported values are `off`, `low`, `medium`, `high`, and `xhigh`. When omitted, each runtime uses its own default.
+`[defaults.agent].effort` optionally controls repo-aware skill reasoning across runtimes. Supported values are `off`, `low`, `medium`, `high`, and `xhigh`. When omitted, Warden sends explicit `high` adaptive thinking to the Claude runtime; Pi uses its own default thinking level.
 
 ## Model Precedence
 
@@ -138,6 +138,6 @@ preferred in CI so they do not collide with locally-set provider keys.
 
 **Token/cost issues:**
 - Reduce `maxTurns` (default: 50)
-- Lower `[defaults.agent].reasoningEffort` when the runtime supports cheaper reasoning levels
+- Lower `[defaults.agent].effort` when the runtime supports cheaper reasoning levels
 - Use chunking settings to control chunk size
 - Filter to relevant files with `paths`

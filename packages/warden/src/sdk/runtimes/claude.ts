@@ -64,6 +64,7 @@ const DEFAULT_READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
 const MUTATING_TOOLS = ['Write', 'Edit', 'Bash'] as const;
 const CLAUDE_AGENT_TOOLS = ['Task', 'TodoWrite'] as const;
+const DEFAULT_CLAUDE_EFFORT: EffortLevel = 'high';
 
 function getClaudeProviderOptions(providerOptions: unknown): ClaudeProviderOptions {
   if (!providerOptions || typeof providerOptions !== 'object') {
@@ -82,13 +83,10 @@ function effortOptions(effort: SkillRunRequest['options']['effort']): {
   thinking?: { type: 'adaptive' } | { type: 'disabled' };
   effort?: EffortLevel;
 } {
-  if (!effort) {
-    return {};
-  }
   if (effort === 'off') {
     return { thinking: { type: 'disabled' } };
   }
-  return { thinking: { type: 'adaptive' }, effort };
+  return { thinking: { type: 'adaptive' }, effort: effort ?? DEFAULT_CLAUDE_EFFORT };
 }
 
 function missingApiKeyResult<T>(kind: 'auxiliary' | 'synthesis'): AuxiliaryRunResult<T> {

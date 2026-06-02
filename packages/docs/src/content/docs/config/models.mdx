@@ -119,7 +119,8 @@ lane. Prefer `defaults.agent.model` and `defaults.agent.maxTurns` in new config.
 
 `defaults.agent.effort` optionally controls repo-aware skill effort
 across runtimes. Supported values are `off`, `low`, `medium`, `high`, and
-`xhigh`. When omitted, each runtime uses its own default.
+`xhigh`. When omitted, Warden sends explicit `high` adaptive thinking to the
+Claude runtime; Pi uses its own default thinking level.
 
 ## Overrides
 

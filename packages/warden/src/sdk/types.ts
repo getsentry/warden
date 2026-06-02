@@ -104,7 +104,7 @@ export interface SkillRunnerOptions {
   batchDelayMs?: number;
   /** Model to use for analysis (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model?: string;
-  /** Effort level to use for analysis. Uses SDK default if not specified. */
+  /** Effort level to use for analysis. Uses the runtime-specific default if not specified. */
   effort?: Effort;
   /** Runtime backend for all model-backed execution. Defaults to Pi. */
   runtime?: RuntimeName;

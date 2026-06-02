@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { EffortSchema, type Effort } from '../config/schema.js';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
+import { RuntimeNameSchema } from '../sdk/runtimes/types.js';
 import { getVersion } from '../utils/index.js';
 import type { HelpTarget } from './help.js';
 
@@ -28,6 +29,8 @@ export const CLIOptionsSchema = z.object({
   model: z.string().optional(),
   /** Effort level to use for this run */
   effort: EffortSchema.optional(),
+  /** Runtime backend for model-backed execution */
+  runtime: RuntimeNameSchema.optional(),
   // Verbosity options
   quiet: z.boolean().default(false),
   verbose: z.number().default(0),
@@ -315,6 +318,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       config: { type: 'string' }, // deprecated alias for --config-path
       model: { type: 'string', short: 'm' },
       'effort': { type: 'string' },
+      runtime: { type: 'string' },
       json: { type: 'boolean', default: false },
       output: { type: 'string', short: 'o' },
       'fail-on': { type: 'string' },
@@ -516,6 +520,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         typeof values.config === 'string' ? values.config : undefined,
       model: typeof values.model === 'string' ? values.model : undefined,
       effort: values['effort'] as Effort | undefined,
+      runtime: typeof values.runtime === 'string' ? values.runtime : undefined,
       json: Boolean(values.json),
       output: typeof values.output === 'string' ? values.output : undefined,
       failOn: values['fail-on'] as SeverityThreshold | undefined,

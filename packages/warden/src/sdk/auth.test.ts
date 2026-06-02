@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { verifyAuth } from './auth.js';
 import { WardenAuthenticationError } from './errors.js';
 import { ExecError } from '../utils/exec.js';
@@ -16,6 +16,10 @@ import { execFileNonInteractive } from '../utils/exec.js';
 const mockExec = vi.mocked(execFileNonInteractive);
 
 describe('verifyAuth', () => {
+  beforeEach(() => {
+    mockExec.mockReset();
+  });
+
   it('returns immediately when API key is provided', () => {
     verifyAuth({ apiKey: 'sk-test-key' });
     expect(mockExec).not.toHaveBeenCalled();
@@ -25,6 +29,15 @@ describe('verifyAuth', () => {
     mockExec.mockReturnValue('1.0.0');
     verifyAuth({ apiKey: undefined });
     expect(mockExec).toHaveBeenCalledWith('claude', ['--version'], { timeout: 5000 });
+  });
+
+  it('checks configured Claude Code executable path when provided', () => {
+    mockExec.mockReturnValue('1.0.0');
+    verifyAuth({
+      apiKey: undefined,
+      pathToClaudeCodeExecutable: '/private/tmp/claude',
+    });
+    expect(mockExec).toHaveBeenCalledWith('/private/tmp/claude', ['--version'], { timeout: 5000 });
   });
 
   it('throws WardenAuthenticationError when claude binary is missing', () => {
