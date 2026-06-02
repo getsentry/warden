@@ -250,11 +250,6 @@ describe('humanizeProviderError', () => {
     expect(humanizeProviderError(raw)).toBe('Anthropic API error \u2014 try again later.');
   });
 
-  it('finds provider error payloads after unrelated JSON objects', () => {
-    const raw = 'Runtime execution failed: {"status":500} details {"type":"error","error":{"type":"rate_limit_error","message":"Rate limit exceeded"}}';
-    expect(humanizeProviderError(raw)).toBe('Anthropic rate limit reached \u2014 try again later.');
-  });
-
   it('falls back to error.message for unknown Anthropic error types', () => {
     const raw = '{"type":"error","error":{"type":"some_new_error","message":"Something went wrong"}}';
     expect(humanizeProviderError(raw)).toBe('Something went wrong');

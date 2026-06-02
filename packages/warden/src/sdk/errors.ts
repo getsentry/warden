@@ -188,11 +188,6 @@ interface ProviderErrorDetails {
   message?: string;
 }
 
-interface JsonObjectCandidate {
-  value: unknown;
-  end: number;
-}
-
 /** Human-friendly messages for known Anthropic API error types. */
 const ANTHROPIC_ERROR_LABELS: Record<string, string> = {
   overloaded_error: 'Anthropic is overloaded — try again later.',
@@ -201,7 +196,7 @@ const ANTHROPIC_ERROR_LABELS: Record<string, string> = {
   authentication_error: 'Anthropic authentication error.',
 };
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
+function recordFrom(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object'
     ? value as Record<string, unknown>
     : undefined;
@@ -213,32 +208,22 @@ function stringProperty(record: Record<string, unknown>, key: string): string | 
 }
 
 function providerErrorDetailsFromPayload(payload: unknown): ProviderErrorDetails | undefined {
-  const record = asRecord(payload);
+  const record = recordFrom(payload);
   if (!record) return undefined;
 
-  const error = asRecord(record['error']);
-  if (!error) return undefined;
-
+  const nestedError = recordFrom(record['error']);
+  const error = nestedError ?? record;
   const type = stringProperty(error, 'type');
-  if (!type && stringProperty(record, 'type') !== 'error') return undefined;
+  const message = stringProperty(error, 'message');
+  const hasProviderShape = nestedError
+    ? Boolean(type || stringProperty(record, 'type') === 'error')
+    : Boolean(type && type !== 'error');
 
-  const details = {
-    type,
-    message: stringProperty(error, 'message'),
-  };
-  return details.type || details.message ? details : undefined;
+  return hasProviderShape && (type || message) ? { type, message } : undefined;
 }
 
-function providerErrorDetailsFromApiError(error: APIError): ProviderErrorDetails | undefined {
-  const payloadDetails = providerErrorDetailsFromPayload((error as APIError & { error?: unknown }).error);
-  if (payloadDetails) return payloadDetails;
-
-  const record = error as unknown as Record<string, unknown>;
-  const type = stringProperty(record, 'type');
-  return type ? { type, message: error.message } : undefined;
-}
-
-function humanizeProviderErrorDetails(details: ProviderErrorDetails): string | undefined {
+function humanizeProviderErrorDetails(details: ProviderErrorDetails | undefined): string | undefined {
+  if (!details) return undefined;
   if (details.type) {
     const label = ANTHROPIC_ERROR_LABELS[details.type];
     if (label) return label;
@@ -246,87 +231,22 @@ function humanizeProviderErrorDetails(details: ProviderErrorDetails): string | u
   return details.message;
 }
 
-function parseJsonObjectCandidate(message: string, start: number): JsonObjectCandidate | undefined {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
+function providerErrorDetailsFromEmbeddedJson(message: string): ProviderErrorDetails | undefined {
+  const jsonStart = message.indexOf('{');
+  if (jsonStart < 0) return undefined;
 
-  for (let index = start; index < message.length; index++) {
-    const char = message.charAt(index);
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (char === '\\') {
-        escaped = true;
-        continue;
-      }
-      if (char === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-    if (char === '{') {
-      depth++;
-      continue;
-    }
-    if (char !== '}') {
-      continue;
-    }
-
-    depth--;
-    if (depth !== 0) {
-      continue;
-    }
-
-    const end = index + 1;
-    try {
-      return {
-        value: JSON.parse(message.slice(start, end)) as unknown,
-        end,
-      };
-    } catch {
-      return undefined;
-    }
+  try {
+    return providerErrorDetailsFromPayload(JSON.parse(message.slice(jsonStart)) as unknown);
+  } catch {
+    return undefined;
   }
-
-  return undefined;
 }
 
-function trimJsonPrefix(message: string, jsonStart: number): string {
-  let prefix = message.slice(0, jsonStart).trimEnd();
-  while (prefix.endsWith(':')) {
-    prefix = prefix.slice(0, -1).trimEnd();
-  }
-  return prefix.trim();
-}
+function messagePrefixBeforeJson(message: string): string | undefined {
+  const jsonStart = message.indexOf('{');
+  if (jsonStart < 0) return undefined;
 
-function humanizeProviderErrorString(message: string): string | undefined {
-  let firstObjectStart: number | undefined;
-
-  for (let index = 0; index < message.length; index++) {
-    if (message.charAt(index) !== '{') continue;
-    firstObjectStart ??= index;
-
-    const candidate = parseJsonObjectCandidate(message, index);
-    if (!candidate) continue;
-
-    const details = providerErrorDetailsFromPayload(candidate.value);
-    const summary = details ? humanizeProviderErrorDetails(details) : undefined;
-    if (summary) return summary;
-
-    index = candidate.end - 1;
-  }
-
-  if (firstObjectStart === undefined) return undefined;
-
-  const prefix = trimJsonPrefix(message, firstObjectStart);
+  const prefix = message.slice(0, jsonStart).replace(/[:\s]+$/, '').trim();
   return prefix || undefined;
 }
 
@@ -334,18 +254,22 @@ function humanizeProviderErrorString(message: string): string | undefined {
  * Extract a human-readable summary from a raw provider error.
  *
  * Structured Anthropic error bodies are preferred so summaries are based on the
- * provider error type. String errors fall back to parsing embedded JSON objects
+ * provider error type. String errors fall back to parsing embedded JSON
  * before returning the text prefix or original message.
  */
 export function humanizeProviderError(error: unknown): string {
-  const details = error instanceof APIError
-    ? providerErrorDetailsFromApiError(error)
-    : providerErrorDetailsFromPayload(error);
-  const structuredSummary = details ? humanizeProviderErrorDetails(details) : undefined;
+  const payload = error instanceof APIError
+    ? (error as APIError & { error?: unknown }).error
+    : error;
+  const structuredSummary = humanizeProviderErrorDetails(providerErrorDetailsFromPayload(payload));
   if (structuredSummary) return structuredSummary;
 
   const message = error instanceof Error ? error.message : String(error);
-  return humanizeProviderErrorString(message) ?? message;
+  return (
+    humanizeProviderErrorDetails(providerErrorDetailsFromEmbeddedJson(message)) ??
+    messagePrefixBeforeJson(message) ??
+    message
+  );
 }
 
 /** Map an internal extract.ts error string to a stable public ErrorCode. */
