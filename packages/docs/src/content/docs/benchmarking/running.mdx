@@ -18,19 +18,23 @@ comparison against known vulnerable files.
 
 ## Setup
 
-Clone Sentry and pick a model:
+Clone Sentry and pick a runtime/model pair:
 
 ```bash
 git clone git@github.com:getsentry/sentry.git /tmp/sentry-benchmark
 
 export BENCH_MODEL="openai/gpt-5.5"
 export BENCH_MODEL_SLUG="gpt-5-5"
-export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_MODEL_SLUG}"
+export BENCH_RUNTIME="pi"
+export BENCH_RUNTIME_SLUG="pi"
+export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_RUNTIME_SLUG}-${BENCH_MODEL_SLUG}"
 mkdir -p "$BENCH_ROOT"
 ```
 
 Set the provider API key required by the model. For GPT 5.5 through Pi, set
 `WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
+For the Claude SDK runtime, use Claude Code model IDs such as
+`claude-sonnet-4-6` instead of Pi provider/model selectors.
 
 The GPT 5.5 run used `openai/gpt-5.5`. The installed Pi registry did not expose
 `openai/gpt-5.5-codex`. No explicit reasoning level was configured, so the run
@@ -92,7 +96,7 @@ cat > "$BENCH_ROOT/warden.toml" <<EOF
 version = 1
 
 [defaults]
-runtime = "pi"
+runtime = "$BENCH_RUNTIME"
 reportOn = "low"
 
 [defaults.agent]
@@ -122,12 +126,12 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
     -C /tmp/sentry-benchmark \
     @"$target" \
     --skill security-review \
-    --config "$BENCH_ROOT/warden.toml" \
+    --config-path "$BENCH_ROOT/warden.toml" \
     --model "$BENCH_MODEL" \
     --report-on low \
     --min-confidence low \
     --parallel 4 \
-    -o "$BENCH_ROOT/sentry-security-review-pi-${BENCH_MODEL_SLUG}-corpus-${short}.jsonl" \
+    -o "$BENCH_ROOT/sentry-security-review-${BENCH_RUNTIME_SLUG}-${BENCH_MODEL_SLUG}-corpus-${short}.jsonl" \
     -v \
     --log
 done
@@ -136,7 +140,7 @@ done
 Inspect the stitched output:
 
 ```bash
-pnpm cli -- runs show "$BENCH_ROOT"/sentry-security-review-pi-"$BENCH_MODEL_SLUG"-corpus-*.jsonl \
+pnpm cli -- runs show "$BENCH_ROOT"/sentry-security-review-"$BENCH_RUNTIME_SLUG"-"$BENCH_MODEL_SLUG"-corpus-*.jsonl \
   -C /tmp/sentry-benchmark \
   --report-on low \
   --min-confidence low
