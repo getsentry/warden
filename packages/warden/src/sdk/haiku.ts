@@ -2,10 +2,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Span } from '@sentry/node';
 import type { z } from 'zod';
 import type { UsageStats } from '../types/index.js';
-import { Sentry } from '../sentry.js';
+import { startTracedSpan } from '../sentry-trace.js';
 import { apiUsageToStats } from './pricing.js';
 import { aggregateUsage, emptyUsage } from './usage.js';
 import {
+  genAiToolCallAttributes,
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
   setGenAiUsageAttrs,
@@ -187,7 +188,7 @@ function inferPrefill(schema: z.ZodType): string | undefined {
 export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuResult<T>> {
   const { apiKey, prompt, schema, agentName, task, model = HAIKU_MODEL, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS, maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES } = options;
 
-  return Sentry.startSpan(
+  return startTracedSpan(
     {
       op: 'gen_ai.chat',
       name: `chat ${model}`,
@@ -298,7 +299,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
     maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES,
   } = options;
 
-  return Sentry.startSpan(
+  return startTracedSpan(
     {
       op: 'gen_ai.chat',
       name: `chat ${model}`,
@@ -383,23 +384,32 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
 
           const toolResults: Anthropic.ToolResultBlockParam[] = [];
           for (const block of toolUseBlocks) {
-            await Sentry.startSpan(
+            await startTracedSpan(
               {
                 op: 'gen_ai.execute_tool',
                 name: `execute_tool ${block.name}`,
-                attributes: {
-                  'gen_ai.operation.name': 'execute_tool',
-                  ...(agentName ? { 'gen_ai.agent.name': agentName } : {}),
-                  ...(task ? { 'warden.ai.task': task } : {}),
-                  'gen_ai.tool.name': block.name,
-                },
+                attributes: genAiToolCallAttributes({
+                  agentName,
+                  task,
+                  toolName: block.name,
+                  toolCallId: block.id,
+                  toolType: 'function',
+                  arguments: block.input,
+                }),
               },
-              async () => {
+              async (toolSpan) => {
                 try {
                   const result = await executeTool(block.name, block.input as Record<string, unknown>);
+                  for (const [key, value] of Object.entries(genAiToolCallAttributes({
+                    toolName: block.name,
+                    result,
+                  }))) {
+                    toolSpan.setAttribute(key, value);
+                  }
                   toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
                 } catch (error) {
                   const errMsg = error instanceof Error ? error.message : String(error);
+                  toolSpan.setAttribute('error.type', error instanceof Error ? error.name : '_OTHER');
                   toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: errMsg, is_error: true });
                 }
               },

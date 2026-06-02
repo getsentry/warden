@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll, afterAll } from 'vitest';
 import { APIError } from '@anthropic-ai/sdk';
 import type { SkillDefinition } from '../config/schema.js';
 import type { HunkWithContext } from '../diff/index.js';
@@ -7,11 +7,28 @@ import { analyzeFile, buildSourceSnippet, filterOutOfRangeFindings, runSkill } f
 import type { PreparedFile } from './types.js';
 import { getRuntime, type Runtime } from './runtimes/index.js';
 import { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
+import { Sentry } from '../sentry.js';
+import { startTracedSpan } from '../sentry-trace.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
   getRuntimeProviderOptions: vi.fn(() => undefined),
 }));
+
+beforeAll(() => {
+  Sentry.init({
+    dsn: 'https://public@example.com/1',
+    tracesSampleRate: 1,
+    transport: () => ({
+      send: vi.fn(async () => ({})),
+      flush: vi.fn(async () => true),
+    }),
+  });
+});
+
+afterAll(async () => {
+  await Sentry.close(0);
+});
 
 function makeFinding(startLine: number, id = `f-${startLine}`): Finding {
   return {
@@ -410,6 +427,108 @@ describe('analyzeFile', () => {
     consoleSpy.mockRestore();
   });
 
+  it('captures Warden-created Sentry spans for completed hunks when enabled', async () => {
+    const runSkill = vi.fn(async () => startTracedSpan(
+      {
+        op: 'gen_ai.invoke_agent',
+        name: 'invoke_agent security-review',
+        attributes: {
+          'gen_ai.operation.name': 'invoke_agent',
+          'gen_ai.agent.name': 'security-review',
+        },
+      },
+      () => {
+        startTracedSpan(
+          {
+            op: 'fs.read',
+            name: 'read package.json',
+            attributes: { 'file.path': 'package.json' },
+          },
+          () => undefined,
+        );
+        return {
+          result: {
+            status: 'success',
+            text: JSON.stringify({ findings: [] }),
+            errors: [],
+            usage: makeUsage(),
+            responseId: 'resp-123',
+            responseModel: 'claude-test',
+            sessionId: 'session-123',
+            durationMs: 1200,
+            durationApiMs: 900,
+            numTurns: 2,
+          },
+        };
+      },
+    ));
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const onChunkComplete = vi.fn();
+    const skill: SkillDefinition = {
+      name: 'security-review',
+      description: 'Security review.',
+      prompt: 'Return findings as JSON.',
+    };
+
+    const result = await analyzeFile(
+      skill,
+      makePreparedFile(),
+      '/tmp/repo',
+      {
+        runtime: 'claude',
+        captureTraces: true,
+      },
+      { onChunkComplete },
+    );
+
+    const trace = result.traces?.[0];
+    expect(trace).toEqual(expect.objectContaining({
+      filename: 'src/example.ts',
+      lineRange: '1',
+      runtime: 'claude',
+      status: 'success',
+      responseId: 'resp-123',
+      responseModel: 'claude-test',
+      sessionId: 'session-123',
+      durationMs: 1200,
+      durationApiMs: 900,
+      numTurns: 2,
+      traceId: expect.any(String),
+      spanId: expect.any(String),
+      spans: expect.arrayContaining([
+        expect.objectContaining({
+          op: 'gen_ai.invoke_agent',
+          name: 'invoke_agent security-review',
+          traceId: expect.any(String),
+          spanId: expect.any(String),
+          attributes: expect.objectContaining({
+            'gen_ai.operation.name': 'invoke_agent',
+          }),
+        }),
+        expect.objectContaining({
+          op: 'fs.read',
+          name: 'read package.json',
+          traceId: expect.any(String),
+          spanId: expect.any(String),
+          attributes: expect.objectContaining({
+            'file.path': 'package.json',
+          }),
+        }),
+      ]),
+    }));
+    expect(trace?.spans?.map((span) => span.traceId)).toEqual(
+      expect.arrayContaining([trace?.traceId, trace?.traceId]),
+    );
+    expect(onChunkComplete).toHaveBeenCalledWith(expect.objectContaining({
+      trace,
+    }));
+  });
+
   it('counts provider failures once per hunk after retries are exhausted', async () => {
     const controller = new AbortController();
     const circuitBreaker = new ProviderFailureCircuitBreaker({
@@ -692,6 +811,78 @@ describe('runSkill', () => {
     expect(report.failedHunks).toBeUndefined();
     expect(report.failedExtractions).toBeUndefined();
     expect(report.error).toBeUndefined();
+  });
+
+  it('includes Warden-created Sentry spans on SkillReport when trace capture is enabled', async () => {
+    const runSkillMock = vi.fn(async () => startTracedSpan(
+      {
+        op: 'gen_ai.invoke_agent',
+        name: 'invoke_agent security-review',
+        attributes: {
+          'gen_ai.operation.name': 'invoke_agent',
+          'gen_ai.agent.name': 'security-review',
+        },
+      },
+      () => ({
+        result: {
+          status: 'success',
+          text: JSON.stringify({ findings: [] }),
+          errors: [],
+          usage: makeUsage(),
+          responseId: 'resp-report',
+          responseModel: 'claude-report',
+          sessionId: 'session-report',
+          durationMs: 500,
+          numTurns: 1,
+        },
+      }),
+    ));
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithOneHunk(),
+      {
+        runtime: 'claude',
+        captureTraces: true,
+        postProcessFindings: false,
+      },
+    );
+
+    const trace = report.traces?.[0];
+    expect(trace).toEqual(expect.objectContaining({
+      filename: 'src/example.ts',
+      lineRange: '10',
+      runtime: 'claude',
+      status: 'success',
+      responseId: 'resp-report',
+      responseModel: 'claude-report',
+      sessionId: 'session-report',
+      durationMs: 500,
+      numTurns: 1,
+      traceId: expect.any(String),
+      spanId: expect.any(String),
+      spans: expect.arrayContaining([
+        expect.objectContaining({
+          op: 'gen_ai.invoke_agent',
+          traceId: expect.any(String),
+          spanId: expect.any(String),
+          attributes: expect.objectContaining({
+            'gen_ai.operation.name': 'invoke_agent',
+          }),
+        }),
+      ]),
+    }));
+    expect(trace?.spans?.[0]?.traceId).toBe(trace?.traceId);
   });
 
   it('classifies mixed provider and extraction failures as provider unavailable', async () => {

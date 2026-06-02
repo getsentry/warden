@@ -13,6 +13,7 @@ interface GenAiMessage {
 }
 
 type GenAiUsageAttributes = Record<string, number>;
+type GenAiToolAttributeValue = string | number | boolean | string[] | undefined;
 
 const PROVIDER_NAME_ALIASES: Record<string, string> = {
   mistral: 'mistral_ai',
@@ -46,6 +47,52 @@ export function genAiUsageAttributes(usage: UsageStats): GenAiUsageAttributes {
     'gen_ai.usage.cache_read.input_tokens': usage.cacheReadInputTokens ?? 0,
     'gen_ai.usage.cache_creation.input_tokens': usage.cacheCreationInputTokens ?? 0,
   };
+}
+
+function stringifyGenAiAttribute(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  try {
+    const json = JSON.stringify(value);
+    return json === undefined ? String(value) : json;
+  } catch {
+    return String(value);
+  }
+}
+
+/** Build OpenTelemetry GenAI attributes for an executed tool call span. */
+export function genAiToolCallAttributes(args: {
+  agentName?: string;
+  task?: string;
+  toolName: string;
+  toolCallId?: string;
+  toolType?: string;
+  arguments?: unknown;
+  result?: unknown;
+  isError?: boolean;
+}): Record<string, GenAiToolAttributeValue> {
+  const attributes: Record<string, GenAiToolAttributeValue> = {
+    'gen_ai.operation.name': 'execute_tool',
+    ...(args.agentName ? { 'gen_ai.agent.name': args.agentName } : {}),
+    ...(args.task ? { 'warden.ai.task': args.task } : {}),
+    'gen_ai.tool.name': args.toolName,
+    ...(args.toolCallId ? { 'gen_ai.tool.call.id': args.toolCallId } : {}),
+    ...(args.toolType ? { 'gen_ai.tool.type': args.toolType } : {}),
+  };
+
+  const serializedArguments = stringifyGenAiAttribute(args.arguments);
+  if (serializedArguments !== undefined) {
+    attributes['gen_ai.tool.call.arguments'] = serializedArguments;
+  }
+
+  const serializedResult = args.isError ? undefined : stringifyGenAiAttribute(args.result);
+  if (serializedResult !== undefined) {
+    attributes['gen_ai.tool.call.result'] = serializedResult;
+  }
+
+  return attributes;
 }
 
 /** Set GenAI token usage attributes expected by Sentry AI monitoring. */

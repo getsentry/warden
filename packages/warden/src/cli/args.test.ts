@@ -109,6 +109,11 @@ describe('parseCliArgs', () => {
     expect(result.options.json).toBe(true);
   });
 
+  it('parses --traces flag', () => {
+    const result = parseCliArgs(['--traces']);
+    expect(result.options.traces).toBe(true);
+  });
+
   it('parses --fail-on option', () => {
     const result = parseCliArgs(['--fail-on', 'high']);
     expect(result.options.failOn).toBe('high');

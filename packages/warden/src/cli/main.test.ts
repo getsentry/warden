@@ -49,6 +49,7 @@ function createVisibleTestReporter(): Reporter {
 function createCliOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
   return {
     json: false,
+    traces: false,
     help: false,
     quiet: true,
     verbose: 0,

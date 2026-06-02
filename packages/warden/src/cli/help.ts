@@ -7,6 +7,7 @@ type HelpOptionId =
   | 'model'
   | 'json'
   | 'output'
+  | 'traces'
   | 'failOn'
   | 'reportOn'
   | 'minConfidence'
@@ -102,6 +103,10 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   output: {
     label: '-o, --output <path>',
     description: 'Write full run output to a JSONL file',
+  },
+  traces: {
+    label: '--traces',
+    description: 'Include per-hunk runtime traces in structured output',
   },
   failOn: {
     label: '--fail-on <severity>',
@@ -238,6 +243,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'model',
       'json',
       'output',
+      'traces',
       'failOn',
       'reportOn',
       'minConfidence',

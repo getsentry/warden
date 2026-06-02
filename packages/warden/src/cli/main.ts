@@ -287,6 +287,7 @@ function appendChunkToRunLog(log: RunLog, skillName: string, chunk: ChunkAnalysi
     durationMs: chunk.durationMs,
     auxiliaryUsage,
     error,
+    trace: chunk.trace,
   };
   let line: string;
   try {
@@ -1052,6 +1053,7 @@ export async function runSkills(
       config?.defaults?.auxiliary?.maxRetries ??
       config?.defaults?.auxiliaryMaxRetries,
     verifyFindings: config?.defaults?.verification?.enabled !== false,
+    captureTraces: options.traces,
   };
   const specs: RunSkillSpec[] = skillsToRun.map(({ skill, remote, filters, ...skillOptions }) => ({
     name: skill,
@@ -1382,6 +1384,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       maxContextFiles: config.defaults?.chunking?.maxContextFiles,
       auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
       verifyFindings: trigger.verifyFindings,
+      captureTraces: options.traces,
     },
   }));
   const invalidModelSelector = findInvalidPiModelSelector(specs);

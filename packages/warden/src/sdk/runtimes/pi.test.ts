@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { z } from 'zod';
 import {
   AuthStorage,
@@ -9,6 +9,9 @@ import {
   createAgentSession,
 } from '@earendil-works/pi-coding-agent';
 import { piRuntime } from './pi.js';
+import { Sentry } from '../../sentry.js';
+import { startTraceRecorder, withTraceRecorder } from '../../sentry-trace.js';
+import type { TraceSpan } from '../../types/index.js';
 
 const piMocks = vi.hoisted(() => {
   const model = {
@@ -86,6 +89,21 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   defineTool: vi.fn((tool: unknown) => tool),
   getAgentDir: vi.fn(() => '/pi-agent'),
 }));
+
+beforeAll(() => {
+  Sentry.init({
+    dsn: 'https://public@example.com/1',
+    tracesSampleRate: 1,
+    transport: () => ({
+      send: vi.fn(async () => ({})),
+      flush: vi.fn(async () => true),
+    }),
+  });
+});
+
+afterAll(async () => {
+  await Sentry.close(0);
+});
 
 function assistantMessage(overrides: Record<string, unknown> = {}) {
   return {
@@ -204,6 +222,61 @@ describe('piRuntime.runSkill', () => {
         costUSD: 0.033,
       },
     });
+  });
+
+  it('records Pi tool execution spans when trace capture is active', async () => {
+    const toolResult = {
+      role: 'toolResult',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      content: [{ type: 'text', text: 'file contents' }],
+      details: { path: 'README.md' },
+      isError: false,
+      timestamp: 2,
+    };
+    piMocks.session.prompt.mockImplementation(async () => {
+      const listener = piMocks.listeners[0];
+      if (!listener) {
+        throw new Error('Pi session listener was not registered');
+      }
+      listener({
+        type: 'tool_execution_start',
+        toolCallId: 'tool-1',
+        toolName: 'read',
+        args: { path: 'README.md' },
+      });
+      listener({
+        type: 'tool_execution_end',
+        toolCallId: 'tool-1',
+        toolName: 'read',
+        result: toolResult,
+        isError: false,
+      });
+      emitSuccessfulRun();
+    });
+
+    let spans: TraceSpan[] | undefined;
+    await Sentry.startSpan({ op: 'test', name: 'parent' }, async (span) => {
+      const recorder = startTraceRecorder(span);
+      await withTraceRecorder(recorder, () => piRuntime.runSkill(baseSkillRequest()));
+      spans = recorder?.snapshot();
+    });
+
+    expect(spans).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        op: 'gen_ai.execute_tool',
+        name: 'execute_tool read',
+        attributes: expect.objectContaining({
+          'gen_ai.operation.name': 'execute_tool',
+          'gen_ai.agent.name': 'test-skill',
+          'gen_ai.tool.name': 'read',
+          'gen_ai.tool.call.id': 'tool-1',
+          'gen_ai.tool.type': 'function',
+          'gen_ai.tool.call.arguments': JSON.stringify({ path: 'README.md' }),
+          'gen_ai.tool.call.result': JSON.stringify(toolResult),
+        }),
+      }),
+    ]));
   });
 
   it('does not treat a final answer on the max turn as a turn-limit failure', async () => {

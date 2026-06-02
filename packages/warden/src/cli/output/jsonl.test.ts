@@ -28,7 +28,7 @@ import {
   type JsonlRecord,
   type JsonlSummaryRecord,
 } from './jsonl.js';
-import type { SkillReport } from '../../types/index.js';
+import type { HunkTrace, SkillReport } from '../../types/index.js';
 
 describe('writeJsonlReport', () => {
   let testDir: string;
@@ -754,6 +754,61 @@ describe('parseJsonlReports', () => {
     expect(report.hunkFailures?.map((failure) => failure.type)).toEqual(['extraction', 'analysis']);
     expect(report.durationMs).toBe(300);
     expect(report.usage?.inputTokens).toBe(300);
+  });
+
+  it('reconstructs trace metadata from chunk records', () => {
+    const run = buildRunMetadata({ runId: 'chunk-traces', durationMs: 300 });
+    const trace: HunkTrace = {
+      filename: 'src/api.ts',
+      lineRange: '10-20',
+      runtime: 'claude',
+      status: 'success',
+      traceId: 'trace-123',
+      spanId: 'span-123',
+      responseId: 'resp-123',
+      responseModel: 'claude-test',
+      sessionId: 'session-123',
+      durationMs: 250,
+      durationApiMs: 200,
+      numTurns: 2,
+      spans: [
+        {
+          op: 'gen_ai.invoke_agent',
+          name: 'invoke_agent security-review',
+          traceId: 'trace-123',
+          spanId: 'span-invoke',
+          attributes: {
+            'gen_ai.operation.name': 'invoke_agent',
+            'gen_ai.agent.name': 'security-review',
+          },
+        },
+        {
+          op: 'gen_ai.chat',
+          name: 'chat security-review turn 1',
+          traceId: 'trace-123',
+          spanId: 'span-chat',
+          parentSpanId: 'span-invoke',
+          attributes: {
+            'gen_ai.operation.name': 'chat',
+            'gen_ai.response.finish_reasons': ['stop'],
+          },
+        },
+      ],
+    };
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'security-review',
+      chunk: { file: 'src/api.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [],
+      durationMs: 300,
+      trace,
+    };
+
+    const result = parseJsonlReports(renderJsonlChunkLine(chunk));
+
+    expect(result.reports[0]!.traces).toEqual([trace]);
   });
 
   it('only treats error-status chunks as extraction failures', () => {

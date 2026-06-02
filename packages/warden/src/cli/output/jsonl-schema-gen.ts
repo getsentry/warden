@@ -18,6 +18,8 @@ import {
   AuxiliaryUsageMapSchema,
   SkippedFileSchema,
   FileReportSchema,
+  TraceSpanSchema,
+  HunkTraceSchema,
 } from '../../types/index.js';
 import {
   JsonlRecordSchema,
@@ -45,6 +47,8 @@ export function buildJsonlJsonSchema(): Record<string, unknown> {
   registry.add(AuxiliaryUsageMapSchema, { id: 'AuxiliaryUsage' });
   registry.add(SkippedFileSchema, { id: 'SkippedFile' });
   registry.add(FileReportSchema, { id: 'FileRecord' });
+  registry.add(TraceSpanSchema, { id: 'TraceSpan' });
+  registry.add(HunkTraceSchema, { id: 'HunkTrace' });
   registry.add(JsonlRunMetadataSchema, { id: 'RunMetadata' });
   registry.add(JsonlFixEvalDetailSchema, { id: 'FixEvalDetail' });
   registry.add(JsonlChunkRecordSchema, { id: 'ChunkRecord' });

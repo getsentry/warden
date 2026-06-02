@@ -274,6 +274,47 @@ export const HunkFailureSchema = z.object({
 });
 export type HunkFailure = z.infer<typeof HunkFailureSchema>;
 
+const TraceSpanAttributeValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.union([z.string(), z.number(), z.boolean()])),
+]);
+export type TraceSpanAttributeValue = z.infer<typeof TraceSpanAttributeValueSchema>;
+
+export const TraceSpanSchema = z.object({
+  traceId: z.string(),
+  spanId: z.string(),
+  parentSpanId: z.string().optional(),
+  op: z.string().optional(),
+  name: z.string().optional(),
+  startTimeUnixMs: z.number().nonnegative().optional(),
+  endTimeUnixMs: z.number().nonnegative().optional(),
+  durationMs: z.number().nonnegative().optional(),
+  status: z.string().optional(),
+  origin: z.string().optional(),
+  attributes: z.record(z.string(), TraceSpanAttributeValueSchema).optional(),
+});
+export type TraceSpan = z.infer<typeof TraceSpanSchema>;
+
+// Optional per-hunk runtime trace captured in structured run output.
+export const HunkTraceSchema = z.object({
+  filename: z.string(),
+  lineRange: z.string(),
+  runtime: z.string(),
+  status: z.string(),
+  traceId: z.string().optional(),
+  spanId: z.string().optional(),
+  responseId: z.string().optional(),
+  responseModel: z.string().optional(),
+  sessionId: z.string().optional(),
+  durationMs: z.number().nonnegative().optional(),
+  durationApiMs: z.number().nonnegative().optional(),
+  numTurns: z.number().int().nonnegative().optional(),
+  spans: z.array(TraceSpanSchema).optional(),
+});
+export type HunkTrace = z.infer<typeof HunkTraceSchema>;
+
 // Skill report output
 export const SkillReportSchema = z.object({
   skill: z.string(),
@@ -290,6 +331,8 @@ export const SkillReportSchema = z.object({
   failedExtractions: z.number().int().nonnegative().optional(),
   /** Per-hunk failure details, in execution order. */
   hunkFailures: z.array(HunkFailureSchema).optional(),
+  /** Optional per-hunk runtime traces, only captured when explicitly requested. */
+  traces: z.array(HunkTraceSchema).optional(),
   /** Set when the run cannot complete normally. */
   error: SkillErrorSchema.optional(),
   /** Usage from auxiliary LLM calls (extraction repair, semantic dedup, etc.) */

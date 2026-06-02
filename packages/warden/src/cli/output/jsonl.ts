@@ -12,6 +12,7 @@ import {
   isExtractionErrorCode,
   SkillErrorSchema,
   SkippedFileSchema,
+  HunkTraceSchema,
 } from '../../types/index.js';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap, SkillError, Finding, FileReport, HunkFailure } from '../../types/index.js';
 import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
@@ -99,6 +100,7 @@ export const JsonlChunkRecordSchema = z.object({
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
   error: SkillErrorSchema.optional(),
   skippedFiles: z.array(SkippedFileSchema).optional(),
+  trace: HunkTraceSchema.optional(),
 });
 export type JsonlChunkRecord = z.infer<typeof JsonlChunkRecordSchema>;
 
@@ -241,6 +243,7 @@ export function buildSkillJsonlRecord(report: SkillReport, run: JsonlRunMetadata
     failedHunks: report.failedHunks || undefined,
     failedExtractions: report.failedExtractions || undefined,
     hunkFailures: report.hunkFailures?.length ? report.hunkFailures : undefined,
+    traces: report.traces?.length ? report.traces : undefined,
   };
   return { ...trimmed, run };
 }
@@ -441,6 +444,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
       (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
       undefined,
     );
+    const traces = aggregateRecords.flatMap((r) => r.trace ? [r.trace] : []);
     const filesByName = new Map<string, FileReport>();
     const hunkFailures: HunkFailure[] = [];
     const skippedFiles = records.flatMap((r) => r.skippedFiles ?? []);
@@ -495,6 +499,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     if (failedHunks > 0) report.failedHunks = failedHunks;
     if (failedExtractions > 0) report.failedExtractions = failedExtractions;
     if (hunkFailures.length > 0) report.hunkFailures = hunkFailures;
+    if (traces.length > 0) report.traces = traces;
     if (skippedFiles.length > 0) report.skippedFiles = skippedFiles;
     reports.push(report);
   }

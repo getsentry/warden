@@ -1,4 +1,4 @@
-import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure } from '../types/index.js';
+import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure, HunkTrace } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig, ReasoningEffort } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
@@ -44,6 +44,8 @@ export interface HunkAnalysisResult {
   attempts?: number;
   /** Usage from auxiliary LLM calls (e.g., extraction repair) */
   auxiliaryUsage?: AuxiliaryUsageEntry[];
+  /** Optional runtime trace captured for this hunk. */
+  trace?: HunkTrace;
 }
 
 /** Result from one completed chunk, suitable for durable run logging. */
@@ -63,6 +65,8 @@ export interface ChunkAnalysisResult {
   extractionError?: string;
   extractionPreview?: string;
   auxiliaryUsage?: AuxiliaryUsageEntry[];
+  /** Optional runtime trace captured for this chunk. */
+  trace?: HunkTrace;
 }
 
 /**
@@ -134,6 +138,8 @@ export interface SkillRunnerOptions {
   postProcessFindings?: boolean;
   /** Trigger name to attach to skill-level telemetry when the caller has one. */
   telemetryTriggerName?: string;
+  /** Capture per-hunk runtime traces in structured run output. Defaults to false. */
+  captureTraces?: boolean;
 }
 
 /**
@@ -201,6 +207,8 @@ export interface FileAnalysisResult {
   hunkFailures: HunkFailure[];
   /** Usage from auxiliary LLM calls across all hunks */
   auxiliaryUsage?: AuxiliaryUsageEntry[];
+  /** Optional runtime traces captured for analyzed hunks. */
+  traces?: HunkTrace[];
 }
 
 /**

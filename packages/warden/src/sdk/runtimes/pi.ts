@@ -31,11 +31,13 @@ import {
 import { z } from 'zod';
 import type { ReasoningEffort, ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
+import { recordTracedSpan, startInactiveTracedSpan, startTracedSpan } from '../../sentry-trace.js';
 import type { UsageStats } from '../../types/index.js';
 import { bridgeWardenProviderApiKeyEnv } from '../../utils/index.js';
 import { extractJson } from '../haiku.js';
 import { isAuthenticationErrorMessage, sanitizeErrorMessage } from '../errors.js';
 import {
+  genAiToolCallAttributes,
   genAiProviderName,
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
@@ -90,6 +92,7 @@ interface PiPromptOptions {
   cwd: string;
   systemPrompt: string;
   userPrompt: string;
+  agentName?: string;
   model?: string;
   legacyAnthropicApiKey?: string;
   toolNames: string[];
@@ -280,6 +283,16 @@ function buildSettingsManager(timeout: number | undefined, maxRetries: number | 
   });
 }
 
+type PiToolSpan = ReturnType<typeof startInactiveTracedSpan>;
+
+function setSpanAttributes(span: PiToolSpan, attributes: Record<string, string | number | boolean | string[] | undefined>): void {
+  for (const [key, value] of Object.entries(attributes)) {
+    if (value !== undefined) {
+      span.setAttribute(key, value);
+    }
+  }
+}
+
 async function promptWithTimeout(
   session: AgentSession,
   userPrompt: string,
@@ -342,6 +355,86 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   let numTurns = 0;
   let hitMaxTurns = false;
   const startedAt = Date.now();
+  const activeToolSpans = new Map<string, PiToolSpan>();
+
+  const buildToolAttributes = (args: {
+    toolName: string;
+    toolCallId?: string;
+    input?: unknown;
+    result?: unknown;
+    isError?: boolean;
+  }): Record<string, string | number | boolean | string[] | undefined> =>
+    genAiToolCallAttributes({
+      agentName: options.agentName,
+      toolName: args.toolName,
+      toolCallId: args.toolCallId,
+      toolType: 'function',
+      arguments: args.input,
+      result: args.result,
+      isError: args.isError,
+    });
+
+  function startToolSpan(event: { toolCallId: string; toolName: string; args: unknown }): void {
+    try {
+      const parentSpan = Sentry.getActiveSpan();
+      const span = startInactiveTracedSpan({
+        op: 'gen_ai.execute_tool',
+        name: `execute_tool ${event.toolName}`,
+        ...(parentSpan && { parentSpan }),
+        attributes: buildToolAttributes({
+          toolName: event.toolName,
+          toolCallId: event.toolCallId,
+          input: event.args,
+        }),
+      });
+      activeToolSpans.set(event.toolCallId, span);
+    } catch {
+      // Telemetry should never break the workflow.
+    }
+  }
+
+  function finishToolSpan(event: {
+    toolCallId: string;
+    toolName: string;
+    result: unknown;
+    isError: boolean;
+  }): void {
+    try {
+      const parentSpan = Sentry.getActiveSpan();
+      const span = activeToolSpans.get(event.toolCallId) ?? startInactiveTracedSpan({
+        op: 'gen_ai.execute_tool',
+        name: `execute_tool ${event.toolName}`,
+        ...(parentSpan && { parentSpan }),
+      });
+      activeToolSpans.delete(event.toolCallId);
+      setSpanAttributes(span, buildToolAttributes({
+        toolName: event.toolName,
+        toolCallId: event.toolCallId,
+        result: event.result,
+        isError: event.isError,
+      }));
+      if (event.isError) {
+        span.setAttribute('error.type', 'tool_error');
+      }
+      span.end();
+      recordTracedSpan(span);
+    } catch {
+      // Telemetry should never break the workflow.
+    }
+  }
+
+  function finishOpenToolSpans(errorType: string): void {
+    for (const span of activeToolSpans.values()) {
+      try {
+        span.setAttribute('error.type', errorType);
+        span.end();
+        recordTracedSpan(span);
+      } catch {
+        // Telemetry should never break the workflow.
+      }
+    }
+    activeToolSpans.clear();
+  }
 
   try {
     const result = await createAgentSession({
@@ -376,6 +469,10 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
         lastAssistant = event.message;
       } else if (event.type === 'agent_end') {
         agentEndMessages = [...event.messages];
+      } else if (event.type === 'tool_execution_start') {
+        startToolSpan(event);
+      } else if (event.type === 'tool_execution_end') {
+        finishToolSpan(event);
       } else if (event.type === 'turn_end') {
         numTurns++;
         if (
@@ -408,6 +505,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       unsubscribe();
     }
   } finally {
+    finishOpenToolSpans('aborted');
     session?.dispose();
   }
 
@@ -492,7 +590,7 @@ async function runStructured<T>(
   const systemPrompt = toStructuredPrompt(request.kind, request.task, request.schema);
   const toolNames = customTools?.map((tool) => tool.name) ?? [];
 
-  return Sentry.startSpan(
+  return startTracedSpan(
     {
       op: 'gen_ai.chat',
       name: `chat ${request.model ?? 'pi-default'}`,
@@ -514,6 +612,7 @@ async function runStructured<T>(
           cwd: process.cwd(),
           systemPrompt,
           userPrompt: request.prompt,
+          agentName: request.agentName,
           model: request.model,
           legacyAnthropicApiKey: request.apiKey,
           toolNames,
@@ -589,7 +688,7 @@ export const piRuntime: Runtime = {
     const { maxTurns = 50, model, reasoningEffort, abortController } = options;
     const skillTools = resolvePiSkillTools(tools, allowMutatingTools);
 
-    return Sentry.startSpan(
+    return startTracedSpan(
       {
         op: 'gen_ai.invoke_agent',
         name: `invoke_agent ${skillName}`,
@@ -610,6 +709,7 @@ export const piRuntime: Runtime = {
             cwd: repoPath,
             systemPrompt,
             userPrompt,
+            agentName: skillName,
             model,
             legacyAnthropicApiKey: apiKey,
             toolNames: skillTools.toolNames,

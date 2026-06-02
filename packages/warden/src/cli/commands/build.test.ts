@@ -68,6 +68,7 @@ function createTestReporter(): Reporter {
 function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
   return {
     json: false,
+    traces: false,
     help: false,
     quiet: false,
     verbose: 0,

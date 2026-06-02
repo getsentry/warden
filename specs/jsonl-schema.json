@@ -94,6 +94,9 @@
           "items": {
             "$ref": "#/$defs/SkippedFile"
           }
+        },
+        "trace": {
+          "$ref": "#/$defs/HunkTrace"
         }
       },
       "required": [
@@ -428,6 +431,142 @@
       ],
       "additionalProperties": false
     },
+    "HunkTrace": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string"
+        },
+        "lineRange": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "spanId": {
+          "type": "string"
+        },
+        "responseId": {
+          "type": "string"
+        },
+        "responseModel": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationApiMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "numTurns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TraceSpan"
+          }
+        }
+      },
+      "required": [
+        "filename",
+        "lineRange",
+        "runtime",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "TraceSpan": {
+      "type": "object",
+      "properties": {
+        "traceId": {
+          "type": "string"
+        },
+        "spanId": {
+          "type": "string"
+        },
+        "parentSpanId": {
+          "type": "string"
+        },
+        "op": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "startTimeUnixMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endTimeUnixMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "traceId",
+        "spanId"
+      ],
+      "additionalProperties": false
+    },
     "SkillRecord": {
       "type": "object",
       "properties": {
@@ -477,6 +616,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/HunkFailure"
+          }
+        },
+        "traces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HunkTrace"
           }
         },
         "error": {

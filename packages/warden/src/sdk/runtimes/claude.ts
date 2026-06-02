@@ -19,8 +19,10 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { query, type EffortLevel, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
+import { recordTracedSpan, startInactiveTracedSpan, startTracedSpan } from '../../sentry-trace.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
 import {
+  genAiToolCallAttributes,
   genAiUsageAttributes,
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
@@ -45,7 +47,7 @@ import type {
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
 interface TurnData {
-  toolUses: { id: string; name: string }[];
+  toolUses: { id: string; name: string; input?: unknown }[];
   inputTokens: number;
   outputTokens: number;
   cacheRead: number;
@@ -309,7 +311,7 @@ export const claudeRuntime: Runtime = {
     const skillTools = resolveClaudeSkillTools(tools, allowMutatingTools);
     const modelId = model ?? 'unknown';
 
-    return Sentry.startSpan(
+    return startTracedSpan(
       {
         op: 'gen_ai.invoke_agent',
         name: `invoke_agent ${skillName}`,
@@ -384,7 +386,7 @@ export const claudeRuntime: Runtime = {
               costUSD: 0,
             });
 
-            Sentry.startSpan(
+            startTracedSpan(
               {
                 op: 'gen_ai.chat',
                 name: `chat ${skillName} turn ${turnCount}`,
@@ -400,28 +402,31 @@ export const claudeRuntime: Runtime = {
               () => {
                 for (const toolUse of turn.toolUses) {
                   const elapsed = toolProgress.get(toolUse.id);
-                  const attributes = {
-                    'gen_ai.operation.name': 'execute_tool',
-                    'gen_ai.agent.name': skillName,
-                    'gen_ai.tool.name': toolUse.name,
-                  };
+                  const attributes = genAiToolCallAttributes({
+                    agentName: skillName,
+                    toolName: toolUse.name,
+                    toolCallId: toolUse.id,
+                    toolType: 'function',
+                    arguments: toolUse.input,
+                  });
 
                   if (elapsed !== undefined) {
                     const endTime = Date.now() / 1000;
                     const parentSpan = Sentry.getActiveSpan();
-                    const span = Sentry.startInactiveSpan({
+                    const span = startInactiveTracedSpan({
                       op: 'gen_ai.execute_tool',
-                      name: toolUse.name,
+                      name: `execute_tool ${toolUse.name}`,
                       ...(parentSpan && { parentSpan }),
                       startTime: Math.max(0, endTime - elapsed),
                       attributes,
                     });
                     span.end(endTime);
+                    recordTracedSpan(span);
                   } else {
-                    Sentry.startSpan(
+                    startTracedSpan(
                       {
                         op: 'gen_ai.execute_tool',
-                        name: toolUse.name,
+                        name: `execute_tool ${toolUse.name}`,
                         attributes,
                       },
                       () => undefined
@@ -444,7 +449,7 @@ export const claudeRuntime: Runtime = {
               const cacheWrite1h = msg.usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0;
               const toolUses = msg.content
                 .filter((block): block is typeof block & { type: 'tool_use' } => block.type === 'tool_use')
-                .map(({ id, name }) => ({ id, name }));
+                .map(({ id, name, input }) => ({ id, name, input }));
               pendingTurn = {
                 toolUses,
                 inputTokens: msg.usage?.input_tokens ?? 0,
@@ -485,7 +490,7 @@ export const claudeRuntime: Runtime = {
             const cacheWrite1h = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
             const cacheWrite = Math.max(usage.cache_creation_input_tokens ?? 0, cacheWrite5m + cacheWrite1h);
             const totalInputTokens = inputTokens + cacheRead + cacheWrite;
-            setGenAiUsageAttrs(span, {
+            const normalizedUsage = {
               inputTokens: totalInputTokens,
               outputTokens,
               cacheReadInputTokens: cacheRead,
@@ -494,7 +499,8 @@ export const claudeRuntime: Runtime = {
               cacheCreation1hInputTokens: cacheWrite1h,
               webSearchRequests: usage.server_tool_use?.web_search_requests ?? 0,
               costUSD: resultMessage.total_cost_usd ?? 0,
-            });
+            };
+            setGenAiUsageAttrs(span, normalizedUsage);
           }
           if (resultMessage.uuid) {
             span.setAttribute('gen_ai.response.id', resultMessage.uuid);
@@ -528,18 +534,19 @@ export const claudeRuntime: Runtime = {
         const stderr = stderrChunks.join('').trim() || undefined;
         const streamedUsage = turnUsages.length > 0 ? aggregateUsage(turnUsages) : undefined;
         const responseModel = responseModels.size === 1 ? [...responseModels][0] : undefined;
-        return {
-          result: resultMessage
-            ? normalizeResult(
-              resultMessage,
-              reconcileStreamedUsage({
-                result: resultMessage,
-                streamedUsage,
-                responseModel,
-              }),
+        const result = resultMessage
+          ? normalizeResult(
+            resultMessage,
+            reconcileStreamedUsage({
+              result: resultMessage,
+              streamedUsage,
               responseModel,
-            )
-            : undefined,
+            }),
+            responseModel,
+          )
+          : undefined;
+        return {
+          result,
           authError,
           stderr,
         };

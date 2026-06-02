@@ -25,9 +25,10 @@ import {
   type ChunkAnalysisResult,
 } from './types.js';
 import { prepareFiles } from './prepare.js';
-import type { EventContext, SkillReport, UsageStats, HunkFailure } from '../types/index.js';
+import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace } from '../types/index.js';
 import type { SourceSnippet, SourceSnippetLine } from '../types/index.js';
 import { runPool } from '../utils/index.js';
+import { startTraceRecorder, withTraceRecorder, type TraceRecorder } from '../sentry-trace.js';
 
 /** Result from parsing hunk output */
 interface ParseHunkOutputResult {
@@ -68,6 +69,7 @@ function hunkFailureFromCircuit(
   reason: CircuitBreakerReason,
   usage: UsageStats[],
   attempts: number,
+  trace?: HunkTrace,
 ): HunkAnalysisResult {
   return {
     findings: [],
@@ -77,6 +79,7 @@ function hunkFailureFromCircuit(
     failureCode: reason.code,
     failureMessage: reason.message,
     attempts,
+    trace,
   };
 }
 
@@ -96,6 +99,45 @@ function allHunksFailedGuidance(runtime: SkillRunnerOptions['runtime'] | undefin
   }
 
   return "Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' when using the Claude runtime without an API key.";
+}
+
+function buildHunkTrace(args: {
+  enabled: boolean | undefined;
+  span: { spanContext?: () => { traceId?: string; spanId?: string } };
+  filename: string;
+  lineRange: string;
+  runtime: NonNullable<SkillRunnerOptions['runtime']>;
+  status: string;
+  result?: SkillRunResult;
+  traceRecorder?: TraceRecorder;
+}): HunkTrace | undefined {
+  if (!args.enabled) return undefined;
+
+  let spanContext: { traceId?: string; spanId?: string } | undefined;
+  try {
+    spanContext = args.span.spanContext?.();
+  } catch {
+    // Trace capture is diagnostic only.
+  }
+  const spans = args.traceRecorder?.snapshot();
+  const childTraceId = spans?.find((span) => span.traceId)?.traceId;
+
+  const trace: HunkTrace = {
+    filename: args.filename,
+    lineRange: args.lineRange,
+    runtime: args.runtime,
+    status: args.status,
+    traceId: spanContext?.traceId ?? childTraceId,
+    spanId: spanContext?.spanId,
+    responseId: args.result?.responseId,
+    responseModel: args.result?.responseModel,
+    sessionId: args.result?.sessionId,
+    durationMs: args.result?.durationMs,
+    durationApiMs: args.result?.durationApiMs,
+    numTurns: args.result?.numTurns,
+    spans,
+  };
+  return trace;
 }
 
 /**
@@ -263,6 +305,8 @@ async function analyzeHunk(
     },
     async (span) => {
       const { abortController, retry } = options;
+      const runtimeName = options.runtime ?? 'pi';
+      const traceRecorder = options.captureTraces ? startTraceRecorder(span) : undefined;
 
       const systemPrompt = buildHunkSystemPrompt(skill);
       const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
@@ -294,7 +338,20 @@ async function analyzeHunk(
       for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
         const circuitReason = options.circuitBreaker?.reason;
         if (circuitReason) {
-          return hunkFailureFromCircuit(circuitReason, accumulatedUsage, attempt);
+          return hunkFailureFromCircuit(
+            circuitReason,
+            accumulatedUsage,
+            attempt,
+            buildHunkTrace({
+              enabled: options.captureTraces,
+              span,
+              filename: hunkCtx.filename,
+              lineRange,
+              runtime: runtimeName,
+              status: circuitReason.code,
+              traceRecorder,
+            }),
+          );
         }
 
         // Check for abort before each attempt
@@ -308,13 +365,21 @@ async function analyzeHunk(
             failureCode: 'aborted',
             failureMessage: 'Analysis aborted',
             attempts: attempt,
+            trace: buildHunkTrace({
+              enabled: options.captureTraces,
+              span,
+              filename: hunkCtx.filename,
+              lineRange,
+              runtime: runtimeName,
+              status: 'aborted',
+              traceRecorder,
+            }),
           };
         }
 
         try {
-          const runtimeName = options.runtime ?? 'pi';
           const runtime = getRuntime(runtimeName);
-          const { result: resultMessage, authError } = await runtime.runSkill({
+          const { result: resultMessage, authError } = await withTraceRecorder(traceRecorder, () => runtime.runSkill({
             apiKey: options.apiKey,
             systemPrompt,
             userPrompt,
@@ -330,7 +395,7 @@ async function analyzeHunk(
             providerOptions: getRuntimeProviderOptions(runtimeName, {
               pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
             }),
-          });
+          }));
 
           // Check for authentication errors from auth_status messages
           // auth_status errors are always auth-related - throw immediately
@@ -348,6 +413,15 @@ async function analyzeHunk(
               failureCode: 'sdk_error',
               failureMessage: 'SDK returned no result',
               attempts: attempt + 1,
+              trace: buildHunkTrace({
+                enabled: options.captureTraces,
+                span,
+                filename: hunkCtx.filename,
+                lineRange,
+                runtime: runtimeName,
+                status: 'missing_result',
+                traceRecorder,
+              }),
             };
           }
 
@@ -383,7 +457,21 @@ async function analyzeHunk(
             const openReason = recordCircuitFailure(options, failureCode, failureMessage);
             notifyHunkFailed(callbacks, callbacks?.lineRange ?? lineRange, failureMessage);
             if (openReason) {
-              return hunkFailureFromCircuit(openReason, accumulatedUsage, attempt + 1);
+              return hunkFailureFromCircuit(
+                openReason,
+                accumulatedUsage,
+                attempt + 1,
+                buildHunkTrace({
+                  enabled: options.captureTraces,
+                  span,
+                  filename: hunkCtx.filename,
+                  lineRange,
+                  runtime: runtimeName,
+                  status: resultMessage.status,
+                  result: resultMessage,
+                  traceRecorder,
+                }),
+              );
             }
             return {
               findings: [],
@@ -393,11 +481,24 @@ async function analyzeHunk(
               failureCode,
               failureMessage,
               attempts: attempt + 1,
+              trace: buildHunkTrace({
+                enabled: options.captureTraces,
+                span,
+                filename: hunkCtx.filename,
+                lineRange,
+                runtime: runtimeName,
+                status: resultMessage.status,
+                result: resultMessage,
+                traceRecorder,
+              }),
             };
           }
 
           options.circuitBreaker?.recordSuccess();
-          const parseResult = await parseHunkOutput(resultMessage, hunkCtx.filename, skill.name, options);
+          const parseResult = await withTraceRecorder(
+            traceRecorder,
+            () => parseHunkOutput(resultMessage, hunkCtx.filename, skill.name, options),
+          );
 
           // Filter findings outside hunk line range (defense-in-depth)
           const hunkRange = getHunkLineRange(hunkCtx.hunk);
@@ -449,6 +550,16 @@ async function analyzeHunk(
             auxiliaryUsage: parseResult.extractionUsage
               ? [{ agent: 'extraction', usage: parseResult.extractionUsage }]
               : undefined,
+            trace: buildHunkTrace({
+              enabled: options.captureTraces,
+              span,
+              filename: hunkCtx.filename,
+              lineRange,
+              runtime: runtimeName,
+              status: resultMessage.status,
+              result: resultMessage,
+              traceRecorder,
+            }),
           };
         } catch (error) {
           lastError = error;
@@ -463,6 +574,15 @@ async function analyzeHunk(
               failureCode: 'aborted',
               failureMessage: 'Analysis aborted',
               attempts: attempt + 1,
+              trace: buildHunkTrace({
+                enabled: options.captureTraces,
+                span,
+                filename: hunkCtx.filename,
+                lineRange,
+                runtime: runtimeName,
+                status: 'aborted',
+                traceRecorder,
+              }),
             };
           }
 
@@ -532,6 +652,15 @@ async function analyzeHunk(
               failureCode: 'aborted',
               failureMessage: 'Analysis aborted during retry delay',
               attempts: attempt + 1,
+              trace: buildHunkTrace({
+                enabled: options.captureTraces,
+                span,
+                filename: hunkCtx.filename,
+                lineRange,
+                runtime: runtimeName,
+                status: 'aborted',
+                traceRecorder,
+              }),
             };
           }
         }
@@ -563,7 +692,20 @@ async function analyzeHunk(
       const retryMsg = sanitizeErrorMessage(message);
       const openReason = recordCircuitFailure(options, retryCode, retryMsg);
       if (openReason) {
-        return hunkFailureFromCircuit(openReason, accumulatedUsage, retryConfig.maxRetries + 1);
+        return hunkFailureFromCircuit(
+          openReason,
+          accumulatedUsage,
+          retryConfig.maxRetries + 1,
+          buildHunkTrace({
+            enabled: options.captureTraces,
+            span,
+            filename: hunkCtx.filename,
+            lineRange,
+            runtime: runtimeName,
+            status: retryCode,
+            traceRecorder,
+          }),
+        );
       }
       return {
         findings: [],
@@ -573,6 +715,15 @@ async function analyzeHunk(
         failureCode: retryCode,
         failureMessage: `All retry attempts failed: ${retryMsg}`,
         attempts: retryConfig.maxRetries + 1,
+        trace: buildHunkTrace({
+          enabled: options.captureTraces,
+          span,
+          filename: hunkCtx.filename,
+          lineRange,
+          runtime: runtimeName,
+          status: retryCode,
+          traceRecorder,
+        }),
       };
     },
   );
@@ -625,6 +776,7 @@ export async function analyzeFile(
       const fileUsage: UsageStats[] = [];
       const fileAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
       const hunkFailures: HunkFailure[] = [];
+      const hunkTraces: HunkTrace[] = [];
       let failedHunks = 0;
       let failedExtractions = 0;
 
@@ -679,6 +831,9 @@ export async function analyzeFile(
 
         attachElapsedTime(result.findings, callbacks?.skillStartTime);
         callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
+        if (result.trace) {
+          hunkTraces.push(result.trace);
+        }
         const chunkResult: ChunkAnalysisResult = {
           filename: file.filename,
           model: options.model,
@@ -695,6 +850,7 @@ export async function analyzeFile(
           extractionError: result.extractionError,
           extractionPreview: result.extractionPreview,
           auxiliaryUsage: result.auxiliaryUsage,
+          trace: result.trace,
         };
         callbacks?.onChunkComplete?.(chunkResult);
 
@@ -717,6 +873,7 @@ export async function analyzeFile(
         failedExtractions,
         hunkFailures,
         auxiliaryUsage: fileAuxiliaryUsage.length > 0 ? fileAuxiliaryUsage : undefined,
+        traces: hunkTraces.length > 0 ? hunkTraces : undefined,
       };
     },
   );
@@ -816,6 +973,7 @@ async function runSkillAnalysis(
   // Track all usage stats for aggregation
   const allUsage: UsageStats[] = [];
   const allAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
+  const allTraces: HunkTrace[] = [];
 
   // Track failed hunks across all files
   let totalFailedHunks = 0;
@@ -942,6 +1100,9 @@ async function runSkillAnalysis(
     if (fr.result.auxiliaryUsage) {
       allAuxiliaryUsage.push(...fr.result.auxiliaryUsage);
     }
+    if (fr.result.traces) {
+      allTraces.push(...fr.result.traces);
+    }
   }
 
   // All hunks failed — typically a systemic problem (auth, subprocess, etc).
@@ -1039,6 +1200,9 @@ async function runSkillAnalysis(
   }
   if (allHunkFailures.length > 0) {
     report.hunkFailures = allHunkFailures;
+  }
+  if (options.captureTraces && allTraces.length > 0) {
+    report.traces = allTraces;
   }
   const auxUsage = aggregateAuxiliaryUsage(allAuxiliaryUsage);
   if (auxUsage) {

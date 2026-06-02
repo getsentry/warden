@@ -5,7 +5,7 @@
  * Reporter spec: specs/reporters.md
  */
 
-import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode } from '../../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode, HunkTrace } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
@@ -46,6 +46,7 @@ interface FileProcessResult {
   failedExtractions: number;
   hunkFailures: HunkFailure[];
   auxiliaryUsage?: AuxiliaryUsageEntry[];
+  traces?: HunkTrace[];
 }
 
 function allAnalysisFailuresHaveCode(
@@ -462,6 +463,7 @@ export async function runSkillTask(
             failedExtractions: result.failedExtractions,
             hunkFailures: result.hunkFailures,
             auxiliaryUsage: result.auxiliaryUsage,
+            traces: result.traces,
           };
         };
 
@@ -511,6 +513,7 @@ export async function runSkillTask(
         const allFindings = allResults.flatMap((r) => r.findings);
         const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
         const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
+        const allTraces = allResults.flatMap((r) => r.traces ?? []);
         const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
         const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
         const allHunkFailures: HunkFailure[] = allResults.flatMap((r) => r.hunkFailures);
@@ -574,6 +577,7 @@ export async function runSkillTask(
           if (totalFailedExtractions > 0) errorReport.failedExtractions = totalFailedExtractions;
           if (skippedFiles.length > 0) errorReport.skippedFiles = skippedFiles;
           if (auxUsage) errorReport.auxiliaryUsage = auxUsage;
+          if (runnerOptions.captureTraces && allTraces.length > 0) errorReport.traces = allTraces;
           span.setAttribute('warden.finding.count', 0);
           callbacks.onSkillError(name, error.message);
           // Mirror the success path: emit a final completion event with the
@@ -645,6 +649,9 @@ export async function runSkillTask(
         }
         if (allHunkFailures.length > 0) {
           report.hunkFailures = allHunkFailures;
+        }
+        if (runnerOptions.captureTraces && allTraces.length > 0) {
+          report.traces = allTraces;
         }
         const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
         if (auxUsage) {

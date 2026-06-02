@@ -36,6 +36,8 @@ export {
   ErrorCodeSchema,
   SkillErrorSchema,
   HunkFailureSchema,
+  TraceSpanSchema,
+  HunkTraceSchema,
   // GitHub Events
   GitHubEventTypeSchema,
   PullRequestActionSchema,
@@ -63,6 +65,9 @@ export type {
   ErrorCode,
   SkillError,
   HunkFailure,
+  TraceSpanAttributeValue,
+  TraceSpan,
+  HunkTrace,
   GitHubEventType,
   PullRequestAction,
   FileChange,
