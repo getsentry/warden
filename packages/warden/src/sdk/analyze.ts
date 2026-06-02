@@ -1,3 +1,4 @@
+import type { Span } from '@sentry/node';
 import type { SkillDefinition } from '../config/schema.js';
 import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
@@ -103,7 +104,7 @@ function allHunksFailedGuidance(runtime: SkillRunnerOptions['runtime'] | undefin
 
 function buildHunkTrace(args: {
   enabled: boolean | undefined;
-  span: { spanContext?: () => { traceId?: string; spanId?: string } };
+  span: Span;
   filename: string;
   lineRange: string;
   runtime: NonNullable<SkillRunnerOptions['runtime']>;

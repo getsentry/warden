@@ -3,42 +3,13 @@ import type { Span } from '@sentry/node';
 import { Sentry } from './sentry.js';
 import type { TraceSpan, TraceSpanAttributeValue } from './types/index.js';
 
-type SentrySpan = Span;
-
-type TracedSpanAttributeValue = string | number | boolean | (string | number | boolean)[] | undefined;
-
-export interface TracedSpanOptions {
-  op?: string;
-  name?: string;
-  attributes?: Record<string, TracedSpanAttributeValue>;
-  startTime?: number | Date;
-  parentSpan?: SentrySpan;
-}
-
-interface SpanContextLike {
-  traceId?: string;
-  spanId?: string;
-}
-
-interface SpanLike {
-  spanContext?: () => SpanContextLike;
-}
-
-interface SentrySpanJsonLike {
-  data?: Record<string, unknown>;
-  description?: unknown;
-  op?: unknown;
-  parent_span_id?: unknown;
-  span_id?: unknown;
-  start_timestamp?: unknown;
-  status?: unknown;
-  timestamp?: unknown;
-  trace_id?: unknown;
-  origin?: unknown;
-}
+type SentryStartSpanOptions = Parameters<typeof Sentry.startSpan>[0];
+type SentrySpanContext = ReturnType<Span['spanContext']>;
+type SentrySpanJson = ReturnType<typeof Sentry.spanToJSON>;
+type SentrySpanAttributeValue = SentrySpanJson['data'][string];
 
 export interface TraceRecorder {
-  record(span: SentrySpan | undefined): void;
+  record(span: Span | undefined): void;
   snapshot(): TraceSpan[] | undefined;
 }
 
@@ -51,7 +22,7 @@ export function withTraceRecorder<T>(recorder: TraceRecorder | undefined, callba
 }
 
 /** Return the Sentry span context when available. */
-export function getSpanContext(span: SpanLike | undefined): SpanContextLike | undefined {
+export function getSpanContext(span: Span | undefined): SentrySpanContext | undefined {
   try {
     return span?.spanContext?.();
   } catch {
@@ -68,7 +39,7 @@ function isTraceSpanAttributeValue(value: unknown): value is TraceSpanAttributeV
   );
 }
 
-function compactAttributes(attributes: Record<string, unknown> | undefined): Record<string, TraceSpanAttributeValue> | undefined {
+function compactAttributes(attributes: Record<string, SentrySpanAttributeValue | undefined> | undefined): Record<string, TraceSpanAttributeValue> | undefined {
   if (!attributes) return undefined;
 
   const compact: Record<string, TraceSpanAttributeValue> = {};
@@ -91,11 +62,11 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function snapshotSpan(span: unknown): TraceSpan | undefined {
+function snapshotSpan(span: Span | undefined): TraceSpan | undefined {
   if (!span) return undefined;
-  let spanJson: SentrySpanJsonLike;
+  let spanJson: SentrySpanJson;
   try {
-    spanJson = Sentry.spanToJSON(span as SentrySpan) as SentrySpanJsonLike;
+    spanJson = Sentry.spanToJSON(span);
   } catch {
     return undefined;
   }
@@ -152,16 +123,16 @@ function hasFinally(value: unknown): value is Promise<unknown> {
  * Warden-owned, though, so structured run output only depends on spans we
  * explicitly create through this helper.
  */
-export function startTracedSpan<T>(options: TracedSpanOptions, callback: (span: SentrySpan) => T): T {
+export function startTracedSpan<T>(options: SentryStartSpanOptions, callback: (span: Span) => T): T {
   const recorder = activeTraceRecorder();
-  let spanRef: SentrySpan | undefined;
+  let spanRef: Span | undefined;
   const recordSpan = (): void => recorder?.record(spanRef);
 
   try {
-    const result = Sentry.startSpan(options as Parameters<typeof Sentry.startSpan>[0], (span) => {
+    const result = Sentry.startSpan(options, (span) => {
       spanRef = span;
       return callback(span);
-    }) as T;
+    });
 
     if (hasFinally(result)) {
       return result.finally(recordSpan) as T;
@@ -175,24 +146,24 @@ export function startTracedSpan<T>(options: TracedSpanOptions, callback: (span: 
 }
 
 /** Start an inactive Sentry span that can be ended and recorded manually. */
-export function startInactiveTracedSpan(options: TracedSpanOptions): SentrySpan {
-  return Sentry.startInactiveSpan(options as Parameters<typeof Sentry.startInactiveSpan>[0]) as SentrySpan;
+export function startInactiveTracedSpan(options: SentryStartSpanOptions): Span {
+  return Sentry.startInactiveSpan(options);
 }
 
 /** Record a manually-ended span in the active Warden trace buffer. */
-export function recordTracedSpan(span: SentrySpan | undefined): void {
+export function recordTracedSpan(span: Span | undefined): void {
   activeTraceRecorder()?.record(span);
 }
 
 /** Create a hunk-scoped recorder for Warden-owned spans under a Sentry parent span. */
-export function startTraceRecorder(parentSpan: SpanLike | undefined): TraceRecorder | undefined {
+export function startTraceRecorder(parentSpan: Span | undefined): TraceRecorder | undefined {
   if (!parentSpan) return undefined;
 
   const parentContext = getSpanContext(parentSpan);
   const buffer = new Map<string, TraceSpan>();
 
   return {
-    record(span: SentrySpan | undefined) {
+    record(span: Span | undefined) {
       const snapshot = snapshotSpan(span);
       if (!snapshot) return;
       if (parentContext?.traceId && snapshot.traceId !== parentContext.traceId) return;
