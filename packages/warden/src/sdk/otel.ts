@@ -12,6 +12,13 @@ interface GenAiMessage {
   content: unknown;
 }
 
+type GenAiUsageAttributes = Record<string, number>;
+
+const PROVIDER_NAME_ALIASES: Record<string, string> = {
+  mistral: 'mistral_ai',
+  xai: 'x_ai',
+};
+
 function providerFromModel(model: string | undefined): string | undefined {
   if (!model) {
     return undefined;
@@ -19,7 +26,8 @@ function providerFromModel(model: string | undefined): string | undefined {
 
   const slashIndex = model.indexOf('/');
   if (slashIndex > 0) {
-    return model.slice(0, slashIndex);
+    const provider = model.slice(0, slashIndex);
+    return PROVIDER_NAME_ALIASES[provider] ?? provider;
   }
 
   return undefined;
@@ -30,13 +38,21 @@ export function genAiProviderName(runtime: string | undefined, model: string | u
   return providerFromModel(model) ?? (runtime === 'pi' ? 'pi' : 'anthropic');
 }
 
+/** Build current OpenTelemetry GenAI usage attributes from normalized usage. */
+export function genAiUsageAttributes(usage: UsageStats): GenAiUsageAttributes {
+  return {
+    'gen_ai.usage.input_tokens': usage.inputTokens,
+    'gen_ai.usage.output_tokens': usage.outputTokens,
+    'gen_ai.usage.cache_read.input_tokens': usage.cacheReadInputTokens ?? 0,
+    'gen_ai.usage.cache_creation.input_tokens': usage.cacheCreationInputTokens ?? 0,
+  };
+}
+
 /** Set GenAI token usage attributes expected by Sentry AI monitoring. */
 export function setGenAiUsageAttrs(span: SpanLike, usage: UsageStats): void {
-  span.setAttribute('gen_ai.usage.input_tokens', usage.inputTokens);
-  span.setAttribute('gen_ai.usage.output_tokens', usage.outputTokens);
-  span.setAttribute('gen_ai.usage.input_tokens.cached', usage.cacheReadInputTokens ?? 0);
-  span.setAttribute('gen_ai.usage.input_tokens.cache_write', usage.cacheCreationInputTokens ?? 0);
-  span.setAttribute('gen_ai.usage.total_tokens', usage.inputTokens + usage.outputTokens);
+  for (const [key, value] of Object.entries(genAiUsageAttributes(usage))) {
+    span.setAttribute(key, value);
+  }
 }
 
 /** Set OpenTelemetry GenAI system-instruction attributes for prompt spans. */

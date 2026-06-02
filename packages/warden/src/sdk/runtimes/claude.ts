@@ -21,6 +21,7 @@ import type { ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
 import {
+  genAiUsageAttributes,
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
   setGenAiSystemInstructionsAttr,
@@ -372,6 +373,16 @@ export const claudeRuntime: Runtime = {
 
           try {
             const totalInput = turn.inputTokens + turn.cacheRead + turn.cacheWrite;
+            const usageAttrs = genAiUsageAttributes({
+              inputTokens: totalInput,
+              outputTokens: turn.outputTokens,
+              cacheReadInputTokens: turn.cacheRead,
+              cacheCreationInputTokens: turn.cacheWrite,
+              cacheCreation5mInputTokens: turn.cacheWrite5m,
+              cacheCreation1hInputTokens: turn.cacheWrite1h,
+              webSearchRequests: turn.webSearchRequests,
+              costUSD: 0,
+            });
 
             Sentry.startSpan(
               {
@@ -383,11 +394,7 @@ export const claudeRuntime: Runtime = {
                   'gen_ai.agent.name': skillName,
                   'gen_ai.request.model': modelId,
                   'gen_ai.response.model': turn.model,
-                  'gen_ai.usage.input_tokens': totalInput,
-                  'gen_ai.usage.output_tokens': turn.outputTokens,
-                  'gen_ai.usage.input_tokens.cached': turn.cacheRead,
-                  'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
-                  'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
+                  ...usageAttrs,
                 },
               },
               () => {

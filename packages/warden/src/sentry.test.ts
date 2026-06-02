@@ -141,11 +141,73 @@ describe('sentry telemetry scope', () => {
       unit: '{token}',
       attributes: expect.objectContaining({
         'gen_ai.operation.name': 'invoke_agent',
-        'gen_ai.provider.name': 'xai',
+        'gen_ai.provider.name': 'x_ai',
         'gen_ai.request.model': 'xai/grok-test',
         'gen_ai.token.type': 'input',
         'warden.runtime.name': 'pi',
       }),
     });
+  });
+
+  it('emits Warden token and cost components for cached-token accounting', async () => {
+    const sentry = await loadInitializedSentry();
+
+    sentry.emitSkillMetrics({
+      skill: 'security-review',
+      summary: 'No findings',
+      findings: [],
+      runtime: 'claude',
+      model: 'claude-haiku-4-5',
+      durationMs: 1200,
+      usage: {
+        inputTokens: 1300,
+        outputTokens: 500,
+        cacheReadInputTokens: 200,
+        cacheCreationInputTokens: 100,
+        cacheCreation5mInputTokens: 100,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.003645,
+      },
+    });
+
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('gen_ai.client.token.usage', 1300, {
+      unit: '{token}',
+      attributes: expect.objectContaining({
+        'gen_ai.token.type': 'input',
+      }),
+    });
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 1000, {
+      unit: '{token}',
+      attributes: expect.objectContaining({
+        'warden.gen_ai.token.category': 'standard_input',
+      }),
+    });
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 200, {
+      unit: '{token}',
+      attributes: expect.objectContaining({
+        'warden.gen_ai.token.category': 'cache_read_input',
+      }),
+    });
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 100, {
+      unit: '{token}',
+      attributes: expect.objectContaining({
+        'warden.gen_ai.token.category': 'cache_creation_5m_input',
+      }),
+    });
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.cost.component.usd', 0.00002, {
+      attributes: expect.objectContaining({
+        'warden.gen_ai.cost.component': 'cache_read_input',
+      }),
+    });
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith(
+      'warden.gen_ai.cost.component.usd',
+      0.000125,
+      {
+        attributes: expect.objectContaining({
+          'warden.gen_ai.cost.component': 'cache_creation_5m_input',
+        }),
+      }
+    );
   });
 });

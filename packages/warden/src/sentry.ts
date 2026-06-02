@@ -3,6 +3,7 @@ import type { Severity, SkillReport } from './types/index.js';
 import { SEVERITY_ORDER } from './types/index.js';
 import { getVersion } from './utils/index.js';
 import { genAiProviderName } from './sdk/otel.js';
+import { estimateUsageCostBreakdown } from './sdk/pricing.js';
 
 export type SentryContext = 'cli' | 'action';
 
@@ -151,6 +152,73 @@ function agentMetricAttributes(skill: string, model?: string, runtime?: string):
   return attrs;
 }
 
+function usageTokenComponents(usage: SkillReport['usage']): { category: string; tokens: number }[] {
+  if (!usage) return [];
+  const cacheReadInputTokens = usage.cacheReadInputTokens ?? 0;
+  const cacheCreation5mInputTokens = usage.cacheCreation5mInputTokens ?? 0;
+  const cacheCreation1hInputTokens = usage.cacheCreation1hInputTokens ?? 0;
+  const cacheCreationInputTokens = Math.max(
+    usage.cacheCreationInputTokens ?? 0,
+    cacheCreation5mInputTokens + cacheCreation1hInputTokens,
+  );
+  const categorizedCacheCreationInputTokens = cacheCreation5mInputTokens + cacheCreation1hInputTokens;
+  const uncategorizedCacheCreationInputTokens = Math.max(
+    0,
+    cacheCreationInputTokens - categorizedCacheCreationInputTokens,
+  );
+  const standardInputTokens = Math.max(
+    0,
+    usage.inputTokens - cacheReadInputTokens - cacheCreationInputTokens,
+  );
+
+  return [
+    { category: 'standard_input', tokens: standardInputTokens },
+    { category: 'cache_read_input', tokens: cacheReadInputTokens },
+    {
+      category: 'cache_creation_5m_input',
+      tokens: cacheCreation5mInputTokens + uncategorizedCacheCreationInputTokens,
+    },
+    { category: 'cache_creation_1h_input', tokens: cacheCreation1hInputTokens },
+    { category: 'output', tokens: usage.outputTokens },
+  ];
+}
+
+function emitUsageComponentMetrics(attrs: TelemetryAttributes, usage: SkillReport['usage']): void {
+  for (const { category, tokens } of usageTokenComponents(usage)) {
+    if (tokens <= 0) continue;
+    Sentry.metrics.distribution('warden.gen_ai.token.usage', tokens, {
+      unit: '{token}',
+      attributes: { ...attrs, 'warden.gen_ai.token.category': category },
+    });
+  }
+}
+
+function emitCostComponentMetrics(
+  attrs: TelemetryAttributes,
+  model: string | undefined,
+  usage: SkillReport['usage'],
+): void {
+  if (!usage) return;
+  const breakdown = estimateUsageCostBreakdown(model, usage);
+  if (!breakdown) return;
+
+  const components = [
+    { component: 'standard_input', costUSD: breakdown.freshInputUSD },
+    { component: 'cache_read_input', costUSD: breakdown.cacheReadUSD },
+    { component: 'cache_creation_5m_input', costUSD: breakdown.cacheCreationUSD + breakdown.cacheCreation5mUSD },
+    { component: 'cache_creation_1h_input', costUSD: breakdown.cacheCreation1hUSD },
+    { component: 'output', costUSD: breakdown.outputUSD },
+    { component: 'web_search', costUSD: breakdown.webSearchUSD },
+  ];
+
+  for (const { component, costUSD } of components) {
+    if (costUSD <= 0) continue;
+    Sentry.metrics.distribution('warden.gen_ai.cost.component.usd', costUSD, {
+      attributes: { ...attrs, 'warden.gen_ai.cost.component': component },
+    });
+  }
+}
+
 /**
  * Emit a single run count. Call once per analysis workflow execution.
  * Inherits warden.source, repository, and GitHub Actions attributes from global scope.
@@ -184,6 +252,8 @@ export function emitSkillMetrics(report: SkillReport): void {
         unit: '{token}',
         attributes: { ...tokenAttrs, 'gen_ai.token.type': 'output' },
       });
+      emitUsageComponentMetrics(tokenAttrs, report.usage);
+      emitCostComponentMetrics(attrs, report.model, report.usage);
       if (report.usage.costUSD) {
         Sentry.metrics.distribution('warden.gen_ai.cost.usd', report.usage.costUSD, { attributes: attrs });
       }
