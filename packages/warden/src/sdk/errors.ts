@@ -183,11 +183,6 @@ export function classifyError(error: unknown): { code: ErrorCode; message: strin
   return { code: 'unknown', message };
 }
 
-interface ProviderErrorDetails {
-  type?: string;
-  message?: string;
-}
-
 /** Human-friendly messages for known Anthropic API error types. */
 const ANTHROPIC_ERROR_LABELS: Record<string, string> = {
   overloaded_error: 'Anthropic is overloaded — try again later.',
@@ -196,58 +191,20 @@ const ANTHROPIC_ERROR_LABELS: Record<string, string> = {
   authentication_error: 'Anthropic authentication error.',
 };
 
-function recordFrom(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object'
-    ? value as Record<string, unknown>
-    : undefined;
+interface ProviderErrorBody {
+  error?: unknown;
+  type?: unknown;
+  message?: unknown;
 }
 
-function stringProperty(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === 'string' && value ? value : undefined;
-}
+function humanizeProviderErrorPayload(payload: unknown): string | undefined {
+  const body = payload && typeof payload === 'object' ? payload as ProviderErrorBody : undefined;
+  const rawError = body?.error ?? body;
+  const error = rawError && typeof rawError === 'object' ? rawError as ProviderErrorBody : undefined;
+  const type = typeof error?.type === 'string' ? error.type : undefined;
+  const message = typeof error?.message === 'string' ? error.message : undefined;
 
-function providerErrorDetailsFromPayload(payload: unknown): ProviderErrorDetails | undefined {
-  const record = recordFrom(payload);
-  if (!record) return undefined;
-
-  const nestedError = recordFrom(record['error']);
-  const error = nestedError ?? record;
-  const type = stringProperty(error, 'type');
-  const message = stringProperty(error, 'message');
-  const hasProviderShape = nestedError
-    ? Boolean(type || stringProperty(record, 'type') === 'error')
-    : Boolean(type && type !== 'error');
-
-  return hasProviderShape && (type || message) ? { type, message } : undefined;
-}
-
-function humanizeProviderErrorDetails(details: ProviderErrorDetails | undefined): string | undefined {
-  if (!details) return undefined;
-  if (details.type) {
-    const label = ANTHROPIC_ERROR_LABELS[details.type];
-    if (label) return label;
-  }
-  return details.message;
-}
-
-function providerErrorDetailsFromEmbeddedJson(message: string): ProviderErrorDetails | undefined {
-  const jsonStart = message.indexOf('{');
-  if (jsonStart < 0) return undefined;
-
-  try {
-    return providerErrorDetailsFromPayload(JSON.parse(message.slice(jsonStart)) as unknown);
-  } catch {
-    return undefined;
-  }
-}
-
-function messagePrefixBeforeJson(message: string): string | undefined {
-  const jsonStart = message.indexOf('{');
-  if (jsonStart < 0) return undefined;
-
-  const prefix = message.slice(0, jsonStart).replace(/[:\s]+$/, '').trim();
-  return prefix || undefined;
+  return type ? ANTHROPIC_ERROR_LABELS[type] ?? message : message;
 }
 
 /**
@@ -261,15 +218,21 @@ export function humanizeProviderError(error: unknown): string {
   const payload = error instanceof APIError
     ? (error as APIError & { error?: unknown }).error
     : error;
-  const structuredSummary = humanizeProviderErrorDetails(providerErrorDetailsFromPayload(payload));
+  const structuredSummary = humanizeProviderErrorPayload(payload);
   if (structuredSummary) return structuredSummary;
 
   const message = error instanceof Error ? error.message : String(error);
-  return (
-    humanizeProviderErrorDetails(providerErrorDetailsFromEmbeddedJson(message)) ??
-    messagePrefixBeforeJson(message) ??
-    message
-  );
+  const jsonStart = message.indexOf('{');
+  if (jsonStart < 0) return message;
+
+  try {
+    const jsonSummary = humanizeProviderErrorPayload(JSON.parse(message.slice(jsonStart)) as unknown);
+    if (jsonSummary) return jsonSummary;
+  } catch {
+    // Ignore malformed embedded JSON and fall back to the readable prefix.
+  }
+
+  return message.slice(0, jsonStart).replace(/[:\s]+$/, '').trim() || message;
 }
 
 /** Map an internal extract.ts error string to a stable public ErrorCode. */

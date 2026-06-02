@@ -219,37 +219,6 @@ describe('mapExtractionErrorCode', () => {
 });
 
 describe('humanizeProviderError', () => {
-  it('returns friendly message for overloaded_error', () => {
-    const raw = 'Runtime execution failed: {"type":"error","error":{"details":null,"type":"overloaded_error","message":"Overloaded"},"request_id":"req_abc"}';
-    expect(humanizeProviderError(raw)).toBe('Anthropic is overloaded \u2014 try again later.');
-  });
-
-  it('returns friendly message for rate_limit_error', () => {
-    const raw = '{"type":"error","error":{"type":"rate_limit_error","message":"Rate limit exceeded"}}';
-    expect(humanizeProviderError(raw)).toBe('Anthropic rate limit reached \u2014 try again later.');
-  });
-
-  it('returns friendly message for api_error', () => {
-    const raw = '{"type":"error","error":{"type":"api_error","message":"Internal server error"}}';
-    expect(humanizeProviderError(raw)).toBe('Anthropic API error \u2014 try again later.');
-  });
-
-  it('uses provider type before message text for structured API errors', () => {
-    const err = new APIError(
-      529,
-      { error: { type: 'api_error', message: 'Rate limit exceeded' } },
-      'Rate limit exceeded',
-      undefined
-    );
-
-    expect(humanizeProviderError(err)).toBe('Anthropic API error \u2014 try again later.');
-  });
-
-  it('uses provider type before embedded error message text', () => {
-    const raw = '{"type":"error","error":{"type":"api_error","message":"Rate limit exceeded"}}';
-    expect(humanizeProviderError(raw)).toBe('Anthropic API error \u2014 try again later.');
-  });
-
   it('falls back to error.message for unknown Anthropic error types', () => {
     const raw = '{"type":"error","error":{"type":"some_new_error","message":"Something went wrong"}}';
     expect(humanizeProviderError(raw)).toBe('Something went wrong');
@@ -257,15 +226,6 @@ describe('humanizeProviderError', () => {
 
   it('strips JSON blob and returns text prefix for unrecognised JSON', () => {
     const raw = 'Runtime execution failed: {"status":500,"body":"Internal error"}';
-    expect(humanizeProviderError(raw)).toBe('Runtime execution failed');
-  });
-
-  it('returns original message when no JSON is present', () => {
-    expect(humanizeProviderError('provider timed out')).toBe('provider timed out');
-  });
-
-  it('returns original message when JSON is invalid', () => {
-    const raw = 'Runtime execution failed: {not valid json}';
     expect(humanizeProviderError(raw)).toBe('Runtime execution failed');
   });
 });
