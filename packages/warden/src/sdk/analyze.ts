@@ -28,7 +28,7 @@ import { prepareFiles } from './prepare.js';
 import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace } from '../types/index.js';
 import type { SourceSnippet, SourceSnippetLine } from '../types/index.js';
 import { runPool } from '../utils/index.js';
-import { startTraceRecorder, withTraceRecorder, type TraceRecorder } from '../sentry-trace.js';
+import { getSpanContext, startTraceRecorder, withTraceRecorder, type TraceRecorder } from '../sentry-trace.js';
 
 /** Result from parsing hunk output */
 interface ParseHunkOutputResult {
@@ -113,12 +113,7 @@ function buildHunkTrace(args: {
 }): HunkTrace | undefined {
   if (!args.enabled) return undefined;
 
-  let spanContext: { traceId?: string; spanId?: string } | undefined;
-  try {
-    spanContext = args.span.spanContext?.();
-  } catch {
-    // Trace capture is diagnostic only.
-  }
+  const spanContext = getSpanContext(args.span);
   const spans = args.traceRecorder?.snapshot();
   const childTraceId = spans?.find((span) => span.traceId)?.traceId;
 
