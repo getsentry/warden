@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { query, type SDKMessage, type SDKResultError, type SDKResultSuccess } from '@anthropic-ai/claude-agent-sdk';
 import { claudeRuntime } from './claude.js';
 
@@ -116,6 +116,10 @@ describe('claudeRuntime.runSkill', () => {
     mockQuery.mockReset();
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('passes read-only Claude tools and normalizes the result', async () => {
     mockQuery.mockReturnValue(mockStream([successResult()]));
     const options = {
@@ -181,6 +185,29 @@ describe('claudeRuntime.runSkill', () => {
       options: expect.objectContaining({
         effort: 'medium',
         thinking: { type: 'adaptive' },
+      }),
+    });
+  });
+
+  it('forces Claude Code to use the short prompt-cache TTL by default', async () => {
+    vi.stubEnv('WARDEN_TEST_INHERITED_ENV', 'present');
+    mockQuery.mockReturnValue(mockStream([successResult()]));
+
+    await claudeRuntime.runSkill({
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      repoPath: '/repo',
+      skillName: 'test-skill',
+      options: {},
+    });
+
+    expect(mockQuery).toHaveBeenCalledWith({
+      prompt: 'user',
+      options: expect.objectContaining({
+        env: expect.objectContaining({
+          FORCE_PROMPT_CACHING_5M: '1',
+          WARDEN_TEST_INHERITED_ENV: 'present',
+        }),
       }),
     });
   });

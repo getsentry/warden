@@ -72,6 +72,13 @@ const MUTATING_TOOLS = ['Write', 'Edit', 'Bash'] as const;
 const CLAUDE_AGENT_TOOLS = ['Task', 'TodoWrite'] as const;
 const DEFAULT_CLAUDE_EFFORT: EffortLevel = 'high';
 
+function claudeEnv(): Record<string, string | undefined> {
+  return {
+    ...process.env,
+    FORCE_PROMPT_CACHING_5M: '1',
+  };
+}
+
 function getClaudeProviderOptions(providerOptions: unknown): ClaudeProviderOptions {
   if (!providerOptions || typeof providerOptions !== 'object') {
     return {};
@@ -392,6 +399,7 @@ export const claudeRuntime: Runtime = {
             permissionMode: 'bypassPermissions',
             // Prevent SDK from writing session .jsonl files and polluting Claude Code's session index.
             persistSession: false,
+            env: claudeEnv(),
             model,
             ...effortOptions(effort),
             abortController,
