@@ -157,7 +157,7 @@ function formatFindingCI(finding: Finding): string[] {
 /**
  * Render a skill report as a box (TTY mode).
  */
-function renderSkillBoxTTY(report: SkillReport, mode: OutputMode, options?: RenderOptions): string[] {
+function renderSkillBoxTTY(report: SkillReport, mode: OutputMode): string[] {
   const counts = countBySeverity(report.findings);
   const durationStr = report.durationMs !== undefined ? formatDuration(report.durationMs) : undefined;
 
@@ -268,7 +268,7 @@ export function renderTerminalReport(reports: SkillReport[], mode?: OutputMode, 
   if (outputMode.isTTY) {
     // TTY mode: use boxes
     for (const report of reports) {
-      lines.push(...renderSkillBoxTTY(report, outputMode, options));
+      lines.push(...renderSkillBoxTTY(report, outputMode));
       lines.push('');
     }
   } else {

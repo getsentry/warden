@@ -27,7 +27,6 @@ import {
   Reporter,
   detectOutputMode,
   parseVerbosity,
-  Verbosity,
   runSkillTasks,
   runSkillTasksWithInk,
   pluralize,
