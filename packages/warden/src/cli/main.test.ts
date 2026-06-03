@@ -56,7 +56,6 @@ function createCliOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     verbose: 0,
     debug: false,
     log: false,
-    fix: false,
     force: false,
     list: false,
     git: false,

@@ -38,7 +38,6 @@ function createDefaultOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     quiet: false,
     verbose: 0,
     debug: false,
-    fix: false,
     force: false,
     list: false,
     git: false,

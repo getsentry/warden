@@ -264,16 +264,6 @@ describe('parseCliArgs', () => {
     expect(result.options.color).toBeUndefined();
   });
 
-  it('parses --fix flag', () => {
-    const result = parseCliArgs(['--fix']);
-    expect(result.options.fix).toBe(true);
-  });
-
-  it('defaults fix to false', () => {
-    const result = parseCliArgs([]);
-    expect(result.options.fix).toBe(false);
-  });
-
   it('parses add command', () => {
     const result = parseCliArgs(['add']);
     expect(result.command).toBe('add');
