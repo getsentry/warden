@@ -162,12 +162,6 @@ function applyVerdict(finding: Finding, verdict: VerificationVerdict | null): Fi
     delete revised.additionalLocations;
   }
 
-  if (finding.suggestedFix) {
-    revised.suggestedFix = finding.suggestedFix;
-  } else {
-    delete revised.suggestedFix;
-  }
-
   if (finding.elapsedMs !== undefined) {
     revised.elapsedMs = finding.elapsedMs;
   } else {

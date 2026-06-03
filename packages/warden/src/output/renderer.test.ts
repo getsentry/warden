@@ -245,40 +245,6 @@ describe('renderSkillReport', () => {
     expect(comment.start_side).toBeUndefined();
   });
 
-  it('renders suggested fixes as GitHub suggestions', () => {
-    const report: SkillReport = {
-      ...baseReport,
-      findings: [
-        {
-          id: 'fix-1',
-          severity: 'medium',
-          title: 'Use parameterized query',
-          description: 'Replace string concatenation with parameters',
-          location: {
-            path: 'src/db.ts',
-            startLine: 10,
-          },
-          suggestedFix: {
-            description: 'Use prepared statement',
-            diff: `--- a/src/db.ts
-+++ b/src/db.ts
-@@ -10,1 +10,1 @@
--const query = "SELECT * FROM users WHERE id = " + id;
-+const query = "SELECT * FROM users WHERE id = ?";`,
-          },
-        },
-      ],
-    };
-
-    const result = renderSkillReport(report);
-
-    const review = result.review!;
-    expect(review.comments[0]!.body).toContain('```suggestion');
-    expect(review.comments[0]!.body).toContain(
-      'const query = "SELECT * FROM users WHERE id = ?";'
-    );
-  });
-
   it('groups findings by file in summary', () => {
     const report: SkillReport = {
       ...baseReport,

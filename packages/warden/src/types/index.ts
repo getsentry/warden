@@ -94,13 +94,6 @@ export const LocationSchema = z.object({
 });
 export type Location = z.infer<typeof LocationSchema>;
 
-// Suggested fix with diff
-export const SuggestedFixSchema = z.object({
-  description: z.string(),
-  diff: z.string(),
-});
-export type SuggestedFix = z.infer<typeof SuggestedFixSchema>;
-
 export const SourceSnippetLineSchema = z.object({
   line: z.number().int().positive(),
   content: z.string(),
@@ -129,7 +122,6 @@ export const FindingSchema = z.object({
   verification: z.string().optional(),
   location: LocationSchema.optional(),
   additionalLocations: z.array(LocationSchema).optional(),
-  suggestedFix: SuggestedFixSchema.optional(),
   sourceSnippet: SourceSnippetSchema.optional(),
   elapsedMs: z.number().nonnegative().optional(),
 });

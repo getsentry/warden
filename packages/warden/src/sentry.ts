@@ -298,22 +298,6 @@ export function emitFixEvalMetrics(
   });
 }
 
-export function emitFixGateMetrics(
-  skill: string,
-  checked: number,
-  strippedDeterministic: number,
-  strippedSemantic: number,
-  semanticUnavailable: number
-): void {
-  safeEmit(() => {
-    const attrs = agentMetricAttributes(skill);
-    Sentry.metrics.count('warden.fix_gate.checked', checked, { attributes: attrs });
-    Sentry.metrics.count('warden.fix_gate.stripped_deterministic', strippedDeterministic, { attributes: attrs });
-    Sentry.metrics.count('warden.fix_gate.stripped_semantic', strippedSemantic, { attributes: attrs });
-    Sentry.metrics.count('warden.fix_gate.semantic_unavailable', semanticUnavailable, { attributes: attrs });
-  });
-}
-
 export function emitRetryMetric(skill: string, attempt: number): void {
   safeEmit(() => {
     Sentry.metrics.count('warden.skill.retries', 1, {

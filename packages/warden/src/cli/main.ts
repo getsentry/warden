@@ -45,12 +45,6 @@ import {
   type SkillTaskOptions,
 } from './output/index.js';
 import { cleanupArtifacts } from './log-cleanup.js';
-import {
-  collectFixableFindings,
-  applyAllFixes,
-  runInteractiveFixFlow,
-  renderFixSummary,
-} from './fix.js';
 import { UserAbortError } from './input.js';
 import { runInit } from './commands/init.js';
 import { runAdd } from './commands/add.js';
@@ -851,17 +845,6 @@ async function outputResultsAndHandleFixes(
     }
   }
 
-  // Collect fixable findings early so we know whether to suppress diffs in the report
-  const fixableFindings = collectFixableFindings(filteredReports);
-  const willStepThrough = fixableFindings.length > 0
-    && !interrupted.value
-    && !failFastAborted
-    && !options.json
-    && !options.fix
-    && reporter.verbosity !== Verbosity.Quiet
-    && reporter.mode.isTTY
-    && process.stdin.isTTY;
-
   reporter.blank();
   if (options.json) {
     // Prefer reading the on-disk log (per-skill durationMs is a snapshot).
@@ -882,7 +865,7 @@ async function outputResultsAndHandleFixes(
     }
     process.stdout.write(jsonlContent);
   } else {
-    console.log(renderTerminalReport(filteredReports, reporter.mode, { suppressFixDiffs: willStepThrough, verbosity: reporter.verbosity }));
+    console.log(renderTerminalReport(filteredReports, reporter.mode, { verbosity: reporter.verbosity }));
   }
 
   // Show interrupted / fail-fast banner before summary
@@ -901,17 +884,6 @@ async function outputResultsAndHandleFixes(
   // Show log file path after summary (only if write succeeded)
   if (!options.json && runLog.primaryLogWritten) {
     reporter.dim(`Log: ${runLog.primaryLogPath}`);
-  }
-
-  // Handle fixes: --fix (automatic) always runs, interactive step-through in TTY mode
-  if (fixableFindings.length > 0) {
-    if (options.fix) {
-      const fixSummary = applyAllFixes(fixableFindings);
-      renderFixSummary(fixSummary, reporter);
-    } else if (willStepThrough && !interrupted.value) {
-      const fixSummary = await runInteractiveFixFlow(fixableFindings, reporter);
-      renderFixSummary(fixSummary, reporter);
-    }
   }
 
   // Interrupted takes precedence for exit code

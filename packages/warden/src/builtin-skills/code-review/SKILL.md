@@ -84,4 +84,3 @@ No proof, no finding. Suspicion is not a result.
 - Title: name the exact bug and trigger.
 - Description: one short public comment stating the broken behavior and impact. Use a second sentence only if needed for the fix.
 - `verification`: write a short evidence trace with concrete code facts showing the trigger, intended contract, changed behavior, and checks that fail to exclude it. Use 2-5 bullets when helpful. Do not use checklist labels or restate the description.
-- `suggestedFix`: include only when the fix is complete for the analyzed path.

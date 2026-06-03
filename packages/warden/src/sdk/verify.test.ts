@@ -174,10 +174,6 @@ describe('verifyFindings', () => {
       title: 'Narrower issue',
       location: { path: 'src/other.ts', startLine: 99 },
       additionalLocations: [{ path: 'src/other.ts', startLine: 100 }],
-      suggestedFix: {
-        description: 'new fix',
-        diff: 'diff --git a/src/other.ts b/src/other.ts',
-      },
     });
     const runtime = mockRuntime(JSON.stringify({
       verdict: 'revise',
@@ -186,12 +182,7 @@ describe('verifyFindings', () => {
     }));
     vi.mocked(getRuntime).mockReturnValue(runtime);
 
-    const finding = makeFinding({
-      suggestedFix: {
-        description: 'original fix',
-        diff: 'diff --git a/src/app.ts b/src/app.ts',
-      },
-    });
+    const finding = makeFinding({});
     const result = await verifyFindings([finding], {
       repoPath: '/repo',
       skill: makeSkill(),
@@ -203,10 +194,6 @@ describe('verifyFindings', () => {
       severity: 'medium',
       title: 'Narrower issue',
       location: { path: 'src/app.ts', startLine: 10 },
-      suggestedFix: {
-        description: 'original fix',
-        diff: 'diff --git a/src/app.ts b/src/app.ts',
-      },
     }));
     expect(verified?.additionalLocations).toBeUndefined();
   });

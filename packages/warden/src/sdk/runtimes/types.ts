@@ -83,7 +83,6 @@ export interface AuxiliaryTool {
 export type AuxiliaryTask =
   | 'extraction'
   | 'deduplication'
-  | 'fix_quality'
   | 'fix_evaluation';
 
 export type SynthesisTask =

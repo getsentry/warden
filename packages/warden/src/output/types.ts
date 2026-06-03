@@ -24,7 +24,6 @@ export interface RenderResult {
 }
 
 export interface RenderOptions {
-  includeSuggestions?: boolean;
   maxFindings?: number;
   groupByFile?: boolean;
   extraLabels?: string[];

@@ -58,11 +58,7 @@ Full schema:
         "startLine": 10,
         "endLine": 15
       },
-      "verification": "Required. Evidence for the public Evidence block. Write 2-5 short Markdown bullets tracing the concrete code path, guard, condition, or behavior that makes the finding real. Use function/file names when useful. Do not use checklist labels, generic reasoning, or restate the description.",
-      "suggestedFix": {
-        "description": "How to fix this issue",
-        "diff": "unified diff format"
-      }
+      "verification": "Required. Evidence for the public Evidence block. Write 2-5 short Markdown bullets tracing the concrete code path, guard, condition, or behavior that makes the finding real. Use function/file names when useful. Do not use checklist labels, generic reasoning, or restate the description."
     }
   ]
 }
@@ -73,9 +69,6 @@ Requirements:
 - "location.path" is auto-filled from context - just provide startLine (and optionally endLine). Omit location entirely for general findings not about a specific line.
 - "location.startLine" MUST be within the hunk line range (shown in the "## Hunk" header). If the issue originates in surrounding code, anchor to the nearest changed line in the hunk and note the actual location in the description.
 - "confidence" reflects how certain you are this is a real issue given the codebase context
-- "suggestedFix" is optional - only include when you can provide a complete, correct fix **to the file being analyzed**. Omit suggestedFix if:
-  - The fix would be incomplete or you're uncertain about the correct solution
-  - The fix requires changes to a different file or a new file (briefly name the fix in the description field instead)
 - "description" is rendered directly in GitHub inline comments. Keep it brief and actionable, usually one sentence.
 - Put the concrete evidence trace in "verification", not "description".
 - Write "verification" as evidence, not reasoning: facts from the code path, guards, conditions, and observed behavior that make the finding believable.

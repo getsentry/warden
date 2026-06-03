@@ -16,7 +16,7 @@ import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
-import { createOrUpdateIssue, createFixPR } from '../../output/github-issues.js';
+import { createOrUpdateIssue } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { filterFindings } from '../../types/index.js';
@@ -240,22 +240,6 @@ async function runScheduleWorkflowInner(
       if (issueResult) {
         console.log(`${issueResult.created ? 'Created' : 'Updated'} issue #${issueResult.issueNumber}`);
         console.log(`Issue URL: ${issueResult.issueUrl}`);
-      }
-
-      // Create fix PR if enabled and there are fixable findings
-      if (scheduleConfig.createFixPR) {
-        const fixResult = await createFixPR(octokit, owner, repo, report.findings, {
-          branchPrefix: scheduleConfig.fixBranchPrefix ?? 'warden-fix',
-          baseBranch: defaultBranch,
-          baseSha: headSha,
-          repoPath,
-          triggerName: resolved.name,
-        });
-
-        if (fixResult) {
-          console.log(`Created fix PR #${fixResult.prNumber} with ${fixResult.fixCount} fixes`);
-          console.log(`PR URL: ${fixResult.prUrl}`);
-        }
       }
 
       // Check failure condition

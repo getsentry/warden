@@ -170,11 +170,7 @@ describe('extractFindingsJson', () => {
           "path": "src/db.ts",
           "lines": {"start": 42, "end": 45}
         },
-        "tags": ["security", "owasp-top-10"],
-        "suggestedFix": {
-          "description": "Use parameterized queries",
-          "diff": "--- a/src/db.ts\\n+++ b/src/db.ts"
-        }
+        "tags": ["security", "owasp-top-10"]
       }
     ]}`;
     const result = extractFindingsJson(text);

@@ -13,7 +13,6 @@ import {
   HunkFailureSchema,
   FindingSchema,
   LocationSchema,
-  SuggestedFixSchema,
   UsageStatsSchema,
   AuxiliaryUsageMapSchema,
   SkippedFileSchema,
@@ -42,7 +41,6 @@ export function buildJsonlJsonSchema(): Record<string, unknown> {
   registry.add(HunkFailureSchema, { id: 'HunkFailure' });
   registry.add(FindingSchema, { id: 'Finding' });
   registry.add(LocationSchema, { id: 'Location' });
-  registry.add(SuggestedFixSchema, { id: 'SuggestedFix' });
   registry.add(UsageStatsSchema, { id: 'UsageStats' });
   registry.add(AuxiliaryUsageMapSchema, { id: 'AuxiliaryUsage' });
   registry.add(SkippedFileSchema, { id: 'SkippedFile' });

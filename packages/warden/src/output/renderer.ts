@@ -6,7 +6,7 @@ import { generateContentHash, generateFindingMetadata, generateMarker } from './
 import { escapeHtml } from '../utils/index.js';
 
 export function renderSkillReport(report: SkillReport, options: RenderOptions = {}): RenderResult {
-  const { includeSuggestions = true, maxFindings, groupByFile = true, reportOn, minConfidence, failOn, requestChanges, checkRunUrl, totalFindings, allFindings } = options;
+  const { maxFindings, groupByFile = true, reportOn, minConfidence, failOn, requestChanges, checkRunUrl, totalFindings, allFindings } = options;
 
   // Filter by reportOn threshold and confidence, then apply maxFindings limit
   const filteredFindings = filterFindings(report.findings, reportOn, minConfidence);
@@ -22,7 +22,7 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
   // Use allFindings for failOn evaluation if provided (e.g., when report.findings was modified for dedup)
   // Apply confidence filtering to failOn evaluation too
   const findingsForFailOn = filterFindings(allFindings ?? report.findings, undefined, minConfidence);
-  const review = renderReview(sortedFindings, report, includeSuggestions, failOn, findingsForFailOn, requestChanges);
+  const review = renderReview(sortedFindings, report, failOn, findingsForFailOn, requestChanges);
   const summaryComment = renderSummaryComment(report, sortedFindings, groupByFile, checkRunUrl, hiddenCount);
 
   return { review, summaryComment };
@@ -31,7 +31,6 @@ export function renderSkillReport(report: SkillReport, options: RenderOptions = 
 function renderReview(
   findings: Finding[],
   report: SkillReport,
-  includeSuggestions: boolean,
   failOn?: SeverityThreshold,
   allFindings?: Finding[],
   requestChanges?: boolean,
@@ -74,9 +73,6 @@ function renderReview(
       body += `\n\n${renderVerification(finding.verification)}`;
     }
 
-    if (includeSuggestions && finding.suggestedFix) {
-      body += `\n\n${renderSuggestion(finding.suggestedFix.description, finding.suggestedFix.diff)}`;
-    }
 
     // Additional locations section
     if (finding.additionalLocations?.length) {
@@ -151,19 +147,6 @@ function determineReviewEvent(
   }
 
   return 'COMMENT';
-}
-
-function renderSuggestion(description: string, diff: string): string {
-  const suggestionLines = diff
-    .split('\n')
-    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
-    .map((line) => line.slice(1));
-
-  if (suggestionLines.length === 0) {
-    return `**Suggested fix:** ${escapeHtml(description)}`;
-  }
-
-  return `**Suggested fix:** ${escapeHtml(description)}\n\n\`\`\`suggestion\n${suggestionLines.join('\n')}\n\`\`\``;
 }
 
 function renderVerification(verification: string): string {

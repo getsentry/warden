@@ -159,10 +159,6 @@ function renderFindingItem(finding: Finding, ctx: LinkContext): string {
   let line = `- \`${finding.id}\` **${escapeHtml(finding.title)}**${locationStr} · ${finding.severity}`;
   line += `\n  ${escapeHtml(finding.description)}`;
 
-  if (finding.suggestedFix) {
-    line += `\n  *Suggested fix:* ${escapeHtml(finding.suggestedFix.description)}`;
-  }
-
   return line;
 }
 

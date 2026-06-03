@@ -18,7 +18,6 @@
 | Reachability and reproducibility evidence | Complete | Findings must prove the changed path is reachable and the failure is triggered by a specific input, state, ordering, or configuration. |
 | False-positive controls | Complete | Exclusions block style, architecture, maintainability, security, performance-only, test-coverage-only, and pattern-only findings. |
 | Severity and confidence calibration | Complete | Severity is tied to user-visible or operational impact, including high-impact public discovery/config breakage, with lower severity for unproven preconditions. |
-| Remediation expectations | Complete | Findings may include `suggestedFix` only when the fix is complete for the analyzed path. |
 | Language and workflow caveats | Complete for initial scope | References cover JS/TS, Python, and GitHub Actions workflow correctness. Other languages use the core contract until repeated examples justify references. |
 
 ## Source-Backed Decisions

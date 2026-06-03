@@ -123,12 +123,6 @@ export function generateSkillToml(skill: SkillConfig): string {
         if (trigger.schedule.issueTitle) {
           lines.push(`issueTitle = "${trigger.schedule.issueTitle}"`);
         }
-        if (trigger.schedule.createFixPR !== undefined) {
-          lines.push(`createFixPR = ${trigger.schedule.createFixPR}`);
-        }
-        if (trigger.schedule.fixBranchPrefix && trigger.schedule.fixBranchPrefix !== 'warden-fix') {
-          lines.push(`fixBranchPrefix = "${trigger.schedule.fixBranchPrefix}"`);
-        }
       }
     }
   }

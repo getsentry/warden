@@ -37,10 +37,6 @@ export type SkillDefinition = z.infer<typeof SkillDefinitionSchema>;
 export const ScheduleConfigSchema = z.object({
   /** Title for the tracking issue (default: "Warden: {skillName}") */
   issueTitle: z.string().optional(),
-  /** Create PR with fixes when suggestedFix is available */
-  createFixPR: z.boolean().default(false),
-  /** Branch prefix for fix PRs (default: "warden-fix") */
-  fixBranchPrefix: z.string().default('warden-fix'),
 });
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 

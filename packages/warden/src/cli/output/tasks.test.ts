@@ -236,33 +236,6 @@ describe('createDefaultCallbacks', () => {
       expect(msg).toContain('No findings');
     });
 
-    it('shows suggested fix only at Debug verbosity in log mode', () => {
-      const tasks = [makeTask('t', 'scanner')];
-      const finding = makeFinding({
-        suggestedFix: { description: 'Use parameterized queries', diff: '--- a\n+++ b\n' },
-      });
-      const report = makeReport({ findings: [finding] });
-
-      // Normal: no finding lines at all (gated behind Verbose)
-      const cbNormal = createDefaultCallbacks(tasks, logMode(), Verbosity.Normal);
-      cbNormal.onSkillComplete('t', report);
-      expect(errorSpy).toHaveBeenCalledTimes(1); // completion only
-      errorSpy.mockClear();
-
-      // Verbose: finding line shown, but no fix line
-      const cbVerbose = createDefaultCallbacks(tasks, logMode(), Verbosity.Verbose);
-      cbVerbose.onSkillComplete('t', report);
-      expect(errorSpy).toHaveBeenCalledTimes(2); // completion + finding
-      errorSpy.mockClear();
-
-      // Debug: fix line shown
-      const cbDebug = createDefaultCallbacks(tasks, logMode(), Verbosity.Debug);
-      cbDebug.onSkillComplete('t', report);
-      expect(errorSpy).toHaveBeenCalledTimes(3); // completion + finding + fix
-      const fixMsg = errorSpy.mock.calls[2]![0] as string;
-      expect(fixMsg).toContain('fix: Use parameterized queries');
-    });
-
     it('is silent in Quiet mode', () => {
       const tasks = [makeTask('t', 's')];
       const cb = createDefaultCallbacks(tasks, logMode(), Verbosity.Quiet);

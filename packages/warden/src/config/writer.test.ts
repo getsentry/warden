@@ -235,8 +235,6 @@ describe('generateSkillToml', () => {
           type: 'schedule',
           schedule: {
             issueTitle: 'Weekly Security Scan',
-            createFixPR: true,
-            fixBranchPrefix: 'security-fix',
           },
         },
       ],
@@ -246,30 +244,6 @@ describe('generateSkillToml', () => {
 
     expect(result).toContain('[skills.triggers.schedule]');
     expect(result).toContain('issueTitle = "Weekly Security Scan"');
-    expect(result).toContain('createFixPR = true');
-    expect(result).toContain('fixBranchPrefix = "security-fix"');
-  });
-
-  it('omits default fixBranchPrefix in schedule config', () => {
-    const skill: SkillConfig = {
-      name: 'weekly-scan',
-      paths: ['src/**/*.ts'],
-      triggers: [
-        {
-          type: 'schedule',
-          schedule: {
-            createFixPR: false,
-            fixBranchPrefix: 'warden-fix',
-          },
-        },
-      ],
-    };
-
-    const result = generateSkillToml(skill);
-
-    expect(result).toContain('[skills.triggers.schedule]');
-    expect(result).toContain('createFixPR = false');
-    expect(result).not.toContain('fixBranchPrefix');
   });
 
   it('generates multiple triggers for one skill', () => {

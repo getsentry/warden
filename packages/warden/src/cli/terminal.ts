@@ -48,7 +48,6 @@ function readFileLine(filePath: string, lineNumber: number): FileLineResult {
 }
 
 interface RenderOptions {
-  suppressFixDiffs?: boolean;
   verbosity?: Verbosity;
 }
 
@@ -109,23 +108,6 @@ function formatFindingTTY(finding: Finding, options?: RenderOptions): string[] {
     lines.push(`  ${formatConfidenceBadge(finding.confidence)}`);
   }
 
-  // Suggested fix diff if available (suppress when step-through will show it)
-  if (finding.suggestedFix?.diff && !options?.suppressFixDiffs) {
-    lines.push('');
-    lines.push(chalk.dim('  Suggested fix:'));
-    const diffLines = finding.suggestedFix.diff.split('\n').map((line) => {
-      if (line.startsWith('+') && !line.startsWith('+++')) {
-        return chalk.green(`  ${line}`);
-      } else if (line.startsWith('-') && !line.startsWith('---')) {
-        return chalk.red(`  ${line}`);
-      } else if (line.startsWith('@@')) {
-        return chalk.cyan(`  ${line}`);
-      }
-      return `  ${line}`;
-    });
-    lines.push(...diffLines);
-  }
-
   return lines;
 }
 
@@ -168,15 +150,6 @@ function formatFindingCI(finding: Finding): string[] {
 
   // Description
   lines.push(`  ${finding.description}`);
-
-  // Suggested fix diff (plain text, no color)
-  if (finding.suggestedFix?.diff) {
-    lines.push('');
-    lines.push('  Suggested fix:');
-    for (const line of finding.suggestedFix.diff.split('\n')) {
-      lines.push(`  ${line}`);
-    }
-  }
 
   return lines;
 }

@@ -5,7 +5,6 @@ import {
   GitHubEventTypeSchema,
   LocationSchema,
   SourceSnippetSchema,
-  SuggestedFixSchema,
   UsageStatsSchema,
 } from '../../types/index.js';
 import type { FindingObservation } from './outcomes.js';
@@ -19,7 +18,6 @@ const ExportedFindingSchema = z.object({
   description: z.string(),
   location: LocationSchema.optional(),
   additionalLocations: z.array(LocationSchema).optional(),
-  suggestedFix: SuggestedFixSchema.optional(),
   sourceSnippet: SourceSnippetSchema.optional(),
 });
 
@@ -119,7 +117,6 @@ export function buildFindingsOutput(
         description: f.description,
         location: f.location,
         additionalLocations: f.additionalLocations,
-        suggestedFix: f.suggestedFix,
         sourceSnippet: f.sourceSnippet,
       })),
     })),

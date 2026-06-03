@@ -40,8 +40,6 @@ export const CLIOptionsSchema = z.object({
   /** Use log output mode (no animations, timestamped) */
   log: z.boolean().default(false),
   color: z.boolean().optional(),
-  /** Automatically apply all suggested fixes */
-  fix: z.boolean().default(false),
   /** Overwrite existing files (for init command) */
   force: z.boolean().default(false),
   /** List available skills (for add command) */
@@ -327,7 +325,6 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'fail-on': { type: 'string' },
       'report-on': { type: 'string' },
       'min-confidence': { type: 'string' },
-      fix: { type: 'boolean', default: false },
       force: { type: 'boolean', short: 'f', default: false },
       list: { type: 'boolean', short: 'l', default: false },
       remote: { type: 'string' },
@@ -530,7 +527,6 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       failOn: values['fail-on'] as SeverityThreshold | undefined,
       reportOn: values['report-on'] as SeverityThreshold | undefined,
       minConfidence: values['min-confidence'] as ConfidenceThreshold | undefined,
-      fix: Boolean(values.fix),
       force: Boolean(values.force),
       parallel: typeof values.parallel === 'string' ? parseInt(values.parallel, 10) : undefined,
       git: Boolean(values.git),
