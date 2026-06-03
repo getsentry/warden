@@ -54,7 +54,7 @@ interface RenderOptions {
 /**
  * Format a finding for TTY display.
  */
-function formatFindingTTY(finding: Finding, options?: RenderOptions): string[] {
+function formatFindingTTY(finding: Finding): string[] {
   const lines: string[] = [];
   const badge = formatSeverityBadge(finding.severity);
   const color = SEVERITY_COLORS[finding.severity];
@@ -191,7 +191,7 @@ function renderSkillBoxTTY(report: SkillReport, mode: OutputMode, options?: Rend
     for (const [index, finding] of report.findings.entries()) {
       box.divider();
       box.blank();
-      const findingLines = formatFindingTTY(finding, options);
+      const findingLines = formatFindingTTY(finding);
       box.content(findingLines);
       // Only add blank after finding if not the last one
       if (index < report.findings.length - 1) {
