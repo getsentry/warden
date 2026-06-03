@@ -1,0 +1,719 @@
+{
+  "runId": "sentry-security-review-pi-gpt-5-5-high-corpus-2026-06-03-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.36.0",
+  "skill": "@sentry/warden:security-review@0.36.0",
+  "model": "openai/gpt-5.5",
+  "runtime": "pi",
+  "reasoningLevel": "high",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "findingVerification": {
+    "enabled": true
+  },
+  "traceCapture": {
+    "enabled": true,
+    "coverage": "partial",
+    "tracedShardCount": 2,
+    "notes": "The final two shards were rerun after Warden 0.36.0 with --traces. Earlier clean shards predate trace capture and remain untraced to avoid rerunning expensive completed work."
+  },
+  "runOptions": {
+    "runtime": "pi",
+    "model": "openai/gpt-5.5",
+    "effort": "high",
+    "traces": true,
+    "maxTurns": 100,
+    "parallel": 4,
+    "reportOn": "low",
+    "minConfidence": "low"
+  },
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "52efccd9-141c-403b-b46a-c001466cdb82",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 5,
+      "durationMs": 503537,
+      "costUSD": 3.620083,
+      "rawJsonl": "sentry-security-review-pi-gpt-5-5-reasoning-high-max-turns-100-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt",
+      "traceCapture": "not-enabled-pre-warden-0.36.0"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "b93f0156-7610-4286-bbcf-3f810a3b895b",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 2,
+      "durationMs": 803385,
+      "costUSD": 3.3717380000000006,
+      "rawJsonl": "sentry-security-review-pi-gpt-5-5-reasoning-high-max-turns-100-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt",
+      "traceCapture": "not-enabled-pre-warden-0.36.0"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "18f58b01-f471-40c4-8b24-94d5c6f43087",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 2,
+      "durationMs": 478341,
+      "costUSD": 1.481138,
+      "rawJsonl": "sentry-security-review-pi-gpt-5-5-reasoning-high-max-turns-100-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt",
+      "traceCapture": "not-enabled-pre-warden-0.36.0"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "56b1773d-da54-4e58-98a2-53fb6e0f9969",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 31,
+      "durationMs": 3822742,
+      "costUSD": 68.161925,
+      "rawJsonl": "sentry-security-review-pi-gpt-5-5-reasoning-high-max-turns-100-corpus-7f41cc50-combined-clean.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt",
+      "traceCapture": "not-enabled-pre-warden-0.36.0",
+      "notes": "Clean stitched artifact assembled from repair shards before Warden 0.36.0 trace capture was available."
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "777e9e93-3542-43b0-a723-f314f30d23ff",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 29,
+      "durationMs": 3915000,
+      "costUSD": 69.25,
+      "rawJsonl": "sentry-security-review-pi-gpt-5-5-high-corpus-9fc06de5-traced.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt",
+      "traceCapture": "enabled",
+      "notes": "Rerun after Warden 0.36.0 rebase with --runtime pi --model openai/gpt-5.5 --effort high --traces."
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "daf2ddca-d381-4daf-a915-231c1addadb9",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 3,
+      "durationMs": 311000,
+      "costUSD": 2.75,
+      "rawJsonl": "sentry-security-review-pi-gpt-5-5-high-corpus-fbecd17d-traced.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt",
+      "traceCapture": "enabled",
+      "notes": "Rerun after Warden 0.36.0 rebase with --runtime pi --model openai/gpt-5.5 --effort high --traces."
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 72,
+    "findingsBySeverity": {
+      "high": 13,
+      "medium": 47,
+      "low": 12
+    },
+    "findingsByConfidence": {
+      "high": 59,
+      "medium": 11,
+      "low": 2
+    },
+    "durationMs": 9834005,
+    "inputTokens": 127903020,
+    "outputTokens": 986842,
+    "cacheReadInputTokens": 118044160,
+    "cacheCreationInputTokens": 0,
+    "analysisCostUSD": 137.92164,
+    "auxiliaryCostUSD": 10.713244,
+    "costUSD": 148.634884
+  },
+  "timing": {
+    "shardWallMs": {
+      "source": "result-shard-durationMs",
+      "total": 9834005,
+      "count": 6,
+      "p50": 653461,
+      "p75": 3067903,
+      "p90": 3868871,
+      "p95": 3891936,
+      "max": 3915000
+    },
+    "analysisChunkMs": {
+      "source": "jsonl-chunk-durationMs",
+      "count": 156,
+      "p50": 178381,
+      "p75": 239065,
+      "p90": 334534,
+      "p95": 366101,
+      "max": 442587
+    }
+  },
+  "auxiliaryUsage": {},
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-06-03",
+    "knownFindingCount": 86,
+    "knownFound": 41,
+    "knownMissed": 45,
+    "knownPartial": 0,
+    "knownFoundRate": 0.4767,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count."
+  },
+  "scores": [
+    {
+      "findingId": "G8P-E3F",
+      "matchedCorpusIds": [
+        "sentry-vuln-003"
+      ],
+      "verdict": "known-found",
+      "notes": "Same InternalEAFeaturesEndpoint access-control gap."
+    },
+    {
+      "findingId": "AC3-ZQK",
+      "matchedCorpusIds": [
+        "sentry-vuln-007"
+      ],
+      "verdict": "known-found",
+      "notes": "Same release-threshold empty project-scope cross-tenant leak."
+    },
+    {
+      "findingId": "MFQ-V5R",
+      "matchedCorpusIds": [
+        "sentry-vuln-004"
+      ],
+      "verdict": "known-found",
+      "notes": "Same OAuth userinfo inactive user/application token issue."
+    },
+    {
+      "findingId": "M7X-ZPL",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "System options credential redaction is not the corpus allowlist substring bug for this commit."
+    },
+    {
+      "findingId": "MYU-EXZ",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "System option logging is not the corpus allowlist substring bug for this commit."
+    },
+    {
+      "findingId": "DU2-KNU",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Bearer-token session promotion is not the corpus superuser reauth fail-open."
+    },
+    {
+      "findingId": "2D7-ERY",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "SSO continuation skipping password/U2F is not the corpus SUPERUSER_ORG_ID fail-open."
+    },
+    {
+      "findingId": "ZP4-X2U",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Invite token logging is not the corpus arbitrary member deletion bug."
+    },
+    {
+      "findingId": "4P4-ZRW",
+      "matchedCorpusIds": [
+        "sentry-vuln-001"
+      ],
+      "verdict": "known-found",
+      "notes": "Same accept-invite path deleting arbitrary org members without validating the invite token."
+    },
+    {
+      "findingId": "DKW-3TE",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Workflow approval race is not the corpus GITHUB_OUTPUT filename injection."
+    },
+    {
+      "findingId": "YEB-2VH",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Search-directory shell injection is not the corpus branch-name shell interpolation bug."
+    },
+    {
+      "findingId": "MQP-BCK",
+      "matchedCorpusIds": [
+        "sentry-vuln-061"
+      ],
+      "verdict": "known-found",
+      "notes": "Same branch-name shell interpolation bug in analyze-styled history commands."
+    },
+    {
+      "findingId": "D5E-F4W",
+      "matchedCorpusIds": [
+        "sentry-vuln-061"
+      ],
+      "verdict": "known-found",
+      "notes": "Duplicate finding for the same branch-name shell interpolation bug."
+    },
+    {
+      "findingId": "MU7-6RC",
+      "matchedCorpusIds": [
+        "sentry-vuln-062"
+      ],
+      "verdict": "known-found",
+      "notes": "Same client_secret_jwt expiry/replay weakness."
+    },
+    {
+      "findingId": "T9J-HV3",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Launchpad artifact HMAC replay is not a corpus finding for this commit."
+    },
+    {
+      "findingId": "PLL-A2Y",
+      "matchedCorpusIds": [
+        "sentry-vuln-047"
+      ],
+      "verdict": "known-found",
+      "notes": "Same workflow-backed rule org-only lookup/project authorization bug."
+    },
+    {
+      "findingId": "FCG-C3B",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Alert quota bypass is not a corpus finding for this commit."
+    },
+    {
+      "findingId": "NRD-5BY",
+      "matchedCorpusIds": [
+        "sentry-vuln-047"
+      ],
+      "verdict": "known-found",
+      "notes": "Same workflow-backed rule/project authorization boundary, reported on delete."
+    },
+    {
+      "findingId": "8PM-BQB",
+      "matchedCorpusIds": [
+        "sentry-vuln-056"
+      ],
+      "verdict": "known-found",
+      "notes": "Same OAuth app clientSecret exposure during the reveal window."
+    },
+    {
+      "findingId": "KKK-HMJ",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-sensitive Statsig comparison is not the corpus timestamp freshness/replay issue."
+    },
+    {
+      "findingId": "2V8-4LS",
+      "matchedCorpusIds": [
+        "sentry-vuln-063"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Statsig webhook freshness/replay protection gap."
+    },
+    {
+      "findingId": "3BR-U7M",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Bitbucket cloud forwarded-IP spoofing is not the corpus Bitbucket Server unsigned webhook bug."
+    },
+    {
+      "findingId": "XWD-VKB",
+      "matchedCorpusIds": [
+        "sentry-vuln-064"
+      ],
+      "verdict": "known-found",
+      "notes": "Same invalid Bitbucket signature logging reusable HMAC material."
+    },
+    {
+      "findingId": "64T-JZS",
+      "matchedCorpusIds": [
+        "sentry-vuln-051"
+      ],
+      "verdict": "known-found",
+      "notes": "Same unsigned Bitbucket Server webhook acceptance bug."
+    },
+    {
+      "findingId": "6CK-UZ9",
+      "matchedCorpusIds": [
+        "sentry-vuln-052"
+      ],
+      "verdict": "known-found",
+      "notes": "Same data forwarder credential exposure to project-scoped users."
+    },
+    {
+      "findingId": "5UE-P9Y",
+      "matchedCorpusIds": [
+        "sentry-vuln-069",
+        "sentry-vuln-071"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Atlassian Connect helper trusting the unverified JWT algorithm header."
+    },
+    {
+      "findingId": "2WL-TLA",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Public OAuth clients without PKCE is not the corpus legacy redirect-prefix bug."
+    },
+    {
+      "findingId": "L3G-FLX",
+      "matchedCorpusIds": [
+        "sentry-vuln-046"
+      ],
+      "verdict": "known-found",
+      "notes": "Same pull-request size-analysis download project-access bypass."
+    },
+    {
+      "findingId": "HP6-XT8",
+      "matchedCorpusIds": [
+        "sentry-vuln-073"
+      ],
+      "verdict": "known-found",
+      "notes": "Same uuid1 release webhook token weakness."
+    },
+    {
+      "findingId": "TBB-Q9V",
+      "matchedCorpusIds": [
+        "sentry-vuln-055"
+      ],
+      "verdict": "known-found",
+      "notes": "Same public org-level Seer RPC project-access bypass."
+    },
+    {
+      "findingId": "4HG-J62",
+      "matchedCorpusIds": [
+        "sentry-vuln-074"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Seer RPC HMAC not binding the URL/method path."
+    },
+    {
+      "findingId": "ANB-DZD",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Issue-link URI host redirection is not the corpus external issue action scope bug."
+    },
+    {
+      "findingId": "B7W-9DF",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Unsafe external issue webUrl storage is not a corpus finding for this commit."
+    },
+    {
+      "findingId": "5ES-L54",
+      "matchedCorpusIds": [
+        "sentry-vuln-057"
+      ],
+      "verdict": "known-found",
+      "notes": "Same event request URL blind SSRF through uptime autodetection."
+    },
+    {
+      "findingId": "96L-L6W",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Inbound email From spoofing is not the corpus Mailgun timestamp/nonce freshness issue."
+    },
+    {
+      "findingId": "266-H9Y",
+      "matchedCorpusIds": [
+        "sentry-vuln-078"
+      ],
+      "verdict": "known-found",
+      "notes": "Same legacy Jira plugin TLS verification disabled while sending credentials."
+    },
+    {
+      "findingId": "74U-VSU",
+      "matchedCorpusIds": [
+        "sentry-vuln-081"
+      ],
+      "verdict": "known-found",
+      "notes": "Same copy-as-curl shell injection through unescaped request metadata."
+    },
+    {
+      "findingId": "3JM-DK4",
+      "matchedCorpusIds": [
+        "sentry-vuln-082"
+      ],
+      "verdict": "known-found",
+      "notes": "Same feature flag ECharts tooltip HTML injection."
+    },
+    {
+      "findingId": "JUR-C9K",
+      "matchedCorpusIds": [
+        "sentry-vuln-083"
+      ],
+      "verdict": "known-found",
+      "notes": "Same CSV formula injection sanitizer bypass."
+    },
+    {
+      "findingId": "9EH-NYH",
+      "matchedCorpusIds": [
+        "sentry-vuln-085"
+      ],
+      "verdict": "known-found",
+      "notes": "Same uploaded artifact path/name ECharts treemap tooltip XSS."
+    },
+    {
+      "findingId": "YFY-L3R",
+      "matchedCorpusIds": [
+        "sentry-vuln-018"
+      ],
+      "verdict": "known-found",
+      "notes": "Same pinned-search update overwriting another user's GroupSearchView."
+    },
+    {
+      "findingId": "2CD-MD4",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Accept-invite member deletion is not the corpus shared-issue slug confusion bug for this commit."
+    },
+    {
+      "findingId": "DFL-3WK",
+      "matchedCorpusIds": [
+        "sentry-vuln-021"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Codecov repository token regeneration allowed with org:read."
+    },
+    {
+      "findingId": "P49-Q9R",
+      "matchedCorpusIds": [
+        "sentry-vuln-019"
+      ],
+      "verdict": "known-found",
+      "notes": "Same ControlAccessService wrong-key SSO owner override bug."
+    },
+    {
+      "findingId": "C55-3UH",
+      "matchedCorpusIds": [
+        "sentry-vuln-041"
+      ],
+      "verdict": "known-found",
+      "notes": "Same DiscoverSavedQueryVisitEndpoint missing object permission check."
+    },
+    {
+      "findingId": "EHE-BG2",
+      "matchedCorpusIds": [
+        "sentry-vuln-025"
+      ],
+      "verdict": "known-found",
+      "notes": "Same ExternalTeamDetailsEndpoint org-only lookup bug."
+    },
+    {
+      "findingId": "BRU-PDX",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Forged Jira install JWT via kid/alg confusion is not the corpus iss/clientKey binding bug."
+    },
+    {
+      "findingId": "LP6-BYA",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "P4PORT command execution is not the corpus Perforce password exposure bug."
+    },
+    {
+      "findingId": "VVX-JSV",
+      "matchedCorpusIds": [
+        "sentry-vuln-013"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Perforce configData password exposure."
+    },
+    {
+      "findingId": "CCZ-Y59",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Slack response_url logging is not the corpus unlink identity ownership bug."
+    },
+    {
+      "findingId": "9VY-NBU",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Perforce web_url stored XSS is not a corpus finding for this commit."
+    },
+    {
+      "findingId": "3B6-Z6E",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Slack team unlink authorization is not the corpus external_id identity deletion bug."
+    },
+    {
+      "findingId": "UP7-L9G",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Slack issue action project-access gap is not the corpus unscoped get_rule lookup."
+    },
+    {
+      "findingId": "EYR-RND",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Teams rule label disclosure is not the corpus group/integration organization scoping bug."
+    },
+    {
+      "findingId": "LT5-PLS",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Slack Autofix org-access gap is not a corpus finding for this commit."
+    },
+    {
+      "findingId": "FY5-U7A",
+      "matchedCorpusIds": [
+        "sentry-vuln-029"
+      ],
+      "verdict": "known-found",
+      "notes": "Same metric-alert team target lookup missing organization scoping."
+    },
+    {
+      "findingId": "EW2-C8H",
+      "matchedCorpusIds": [
+        "sentry-vuln-030"
+      ],
+      "verdict": "known-found",
+      "notes": "Same preprod artifact approval missing project access."
+    },
+    {
+      "findingId": "5RA-CP9",
+      "matchedCorpusIds": [
+        "sentry-vuln-015"
+      ],
+      "verdict": "known-found",
+      "notes": "Same unauthenticated Pub/Sub-style transfer retry trigger."
+    },
+    {
+      "findingId": "RLZ-SDD",
+      "matchedCorpusIds": [
+        "sentry-vuln-033"
+      ],
+      "verdict": "known-found",
+      "notes": "Same replay_counts issue.id project-access bypass."
+    },
+    {
+      "findingId": "7KA-58J",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Preprod repository/status-check forgery is not the corpus snapshot GET/DELETE project-access bug."
+    },
+    {
+      "findingId": "W4G-8CL",
+      "matchedCorpusIds": [
+        "sentry-vuln-034"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Seer Autofix run_id not bound to the requested group."
+    },
+    {
+      "findingId": "KJ7-7T2",
+      "matchedCorpusIds": [
+        "sentry-vuln-036"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Seer supergroups project-access bypass."
+    },
+    {
+      "findingId": "X9E-NWT",
+      "matchedCorpusIds": [
+        "sentry-vuln-035"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Autofix automation settings GET bypassing accessible projects."
+    },
+    {
+      "findingId": "ZWY-GCT",
+      "matchedCorpusIds": [
+        "sentry-vuln-037"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Sentry App cell service dropping project access when user is optional."
+    },
+    {
+      "findingId": "F6Q-LW6",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Issue-action URI redirect is not the corpus GroupEventJsonView project-access bug."
+    },
+    {
+      "findingId": "U4E-7BG",
+      "matchedCorpusIds": [
+        "sentry-vuln-020"
+      ],
+      "verdict": "known-found",
+      "notes": "Same merge verification code expiry/single-use gap."
+    },
+    {
+      "findingId": "WGL-RC2",
+      "matchedCorpusIds": [
+        "sentry-vuln-039"
+      ],
+      "verdict": "known-found",
+      "notes": "Same open-periods org-only detector/group lookup."
+    },
+    {
+      "findingId": "VFF-5NX",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Attaching inaccessible workflows is not the corpus disconnect permission-check bug."
+    },
+    {
+      "findingId": "2JY-DAH",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Unfiltered service-hook re-scoping is not the corpus external issue creation project-access bug."
+    },
+    {
+      "findingId": "4N8-NAJ",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "System options GET redaction is not the corpus option-update logging bug."
+    },
+    {
+      "findingId": "XS3-DX9",
+      "matchedCorpusIds": [
+        "sentry-vuln-010"
+      ],
+      "verdict": "known-found",
+      "notes": "Same SystemOptionsEndpoint option_value credential logging bug."
+    },
+    {
+      "findingId": "WDR-2PQ",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Unbounded per_page DoS is not the corpus transaction-name search injection bug."
+    }
+  ],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. All shards completed with 156 ok chunk records and no failed chunks. The 9fc06de5 and fbecd17d shards were rerun after rebasing to Warden 0.36.0 using --runtime pi --model openai/gpt-5.5 --effort high --traces. Earlier clean shards predate trace capture and are retained rather than rerun. Cost uses persisted analysis cost for pre-trace shards and live CLI total cost for the two traced shards; auxiliary/verifier cost for pre-trace shards may still be under-recorded because those raw artifacts do not preserve verifier usage separately."
+}

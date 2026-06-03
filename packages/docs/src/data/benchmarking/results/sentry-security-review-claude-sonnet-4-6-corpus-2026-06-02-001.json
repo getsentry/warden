@@ -136,6 +136,27 @@
     "auxiliaryCostUSD": 0.014821999999999998,
     "costUSD": 72.2844113
   },
+  "timing": {
+    "shardWallMs": {
+      "source": "result-shard-durationMs",
+      "total": 10180873,
+      "count": 6,
+      "p50": 400205,
+      "p75": 2243943,
+      "p90": 4347887,
+      "p95": 5094613,
+      "max": 5841339
+    },
+    "analysisChunkMs": {
+      "source": "jsonl-chunk-durationMs",
+      "count": 156,
+      "p50": 93946,
+      "p75": 139389,
+      "p90": 196507,
+      "p95": 236672,
+      "max": 368270
+    }
+  },
   "auxiliaryUsage": {
     "extraction": {
       "inputTokens": 2687,
@@ -143,16 +164,196 @@
       "costUSD": 0.014821999999999998
     }
   },
+  "findingVerification": {
+    "enabled": true,
+    "source": "warden-default",
+    "notes": "The benchmark config did not disable defaults.verification. Warden enables the post-analysis finding verifier unless defaults.verification.enabled is false."
+  },
   "scoring": {
-    "reviewer": "manual-root-cause-pass",
+    "reviewer": "agent-semantic-match-pass",
     "scoredAt": "2026-06-02",
     "knownFindingCount": 86,
-    "knownFound": 21,
-    "knownMissed": 65,
+    "knownFound": 23,
+    "knownMissed": 63,
     "knownPartial": 0,
-    "knownFoundRate": 0.2442,
-    "notes": "Counts corpus entries where the run identified the same root cause. Raw findings may include unexpected findings and duplicates."
+    "knownFoundRate": 0.2674,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count."
   },
-  "scores": [],
+  "scores": [
+    {
+      "findingId": "DFN-QLE",
+      "matchedCorpusIds": ["sentry-vuln-003"],
+      "verdict": "known-found",
+      "notes": "Same InternalEAFeaturesEndpoint permission bypass."
+    },
+    {
+      "findingId": "3KB-XU5",
+      "matchedCorpusIds": ["sentry-vuln-008"],
+      "verdict": "known-found",
+      "notes": "Same system options allowlist tuple bug."
+    },
+    {
+      "findingId": "2E2-TK4",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Same file as a 2d929588 corpus entry, but this reports plaintext option logging rather than the allowlist tuple bug."
+    },
+    {
+      "findingId": "SZ6-K5U",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Reports credential persistence in the session, not the AuthIndexEndpoint superuser reauth fail-open bug."
+    },
+    {
+      "findingId": "G5Y-VPB",
+      "matchedCorpusIds": ["sentry-vuln-001"],
+      "verdict": "known-found",
+      "notes": "Same accept-invite missing-return member deletion bug."
+    },
+    {
+      "findingId": "X6K-CR5",
+      "matchedCorpusIds": ["sentry-vuln-062"],
+      "verdict": "known-found",
+      "notes": "Same client_secret_jwt missing-exp and replay-cache issue."
+    },
+    {
+      "findingId": "6MR-48X",
+      "matchedCorpusIds": ["sentry-vuln-070"],
+      "verdict": "known-found",
+      "notes": "Same Jira Server webhook JWT logging issue."
+    },
+    {
+      "findingId": "HAE-SNS",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-safe comparison issue is not the Statsig timestamp freshness bug in the corpus."
+    },
+    {
+      "findingId": "CYL-WRE",
+      "matchedCorpusIds": ["sentry-vuln-067"],
+      "verdict": "known-found",
+      "notes": "Same legacy unsigned GitHub Enterprise webhook bypass."
+    },
+    {
+      "findingId": "NBA-YZC",
+      "matchedCorpusIds": ["sentry-vuln-073"],
+      "verdict": "known-found",
+      "notes": "Same uuid1 release webhook token bug."
+    },
+    {
+      "findingId": "TN6-AQN",
+      "matchedCorpusIds": ["sentry-vuln-048"],
+      "verdict": "known-found",
+      "notes": "Same project size-analysis comparison download IDOR."
+    },
+    {
+      "findingId": "4B7-QTT",
+      "matchedCorpusIds": ["sentry-vuln-072"],
+      "verdict": "known-found",
+      "notes": "Same OAuth redirect URI prefix-match bug."
+    },
+    {
+      "findingId": "22Y-WRB",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Reports a GitHub Enterprise token exposure through Seer RPC, not one of the existing Seer project-access corpus bugs."
+    },
+    {
+      "findingId": "PH6-KXQ",
+      "matchedCorpusIds": ["sentry-vuln-078"],
+      "verdict": "known-found",
+      "notes": "Same Jira plugin TLS verification bug."
+    },
+    {
+      "findingId": "7NR-SEB",
+      "matchedCorpusIds": ["sentry-vuln-082"],
+      "verdict": "known-found",
+      "notes": "Same feature flag tooltip XSS."
+    },
+    {
+      "findingId": "EUH-P9C",
+      "matchedCorpusIds": ["sentry-vuln-074"],
+      "verdict": "known-found",
+      "notes": "Same Seer RPC HMAC path-binding bug."
+    },
+    {
+      "findingId": "FF4-JFS",
+      "matchedCorpusIds": ["sentry-vuln-021"],
+      "verdict": "known-found",
+      "notes": "Same Codecov repository token regeneration scope bug."
+    },
+    {
+      "findingId": "JB3-65U",
+      "matchedCorpusIds": ["sentry-vuln-025"],
+      "verdict": "known-found",
+      "notes": "Same external team cross-team authorization bug."
+    },
+    {
+      "findingId": "8HS-N2Z",
+      "matchedCorpusIds": ["sentry-vuln-028"],
+      "verdict": "known-found",
+      "notes": "Semantic match to the same accept-invite vulnerable branch/location; the corpus summary wording drifts from the emitted impact."
+    },
+    {
+      "findingId": "GZD-ZCP",
+      "matchedCorpusIds": ["sentry-vuln-026"],
+      "verdict": "known-found",
+      "notes": "Same UnlinkIdentityView ownership bug."
+    },
+    {
+      "findingId": "FYR-95A",
+      "matchedCorpusIds": ["sentry-vuln-013"],
+      "verdict": "known-found",
+      "notes": "Same Perforce configData secret disclosure."
+    },
+    {
+      "findingId": "9DG-PG8",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Reports a Perforce p4port SSRF, not the existing Perforce configData secret disclosure corpus entry."
+    },
+    {
+      "findingId": "BKR-DL6",
+      "matchedCorpusIds": ["sentry-vuln-014"],
+      "verdict": "known-found",
+      "notes": "Same Slack options-load cross-tenant disclosure."
+    },
+    {
+      "findingId": "C6L-4F3",
+      "matchedCorpusIds": ["sentry-vuln-015"],
+      "verdict": "known-found",
+      "notes": "Same unverified PubSub transfer job trigger."
+    },
+    {
+      "findingId": "RTN-Y2Y",
+      "matchedCorpusIds": ["sentry-vuln-036"],
+      "verdict": "known-found",
+      "notes": "Semantic match to the same supergroups access-control gap."
+    },
+    {
+      "findingId": "6D5-ZKH",
+      "matchedCorpusIds": ["sentry-vuln-034"],
+      "verdict": "known-found",
+      "notes": "Same Seer autofix run_id ownership bug."
+    },
+    {
+      "findingId": "P7D-YJ4",
+      "matchedCorpusIds": ["sentry-vuln-037"],
+      "verdict": "known-found",
+      "notes": "Same Sentry App cell service optional-user project-access bypass."
+    },
+    {
+      "findingId": "W36-XEM",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Same file as the fbecd17d system-options corpus entry, but this reports the allowlist tuple issue rather than plaintext option logging."
+    },
+    {
+      "findingId": "BY7-WAW",
+      "matchedCorpusIds": ["sentry-vuln-010"],
+      "verdict": "known-found",
+      "notes": "Same plaintext system option value logging bug."
+    }
+  ],
   "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This result was reconstructed from chunk records because the explicit output JSONL shards did not include final summary records. One chunk failed during extraction for src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py."
 }
