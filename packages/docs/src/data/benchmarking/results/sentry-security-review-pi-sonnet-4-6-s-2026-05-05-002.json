@@ -39,6 +39,5 @@
   "costUSD": 6.08437865,
   "rawJsonl": "sentry-security-review-pi-sonnet-4-6-s-2026-05-05-002.jsonl",
   "rawArtifactStatus": "withheld-pending-sensitive-review",
-  "scores": [],
   "notes": "Raw JSONL output and repo-local run log were byte-identical. Use JSONL totals as canonical; the live console reported a different transient cost."
 }
