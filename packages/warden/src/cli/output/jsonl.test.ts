@@ -859,6 +859,55 @@ describe('parseJsonlReports', () => {
     expect(report.usage?.inputTokens).toBe(300);
   });
 
+  it('ignores post-processing usage chunks when reconstructing all-hunks-failed', () => {
+    const run = buildRunMetadata({ runId: 'failed-with-post-processing', durationMs: 300 });
+    const chunks: JsonlChunkRecord[] = [
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 1, total: 2, lineRange: '10-20' },
+        status: 'error',
+        findings: [],
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 100, outputTokens: 10, costUSD: 0.001 }, undefined),
+        durationMs: 100,
+        error: { code: 'sdk_error', message: 'sdk failed' },
+      },
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 2, total: 2, lineRange: '21-30' },
+        status: 'error',
+        findings: [],
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 200, outputTokens: 20, costUSD: 0.002 }, undefined),
+        durationMs: 200,
+        error: { code: 'sdk_error', message: 'sdk failed again' },
+      },
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: '', index: 1, total: 1, lineRange: 'post-processing' },
+        status: 'ok',
+        findings: [],
+        usageBreakdown: buildJsonlUsageBreakdown(
+          undefined,
+          { verification: { inputTokens: 50, outputTokens: 5, costUSD: 0.0005 } },
+        ),
+        durationMs: 0,
+      },
+    ];
+
+    const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
+
+    const report = result.reports[0]!;
+    expect(report.error?.code).toBe('all_hunks_failed');
+    expect(report.error?.message).toContain('All 2 chunks failed');
+    expect(report.failedHunks).toBe(2);
+    expect(report.auxiliaryUsage?.['verification']?.costUSD).toBe(0.0005);
+  });
+
   it('reconstructs trace metadata from chunk records', () => {
     const run = buildRunMetadata({ runId: 'chunk-traces', durationMs: 300 });
     const trace: HunkTrace = {

@@ -506,6 +506,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
   for (const [skill, records] of bySkill) {
     const reportLevelError = records.find(isReportLevelErrorRecord)?.error;
     const chunkRecords = records.filter((record) => !isReportLevelErrorRecord(record));
+    const analysisChunkRecords = chunkRecords.filter(isAnalysisChunkRecord);
     const aggregateRecords = chunkRecords.length > 0 ? chunkRecords : records;
     const findings = aggregateRecords.flatMap((r) => r.findings);
     const usage = aggregateRecords.reduce<UsageStats | undefined>(
@@ -544,16 +545,16 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
         });
       }
     }
-    const failedHunks = chunkRecords.filter(
+    const failedHunks = analysisChunkRecords.filter(
       (r) => r.status === 'error' && r.error && !isExtractionErrorCode(r.error.code),
     ).length;
-    const failedExtractions = chunkRecords.filter(
+    const failedExtractions = analysisChunkRecords.filter(
       (r) => r.status === 'error' && r.error && isExtractionErrorCode(r.error.code),
     ).length;
     const allChunksFailed =
-      chunkRecords.length > 0 &&
+      analysisChunkRecords.length > 0 &&
       findings.length === 0 &&
-      chunkRecords.every((record) => record.status === 'error');
+      analysisChunkRecords.every((record) => record.status === 'error');
     const report: SkillReport = {
       skill,
       summary: summarizeFindings(skill, findings),
@@ -568,7 +569,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     } else if (allChunksFailed) {
       report.error = {
         code: 'all_hunks_failed',
-        message: `All ${chunkRecords.length} ${chunkRecords.length === 1 ? 'chunk' : 'chunks'} failed to analyze.`,
+        message: `All ${analysisChunkRecords.length} ${analysisChunkRecords.length === 1 ? 'chunk' : 'chunks'} failed to analyze.`,
       };
     }
     if (auxiliaryUsage) report.auxiliaryUsage = auxiliaryUsage;
@@ -585,6 +586,18 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
 
 function isReportLevelErrorRecord(record: JsonlChunkRecord): boolean {
   return record.status === 'error' && record.chunk.file === '' && Boolean(record.error);
+}
+
+function isUsageOnlyPostProcessingRecord(record: JsonlChunkRecord): boolean {
+  return record.chunk.file === '' && record.chunk.lineRange === 'post-processing';
+}
+
+function isSkippedFilesMetadataRecord(record: JsonlChunkRecord): boolean {
+  return record.status === 'skipped' && record.chunk.lineRange === '' && (record.skippedFiles?.length ?? 0) > 0;
+}
+
+function isAnalysisChunkRecord(record: JsonlChunkRecord): boolean {
+  return !isUsageOnlyPostProcessingRecord(record) && !isSkippedFilesMetadataRecord(record);
 }
 
 export function parseJsonlReports(content: string): ParsedJsonlLog {
