@@ -26,8 +26,10 @@ import {
   type Model,
   type TSchema,
   type TextContent,
+  type ToolResultMessage,
   type Usage,
 } from '@earendil-works/pi-ai';
+import type { Span } from '@sentry/node';
 import { z } from 'zod';
 import type { Effort, ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
@@ -37,10 +39,14 @@ import { bridgeWardenProviderApiKeyEnv } from '../../utils/index.js';
 import { extractJson } from '../haiku.js';
 import { isAuthenticationErrorMessage, sanitizeErrorMessage } from '../errors.js';
 import {
+  type GenAiMessage,
+  genAiSpanName,
   genAiToolCallAttributes,
   genAiProviderName,
+  genAiUsageAttributes,
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
+  setGenAiOutputMessagesAttrFromMessages,
   setGenAiSystemInstructionsAttr,
   setGenAiUsageAttrs,
 } from '../otel.js';
@@ -102,6 +108,9 @@ interface PiPromptOptions {
   maxRetries?: number;
   timeout?: number;
   abortController?: AbortController;
+  toolDescriptions?: Record<string, string>;
+  /** Parent `invoke_agent` span for model-call and tool-execution child spans. */
+  parentSpan?: Span;
 }
 
 function errorMessage(error: unknown): string {
@@ -356,6 +365,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   let hitMaxTurns = false;
   const startedAt = Date.now();
   const activeToolSpans = new Map<string, PiToolSpan>();
+  const conversationMessages: GenAiMessage[] = [{ role: 'user', content: options.userPrompt }];
 
   const buildToolAttributes = (args: {
     toolName: string;
@@ -367,6 +377,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     genAiToolCallAttributes({
       agentName: options.agentName,
       toolName: args.toolName,
+      toolDescription: options.toolDescriptions?.[args.toolName],
       toolCallId: args.toolCallId,
       toolType: 'function',
       arguments: args.input,
@@ -376,7 +387,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
 
   function startToolSpan(event: { toolCallId: string; toolName: string; args: unknown }): void {
     try {
-      const parentSpan = Sentry.getActiveSpan();
+      const parentSpan = options.parentSpan ?? Sentry.getActiveSpan();
       const span = startInactiveTracedSpan({
         op: 'gen_ai.execute_tool',
         name: `execute_tool ${event.toolName}`,
@@ -400,7 +411,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     isError: boolean;
   }): void {
     try {
-      const parentSpan = Sentry.getActiveSpan();
+      const parentSpan = options.parentSpan ?? Sentry.getActiveSpan();
       const span = activeToolSpans.get(event.toolCallId) ?? startInactiveTracedSpan({
         op: 'gen_ai.execute_tool',
         name: `execute_tool ${event.toolName}`,
@@ -434,6 +445,46 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       }
     }
     activeToolSpans.clear();
+  }
+
+  function recordTurnSpan(
+    message: AssistantMessage,
+    toolResults: ToolResultMessage[] | undefined,
+  ): void {
+    const outputMessage: GenAiMessage = {
+      role: message.role,
+      content: message.content,
+      finishReason: message.stopReason,
+    };
+    const followUpMessages = toolResults ?? [];
+    const requestModel = options.model ?? message.model ?? message.responseModel;
+
+    try {
+      const usageAttrs = genAiUsageAttributes(piUsageToStats(message.usage));
+      startTracedSpan(
+        {
+          op: 'gen_ai.chat',
+          name: genAiSpanName('chat', requestModel),
+          ...(options.parentSpan ? { parentSpan: options.parentSpan } : {}),
+          attributes: {
+            'gen_ai.operation.name': 'chat',
+            'gen_ai.provider.name': message.provider ?? genAiProviderName('pi', options.model),
+            ...(options.agentName ? { 'gen_ai.agent.name': options.agentName } : {}),
+            ...(requestModel ? { 'gen_ai.request.model': requestModel } : {}),
+            'gen_ai.response.model': message.responseModel ?? message.model,
+            ...usageAttrs,
+          },
+        },
+        (span) => {
+          setGenAiInputMessagesAttr(span, conversationMessages);
+          setGenAiOutputMessagesAttrFromMessages(span, [outputMessage]);
+        },
+      );
+    } catch {
+      // Telemetry should never break the workflow.
+    }
+
+    conversationMessages.push(outputMessage, ...followUpMessages);
   }
 
   try {
@@ -474,6 +525,9 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       } else if (event.type === 'tool_execution_end') {
         finishToolSpan(event);
       } else if (event.type === 'turn_end') {
+        if (isAssistantMessage(event.message)) {
+          recordTurnSpan(event.message, event.toolResults);
+        }
         numTurns++;
         if (
           options.maxTurns !== undefined
@@ -569,6 +623,18 @@ function toPiCustomTools(
   }));
 }
 
+function toolDescriptionsByName(tools: AuxiliaryTool[] | undefined): Record<string, string> | undefined {
+  const descriptions = Object.fromEntries(
+    (tools ?? [])
+      .filter((tool): tool is AuxiliaryTool & { description: string } =>
+        typeof tool.description === 'string' && tool.description.length > 0
+      )
+      .map((tool) => [tool.name, tool.description]),
+  );
+
+  return Object.keys(descriptions).length > 0 ? descriptions : undefined;
+}
+
 async function runStructured<T>(
   request: {
     kind: 'auxiliary' | 'synthesis';
@@ -589,17 +655,18 @@ async function runStructured<T>(
   const customTools = toPiCustomTools(request.tools, request.executeTool);
   const systemPrompt = toStructuredPrompt(request.kind, request.task, request.schema);
   const toolNames = customTools?.map((tool) => tool.name) ?? [];
+  const toolDescriptions = toolDescriptionsByName(request.tools);
 
   return startTracedSpan(
     {
-      op: 'gen_ai.chat',
-      name: `chat ${request.model ?? 'pi-default'}`,
+      op: 'gen_ai.invoke_agent',
+      name: genAiSpanName('invoke_agent', request.agentName),
       attributes: {
-        'gen_ai.operation.name': 'chat',
+        'gen_ai.operation.name': 'invoke_agent',
         'gen_ai.provider.name': genAiProviderName('pi', request.model),
         ...(request.agentName ? { 'gen_ai.agent.name': request.agentName } : {}),
         ...(request.task ? { 'warden.ai.task': request.task } : {}),
-        'gen_ai.request.model': request.model ?? 'default',
+        ...(request.model ? { 'gen_ai.request.model': request.model } : {}),
         'gen_ai.output.type': 'json',
       },
     },
@@ -617,9 +684,11 @@ async function runStructured<T>(
           legacyAnthropicApiKey: request.apiKey,
           toolNames,
           customTools,
+          toolDescriptions,
           maxTurns: request.maxIterations,
           maxRetries: request.maxRetries,
           timeout: request.timeout,
+          parentSpan: span,
         });
         const result = normalizePiResult(run);
         if (!result) {
@@ -691,12 +760,12 @@ export const piRuntime: Runtime = {
     return startTracedSpan(
       {
         op: 'gen_ai.invoke_agent',
-        name: `invoke_agent ${skillName}`,
+        name: genAiSpanName('invoke_agent', skillName),
         attributes: {
           'gen_ai.operation.name': 'invoke_agent',
           'gen_ai.provider.name': genAiProviderName('pi', model),
           'gen_ai.agent.name': skillName,
-          'gen_ai.request.model': model ?? 'default',
+          ...(model ? { 'gen_ai.request.model': model } : {}),
           'warden.request.max_turns': maxTurns,
         },
       },
@@ -716,6 +785,7 @@ export const piRuntime: Runtime = {
             maxTurns,
             effort,
             abortController,
+            parentSpan: span,
           });
           run.warnings.unshift(...skillTools.warnings);
           const result = normalizePiResult(run);

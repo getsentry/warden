@@ -6,9 +6,11 @@ import { startTracedSpan } from '../sentry-trace.js';
 import { apiUsageToStats } from './pricing.js';
 import { aggregateUsage, emptyUsage } from './usage.js';
 import {
+  genAiSpanName,
   genAiToolCallAttributes,
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
+  setGenAiOutputMessagesAttrFromMessages,
   setGenAiUsageAttrs,
 } from './otel.js';
 
@@ -191,7 +193,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
   return startTracedSpan(
     {
       op: 'gen_ai.chat',
-      name: `chat ${model}`,
+      name: genAiSpanName('chat', model),
       attributes: {
         'gen_ai.operation.name': 'chat',
         'gen_ai.provider.name': 'anthropic',
@@ -282,6 +284,10 @@ export interface CallHaikuWithToolsOptions<T> {
  * Multi-turn Haiku call with tool use loop.
  * Iterates tool calls until the model produces a final text response.
  * Accumulates usage across all iterations.
+ *
+ * Telemetry mirrors an agent run: the outer span describes the local
+ * orchestration, each Anthropic API call gets its own `gen_ai.chat` span, and
+ * every application-executed tool call is recorded as `gen_ai.execute_tool`.
  */
 export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T>): Promise<HaikuResult<T>> {
   const {
@@ -301,10 +307,10 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
 
   return startTracedSpan(
     {
-      op: 'gen_ai.chat',
-      name: `chat ${model}`,
+      op: 'gen_ai.invoke_agent',
+      name: genAiSpanName('invoke_agent', agentName),
       attributes: {
-        'gen_ai.operation.name': 'chat',
+        'gen_ai.operation.name': 'invoke_agent',
         'gen_ai.provider.name': 'anthropic',
         ...(agentName ? { 'gen_ai.agent.name': agentName } : {}),
         ...(task ? { 'warden.ai.task': task } : {}),
@@ -315,14 +321,17 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
     },
     async (span) => {
       const client = new Anthropic({ apiKey, timeout, maxRetries });
+      const toolDescriptions = new Map(
+        tools
+          .map((tool) => [tool.name, tool.description])
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0),
+      );
 
       // No prefill for tool-use loops: prefill biases the model to output JSON
       // immediately instead of calling tools to gather information first.
       const messages: Anthropic.MessageParam[] = [
         { role: 'user', content: prompt },
       ];
-
-      setGenAiInputMessagesAttr(span, messages);
 
       const usages: UsageStats[] = [];
       // Accumulate raw API usage across iterations so setGenAiResponseAttrs
@@ -338,23 +347,59 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
         },
       };
 
-      function setFinalSpanAttrs(stopReason?: string | null, responseText?: string): void {
-        setGenAiResponseAttrs(span, cumulativeUsage, stopReason, responseText);
+      function setFinalSpanAttrs(stopReason?: string | null): void {
+        setGenAiResponseAttrs(span, cumulativeUsage, stopReason);
       }
 
       function currentUsage(): UsageStats {
         return usages.length > 0 ? aggregateUsage(usages) : emptyUsage();
       }
 
+      async function runModelIteration(): Promise<Anthropic.Message> {
+        const inputMessages = [...messages];
+        return startTracedSpan(
+          {
+            op: 'gen_ai.chat',
+            name: genAiSpanName('chat', model),
+            parentSpan: span,
+            attributes: {
+              'gen_ai.operation.name': 'chat',
+              'gen_ai.provider.name': 'anthropic',
+              ...(agentName ? { 'gen_ai.agent.name': agentName } : {}),
+              ...(task ? { 'warden.ai.task': task } : {}),
+              'gen_ai.request.model': model,
+              'gen_ai.request.max_tokens': maxTokens,
+              'gen_ai.output.type': 'json',
+            },
+          },
+          async (chatSpan) => {
+            setGenAiInputMessagesAttr(chatSpan, inputMessages);
+            try {
+              const response = await client.messages.create({
+                model,
+                max_tokens: maxTokens,
+                messages: inputMessages,
+                tools,
+              });
+              setGenAiResponseAttrs(chatSpan, response.usage, response.stop_reason);
+              setGenAiOutputMessagesAttrFromMessages(chatSpan, [{
+                role: response.role,
+                content: response.content,
+                finishReason: response.stop_reason,
+              }]);
+              return response;
+            } catch (error) {
+              chatSpan.setAttribute('error.type', error instanceof Error ? error.name : '_OTHER');
+              throw error;
+            }
+          },
+        );
+      }
+
       for (let iteration = 0; iteration < maxIterations; iteration++) {
         let response: Anthropic.Message;
         try {
-          response = await client.messages.create({
-            model,
-            max_tokens: maxTokens,
-            messages,
-            tools,
-          });
+          response = await runModelIteration();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           span.setAttribute('error.type', error instanceof Error ? error.name : '_OTHER');
@@ -388,10 +433,12 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
               {
                 op: 'gen_ai.execute_tool',
                 name: `execute_tool ${block.name}`,
+                parentSpan: span,
                 attributes: genAiToolCallAttributes({
                   agentName,
                   task,
                   toolName: block.name,
+                  toolDescription: toolDescriptions.get(block.name),
                   toolCallId: block.id,
                   toolType: 'function',
                   arguments: block.input,
@@ -438,7 +485,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
           return { success: false, error: 'No text in final response', usage: aggregateUsage(usages) };
         }
 
-        setFinalSpanAttrs(response.stop_reason, textBlock.text);
+        setFinalSpanAttrs(response.stop_reason);
 
         const jsonStr = extractJson(textBlock.text);
         if (!jsonStr) {

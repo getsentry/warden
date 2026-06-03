@@ -16,16 +16,18 @@
  * - Claude-specific result subtypes normalize to Warden-owned statuses.
  */
 import type Anthropic from '@anthropic-ai/sdk';
-import { query, type EffortLevel, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type EffortLevel, type SDKResultMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { ToolConfig, ToolName } from '../../config/schema.js';
-import { Sentry } from '../../sentry.js';
 import { recordTracedSpan, startInactiveTracedSpan, startTracedSpan } from '../../sentry-trace.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
 import {
+  type GenAiMessage,
+  genAiSpanName,
   genAiToolCallAttributes,
   genAiUsageAttributes,
   setGenAiInputMessagesAttr,
   setGenAiOutputMessagesAttr,
+  setGenAiOutputMessagesAttrFromMessages,
   setGenAiSystemInstructionsAttr,
   setGenAiUsageAttrs,
 } from '../otel.js';
@@ -47,6 +49,8 @@ import type {
 
 /** Buffered data for a single SDK turn, flushed into gen_ai.chat child spans. */
 interface TurnData {
+  /** Raw assistant message content for this turn, normalized only in sdk/otel.ts. */
+  outputMessage: GenAiMessage;
   toolUses: { id: string; name: string; input?: unknown }[];
   inputTokens: number;
   outputTokens: number;
@@ -218,6 +222,55 @@ function turnUsageToStats(turn: TurnData) {
   });
 }
 
+function claudeUserMessage(message: SDKUserMessage): GenAiMessage {
+  if (message.tool_use_result !== undefined && message.parent_tool_use_id) {
+    return {
+      role: 'tool',
+      content: message.tool_use_result,
+      toolCallId: message.parent_tool_use_id,
+    };
+  }
+
+  return {
+    role: message.message.role,
+    content: message.message.content,
+  };
+}
+
+function toolResultBlockContent(content: unknown, toolCallId: string): unknown {
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+
+  for (const part of content) {
+    if (!part || typeof part !== 'object') {
+      continue;
+    }
+
+    const block = part as Record<string, unknown>;
+    if (block['type'] === 'tool_result' && block['tool_use_id'] === toolCallId) {
+      return block['content'];
+    }
+  }
+
+  return undefined;
+}
+
+function toolResultForCall(messages: GenAiMessage[], toolCallId: string): unknown {
+  for (const message of messages) {
+    if ((message.role === 'tool' || message.role === 'toolResult') && message.toolCallId === toolCallId) {
+      return message.content;
+    }
+
+    const blockContent = toolResultBlockContent(message.content, toolCallId);
+    if (blockContent !== undefined) {
+      return blockContent;
+    }
+  }
+
+  return undefined;
+}
+
 function reconcileStreamedUsage(args: {
   result: SDKResultMessage;
   streamedUsage?: ReturnType<typeof turnUsageToStats>;
@@ -307,17 +360,16 @@ export const claudeRuntime: Runtime = {
     const { maxTurns = 50, model, effort, abortController } = options;
     const { pathToClaudeCodeExecutable } = getClaudeProviderOptions(providerOptions);
     const skillTools = resolveClaudeSkillTools(tools, allowMutatingTools);
-    const modelId = model ?? 'unknown';
 
     return startTracedSpan(
       {
         op: 'gen_ai.invoke_agent',
-        name: `invoke_agent ${skillName}`,
+        name: genAiSpanName('invoke_agent', skillName),
         attributes: {
           'gen_ai.operation.name': 'invoke_agent',
           'gen_ai.provider.name': 'anthropic',
           'gen_ai.agent.name': skillName,
-          'gen_ai.request.model': modelId,
+          ...(model ? { 'gen_ai.request.model': model } : {}),
           'warden.request.max_turns': maxTurns,
         },
       },
@@ -360,12 +412,18 @@ export const claudeRuntime: Runtime = {
         const turnUsages: ReturnType<typeof turnUsageToStats>[] = [];
         const responseModels = new Set<string>();
         const pendingToolProgress = new Map<string, number>();
+        const conversationMessages: GenAiMessage[] = [{ role: 'user', content: userPrompt }];
+        // Tool-result user messages can arrive after the assistant event they
+        // answer, so hold them until that turn span has been flushed.
+        const pendingFollowUpMessages: GenAiMessage[] = [];
 
         function flushPendingTurn(): void {
           if (!pendingTurn) return;
           turnCount++;
           const turn = pendingTurn;
           const toolProgress = new Map(pendingToolProgress);
+          const inputMessages = [...conversationMessages];
+          const followUpMessages = [...pendingFollowUpMessages];
           pendingTurn = null;
           pendingToolProgress.clear();
           turnUsages.push(turnUsageToStats(turn));
@@ -387,55 +445,62 @@ export const claudeRuntime: Runtime = {
             startTracedSpan(
               {
                 op: 'gen_ai.chat',
-                name: `chat ${skillName} turn ${turnCount}`,
+                name: genAiSpanName('chat', model),
+                parentSpan: span,
                 attributes: {
                   'gen_ai.operation.name': 'chat',
                   'gen_ai.provider.name': 'anthropic',
                   'gen_ai.agent.name': skillName,
-                  'gen_ai.request.model': modelId,
+                  ...(model ? { 'gen_ai.request.model': model } : {}),
                   'gen_ai.response.model': turn.model,
                   ...usageAttrs,
                 },
               },
-              () => {
-                for (const toolUse of turn.toolUses) {
-                  const elapsed = toolProgress.get(toolUse.id);
-                  const attributes = genAiToolCallAttributes({
-                    agentName: skillName,
-                    toolName: toolUse.name,
-                    toolCallId: toolUse.id,
-                    toolType: 'function',
-                    arguments: toolUse.input,
-                  });
-
-                  if (elapsed !== undefined) {
-                    const endTime = Date.now() / 1000;
-                    const parentSpan = Sentry.getActiveSpan();
-                    const span = startInactiveTracedSpan({
-                      op: 'gen_ai.execute_tool',
-                      name: `execute_tool ${toolUse.name}`,
-                      ...(parentSpan && { parentSpan }),
-                      startTime: Math.max(0, endTime - elapsed),
-                      attributes,
-                    });
-                    span.end(endTime);
-                    recordTracedSpan(span);
-                  } else {
-                    startTracedSpan(
-                      {
-                        op: 'gen_ai.execute_tool',
-                        name: `execute_tool ${toolUse.name}`,
-                        attributes,
-                      },
-                      () => undefined
-                    );
-                  }
-                }
-              }
+              (chatSpan) => {
+                setGenAiInputMessagesAttr(chatSpan, inputMessages);
+                setGenAiOutputMessagesAttrFromMessages(chatSpan, [turn.outputMessage]);
+              },
             );
+
+            for (const toolUse of turn.toolUses) {
+              const elapsed = toolProgress.get(toolUse.id);
+              const attributes = genAiToolCallAttributes({
+                agentName: skillName,
+                toolName: toolUse.name,
+                toolCallId: toolUse.id,
+                toolType: 'function',
+                arguments: toolUse.input,
+                result: toolResultForCall(followUpMessages, toolUse.id),
+              });
+
+              if (elapsed !== undefined) {
+                const endTime = Date.now() / 1000;
+                const toolSpan = startInactiveTracedSpan({
+                  op: 'gen_ai.execute_tool',
+                  name: `execute_tool ${toolUse.name}`,
+                  parentSpan: span,
+                  startTime: Math.max(0, endTime - elapsed),
+                  attributes,
+                });
+                toolSpan.end(endTime);
+                recordTracedSpan(toolSpan);
+              } else {
+                startTracedSpan(
+                  {
+                    op: 'gen_ai.execute_tool',
+                    name: `execute_tool ${toolUse.name}`,
+                    parentSpan: span,
+                    attributes,
+                  },
+                  () => undefined,
+                );
+              }
+            }
           } catch {
             // Telemetry should never break the workflow.
           }
+          conversationMessages.push(turn.outputMessage, ...followUpMessages);
+          pendingFollowUpMessages.length = 0;
         }
 
         try {
@@ -449,6 +514,11 @@ export const claudeRuntime: Runtime = {
                 .filter((block): block is typeof block & { type: 'tool_use' } => block.type === 'tool_use')
                 .map(({ id, name, input }) => ({ id, name, input }));
               pendingTurn = {
+                outputMessage: {
+                  role: msg.role,
+                  content: msg.content,
+                  finishReason: msg.stop_reason,
+                },
                 toolUses,
                 inputTokens: msg.usage?.input_tokens ?? 0,
                 outputTokens: msg.usage?.output_tokens ?? 0,
@@ -459,6 +529,13 @@ export const claudeRuntime: Runtime = {
                 webSearchRequests: msg.usage?.server_tool_use?.web_search_requests ?? 0,
                 model: msg.model,
               };
+            } else if (message.type === 'user') {
+              const userMessage = claudeUserMessage(message);
+              if (pendingTurn) {
+                pendingFollowUpMessages.push(userMessage);
+              } else {
+                conversationMessages.push(userMessage);
+              }
             } else if (message.type === 'tool_progress') {
               pendingToolProgress.set(message.tool_use_id, message.elapsed_time_seconds);
             } else if (message.type === 'result') {
