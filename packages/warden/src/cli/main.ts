@@ -308,6 +308,7 @@ function buildReportChunkRecord(
   index = 1,
   total = 1,
   error?: SkillError,
+  includeReportResults = true,
 ): JsonlChunkRecord {
   const reportError = report.error ?? error;
   return {
@@ -322,12 +323,14 @@ function buildReportChunkRecord(
       lineRange: '',
     },
     status: reportError ? 'error' : report.skippedFiles?.length ? 'skipped' : 'ok',
-    findings: report.findings,
-    usageBreakdown: buildJsonlUsageBreakdown(report.usage, report.auxiliaryUsage, {
-      scan: { model: report.model, runtime: report.runtime },
-      auxiliary: report.auxiliaryUsageAttribution,
-    }),
-    durationMs: report.durationMs ?? runDurationMs,
+    findings: includeReportResults ? report.findings : [],
+    usageBreakdown: includeReportResults
+      ? buildJsonlUsageBreakdown(report.usage, report.auxiliaryUsage, {
+        scan: { model: report.model, runtime: report.runtime },
+        auxiliary: report.auxiliaryUsageAttribution,
+      })
+      : undefined,
+    durationMs: includeReportResults ? (report.durationMs ?? runDurationMs) : 0,
     error: reportError,
     skippedFiles: report.skippedFiles,
   };
@@ -526,7 +529,10 @@ export function buildFinalChunkRecords(
   return [
     ...chunkRecords,
     ...postProcessingUsageRecords,
-    ...missingReports.map((report) => buildReportChunkRecord(log, report, totalDurationMs, undefined, undefined, error)),
+    ...missingReports.map((report) => {
+      const hasExistingSkillChunks = chunkRecords.some((chunk) => chunk.skill === report.skill);
+      return buildReportChunkRecord(log, report, totalDurationMs, undefined, undefined, error, !hasExistingSkillChunks);
+    }),
   ];
 }
 

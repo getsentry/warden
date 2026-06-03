@@ -171,6 +171,69 @@ describe('buildFinalChunkRecords', () => {
     expect(totalUsageCost(parsed.reports[0]!.usage, parsed.reports[0]!.auxiliaryUsage)).toBeCloseTo(7.5);
   });
 
+  it('keeps skipped-file metadata from double-counting finalized usage', () => {
+    const run = buildRunMetadata({
+      runId: 'run-skipped-usage',
+      durationMs: 100,
+      timestamp: new Date('2026-06-03T00:00:00.000Z'),
+      cwd: '/repo',
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'skill-a',
+      model: 'scan-model',
+      chunk: { file: 'src/app.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [],
+      usageBreakdown: buildJsonlUsageBreakdown(
+        makeUsage(1000, 100, 5),
+        { extraction: makeUsage(100, 10, 0.5) },
+        { auxiliary: { extraction: { model: 'extract-model' } } },
+      ),
+      durationMs: 100,
+    };
+    const log: RunLog = {
+      paths: [],
+      primaryLogPath: '/repo/.warden/logs/run.jsonl',
+      primaryLogWritten: true,
+      outputPath: undefined,
+      startTime: 0,
+      baseRun: run,
+      chunks: [chunk],
+    };
+    const report = makeReport({
+      model: 'scan-model',
+      usage: makeUsage(1000, 100, 5),
+      auxiliaryUsage: {
+        extraction: makeUsage(100, 10, 0.5),
+        verification: makeUsage(200, 20, 1.5),
+      },
+      findings: [{
+        id: 'finding-1',
+        severity: 'medium',
+        title: 'Finding',
+        description: 'Finding',
+        location: { path: 'src/app.ts', startLine: 12 },
+      }],
+      skippedFiles: [{ filename: 'dist/generated.ts', reason: 'builtin' }],
+    });
+
+    const records = buildFinalChunkRecords(log, [report], 1000);
+    const skippedRecord = records.find((record) => record.status === 'skipped');
+    const parsed = parseJsonlReports(renderJsonlChunkRecords(records));
+
+    expect(records).toHaveLength(3);
+    expect(skippedRecord?.findings).toEqual([]);
+    expect(skippedRecord?.durationMs).toBe(0);
+    expect(skippedRecord?.usageBreakdown).toBeUndefined();
+    expect(parsed.reports[0]!.findings).toHaveLength(1);
+    expect(parsed.reports[0]!.usage?.costUSD).toBe(5);
+    expect(parsed.reports[0]!.auxiliaryUsage?.['extraction']?.costUSD).toBe(0.5);
+    expect(parsed.reports[0]!.auxiliaryUsage?.['verification']?.costUSD).toBe(1.5);
+    expect(totalUsageCost(parsed.reports[0]!.usage, parsed.reports[0]!.auxiliaryUsage)).toBeCloseTo(7);
+  });
+
   it('renders finalized content with a trailing run summary usage breakdown', () => {
     const run = buildRunMetadata({
       runId: 'run-summary',
