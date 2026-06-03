@@ -371,14 +371,30 @@ function hasReportRecord(log: RunLog, report: SkillReport): boolean {
   });
 }
 
-function shouldStreamReportRecord(log: RunLog, report: SkillReport): boolean {
-  if (hasReportRecord(log, report)) return false;
-  return Boolean(report.error || report.skippedFiles?.length || !log.chunks.some((chunk) => chunk.skill === report.skill));
+function hasSkillChunkRecord(chunks: JsonlChunkRecord[], skill: string): boolean {
+  return chunks.some((chunk) => chunk.skill === skill);
 }
 
-function appendReportToRunLog(log: RunLog, report: SkillReport): void {
+function shouldStreamReportRecord(log: RunLog, report: SkillReport): boolean {
+  if (hasReportRecord(log, report)) return false;
+  return Boolean(report.error || report.skippedFiles?.length || !hasSkillChunkRecord(log.chunks, report.skill));
+}
+
+/**
+ * Append a report-level JSONL record when streaming has not already captured one.
+ */
+export function appendReportToRunLog(log: RunLog, report: SkillReport): void {
   if (!shouldStreamReportRecord(log, report)) return;
-  const record = buildReportChunkRecord(log, report, Date.now() - log.startTime);
+  const hasExistingSkillChunks = hasSkillChunkRecord(log.chunks, report.skill);
+  const record = buildReportChunkRecord(
+    log,
+    report,
+    Date.now() - log.startTime,
+    undefined,
+    undefined,
+    undefined,
+    !hasExistingSkillChunks,
+  );
   let line: string;
   try {
     line = renderJsonlChunkLine(record);
@@ -530,7 +546,7 @@ export function buildFinalChunkRecords(
     ...chunkRecords,
     ...postProcessingUsageRecords,
     ...missingReports.map((report) => {
-      const hasExistingSkillChunks = chunkRecords.some((chunk) => chunk.skill === report.skill);
+      const hasExistingSkillChunks = hasSkillChunkRecord(chunkRecords, report.skill);
       return buildReportChunkRecord(log, report, totalDurationMs, undefined, undefined, error, !hasExistingSkillChunks);
     }),
   ];
