@@ -186,9 +186,6 @@
             "$ref": "#/$defs/Location"
           }
         },
-        "suggestedFix": {
-          "$ref": "#/$defs/SuggestedFix"
-        },
         "sourceSnippet": {
           "type": "object",
           "properties": {
@@ -286,22 +283,6 @@
       "required": [
         "path",
         "startLine"
-      ],
-      "additionalProperties": false
-    },
-    "SuggestedFix": {
-      "type": "object",
-      "properties": {
-        "description": {
-          "type": "string"
-        },
-        "diff": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "description",
-        "diff"
       ],
       "additionalProperties": false
     },
