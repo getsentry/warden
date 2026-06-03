@@ -6,7 +6,7 @@ import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics } from
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
-import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage } from './usage.js';
+import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
 import { postProcessFindings } from './post-process.js';
@@ -544,7 +544,12 @@ async function analyzeHunk(
             extractionError: parseResult.extractionError,
             extractionPreview: parseResult.extractionPreview,
             auxiliaryUsage: parseResult.extractionUsage
-              ? [{ agent: 'extraction', usage: parseResult.extractionUsage }]
+              ? [{
+                  agent: 'extraction',
+                  usage: parseResult.extractionUsage,
+                  model: options.auxiliaryModel,
+                  runtime: runtimeName,
+                }]
               : undefined,
             trace: buildHunkTrace({
               enabled: options.captureTraces,
@@ -1203,6 +1208,10 @@ async function runSkillAnalysis(
   const auxUsage = aggregateAuxiliaryUsage(allAuxiliaryUsage);
   if (auxUsage) {
     report.auxiliaryUsage = auxUsage;
+  }
+  const auxAttribution = aggregateAuxiliaryUsageAttribution(allAuxiliaryUsage);
+  if (auxAttribution) {
+    report.auxiliaryUsageAttribution = auxAttribution;
   }
   return report;
 }

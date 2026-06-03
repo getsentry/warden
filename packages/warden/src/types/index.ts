@@ -167,9 +167,19 @@ export const UsageStatsSchema = z.object({
 });
 export type UsageStats = z.infer<typeof UsageStatsSchema>;
 
+export const UsageAttributionSchema = z.object({
+  model: z.string().optional(),
+  models: z.array(z.string()).optional(),
+  runtime: z.string().optional(),
+  runtimes: z.array(z.string()).optional(),
+});
+export type UsageAttribution = z.infer<typeof UsageAttributionSchema>;
+
 // Auxiliary usage from non-SDK LLM calls (extraction repair, semantic dedup, etc.)
 export const AuxiliaryUsageMapSchema = z.record(z.string(), UsageStatsSchema);
 export type AuxiliaryUsageMap = z.infer<typeof AuxiliaryUsageMapSchema>;
+export const AuxiliaryUsageAttributionMapSchema = z.record(z.string(), UsageAttributionSchema);
+export type AuxiliaryUsageAttributionMap = z.infer<typeof AuxiliaryUsageAttributionMapSchema>;
 
 // Skipped file info for chunking
 export const SkippedFileSchema = z.object({
@@ -329,6 +339,8 @@ export const SkillReportSchema = z.object({
   error: SkillErrorSchema.optional(),
   /** Usage from auxiliary LLM calls (extraction repair, semantic dedup, etc.) */
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+  /** Model/runtime attribution for auxiliary LLM usage, keyed like auxiliaryUsage */
+  auxiliaryUsageAttribution: AuxiliaryUsageAttributionMapSchema.optional(),
   /** Per-file breakdown of findings, timing, and usage */
   files: z.array(FileReportSchema).optional(),
   /** Model used for this skill's analysis */

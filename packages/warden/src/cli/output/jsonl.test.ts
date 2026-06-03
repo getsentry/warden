@@ -12,6 +12,7 @@ import {
   readJsonlLog,
   parseJsonlReports,
   parseLogMetadata,
+  JsonlUsageBreakdownSchema,
   JsonlChunkRecordSchema,
   JsonlRecordSchema,
   JsonlSummaryRecordSchema,
@@ -22,6 +23,8 @@ import {
   renderJsonlSkillLine,
   renderJsonlSummaryLine,
   buildRunMetadata,
+  buildJsonlUsageBreakdown,
+  parseJsonlChunkRecord,
   initJsonlFile,
   appendJsonlLine,
   type JsonlChunkRecord,
@@ -174,11 +177,13 @@ describe('writeJsonlReport', () => {
     const lines = content.trim().split('\n');
     const summary = JSON.parse(lines[2]!);
 
-    expect(summary.usage.inputTokens).toBe(300);
-    expect(summary.usage.outputTokens).toBe(150);
-    expect(summary.usage.cacheReadInputTokens).toBe(30);
-    expect(summary.usage.cacheCreationInputTokens).toBe(15);
-    expect(summary.usage.costUSD).toBeCloseTo(0.003);
+    expect(summary.usage).toBeUndefined();
+    expect(summary.usageBreakdown.scan.usage.inputTokens).toBe(300);
+    expect(summary.usageBreakdown.scan.usage.outputTokens).toBe(150);
+    expect(summary.usageBreakdown.scan.usage.cacheReadInputTokens).toBe(30);
+    expect(summary.usageBreakdown.scan.usage.cacheCreationInputTokens).toBe(15);
+    expect(summary.usageBreakdown.scan.usage.costUSD).toBeCloseTo(0.003);
+    expect(summary.usageBreakdown.total.usage.costUSD).toBeCloseTo(0.003);
   });
 
   it('creates parent directories if they do not exist', () => {
@@ -338,6 +343,11 @@ describe('writeJsonlReport', () => {
         summary: 'Done',
         findings: [],
         usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 },
+        model: 'scan-model-1',
+        runtime: 'pi',
+        auxiliaryUsageAttribution: {
+          extraction: { model: 'extract-model', runtime: 'pi' },
+        },
         auxiliaryUsage: {
           extraction: { inputTokens: 20, outputTokens: 10, costUSD: 0.0001 },
         },
@@ -347,6 +357,11 @@ describe('writeJsonlReport', () => {
         summary: 'Done',
         findings: [],
         usage: { inputTokens: 200, outputTokens: 100, costUSD: 0.002 },
+        model: 'scan-model-2',
+        runtime: 'pi',
+        auxiliaryUsageAttribution: {
+          extraction: { model: 'extract-model', runtime: 'pi' },
+        },
         auxiliaryUsage: {
           extraction: { inputTokens: 30, outputTokens: 15, costUSD: 0.0002 },
         },
@@ -357,12 +372,21 @@ describe('writeJsonlReport', () => {
 
     const content = readFileSync(outputPath, 'utf-8');
     const lines = content.trim().split('\n');
+    const firstRecord = JSON.parse(lines[0]!);
     const summary = JSON.parse(lines[2]!);
 
-    expect(summary.auxiliaryUsage).toBeDefined();
-    expect(summary.auxiliaryUsage.extraction.inputTokens).toBe(50);
-    expect(summary.auxiliaryUsage.extraction.outputTokens).toBe(25);
-    expect(summary.auxiliaryUsage.extraction.costUSD).toBeCloseTo(0.0003);
+    expect(firstRecord.usageBreakdown.scan.usage.costUSD).toBeCloseTo(0.001);
+    expect(firstRecord.usageBreakdown.scan.model).toBe('scan-model-1');
+    expect(firstRecord.usageBreakdown.auxiliary.extraction.usage.costUSD).toBeCloseTo(0.0001);
+    expect(firstRecord.usageBreakdown.auxiliary.extraction.model).toBe('extract-model');
+    expect(firstRecord.usageBreakdown.total.usage.costUSD).toBeCloseTo(0.0011);
+    expect(summary.auxiliaryUsage).toBeUndefined();
+    expect(summary.usageBreakdown.scan.usage.costUSD).toBeCloseTo(0.003);
+    expect(summary.usageBreakdown.scan.models).toEqual(['scan-model-1', 'scan-model-2']);
+    expect(summary.usageBreakdown.auxiliary.extraction.usage.costUSD).toBeCloseTo(0.0003);
+    expect(summary.usageBreakdown.auxiliary.extraction.model).toBe('extract-model');
+    expect(summary.usageBreakdown.total.usage.costUSD).toBeCloseTo(0.0033);
+    expect(summary.usageBreakdown.total.models).toEqual(['extract-model', 'scan-model-1', 'scan-model-2']);
   });
 
   it('omits auxiliary usage from summary when none present', () => {
@@ -383,6 +407,7 @@ describe('writeJsonlReport', () => {
     const summary = JSON.parse(lines[1]!);
 
     expect(summary.auxiliaryUsage).toBeUndefined();
+    expect(summary.usageBreakdown.auxiliary).toBeUndefined();
   });
 
   it('counts findings by severity in summary', () => {
@@ -602,6 +627,84 @@ describe('parseLogMetadata', () => {
   });
 });
 
+describe('renderJsonlChunkLine', () => {
+  it('requires total usage when a detailed usage breakdown is present', () => {
+    const result = JsonlUsageBreakdownSchema.safeParse({
+      scan: { usage: { inputTokens: 1000, outputTokens: 100, costUSD: 5 } },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('requires detailed usage breakdown totals to match their components', () => {
+    const result = JsonlUsageBreakdownSchema.safeParse({
+      scan: { usage: { inputTokens: 1000, outputTokens: 100, costUSD: 5 } },
+      auxiliary: {
+        verification: { usage: { inputTokens: 200, outputTokens: 20, costUSD: 1.5 } },
+      },
+      total: { usage: { inputTokens: 1200, outputTokens: 120, costUSD: 5 } },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('renders detailed usage breakdown as the only usage field', () => {
+    const run = buildRunMetadata({ runId: 'usage-breakdown', durationMs: 100 });
+    const usageBreakdown = buildJsonlUsageBreakdown(
+      { inputTokens: 1000, outputTokens: 100, costUSD: 5 },
+      { verification: { inputTokens: 200, outputTokens: 20, costUSD: 1.5 } },
+      { scan: { model: 'scan-model' } },
+    );
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'security-review',
+      model: 'scan-model',
+      chunk: { file: 'src/api.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [],
+      usageBreakdown,
+      durationMs: 100,
+    };
+
+    const rendered = JSON.parse(renderJsonlChunkLine(chunk)) as JsonlChunkRecord & {
+      usage?: unknown;
+      auxiliaryUsage?: unknown;
+    };
+
+    expect(rendered.usage).toBeUndefined();
+    expect(rendered.auxiliaryUsage).toBeUndefined();
+    expect(rendered.usageBreakdown?.scan?.usage.costUSD).toBe(5);
+    expect(rendered.usageBreakdown?.scan?.model).toBe('scan-model');
+    expect(rendered.usageBreakdown?.auxiliary?.['verification']?.usage.costUSD).toBe(1.5);
+    expect(rendered.usageBreakdown?.total.usage.inputTokens).toBe(1200);
+    expect(rendered.usageBreakdown?.total.usage.outputTokens).toBe(120);
+    expect(rendered.usageBreakdown?.total.usage.costUSD).toBeCloseTo(6.5);
+  });
+
+  it('normalizes legacy chunk usage fields while parsing old logs', () => {
+    const run = buildRunMetadata({ runId: 'legacy-usage', durationMs: 100 });
+    const chunk = parseJsonlChunkRecord({
+      schemaVersion: 1,
+      run,
+      skill: 'security-review',
+      model: 'scan-model',
+      chunk: { file: 'src/api.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [],
+      usage: { inputTokens: 1000, outputTokens: 100, costUSD: 5 },
+      auxiliaryUsage: {
+        verification: { inputTokens: 200, outputTokens: 20, costUSD: 1.5 },
+      },
+      durationMs: 100,
+    });
+
+    expect(chunk?.usageBreakdown?.scan?.usage.costUSD).toBe(5);
+    expect(chunk?.usageBreakdown?.auxiliary?.['verification']?.usage.costUSD).toBe(1.5);
+    expect(chunk?.usageBreakdown?.total.usage.costUSD).toBeCloseTo(6.5);
+  });
+});
+
 describe('parseJsonlReports', () => {
   it('reconstructs SkillReport from JSONL content', () => {
     // Sample JSONL content that matches what would be written by renderJsonlString
@@ -647,7 +750,7 @@ describe('parseJsonlReports', () => {
     expect(result.runMetadata?.runId).toBe('empty-123');
   });
 
-  it('reconstructs skill reports from homogeneous chunk records', () => {
+  it('reconstructs skill reports from chunk records', () => {
     const run = buildRunMetadata({
       runId: 'chunk-123',
       durationMs: 100,
@@ -664,7 +767,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: 'src/api.ts', index: 1, total: 2, lineRange: '10-20' },
         status: 'ok',
         findings: [{ id: 'sec-001', severity: 'high', title: 'SQL Injection', description: 'Unsafe query' }],
-        usage: { inputTokens: 1000, outputTokens: 500, costUSD: 0.01 },
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 1000, outputTokens: 500, costUSD: 0.01 }, undefined),
         durationMs: 1200,
       },
       {
@@ -675,7 +778,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: 'src/api.ts', index: 2, total: 2, lineRange: '21-30' },
         status: 'ok',
         findings: [],
-        usage: { inputTokens: 800, outputTokens: 200, costUSD: 0.005 },
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 800, outputTokens: 200, costUSD: 0.005 }, undefined),
         durationMs: 900,
       },
     ];
@@ -717,7 +820,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: 'src/api.ts', index: 1, total: 2, lineRange: '10-20' },
         status: 'error',
         findings: [],
-        usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 100, outputTokens: 10, costUSD: 0.001 }, undefined),
         durationMs: 100,
         error: { code: 'extraction_invalid_json', message: 'bad json' },
       },
@@ -728,7 +831,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: 'src/api.ts', index: 2, total: 2, lineRange: '21-30' },
         status: 'error',
         findings: [],
-        usage: { inputTokens: 200, outputTokens: 20, costUSD: 0.002 },
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 200, outputTokens: 20, costUSD: 0.002 }, undefined),
         durationMs: 200,
         error: { code: 'sdk_error', message: 'sdk failed' },
       },
@@ -739,7 +842,7 @@ describe('parseJsonlReports', () => {
         chunk: { file: '', index: 1, total: 1, lineRange: '' },
         status: 'error',
         findings: [],
-        usage: { inputTokens: 300, outputTokens: 30, costUSD: 0.003 },
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 300, outputTokens: 30, costUSD: 0.003 }, undefined),
         durationMs: 300,
         error: { code: 'all_hunks_failed', message: 'All chunks failed.' },
       },

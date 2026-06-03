@@ -1,4 +1,4 @@
-import type { UsageStats, AuxiliaryUsageMap } from '../types/index.js';
+import type { UsageStats, AuxiliaryUsageMap, AuxiliaryUsageAttributionMap, UsageAttribution } from '../types/index.js';
 import type { AuxiliaryUsageEntry } from './types.js';
 
 export interface RuntimeUsageResult {
@@ -106,6 +106,112 @@ export function aggregateAuxiliaryUsage(
   }
 
   return map;
+}
+
+function uniqueSorted(values: (string | undefined)[]): string[] | undefined {
+  const unique = [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
+  return unique.length > 0 ? unique : undefined;
+}
+
+function attributionFromEntries(entries: AuxiliaryUsageEntry[]): UsageAttribution | undefined {
+  const models = uniqueSorted(entries.map((entry) => entry.model));
+  const runtimes = uniqueSorted(entries.map((entry) => entry.runtime));
+  if (!models && !runtimes) return undefined;
+  return {
+    model: models?.length === 1 ? models[0] : undefined,
+    models: models && models.length > 1 ? models : undefined,
+    runtime: runtimes?.length === 1 ? runtimes[0] : undefined,
+    runtimes: runtimes && runtimes.length > 1 ? runtimes : undefined,
+  };
+}
+
+function attributionValues(attribution: UsageAttribution | undefined): {
+  models: string[];
+  runtimes: string[];
+} {
+  return {
+    models: [
+      ...(attribution?.model ? [attribution.model] : []),
+      ...(attribution?.models ?? []),
+    ],
+    runtimes: [
+      ...(attribution?.runtime ? [attribution.runtime] : []),
+      ...(attribution?.runtimes ?? []),
+    ],
+  };
+}
+
+function mergeAttribution(a: UsageAttribution | undefined, b: UsageAttribution | undefined): UsageAttribution | undefined {
+  const aValues = attributionValues(a);
+  const bValues = attributionValues(b);
+  const models = uniqueSorted([...aValues.models, ...bValues.models]);
+  const runtimes = uniqueSorted([...aValues.runtimes, ...bValues.runtimes]);
+  if (!models && !runtimes) return undefined;
+  return {
+    model: models?.length === 1 ? models[0] : undefined,
+    models: models && models.length > 1 ? models : undefined,
+    runtime: runtimes?.length === 1 ? runtimes[0] : undefined,
+    runtimes: runtimes && runtimes.length > 1 ? runtimes : undefined,
+  };
+}
+
+function normalizeAttributionMap(map: AuxiliaryUsageAttributionMap | undefined): AuxiliaryUsageAttributionMap | undefined {
+  if (!map) return undefined;
+  const normalized: AuxiliaryUsageAttributionMap = {};
+  for (const [agent, attribution] of Object.entries(map)) {
+    const next = mergeAttribution(undefined, attribution);
+    if (next) {
+      normalized[agent] = next;
+    }
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+/**
+ * Aggregate auxiliary usage model/runtime attribution by agent name.
+ */
+export function aggregateAuxiliaryUsageAttribution(
+  entries: AuxiliaryUsageEntry[]
+): AuxiliaryUsageAttributionMap | undefined {
+  const byAgent = new Map<string, AuxiliaryUsageEntry[]>();
+  for (const entry of entries) {
+    const agentEntries = byAgent.get(entry.agent) ?? [];
+    agentEntries.push(entry);
+    byAgent.set(entry.agent, agentEntries);
+  }
+
+  const map: AuxiliaryUsageAttributionMap = {};
+  for (const [agent, agentEntries] of byAgent) {
+    const attribution = attributionFromEntries(agentEntries);
+    if (attribution) {
+      map[agent] = attribution;
+    }
+  }
+
+  return Object.keys(map).length > 0 ? map : undefined;
+}
+
+/**
+ * Merge two auxiliary usage attribution maps.
+ */
+export function mergeAuxiliaryUsageAttribution(
+  a: AuxiliaryUsageAttributionMap | undefined,
+  b: AuxiliaryUsageAttributionMap | undefined
+): AuxiliaryUsageAttributionMap | undefined {
+  const left = normalizeAttributionMap(a);
+  const right = normalizeAttributionMap(b);
+  if (!left && !right) return undefined;
+  if (!left) return right;
+  if (!right) return left;
+
+  const merged: AuxiliaryUsageAttributionMap = { ...left };
+  for (const [agent, attribution] of Object.entries(right)) {
+    const next = mergeAttribution(merged[agent], attribution);
+    if (next) {
+      merged[agent] = next;
+    }
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 /**

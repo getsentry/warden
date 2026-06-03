@@ -15,10 +15,23 @@ import {
   resolveCliDefaultModel,
   resolveCliLogModel,
   resolveCliEffort,
+  buildFinalChunkRecords,
+  renderFinalRunLogContent,
+  type RunLog,
   type RunSkillSpec,
 } from './main.js';
-import { MODEL_DEFAULT_SENTINEL, Reporter, Verbosity } from './output/index.js';
-import type { SkillReport } from '../types/index.js';
+import {
+  MODEL_DEFAULT_SENTINEL,
+  Reporter,
+  Verbosity,
+  buildRunMetadata,
+  buildJsonlUsageBreakdown,
+  parseJsonlReports,
+  renderJsonlChunkRecords,
+  totalUsageCost,
+  type JsonlChunkRecord,
+} from './output/index.js';
+import type { SkillReport, UsageStats } from '../types/index.js';
 
 const tempDirs: string[] = [];
 
@@ -37,6 +50,10 @@ function makeReport(overrides: Partial<SkillReport> = {}): SkillReport {
     findings: [],
     ...overrides,
   };
+}
+
+function makeUsage(inputTokens: number, outputTokens: number, costUSD: number): UsageStats {
+  return { inputTokens, outputTokens, costUSD };
 }
 
 function createTestReporter(): Reporter {
@@ -66,6 +83,144 @@ function createCliOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     ...overrides,
   };
 }
+
+describe('buildFinalChunkRecords', () => {
+  it('adds missing post-processing auxiliary usage without double-counting chunk auxiliary usage', () => {
+    const run = buildRunMetadata({
+      runId: 'run-1',
+      durationMs: 100,
+      timestamp: new Date('2026-06-03T00:00:00.000Z'),
+      cwd: '/repo',
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'skill-a',
+      model: 'scan-model',
+      chunk: {
+        file: 'src/app.ts',
+        index: 1,
+        total: 1,
+        lineRange: '10-20',
+      },
+      status: 'ok',
+      findings: [],
+      usageBreakdown: buildJsonlUsageBreakdown(
+        makeUsage(1000, 100, 5),
+        { extraction: makeUsage(100, 10, 0.5) },
+        {
+          scan: { model: 'scan-model' },
+          auxiliary: { extraction: { model: 'extract-model' } },
+        },
+      ),
+      durationMs: 100,
+    };
+    const log: RunLog = {
+      paths: [],
+      primaryLogPath: '/repo/.warden/logs/run.jsonl',
+      primaryLogWritten: true,
+      outputPath: undefined,
+      startTime: 0,
+      baseRun: run,
+      chunks: [chunk],
+    };
+    const report = makeReport({
+      model: 'scan-model',
+      usage: makeUsage(1000, 100, 5),
+      auxiliaryUsage: {
+        extraction: makeUsage(100, 10, 0.5),
+        verification: makeUsage(200, 20, 1.5),
+        merge: makeUsage(30, 5, 0.2),
+        fix_gate: makeUsage(40, 6, 0.3),
+      },
+      auxiliaryUsageAttribution: {
+        extraction: { model: 'extract-model' },
+        verification: { model: 'verify-model' },
+        merge: { model: 'merge-model' },
+        fix_gate: { model: 'verify-model' },
+      },
+    });
+
+    const records = buildFinalChunkRecords(log, [report], 1000);
+
+    expect(records).toHaveLength(2);
+    expect(records[0]!.usageBreakdown?.scan?.usage.costUSD).toBe(5);
+    expect(records[0]!.usageBreakdown?.scan?.model).toBe('scan-model');
+    expect(records[0]!.usageBreakdown?.auxiliary?.['extraction']?.usage.costUSD).toBe(0.5);
+    expect(records[0]!.usageBreakdown?.total.usage.costUSD).toBeCloseTo(5.5);
+
+    const postProcessing = records[1]!;
+    expect(postProcessing.chunk.file).toBe('');
+    expect(postProcessing.chunk.lineRange).toBe('post-processing');
+    expect(postProcessing.usageBreakdown?.scan).toBeUndefined();
+    expect(postProcessing.usageBreakdown?.auxiliary?.['extraction']).toBeUndefined();
+    expect(postProcessing.usageBreakdown?.auxiliary?.['verification']?.usage.costUSD).toBe(1.5);
+    expect(postProcessing.usageBreakdown?.auxiliary?.['merge']?.usage.costUSD).toBe(0.2);
+    expect(postProcessing.usageBreakdown?.auxiliary?.['fix_gate']?.usage.costUSD).toBe(0.3);
+    expect(postProcessing.usageBreakdown?.auxiliary?.['verification']?.model).toBe('verify-model');
+    expect(postProcessing.usageBreakdown?.auxiliary?.['merge']?.model).toBe('merge-model');
+    expect(postProcessing.usageBreakdown?.total.usage.costUSD).toBeCloseTo(2);
+
+    const parsed = parseJsonlReports(renderJsonlChunkRecords(records));
+    expect(parsed.reports).toHaveLength(1);
+    expect(parsed.reports[0]!.usage?.costUSD).toBe(5);
+    expect(parsed.reports[0]!.auxiliaryUsage?.['extraction']?.costUSD).toBe(0.5);
+    expect(parsed.reports[0]!.auxiliaryUsage?.['verification']?.costUSD).toBe(1.5);
+    expect(parsed.reports[0]!.auxiliaryUsage?.['merge']?.costUSD).toBe(0.2);
+    expect(parsed.reports[0]!.auxiliaryUsage?.['fix_gate']?.costUSD).toBe(0.3);
+    expect(totalUsageCost(parsed.reports[0]!.usage, parsed.reports[0]!.auxiliaryUsage)).toBeCloseTo(7.5);
+  });
+
+  it('renders finalized content with a trailing run summary usage breakdown', () => {
+    const run = buildRunMetadata({
+      runId: 'run-summary',
+      durationMs: 100,
+      timestamp: new Date('2026-06-03T00:00:00.000Z'),
+      cwd: '/repo',
+    });
+    const log: RunLog = {
+      paths: [],
+      primaryLogPath: '/repo/.warden/logs/run.jsonl',
+      primaryLogWritten: true,
+      outputPath: undefined,
+      startTime: 0,
+      baseRun: run,
+      chunks: [{
+        schemaVersion: 1,
+        run,
+        skill: 'skill-a',
+        chunk: { file: 'src/app.ts', index: 1, total: 1, lineRange: '10-20' },
+        status: 'ok',
+        findings: [],
+        usageBreakdown: buildJsonlUsageBreakdown(makeUsage(1000, 100, 5), undefined),
+        durationMs: 100,
+      }],
+    };
+    const report = makeReport({
+      usage: makeUsage(1000, 100, 5),
+      auxiliaryUsage: {
+        verification: makeUsage(200, 20, 1.5),
+      },
+      auxiliaryUsageAttribution: {
+        verification: { model: 'verify-model' },
+      },
+    });
+
+    const lines = renderFinalRunLogContent(log, [report], 1000).trim().split('\n');
+    const summary = JSON.parse(lines[lines.length - 1]!) as {
+      type: string;
+      usageBreakdown?: {
+        auxiliary?: Record<string, { model?: string }>;
+        total: { usage: UsageStats };
+      };
+    };
+
+    expect(lines).toHaveLength(3);
+    expect(summary.type).toBe('summary');
+    expect(summary.usageBreakdown?.auxiliary?.['verification']?.model).toBe('verify-model');
+    expect(summary.usageBreakdown?.total.usage.costUSD).toBeCloseTo(6.5);
+  });
+});
 
 describe('createSkillTasks', () => {
   it('resolves explicit built-in skills from the package after repo-local paths', async () => {

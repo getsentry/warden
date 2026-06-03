@@ -27,6 +27,8 @@ import {
   JsonlFixEvaluationRecordSchema,
   JsonlRunMetadataSchema,
   JsonlFixEvalDetailSchema,
+  JsonlUsageBreakdownEntrySchema,
+  JsonlUsageBreakdownSchema,
 } from './jsonl.js';
 
 /**
@@ -48,6 +50,8 @@ export function buildJsonlJsonSchema(): Record<string, unknown> {
   registry.add(TraceSpanSchema, { id: 'TraceSpan' });
   registry.add(HunkTraceSchema, { id: 'HunkTrace' });
   registry.add(JsonlRunMetadataSchema, { id: 'RunMetadata' });
+  registry.add(JsonlUsageBreakdownEntrySchema, { id: 'UsageBreakdownEntry' });
+  registry.add(JsonlUsageBreakdownSchema, { id: 'UsageBreakdown' });
   registry.add(JsonlFixEvalDetailSchema, { id: 'FixEvalDetail' });
   registry.add(JsonlChunkRecordSchema, { id: 'ChunkRecord' });
   registry.add(JsonlRecordSchema, { id: 'SkillRecord' });
@@ -74,6 +78,16 @@ export function buildJsonlJsonSchema(): Record<string, unknown> {
     for (const def of Object.values(defs)) {
       delete def['id'];
     }
+    // Zod refinements do not fully project into JSON Schema. Keep the
+    // formal schema aligned with the UsageBreakdown contract that a
+    // breakdown always has at least one detailed component plus total.
+    const usageBreakdown = defs['UsageBreakdown'];
+    if (usageBreakdown) {
+      usageBreakdown['anyOf'] = [
+        { required: ['scan'] },
+        { required: ['auxiliary'] },
+      ];
+    }
   }
 
   return {
@@ -81,7 +95,7 @@ export function buildJsonlJsonSchema(): Record<string, unknown> {
     $id: 'https://warden.dev/schemas/jsonl-v1.json',
     title: 'Warden JSONL Output',
     description:
-      'Schema for a single line in Warden\'s JSONL output. New run logs are homogeneous chunk records; legacy skill, summary, and fix-evaluation records remain parseable. Generated from packages/warden/src/cli/output/jsonl-schema-gen.ts — do not edit by hand.',
+      'Schema for a single line in Warden\'s JSONL output. Finalized run logs contain chunk records plus a summary record; legacy skill and fix-evaluation records remain parseable. Generated from packages/warden/src/cli/output/jsonl-schema-gen.ts — do not edit by hand.',
     ...generated,
   };
 }

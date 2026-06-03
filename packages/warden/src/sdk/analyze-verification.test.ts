@@ -93,6 +93,7 @@ describe('runSkill verification', () => {
     expect(report.findings).toEqual([]);
     expect(report.files?.[0]?.findings).toBe(0);
     expect(report.auxiliaryUsage?.['verification']).toEqual(makeUsage());
+    expect(report.auxiliaryUsageAttribution?.['verification']?.model).toBe('claude-haiku-4-5');
     expect(verifyFindings).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({ model: 'claude-haiku-4-5' })

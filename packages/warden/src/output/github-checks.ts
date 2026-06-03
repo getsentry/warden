@@ -1,7 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
 import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
-import { formatDuration, formatCost, formatTokens, totalUsageCost } from '../cli/output/formatters.js';
+import { formatDuration, formatCost, formatTokens, totalUsageCost, totalUsageStats } from '../cli/output/formatters.js';
 import { escapeHtml } from '../utils/index.js';
 
 /**
@@ -389,18 +389,16 @@ function renderStatsFooter(
   usage: UsageStats | undefined,
   auxiliaryUsage: AuxiliaryUsageMap | undefined
 ): string[] {
-  const cost = totalUsageCost(usage, auxiliaryUsage);
-  if (durationMs === undefined && !usage && cost === undefined) return [];
+  const total = totalUsageStats(usage, auxiliaryUsage);
+  if (durationMs === undefined && !total) return [];
 
   const parts: string[] = [];
   if (durationMs !== undefined) {
     parts.push(`⏱ ${formatDuration(durationMs)}`);
   }
-  if (usage) {
-    parts.push(`${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
-  }
-  if (cost !== undefined) {
-    parts.push(`${formatCost(cost)}`);
+  if (total) {
+    parts.push(`${formatTokens(total.inputTokens)} in / ${formatTokens(total.outputTokens)} out`);
+    parts.push(formatCost(total.costUSD));
   }
 
   return ['---', `<sub>${parts.join(' · ')}</sub>`];

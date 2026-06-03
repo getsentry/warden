@@ -18,4 +18,31 @@ describe('jsonl-schema-gen', () => {
     }
     expect(regenerated).toBe(committed);
   });
+
+  it('keeps usage breakdown totals strict in the generated schema', () => {
+    const schema = JSON.parse(renderJsonlJsonSchema()) as {
+      $defs?: Record<string, {
+        properties?: Record<string, unknown>;
+        required?: string[];
+        anyOf?: { required?: string[] }[];
+      }>;
+    };
+    const usageBreakdown = schema.$defs?.['UsageBreakdown'];
+    const usageBreakdownEntry = schema.$defs?.['UsageBreakdownEntry'];
+    const chunkRecord = schema.$defs?.['ChunkRecord'];
+    const summaryRecord = schema.$defs?.['SummaryRecord'];
+
+    expect(usageBreakdownEntry?.required).toContain('usage');
+    expect(usageBreakdown?.required).toContain('total');
+    expect(usageBreakdown?.anyOf).toEqual([
+      { required: ['scan'] },
+      { required: ['auxiliary'] },
+    ]);
+    expect(chunkRecord?.properties).toHaveProperty('usageBreakdown');
+    expect(chunkRecord?.properties).not.toHaveProperty('usage');
+    expect(chunkRecord?.properties).not.toHaveProperty('auxiliaryUsage');
+    expect(summaryRecord?.properties).toHaveProperty('usageBreakdown');
+    expect(summaryRecord?.properties).not.toHaveProperty('usage');
+    expect(summaryRecord?.properties).not.toHaveProperty('auxiliaryUsage');
+  });
 });

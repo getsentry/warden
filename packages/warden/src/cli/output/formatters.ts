@@ -257,12 +257,50 @@ export function formatCost(costUSD: number): string {
 }
 
 /**
+ * Calculate total usage across primary and auxiliary calls.
+ */
+export function totalUsageStats(usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): UsageStats | undefined {
+  const hasAuxiliaryUsage = auxiliaryUsage !== undefined && Object.keys(auxiliaryUsage).length > 0;
+  if (!usage && !hasAuxiliaryUsage) return undefined;
+
+  const total: UsageStats = {
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0,
+    costUSD: usage?.costUSD ?? 0,
+  };
+
+  const addOptional = (key: keyof Omit<UsageStats, 'inputTokens' | 'outputTokens' | 'costUSD'>, value: number | undefined): void => {
+    if (value === undefined && total[key] === undefined) return;
+    total[key] = (total[key] ?? 0) + (value ?? 0);
+  };
+
+  if (usage) {
+    addOptional('cacheReadInputTokens', usage.cacheReadInputTokens);
+    addOptional('cacheCreationInputTokens', usage.cacheCreationInputTokens);
+    addOptional('cacheCreation5mInputTokens', usage.cacheCreation5mInputTokens);
+    addOptional('cacheCreation1hInputTokens', usage.cacheCreation1hInputTokens);
+    addOptional('webSearchRequests', usage.webSearchRequests);
+  }
+
+  for (const auxiliary of Object.values(auxiliaryUsage ?? {})) {
+    total.inputTokens += auxiliary.inputTokens;
+    total.outputTokens += auxiliary.outputTokens;
+    total.costUSD += auxiliary.costUSD;
+    addOptional('cacheReadInputTokens', auxiliary.cacheReadInputTokens);
+    addOptional('cacheCreationInputTokens', auxiliary.cacheCreationInputTokens);
+    addOptional('cacheCreation5mInputTokens', auxiliary.cacheCreation5mInputTokens);
+    addOptional('cacheCreation1hInputTokens', auxiliary.cacheCreation1hInputTokens);
+    addOptional('webSearchRequests', auxiliary.webSearchRequests);
+  }
+
+  return total;
+}
+
+/**
  * Calculate total cost across primary and auxiliary usage.
  */
 export function totalUsageCost(usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): number | undefined {
-  const hasAuxiliaryUsage = auxiliaryUsage !== undefined && Object.keys(auxiliaryUsage).length > 0;
-  if (!usage && !hasAuxiliaryUsage) return undefined;
-  return (usage?.costUSD ?? 0) + (auxiliaryUsage ? totalAuxiliaryCost(auxiliaryUsage) : 0);
+  return totalUsageStats(usage, auxiliaryUsage)?.costUSD;
 }
 
 /**
@@ -282,9 +320,10 @@ export function formatTokens(tokens: number): string {
  * Format usage stats for terminal display.
  */
 export function formatUsage(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
-  const inputStr = formatTokens(usage.inputTokens);
-  const outputStr = formatTokens(usage.outputTokens);
-  const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
+  const total = totalUsageStats(usage, auxiliaryUsage) ?? usage;
+  const inputStr = formatTokens(total.inputTokens);
+  const outputStr = formatTokens(total.outputTokens);
+  const costStr = formatCost(total.costUSD);
   return `${inputStr} in / ${outputStr} out · ${costStr}`;
 }
 
@@ -292,9 +331,10 @@ export function formatUsage(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMa
  * Format usage stats for plain text display.
  */
 export function formatUsagePlain(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
-  const inputStr = formatTokens(usage.inputTokens);
-  const outputStr = formatTokens(usage.outputTokens);
-  const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
+  const total = totalUsageStats(usage, auxiliaryUsage) ?? usage;
+  const inputStr = formatTokens(total.inputTokens);
+  const outputStr = formatTokens(total.outputTokens);
+  const costStr = formatCost(total.costUSD);
   return `${inputStr} input, ${outputStr} output, ${costStr}`;
 }
 
@@ -305,33 +345,30 @@ export function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
   return Object.values(auxiliaryUsage).reduce((sum, u) => sum + u.costUSD, 0);
 }
 
-
-
 /**
  * Format stats (duration, tokens, cost) into a compact single-line format.
  * Used for markdown footers in PR comments and check annotations.
  *
- * When auxiliaryUsage is provided, the cost shown is primary + auxiliary total,
- * with a breakdown suffix showing per-agent auxiliary costs.
+ * When auxiliaryUsage is provided, tokens and cost are primary + auxiliary totals.
  *
  * @example formatStatsCompact(15800, { inputTokens: 3000, outputTokens: 680, costUSD: 0.0048 })
  * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.00"
  *
- * @example formatStatsCompact(15800, usage, { extraction: { ... costUSD: 0.001 } })
- * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.01 (+extraction: $0.00)"
+ * @example formatStatsCompact(15800, usage, { extraction: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 } })
+ * // Returns: "⏱ 15.8s · 3.1k in / 730 out · $0.01"
  */
 export function formatStatsCompact(durationMs?: number, usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
   const parts: string[] = [];
+  const total = totalUsageStats(usage, auxiliaryUsage);
 
   if (durationMs !== undefined) {
     parts.push(`⏱ ${formatDuration(durationMs)}`);
   }
 
-  if (usage) {
-    parts.push(`${formatTokens(usage.inputTokens)} in / ${formatTokens(usage.outputTokens)} out`);
+  if (total) {
+    parts.push(`${formatTokens(total.inputTokens)} in / ${formatTokens(total.outputTokens)} out`);
 
-    const costStr = formatCost(totalUsageCost(usage, auxiliaryUsage) ?? 0);
-    parts.push(`${costStr}`);
+    parts.push(formatCost(total.costUSD));
   }
 
   return parts.join(' · ');

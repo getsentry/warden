@@ -14,10 +14,30 @@ import {
   SkippedFileSchema,
   HunkTraceSchema,
 } from '../../types/index.js';
-import type { SkillReport, UsageStats, AuxiliaryUsageMap, SkillError, Finding, FileReport, HunkFailure } from '../../types/index.js';
-import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
+import type { SkillReport, UsageStats, AuxiliaryUsageMap, AuxiliaryUsageAttributionMap, SkillError, Finding, FileReport, HunkFailure } from '../../types/index.js';
+import { mergeAuxiliaryUsage, mergeAuxiliaryUsageAttribution } from '../../sdk/usage.js';
 import { logger } from '../../sentry.js';
 import { countBySeverity } from './formatters.js';
+import {
+  JsonlUsageBreakdownSchema,
+  aggregateReportAuxiliaryUsageAttribution,
+  aggregateUsageStatsPreservingOptional,
+  auxiliaryUsageAttributionFromBreakdown,
+  auxiliaryUsageFromBreakdown,
+  buildJsonlUsageBreakdown,
+  scanUsageFromBreakdown,
+  usageAttributionFromReports,
+} from './usage-breakdown.js';
+export {
+  JsonlUsageBreakdownEntrySchema,
+  JsonlUsageBreakdownSchema,
+  auxiliaryUsageFromBreakdown,
+  buildJsonlUsageBreakdown,
+  scanUsageFromBreakdown,
+  usageStatsHaveValue,
+  type JsonlUsageBreakdown,
+  type JsonlUsageBreakdownEntry,
+} from './usage-breakdown.js';
 
 /**
  * Sentinel value recorded in JSONL metadata when no model is explicitly configured.
@@ -81,7 +101,7 @@ export type JsonlRunMetadata = z.infer<typeof JsonlRunMetadataSchema>;
 export const JsonlFileRecordSchema = FileReportSchema;
 export type JsonlFileRecord = z.infer<typeof JsonlFileRecordSchema>;
 
-/** Unit of work scanned by Warden. New run logs contain only this record type. */
+/** Unit of work scanned by Warden, emitted during streaming and finalization. */
 export const JsonlChunkRecordSchema = z.object({
   schemaVersion: z.literal(1),
   run: JsonlRunMetadataSchema,
@@ -95,14 +115,38 @@ export const JsonlChunkRecordSchema = z.object({
   }),
   status: z.enum(['ok', 'error', 'skipped']),
   findings: z.array(FindingSchema),
-  usage: UsageStatsSchema.optional(),
+  usageBreakdown: JsonlUsageBreakdownSchema.optional(),
   durationMs: z.number().nonnegative(),
-  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
   error: SkillErrorSchema.optional(),
   skippedFiles: z.array(SkippedFileSchema).optional(),
   trace: HunkTraceSchema.optional(),
 });
 export type JsonlChunkRecord = z.infer<typeof JsonlChunkRecordSchema>;
+
+const JsonlLegacyChunkRecordSchema = JsonlChunkRecordSchema.extend({
+  usage: UsageStatsSchema.optional(),
+  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+});
+type JsonlLegacyChunkRecord = z.infer<typeof JsonlLegacyChunkRecordSchema>;
+
+function normalizeChunkRecord(record: JsonlLegacyChunkRecord): JsonlChunkRecord {
+  const {
+    usage,
+    auxiliaryUsage,
+    ...chunk
+  } = record;
+  return {
+    ...chunk,
+    usageBreakdown: chunk.usageBreakdown ?? buildJsonlUsageBreakdown(usage, auxiliaryUsage, {
+      scan: { model: chunk.model },
+    }),
+  };
+}
+
+export function parseJsonlChunkRecord(value: unknown): JsonlChunkRecord | undefined {
+  const result = JsonlLegacyChunkRecordSchema.safeParse(value);
+  return result.success ? normalizeChunkRecord(result.data) : undefined;
+}
 
 /**
  * One skill's analysis results. This is the shared SkillReport plus a `run`
@@ -111,6 +155,7 @@ export type JsonlChunkRecord = z.infer<typeof JsonlChunkRecordSchema>;
  */
 export const JsonlRecordSchema = SkillReportSchema.extend({
   run: JsonlRunMetadataSchema,
+  usageBreakdown: JsonlUsageBreakdownSchema.optional(),
 });
 export type JsonlRecord = z.infer<typeof JsonlRecordSchema>;
 
@@ -150,9 +195,8 @@ export const JsonlSummaryRecordSchema = z.object({
   type: z.literal('summary'),
   totalFindings: z.number().int().nonnegative(),
   bySeverity: BySeveritySchema,
-  usage: UsageStatsSchema.optional(),
+  usageBreakdown: JsonlUsageBreakdownSchema.optional(),
   totalSkippedFiles: z.number().int().nonnegative().optional(),
-  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
   failedSkills: z.array(z.string()).optional(),
   totalFailedHunks: z.number().int().nonnegative().optional(),
   totalFailedExtractions: z.number().int().nonnegative().optional(),
@@ -164,6 +208,29 @@ export const JsonlSummaryRecordSchema = z.object({
   error: SkillErrorSchema.optional(),
 });
 export type JsonlSummaryRecord = z.infer<typeof JsonlSummaryRecordSchema>;
+
+const JsonlLegacySummaryRecordSchema = JsonlSummaryRecordSchema.extend({
+  usage: UsageStatsSchema.optional(),
+  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+});
+type JsonlLegacySummaryRecord = z.infer<typeof JsonlLegacySummaryRecordSchema>;
+
+function normalizeSummaryRecord(record: JsonlLegacySummaryRecord): JsonlSummaryRecord {
+  const {
+    usage,
+    auxiliaryUsage,
+    ...summary
+  } = record;
+  return {
+    ...summary,
+    usageBreakdown: summary.usageBreakdown ?? buildJsonlUsageBreakdown(usage, auxiliaryUsage),
+  };
+}
+
+export function parseJsonlSummaryRecord(value: unknown): JsonlSummaryRecord | undefined {
+  const result = JsonlLegacySummaryRecordSchema.safeParse(value);
+  return result.success ? normalizeSummaryRecord(result.data) : undefined;
+}
 
 /** Per-evaluation detail for fix evaluation records. */
 export const JsonlFixEvalDetailSchema = z.object({
@@ -199,16 +266,7 @@ function aggregateUsage(reports: SkillReport[]): UsageStats | undefined {
   const usages = reports.map((r) => r.usage).filter((u) => u !== undefined);
   if (usages.length === 0) return undefined;
 
-  return usages.reduce((acc, u) => ({
-    inputTokens: acc.inputTokens + u.inputTokens,
-    outputTokens: acc.outputTokens + u.outputTokens,
-    cacheReadInputTokens: (acc.cacheReadInputTokens ?? 0) + (u.cacheReadInputTokens ?? 0),
-    cacheCreationInputTokens: (acc.cacheCreationInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
-    cacheCreation5mInputTokens: (acc.cacheCreation5mInputTokens ?? 0) + (u.cacheCreation5mInputTokens ?? 0),
-    cacheCreation1hInputTokens: (acc.cacheCreation1hInputTokens ?? 0) + (u.cacheCreation1hInputTokens ?? 0),
-    webSearchRequests: (acc.webSearchRequests ?? 0) + (u.webSearchRequests ?? 0),
-    costUSD: acc.costUSD + u.costUSD,
-  }));
+  return aggregateUsageStatsPreservingOptional(usages);
 }
 
 /**
@@ -245,7 +303,14 @@ export function buildSkillJsonlRecord(report: SkillReport, run: JsonlRunMetadata
     hunkFailures: report.hunkFailures?.length ? report.hunkFailures : undefined,
     traces: report.traces?.length ? report.traces : undefined,
   };
-  return { ...trimmed, run };
+  return {
+    ...trimmed,
+    run,
+    usageBreakdown: buildJsonlUsageBreakdown(report.usage, report.auxiliaryUsage, {
+      scan: { model: report.model, runtime: report.runtime },
+      auxiliary: report.auxiliaryUsageAttribution,
+    }),
+  };
 }
 
 /** Build the aggregate summary JSONL record. */
@@ -260,6 +325,8 @@ export function buildSummaryJsonlRecord(
     (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
     undefined
   );
+  const totalAuxiliaryUsageAttribution = aggregateReportAuxiliaryUsageAttribution(reports);
+  const usage = aggregateUsage(reports);
   const failedSkills = reports.filter((r) => r.error).map((r) => r.skill);
   const totalFailedHunks = reports.reduce((n, r) => n + (r.failedHunks ?? 0), 0);
   const totalFailedExtractions = reports.reduce((n, r) => n + (r.failedExtractions ?? 0), 0);
@@ -268,9 +335,11 @@ export function buildSummaryJsonlRecord(
     type: 'summary',
     totalFindings: allFindings.length,
     bySeverity: countBySeverity(allFindings),
-    usage: aggregateUsage(reports),
+    usageBreakdown: buildJsonlUsageBreakdown(usage, totalAuxiliaryUsage, {
+      scan: usageAttributionFromReports(reports),
+      auxiliary: totalAuxiliaryUsageAttribution,
+    }),
     totalSkippedFiles: totalSkippedFiles > 0 ? totalSkippedFiles : undefined,
-    auxiliaryUsage: totalAuxiliaryUsage,
     failedSkills: failedSkills.length > 0 ? failedSkills : undefined,
     totalFailedHunks: totalFailedHunks > 0 ? totalFailedHunks : undefined,
     totalFailedExtractions: totalFailedExtractions > 0 ? totalFailedExtractions : undefined,
@@ -439,9 +508,16 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     const chunkRecords = records.filter((record) => !isReportLevelErrorRecord(record));
     const aggregateRecords = chunkRecords.length > 0 ? chunkRecords : records;
     const findings = aggregateRecords.flatMap((r) => r.findings);
-    const usage = aggregateRecords.reduce<UsageStats | undefined>((acc, r) => addUsage(acc, r.usage), undefined);
+    const usage = aggregateRecords.reduce<UsageStats | undefined>(
+      (acc, r) => addUsage(acc, scanUsageFromBreakdown(r.usageBreakdown)),
+      undefined,
+    );
     const auxiliaryUsage = aggregateRecords.reduce<AuxiliaryUsageMap | undefined>(
-      (acc, r) => mergeAuxiliaryUsage(acc, r.auxiliaryUsage),
+      (acc, r) => mergeAuxiliaryUsage(acc, auxiliaryUsageFromBreakdown(r.usageBreakdown)),
+      undefined,
+    );
+    const auxiliaryUsageAttribution = aggregateRecords.reduce<AuxiliaryUsageAttributionMap | undefined>(
+      (acc, r) => mergeAuxiliaryUsageAttribution(acc, auxiliaryUsageAttributionFromBreakdown(r.usageBreakdown)),
       undefined,
     );
     const traces = aggregateRecords.flatMap((r) => r.trace ? [r.trace] : []);
@@ -455,7 +531,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
           filename: record.chunk.file,
           findings: (existing?.findings ?? 0) + record.findings.length,
           durationMs: (existing?.durationMs ?? 0) + record.durationMs,
-          usage: addUsage(existing?.usage, record.usage),
+          usage: addUsage(existing?.usage, scanUsageFromBreakdown(record.usageBreakdown)),
         });
       }
       if (record.status === 'error' && record.error && !isReportLevelErrorRecord(record)) {
@@ -496,6 +572,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
       };
     }
     if (auxiliaryUsage) report.auxiliaryUsage = auxiliaryUsage;
+    if (auxiliaryUsageAttribution) report.auxiliaryUsageAttribution = auxiliaryUsageAttribution;
     if (failedHunks > 0) report.failedHunks = failedHunks;
     if (failedExtractions > 0) report.failedExtractions = failedExtractions;
     if (hunkFailures.length > 0) report.hunkFailures = hunkFailures;
@@ -521,17 +598,18 @@ export function parseJsonlReports(content: string): ParsedJsonlLog {
     try {
       const parsed = JSON.parse(line);
 
-      const chunk = JsonlChunkRecordSchema.safeParse(parsed);
-      if (chunk.success) {
-        chunks.push(chunk.data);
-        if (!runMetadata) runMetadata = chunk.data.run;
-        totalDurationMs = Math.max(totalDurationMs, chunk.data.run.durationMs);
+      const chunk = parseJsonlChunkRecord(parsed);
+      if (chunk) {
+        chunks.push(chunk);
+        if (!runMetadata) runMetadata = chunk.run;
+        totalDurationMs = Math.max(totalDurationMs, chunk.run.durationMs);
         continue;
       }
 
       // Skip summary record (but capture metadata from it)
       if (parsed.type === 'summary') {
-        const summary = JsonlSummaryRecordSchema.parse(parsed);
+        const summary = parseJsonlSummaryRecord(parsed);
+        if (!summary) throw new Error('Invalid summary record');
         runMetadata = summary.run;
         totalDurationMs = summary.run.durationMs;
         continue;
@@ -544,7 +622,7 @@ export function parseJsonlReports(content: string): ParsedJsonlLog {
 
       // A JsonlRecord is a SkillReport + { run }. Strip `run` to get the
       // SkillReport without rebuilding it field-by-field.
-      const { run, ...report } = JsonlRecordSchema.parse(parsed);
+      const { run, usageBreakdown: _usageBreakdown, ...report } = JsonlRecordSchema.parse(parsed);
       reports.push(report);
 
       // Capture run metadata from first record if no summary yet
@@ -605,28 +683,30 @@ export function parseLogMetadata(filePath: string): LogFileMetadata | undefined 
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line);
-      const chunk = JsonlChunkRecordSchema.safeParse(parsed);
-      if (chunk.success) {
-        chunks.push(chunk.data);
+      const chunk = parseJsonlChunkRecord(parsed);
+      if (chunk) {
+        chunks.push(chunk);
         recognizedRecords++;
-        if (!skills.includes(chunk.data.skill)) {
-          skills.push(chunk.data.skill);
+        if (!skills.includes(chunk.skill)) {
+          skills.push(chunk.skill);
         }
-        if (!model && chunk.data.model) {
-          model = chunk.data.model;
+        if (!model && chunk.model) {
+          model = chunk.model;
         }
-        if (!model && chunk.data.run.model) {
-          model = chunk.data.run.model;
+        if (!model && chunk.run.model) {
+          model = chunk.run.model;
         }
-        if (!headSha && chunk.data.run.headSha) {
-          headSha = chunk.data.run.headSha;
+        if (!headSha && chunk.run.headSha) {
+          headSha = chunk.run.headSha;
         }
-        if (!firstRun) firstRun = chunk.data.run;
-        if (chunk.data.chunk.file) {
-          uniqueFiles.add(chunk.data.chunk.file);
+        if (!firstRun) firstRun = chunk.run;
+        if (chunk.chunk.file) {
+          uniqueFiles.add(chunk.chunk.file);
         }
       } else if (parsed.type === 'summary') {
-        summary = JsonlSummaryRecordSchema.parse(parsed);
+        const parsedSummary = parseJsonlSummaryRecord(parsed);
+        if (!parsedSummary) throw new Error('Invalid summary record');
+        summary = parsedSummary;
         recognizedRecords++;
         if (!model && parsed.run?.model && typeof parsed.run.model === 'string') {
           model = parsed.run.model;

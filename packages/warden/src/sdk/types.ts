@@ -8,6 +8,8 @@ import type { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
 export interface AuxiliaryUsageEntry {
   agent: string;
   usage: UsageStats;
+  model?: string;
+  runtime?: RuntimeName;
 }
 
 export interface FindingProcessingEvent {

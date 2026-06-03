@@ -18,7 +18,7 @@ import {
   consolidateBatchFindings,
 } from '../../output/dedup.js';
 import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
-import { mergeAuxiliaryUsage } from '../../sdk/usage.js';
+import { mergeAuxiliaryUsage, mergeAuxiliaryUsageAttribution } from '../../sdk/usage.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
@@ -275,6 +275,10 @@ export async function postTriggerReview(
       if (consolidateResult.usage) {
         const consolidateAux = { consolidate: consolidateResult.usage };
         result.report.auxiliaryUsage = mergeAuxiliaryUsage(result.report.auxiliaryUsage, consolidateAux);
+        result.report.auxiliaryUsageAttribution = mergeAuxiliaryUsageAttribution(
+          result.report.auxiliaryUsageAttribution,
+          { consolidate: { model: ctx.model, runtime: ctx.runtime } },
+        );
       }
 
       if (consolidateResult.removedCount > 0) {
@@ -304,6 +308,10 @@ export async function postTriggerReview(
       if (dedupResult.dedupUsage) {
         const dedupAux = { dedup: dedupResult.dedupUsage };
         result.report.auxiliaryUsage = mergeAuxiliaryUsage(result.report.auxiliaryUsage, dedupAux);
+        result.report.auxiliaryUsageAttribution = mergeAuxiliaryUsageAttribution(
+          result.report.auxiliaryUsageAttribution,
+          { dedup: { model: ctx.model, runtime: ctx.runtime } },
+        );
       }
 
       if (dedupResult.duplicateActions.length > 0) {

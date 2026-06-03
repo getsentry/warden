@@ -27,6 +27,8 @@ export {
   FindingSchema,
   UsageStatsSchema,
   AuxiliaryUsageMapSchema,
+  UsageAttributionSchema,
+  AuxiliaryUsageAttributionMapSchema,
   // File Report (per-file breakdown within a skill)
   FileReportSchema,
   // Skill Report
@@ -58,6 +60,8 @@ export type {
   Finding,
   UsageStats,
   AuxiliaryUsageMap,
+  UsageAttribution,
+  AuxiliaryUsageAttributionMap,
   FileReport,
   SkillReport,
   ErrorCode,

@@ -11,10 +11,10 @@ import {
   type InvalidPiModelSelector,
 } from '../sdk/runtimes/model-selectors.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
-import { mergeAuxiliaryUsage } from '../sdk/usage.js';
+import { aggregateAuxiliaryUsageAttribution, mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
-import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding } from '../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
 import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
 import { isRepoRelativePath, normalizePath, resolveConfigInput } from '../utils/path.js';
@@ -35,6 +35,10 @@ import {
   renderJsonlString,
   renderJsonlChunkLine,
   renderJsonlChunkRecords,
+  renderJsonlSummaryLine,
+  buildJsonlUsageBreakdown,
+  auxiliaryUsageFromBreakdown,
+  usageStatsHaveValue,
   initJsonlFile,
   appendJsonlLine,
   getRepoLogPath,
@@ -175,11 +179,11 @@ function emitEmptyRunLog(
 }
 
 /**
- * In-flight JSONL log state for a run. Skill records are appended as
- * each skill finishes; the summary is appended at finalize. A path is
- * dropped from `paths` if its initial write failed.
+ * In-flight JSONL log state for a run. Chunk records are streamed while
+ * skills run, then rewritten from final reports after post-processing.
+ * A path is dropped from `paths` if its initial write failed.
  */
-interface RunLog {
+export interface RunLog {
   paths: string[];
   primaryLogPath: string;
   primaryLogWritten: boolean;
@@ -248,8 +252,9 @@ function appendChunkToRunLog(log: RunLog, skillName: string, chunk: ChunkAnalysi
   if (log.paths.length === 0) return;
   const auxiliaryUsage = chunk.auxiliaryUsage?.reduce(
     (acc, entry) => mergeAuxiliaryUsage(acc, { [entry.agent]: entry.usage }),
-    undefined as JsonlChunkRecord['auxiliaryUsage'],
+    undefined as AuxiliaryUsageMap | undefined,
   );
+  const auxiliaryUsageAttribution = aggregateAuxiliaryUsageAttribution(chunk.auxiliaryUsage ?? []);
   const error: SkillError | undefined = chunk.failed
     ? {
         code: chunk.failureCode ?? 'unknown',
@@ -276,9 +281,11 @@ function appendChunkToRunLog(log: RunLog, skillName: string, chunk: ChunkAnalysi
     },
     status: error ? 'error' : 'ok',
     findings: chunk.findings,
-    usage: chunk.usage,
+    usageBreakdown: buildJsonlUsageBreakdown(chunk.usage, auxiliaryUsage, {
+      scan: { model: chunk.model },
+      auxiliary: auxiliaryUsageAttribution,
+    }),
     durationMs: chunk.durationMs,
-    auxiliaryUsage,
     error,
     trace: chunk.trace,
   };
@@ -316,9 +323,11 @@ function buildReportChunkRecord(
     },
     status: reportError ? 'error' : report.skippedFiles?.length ? 'skipped' : 'ok',
     findings: report.findings,
-    usage: report.usage,
+    usageBreakdown: buildJsonlUsageBreakdown(report.usage, report.auxiliaryUsage, {
+      scan: { model: report.model, runtime: report.runtime },
+      auxiliary: report.auxiliaryUsageAttribution,
+    }),
     durationMs: report.durationMs ?? runDurationMs,
-    auxiliaryUsage: report.auxiliaryUsage,
     error: reportError,
     skippedFiles: report.skippedFiles,
   };
@@ -379,6 +388,48 @@ function appendReportToRunLog(log: RunLog, report: SkillReport): void {
   }
 }
 
+function subtractUsage(total: UsageStats | undefined, alreadyRecorded: UsageStats | undefined): UsageStats | undefined {
+  if (!total) return undefined;
+  const result: UsageStats = {
+    inputTokens: Math.max(0, total.inputTokens - (alreadyRecorded?.inputTokens ?? 0)),
+    outputTokens: Math.max(0, total.outputTokens - (alreadyRecorded?.outputTokens ?? 0)),
+    costUSD: Math.max(0, total.costUSD - (alreadyRecorded?.costUSD ?? 0)),
+  };
+  if (total.cacheReadInputTokens !== undefined || alreadyRecorded?.cacheReadInputTokens !== undefined) {
+    result.cacheReadInputTokens = Math.max(0, (total.cacheReadInputTokens ?? 0) - (alreadyRecorded?.cacheReadInputTokens ?? 0));
+  }
+  if (total.cacheCreationInputTokens !== undefined || alreadyRecorded?.cacheCreationInputTokens !== undefined) {
+    result.cacheCreationInputTokens = Math.max(0, (total.cacheCreationInputTokens ?? 0) - (alreadyRecorded?.cacheCreationInputTokens ?? 0));
+  }
+  if (total.cacheCreation5mInputTokens !== undefined || alreadyRecorded?.cacheCreation5mInputTokens !== undefined) {
+    result.cacheCreation5mInputTokens = Math.max(0, (total.cacheCreation5mInputTokens ?? 0) - (alreadyRecorded?.cacheCreation5mInputTokens ?? 0));
+  }
+  if (total.cacheCreation1hInputTokens !== undefined || alreadyRecorded?.cacheCreation1hInputTokens !== undefined) {
+    result.cacheCreation1hInputTokens = Math.max(0, (total.cacheCreation1hInputTokens ?? 0) - (alreadyRecorded?.cacheCreation1hInputTokens ?? 0));
+  }
+  if (total.webSearchRequests !== undefined || alreadyRecorded?.webSearchRequests !== undefined) {
+    result.webSearchRequests = Math.max(0, (total.webSearchRequests ?? 0) - (alreadyRecorded?.webSearchRequests ?? 0));
+  }
+  return usageStatsHaveValue(result) ? result : undefined;
+}
+
+function subtractAuxiliaryUsage(
+  total: AuxiliaryUsageMap | undefined,
+  alreadyRecorded: AuxiliaryUsageMap | undefined
+): AuxiliaryUsageMap | undefined {
+  if (!total) return undefined;
+
+  const missing: AuxiliaryUsageMap = {};
+  for (const [agent, usage] of Object.entries(total)) {
+    const remainder = subtractUsage(usage, alreadyRecorded?.[agent]);
+    if (remainder) {
+      missing[agent] = remainder;
+    }
+  }
+
+  return Object.keys(missing).length > 0 ? missing : undefined;
+}
+
 function lineRangeIncludes(lineRange: string, line: number): boolean {
   if (!lineRange) return false;
   const [startText, endText] = lineRange.split('-');
@@ -396,7 +447,36 @@ function findChunkForFinding(chunks: JsonlChunkRecord[], skill: string, finding:
   ) ?? sameSkill.find((chunk) => chunk.chunk.file === location.path) ?? sameSkill[0];
 }
 
-function buildFinalChunkRecords(
+function buildUsageOnlyChunkRecord(
+  log: RunLog,
+  report: SkillReport,
+  runDurationMs: number,
+  auxiliaryUsage: AuxiliaryUsageMap,
+): JsonlChunkRecord {
+  return {
+    schemaVersion: 1,
+    run: { ...log.baseRun, durationMs: runDurationMs },
+    skill: report.skill,
+    model: report.model,
+    chunk: {
+      file: '',
+      index: 1,
+      total: 1,
+      lineRange: 'post-processing',
+    },
+    status: 'ok',
+    findings: [],
+    durationMs: 0,
+    usageBreakdown: buildJsonlUsageBreakdown(undefined, auxiliaryUsage, {
+      auxiliary: report.auxiliaryUsageAttribution,
+    }),
+  };
+}
+
+/**
+ * Build finalized chunk records from streamed chunks and final reports.
+ */
+export function buildFinalChunkRecords(
   log: RunLog,
   reports: SkillReport[],
   totalDurationMs: number,
@@ -425,18 +505,47 @@ function buildFinalChunkRecords(
     ...chunk,
     run: { ...finalRun },
     findings: findingsByChunk.get(chunk) ?? [],
+    usageBreakdown: chunk.usageBreakdown,
   }));
 
   const finalLog = { ...log, chunks: chunkRecords };
   const missingReports = reports.filter((report) => shouldStreamReportRecord(finalLog, report));
+  const postProcessingUsageRecords = reports.flatMap((report) => {
+    const skillChunkRecords = chunkRecords.filter((chunk) => chunk.skill === report.skill);
+    if (skillChunkRecords.length === 0) return [];
+
+    const recordedAuxiliaryUsage = skillChunkRecords.reduce<AuxiliaryUsageMap | undefined>(
+      (acc, chunk) => mergeAuxiliaryUsage(acc, auxiliaryUsageFromBreakdown(chunk.usageBreakdown)),
+      undefined,
+    );
+    const missingAuxiliaryUsage = subtractAuxiliaryUsage(report.auxiliaryUsage, recordedAuxiliaryUsage);
+    return missingAuxiliaryUsage
+      ? [buildUsageOnlyChunkRecord(log, report, totalDurationMs, missingAuxiliaryUsage)]
+      : [];
+  });
   return [
     ...chunkRecords,
+    ...postProcessingUsageRecords,
     ...missingReports.map((report) => buildReportChunkRecord(log, report, totalDurationMs, undefined, undefined, error)),
   ];
 }
 
 /**
- * Rewrite the run log with final chunk records. Returns the set of paths that
+ * Render the finalized JSONL content for a run log.
+ */
+export function renderFinalRunLogContent(
+  log: RunLog,
+  reports: SkillReport[],
+  totalDurationMs: number,
+  error?: SkillError,
+): string {
+  const records = buildFinalChunkRecords(log, reports, totalDurationMs, error);
+  const run: JsonlRunMetadata = { ...log.baseRun, durationMs: totalDurationMs };
+  return renderJsonlChunkRecords(records) + renderJsonlSummaryLine(reports, run, error);
+}
+
+/**
+ * Rewrite the run log with final records. Returns the set of paths that
  * accepted the write, so the caller can decide whether to claim
  * "wrote JSONL output to X" (only true when the final log actually landed).
  */
@@ -450,8 +559,7 @@ function finalizeRunLog(
   if (log.paths.length === 0) return wrote;
   let content: string;
   try {
-    const records = buildFinalChunkRecords(log, reports, totalDurationMs, error);
-    content = renderJsonlChunkRecords(records);
+    content = renderFinalRunLogContent(log, reports, totalDurationMs, error);
   } catch {
     return wrote;
   }
@@ -835,7 +943,7 @@ async function outputResultsAndHandleFixes(
 
   const finalizedPaths = finalizeRunLog(runLog, reports, totalDuration);
 
-  // Only claim --output succeeded if the summary actually landed there.
+  // Only claim --output succeeded if finalization actually landed there.
   if (runLog.outputPath) {
     if (finalizedPaths.has(runLog.outputPath)) {
       reporter.success(`Wrote JSONL output to ${runLog.outputPath}`);
@@ -847,16 +955,16 @@ async function outputResultsAndHandleFixes(
   reporter.blank();
   if (options.json) {
     // Prefer reading the on-disk log (per-skill durationMs is a snapshot).
-    // Only read it back if finalize actually landed the summary there;
+    // Only read it back if finalization actually landed there;
     // a half-written file should fall through to the in-memory render.
-    // The fallback renders the same chunk-record shape in memory.
+    // The fallback renders the same finalized JSONL shape in memory.
     let jsonlContent: string | undefined;
     if (finalizedPaths.has(runLog.primaryLogPath)) {
       try { jsonlContent = readFileSync(runLog.primaryLogPath, 'utf-8'); } catch { /* fall through */ }
     }
     if (!jsonlContent) {
       try {
-        jsonlContent = renderJsonlChunkRecords(buildFinalChunkRecords(runLog, reports, totalDuration));
+        jsonlContent = renderFinalRunLogContent(runLog, reports, totalDuration);
       } catch (err) {
         reporter.error(`Failed to render JSONL output: ${err instanceof Error ? err.message : String(err)}`);
         return 1;

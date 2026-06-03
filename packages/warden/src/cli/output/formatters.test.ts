@@ -9,6 +9,7 @@ import {
   padRight,
   formatUsage,
   formatUsagePlain,
+  totalUsageStats,
   totalUsageCost,
   formatStatsCompact,
   formatSeverityBadge,
@@ -192,8 +193,29 @@ describe('totalUsageCost', () => {
   });
 });
 
+describe('totalUsageStats', () => {
+  it('adds auxiliary tokens and cost to primary usage', () => {
+    const usage: UsageStats = {
+      inputTokens: 3000,
+      outputTokens: 680,
+      cacheReadInputTokens: 100,
+      costUSD: 20,
+    };
+    const auxiliaryUsage: AuxiliaryUsageMap = {
+      verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+      dedup: { inputTokens: 200, outputTokens: 80, cacheReadInputTokens: 25, costUSD: 1 },
+    };
+
+    const total = totalUsageStats(usage, auxiliaryUsage);
+    expect(total?.inputTokens).toBe(3300);
+    expect(total?.outputTokens).toBe(810);
+    expect(total?.cacheReadInputTokens).toBe(125);
+    expect(total?.costUSD).toBeCloseTo(27.19);
+  });
+});
+
 describe('formatUsage', () => {
-  it('renders total cost when auxiliary usage is present', () => {
+  it('renders total tokens and cost when auxiliary usage is present', () => {
     const usage: UsageStats = {
       inputTokens: 3000,
       outputTokens: 680,
@@ -203,8 +225,8 @@ describe('formatUsage', () => {
       verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
     };
 
-    expect(formatUsage(usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $26.19');
-    expect(formatUsagePlain(usage, auxiliaryUsage)).toBe('3.0k input, 680 output, $26.19');
+    expect(formatUsage(usage, auxiliaryUsage)).toBe('3.1k in / 730 out · $26.19');
+    expect(formatUsagePlain(usage, auxiliaryUsage)).toBe('3.1k input, 730 output, $26.19');
   });
 });
 
@@ -258,7 +280,7 @@ describe('formatStatsCompact', () => {
     expect(formatStatsCompact(45600, usage)).toBe('⏱ 45.6s · 120.0k in / 3.8k out · $0.09');
   });
 
-  it('includes auxiliary costs in total when provided', () => {
+  it('includes auxiliary tokens and cost in total when provided', () => {
     const usage: UsageStats = {
       inputTokens: 3000,
       outputTokens: 680,
@@ -269,7 +291,7 @@ describe('formatStatsCompact', () => {
     };
     // Total cost: 0.0048 + 0.0012 = 0.0060
     expect(formatStatsCompact(15800, usage, auxiliaryUsage)).toBe(
-      '⏱ 15.8s · 3.0k in / 680 out · $0.01'
+      '⏱ 15.8s · 3.1k in / 730 out · $0.01'
     );
   });
 
@@ -284,7 +306,7 @@ describe('formatStatsCompact', () => {
       dedup: { inputTokens: 200, outputTokens: 80, costUSD: 0.0008 },
     };
     // Total: 0.0048 + 0.0012 + 0.0008 = 0.0068
-    expect(formatStatsCompact(undefined, usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $0.01');
+    expect(formatStatsCompact(undefined, usage, auxiliaryUsage)).toBe('3.3k in / 810 out · $0.01');
   });
 
   it('omits auxiliary suffix when all agents have zero cost', () => {
@@ -299,11 +321,10 @@ describe('formatStatsCompact', () => {
     expect(formatStatsCompact(undefined, usage, auxiliaryUsage)).toBe('3.0k in / 680 out · $0.00');
   });
 
-  it('ignores auxiliary when usage is not provided', () => {
+  it('renders auxiliary-only usage when primary usage is not provided', () => {
     const auxiliaryUsage: AuxiliaryUsageMap = {
       extraction: { inputTokens: 100, outputTokens: 50, costUSD: 0.0012 },
     };
-    // No usage means no cost line, so auxiliary is not shown
-    expect(formatStatsCompact(15800, undefined, auxiliaryUsage)).toBe('⏱ 15.8s');
+    expect(formatStatsCompact(15800, undefined, auxiliaryUsage)).toBe('⏱ 15.8s · 100 in / 50 out · $0.00');
   });
 });

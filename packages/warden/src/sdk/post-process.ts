@@ -1,7 +1,8 @@
 import type { Effort, SkillDefinition } from '../config/schema.js';
-import { emitDedupMetrics } from '../sentry.js';
+import { emitDedupMetrics, emitFixGateMetrics, logger } from '../sentry.js';
 import type { Finding } from '../types/index.js';
 import { deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
+import { sanitizeFindingsSuggestedFixes } from './fix-quality.js';
 import type { PromptPRContext } from './prompt-sections.js';
 import type { RuntimeName } from './runtimes/index.js';
 import type { AuxiliaryUsageEntry, FindingProcessingEvent } from './types.js';
@@ -58,7 +59,12 @@ export async function postProcessFindings(
     });
     currentFindings = verification.findings;
     if (verification.usage) {
-      auxiliaryUsage.push({ agent: 'verification', usage: verification.usage });
+      auxiliaryUsage.push({
+        agent: 'verification',
+        usage: verification.usage,
+        model: options.auxiliaryModel,
+        runtime: options.runtime,
+      });
     }
   }
 
@@ -73,7 +79,47 @@ export async function postProcessFindings(
   });
   currentFindings = mergeResult.findings;
   if (mergeResult.usage) {
-    auxiliaryUsage.push({ agent: 'merge', usage: mergeResult.usage });
+    auxiliaryUsage.push({
+      agent: 'merge',
+      usage: mergeResult.usage,
+      model: options.synthesisModel,
+      runtime: options.runtime,
+    });
+  }
+
+  const sanitized = await sanitizeFindingsSuggestedFixes(currentFindings, {
+    repoPath: options.repoPath,
+    apiKey: options.apiKey,
+    runtime: options.runtime,
+    model: options.auxiliaryModel,
+    maxRetries: options.auxiliaryMaxRetries,
+    agentName: options.skill.name,
+    onFindingProcessing: options.onFindingProcessing,
+  });
+  currentFindings = sanitized.findings;
+  if (sanitized.usage) {
+    auxiliaryUsage.push({
+      agent: 'fix_gate',
+      usage: sanitized.usage,
+      model: options.auxiliaryModel,
+      runtime: options.runtime,
+    });
+  }
+
+  emitFixGateMetrics(
+    options.skill.name,
+    sanitized.stats.checked,
+    sanitized.stats.strippedDeterministic,
+    sanitized.stats.strippedSemantic,
+    sanitized.stats.semanticUnavailable
+  );
+  if (sanitized.stats.checked > 0) {
+    logger.info('Suggested fix quality gate', {
+      'warden.fix_gate.checked': sanitized.stats.checked,
+      'warden.fix_gate.stripped_deterministic': sanitized.stats.strippedDeterministic,
+      'warden.fix_gate.stripped_semantic': sanitized.stats.strippedSemantic,
+      'warden.fix_gate.semantic_unavailable': sanitized.stats.semanticUnavailable,
+    });
   }
 
   return { findings: currentFindings, auxiliaryUsage };

@@ -12,15 +12,16 @@ import {
   pluralize,
   formatDuration,
   formatCost,
-  totalUsageCost,
   shortRunId,
   parseJsonlReports,
   parseLogMetadata,
   renderJsonlString,
-  JsonlChunkRecordSchema,
+  parseJsonlChunkRecord,
+  parseJsonlSummaryRecord,
+  scanUsageFromBreakdown,
   JsonlRecordSchema,
-  JsonlSummaryRecordSchema,
   type JsonlRunMetadata,
+  type JsonlSummaryRecord,
   type LogFileMetadata,
 } from '../output/index.js';
 
@@ -146,8 +147,8 @@ function formatSeverityBreakdown(bySeverity: Partial<Record<Severity, number>>):
 /**
  * Get the total rendered cost for a saved run summary.
  */
-function getSummaryCostUSD(summary: { usage?: SkillReport['usage']; auxiliaryUsage?: SkillReport['auxiliaryUsage'] }): number | undefined {
-  return totalUsageCost(summary.usage, summary.auxiliaryUsage);
+function getSummaryCostUSD(summary: Pick<JsonlSummaryRecord, 'usageBreakdown'>): number | undefined {
+  return summary.usageBreakdown?.total.usage.costUSD;
 }
 
 /**
@@ -610,9 +611,9 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
   const obj = parsed as { type?: string };
 
   if (obj.type === 'summary') {
-    const summary = JsonlSummaryRecordSchema.safeParse(obj);
-    if (summary.success) {
-      const { totalFindings, bySeverity } = summary.data;
+    const summary = parseJsonlSummaryRecord(obj);
+    if (summary) {
+      const { totalFindings, bySeverity } = summary;
       reporter.blank();
       reporter.text(
         chalk.dim(`Run finished — ${totalFindings} ${pluralize(totalFindings, 'finding')}  `) +
@@ -624,10 +625,10 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
 
   if (obj.type === 'fix-evaluation') return { stop: false };
 
-  const chunkResult = JsonlChunkRecordSchema.safeParse(obj);
-  if (chunkResult.success) {
-    const chunk = chunkResult.data;
+  const chunk = parseJsonlChunkRecord(obj);
+  if (chunk) {
     if (chunk.findings.length === 0 && !chunk.error) return { stop: false };
+    const usage = scanUsageFromBreakdown(chunk.usageBreakdown);
     console.log(renderTerminalReport([{
       skill: chunk.skill,
       summary: chunk.findings.length > 0
@@ -635,13 +636,13 @@ function renderFollowLine(line: string, reporter: Reporter): { stop: boolean } {
         : `${chunk.skill}: chunk failed`,
       findings: chunk.findings,
       durationMs: chunk.durationMs,
-      usage: chunk.usage,
+      usage,
       model: chunk.model,
       files: [{
         filename: chunk.chunk.file,
         findings: chunk.findings.length,
         durationMs: chunk.durationMs,
-        usage: chunk.usage,
+        usage,
       }],
       error: chunk.error,
       hunkFailures: chunk.error

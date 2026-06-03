@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { aggregateAuxiliaryUsage, extractUsage, mergeAuxiliaryUsage } from './usage.js';
+import {
+  aggregateAuxiliaryUsage,
+  aggregateAuxiliaryUsageAttribution,
+  extractUsage,
+  mergeAuxiliaryUsage,
+  mergeAuxiliaryUsageAttribution,
+} from './usage.js';
 import type { UsageStats } from '../types/index.js';
 
 const makeUsage = (input: number, output: number, cost: number): UsageStats => ({
@@ -198,6 +204,49 @@ describe('mergeAuxiliaryUsage', () => {
         cacheCreation1hInputTokens: 0,
         webSearchRequests: 0,
         costUSD: 0.003,
+      },
+    });
+  });
+});
+
+describe('aggregateAuxiliaryUsageAttribution', () => {
+  it('returns undefined when entries have no attribution', () => {
+    expect(aggregateAuxiliaryUsageAttribution([
+      { agent: 'extraction', usage: makeUsage(100, 50, 0.001) },
+    ])).toBeUndefined();
+  });
+
+  it('uses singular model/runtime for one attributed agent', () => {
+    expect(aggregateAuxiliaryUsageAttribution([
+      { agent: 'verification', usage: makeUsage(100, 50, 0.001), model: 'verify-model', runtime: 'pi' },
+      { agent: 'verification', usage: makeUsage(10, 5, 0.0001), model: 'verify-model', runtime: 'pi' },
+    ])).toEqual({
+      verification: { model: 'verify-model', runtime: 'pi' },
+    });
+  });
+
+  it('uses model arrays when one agent has mixed attribution', () => {
+    expect(aggregateAuxiliaryUsageAttribution([
+      { agent: 'verification', usage: makeUsage(100, 50, 0.001), model: 'model-b', runtime: 'pi' },
+      { agent: 'verification', usage: makeUsage(10, 5, 0.0001), model: 'model-a', runtime: 'claude' },
+    ])).toEqual({
+      verification: {
+        models: ['model-a', 'model-b'],
+        runtimes: ['claude', 'pi'],
+      },
+    });
+  });
+});
+
+describe('mergeAuxiliaryUsageAttribution', () => {
+  it('merges singular and array attribution', () => {
+    expect(mergeAuxiliaryUsageAttribution(
+      { verification: { model: 'model-a', runtime: 'pi' } },
+      { verification: { models: ['model-b'], runtime: 'claude' } },
+    )).toEqual({
+      verification: {
+        models: ['model-a', 'model-b'],
+        runtimes: ['claude', 'pi'],
       },
     });
   });

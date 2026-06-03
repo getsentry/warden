@@ -12,6 +12,7 @@ import {
 } from './runs.js';
 import {
   appendJsonlLine,
+  buildJsonlUsageBreakdown,
   buildRunMetadata,
   initJsonlFile,
   renderJsonlChunkLine,
@@ -180,6 +181,47 @@ describe('runRunsList', () => {
     expect(output).toContain('$26.19');
 
     errorSpy.mockRestore();
+  });
+
+  it('lists cost from explicit summary usage breakdown totals', async () => {
+    const logDir = join(testDir, '.warden', 'logs');
+    const run = buildRunMetadata({
+      runId: 'eee55555-0000-0000-0000-000000000000',
+      durationMs: 1000,
+      timestamp: new Date('2026-02-18T10:00:00.000Z'),
+      cwd: testDir,
+    });
+    writeFileSync(
+      join(logDir, 'eee55555-2026-02-18T10-00-00-000Z.jsonl'),
+      JSON.stringify({
+        run,
+        type: 'summary',
+        totalFindings: 0,
+        bySeverity: { high: 0, medium: 0, low: 0 },
+        usageBreakdown: {
+          scan: { usage: { inputTokens: 100, outputTokens: 10, costUSD: 40 }, model: 'scan-model' },
+          auxiliary: {
+            verification: { usage: { inputTokens: 50, outputTokens: 5, costUSD: 59 }, model: 'verify-model' },
+          },
+          total: { usage: { inputTokens: 150, outputTokens: 15, costUSD: 99 }, models: ['scan-model', 'verify-model'] },
+        },
+      }) + '\n',
+    );
+
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const reporter = createTestReporter();
+    const options = createDefaultOptions({ json: true });
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const exitCode = await runRunsList(options, reporter, { all: true });
+    expect(exitCode).toBe(0);
+
+    const output = stdoutSpy.mock.calls[0]![0] as string;
+    const parsed = JSON.parse(output);
+    expect(parsed[0].costUSD).toBe(99);
+
+    stdoutSpy.mockRestore();
   });
 });
 
@@ -819,7 +861,7 @@ describe('runRunsFollow', () => {
         description: 'This should render before the run is complete.',
         location: { path: 'src/a.ts', startLine: 12 },
       }],
-      usage: { inputTokens: 100, outputTokens: 20, costUSD: 0.001 },
+      usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 100, outputTokens: 20, costUSD: 0.001 }, undefined),
       durationMs: 250,
     };
 
