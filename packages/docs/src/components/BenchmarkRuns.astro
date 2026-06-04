@@ -135,11 +135,16 @@ const reasoningLabel = (reasoningLevel: string | undefined) => {
   return undefined;
 };
 
+const hidesReasoningLabel = (result: BenchmarkResult) =>
+  result.model.includes("claude-sonnet");
+
 const runLabel = (result: BenchmarkResult) =>
   `${modelLabel(result.model)} (${runtimeLabel(result.runtime)})`;
 
 const runMeta = (result: BenchmarkResult) =>
-  [reasoningLabel(result.reasoningLevel)].filter(Boolean).join(" · ");
+  hidesReasoningLabel(result)
+    ? ""
+    : [reasoningLabel(result.reasoningLevel)].filter(Boolean).join(" · ");
 
 const sortLabel = (result: BenchmarkResult) =>
   [runLabel(result), runMeta(result)].filter(Boolean).join(" ");
@@ -244,7 +249,10 @@ const comparisonResults = Object.values(resultModules)
             {comparisonResults.map((result) => (
               <article class="run-row" role="row">
                 <div class="run-name" role="cell">
-                  <h3>{runLabel(result)}</h3>
+                  <h3>
+                    {modelLabel(result.model)}{" "}
+                    <span>({runtimeLabel(result.runtime)})</span>
+                  </h3>
                   {runMeta(result) && <p>{runMeta(result)}</p>}
                 </div>
                 <div class="metric-cell" role="cell">
@@ -281,23 +289,26 @@ const comparisonResults = Object.values(resultModules)
               return (
                 <article class="run-row" role="row">
                   <div class="run-name" role="cell">
-                    <h3>{runLabel(result)}</h3>
-                  {runMeta(result) && <p>{runMeta(result)}</p>}
-                </div>
-                <div class="metric-cell" role="cell">
-                  <span class="cell-label">P50</span>
-                  <strong class="metric-value">{formatDuration(chunkTiming?.p50)}</strong>
-                </div>
-                <div class="metric-cell" role="cell">
-                  <span class="cell-label">P90</span>
-                  <strong class="metric-value">{formatDuration(chunkTiming?.p90)}</strong>
-                </div>
-                <div class="metric-cell" role="cell">
-                  <span class="cell-label">Total</span>
-                  <strong class="metric-value">{formatDuration(shardTiming?.total ?? result.summary.durationMs)}</strong>
-                </div>
-              </article>
-            );
+                    <h3>
+                      {modelLabel(result.model)}{" "}
+                      <span>({runtimeLabel(result.runtime)})</span>
+                    </h3>
+                    {runMeta(result) && <p>{runMeta(result)}</p>}
+                  </div>
+                  <div class="metric-cell" role="cell">
+                    <span class="cell-label">P50</span>
+                    <strong class="metric-value">{formatDuration(chunkTiming?.p50)}</strong>
+                  </div>
+                  <div class="metric-cell" role="cell">
+                    <span class="cell-label">P90</span>
+                    <strong class="metric-value">{formatDuration(chunkTiming?.p90)}</strong>
+                  </div>
+                  <div class="metric-cell" role="cell">
+                    <span class="cell-label">Total</span>
+                    <strong class="metric-value">{formatDuration(shardTiming?.total ?? result.summary.durationMs)}</strong>
+                  </div>
+                </article>
+              );
             })}
           </div>
         </div>
@@ -339,17 +350,17 @@ const comparisonResults = Object.values(resultModules)
 
   .score-table .run-header,
   .score-table .run-row {
-    grid-template-columns: minmax(0, 1fr) repeat(3, 80px);
+    grid-template-columns: minmax(12rem, 1fr) repeat(3, minmax(5.4rem, 0.34fr));
   }
 
   .cost-table .run-header,
   .cost-table .run-row {
-    grid-template-columns: minmax(12rem, 1fr) 84px repeat(2, 104px);
+    grid-template-columns: minmax(13rem, 1fr) minmax(6.3rem, 0.44fr) repeat(2, minmax(6.8rem, 0.46fr));
   }
 
   .timing-table .run-header,
   .timing-table .run-row {
-    grid-template-columns: minmax(12rem, 1fr) repeat(3, 84px);
+    grid-template-columns: minmax(13rem, 1fr) repeat(3, minmax(5.8rem, 0.38fr));
   }
 
   .run-header {
@@ -365,6 +376,7 @@ const comparisonResults = Object.values(resultModules)
   .run-row > * {
     align-self: start;
     min-width: 0;
+    overflow-wrap: anywhere;
     padding: 0.55rem 0.7rem;
     vertical-align: top;
   }
@@ -376,7 +388,6 @@ const comparisonResults = Object.values(resultModules)
 
   .run-header > :not(:first-child) {
     text-align: center;
-    white-space: nowrap;
   }
 
   .run-row {
@@ -397,7 +408,6 @@ const comparisonResults = Object.values(resultModules)
     gap: 0.12rem;
     justify-items: center;
     text-align: center;
-    white-space: nowrap;
   }
 
   .run-name h3 {
@@ -457,7 +467,7 @@ const comparisonResults = Object.values(resultModules)
 
   .cost-table,
   .timing-table {
-    min-width: 38rem;
+    min-width: min(100%, 40rem);
   }
 
   @media (max-width: 38rem) {

@@ -355,5 +355,6 @@
       "notes": "Same plaintext system option value logging bug."
     }
   ],
-  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This result was reconstructed from chunk records because the explicit output JSONL shards did not include final summary records. One chunk failed during extraction for src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py."
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This result was reconstructed from chunk records because the explicit output JSONL shards did not include final summary records. One chunk failed during extraction for src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py.",
+  "supersededBy": "sentry-security-review-claude-sonnet-4-6-traced-corpus-2026-06-04-001"
 }
