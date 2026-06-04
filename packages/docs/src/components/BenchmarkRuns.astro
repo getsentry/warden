@@ -28,12 +28,16 @@ type BenchmarkResult = {
   summary: {
     analysisCostUSD: number;
     auxiliaryCostUSD: number;
+    chunksAnalyzed: number;
+    chunksFailed: number;
+    chunksTotal: number;
     costUSD: number;
     durationMs: number;
     findingsTotal: number;
     inputTokens?: number;
     outputTokens?: number;
   };
+  supersededBy?: string;
   targetMode: string;
   timing?: {
     analysisChunkMs?: TimingDistribution;
@@ -171,6 +175,9 @@ const comparisonResults = Object.values(resultModules)
     (result) =>
       result.corpusId === "sentry-vulnerability-corpus" &&
       result.targetMode === "all-corpus-files-by-sha" &&
+      !result.supersededBy &&
+      result.summary.chunksFailed === 0 &&
+      result.summary.chunksAnalyzed === result.summary.chunksTotal &&
       result.timing?.analysisChunkMs,
   )
   .sort(compareResults);
@@ -185,7 +192,7 @@ const comparisonResults = Object.values(resultModules)
         <span role="columnheader">Run</span>
         <span role="columnheader">Known</span>
         <span role="columnheader">Findings</span>
-        <span role="columnheader">Run Cost</span>
+        <span role="columnheader">Recorded Cost</span>
       </div>
       {comparisonResults.map((result) => {
         const scoring = result.scoring;
@@ -213,7 +220,7 @@ const comparisonResults = Object.values(resultModules)
               <strong class="metric-value">{result.summary.findingsTotal}</strong>
             </div>
             <div class="metric-cell" role="cell">
-              <span class="cell-label">Run cost</span>
+              <span class="cell-label">Recorded cost</span>
               <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
             </div>
           </article>
@@ -230,7 +237,7 @@ const comparisonResults = Object.values(resultModules)
           <div class="run-table cost-table" role="table" aria-label="Cost breakdown">
             <div class="run-header" role="row">
               <span role="columnheader">Run</span>
-              <span role="columnheader">Run Cost</span>
+              <span role="columnheader">Recorded Cost</span>
               <span role="columnheader">Input Tokens</span>
               <span role="columnheader">Output Tokens</span>
             </div>
@@ -241,7 +248,7 @@ const comparisonResults = Object.values(resultModules)
                   {runMeta(result) && <p>{runMeta(result)}</p>}
                 </div>
                 <div class="metric-cell" role="cell">
-                  <span class="cell-label">Run cost</span>
+                  <span class="cell-label">Recorded cost</span>
                   <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
                 </div>
                 <div class="metric-cell" role="cell">

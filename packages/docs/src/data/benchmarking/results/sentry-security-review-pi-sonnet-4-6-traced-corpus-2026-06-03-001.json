@@ -1,0 +1,3034 @@
+{
+  "runId": "sentry-security-review-pi-sonnet-4-6-traced-corpus-2026-06-03-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.36.1",
+  "skill": "@sentry/warden:security-review@0.36.1",
+  "model": "anthropic/claude-sonnet-4-6",
+  "runtime": "pi",
+  "reasoningLevel": "pi-default-medium",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "findingVerification": {
+    "enabled": true,
+    "source": "benchmark-config",
+    "notes": "The benchmark warden.toml explicitly sets defaults.verification.enabled = true."
+  },
+  "traceCapture": {
+    "enabled": true,
+    "coverage": "complete",
+    "tracedShardCount": 6,
+    "tracedChunkCount": 156,
+    "notes": "Run used --traces on all shards. Per-chunk trace metadata is preserved in traceSummaries and the raw JSONL artifacts."
+  },
+  "runOptions": {
+    "runtime": "pi",
+    "model": "anthropic/claude-sonnet-4-6",
+    "effort": "pi-default-medium",
+    "traces": true,
+    "parallel": 4,
+    "reportOn": "low",
+    "minConfidence": "low"
+  },
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "5c93a2d8-df39-4ab9-a35f-6ca602ed7011",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 4,
+      "durationMs": 215367,
+      "scanCostUSD": 0.9745402499999999,
+      "auxiliaryCostUSD": 0.47789325000000005,
+      "costUSD": 1.4524335,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 827874,
+            "outputTokens": 31165,
+            "costUSD": 0.9745402499999999,
+            "cacheReadInputTokens": 752870,
+            "cacheCreationInputTokens": 74923,
+            "cacheCreation5mInputTokens": 74923,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 98151,
+              "outputTokens": 6127,
+              "cacheReadInputTokens": 51864,
+              "cacheCreationInputTokens": 46263,
+              "cacheCreation5mInputTokens": 46263,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.46837075
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 1508,
+              "outputTokens": 4,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 1506,
+              "cacheCreation5mInputTokens": 1506,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.009522500000000001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 927533,
+            "outputTokens": 37296,
+            "costUSD": 1.4524335,
+            "cacheReadInputTokens": 804734,
+            "cacheCreationInputTokens": 122692,
+            "cacheCreation5mInputTokens": 122692,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 6,
+      "traceIds": [
+        "dc32b2bcd99541f8a3a79a04428edcb9",
+        "affb7c4a12cf4299913ebbb170e71da6",
+        "3d8b3605692a462895963203131877f9",
+        "2df843ac28824dbbbfa6ccd42915acc4",
+        "a58d677676ac4e75ae80d864659fbd86",
+        "8d6e6194a5df4e8594b20e701a7ad8b4"
+      ],
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-traced-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "e06a668a-52df-4339-b64f-6d7c7d7dbc58",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 218986,
+      "scanCostUSD": 0.3046554,
+      "auxiliaryCostUSD": 0.08365375000000003,
+      "costUSD": 0.38830915000000005,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 181239,
+            "outputTokens": 10244,
+            "costUSD": 0.3046554,
+            "cacheReadInputTokens": 153228,
+            "cacheCreationInputTokens": 27992,
+            "cacheCreation5mInputTokens": 27992,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 28635,
+              "outputTokens": 866,
+              "cacheReadInputTokens": 20340,
+              "cacheCreationInputTokens": 8287,
+              "cacheCreation5mInputTokens": 8287,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.08365375000000001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 209874,
+            "outputTokens": 11110,
+            "costUSD": 0.38830915000000005,
+            "cacheReadInputTokens": 173568,
+            "cacheCreationInputTokens": 36279,
+            "cacheCreation5mInputTokens": 36279,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "fffbf2f73a754c3aa3f9dd360f658a1c",
+        "f35642f0fcb041ce9781835595beb2bc"
+      ],
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-traced-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "80e7c52c-0ef1-4c3f-a2c1-b65c8fcd8713",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 267691,
+      "scanCostUSD": 0.24300180000000005,
+      "auxiliaryCostUSD": 0.33531125000000006,
+      "costUSD": 0.5783130500000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 123992,
+            "outputTokens": 9023,
+            "costUSD": 0.24300180000000005,
+            "cacheReadInputTokens": 103566,
+            "cacheCreationInputTokens": 20412,
+            "cacheCreation5mInputTokens": 20412,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 92109,
+              "outputTokens": 7100,
+              "cacheReadInputTokens": 72670,
+              "cacheCreationInputTokens": 19425,
+              "cacheCreation5mInputTokens": 19425,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.33531125000000006
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 216101,
+            "outputTokens": 16123,
+            "costUSD": 0.5783130500000001,
+            "cacheReadInputTokens": 176236,
+            "cacheCreationInputTokens": 39837,
+            "cacheCreation5mInputTokens": 39837,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "cd2c8e73a176430c9405d1fa5f206bfa",
+        "e4cebd7dd21349d7b859b9854c8ae4ff"
+      ],
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-traced-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "3f9dcfd4-c96d-42ed-a8e9-b23aa3252231",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 11,
+      "durationMs": 1056323,
+      "scanCostUSD": 4.6834308,
+      "auxiliaryCostUSD": 3.164346,
+      "costUSD": 7.8477768,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 2297999,
+            "outputTokens": 156683,
+            "costUSD": 4.6834308,
+            "cacheReadInputTokens": 1821451,
+            "cacheCreationInputTokens": 476142,
+            "cacheCreation5mInputTokens": 476142,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 933880,
+              "outputTokens": 56818,
+              "cacheReadInputTokens": 720452,
+              "cacheCreationInputTokens": 213216,
+              "cacheCreation5mInputTokens": 213216,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 3.1143359999999998
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 5090,
+              "outputTokens": 728,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 5088,
+              "cacheCreation5mInputTokens": 5088,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.05001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 3236969,
+            "outputTokens": 214229,
+            "costUSD": 7.8477768,
+            "cacheReadInputTokens": 2541903,
+            "cacheCreationInputTokens": 694446,
+            "cacheCreation5mInputTokens": 694446,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 80,
+      "traceIds": [
+        "7f8733660c204327818f2bbaaa7cbc4b",
+        "6acc54e7b2824b6881dd6c85d34b1163",
+        "a0364c1ecf284a0198393bca6ae31050",
+        "0099ac7c6c474a688bb92f929a9bed12",
+        "8ce449d142d14432bf1e14abc78f2963",
+        "4b8e9b8ebc204e1693077cc83199b5a1",
+        "219465015700400e878c9d4b58f915e0",
+        "a5291e6204fd4cc3a953fef8a56650ea",
+        "0289d7600bf846bd8c853c598345e7bd",
+        "7384c4bfaaf7440aa517195855bce58a",
+        "7938598aeed1443b876e21e13f3cdb9a",
+        "1e610142875e461d8efeac401eb6268f",
+        "c85468d0e40f48eca8d706f30fbc1f88",
+        "07897e3b72a741bdb9acf6c2c939ebae",
+        "71c8096f48a34b5ba65ea1fbc1d7fa3a",
+        "ef6aa89ca7b441ba82cdd3d977d84bca",
+        "e56fff75762b4f0eb0f4b03dcce3cddc",
+        "eafc6fc4f1a94a0984c736a99e1c5066",
+        "9fa8417748d94f4394b2cd5398d82669",
+        "f6c7b01e1ca942f1bbbdfbf347880df2",
+        "7e48cd9882c041b0b07c04dfe78ea755",
+        "6fc7b8df36354cb2a285322a917d0120",
+        "c84ce810e9584e3988826e3a23ecc80c",
+        "bb47d37ede1a4fb9a1f4db74beb82712",
+        "97b05e15b7394867b515c935ac3c5a57",
+        "6cc09b5fbf504df48e970f6df54bce46",
+        "9ce9e7109f9947719b750e302e7ccbfd",
+        "25616b409e1e44ad9ec77ef6827dd6f1",
+        "2d2be803e95340359405144fd492ad33",
+        "cb4db0ae4aca43599e5eef15db5de4f7",
+        "fc40ee9c37024917a1a96d7d8c90e6f7",
+        "20fb8fd18e8a4c579f95964247b0ae05",
+        "5efe5b0a558345cfb59976fc10d0e5be",
+        "7f4477051e03416c9ef95dd2d11299da",
+        "8cef5b99720d4c14be7e70cfe5d6c192",
+        "a4eb320abe30476faf32d5e1802df9c8",
+        "58166fb9203b47449b56a7bb714da43e",
+        "b0b48e10ed0d4872ac9b5ba0d6f6e58b",
+        "7dd49878e8bd491e87dd47556eb2245b",
+        "aa41f788bfb942f6b4a0bd0231969769",
+        "56304e36843640dcb235cc876638144b",
+        "9e0df79b97244f52aabc6d21852fb990",
+        "bf4bf762c1a149c5bd21c8515aa76492",
+        "a20b597151e9465f815bbeb5be841445",
+        "f298c35b4d854006a077af4bfc66b6b2",
+        "5cd69f082d2347948ca8f30648c8bd3b",
+        "7c252e37e3414ebc8c41cd5d59661dd8",
+        "5db91347af034544b85182182c3f571b",
+        "1a0bf53d8f784f52910e4243639e958a",
+        "d7f86e74cba743b483a5fb4748591ab6",
+        "d4c29cee93a14fb7b87c58cf08df33e8",
+        "1edc41e52fe8494fa4cf951eae9e0b3d",
+        "870266c03fcd4e55af63c348e91af077",
+        "4de3840daf104e33b564fb489588ccdb",
+        "b4063c158b374200b641d56738ea0472",
+        "7b876b446a1847089d3a7ebd3b780e18",
+        "6087bcdf55e843668c24de60828b5800",
+        "a9fb9dc522b349c6b71ac51769b27549",
+        "44d1766581a6433c9e2cda64f88500ce",
+        "1186f621deff495fac91842c357381e3",
+        "457a6e9725824ffbb023d6aafae4e558",
+        "17bd4c1896894fea8519c6364f9b299f",
+        "239ab9bc528149e184a4123b38074915",
+        "264bd67562584b319c46f942b525da0d",
+        "21d00b26bc214a768b16f575b7b40759",
+        "86b72db9b4a549d8abaa5e655412ccd2",
+        "e96865158ff54fa2b5fbe249d3808ccd",
+        "7f978e810b7d46db99a13bab8e20a4cb",
+        "c3e0432b6fb544b88c9543ff4ae87f5b",
+        "de08cfbb6b634610a65f3616820f130e",
+        "87820ed4377f4f18bd5b09da7ab876af",
+        "e11ca75140ef4cfeb51f222d3fb0328b",
+        "f962492228934abab19263283baabfc4",
+        "175fb40547ad4ea58b4042327f74256f",
+        "48786b67e15845879eb2a91f3090325b",
+        "400ef7a05c1747148a15e49e397c09ca",
+        "5b7ae95d54924ee186c0ae3823e455e6",
+        "730442c9d73e4dc5bda9dfba49734f0c",
+        "77eb9258e08c4ce6ac3196b23eac9243",
+        "f50f6595e6a7431fbd03393d644566d2"
+      ],
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-traced-corpus-7f41cc50.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "cc81da79-6038-4b48-a32d-d8edb5b68308",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 14,
+      "durationMs": 1293028,
+      "scanCostUSD": 4.735656450000001,
+      "auxiliaryCostUSD": 4.2630247500000005,
+      "costUSD": 8.998681200000002,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 3136327,
+            "outputTokens": 147238,
+            "costUSD": 4.735656450000001,
+            "cacheReadInputTokens": 2676474,
+            "cacheCreationInputTokens": 459447,
+            "cacheCreation5mInputTokens": 459447,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 1746569,
+              "outputTokens": 65415,
+              "cacheReadInputTokens": 1449012,
+              "cacheCreationInputTokens": 297329,
+              "cacheCreation5mInputTokens": 297329,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 4.21932725
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 4996,
+              "outputTokens": 499,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 4994,
+              "cacheCreation5mInputTokens": 4994,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.0436975
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 4887892,
+            "outputTokens": 213152,
+            "costUSD": 8.998681200000002,
+            "cacheReadInputTokens": 4125486,
+            "cacheCreationInputTokens": 761770,
+            "cacheCreation5mInputTokens": 761770,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 64,
+      "traceIds": [
+        "657cd162466c414f900f06d40629c3a6",
+        "010ff3c0d65f4aa08b38e4ab190ca75c",
+        "44845b0e3c5544348d0e56cef1801a0d",
+        "062b58198fdc46539d0cb436bfb1d589",
+        "9a5a151a15534e0bb93490315da3a109",
+        "e5e8ff22c2fe48bda707f0a5c9427e99",
+        "092cfa3ecc564057bbed96fa52d9e4e8",
+        "19aa3793feb7405789f0dda5bd0bf6ae",
+        "9580271b272449788650381372131fc8",
+        "ab9200ecd57648b79d75b018e0afdf0a",
+        "0655a1867cf14f6b8d0ac0a5260f6e41",
+        "7e6baf2e4a3c4ccdb49ad958ae6b0603",
+        "663ff29d55964e3daa2077540c650256",
+        "74c36d21de734f4a984886b554c20789",
+        "c295cdaaaf0b41d3a989baec9700eb3e",
+        "d8e1e1c71c084cd9a54dfced720ab0a9",
+        "63e0c4f081f742939c4eb525a20ebc98",
+        "aa652d3da88d4cada180da9b14be3647",
+        "398f6f18464b44d598ec71936db115e5",
+        "0129e36ee40343c58435c434a18b3ef2",
+        "f59eea3fd37c41f8acf69ea1a1ae75c5",
+        "d90c801e1fa849419743ca388f85a65e",
+        "0344530bc50a4a58993bc4165bf41f1a",
+        "c739f491b4d540ada405b414b9869d98",
+        "ee951fbb22b34c8fa8873226ec7889ab",
+        "cb001d0fddc142a3bb48475a20d44c61",
+        "5cdf9555b1ae4313b0f1b93b3fe106e3",
+        "379f77789e2f439499cb2a80fcf62f35",
+        "bd38c03610de424b875b637a618b9b65",
+        "9c6dea6e1e8e47e5bcc32ddd8c3be540",
+        "751726b6671b428a91ad7f3f49106dba",
+        "86924c1259fc4340863f11dfa08b4500",
+        "2cefd9e789764101a98fbfdd0e0bfbc1",
+        "e6adb55e081749d293c52f6a1a4f6124",
+        "c705b93537704c809e906f4a0f67000c",
+        "fc270f50e3414c71b6c1ade5fd86f063",
+        "f57f5a17ef4f471d9b0dd5e0250c6c2c",
+        "4b9e9f289d2d4d50a8e36dcce36703f4",
+        "da21c301daaa4f749482da82850bf63a",
+        "d19ada98877c498d8aecb3f222089d3c",
+        "589ccf2b9f8a4f36b0e6a37b951ff56e",
+        "7efa26b1b4d9418fb63106fad0e61747",
+        "705175d5951246fd90c90d542d052a82",
+        "54b5cf9e7b684a20a1cebf28ca30ee49",
+        "50c15fb21f8a40618e2ce37362473741",
+        "cb1f2bbac4a24ad68077ad9776b353ef",
+        "e687ddb35d51488eb5527e2099b2ed82",
+        "be0cfe0afbd5479488eea8614bf9f4f5",
+        "d9407d0cc3ef49fcb8d20dd638cbb7a3",
+        "9d82969037854118b059e7c17c71c0a6",
+        "b90213db012a4d81b18301840ac0099b",
+        "0f00ed8470a64792b86d601f4573fdd5",
+        "e25a6452a2214810a176b96c7332e0bd",
+        "efc8e2f430654120a4af15d110fa3303",
+        "9d8fc1e1a19d4d3fa2a881f59de7e083",
+        "1cbc8d54c1e64bb6834aa6f1fcb1241a",
+        "effe6b5322614a3c98e330d2f05da6b9",
+        "8e443179bdcd452bb401c85d48f692a5",
+        "4431c34cfe504d199a532f2e038f1f41",
+        "8fac5491579b4496b818491bfb9b39ce",
+        "24e00cdadecc46a08c7a03ade44d7655",
+        "6f936eca647f4933bf63ded1cbb12a36",
+        "d9ddb89de9d24e568fe70b44fddb72f8",
+        "f1cfc7b169684c099b55bcc4211eae39"
+      ],
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-traced-corpus-9fc06de5.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "2e225af7-3be9-4e07-9c34-dd7acec46b37",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 162877,
+      "scanCostUSD": 0.25546725000000003,
+      "auxiliaryCostUSD": 0.3195942500000001,
+      "costUSD": 0.5750615000000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 100570,
+            "outputTokens": 10693,
+            "costUSD": 0.25546725000000003,
+            "cacheReadInputTokens": 81755,
+            "cacheCreationInputTokens": 18801,
+            "cacheCreation5mInputTokens": 18801,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 92835,
+              "outputTokens": 6234,
+              "cacheReadInputTokens": 72426,
+              "cacheCreationInputTokens": 20389,
+              "cacheCreation5mInputTokens": 20389,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.31959425
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 193405,
+            "outputTokens": 16927,
+            "costUSD": 0.5750615000000001,
+            "cacheReadInputTokens": 154181,
+            "cacheCreationInputTokens": 39190,
+            "cacheCreation5mInputTokens": 39190,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-sonnet-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "7e0ddb1aed564e7997acbe8f745af76a",
+        "4ce94afabf834823b796de53f75a1d4b"
+      ],
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-traced-corpus-fbecd17d.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 32,
+    "findingsBySeverity": {
+      "high": 3,
+      "medium": 18,
+      "low": 11
+    },
+    "findingsByConfidence": {
+      "medium": 10,
+      "high": 21,
+      "low": 1
+    },
+    "durationMs": 3214272,
+    "inputTokens": 9671774,
+    "outputTokens": 508837,
+    "cacheReadInputTokens": 7976108,
+    "cacheCreationInputTokens": 1694214,
+    "analysisCostUSD": 11.196751950000001,
+    "auxiliaryCostUSD": 8.643823249999999,
+    "costUSD": 19.8405752
+  },
+  "usageBreakdown": {
+    "scan": {
+      "model": "anthropic/claude-sonnet-4-6",
+      "runtime": "pi",
+      "usage": {
+        "inputTokens": 6668001,
+        "outputTokens": 365046,
+        "costUSD": 11.196751950000001,
+        "cacheReadInputTokens": 5589344,
+        "cacheCreationInputTokens": 1077717,
+        "cacheCreation5mInputTokens": 1077717,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      }
+    },
+    "auxiliary": {
+      "verification": {
+        "usage": {
+          "inputTokens": 2992179,
+          "outputTokens": 142560,
+          "costUSD": 8.540593249999999,
+          "cacheReadInputTokens": 2386764,
+          "cacheCreationInputTokens": 604909,
+          "cacheCreation5mInputTokens": 604909,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0
+        }
+      },
+      "merge": {
+        "usage": {
+          "inputTokens": 11594,
+          "outputTokens": 1231,
+          "costUSD": 0.10323,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 11588,
+          "cacheCreation5mInputTokens": 11588,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0
+        }
+      }
+    },
+    "total": {
+      "model": "anthropic/claude-sonnet-4-6",
+      "runtime": "pi",
+      "usage": {
+        "inputTokens": 9671774,
+        "outputTokens": 508837,
+        "costUSD": 19.8405752,
+        "cacheReadInputTokens": 7976108,
+        "cacheCreationInputTokens": 1694214,
+        "cacheCreation5mInputTokens": 1694214,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      }
+    }
+  },
+  "timing": {
+    "analysisChunkMs": {
+      "source": "raw-jsonl-durationMs",
+      "count": 156,
+      "p50": 41909,
+      "p75": 61449,
+      "p90": 115241,
+      "p95": 134185,
+      "max": 181411
+    },
+    "shardWallMs": {
+      "source": "result-shard-durationMs",
+      "total": 3214272,
+      "count": 6,
+      "p50": 218986,
+      "p75": 267691,
+      "p90": 1056323,
+      "p95": 1056323,
+      "max": 1293028
+    }
+  },
+  "auxiliaryUsage": {
+    "verification": {
+      "usage": {
+        "inputTokens": 2992179,
+        "outputTokens": 142560,
+        "costUSD": 8.540593249999999,
+        "cacheReadInputTokens": 2386764,
+        "cacheCreationInputTokens": 604909,
+        "cacheCreation5mInputTokens": 604909,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      }
+    },
+    "merge": {
+      "usage": {
+        "inputTokens": 11594,
+        "outputTokens": 1231,
+        "costUSD": 0.10323,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 11588,
+        "cacheCreation5mInputTokens": 11588,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      }
+    }
+  },
+  "traceSummaries": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/organization_plugin_deprecation_info.py",
+      "lineRange": "1-87",
+      "traceId": "dc32b2bcd99541f8a3a79a04428edcb9",
+      "spanId": "8e7f005f6cfc5a8b",
+      "responseId": "msg_019WNkgmPVkSusG5nuTsTUeL",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f39-c44b-78ee-afc0-0d206c477273",
+      "durationMs": 28967,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+      "lineRange": "1-69",
+      "traceId": "affb7c4a12cf4299913ebbb170e71da6",
+      "spanId": "897e331670e3cd67",
+      "responseId": "msg_01VykmTQwpMjZ9yiEoMT3TZK",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f39-c44b-78ee-afc0-126f8a94da81",
+      "durationMs": 108820,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/internal_ea_features.py",
+      "lineRange": "1-41",
+      "traceId": "3d8b3605692a462895963203131877f9",
+      "spanId": "904ab4563bccff61",
+      "responseId": "msg_01UU2EKaMcv96njtofFzop92",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f39-c44a-7d40-ae55-0a955681be8d",
+      "durationMs": 118507,
+      "numTurns": 22,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "traceId": "2df843ac28824dbbbfa6ccd42915acc4",
+      "spanId": "9a9bef3c15cf671d",
+      "responseId": "msg_01SkxjXgC4usLt6ScSAZRiu3",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f3b-6d77-7d7d-84a1-67032945166f",
+      "durationMs": 32591,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/oauth_userinfo.py",
+      "lineRange": "1-110",
+      "traceId": "a58d677676ac4e75ae80d864659fbd86",
+      "spanId": "aff40e6a8432a147",
+      "responseId": "msg_01QHMVmzdT8yXUyhrvVh98nX",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f39-c44b-78ee-afc0-0814bc561558",
+      "durationMs": 174445,
+      "numTurns": 26,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "traceId": "8d6e6194a5df4e8594b20e701a7ad8b4",
+      "spanId": "afdae31cb338fb10",
+      "responseId": "msg_0167Rfp8zTgX2oDxXMuW6q91",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f3a-357d-7296-8360-9a385db3ab83",
+      "durationMs": 149371,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "1-189",
+      "traceId": "fffbf2f73a754c3aa3f9dd360f658a1c",
+      "spanId": "aeae1a0587e67837",
+      "responseId": "msg_014hWrQtR3jtZ72Fdf5DWVUS",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f41-084f-7b2e-8c8d-324ed284067f",
+      "durationMs": 55946,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "190-362",
+      "traceId": "f35642f0fcb041ce9781835595beb2bc",
+      "spanId": "909bf9c18f68200a",
+      "responseId": "msg_01BwCA5LoeiCgyMeQLmqoexB",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f41-e2e6-702d-b1a1-0138761f7508",
+      "durationMs": 144066,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "traceId": "cd2c8e73a176430c9405d1fa5f206bfa",
+      "spanId": "9f806c7848b97250",
+      "responseId": "msg_01Xr3bSwsi61VWBqmKRy4aYK",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f46-ba87-784b-91db-df00e1a90496",
+      "durationMs": 40032,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "traceId": "e4cebd7dd21349d7b859b9854c8ae4ff",
+      "spanId": "81b9e62d0f233514",
+      "responseId": "msg_01Pd3V4JKrRJpxxBeDYqtrGN",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f47-56f1-71b3-b640-4de9cce31eda",
+      "durationMs": 129307,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1-250",
+      "traceId": "7f8733660c204327818f2bbaaa7cbc4b",
+      "spanId": "8186934ca0e68957",
+      "responseId": "msg_01EXE9q19kiSSkgQPGV7mVgU",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4d-d9e2-73d3-b2f1-ef2cf4d0431e",
+      "durationMs": 14682,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "251-500",
+      "traceId": "6acc54e7b2824b6881dd6c85d34b1163",
+      "spanId": "bd66149771b64fc4",
+      "responseId": "msg_01ELeFoaZ8L1wPh3yNxJG2HY",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-1346-7342-90de-933f2fd63a6a",
+      "durationMs": 21872,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "501-750",
+      "traceId": "a0364c1ecf284a0198393bca6ae31050",
+      "spanId": "9c35235725905e51",
+      "responseId": "msg_01USaCapCcYxXRXfTKwVyhA5",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-68bf-721b-a208-05220fde0896",
+      "durationMs": 1500,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "751-1000",
+      "traceId": "0099ac7c6c474a688bb92f929a9bed12",
+      "spanId": "a4ca59c12031ae51",
+      "responseId": "msg_015PABMRoj7vn2ciaw2ParXy",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-6e9e-7576-8a74-1ea548b4705e",
+      "durationMs": 2133,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1001-1250",
+      "traceId": "8ce449d142d14432bf1e14abc78f2963",
+      "spanId": "8b67bc7e503d409c",
+      "responseId": "msg_01H4DwDcP8gQxSYKy6k6X1xP",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-76fa-79a1-ae64-7dc4c71168a5",
+      "durationMs": 1221,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/organization_pipeline.py",
+      "lineRange": "1-151",
+      "traceId": "4b8e9b8ebc204e1693077cc83199b5a1",
+      "spanId": "a16949ad78f4e11d",
+      "responseId": "msg_01CEUMjRmbMaa7bmXaAQkt5j",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4d-d9e2-73d3-b2f1-f75e6ad1fc16",
+      "durationMs": 53187,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1251-1500",
+      "traceId": "219465015700400e878c9d4b58f915e0",
+      "spanId": "9474184d1637bd2c",
+      "responseId": "msg_012UKE2DfqMbPjiGEFa19jc5",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-7bc7-7642-b217-49eb6a2bbf21",
+      "durationMs": 19899,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": ".github/workflows/getsentry-dispatch.yml",
+      "lineRange": "1-97",
+      "traceId": "a5291e6204fd4cc3a953fef8a56650ea",
+      "spanId": "b693e0df2b83feaa",
+      "responseId": "msg_01WsWHZqD8xbRaut9Rsc8s9f",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4d-d9e1-7eff-b677-3ffbf0968441",
+      "durationMs": 66228,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "1-170",
+      "traceId": "0289d7600bf846bd8c853c598345e7bd",
+      "spanId": "ab4e676767ec9374",
+      "responseId": "msg_01BeXF1agRTBh2z1fLiHDmSV",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-a9ad-77fd-9ffe-f51322a27bc6",
+      "durationMs": 18626,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/serializers/models/apiapplication.py",
+      "lineRange": "1-28",
+      "traceId": "7384c4bfaaf7440aa517195855bce58a",
+      "spanId": "b4896ea44d8f3fdf",
+      "responseId": "msg_014XJuiY2PJj4A7Pzz4rwPSP",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-dc9b-7617-8a0e-05154957fb98",
+      "durationMs": 14804,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "1-202",
+      "traceId": "7938598aeed1443b876e21e13f3cdb9a",
+      "spanId": "b9f0ee651e78342e",
+      "responseId": "msg_01N2yKo3ihjaQcwXrfigbHFK",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4d-d9e2-73d3-b2f1-f365cb40a6f0",
+      "durationMs": 88948,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "171-340",
+      "traceId": "1e610142875e461d8efeac401eb6268f",
+      "spanId": "ab9307dcf24ebc5a",
+      "responseId": "msg_01LVeph34KjRF9RwvYPj74R8",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-f277-7389-ac90-e050433f299a",
+      "durationMs": 18218,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/serializers/models/projectcodeowners.py",
+      "lineRange": "1-118",
+      "traceId": "c85468d0e40f48eca8d706f30fbc1f88",
+      "spanId": "bdb3008b73b4a81e",
+      "responseId": "msg_01PDcM5hwYRPoMZDeu4SVy4R",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4f-1676-70e4-a84f-1fa640509aa9",
+      "durationMs": 20445,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1501-1656",
+      "traceId": "07897e3b72a741bdb9acf6c2c939ebae",
+      "spanId": "8fec5bf2d3894727",
+      "responseId": "msg_01M6QxMHviuBo5ZNh1ytE9yi",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4e-c989-7f5d-8e1e-7bb95ef597d4",
+      "durationMs": 41926,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "341-439",
+      "traceId": "71c8096f48a34b5ba65ea1fbc1d7fa3a",
+      "spanId": "9c53b2274a140550",
+      "responseId": "msg_01YQyLMPbv8dpZ298M1GAa3g",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4f-39a9-7e1c-8c27-77d65dee3b0c",
+      "durationMs": 50168,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "203-404",
+      "traceId": "ef6aa89ca7b441ba82cdd3d977d84bca",
+      "spanId": "a490dc1e6f312999",
+      "responseId": "msg_01Fq1ti4eeHYe8AuVtoE7LbK",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4f-355e-76b9-bf3e-c29410773b68",
+      "durationMs": 54836,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "1-207",
+      "traceId": "e56fff75762b4f0eb0f4b03dcce3cddc",
+      "spanId": "bc6f709bfb90360c",
+      "responseId": "msg_017VmXr3S4Z8bzS8W1SENFGV",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4f-6d59-7c25-8fed-3f90e05b1c1d",
+      "durationMs": 40859,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "1-235",
+      "traceId": "eafc6fc4f1a94a0984c736a99e1c5066",
+      "spanId": "8f96ee27db0e0a98",
+      "responseId": "msg_014CAkFivuumUhR2rSr53GXx",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4f-6659-7cf9-95ea-c674e6106c01",
+      "durationMs": 59132,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket_server/urls.py",
+      "lineRange": "1-12",
+      "traceId": "9fa8417748d94f4394b2cd5398d82669",
+      "spanId": "baad4ff4e8e4d9cd",
+      "responseId": "msg_01TJ3Mh2sy9QsGpobfkUfeg4",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4f-fda9-7e5a-a316-b660052724af",
+      "durationMs": 45669,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "405-606",
+      "traceId": "f6c7b01e1ca942f1bbbdfbf347880df2",
+      "spanId": "a94284e3396aafe4",
+      "responseId": "msg_01PgDWuieyPzqsdNC6uJ2Pk4",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f50-0ba2-7f9b-84b5-375c2ec7f9fe",
+      "durationMs": 53481,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "208-273",
+      "traceId": "7e48cd9882c041b0b07c04dfe78ea755",
+      "spanId": "837f54adcca86a92",
+      "responseId": "msg_01MB2dniSFiqywsFdxYbYHfK",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f50-0cfc-7577-975d-6ca56788aaf2",
+      "durationMs": 54036,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "1-215",
+      "traceId": "6fc7b8df36354cb2a285322a917d0120",
+      "spanId": "acee316d560b4ce9",
+      "responseId": "msg_01U1uTsWRTnWt4a1MUPaACyn",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f50-b016-7e38-a3cb-6ad449d9a0ee",
+      "durationMs": 51918,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "216-282",
+      "traceId": "c84ce810e9584e3988826e3a23ecc80c",
+      "spanId": "b82b8d6ec72be6f8",
+      "responseId": "msg_01L5ArwDQZueXFoqKnnGpjLt",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f51-7aeb-7bed-90bb-83c1f9989f65",
+      "durationMs": 17696,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "1-199",
+      "traceId": "bb47d37ede1a4fb9a1f4db74beb82712",
+      "spanId": "b20fea34163c8da9",
+      "responseId": "msg_013TPa4qjkyfT8j2ZpH88MVP",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f50-e017-73a5-aa96-b1df753af67c",
+      "durationMs": 74265,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "236-470",
+      "traceId": "97b05e15b7394867b515c935ac3c5a57",
+      "spanId": "b666231f93d8a96e",
+      "responseId": "msg_01VZHeqxYiaSxH8EewDJ9AjA",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f50-4d5d-7ff2-a91f-56f48e705b7f",
+      "durationMs": 115899,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/jira_server/webhooks.py",
+      "lineRange": "1-106",
+      "traceId": "6cc09b5fbf504df48e970f6df54bce46",
+      "spanId": "9f8c8af9355dbd3a",
+      "responseId": "msg_01ScU34qx1iesRvXZL76WRD9",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f51-c011-7bd6-b555-eaf1913d23f0",
+      "durationMs": 73135,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/models/data_forwarder.py",
+      "lineRange": "1-39",
+      "traceId": "9ce9e7109f9947719b750e302e7ccbfd",
+      "spanId": "850c48c8c603460c",
+      "responseId": "msg_01PMWRksgnbWpBAexG5dwfWQ",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f52-ddc7-70e6-aabe-19e4326bf540",
+      "durationMs": 1424,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "200-386",
+      "traceId": "25616b409e1e44ad9ec77ef6827dd6f1",
+      "spanId": "a951d773c703f2d6",
+      "responseId": "msg_01VSzqZisHG3Cpfa1gTUznov",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f52-023a-78e3-9f2f-8c7aef507f04",
+      "durationMs": 64658,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "471-605",
+      "traceId": "2d2be803e95340359405144fd492ad33",
+      "spanId": "960a9dd7675573fa",
+      "responseId": "msg_017ddW59mQvpmSjtU9MLG2YJ",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f52-121e-735e-aa68-dbe071f23cf4",
+      "durationMs": 61443,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "607-808",
+      "traceId": "cb4db0ae4aca43599e5eef15db5de4f7",
+      "spanId": "8c38cfe27dc85482",
+      "responseId": "msg_01QYUtJscicWCUzdDnrmcyCa",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f50-dc91-73d4-8b62-56e385be095a",
+      "durationMs": 151760,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/preprod/api/endpoints/pull_request/organization_pullrequest_size_analysis_download.py",
+      "lineRange": "1-76",
+      "traceId": "fc40ee9c37024917a1a96d7d8c90e6f7",
+      "spanId": "a92d704f64c49899",
+      "responseId": "msg_01GR9bBai4KBfWT8AG7JcXH2",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f53-0229-7c29-aada-46715d21f30b",
+      "durationMs": 14098,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "809-864",
+      "traceId": "20fb8fd18e8a4c579f95964247b0ae05",
+      "spanId": "a1bde1ae5677bafa",
+      "responseId": "msg_014V585A6WwFc41FpVLEvUk9",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f53-2d68-74cc-bf85-ab96900eab92",
+      "durationMs": 25889,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/projects/services/project_key/impl.py",
+      "lineRange": "1-87",
+      "traceId": "5efe5b0a558345cfb59976fc10d0e5be",
+      "spanId": "a85619bb14ffc823",
+      "responseId": "msg_01NN82Vuuc8UGfaGB1ZMxY1S",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f53-9291-71f0-8a65-f818d263d3e2",
+      "durationMs": 1408,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/releases/endpoints/project_releases_token.py",
+      "lineRange": "1-66",
+      "traceId": "7f4477051e03416c9ef95dd2d11299da",
+      "spanId": "94a2ae8c521da321",
+      "responseId": "msg_013NzhjooaJeT9uY5BV5D2Cs",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f53-9818-7dc5-b0e4-0683a99a910d",
+      "durationMs": 21318,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/utils/atlassian_connect.py",
+      "lineRange": "1-155",
+      "traceId": "8cef5b99720d4c14be7e70cfe5d6c192",
+      "spanId": "994a75cf077df10f",
+      "responseId": "msg_01Et56DUfUQz8aseYKzx4yDK",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f52-e35d-7bfe-8c39-ef2fcd9e2cd1",
+      "durationMs": 79321,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/preprod/api/endpoints/size_analysis/project_preprod_size_analysis_compare_download.py",
+      "lineRange": "1-122",
+      "traceId": "a4eb320abe30476faf32d5e1802df9c8",
+      "spanId": "86fe2b363eaf0297",
+      "responseId": "msg_01MtUMduwj1yQ2GTwwiewyYA",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f53-3942-75d2-a10c-1b89a76eea99",
+      "durationMs": 66621,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/relocation/api/endpoints/retry.py",
+      "lineRange": "1-148",
+      "traceId": "58166fb9203b47449b56a7bb714da43e",
+      "spanId": "b495c69c86fd2f69",
+      "responseId": "msg_01H9VBGTCd15EffDa86pioMg",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f53-eb64-712c-a167-0824e3634399",
+      "durationMs": 53380,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "1-186",
+      "traceId": "b0b48e10ed0d4872ac9b5ba0d6f6e58b",
+      "spanId": "974d821335595387",
+      "responseId": "msg_015egnspqe5Ve8HnyFmJGc7X",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f54-193d-75bf-bb9c-fa41441e5517",
+      "durationMs": 43152,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "1-209",
+      "traceId": "7dd49878e8bd491e87dd47556eb2245b",
+      "spanId": "ab00cf2578c5fc63",
+      "responseId": "msg_01T16yCcvRyr3L8BUsTfyfWP",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f52-fed2-7509-b40e-25715c76fdff",
+      "durationMs": 121758,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "1-215",
+      "traceId": "aa41f788bfb942f6b4a0bd0231969769",
+      "spanId": "a4f0c81b6e1887e6",
+      "responseId": "msg_018MwVCgDyN59mWCujXAqYsF",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f54-3d88-72a9-b5f6-38ebc8e365de",
+      "durationMs": 68040,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "traceId": "56304e36843640dcb235cc876638144b",
+      "spanId": "931106327d56466a",
+      "responseId": "msg_01HpPEB7D85Q5ozjp15Sdte9",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f54-bbf0-7a2a-93f0-6b216a5250f6",
+      "durationMs": 60210,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1-205",
+      "traceId": "9e0df79b97244f52aabc6d21852fb990",
+      "spanId": "96aa1974ed26d607",
+      "responseId": "msg_01AH6AyoqMSMzAE7JJ9zEpeA",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-a729-77f9-9965-0a44483dfb7f",
+      "durationMs": 16090,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "216-430",
+      "traceId": "bf4bf762c1a149c5bd21c8515aa76492",
+      "spanId": "8e624f697fb11a3a",
+      "responseId": "msg_01DVVCABKDYYFn8XeSkqHAZs",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-4757-7bff-898b-4d0308f19874",
+      "durationMs": 41904,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "206-410",
+      "traceId": "a20b597151e9465f815bbeb5be841445",
+      "spanId": "88b57b1c2aa3f16c",
+      "responseId": "msg_01G4GR8BQNqV2zUJPWEJXVjo",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-e60b-7218-a5e3-96ef06fed06f",
+      "durationMs": 1779,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "411-615",
+      "traceId": "f298c35b4d854006a077af4bfc66b6b2",
+      "spanId": "b02f378641f8b64e",
+      "responseId": "msg_011eFJWhVXF6HuMSBHjVjYSX",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-ed04-773f-adcf-ffc48e55dd8e",
+      "durationMs": 1218,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "616-820",
+      "traceId": "5cd69f082d2347948ca8f30648c8bd3b",
+      "spanId": "8e960c063406eaae",
+      "responseId": "msg_01MLG87MUfyd5YmqPhBNTr4J",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-f1cd-75c6-a7fe-ea1b888553b6",
+      "durationMs": 1165,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "821-1025",
+      "traceId": "7c252e37e3414ebc8c41cd5d59661dd8",
+      "spanId": "95c23ffdd80f4386",
+      "responseId": "msg_013fYaUpF5sZw4AtPDMsZ68u",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-f660-796a-97b0-af4be4d9147f",
+      "durationMs": 1529,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1026-1230",
+      "traceId": "5db91347af034544b85182182c3f571b",
+      "spanId": "a1444b95db267b6d",
+      "responseId": "msg_01LZ8TboVVoz65CcVtgVPupF",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-fc5f-7ad0-9a7f-6f481d5a6436",
+      "durationMs": 1367,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1231-1435",
+      "traceId": "1a0bf53d8f784f52910e4243639e958a",
+      "spanId": "864915aea2cbd477",
+      "responseId": "msg_014Sh1754nPubb2Xxi149AhS",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-01bc-7457-b4d5-a950e488c035",
+      "durationMs": 1142,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "210-299",
+      "traceId": "d7f86e74cba743b483a5fb4748591ab6",
+      "spanId": "9879e9a09ca77099",
+      "responseId": "msg_01H57iWkCvc9ntexBZP53tJf",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f54-da77-7283-b07f-da7840d9428e",
+      "durationMs": 77626,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1436-1640",
+      "traceId": "d4c29cee93a14fb7b87c58cf08df33e8",
+      "spanId": "96513b65013e0808",
+      "responseId": "msg_01JB5ZgeuXur1wyGyoKfNC4s",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-0639-7f39-9d9c-c19489760405",
+      "durationMs": 1646,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1641-1672",
+      "traceId": "1edc41e52fe8494fa4cf951eae9e0b3d",
+      "spanId": "94b6fc6283ef2e09",
+      "responseId": "msg_01RQwGb8Ja6yqyT6a3yjuBSQ",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-0cad-7b31-bbb0-b01443d81932",
+      "durationMs": 1338,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "187-274",
+      "traceId": "870266c03fcd4e55af63c348e91af077",
+      "spanId": "a4a5dd93b893cc74",
+      "responseId": "msg_018cCEPVGGMiPVkLk6sbVibW",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f54-c1d4-7116-a183-8b1353a3835c",
+      "durationMs": 115236,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "431-645",
+      "traceId": "4de3840daf104e33b564fb489588ccdb",
+      "spanId": "9e8480c12d8f7112",
+      "responseId": "msg_01TiEw9k4LnnzX7gRjAz24sB",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f55-eb0e-7085-9e00-842583159835",
+      "durationMs": 49964,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/web/frontend/release_webhook.py",
+      "lineRange": "1-124",
+      "traceId": "b4063c158b374200b641d56738ea0472",
+      "spanId": "aeeef1bd805f3b40",
+      "responseId": "msg_01FAaYRnHKy8K9ttFpjUbbjL",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-11ee-7152-b40b-b2cdc996a98c",
+      "durationMs": 54182,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/web/frontend/mailgun_inbound_webhook.py",
+      "lineRange": "1-92",
+      "traceId": "7b876b446a1847089d3a7ebd3b780e18",
+      "spanId": "a2113a2438f810be",
+      "responseId": "msg_01F1mKy2ys37d3QPoTVkiaaG",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-09b7-7f3d-b561-99aa8ae9d56b",
+      "durationMs": 61114,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "traceId": "6087bcdf55e843668c24de60828b5800",
+      "spanId": "9ccf29321826a09f",
+      "responseId": "msg_013XDkug9NoYMtyfoywYScHP",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-8400-7921-a25b-ec12912a7c68",
+      "durationMs": 34265,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_detector_anomaly_data.py",
+      "lineRange": "1-179",
+      "traceId": "a9fb9dc522b349c6b71ac51769b27549",
+      "spanId": "b0607b52f53ad1cf",
+      "responseId": "msg_014RHruNRu4A2n59NFVbkpuG",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-e59b-7649-abde-d26457500b73",
+      "durationMs": 23254,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "1-275",
+      "traceId": "44d1766581a6433c9e2cda64f88500ce",
+      "spanId": "850c6708fe0be0c8",
+      "responseId": "msg_015ffFaCdiyMUJnu6ByqSRU6",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-4078-779d-b786-4ed0adc29969",
+      "durationMs": 19201,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "1-211",
+      "traceId": "1186f621deff495fac91842c357381e3",
+      "spanId": "b97449861306de7f",
+      "responseId": "msg_01NkHdbkLGCEDrHnM7agBvsv",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-f878-7674-9658-6f1a3dd0df60",
+      "durationMs": 43143,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "212-213",
+      "traceId": "457a6e9725824ffbb023d6aafae4e558",
+      "spanId": "8c9001e4c886dced",
+      "responseId": "msg_01A5Yq3idVkDJ79NYf9S2xJF",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-a107-72b9-851f-8e4e8b9f533b",
+      "durationMs": 1178,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "1-279",
+      "traceId": "17bd4c1896894fea8519c6364f9b299f",
+      "spanId": "962b4efd6467c89d",
+      "responseId": "msg_011Z89Vu6HdkNh4HPe4uXRS2",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-a5a8-7282-8d01-5070957437d3",
+      "durationMs": 1360,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "646-860",
+      "traceId": "239ab9bc528149e184a4123b38074915",
+      "spanId": "96c0ed7cfd57ea3a",
+      "responseId": "msg_01YYuWPyMSWd75vafvsdnx5T",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f56-ae3f-7cbb-b74e-91d26ab9f7ef",
+      "durationMs": 65685,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "280-392",
+      "traceId": "264bd67562584b319c46f942b525da0d",
+      "spanId": "b5a9493f36518ba9",
+      "responseId": "msg_01DBXWhwY3DV7H1NMdCkZvKE",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-ab00-72ed-9cc8-bc0529be57d5",
+      "durationMs": 1308,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/featureFlags/hooks/useFlagSeries.tsx",
+      "lineRange": "1-84",
+      "traceId": "21d00b26bc214a768b16f575b7b40759",
+      "spanId": "a59c147fa829e0b7",
+      "responseId": "msg_01KvQkJPcXzUK3QTjWndqa99",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-b022-7b52-87cb-05af7a6f3524",
+      "durationMs": 48479,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "276-447",
+      "traceId": "86b72db9b4a549d8abaa5e655412ccd2",
+      "spanId": "97535b889bb60ab9",
+      "responseId": "msg_01LLciz7Z7ngvw5ehbhwugvg",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-8b81-7e95-a5bf-927b611e6407",
+      "durationMs": 60818,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "861-965",
+      "traceId": "e96865158ff54fa2b5fbe249d3808ccd",
+      "spanId": "a482935194e39656",
+      "responseId": "msg_019Be4QeMFYTKgEa5XPJ6Qau",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-aeda-7b89-8a89-e1eccbf2f242",
+      "durationMs": 88845,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "1-242",
+      "traceId": "7f978e810b7d46db99a13bab8e20a4cb",
+      "spanId": "940eced827ae740b",
+      "responseId": "msg_0162oQpqwFkvMNCqL6Z3bPdy",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-09ee-7058-9446-a192f5fa6342",
+      "durationMs": 1340,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "1-243",
+      "traceId": "c3e0432b6fb544b88c9543ff4ae87f5b",
+      "spanId": "800583459a009f16",
+      "responseId": "msg_01W2xjdR6rRbpD5m2DVY1JVk",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f58-7919-7d29-95af-155900d04b4a",
+      "durationMs": 46114,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "1-254",
+      "traceId": "de08cfbb6b634610a65f3616820f130e",
+      "spanId": "96e4ea77aae780fd",
+      "responseId": "msg_013a5U4VkyzL4WgNpe4skKDH",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f58-6d89-7717-8366-d3c571cb90b6",
+      "durationMs": 62711,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "255-508",
+      "traceId": "87820ed4377f4f18bd5b09da7ab876af",
+      "spanId": "b2afc6d982483934",
+      "responseId": "msg_0129BZAVPVPGkYSSBVMe9GAT",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-6286-71c7-a57b-6dc08f1ffb23",
+      "durationMs": 1737,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "509-762",
+      "traceId": "e11ca75140ef4cfeb51f222d3fb0328b",
+      "spanId": "bb99b57f24238d05",
+      "responseId": "msg_01Nxp2Ufe8pPHsFJbFDZ9rGv",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-6954-7964-bc8c-9911d060e0a1",
+      "durationMs": 1530,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/jira/client.py",
+      "lineRange": "1-98",
+      "traceId": "f962492228934abab19263283baabfc4",
+      "spanId": "a1139969297e6660",
+      "responseId": "msg_01WCt8Aw3oXQD33tgKZGBnT2",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f57-09e0-7aa4-a6c5-3c6af4d9cf22",
+      "durationMs": 166552,
+      "numTurns": 17,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "763-908",
+      "traceId": "175fb40547ad4ea58b4042327f74256f",
+      "spanId": "b9d66e1fe0df44bc",
+      "responseId": "msg_016TqQ7aXEe5Mdgq9kqVDBxT",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-6f56-7472-a6cb-9724fcc5f8f2",
+      "durationMs": 19289,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "244-274",
+      "traceId": "48786b67e15845879eb2a91f3090325b",
+      "spanId": "95b38319916cd7dc",
+      "responseId": "msg_01DAqDo7cZM8dvon3ndc9XjG",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-2d42-74b6-bfcb-1167b781a0f9",
+      "durationMs": 42506,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "1-234",
+      "traceId": "400ef7a05c1747148a15e49e397c09ca",
+      "spanId": "a66fecd533d8545d",
+      "responseId": "msg_01AHWpG6aZdvVU2Er99572ab",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-947f-7acc-a1d1-b58f5516f387",
+      "durationMs": 21277,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "243-484",
+      "traceId": "5b7ae95d54924ee186c0ae3823e455e6",
+      "spanId": "a212692acb6274d0",
+      "responseId": "msg_01EEmsY5fiffPRkSpUmhSDZr",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-0f2f-70d7-b336-30200208f8f1",
+      "durationMs": 71707,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "485-559",
+      "traceId": "730442c9d73e4dc5bda9dfba49734f0c",
+      "spanId": "a507a1d144a353d0",
+      "responseId": "msg_01JtW5t2BrVFwAewQcVZsMwq",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5a-2752-7a7d-ab3b-ed6dc05e95c5",
+      "durationMs": 1296,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "235-468",
+      "traceId": "77eb9258e08c4ce6ac3196b23eac9243",
+      "spanId": "84a449a7db4fb9df",
+      "responseId": "msg_01E5netjnDw2KADDNhBkDiHJ",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f59-e7a3-7292-ae18-6ef2d3a04bd4",
+      "durationMs": 20173,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "469-554",
+      "traceId": "f50f6595e6a7431fbd03393d644566d2",
+      "spanId": "bb074eded408b77e",
+      "responseId": "msg_01L2BtKrMP9LRveBNCQtJqmM",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5a-3676-7ac3-bd58-e2a9bce3371a",
+      "durationMs": 1500,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1-202",
+      "traceId": "657cd162466c414f900f06d40629c3a6",
+      "spanId": "a29344d3633eab08",
+      "responseId": "msg_01SUvgNgvtg4sLcnT8uCpJri",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-3986-7edd-b79b-00484c1a01f2",
+      "durationMs": 1419,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "203-404",
+      "traceId": "010ff3c0d65f4aa08b38e4ab190ca75c",
+      "spanId": "b39e868322fb6212",
+      "responseId": "msg_01GqM5AfhTCzhanC9QemEhTe",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-3f19-7bed-a256-f396bdc8a320",
+      "durationMs": 1339,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "405-606",
+      "traceId": "44845b0e3c5544348d0e56cef1801a0d",
+      "spanId": "98782fe720936143",
+      "responseId": "msg_01LfZPTcMjrmVsd671x1fVgN",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-445a-7c69-9297-ab59ca32f4cf",
+      "durationMs": 1247,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "607-808",
+      "traceId": "062b58198fdc46539d0cb436bfb1d589",
+      "spanId": "929e0424e5c1a96f",
+      "responseId": "msg_01BNe7yixR4CH2bbAh3tfSt4",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-4940-71c2-918b-7abe35f5ac6d",
+      "durationMs": 1237,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/organization_pinned_searches.py",
+      "lineRange": "1-113",
+      "traceId": "9a5a151a15534e0bb93490315da3a109",
+      "spanId": "b21f3998b6fda627",
+      "responseId": "msg_014EFuufZEZMgnpBwYD2PDR4",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-3986-7edd-b79a-fcc029bb7470",
+      "durationMs": 28187,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "traceId": "e5e8ff22c2fe48bda707f0a5c9427e99",
+      "spanId": "9aac8613ca16ae0f",
+      "responseId": "msg_01Bw4Di3MGaYFRVWGvmqGJ3G",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-3984-7184-950b-6f9cf9116029",
+      "durationMs": 36257,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "809-1010",
+      "traceId": "092cfa3ecc564057bbed96fa52d9e4e8",
+      "spanId": "8ea982d5b6129560",
+      "responseId": "msg_019Fmyv5VKqnczYroGr6Jg6G",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-4e1c-72d2-9f68-f90be6aecab3",
+      "durationMs": 41015,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/auth/services/access/impl.py",
+      "lineRange": "1-125",
+      "traceId": "19aa3793feb7405789f0dda5bd0bf6ae",
+      "spanId": "8c51569d8e7c331f",
+      "responseId": "msg_01VSxdmDszt9Bf9WHZHSdwin",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-3986-7edd-b79b-07a24b3e860b",
+      "durationMs": 59950,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1011-1083",
+      "traceId": "9580271b272449788650381372131fc8",
+      "spanId": "a8f33418d9de187f",
+      "responseId": "msg_01YCNhKhVdZ6Vnbcc1b3dUFB",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-ee5b-7234-9a07-ecdc738fdf8a",
+      "durationMs": 14980,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/codecov/endpoints/repository_token_regenerate/repository_token_regenerate.py",
+      "lineRange": "1-68",
+      "traceId": "ab9200ecd57648b79d75b018e0afdf0a",
+      "spanId": "aa6cd00e7d03f323",
+      "responseId": "msg_01LC6BvSHa7kvWw5xmdzhUiU",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-a7a6-7703-b5f3-f527e2fcbb8d",
+      "durationMs": 59476,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/discover/endpoints/discover_saved_query_detail.py",
+      "lineRange": "1-191",
+      "traceId": "0655a1867cf14f6b8d0ac0a5260f6e41",
+      "spanId": "ba9bb38bc3a77c3f",
+      "responseId": "msg_01WKmPUtnNeYJuwW314hesbw",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5f-23bb-798a-a40e-42effb5dda6d",
+      "durationMs": 34270,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "traceId": "7e6baf2e4a3c4ccdb49ad958ae6b0603",
+      "spanId": "9fd4a9209443df53",
+      "responseId": "msg_01RrJxeNggLLFcRqEG14h6Ex",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5e-c72d-7edd-beb7-aeecd8d447c4",
+      "durationMs": 59710,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/explore/endpoints/explore_saved_query_detail.py",
+      "lineRange": "1-195",
+      "traceId": "663ff29d55964e3daa2077540c650256",
+      "spanId": "81d0d50a8ed46dd8",
+      "responseId": "msg_01HyGQSrVtkm5N58k8ECqCiM",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5f-28e8-70a3-b7e1-010410957467",
+      "durationMs": 46312,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/api/endpoints/external_team_details.py",
+      "lineRange": "1-113",
+      "traceId": "74c36d21de734f4a984886b554c20789",
+      "spanId": "a58780254f521f2e",
+      "responseId": "msg_01JVNFs7PPcvLRSHw6uZucM2",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5f-a9a1-7e74-b956-fd7e09f466ab",
+      "durationMs": 51112,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/flags/endpoints/secrets.py",
+      "lineRange": "1-140",
+      "traceId": "c295cdaaaf0b41d3a989baec9700eb3e",
+      "spanId": "81a7869fcbbb9cde",
+      "responseId": "msg_0123cWN2w691LH9J4vLAn2gc",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5f-9007-7197-859b-88402c3ce879",
+      "durationMs": 60211,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "1-198",
+      "traceId": "d8e1e1c71c084cd9a54dfced720ab0a9",
+      "spanId": "81476374030fd781",
+      "responseId": "msg_01JQzLuDkRTX6imMopahBpr6",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5f-ddda-7bd8-b689-cc35a81b5e06",
+      "durationMs": 49784,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "1-197",
+      "traceId": "63e0c4f081f742939c4eb525a20ebc98",
+      "spanId": "ac510a9374de8160",
+      "responseId": "msg_01BmouBWhEDxwXQx6qxAikUC",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f60-7156-7262-bff1-be10920c93d6",
+      "durationMs": 32890,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "198-394",
+      "traceId": "aa652d3da88d4cada180da9b14be3647",
+      "spanId": "a722070eecb0e94e",
+      "responseId": "msg_01CQ4AeTDyJ9zLnBSAa8aam7",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f60-f1d9-7adb-9f7c-755c063a3093",
+      "durationMs": 50610,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "1-202",
+      "traceId": "398f6f18464b44d598ec71936db115e5",
+      "spanId": "9dec186cc98a333e",
+      "responseId": "msg_01WxjQQEjL1r9sCQMLJSkA2a",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f60-7b41-7ed7-bcd5-7a7574b499cf",
+      "durationMs": 81335,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "199-396",
+      "traceId": "0129e36ee40343c58435c434a18b3ef2",
+      "spanId": "9434a04d97d5da13",
+      "responseId": "msg_01K8DUfJobQuHYbgGm12eSKX",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f60-a05a-7119-87ac-6e8957170bf9",
+      "durationMs": 108979,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "203-404",
+      "traceId": "f59eea3fd37c41f8acf69ea1a1ae75c5",
+      "spanId": "af5c5d24af07acd3",
+      "responseId": "msg_011a8GsrNSc319xkxrt2Y8GP",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f61-b8ff-72a8-9439-5093f54cad05",
+      "durationMs": 37759,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/jira/webhooks/installed.py",
+      "lineRange": "1-110",
+      "traceId": "d90c801e1fa849419743ca388f85a65e",
+      "spanId": "86f718faee866538",
+      "responseId": "msg_01RsrqpgohAEsSsnaGgzzvor",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f5f-b071-7b77-bda4-31b8ac8f3b5d",
+      "durationMs": 171384,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "395-591",
+      "traceId": "0344530bc50a4a58993bc4165bf41f1a",
+      "spanId": "9c10c80a0217cfb9",
+      "responseId": "msg_01CyZ3qiJF6Tkk32HkehHdk2",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f61-b791-760b-bf68-68bfd5484be7",
+      "durationMs": 58582,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "405-606",
+      "traceId": "c739f491b4d540ada405b414b9869d98",
+      "spanId": "ad31d96916aeb1d5",
+      "responseId": "msg_014UwqgZVtUBwZJ5KXrnSKuL",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f62-4c80-7e5e-a48e-b52c690b9ded",
+      "durationMs": 35358,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "397-594",
+      "traceId": "ee951fbb22b34c8fa8873226ec7889ab",
+      "spanId": "93ec4ea2b7cde5bd",
+      "responseId": "msg_017rKHkWhMYypJuQwwUgTCPf",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f62-4a14-7ddd-80e9-5f57be596b95",
+      "durationMs": 43579,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "607-681",
+      "traceId": "cb001d0fddc142a3bb48475a20d44c61",
+      "spanId": "bd8afb4701d0b841",
+      "responseId": "msg_014YPoiHYtpwzAZyJMT5JRSB",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f62-d6a7-7696-ab0a-a86d59aeccbd",
+      "durationMs": 54627,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "595-677",
+      "traceId": "5cdf9555b1ae4313b0f1b93b3fe106e3",
+      "spanId": "b41ce6d9e307a65b",
+      "responseId": "msg_01WUTrDfyyCxGgksYgNQ2WMQ",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f62-f456-749b-96cc-effe7999b9c2",
+      "durationMs": 52381,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/notifications/notification_action/group_type_notification_registry/handlers/metric_alert_registry_handler.py",
+      "lineRange": "1-108",
+      "traceId": "379f77789e2f439499cb2a80fcf62f35",
+      "spanId": "9fe1de0544c327fd",
+      "responseId": "msg_01FBB7caM8qNbGvFaSUiBkbA",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f63-c0f8-793f-b7c8-5a33faa168a6",
+      "durationMs": 1780,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py",
+      "lineRange": "1-128",
+      "traceId": "bd38c03610de424b875b637a618b9b65",
+      "spanId": "9ec9d83329571930",
+      "responseId": "msg_01AeowF2nh8wKQxfTBwM1f69",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f63-c7f5-724a-bf9a-f076056b37ba",
+      "durationMs": 29213,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1-202",
+      "traceId": "9c6dea6e1e8e47e5bcc32ddd8c3be540",
+      "spanId": "a08ba7b1753f8cb0",
+      "responseId": "msg_01MSD3Q6wDer5NVsx83SeDBU",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f62-4df0-7afe-825c-6625422bedbe",
+      "durationMs": 128169,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_approve.py",
+      "lineRange": "1-104",
+      "traceId": "751726b6671b428a91ad7f3f49106dba",
+      "spanId": "b42f917e057fed84",
+      "responseId": "msg_01PxAQRb3vACr38koqqxvTYv",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f64-3a19-7691-9dc3-71f6d003d235",
+      "durationMs": 18997,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "592-747",
+      "traceId": "86924c1259fc4340863f11dfa08b4500",
+      "spanId": "b39512efb1efea25",
+      "responseId": "msg_0185Vy45gSwj4zkdcSuuxSPX",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f62-9c6f-7377-82b0-8a70adfc4d4c",
+      "durationMs": 134179,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "203-404",
+      "traceId": "2cefd9e789764101a98fbfdd0e0bfbc1",
+      "spanId": "95b3b3de1523f128",
+      "responseId": "msg_01FYFWDJD5YhRyzxzq7vXPqT",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f64-429f-7f02-99b6-2665cb33015a",
+      "durationMs": 33090,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "1-199",
+      "traceId": "e6adb55e081749d293c52f6a1a4f6124",
+      "spanId": "be57f8452930609d",
+      "responseId": "msg_01UkXVDWe1WksbgDLR1kN2wh",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f64-a897-79b2-9604-79d399b21777",
+      "durationMs": 12726,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "1-191",
+      "traceId": "c705b93537704c809e906f4a0f67000c",
+      "spanId": "aaed7f8de21d1d8e",
+      "responseId": "msg_01CyXSbZ3P9muhvt196HUK2F",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f64-8455-7827-942b-8bb58b65b750",
+      "durationMs": 33132,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/options_load.py",
+      "lineRange": "1-115",
+      "traceId": "fc270f50e3414c71b6c1ade5fd86f063",
+      "spanId": "83bd090e1df4bdaf",
+      "responseId": "msg_01M4df65A86t2hAXiHan8NCX",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f63-ac0f-73be-a6be-67b78e014460",
+      "durationMs": 93995,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "200-291",
+      "traceId": "f57f5a17ef4f471d9b0dd5e0250c6c2c",
+      "spanId": "83f07603515d1534",
+      "responseId": "msg_01LvwGp4iPvuRv4iaJcofecR",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f64-da53-7861-a45f-51aa4695a09c",
+      "durationMs": 17443,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "192-382",
+      "traceId": "4b9e9f289d2d4d50a8e36dcce36703f4",
+      "spanId": "9b48738575253b13",
+      "responseId": "msg_01XkoA95cX9g8RbDr5up8qCt",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f65-05c7-74d3-8f9d-2154fe09305d",
+      "durationMs": 24153,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "405-606",
+      "traceId": "da21c301daaa4f749482da82850bf63a",
+      "spanId": "baa7bf2bc87eee90",
+      "responseId": "msg_01YUFi38bnT4rQigxrxHjnPE",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f64-c3e8-78cd-a582-5babaa612bd3",
+      "durationMs": 45360,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/endpoints/data_export_notifications.py",
+      "lineRange": "1-26",
+      "traceId": "d19ada98877c498d8aecb3f222089d3c",
+      "spanId": "9aadcd483852e7dd",
+      "responseId": "msg_013zwWXT4wkWPGrC7eFhz6Td",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f65-1b41-7f9e-9092-f3a4ea5fe78c",
+      "durationMs": 52217,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/endpoints/project_replay_details.py",
+      "lineRange": "1-103",
+      "traceId": "589ccf2b9f8a4f36b0e6a37b951ff56e",
+      "spanId": "9564d3decbf29b21",
+      "responseId": "msg_01XnawafrpL4LCX5BPAKtd83",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f65-1e7b-7280-ac14-8f3ba865a8fd",
+      "durationMs": 71543,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "1-202",
+      "traceId": "7efa26b1b4d9418fb63106fad0e61747",
+      "spanId": "8fce645c00c50246",
+      "responseId": "msg_01WbwmVJqDLKAryyWAct4Rnc",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f65-e740-74ac-be43-e7415af2fc67",
+      "durationMs": 24181,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "203-229",
+      "traceId": "705175d5951246fd90c90d542d052a82",
+      "spanId": "8cf8d612ad723f89",
+      "responseId": "msg_01MTTb9Qm2vs7qaQPPprTgLu",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-45bb-7dd2-a541-0ba475b8db2f",
+      "durationMs": 1570,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "1-231",
+      "traceId": "54b5cf9e7b684a20a1cebf28ca30ee49",
+      "spanId": "8d5b48bb1dcab042",
+      "responseId": "msg_01X4bnufknfQUUejoXoUqmSa",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-35f7-70b1-a80e-c49d6e864107",
+      "durationMs": 9391,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "232-462",
+      "traceId": "50c15fb21f8a40618e2ce37362473741",
+      "spanId": "b32a113ed6e7d381",
+      "responseId": "msg_01XpK1FYEZjApNVLEnV1XW2B",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-5aac-7a10-bf7b-7254a2369ae9",
+      "durationMs": 25035,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "607-808",
+      "traceId": "cb1f2bbac4a24ad68077ad9776b353ef",
+      "spanId": "9bfab1fded107430",
+      "responseId": "msg_01WwAUVoyQnDEwm3xj8cF9uk",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f65-7520-7311-b270-4bd802b81103",
+      "durationMs": 87259,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "809-1010",
+      "traceId": "e687ddb35d51488eb5527e2099b2ed82",
+      "spanId": "a2a37a9a5a3491b1",
+      "responseId": "msg_011p23aD1Zw3bVpZ5c4ij3D9",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-ca03-7416-bcd6-873f2de4cce8",
+      "durationMs": 1200,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1011-1037",
+      "traceId": "be0cfe0afbd5479488eea8614bf9f4f5",
+      "spanId": "8d48e88300c27b0a",
+      "responseId": "msg_015WV3uX1HdUr8vYbL13SdHW",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-ceba-7a7f-bb1b-3d473652c5d2",
+      "durationMs": 1507,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "1-192",
+      "traceId": "d9407d0cc3ef49fcb8d20dd638cbb7a3",
+      "spanId": "b0e31c6077729a83",
+      "responseId": "msg_017hP6BCw9jMuuTCvSpnH95a",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-4bea-7baf-9950-257fa66b1369",
+      "durationMs": 51291,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/supergroups/endpoints/organization_supergroups_by_group.py",
+      "lineRange": "1-103",
+      "traceId": "9d82969037854118b059e7c17c71c0a6",
+      "spanId": "947b5102a3db6fb7",
+      "responseId": "msg_01CfUpTzeFnFziHXYbb99gW4",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-d4a2-7910-ac5b-495489f01523",
+      "durationMs": 31403,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "463-671",
+      "traceId": "b90213db012a4d81b18301840ac0099b",
+      "spanId": "b5648af0c2deef9a",
+      "responseId": "msg_01XJeu2wNxZZ9FbnqJ4cNoyb",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f66-bc7d-7658-853f-7ce6b4e415a9",
+      "durationMs": 44040,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "193-384",
+      "traceId": "0f00ed8470a64792b86d601f4573fdd5",
+      "spanId": "a6bb9253f495d945",
+      "responseId": "msg_01Tri9btH4bL6R9qhjQkzgUR",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-144a-755e-802d-8adb0de925be",
+      "durationMs": 24825,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "385-405",
+      "traceId": "e25a6452a2214810a176b96c7332e0bd",
+      "spanId": "9aa47059d7a2d624",
+      "responseId": "msg_01AzbBQctAwiFkWHBhsfvUqi",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-7549-72d7-aaf0-e1f8c9836f3b",
+      "durationMs": 1536,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "383-573",
+      "traceId": "efc8e2f430654120a4af15d110fa3303",
+      "spanId": "9afe3cc172d184ba",
+      "responseId": "msg_01HMw9REiVvhE6gtjgY8kx1S",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f65-6428-70fa-9c3f-fcdf56f28f78",
+      "durationMs": 159978,
+      "numTurns": 20,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "574-754",
+      "traceId": "9d8fc1e1a19d4d3fa2a881f59de7e083",
+      "spanId": "b85ba1b83093192b",
+      "responseId": "msg_01QsNM3C1KzdPcCpXCyENVhd",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-d518-78c5-97ea-fbf30b7f6e84",
+      "durationMs": 1547,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/users/models/user_merge_verification_code.py",
+      "lineRange": "1-77",
+      "traceId": "1cbc8d54c1e64bb6834aa6f1fcb1241a",
+      "spanId": "b9cc2798cf8eb930",
+      "responseId": "msg_01S2BceMxtThCrUVZBToJpmz",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-7b4e-75f5-88c0-29d52c90221e",
+      "durationMs": 32194,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "1-208",
+      "traceId": "effe6b5322614a3c98e330d2f05da6b9",
+      "spanId": "957986d6dad7d7f5",
+      "responseId": "msg_01FUL7K4AgyKPFqBwSqrdGAK",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-f916-7048-981a-cc328989e7a1",
+      "durationMs": 20233,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_open_periods.py",
+      "lineRange": "1-173",
+      "traceId": "8e443179bdcd452bb401c85d48f692a5",
+      "spanId": "b9c2baf3fad074f8",
+      "responseId": "msg_01VLDaBRQrGZVkoxBB8cJgFx",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-db2a-71d3-a3b0-010cb2db4eba",
+      "durationMs": 29777,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "1-207",
+      "traceId": "4431c34cfe504d199a532f2e038f1f41",
+      "spanId": "b508f8eebcc12d82",
+      "responseId": "msg_01HFzyT6fFtAuEanaCzY5kwd",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-688a-7b96-9809-0cce579c54be",
+      "durationMs": 77251,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "209-371",
+      "traceId": "8fac5491579b4496b818491bfb9b39ce",
+      "spanId": "a96420fe7926d03b",
+      "responseId": "msg_01Fbk1ZUQnf6Xk1QXMpcjaPU",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f68-4826-761f-a021-aaf0bdb13f6f",
+      "durationMs": 46437,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "traceId": "24e00cdadecc46a08c7a03ade44d7655",
+      "spanId": "8ba68724d0710520",
+      "responseId": "msg_01R7MZALXysXved2C5Bkd1rT",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f67-4f53-7fbb-b204-9634137ae10b",
+      "durationMs": 181407,
+      "numTurns": 29,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "208-414",
+      "traceId": "6f936eca647f4933bf63ded1cbb12a36",
+      "spanId": "8dfb2193c8d839a1",
+      "responseId": "msg_0124Mjrz9Y4Z5xVv5KPjprco",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f68-9653-75ef-9e8f-78d6f96e8a79",
+      "durationMs": 131948,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "415-621",
+      "traceId": "d9ddb89de9d24e568fe70b44fddb72f8",
+      "spanId": "b31db38be9767b96",
+      "responseId": "msg_01GQB3aoZkFHDhYNt47ymzxv",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f6a-99c6-77b3-8db4-a1a8389e6cd1",
+      "durationMs": 81387,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "622",
+      "traceId": "f1cfc7b169684c099b55bcc4211eae39",
+      "spanId": "be1dd3b086462cba",
+      "responseId": "msg_011a6FQhwER26jEWsUEHyjAw",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f6b-d7b8-7708-ab91-9079b5da39b7",
+      "durationMs": 1290,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "filename": "src/sentry/api/endpoints/organization_events_root_cause_analysis.py",
+      "lineRange": "1-218",
+      "traceId": "7e0ddb1aed564e7997acbe8f745af76a",
+      "spanId": "9772d4fec2c23197",
+      "responseId": "msg_01TPqi2bRnLUPcMMUGgyCFCv",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4b-1bd4-7977-b55d-5c7624ebaf58",
+      "durationMs": 73819,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "traceId": "4ce94afabf834823b796de53f75a1d4b",
+      "spanId": "8a69b66303777386",
+      "responseId": "msg_01CtSYWUYTU6dj2vfJkLHvqS",
+      "responseModel": "claude-sonnet-4-6",
+      "sessionId": "019e8f4b-1bd5-739a-97ef-5b11ddfa60db",
+      "durationMs": 123889,
+      "numTurns": 6,
+      "status": "success"
+    }
+  ],
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-06-03",
+    "knownFindingCount": 86,
+    "knownFound": 25,
+    "knownMissed": 61,
+    "knownPartial": 0,
+    "knownFoundRate": 0.2907,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count."
+  },
+  "scores": [
+    {
+      "findingId": "WRY-AH6",
+      "matchedCorpusIds": [
+        "sentry-vuln-007"
+      ],
+      "verdict": "known-found",
+      "notes": "Same release-threshold empty project-list exposure."
+    },
+    {
+      "findingId": "8KB-M3L",
+      "matchedCorpusIds": [
+        "sentry-vuln-003"
+      ],
+      "verdict": "known-found",
+      "notes": "Same InternalEAFeaturesEndpoint permission bypass."
+    },
+    {
+      "findingId": "ZTK-YTR",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Credential logging is not the system options allowlist tuple bug in this SHA."
+    },
+    {
+      "findingId": "UN3-P5R",
+      "matchedCorpusIds": [
+        "sentry-vuln-008"
+      ],
+      "verdict": "known-found",
+      "notes": "Same system options allowlist tuple bug."
+    },
+    {
+      "findingId": "VAK-T9K",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Plaintext password session storage is not the SUPERUSER_ORG_ID superuser reauth fail-open bug."
+    },
+    {
+      "findingId": "9LV-U2E",
+      "matchedCorpusIds": [
+        "sentry-vuln-001"
+      ],
+      "verdict": "known-found",
+      "notes": "Same invite-accept fallthrough member deletion bug."
+    },
+    {
+      "findingId": "P29-VAG",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-unsafe HMAC comparison is not the Statsig timestamp freshness bug."
+    },
+    {
+      "findingId": "YCF-ZYY",
+      "matchedCorpusIds": [
+        "sentry-vuln-051"
+      ],
+      "verdict": "known-found",
+      "notes": "Same unsigned Bitbucket Server webhook bug."
+    },
+    {
+      "findingId": "H2Q-8KX",
+      "matchedCorpusIds": [
+        "sentry-vuln-062"
+      ],
+      "verdict": "known-found",
+      "notes": "Same client_secret_jwt replay-cache and exp weakness."
+    },
+    {
+      "findingId": "2FL-UGD",
+      "matchedCorpusIds": [
+        "sentry-vuln-073"
+      ],
+      "verdict": "known-found",
+      "notes": "Same uuid1 release webhook token bug."
+    },
+    {
+      "findingId": "W34-V23",
+      "matchedCorpusIds": [
+        "sentry-vuln-048"
+      ],
+      "verdict": "known-found",
+      "notes": "Same project size-analysis comparison download IDOR."
+    },
+    {
+      "findingId": "ZWG-CWT",
+      "matchedCorpusIds": [
+        "sentry-vuln-055"
+      ],
+      "verdict": "known-found",
+      "notes": "Same org-level Seer RPC project-access bypass."
+    },
+    {
+      "findingId": "N6G-PSG",
+      "matchedCorpusIds": [
+        "sentry-vuln-082"
+      ],
+      "verdict": "known-found",
+      "notes": "Same ECharts tooltip HTML injection path."
+    },
+    {
+      "findingId": "5EL-PPM",
+      "matchedCorpusIds": [
+        "sentry-vuln-080"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Autofix window.open URL validation bug."
+    },
+    {
+      "findingId": "LS4-UT8",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "CSV header sanitization gap is not the disableMacros tab/carriage-return prefix bug."
+    },
+    {
+      "findingId": "FUZ-J8X",
+      "matchedCorpusIds": [
+        "sentry-vuln-079"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Jira JQL backslash escaping bug."
+    },
+    {
+      "findingId": "H27-M9U",
+      "matchedCorpusIds": [
+        "sentry-vuln-078"
+      ],
+      "verdict": "known-found",
+      "notes": "Same legacy Jira TLS verification disablement."
+    },
+    {
+      "findingId": "8TC-FDZ",
+      "matchedCorpusIds": [
+        "sentry-vuln-021"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Codecov token regeneration org:read authorization bug."
+    },
+    {
+      "findingId": "LY9-89V",
+      "matchedCorpusIds": [
+        "sentry-vuln-022"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Explore saved-query visit missing object permission check."
+    },
+    {
+      "findingId": "D6Z-TTY",
+      "matchedCorpusIds": [
+        "sentry-vuln-025"
+      ],
+      "verdict": "known-found",
+      "notes": "Same external team details org-only scoping bug."
+    },
+    {
+      "findingId": "8MF-55A",
+      "matchedCorpusIds": [
+        "sentry-vuln-023"
+      ],
+      "verdict": "known-found",
+      "notes": "Same flag webhook signing secret org:read creation bug."
+    },
+    {
+      "findingId": "3VR-VYV",
+      "matchedCorpusIds": [
+        "sentry-vuln-013"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Perforce password exposure in config data."
+    },
+    {
+      "findingId": "NQU-Y9K",
+      "matchedCorpusIds": [
+        "sentry-vuln-026"
+      ],
+      "verdict": "known-found",
+      "notes": "Same messaging identity unlink ownership bug."
+    },
+    {
+      "findingId": "4ZE-KPV",
+      "matchedCorpusIds": [
+        "sentry-vuln-011"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Jira install webhook JWT issuer/clientKey binding bug."
+    },
+    {
+      "findingId": "HGS-EPD",
+      "matchedCorpusIds": [
+        "sentry-vuln-012"
+      ],
+      "verdict": "known-found",
+      "notes": "Same MS Teams group_id cross-tenant issue mutation bug."
+    },
+    {
+      "findingId": "CM9-PX8",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Perforce SSRF is not the Perforce password exposure corpus bug."
+    },
+    {
+      "findingId": "EMC-S4B",
+      "matchedCorpusIds": [
+        "sentry-vuln-015"
+      ],
+      "verdict": "known-found",
+      "notes": "Same replay data export PubSub verification bug."
+    },
+    {
+      "findingId": "SJX-NS6",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Slack token logging is not the Slack rule lookup or Insights project_id corpus bug."
+    },
+    {
+      "findingId": "MXN-T5V",
+      "matchedCorpusIds": [
+        "sentry-vuln-034"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Seer autofix run_id/group ownership bug."
+    },
+    {
+      "findingId": "A53-RXY",
+      "matchedCorpusIds": [
+        "sentry-vuln-037"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Sentry App cell service project-access bypass."
+    },
+    {
+      "findingId": "AK2-N2Z",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Sentry App URI redirect is not the GroupEventJsonView project-access corpus bug."
+    },
+    {
+      "findingId": "WRR-PX4",
+      "matchedCorpusIds": [
+        "sentry-vuln-010"
+      ],
+      "verdict": "known-found",
+      "notes": "Same system options cleartext credential logging bug."
+    }
+  ],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run used --runtime pi --model anthropic/claude-sonnet-4-6 --traces with no explicit --effort, so it captures Pi default medium thinking. Warden post-analysis verification was enabled by benchmark config. The raw JSONL artifacts contain complete per-chunk traces and verifier usage, but remain withheld pending sensitive-data review."
+}

@@ -22,6 +22,7 @@
     "update-pricing-pr": "pnpm --filter @sentry/warden update-pricing-pr",
     "generate:jsonl-schema": "pnpm --filter @sentry/warden generate:jsonl-schema",
     "docs": "pnpm --filter warden-docs dev",
+    "docs:check": "pnpm -C packages/docs check",
     "prepare": "simple-git-hooks",
     "pack:warden": "pnpm --filter @sentry/warden pack"
   },

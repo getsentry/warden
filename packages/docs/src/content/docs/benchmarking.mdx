@@ -29,8 +29,8 @@ Sentry repository.
 The score table is the headline. The cost and timing tables below it are
 operational context for understanding why two runs with similar scores may look
 very different to operate. This matrix only shows stable comparison runs with
-per-chunk timing metadata; older incomplete runs remain in the result data but
-are hidden here.
+per-chunk timing metadata and no failed chunks; older incomplete or partial
+runs remain in the result data but are hidden here.
 
 <BenchmarkRuns />
 
@@ -59,24 +59,27 @@ Total findings is the amount of review output Warden produced before scoring.
 A higher number can be good if it finds more real vulnerabilities, but it also
 means more human review.
 
-Cost is the provider-reported cost persisted in the result metadata, not cost
-per finding. The cost table shows one run-cost column plus the persisted input
-and output token totals. Total cost can include Warden's post-analysis verifier
-and other auxiliary model calls, but those calls may use auxiliary or synthesis
-models rather than the model being benchmarked. Because of that, auxiliary cost
-is operational context, not a useful comparison dimension for this matrix. The
-raw JSONL logs are kept outside the docs until they have been reviewed for
-sensitive data. Current runs scan the same 156 analysis chunks; failed chunks
-are shown in the run table when present. When the raw artifacts preserve
-verifier usage, it is included under `auxiliaryUsage.verification`; some run
-shapes only persist the final total or per-chunk analysis usage.
+Recorded cost is the provider-reported cost persisted in the result metadata,
+not cost per finding. The cost table shows one recorded-cost column plus the
+persisted input and output token totals. Recorded cost can include Warden's
+post-analysis verifier and other auxiliary model calls, but those calls may use
+auxiliary or synthesis models rather than the model being benchmarked. Because
+of that, auxiliary cost is operational context, not a useful comparison
+dimension for this matrix. The raw JSONL logs are kept outside the docs until
+they have been reviewed for sensitive data. Current displayed runs scan the
+same 156 analysis chunks with zero failed chunks. Rows with failed chunks stay
+out of the stable matrix until they are rerun or explicitly recorded as partial.
+When the raw artifacts preserve verifier usage, it is included under
+`auxiliaryUsage.verification`; some run shapes only persist the final total or
+per-chunk analysis usage.
 
 Some run shapes persist only per-chunk analysis usage. The Opus 4.6 high-effort
-Pi run completed with no failed chunks, but its live CLI shard
-summaries showed approximately $38.43 total including auxiliary/post-processing
-work while the persisted JSONL artifacts contain $30.89 of scan cost. Until
-the artifact format preserves that auxiliary usage exactly, the table uses the
-persisted JSONL cost and the run note records the gap.
+Pi run completed with no failed chunks, but its live CLI shard summaries showed
+approximately $38.43 total including auxiliary/post-processing work while the
+persisted JSONL artifacts contain $30.89 of scan cost. Until the artifact
+format preserves that auxiliary usage exactly, the table uses the persisted
+JSONL cost and the run note records the gap. Treat recorded cost as operational
+accounting for a row, not normalized model pricing.
 
 Treat duration as an operational measurement, not a stable model quality
 metric. P50 and P90 come from per-analysis-chunk `durationMs` records in the
@@ -95,14 +98,30 @@ corpus and target files are identical.
 Pi runs without an explicit Warden `--effort` use Pi's default thinking level,
 which is currently medium.
 
+The Opus 4.7 and 4.8 Pi runs currently have an unusual shape. They complete
+cleanly, but many no-finding chunks are very short. In the traced Opus 4.8 Pi
+rerun, chunks with findings averaged 4.3 turns and 3.1k output tokens, while
+no-finding chunks averaged 1.8 turns and 824 output tokens. Eighty-one of 137
+no-finding chunks were one-turn scans, and 32 of 68 missed corpus entries were
+covered by one-turn no-finding scans. The Opus 4.7 run predates trace capture,
+but its low token use and short timings show a similar pattern.
+
+Treat this as a hypothesis, not a model diagnosis. Through Pi, the traces
+suggest many no-finding chunks terminate early. The miss pattern is consistent
+with under-exploration of cross-file authorization and data-boundary invariants,
+not a proven inability to reason about a found issue.
+
 ## Current Takeaway
 
-In the current agent-verified rows, GPT 5.5 on Pi with explicit high effort
-found 41 of 86. Sonnet 4.6 found 23 of 86 through the Claude SDK, and Opus 4.6
-on Pi with explicit high effort also found 23 of 86. Opus 4.8 found 16 of 86 on
-Pi at Pi's default level, 14 of 86 on Pi with explicit high effort,
-and 17 of 86 through the Claude SDK. Opus 4.7 on Pi found 6 of 86 at Pi's
-default level.
+In the current clean, agent-verified rows, GPT 5.5 on Pi found 41 of 86 with
+explicit high effort and 28 of 86 with explicit low effort. Sonnet 4.6 found 25
+of 86 on Pi at Pi's default level. Opus 4.6 on Pi with explicit high effort
+found 23 of 86. Opus 4.8 found 18 of 86 on Pi at Pi's default level, 14 of 86
+on Pi with explicit high effort, and 17 of 86 through the Claude SDK. Opus 4.7
+on Pi found 6 of 86 at Pi's default level.
+
+A Claude SDK Sonnet 4.6 run found 23 of 86, but one chunk failed, so it is kept
+in the result data and omitted from the stable matrix until rerun cleanly.
 
 Use those numbers as a relative comparison for this corpus. They are not a
 general pass rate for Sentry.

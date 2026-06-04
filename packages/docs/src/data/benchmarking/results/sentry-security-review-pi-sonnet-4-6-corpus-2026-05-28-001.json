@@ -1,5 +1,6 @@
 {
   "runId": "sentry-security-review-pi-sonnet-4-6-corpus-2026-05-28-001",
+  "supersededBy": "sentry-security-review-pi-sonnet-4-6-traced-corpus-2026-06-03-001",
   "corpusId": "sentry-vulnerability-corpus",
   "repository": "getsentry/sentry",
   "wardenVersion": "0.34.0",
