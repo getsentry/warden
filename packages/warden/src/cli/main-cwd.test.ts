@@ -16,6 +16,7 @@ vi.mock('../sentry.js', () => ({
   setRepositoryScope: vi.fn(),
   emitRunMetric: vi.fn(),
   getTraceId: vi.fn(() => undefined),
+  initSentry: vi.fn(),
 }));
 
 vi.mock('./commands/build.js', () => ({

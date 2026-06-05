@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
-import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId } from '../sentry.js';
+import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId, initSentry } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfigFile, resolveSkillConfigs } from '../config/loader.js';
 import type { SkillDefinition, WardenConfig, Effort } from '../config/schema.js';
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
@@ -1738,6 +1738,7 @@ export async function main(): Promise<void> {
     // Not in a git repo - use cwd
   }
   loadEnvFiles(envDir);
+  initSentry('cli');
 
   // Show header (unless JSON output or quiet)
   if (!options.json) {

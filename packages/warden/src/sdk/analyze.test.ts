@@ -529,6 +529,67 @@ describe('analyzeFile', () => {
     }));
   });
 
+  it('passes the hunk span to runtimes so runtime spans are captured in traces', async () => {
+    const runSkill = vi.fn(async (request: Parameters<Runtime['runSkill']>[0]) => {
+      expect(request.parentSpan).toBeDefined();
+      return startTracedSpan(
+        {
+          op: 'gen_ai.invoke_agent',
+          name: 'invoke_agent security-review',
+          parentSpan: request.parentSpan,
+          attributes: {
+            'gen_ai.operation.name': 'invoke_agent',
+            'gen_ai.agent.name': 'security-review',
+          },
+        },
+        () => ({
+          result: {
+            status: 'success',
+            text: JSON.stringify({ findings: [] }),
+            errors: [],
+            usage: makeUsage(),
+            responseId: 'resp-parented',
+            responseModel: 'claude-test',
+            sessionId: 'session-parented',
+            durationMs: 1200,
+            numTurns: 1,
+          },
+        }),
+      );
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const result = await analyzeFile(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makePreparedFile(),
+      '/tmp/repo',
+      {
+        runtime: 'claude',
+        captureTraces: true,
+      },
+    );
+
+    const trace = result.traces?.[0];
+    expect(trace?.spans).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        op: 'gen_ai.invoke_agent',
+        parentSpanId: trace?.spanId,
+        attributes: expect.objectContaining({
+          'gen_ai.operation.name': 'invoke_agent',
+        }),
+      }),
+    ]));
+  });
+
   it('counts provider failures once per hunk after retries are exhausted', async () => {
     const controller = new AbortController();
     const circuitBreaker = new ProviderFailureCircuitBreaker({

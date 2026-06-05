@@ -372,6 +372,7 @@ export const claudeRuntime: Runtime = {
       {
         op: 'gen_ai.invoke_agent',
         name: genAiSpanName('invoke_agent', skillName),
+        ...(request.parentSpan ? { parentSpan: request.parentSpan } : {}),
         attributes: {
           'gen_ai.operation.name': 'invoke_agent',
           'gen_ai.provider.name': 'anthropic',
@@ -468,6 +469,7 @@ export const claudeRuntime: Runtime = {
                 setGenAiInputMessagesAttr(chatSpan, inputMessages);
                 setGenAiOutputMessagesAttrFromMessages(chatSpan, [turn.outputMessage]);
               },
+              request.traceRecorder,
             );
 
             for (const toolUse of turn.toolUses) {
@@ -491,7 +493,7 @@ export const claudeRuntime: Runtime = {
                   attributes,
                 });
                 toolSpan.end(endTime);
-                recordTracedSpan(toolSpan);
+                recordTracedSpan(toolSpan, request.traceRecorder);
               } else {
                 startTracedSpan(
                   {
@@ -501,6 +503,7 @@ export const claudeRuntime: Runtime = {
                     attributes,
                   },
                   () => undefined,
+                  request.traceRecorder,
                 );
               }
             }
@@ -634,6 +637,7 @@ export const claudeRuntime: Runtime = {
           stderr,
         };
       },
+      request.traceRecorder,
     );
   },
 

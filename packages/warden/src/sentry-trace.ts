@@ -123,8 +123,12 @@ function hasFinally(value: unknown): value is Promise<unknown> {
  * Warden-owned, though, so structured run output only depends on spans we
  * explicitly create through this helper.
  */
-export function startTracedSpan<T>(options: SentryStartSpanOptions, callback: (span: Span) => T): T {
-  const recorder = activeTraceRecorder();
+export function startTracedSpan<T>(
+  options: SentryStartSpanOptions,
+  callback: (span: Span) => T,
+  traceRecorder?: TraceRecorder,
+): T {
+  const recorder = traceRecorder ?? activeTraceRecorder();
   let spanRef: Span | undefined;
   const recordSpan = (): void => recorder?.record(spanRef);
 
@@ -150,9 +154,9 @@ export function startInactiveTracedSpan(options: SentryStartSpanOptions): Span {
   return Sentry.startInactiveSpan(options);
 }
 
-/** Record a manually-ended span in the active Warden trace buffer. */
-export function recordTracedSpan(span: Span | undefined): void {
-  activeTraceRecorder()?.record(span);
+/** Record a manually-ended span in Warden's active or explicit trace buffer. */
+export function recordTracedSpan(span: Span | undefined, traceRecorder?: TraceRecorder): void {
+  (traceRecorder ?? activeTraceRecorder())?.record(span);
 }
 
 /** Create a hunk-scoped recorder for Warden-owned spans under a Sentry parent span. */

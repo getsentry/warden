@@ -2,7 +2,7 @@ import type { Span } from '@sentry/node';
 import type { SkillDefinition } from '../config/schema.js';
 import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
-import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics } from '../sentry.js';
+import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
@@ -287,6 +287,10 @@ async function analyzeHunk(
   callbacks?: HunkAnalysisCallbacks,
   prContext?: PRPromptContext
 ): Promise<HunkAnalysisResult> {
+  if (options.captureTraces) {
+    ensureLocalTracing();
+  }
+
   const lineRange = callbacks?.lineRange ?? formatHunkLineRange(hunkCtx);
 
   return Sentry.startSpan(
@@ -382,6 +386,8 @@ async function analyzeHunk(
             repoPath,
             skillName: skill.name,
             tools: skill.tools,
+            parentSpan: span,
+            traceRecorder,
             options: {
               maxTurns: options.maxTurns,
               model: options.model,

@@ -13,7 +13,9 @@
  * hunk parsing, extraction repair, deduplication, fix gates, or reporting.
  */
 import { z } from 'zod';
+import type { Span } from '@sentry/node';
 import type { Effort, ToolConfig } from '../../config/schema.js';
+import type { TraceRecorder } from '../../sentry-trace.js';
 import type { UsageStats } from '../../types/index.js';
 
 export const RuntimeNameSchema = z.enum(['claude', 'pi']);
@@ -49,6 +51,10 @@ export interface SkillRunRequest {
    * Normal skill analysis keeps this false so hunks remain read-only.
    */
   allowMutatingTools?: boolean;
+  /** Optional parent span used to attach runtime telemetry to a hunk trace. */
+  parentSpan?: Span;
+  /** Optional recorder used to persist runtime child spans in structured traces. */
+  traceRecorder?: TraceRecorder;
   /** Provider-specific settings consumed only by the selected runtime adapter. */
   providerOptions?: unknown;
 }

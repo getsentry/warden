@@ -33,7 +33,7 @@ import type { Span } from '@sentry/node';
 import { z } from 'zod';
 import type { Effort, ToolConfig, ToolName } from '../../config/schema.js';
 import { Sentry } from '../../sentry.js';
-import { recordTracedSpan, startInactiveTracedSpan, startTracedSpan } from '../../sentry-trace.js';
+import { recordTracedSpan, startInactiveTracedSpan, startTracedSpan, type TraceRecorder } from '../../sentry-trace.js';
 import type { UsageStats } from '../../types/index.js';
 import { bridgeWardenProviderApiKeyEnv } from '../../utils/index.js';
 import { extractJson } from '../haiku.js';
@@ -111,6 +111,8 @@ interface PiPromptOptions {
   toolDescriptions?: Record<string, string>;
   /** Parent `invoke_agent` span for model-call and tool-execution child spans. */
   parentSpan?: Span;
+  /** Recorder used to persist runtime child spans in structured traces. */
+  traceRecorder?: TraceRecorder;
 }
 
 function errorMessage(error: unknown): string {
@@ -428,7 +430,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
         span.setAttribute('error.type', 'tool_error');
       }
       span.end();
-      recordTracedSpan(span);
+      recordTracedSpan(span, options.traceRecorder);
     } catch {
       // Telemetry should never break the workflow.
     }
@@ -439,7 +441,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       try {
         span.setAttribute('error.type', errorType);
         span.end();
-        recordTracedSpan(span);
+        recordTracedSpan(span, options.traceRecorder);
       } catch {
         // Telemetry should never break the workflow.
       }
@@ -479,6 +481,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
           setGenAiInputMessagesAttr(span, conversationMessages);
           setGenAiOutputMessagesAttrFromMessages(span, [outputMessage]);
         },
+        options.traceRecorder,
       );
     } catch {
       // Telemetry should never break the workflow.
@@ -761,6 +764,7 @@ export const piRuntime: Runtime = {
       {
         op: 'gen_ai.invoke_agent',
         name: genAiSpanName('invoke_agent', skillName),
+        ...(request.parentSpan ? { parentSpan: request.parentSpan } : {}),
         attributes: {
           'gen_ai.operation.name': 'invoke_agent',
           'gen_ai.provider.name': genAiProviderName('pi', model),
@@ -786,6 +790,7 @@ export const piRuntime: Runtime = {
             effort,
             abortController,
             parentSpan: span,
+            traceRecorder: request.traceRecorder,
           });
           run.warnings.unshift(...skillTools.warnings);
           const result = normalizePiResult(run);
@@ -833,6 +838,7 @@ export const piRuntime: Runtime = {
           throw error;
         }
       },
+      request.traceRecorder,
     );
   },
 

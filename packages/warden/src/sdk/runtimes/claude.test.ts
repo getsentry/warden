@@ -1,12 +1,30 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll, afterEach } from 'vitest';
 import { query, type SDKMessage, type SDKResultError, type SDKResultSuccess } from '@anthropic-ai/claude-agent-sdk';
 import { claudeRuntime } from './claude.js';
+import { Sentry } from '../../sentry.js';
+import { startTraceRecorder } from '../../sentry-trace.js';
+import type { TraceSpan } from '../../types/index.js';
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: vi.fn(),
 }));
 
 const mockQuery = vi.mocked(query);
+
+beforeAll(() => {
+  Sentry.init({
+    dsn: 'https://public@example.com/1',
+    tracesSampleRate: 1,
+    transport: () => ({
+      send: vi.fn(async () => ({})),
+      flush: vi.fn(async () => true),
+    }),
+  });
+});
+
+afterAll(async () => {
+  await Sentry.close(0);
+});
 
 function successResult(overrides: Partial<SDKResultSuccess> = {}): SDKResultSuccess {
   return {
@@ -302,6 +320,100 @@ describe('claudeRuntime.runSkill', () => {
       cacheCreationInputTokens: 100,
     });
     expect(result.result?.usage.costUSD).toBeCloseTo(0.023645, 6);
+  });
+
+  it('records Claude runtime spans under the provided hunk trace parent', async () => {
+    mockQuery.mockReturnValue(mockStream([
+      {
+        type: 'assistant',
+        message: {
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-test',
+          content: [
+            { type: 'text', text: 'checking file' },
+            { type: 'tool_use', id: 'tool-1', name: 'Read', input: { file_path: 'README.md' } },
+          ],
+          stop_reason: 'tool_use',
+          stop_sequence: null,
+          usage: {
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 10 },
+            cache_creation_input_tokens: 10,
+            cache_read_input_tokens: 30,
+            server_tool_use: { web_fetch_requests: 0, web_search_requests: 0 },
+            service_tier: 'standard',
+          },
+        },
+        parent_tool_use_id: null,
+        uuid: '00000000-0000-4000-8000-000000000012',
+        session_id: 'session-1',
+      } as unknown as SDKMessage,
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool-1',
+              content: 'file contents',
+              is_error: false,
+            },
+          ],
+        },
+        parent_tool_use_id: null,
+        uuid: '00000000-0000-4000-8000-000000000013',
+        session_id: 'session-1',
+      } as unknown as SDKMessage,
+      successResult(),
+    ]));
+
+    let spans: TraceSpan[] | undefined;
+    await Sentry.startSpan({ op: 'skill.analyze_hunk', name: 'analyze hunk src/example.ts:1' }, async (span) => {
+      const traceRecorder = startTraceRecorder(span);
+      await claudeRuntime.runSkill({
+        systemPrompt: 'system',
+        userPrompt: 'user',
+        repoPath: '/repo',
+        skillName: 'test-skill',
+        parentSpan: span,
+        traceRecorder,
+        options: {
+          model: 'claude-test',
+        },
+      });
+      spans = traceRecorder?.snapshot();
+    });
+
+    expect(spans).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        op: 'gen_ai.invoke_agent',
+        name: 'invoke_agent test-skill',
+      }),
+      expect.objectContaining({
+        op: 'gen_ai.chat',
+        name: 'chat claude-test',
+        attributes: expect.objectContaining({
+          'gen_ai.operation.name': 'chat',
+          'gen_ai.response.model': 'claude-test',
+        }),
+      }),
+      expect.objectContaining({
+        op: 'gen_ai.execute_tool',
+        name: 'execute_tool Read',
+        attributes: expect.objectContaining({
+          'gen_ai.operation.name': 'execute_tool',
+          'gen_ai.tool.name': 'Read',
+          'gen_ai.tool.call.id': 'tool-1',
+          'gen_ai.tool.call.arguments': JSON.stringify({ file_path: 'README.md' }),
+          'gen_ai.tool.call.result': JSON.stringify('file contents'),
+        }),
+      }),
+    ]));
+    expect(spans?.every((traceSpan) => traceSpan.traceId === spans?.[0]?.traceId)).toBe(true);
   });
 
   it('allows read-only web tools when a skill explicitly opts in', async () => {

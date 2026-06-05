@@ -40,6 +40,19 @@ export function initSentry(context: SentryContext): void {
   });
 }
 
+/** Ensure local span objects are materialized for structured trace output. */
+export function ensureLocalTracing(): void {
+  if (Sentry.getClient()) return;
+
+  Sentry.init({
+    tracesSampleRate: 1.0,
+    transport: () => ({
+      send: async () => ({}),
+      flush: async () => true,
+    }),
+  });
+}
+
 export { Sentry };
 export const { logger } = Sentry;
 
