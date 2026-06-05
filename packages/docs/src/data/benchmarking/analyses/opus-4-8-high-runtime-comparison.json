@@ -6,6 +6,124 @@
     "Child-span counts come from Warden structured traces after runtime child-span capture was fixed.",
     "Raw JSONL artifacts remain withheld pending sensitive-data review because spans can include prompts, source snippets, and tool results."
   ],
+  "crossModelComparison": {
+    "description": "Opus 4.8 high versus Sonnet 4.6 traced rows on the same corpus.",
+    "rows": {
+      "piSonnet46": {
+        "runId": "sentry-security-review-pi-sonnet-4-6-traced-corpus-2026-06-03-001",
+        "knownFound": 25,
+        "findingsTotal": 32,
+        "findingsWithoutKnownMatch": 7,
+        "scanCostUSD": 11.196751950000001,
+        "totalCostUSD": 19.8405752,
+        "scanInputTokens": 6668001,
+        "scanOutputTokens": 365046,
+        "traceTurns": 628,
+        "averageTurnsPerChunk": 4.03,
+        "oneTurnChunks": 59,
+        "twoOrFewerTurnChunks": 71,
+        "maxTurnsInChunk": 29
+      },
+      "piOpus48High": {
+        "runId": "sentry-security-review-pi-opus-4-8-high-traced-corpus-2026-06-05-001",
+        "knownFound": 21,
+        "findingsTotal": 24,
+        "findingsWithoutKnownMatch": 4,
+        "scanCostUSD": 17.39247975,
+        "totalCostUSD": 21.312897000000003,
+        "scanInputTokens": 5170716,
+        "scanOutputTokens": 316284,
+        "traceTurns": 426,
+        "averageTurnsPerChunk": 2.73,
+        "oneTurnChunks": 60,
+        "twoOrFewerTurnChunks": 86,
+        "maxTurnsInChunk": 11
+      },
+      "claudeSdkSonnet46": {
+        "runId": "sentry-security-review-claude-sonnet-4-6-traced-corpus-2026-06-04-001",
+        "knownFound": 24,
+        "findingsTotal": 32,
+        "findingsWithoutKnownMatch": 8,
+        "scanCostUSD": 61.61321505,
+        "totalCostUSD": 103.59261104999999,
+        "scanInputTokens": 42264775,
+        "scanOutputTokens": 889761,
+        "traceTurns": 939,
+        "averageTurnsPerChunk": 6.02,
+        "oneTurnChunks": 8,
+        "twoOrFewerTurnChunks": 45,
+        "maxTurnsInChunk": 27
+      },
+      "claudeSdkOpus48High": {
+        "runId": "sentry-security-review-claude-opus-4-8-high-traced-corpus-2026-06-05-001",
+        "knownFound": 17,
+        "findingsTotal": 17,
+        "findingsWithoutKnownMatch": 2,
+        "scanCostUSD": 61.07626299999999,
+        "totalCostUSD": 79.559748,
+        "scanInputTokens": 22499304,
+        "scanOutputTokens": 308283,
+        "traceTurns": 375,
+        "averageTurnsPerChunk": 2.4,
+        "oneTurnChunks": 86,
+        "twoOrFewerTurnChunks": 109,
+        "maxTurnsInChunk": 12
+      }
+    },
+    "overlap": {
+      "pi": {
+        "sonnetKnownFound": 25,
+        "opusKnownFound": 21,
+        "overlap": 15,
+        "sonnetOnly": 10,
+        "opusOnly": 6
+      },
+      "claudeSdk": {
+        "sonnetKnownFound": 24,
+        "opusKnownFound": 17,
+        "overlap": 10,
+        "sonnetOnly": 14,
+        "opusOnly": 7
+      },
+      "runtimeUnion": {
+        "sonnetKnownIds": 31,
+        "opusKnownIds": 23,
+        "overlap": 17,
+        "sonnetOnly": 14,
+        "opusOnly": 6,
+        "sonnetOnlyIds": [
+          "sentry-vuln-001",
+          "sentry-vuln-007",
+          "sentry-vuln-010",
+          "sentry-vuln-011",
+          "sentry-vuln-023",
+          "sentry-vuln-026",
+          "sentry-vuln-028",
+          "sentry-vuln-032",
+          "sentry-vuln-037",
+          "sentry-vuln-062",
+          "sentry-vuln-072",
+          "sentry-vuln-075",
+          "sentry-vuln-080",
+          "sentry-vuln-086"
+        ],
+        "opusOnlyIds": [
+          "sentry-vuln-004",
+          "sentry-vuln-016",
+          "sentry-vuln-031",
+          "sentry-vuln-046",
+          "sentry-vuln-054",
+          "sentry-vuln-060"
+        ]
+      }
+    },
+    "interpretation": [
+      "All four rows scanned 156 chunks with zero failed chunks, Warden finding verification, and agent-verified scoring.",
+      "Opus 4.8 high emits fewer candidate findings than Sonnet 4.6 in both runtimes, while also emitting fewer findings without known-corpus matches.",
+      "The trace summaries show shorter Opus 4.8 investigations: fewer total turns, fewer scan output tokens, and many more one-turn chunks through the Claude SDK.",
+      "The lower Opus 4.8 score is best explained as more selective scanning and reporting, not failed coverage or verifier filtering."
+    ]
+  },
   "stableRows": {
     "claudeSdk": {
       "runId": "sentry-security-review-claude-opus-4-8-high-traced-corpus-2026-06-05-001",
