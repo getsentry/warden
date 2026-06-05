@@ -745,6 +745,18 @@ function reportMissingCloudflareEnv(reporter: Reporter, missing: MissingCloudfla
   reporter.tip(tip);
 }
 
+function emitMissingCloudflareEnvRunLog(
+  repoPath: string,
+  options: CLIOptions,
+  missing: MissingCloudflareEnv,
+): void {
+  emitEmptyRunLog(repoPath, options, {
+    code: 'auth_failed',
+    message: missingCloudflareEnvMessage(missing),
+    timestamp: new Date().toISOString(),
+  });
+}
+
 function emitInvalidPiModelSelectorRunLog(
   repoPath: string,
   options: CLIOptions,
@@ -1201,6 +1213,7 @@ export async function runSkills(
   const missingCloudflare = findMissingCloudflareEnv(specs.map((s) => ({ ...s.runnerOptions })));
   if (missingCloudflare) {
     reportMissingCloudflareEnv(reporter, missingCloudflare);
+    emitMissingCloudflareEnvRunLog(repoPath ?? cwd, options, missingCloudflare);
     return 1;
   }
   let tasks: SkillTaskOptions[];
@@ -1536,6 +1549,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const missingCloudflare = findMissingCloudflareEnv(specs.map((s) => ({ ...s.runnerOptions })));
   if (missingCloudflare) {
     reportMissingCloudflareEnv(reporter, missingCloudflare);
+    emitMissingCloudflareEnvRunLog(repoPath, options, missingCloudflare);
     return 1;
   }
   let tasks: SkillTaskOptions[];
