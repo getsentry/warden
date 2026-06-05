@@ -10,7 +10,7 @@ import { buildLocalEventContext } from '../cli/context.js';
 function makeContext(
   files: {
     filename: string;
-    patch: string;
+    patch?: string;
     status?: FileChange['status'];
     additions?: number;
     deletions?: number;
@@ -151,6 +151,17 @@ describe('prepareFiles', () => {
     ]);
   });
 
+  it('does not skip go.mod as a built-in ignored file', () => {
+    const context = makeContext([
+      { filename: 'go.mod', patch: '@@ -0,0 +1,1 @@\n+module example.com/app' },
+    ]);
+
+    const result = prepareFiles(context);
+
+    expect(result.files.map((file) => file.filename)).toEqual(['go.mod']);
+    expect(result.skippedFiles).toEqual([]);
+  });
+
   it('skips high-confidence generated files', () => {
     const context = makeContext([
       {
@@ -196,6 +207,23 @@ describe('prepareFiles', () => {
     expect(result.skippedFiles).toContainEqual({
       filename: 'src/two.ts',
       reason: 'limit:changed_lines',
+    });
+  });
+
+  it('skips patchless files before applying changed-line budget', () => {
+    const context = makeContext([
+      { filename: 'src/large-diff.ts', additions: 10 },
+      { filename: 'src/real.ts', patch: '@@ -0,0 +1,1 @@\n+one', additions: 1 },
+    ]);
+
+    const result = prepareFiles(context, {
+      scan: { maxChangedLines: 1 },
+    });
+
+    expect(result.files.map((file) => file.filename)).toEqual(['src/real.ts']);
+    expect(result.skippedFiles).toContainEqual({
+      filename: 'src/large-diff.ts',
+      reason: 'limit:missing_patch',
     });
   });
 

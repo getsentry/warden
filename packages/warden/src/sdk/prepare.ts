@@ -54,8 +54,6 @@ export function prepareFiles(
   skippedFiles.push(...scanPolicy.skippedFiles);
 
   for (const file of scanPolicy.files) {
-    if (!file.patch) continue;
-
     const mode = classifyFile(file.filename, chunking?.filePatterns);
     if (mode === 'skip') {
       skippedFiles.push({

@@ -1,9 +1,10 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import ignore from 'ignore';
 import { DEFAULT_SCAN_LIMITS, type IgnoreConfig, type ScanConfig } from '../config/schema.js';
 import { matchGlob } from '../triggers/matcher.js';
 import type { FileChange, SkippedFile } from '../types/index.js';
+import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 
 const GENERATED_PREFIX_BYTES = 64 * 1024;
 const GENERATED_PREFIX_LINES = 200;
@@ -14,7 +15,6 @@ const BUILTIN_IGNORE_PATTERNS = [
   '**/yarn.lock',
   '**/Cargo.lock',
   '**/go.sum',
-  '**/go.mod',
   '**/poetry.lock',
   '**/composer.lock',
   '**/Gemfile.lock',
@@ -83,8 +83,10 @@ export interface ScanPolicyOptions {
   scan?: ScanConfig;
 }
 
+export type ScannableFileChange = FileChange & { patch: string };
+
 export interface ApplyScanPolicyResult {
-  files: FileChange[];
+  files: ScannableFileChange[];
   skippedFiles: SkippedFile[];
 }
 
@@ -140,7 +142,8 @@ function ignoredByBuiltinOrUser(filename: string, config?: IgnoreConfig): Skippe
 function filePathFor(repoPath: string, filename: string): string | undefined {
   const root = resolve(repoPath);
   const filePath = resolve(join(repoPath, filename));
-  if (filePath !== root && !filePath.startsWith(`${root}/`)) {
+  const relativePath = normalizePath(relative(root, filePath));
+  if (!isRepoRelativePath(relativePath)) {
     return undefined;
   }
   return filePath;
@@ -263,7 +266,7 @@ export function applyScanPolicy(
 ): ApplyScanPolicyResult {
   const scan = effectiveScanConfig(options.scan);
   const skippedFiles: SkippedFile[] = [];
-  const eligible: FileChange[] = [];
+  const eligible: ScannableFileChange[] = [];
 
   for (const file of files) {
     const ignored = ignoredByBuiltinOrUser(file.filename, options.ignore);
@@ -283,10 +286,16 @@ export function applyScanPolicy(
       continue;
     }
 
-    eligible.push(file);
+    const patch = file.patch;
+    if (!patch) {
+      skippedFiles.push({ filename: file.filename, reason: 'limit:missing_patch' });
+      continue;
+    }
+
+    eligible.push({ ...file, patch });
   }
 
-  const selected: FileChange[] = [];
+  const selected: ScannableFileChange[] = [];
   let consumedChangedLines = 0;
   for (const file of eligible) {
     if (selected.length >= scan.maxFiles) {

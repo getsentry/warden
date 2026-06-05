@@ -195,6 +195,7 @@ export const SkippedFileSchema = z.object({
     'limit:file_read',
     'limit:file_count',
     'limit:changed_lines',
+    'limit:missing_patch',
   ]),
   pattern: z.string().optional(),
 });
