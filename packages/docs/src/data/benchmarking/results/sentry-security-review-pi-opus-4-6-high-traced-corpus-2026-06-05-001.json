@@ -1,0 +1,2891 @@
+{
+  "runId": "sentry-security-review-pi-opus-4-6-high-traced-corpus-2026-06-05-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.36.1",
+  "skill": "security-review",
+  "model": "anthropic/claude-opus-4-6",
+  "runtime": "pi",
+  "reasoningLevel": "high",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "findingVerification": {
+    "enabled": true,
+    "source": "benchmark-config",
+    "notes": "The benchmark warden.toml explicitly sets defaults.verification.enabled = true."
+  },
+  "traceCapture": {
+    "enabled": true,
+    "coverage": "complete",
+    "tracedShardCount": 6,
+    "tracedChunkCount": 156,
+    "notes": "Run used --traces on all shards after runtime child-span trace capture was fixed. Per-chunk trace metadata is preserved in traceSummaries and the raw JSONL artifacts."
+  },
+  "runOptions": {
+    "runtime": "pi",
+    "model": "anthropic/claude-opus-4-6",
+    "effort": "high",
+    "traces": true,
+    "parallel": 4,
+    "reportOn": "low",
+    "minConfidence": "low",
+    "maxTurns": "default-50; 9fc06de5 rerun used 100 after a turn_limit on msteams/webhook.py:395-591"
+  },
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "57769148-d849-4ece-acbe-98536d49438b",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 2,
+      "durationMs": 271512,
+      "scanCostUSD": 1.5624715,
+      "auxiliaryCostUSD": 0.18641675000000002,
+      "costUSD": 1.74888825,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 643528,
+            "outputTokens": 29042,
+            "costUSD": 1.5624715,
+            "cacheReadInputTokens": 554008,
+            "cacheCreationInputTokens": 89454,
+            "cacheCreation5mInputTokens": 89454,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 50471,
+              "outputTokens": 2254,
+              "cacheReadInputTokens": 33126,
+              "cacheCreationInputTokens": 17331,
+              "cacheCreation5mInputTokens": 17331,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.18130175
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 1003,
+              "outputTokens": 4,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "cacheCreation5mInputTokens": 0,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.005115000000000001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 695002,
+            "outputTokens": 31300,
+            "costUSD": 1.74888825,
+            "cacheReadInputTokens": 587134,
+            "cacheCreationInputTokens": 106785,
+            "cacheCreation5mInputTokens": 106785,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 6,
+      "traceIds": [
+        "d86cb49d62da3db44a9783e0f55f39ba",
+        "886f285ff4e739ecdab9774c4ba732cb",
+        "43a8b85fe46d35d9ee3cc0939b7b7122",
+        "570185ed4f1d45bd63082cf66d101282",
+        "22cd8eb89528b3adbbeb9a181e6dc5a5",
+        "200cdb0dcac867bd60db5914567f39f8"
+      ],
+      "rawJsonl": "sentry-security-review-pi-opus-4-6-high-traced-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "7ca6be39-9c5f-44fa-9897-dfee89fc99c2",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 209240,
+      "scanCostUSD": 0.45261650000000003,
+      "auxiliaryCostUSD": 0.10041625000000001,
+      "costUSD": 0.5530327500000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 165312,
+            "outputTokens": 8286,
+            "costUSD": 0.45261650000000003,
+            "cacheReadInputTokens": 136993,
+            "cacheCreationInputTokens": 28300,
+            "cacheCreation5mInputTokens": 28300,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 43915,
+              "outputTokens": 1346,
+              "cacheReadInputTokens": 36120,
+              "cacheCreationInputTokens": 7785,
+              "cacheCreation5mInputTokens": 7785,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.10041625000000001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 209227,
+            "outputTokens": 9632,
+            "costUSD": 0.5530327500000001,
+            "cacheReadInputTokens": 173113,
+            "cacheCreationInputTokens": 36085,
+            "cacheCreation5mInputTokens": 36085,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "736fb58f32bf7fbb3977f4f10bdedc00",
+        "94877d9c36f7326d34617f2cc4278f8d"
+      ],
+      "rawJsonl": "sentry-security-review-pi-opus-4-6-high-traced-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "96a2efc8-7f66-4ad5-9ca5-3cbad9f799c3",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 293540,
+      "scanCostUSD": 0.4525995,
+      "auxiliaryCostUSD": 0.5152760000000001,
+      "costUSD": 0.9678755000000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 200551,
+            "outputTokens": 7741,
+            "costUSD": 0.4525995,
+            "cacheReadInputTokens": 172929,
+            "cacheCreationInputTokens": 27600,
+            "cacheCreation5mInputTokens": 27600,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 192090,
+              "outputTokens": 9682,
+              "cacheReadInputTokens": 161272,
+              "cacheCreationInputTokens": 30800,
+              "cacheCreation5mInputTokens": 30800,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.5152760000000001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 392641,
+            "outputTokens": 17423,
+            "costUSD": 0.9678755000000001,
+            "cacheReadInputTokens": 334201,
+            "cacheCreationInputTokens": 58400,
+            "cacheCreation5mInputTokens": 58400,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "ac58b11a12b8356fed6e78a77c524707",
+        "6eb9b90a46bd8d835f928eefd75f679c"
+      ],
+      "rawJsonl": "sentry-security-review-pi-opus-4-6-high-traced-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "223b1f80-bf4b-4d34-87f1-c87087a1e970",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 9,
+      "durationMs": 1518962,
+      "scanCostUSD": 13.6398755,
+      "auxiliaryCostUSD": 2.4930675,
+      "costUSD": 16.132943,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 5297970,
+            "outputTokens": 221155,
+            "costUSD": 13.6398755,
+            "cacheReadInputTokens": 4347926,
+            "cacheCreationInputTokens": 949454,
+            "cacheCreation5mInputTokens": 949454,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 734188,
+              "outputTokens": 44940,
+              "cacheReadInputTokens": 566925,
+              "cacheCreationInputTokens": 167089,
+              "cacheCreation5mInputTokens": 167089,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 2.45213875
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 5801,
+              "outputTokens": 187,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 5799,
+              "cacheCreation5mInputTokens": 5799,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.04092875000000001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 6037959,
+            "outputTokens": 266282,
+            "costUSD": 16.132943,
+            "cacheReadInputTokens": 4914851,
+            "cacheCreationInputTokens": 1122342,
+            "cacheCreation5mInputTokens": 1122342,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 38,
+      "traceIds": [
+        "5b7a1be3f1c6608e012f75570261c7e5",
+        "7680ce74dd2f6d7b6e67cf8b91f37845",
+        "3d7b920e5bc8b4ecacd54d940ee529f3",
+        "041f1f2601133abdaaa3375f516331f5",
+        "64da129daa6e7de979e17b6ec722aa69",
+        "b5c89df3a49243f00abf2037a5e5c017",
+        "98a3c93539659de1c60ec6cf4c168966",
+        "9163112ee2d5649c0a92caf27f0dcd2e",
+        "5083143c25a93f86063feae6bf5d3d39",
+        "04663f177bf7bccf73790019a697895c",
+        "36d2e724113cdec3e089318e102805c3",
+        "66fec006816e3d28e5ed1e042384d08e",
+        "86e920a7f65e7fc4621e8825f2aca2cd",
+        "e084b60e45a97a455cae2ff3e036b9f2",
+        "b09088dfa9da3bc8dbccaf85f3e5c703",
+        "7ac9e657714af709d9f1c5a492522c75",
+        "aa0594cb76517bbbd59bca13978e9a68",
+        "c938f6283076509e29d145a1fb700fc5",
+        "b5cee7d8e228526410e5bc8e2048a9a5",
+        "1556f6d4ab57128f5ec6f5c12c3051b3",
+        "5b4712fba117385972d14111b23ec6c3",
+        "acd3893ff406dfccdf4f350f69a46885",
+        "523131c7ca72d02eeadf9ee53f6d4c3f",
+        "4d62e4c081fb503b4ecd7504221fd3da",
+        "ac216418d0b394d67e5ecc0555c043f6",
+        "cfde75296db25344dcfaeafd9ee24a5f",
+        "5670cd72c52afb965dc9679dad79c26b",
+        "db8402eace407d33619522e818dca96e",
+        "4e5769a8a1894a355fcd036077b4ccab",
+        "607a44bf9198541ce6286e2f2cd224b6",
+        "5e572f531f4798297150b4608f5c1fc2",
+        "2204fd56ba7c5982e5d4cafba0db0bfe",
+        "6e0d0ec3f11faed63df51b45ee1eee45",
+        "574757058999b8dd1129059fcfecacae",
+        "217ebcc92a68744ad45283be339e5d9b",
+        "accbbc9072943440dbed080bed477c88",
+        "0f27b5a9a33a988c46c683d54ec84356",
+        "bcadb08c715248886a748b4fcf3b4fa8"
+      ],
+      "rawJsonl": "sentry-security-review-pi-opus-4-6-high-traced-corpus-7f41cc50.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "7e22cfd5-2c3e-4c9c-9c96-40297feadf8a",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 11,
+      "durationMs": 1497137,
+      "scanCostUSD": 13.062147000000001,
+      "auxiliaryCostUSD": 3.4563777499999997,
+      "costUSD": 16.51852475,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 6817704,
+            "outputTokens": 188974,
+            "costUSD": 13.062147000000001,
+            "cacheReadInputTokens": 5960374,
+            "cacheCreationInputTokens": 856768,
+            "cacheCreation5mInputTokens": 856768,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 1550472,
+              "outputTokens": 53191,
+              "cacheReadInputTokens": 1323848,
+              "cacheCreationInputTokens": 226364,
+              "cacheCreation5mInputTokens": 226364,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 3.407774
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 4613,
+              "outputTokens": 791,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 4611,
+              "cacheCreation5mInputTokens": 4611,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.04860375
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 8372789,
+            "outputTokens": 242956,
+            "costUSD": 16.51852475,
+            "cacheReadInputTokens": 7284222,
+            "cacheCreationInputTokens": 1087743,
+            "cacheCreation5mInputTokens": 1087743,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 32,
+      "traceIds": [
+        "76524209558d083edd84b5fcce0e648c",
+        "68a4a89f2f83e792577e4420d2c1368e",
+        "5744a9750296bf4572cc6c4e12fa2ac5",
+        "c1bbde91895769e4ad8309cacf1471d7",
+        "4d32997bde41e08402dc5d237d712b43",
+        "a47044fde8055c225750b83655c367d5",
+        "9ac48b28c5ba93ee78c0604f5430dfd2",
+        "56fba1d2de88d581ce75988c71251ec3",
+        "a33ff89da5ca1e67b00c556d1ed15816",
+        "5a28d64ce758fd4f312573189ab46e99",
+        "594baeb44de4cd30dd0ad993c86b2ab1",
+        "316665f705d0933f3cfa7410fb5c0384",
+        "de095b8494f58192029df490c10e6eae",
+        "03878f907fa7f45a2dedcca3680fa874",
+        "1e518bda1b30750fa511c5401c2dcf44",
+        "06c96128f653e3355a48db55444741d0",
+        "f4f7fda585f09d29fef6d71fdcfa7f4f",
+        "86586c54b886d6d10605ae7156d63bd0",
+        "65bc0bfc83f100c2109b03ed1f468518",
+        "94ba85b7a2e7e27609d4287f8815a246",
+        "fc3b5ec7fd5592564db3f499dd5dccdb",
+        "4a8833f2649ad72037b6b36309f67ddf",
+        "aa385da2d331c705be31b58e574d6874",
+        "ad200ca079e16414d5e5d80234de3731",
+        "a1005c968dc45d97cf98edc6303b48e4",
+        "4745f0d30f6fe169f07111701bb189c9",
+        "3f9fff899fffd52b8ab3de55901ac50a",
+        "252e62737059d8cd3ae804df2ec000c8",
+        "86b143d57584c10bad6836bc0ad05ba4",
+        "956add19b8efca06502fc0fb818914d2",
+        "1fe58ddbddca57bfb63780e877c67638",
+        "6799ddf204b0e916177559d45e221b5a"
+      ],
+      "rawJsonl": "sentry-security-review-pi-opus-4-6-high-traced-corpus-9fc06de5.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "ba1a616e-df8c-48d3-847a-d7e631db5400",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 262912,
+      "scanCostUSD": 0.9397135,
+      "auxiliaryCostUSD": 0,
+      "costUSD": 0.9397135,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 432458,
+            "outputTokens": 18247,
+            "costUSD": 0.9397135,
+            "cacheReadInputTokens": 385962,
+            "cacheCreationInputTokens": 46462,
+            "cacheCreation5mInputTokens": 46462,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 432458,
+            "outputTokens": 18247,
+            "costUSD": 0.9397135,
+            "cacheReadInputTokens": 385962,
+            "cacheCreationInputTokens": 46462,
+            "cacheCreation5mInputTokens": 46462,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "anthropic/claude-opus-4-6",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "1cba9872bb986401933d106819ad4662",
+        "ef52899a9cf32ad54cd49c7e346793c8"
+      ],
+      "rawJsonl": "sentry-security-review-pi-opus-4-6-high-traced-corpus-fbecd17d.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 24,
+    "durationMs": 4053303,
+    "inputTokens": 16140076,
+    "outputTokens": 585840,
+    "cacheReadInputTokens": 13679483,
+    "cacheCreationInputTokens": 2457817,
+    "analysisCostUSD": 30.109423500000002,
+    "auxiliaryCostUSD": 6.75155425,
+    "costUSD": 36.86097775000001,
+    "findingsBySeverity": {
+      "medium": 17,
+      "low": 6,
+      "high": 1
+    },
+    "findingsByConfidence": {
+      "medium": 3,
+      "high": 20,
+      "low": 1
+    }
+  },
+  "usageBreakdown": {
+    "scan": {
+      "usage": {
+        "inputTokens": 13557523,
+        "outputTokens": 473445,
+        "costUSD": 30.109423500000002,
+        "cacheReadInputTokens": 11558192,
+        "cacheCreationInputTokens": 1998038,
+        "cacheCreation5mInputTokens": 1998038,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "anthropic/claude-opus-4-6",
+      "runtime": "pi"
+    },
+    "auxiliary": {
+      "verification": {
+        "usage": {
+          "inputTokens": 2571136,
+          "outputTokens": 111413,
+          "costUSD": 6.65690675,
+          "cacheReadInputTokens": 2121291,
+          "cacheCreationInputTokens": 449369,
+          "cacheCreation5mInputTokens": 449369,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0
+        }
+      },
+      "merge": {
+        "usage": {
+          "inputTokens": 11417,
+          "outputTokens": 982,
+          "costUSD": 0.09464750000000001,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 10410,
+          "cacheCreation5mInputTokens": 10410,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0
+        }
+      }
+    },
+    "total": {
+      "usage": {
+        "inputTokens": 16140076,
+        "outputTokens": 585840,
+        "costUSD": 36.86097775000001,
+        "cacheReadInputTokens": 13679483,
+        "cacheCreationInputTokens": 2457817,
+        "cacheCreation5mInputTokens": 2457817,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "anthropic/claude-opus-4-6",
+      "runtime": "pi"
+    }
+  },
+  "timing": {
+    "analysisChunkMs": {
+      "source": "raw-jsonl-durationMs",
+      "count": 156,
+      "p50": 49628,
+      "p75": 93123,
+      "p90": 149892,
+      "p95": 223022,
+      "max": 623496
+    },
+    "shardWallMs": {
+      "source": "result-shard-durationMs",
+      "count": 6,
+      "p50": 271512,
+      "p75": 1497137,
+      "p90": 1518962,
+      "p95": 1518962,
+      "max": 1518962,
+      "total": 4053303
+    }
+  },
+  "auxiliaryUsage": {
+    "verification": {
+      "usage": {
+        "inputTokens": 2571136,
+        "outputTokens": 111413,
+        "costUSD": 6.65690675,
+        "cacheReadInputTokens": 2121291,
+        "cacheCreationInputTokens": 449369,
+        "cacheCreation5mInputTokens": 449369,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      }
+    },
+    "merge": {
+      "usage": {
+        "inputTokens": 11417,
+        "outputTokens": 982,
+        "costUSD": 0.09464750000000001,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 10410,
+        "cacheCreation5mInputTokens": 10410,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      }
+    }
+  },
+  "traceSummaries": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/organization_plugin_deprecation_info.py",
+      "lineRange": "1-87",
+      "traceId": "d86cb49d62da3db44a9783e0f55f39ba",
+      "spanId": "3b9435122add420c",
+      "responseId": "msg_012YZ3qNpHNT5tun7nYc7S4C",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e959b-dc74-76da-a889-ee3d8a0fdc7b",
+      "durationMs": 23584,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/internal_ea_features.py",
+      "lineRange": "1-41",
+      "traceId": "886f285ff4e739ecdab9774c4ba732cb",
+      "spanId": "2d13a6588a81e387",
+      "responseId": "msg_01Wew8nQUQDjBXA441bKRrmu",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e959b-dc71-7e4c-a1aa-acf3fb60bb2e",
+      "durationMs": 79136,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "traceId": "43a8b85fe46d35d9ee3cc0939b7b7122",
+      "spanId": "cb548b602c555e58",
+      "responseId": "msg_017umSg8h9n8znb7wZi1npyk",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e959d-11a0-791c-aa38-cfd529cc6d63",
+      "durationMs": 19441,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/oauth_userinfo.py",
+      "lineRange": "1-110",
+      "traceId": "570185ed4f1d45bd63082cf66d101282",
+      "spanId": "ac55930150797930",
+      "responseId": "msg_013cRBydSfoWqE55tRn741Zy",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e959b-dc74-76da-a889-eb57339577b9",
+      "durationMs": 106862,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+      "lineRange": "1-69",
+      "traceId": "22cd8eb89528b3adbbeb9a181e6dc5a5",
+      "spanId": "96178b0e843d3f01",
+      "responseId": "msg_01SKctsXFnfXMTLnfGKNmLcV",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e959b-dc74-76da-a889-f22badb3b3a3",
+      "durationMs": 164884,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "traceId": "200cdb0dcac867bd60db5914567f39f8",
+      "spanId": "b32790ccdf2411ee",
+      "responseId": "msg_01Nwi1UcAjQPfnxxHNWCVyYz",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e959c-38a3-7d36-9733-7826c3dfaac8",
+      "durationMs": 223014,
+      "numTurns": 16,
+      "status": "success"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "1-189",
+      "traceId": "736fb58f32bf7fbb3977f4f10bdedc00",
+      "spanId": "288bd7889c08e7bd",
+      "responseId": "msg_01YS8fdt75Y7W7zHLMq53egf",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a0-0a5e-7e84-bd7c-2297eb9e975b",
+      "durationMs": 93092,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "190-362",
+      "traceId": "94877d9c36f7326d34617f2cc4278f8d",
+      "spanId": "ce17699c949f83af",
+      "responseId": "msg_01CDVcpmSGuD9LcHBJpnjzQL",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a1-760c-736b-b95c-064bd35e6d29",
+      "durationMs": 89629,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "traceId": "ac58b11a12b8356fed6e78a77c524707",
+      "spanId": "2811520d0947c978",
+      "responseId": "msg_01UmYpP2VXyYvWZAQAKGuu4Q",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a3-4f64-7043-9e63-38739121ecc8",
+      "durationMs": 42436,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "traceId": "6eb9b90a46bd8d835f928eefd75f679c",
+      "spanId": "0279828ae9cb9bc7",
+      "responseId": "msg_01LnoxRte18mzrtGgLMndBaQ",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a3-f539-7ea1-ac21-363cde9e12fa",
+      "durationMs": 123633,
+      "numTurns": 15,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1-250",
+      "traceId": "5b7a1be3f1c6608e012f75570261c7e5",
+      "spanId": "6bff814e73236e2a",
+      "responseId": "msg_01Ns297HzEkwv7CUrdiSEFka",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a7-de94-775a-a7d2-d60a02b43039",
+      "durationMs": 17017,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "1-202",
+      "traceId": "7680ce74dd2f6d7b6e67cf8b91f37845",
+      "spanId": "2587c6ad7f3bdcd5",
+      "responseId": "msg_01TirMAjkmrA7NuH1M45X8dP",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a7-de94-775a-a7d2-d9c44ef0b411",
+      "durationMs": 25700,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "251-500",
+      "traceId": "5b7a1be3f1c6608e012f75570261c7e5",
+      "spanId": "9f363096a3610e7c",
+      "responseId": "msg_01H7jh3D3HyXsZdNY4h2P8Zu",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a8-2117-750b-a422-960188e92703",
+      "durationMs": 24930,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "501-750",
+      "traceId": "5b7a1be3f1c6608e012f75570261c7e5",
+      "spanId": "011a1576eddd55e1",
+      "responseId": "msg_01X3EHoffWkeHNQhbJ8WqEiY",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a8-8283-7c0d-a333-6f67831a3aa9",
+      "durationMs": 9357,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "751-1000",
+      "traceId": "5b7a1be3f1c6608e012f75570261c7e5",
+      "spanId": "5d2a786ccfc21bc2",
+      "responseId": "msg_017VWvWLqMgUhWVqRvKFyFah",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a8-a717-78ec-a806-3f37cd0b3df8",
+      "durationMs": 2615,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1001-1250",
+      "traceId": "5b7a1be3f1c6608e012f75570261c7e5",
+      "spanId": "de2e437ec5de4f38",
+      "responseId": "msg_01N99Zf3PDKUNVV2vq78kskv",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a8-b156-7c80-ad0c-43d7a97d7a71",
+      "durationMs": 9235,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "203-404",
+      "traceId": "7680ce74dd2f6d7b6e67cf8b91f37845",
+      "spanId": "c545b3ef5c9a16b6",
+      "responseId": "msg_01Qqbb66Cys9HJTAaZx14ZF5",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a8-4300-772e-a214-7939cb176f6a",
+      "durationMs": 60902,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1251-1500",
+      "traceId": "5b7a1be3f1c6608e012f75570261c7e5",
+      "spanId": "6117c853bc5d1fa8",
+      "responseId": "msg_01CdpgZiLvVmXchirAJZ1Drg",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a8-d572-799a-829d-3b720fce47e8",
+      "durationMs": 45301,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": ".github/workflows/getsentry-dispatch.yml",
+      "lineRange": "1-97",
+      "traceId": "3d7b920e5bc8b4ecacd54d940ee529f3",
+      "spanId": "2ab89ac410e0dde2",
+      "responseId": "msg_018tgegfKPuAt2LqHafMJY5z",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a7-de91-7c53-bc91-3b32e360bb33",
+      "durationMs": 121970,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "1-170",
+      "traceId": "041f1f2601133abdaaa3375f516331f5",
+      "spanId": "0ac2b63c21809ce8",
+      "responseId": "msg_01QtFFT17S5xsABvMvWmX39v",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a9-bb10-7922-a529-e72f934fc7cc",
+      "durationMs": 18462,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/organization_pipeline.py",
+      "lineRange": "1-151",
+      "traceId": "64da129daa6e7de979e17b6ec722aa69",
+      "spanId": "ba351e970a7069dd",
+      "responseId": "msg_01LP6kNB1hQSxU1Xcq8kaRPK",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a7-de94-775a-a7d2-dd1523055602",
+      "durationMs": 151552,
+      "numTurns": 15,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "171-340",
+      "traceId": "041f1f2601133abdaaa3375f516331f5",
+      "spanId": "d46eee48b60c3cd8",
+      "responseId": "msg_01A6KkHcRPhCwqoLTRJUEv9H",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95aa-0335-7fef-9fd2-31b82538ce0f",
+      "durationMs": 19427,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/serializers/models/apiapplication.py",
+      "lineRange": "1-28",
+      "traceId": "b5c89df3a49243f00abf2037a5e5c017",
+      "spanId": "6158e9954e6fa49b",
+      "responseId": "msg_0193duR3qFCaLGoMYjYcJuiK",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95aa-2ea9-7110-97a8-46f673273235",
+      "durationMs": 22812,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "341-439",
+      "traceId": "041f1f2601133abdaaa3375f516331f5",
+      "spanId": "ba0340cf0861c881",
+      "responseId": "msg_01YEpiDW5QKTvcGcMUjpkYiz",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95aa-4f21-7df9-b894-020d75c0abbc",
+      "durationMs": 24032,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/serializers/models/projectcodeowners.py",
+      "lineRange": "1-118",
+      "traceId": "98a3c93539659de1c60ec6cf4c168966",
+      "spanId": "56a36fb9867aca9b",
+      "responseId": "msg_01HFykn3Zv1dfSAxzzSXx1an",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95aa-87cb-7315-be3d-f090aa91b869",
+      "durationMs": 16395,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1501-1656",
+      "traceId": "5b7a1be3f1c6608e012f75570261c7e5",
+      "spanId": "cfa6a1d112ec2411",
+      "responseId": "msg_013navFuhz5UCsog14gw3WSP",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a9-8674-7a12-9a47-3b7ed6e6043b",
+      "durationMs": 93934,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket_server/urls.py",
+      "lineRange": "1-12",
+      "traceId": "9163112ee2d5649c0a92caf27f0dcd2e",
+      "spanId": "0400e6c2185ec852",
+      "responseId": "msg_01QZKoVNUZT19FNk4V84UcnW",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95aa-f569-718e-9559-ab1f822411a2",
+      "durationMs": 59627,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "1-207",
+      "traceId": "5083143c25a93f86063feae6bf5d3d39",
+      "spanId": "df8a2bbd6ec840ec",
+      "responseId": "msg_01W9qVoa17dxa2ySE2DiresL",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95aa-c7db-7c33-b9e4-39b71fcf5271",
+      "durationMs": 80381,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "405-606",
+      "traceId": "7680ce74dd2f6d7b6e67cf8b91f37845",
+      "spanId": "495e5623b18513da",
+      "responseId": "msg_01WSVkqJBZfEsjbHiZrnyRb8",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95a9-30f1-7404-89bf-fcbbca02516d",
+      "durationMs": 186602,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "1-235",
+      "traceId": "04663f177bf7bccf73790019a697895c",
+      "spanId": "6f3fa7f99d7bc6d3",
+      "responseId": "msg_01FswHWb6xg9GGFT52hGT84e",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95aa-ad07-7d4e-ace4-5870995e7ae6",
+      "durationMs": 100809,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "1-215",
+      "traceId": "36d2e724113cdec3e089318e102805c3",
+      "spanId": "10d0b09959ae00ca",
+      "responseId": "msg_01WS49R3iz2ehHYZozyEzk1X",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ab-de63-74a4-899c-71001756f7d8",
+      "durationMs": 49098,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "607-808",
+      "traceId": "7680ce74dd2f6d7b6e67cf8b91f37845",
+      "spanId": "293e7705376a3200",
+      "responseId": "msg_01Y8RR3gPviBp2j2K6FiEYRq",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ac-09f0-746a-92f5-cc681f9b4780",
+      "durationMs": 60878,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "216-282",
+      "traceId": "36d2e724113cdec3e089318e102805c3",
+      "spanId": "8ac7579daf464bab",
+      "responseId": "msg_019hTeM5ehPpBTFGbjVbrDGL",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ac-9e38-77c2-8288-f04eb64718c6",
+      "durationMs": 42989,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "236-470",
+      "traceId": "04663f177bf7bccf73790019a697895c",
+      "spanId": "befab4e282ca0815",
+      "responseId": "msg_01HEAJG2sYTqN6XMXBF63Mbv",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ac-36d7-7c46-9284-1df8f2289817",
+      "durationMs": 74342,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "208-273",
+      "traceId": "5083143c25a93f86063feae6bf5d3d39",
+      "spanId": "5d3de0682e7d0ee5",
+      "responseId": "msg_01YRjXyaCGr7VZw7uTpzAQ7D",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ac-01e2-7856-8fe4-c25944da9326",
+      "durationMs": 135727,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "809-864",
+      "traceId": "7680ce74dd2f6d7b6e67cf8b91f37845",
+      "spanId": "b2077628bcddd908",
+      "responseId": "msg_01HCEBRZx2iAvy33nHNJBfYj",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ac-f7ca-7abd-b026-6feca42f9eb9",
+      "durationMs": 79588,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/models/data_forwarder.py",
+      "lineRange": "1-39",
+      "traceId": "66fec006816e3d28e5ed1e042384d08e",
+      "spanId": "861d50b189152320",
+      "responseId": "msg_01R71HhLFQ2GjfsWoq7J5qhC",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ae-2eb7-7eb5-bfdf-90b55c38609b",
+      "durationMs": 9634,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "471-605",
+      "traceId": "04663f177bf7bccf73790019a697895c",
+      "spanId": "1201ee911cd4dd79",
+      "responseId": "msg_01M3ncYPfvv4Le76VQr9gAHv",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ad-5944-71b2-9fcb-1a80149a5984",
+      "durationMs": 67764,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "1-199",
+      "traceId": "86e920a7f65e7fc4621e8825f2aca2cd",
+      "spanId": "8e1f380e0079a48b",
+      "responseId": "msg_01Y2bHr5MzyP5axpbPBt6wKP",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ad-4631-7fe6-adf6-97a62d687429",
+      "durationMs": 92907,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/jira_server/webhooks.py",
+      "lineRange": "1-106",
+      "traceId": "e084b60e45a97a455cae2ff3e036b9f2",
+      "spanId": "cbe7c33e8977deb2",
+      "responseId": "msg_01TKYahRWD145egjgA6z5FNb",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ae-141d-7842-971a-a9af027eddc8",
+      "durationMs": 54848,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/preprod/api/endpoints/pull_request/organization_pullrequest_size_analysis_download.py",
+      "lineRange": "1-76",
+      "traceId": "b09088dfa9da3bc8dbccaf85f3e5c703",
+      "spanId": "65774f967a0d96b9",
+      "responseId": "msg_01QUVZuuck1LUJu6k2wGiNq3",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ae-ea6b-7f08-8f8b-785f019aa688",
+      "durationMs": 54742,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/utils/atlassian_connect.py",
+      "lineRange": "1-155",
+      "traceId": "7ac9e657714af709d9f1c5a492522c75",
+      "spanId": "e15a967cc67c8248",
+      "responseId": "msg_01YNg9dRfmvZNKDYWkxjcXWo",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ae-545f-7afb-9284-5a9ea5a4f64d",
+      "durationMs": 96030,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "200-386",
+      "traceId": "86e920a7f65e7fc4621e8825f2aca2cd",
+      "spanId": "7f1b136d19b569b9",
+      "responseId": "msg_01QxC1txnw5Ct2fBvrBcnBGt",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ae-b127-72a0-bd77-7f9b469b58db",
+      "durationMs": 119046,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/preprod/api/endpoints/size_analysis/project_preprod_size_analysis_compare_download.py",
+      "lineRange": "1-122",
+      "traceId": "aa0594cb76517bbbd59bca13978e9a68",
+      "spanId": "49b6f5743f63a67b",
+      "responseId": "msg_01NVy3fUTuEUMaq3heoywH2F",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95af-c04e-77d5-8e64-7b7da76169d4",
+      "durationMs": 90608,
+      "numTurns": 17,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/projects/services/project_key/impl.py",
+      "lineRange": "1-87",
+      "traceId": "c938f6283076509e29d145a1fb700fc5",
+      "spanId": "37e3e62d209dca13",
+      "responseId": "msg_01JW6J6RXouW8f5p7sjPXkUw",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95af-cb8c-72af-a35b-bcf873222c3c",
+      "durationMs": 101419,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/releases/endpoints/project_releases_token.py",
+      "lineRange": "1-66",
+      "traceId": "b5cee7d8e228526410e5bc8e2048a9a5",
+      "spanId": "284aca9e180e213c",
+      "responseId": "msg_01AbF9VDoK9euxmgSVeApfLR",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b0-823d-7d1b-b2e4-3ea97dfe9d11",
+      "durationMs": 71890,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/relocation/api/endpoints/retry.py",
+      "lineRange": "1-148",
+      "traceId": "1556f6d4ab57128f5ec6f5c12c3051b3",
+      "spanId": "8b030b479b2df991",
+      "responseId": "msg_0177xT2YZfh2mG7bJ1xSocTr",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b1-2243-7879-b8b2-7cff82d91aea",
+      "durationMs": 61611,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "1-209",
+      "traceId": "5b4712fba117385972d14111b23ec6c3",
+      "spanId": "b82c324e739ba2dd",
+      "responseId": "msg_01MhuuNpd1wnf5TDXYrLiBjv",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ae-6201-76c4-ac13-193e90eb4fc7",
+      "durationMs": 393877,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "1-215",
+      "traceId": "acd3893ff406dfccdf4f350f69a46885",
+      "spanId": "7f0ed7823496444c",
+      "responseId": "msg_01JL7cdEMhjkqopyPQiGcAx4",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b1-9b1a-7a93-badf-4ab4f9f1ce84",
+      "durationMs": 249821,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "traceId": "523131c7ca72d02eeadf9ee53f6d4c3f",
+      "spanId": "2272de4dfc04791d",
+      "responseId": "msg_01JfQnY12y8a7U5R5AfdzhCG",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b2-12f9-7835-b5fb-9a41bbae9001",
+      "durationMs": 226973,
+      "numTurns": 29,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1-205",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "8a53fb4407689464",
+      "responseId": "msg_01VaEi7a1MT8L3RiSJmkTEdj",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b5-89ae-7cb7-b7c8-e319e9750b42",
+      "durationMs": 12190,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "1-186",
+      "traceId": "ac216418d0b394d67e5ecc0555c043f6",
+      "spanId": "1bcdbb185f181f23",
+      "responseId": "msg_01KEJGGhsRiM5ebDyCoy5SCn",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b1-57c5-703c-8bc2-0a680ca2a50e",
+      "durationMs": 299244,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "206-410",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "5de0a9bbcab27c29",
+      "responseId": "msg_01T4xNBdbF7ijH8mKDTTjEyy",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b5-b953-72ca-b39e-f19bfbccc420",
+      "durationMs": 12371,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "411-615",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "1bd98280d77fdb91",
+      "responseId": "msg_01FJRKWJcqgMKoyNa2U7uqFE",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b5-e9ac-75e5-a543-bbe8c8fc5ebe",
+      "durationMs": 12263,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "210-299",
+      "traceId": "5b4712fba117385972d14111b23ec6c3",
+      "spanId": "33d8a0b7221ff8e0",
+      "responseId": "msg_0149dKqe61LwXyqn8bHfqkHf",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b4-64a8-745f-809b-ce2ad6734a84",
+      "durationMs": 111943,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "616-820",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "b0ed481f5630a116",
+      "responseId": "msg_01NHYXzRYi5WVJ8XKoQPMeJs",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b6-199a-706b-a681-0023d0e5c707",
+      "durationMs": 11159,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "216-430",
+      "traceId": "acd3893ff406dfccdf4f350f69a46885",
+      "spanId": "4e303c2620359538",
+      "responseId": "msg_017cHqNVYGRDvx1CjKS9wXym",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b5-6b0a-7394-af71-49879cf68735",
+      "durationMs": 66169,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "821-1025",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "55272ffd7cdaf806",
+      "responseId": "msg_01JKvodrqycCXEhwk4X4egrD",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b6-4536-7ea9-854e-7d93b1ad33a7",
+      "durationMs": 13792,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1026-1230",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "22a163d6e4ab2551",
+      "responseId": "msg_01PrnVxGUiZran8EuKfHbsEP",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b6-7b1c-7c1f-87fd-1ee9cad418a6",
+      "durationMs": 11968,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1231-1435",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "ad1d96be70c472c0",
+      "responseId": "msg_01LcLJrQyCh6NmybzNX5PWA4",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b6-a9e4-7791-9029-593d086ac902",
+      "durationMs": 14989,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1436-1640",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "7db636aaf7e8d1d4",
+      "responseId": "msg_01BcXdj5EMExuGBiUQkvs3NY",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b6-e478-71f6-af3b-90bbc8c8d197",
+      "durationMs": 40069,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1641-1672",
+      "traceId": "4d62e4c081fb503b4ecd7504221fd3da",
+      "spanId": "f6aeff03d711adc6",
+      "responseId": "msg_01F9WQZBYWyvhoqBRK2JUkuF",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b7-8103-7b64-9e7f-5641dc61455a",
+      "durationMs": 2307,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "431-645",
+      "traceId": "acd3893ff406dfccdf4f350f69a46885",
+      "spanId": "53d1ea1e7aacec10",
+      "responseId": "msg_012gfnJ6ZqhNGwi1ELawKfCf",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b6-6d8b-7aa9-8e55-c7c64ea3ffd4",
+      "durationMs": 81686,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/web/frontend/mailgun_inbound_webhook.py",
+      "lineRange": "1-92",
+      "traceId": "cfde75296db25344dcfaeafd9ee24a5f",
+      "spanId": "816e1b94eacbc6af",
+      "responseId": "msg_01Jf13xvZmpmDiM1FQ5HWprt",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b6-19f6-78ac-b5fa-96890b9abbbd",
+      "durationMs": 120019,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "traceId": "5670cd72c52afb965dc9679dad79c26b",
+      "spanId": "97cc30f61013e954",
+      "responseId": "msg_01Hg55WvVzPS8PntsMvknZv1",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b7-eed5-72c8-bf37-a858c51710cf",
+      "durationMs": 17838,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_detector_anomaly_data.py",
+      "lineRange": "1-179",
+      "traceId": "db8402eace407d33619522e818dca96e",
+      "spanId": "077a4b0f46a37cc9",
+      "responseId": "msg_01Y9VRqCdVGRvmSBxayLuzX8",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b8-3488-7b24-a8df-0fad2cde59be",
+      "durationMs": 9020,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "646-860",
+      "traceId": "acd3893ff406dfccdf4f350f69a46885",
+      "spanId": "97c7562f47412126",
+      "responseId": "msg_01UvAmaYEpmk2rwYTwTXHf4o",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b7-acaf-74c9-9b8e-3355694852c4",
+      "durationMs": 50463,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/web/frontend/release_webhook.py",
+      "lineRange": "1-124",
+      "traceId": "4e5769a8a1894a355fcd036077b4ccab",
+      "spanId": "a0996e6cda23e67e",
+      "responseId": "msg_01AUzeC4AQFYsKRJezuJU2DC",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b7-8a12-7d21-a194-7018e562910f",
+      "durationMs": 81362,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "187-274",
+      "traceId": "ac216418d0b394d67e5ecc0555c043f6",
+      "spanId": "1c59a48c8e4ecab3",
+      "responseId": "msg_01P7uGf9SoTKFeqJr6vdEPQF",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b5-e8c9-7b62-8e19-686462a114df",
+      "durationMs": 198380,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "861-965",
+      "traceId": "acd3893ff406dfccdf4f350f69a46885",
+      "spanId": "17a4a8e14a3061c3",
+      "responseId": "msg_01J6k6oWYBuUNVVCGatd81xB",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b8-71d8-7c76-a3b8-21f6a5aee618",
+      "durationMs": 42971,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "1-275",
+      "traceId": "607a44bf9198541ce6286e2f2cd224b6",
+      "spanId": "c668edee41254761",
+      "responseId": "msg_01EbTwS9dHm8vggCgwBwNVz2",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b8-efbf-7ece-b824-53a85b71f2b9",
+      "durationMs": 24275,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "1-211",
+      "traceId": "5e572f531f4798297150b4608f5c1fc2",
+      "spanId": "5c055b77f60114fb",
+      "responseId": "msg_0122p8bSgi5yNzVCJm9Jy8RC",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b8-57ca-7109-8f8f-7a5d7f7e1e89",
+      "durationMs": 73614,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "212-213",
+      "traceId": "5e572f531f4798297150b4608f5c1fc2",
+      "spanId": "b1dcb12d865d0271",
+      "responseId": "msg_01QFzseSEPU5ScLZSo4QkvvM",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b9-7760-7b18-b8f8-cd3d71c64ef1",
+      "durationMs": 4666,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "276-447",
+      "traceId": "607a44bf9198541ce6286e2f2cd224b6",
+      "spanId": "c11b886ae709a46f",
+      "responseId": "msg_014CfH8LR3tdBHsyvgVSmTcw",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b9-4e9b-7529-8e9f-d65977152503",
+      "durationMs": 60438,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "1-279",
+      "traceId": "2204fd56ba7c5982e5d4cafba0db0bfe",
+      "spanId": "3605f41a380387fc",
+      "responseId": "msg_01TdELTwxXqmTxG7f7phhTys",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b9-19ba-74ad-b3d9-14cc87ded8b6",
+      "durationMs": 75608,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/featureFlags/hooks/useFlagSeries.tsx",
+      "lineRange": "1-84",
+      "traceId": "6e0d0ec3f11faed63df51b45ee1eee45",
+      "spanId": "498cceb666ffba08",
+      "responseId": "msg_01M4RTTXPyHYF9a6inZCWXrF",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b9-899f-7eac-a471-bb3d25acb508",
+      "durationMs": 49646,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "280-392",
+      "traceId": "2204fd56ba7c5982e5d4cafba0db0bfe",
+      "spanId": "af4f700d091b8cd8",
+      "responseId": "msg_015UsUwjzgcqMhhMVy4r34KN",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-411c-72ea-af9b-08f4de2f003f",
+      "durationMs": 3262,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "1-254",
+      "traceId": "574757058999b8dd1129059fcfecacae",
+      "spanId": "4abd0af0c129ff93",
+      "responseId": "msg_01STFUL87EWWFpgMjpW83CCJ",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-3aba-7c66-9132-72edaac7a705",
+      "durationMs": 15650,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "1-242",
+      "traceId": "217ebcc92a68744ad45283be339e5d9b",
+      "spanId": "d2f6ce9f2e69c157",
+      "responseId": "msg_01WoeLgrqdVVTxPNvykT1D4y",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-4de3-7c42-be7f-ed19e74f22b1",
+      "durationMs": 13932,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "255-508",
+      "traceId": "574757058999b8dd1129059fcfecacae",
+      "spanId": "a67325dc8bc389b9",
+      "responseId": "msg_01RBZxuAuus7Fu7DLVKsmfVg",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-77e4-7b7c-8183-99a8042dca4d",
+      "durationMs": 13749,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "509-762",
+      "traceId": "574757058999b8dd1129059fcfecacae",
+      "spanId": "2fd96d74d04b22fb",
+      "responseId": "msg_017SSgBN8RejeCR9pzB3MqBc",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-ad9f-7a60-917e-edf5aa0aac11",
+      "durationMs": 1603,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/jira/client.py",
+      "lineRange": "1-98",
+      "traceId": "accbbc9072943440dbed080bed477c88",
+      "spanId": "2ed5ccde87ef4f3e",
+      "responseId": "msg_01PQ3nD7PYrCCDpZh9NyoEUt",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95b8-c7f1-7d71-b91a-146544d22657",
+      "durationMs": 127804,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "1-234",
+      "traceId": "0f27b5a9a33a988c46c683d54ec84356",
+      "spanId": "f6707cde3bba9bb1",
+      "responseId": "msg_01Ji8Ze7Ef7MpDRRdFLGZ3mM",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-bb39-7b54-91e9-d1fef9957a27",
+      "durationMs": 13228,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "763-908",
+      "traceId": "574757058999b8dd1129059fcfecacae",
+      "spanId": "37cbd9e36bd39093",
+      "responseId": "msg_01UhdCPgeKU4LZPQRENyXetp",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-b3e7-74e9-8b61-602fa9b5b4dd",
+      "durationMs": 15593,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "1-243",
+      "traceId": "bcadb08c715248886a748b4fcf3b4fa8",
+      "spanId": "96804f2de3952ca2",
+      "responseId": "msg_013SWEHEiokMsrE229DfqeWu",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-4b96-711a-85e3-e26837717817",
+      "durationMs": 58907,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "235-468",
+      "traceId": "0f27b5a9a33a988c46c683d54ec84356",
+      "spanId": "52b4ccf46c4354f1",
+      "responseId": "msg_01HKNmceqvkywMFzkCKx8gKp",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-eeea-7c9a-9890-f4603bee1e17",
+      "durationMs": 30133,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "469-554",
+      "traceId": "0f27b5a9a33a988c46c683d54ec84356",
+      "spanId": "1afdf9b941cb1041",
+      "responseId": "msg_01WVRy2sgfWuPfDBcA3fc5DC",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95bb-64a7-7976-9ceb-97215a3499e4",
+      "durationMs": 1518,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "244-274",
+      "traceId": "bcadb08c715248886a748b4fcf3b4fa8",
+      "spanId": "a0b81f389852e95c",
+      "responseId": "msg_018R1AgF7wWkEX4FrGEwfg7n",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95bb-31c1-7584-b8e7-76e23e497122",
+      "durationMs": 39457,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "243-484",
+      "traceId": "217ebcc92a68744ad45283be339e5d9b",
+      "spanId": "c82a8792c64f6242",
+      "responseId": "msg_01GcG3ZpCp1441TfzKLY8Mqj",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95ba-8456-7933-9589-1c223792f344",
+      "durationMs": 96311,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "485-559",
+      "traceId": "217ebcc92a68744ad45283be339e5d9b",
+      "spanId": "0f203e8f30a0e9ae",
+      "responseId": "msg_013Ae8rt9TwaATJZvaRcteW6",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95bb-fc98-7753-ae97-12e5ba264c8f",
+      "durationMs": 3212,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1-202",
+      "traceId": "76524209558d083edd84b5fcce0e648c",
+      "spanId": "1d3102f3ad4d3b40",
+      "responseId": "msg_01BLyapiXMP57vfdhPzUEM2B",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-8771-762c-842d-e2ab386638ce",
+      "durationMs": 11642,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "203-404",
+      "traceId": "76524209558d083edd84b5fcce0e648c",
+      "spanId": "a633abf4a0b61189",
+      "responseId": "msg_0135wfahrFv9HacbyqPYMt7R",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-b4f6-7cab-b7e0-698326437df5",
+      "durationMs": 9557,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "405-606",
+      "traceId": "76524209558d083edd84b5fcce0e648c",
+      "spanId": "65c13b0f68a7d0bb",
+      "responseId": "msg_01EZM96U5jwhAihFQRojR2Cn",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-da5b-77a4-bb24-3e356bc2d2b7",
+      "durationMs": 1293,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/auth/services/access/impl.py",
+      "lineRange": "1-125",
+      "traceId": "68a4a89f2f83e792577e4420d2c1368e",
+      "spanId": "36d06ac16282f260",
+      "responseId": "msg_012tY2kp4xaaFnqAdoHZ8VJM",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-8772-7f15-a2de-e9b3ce7a51ca",
+      "durationMs": 22772,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "607-808",
+      "traceId": "76524209558d083edd84b5fcce0e648c",
+      "spanId": "e89afcc836525530",
+      "responseId": "msg_01FadrTDw3bw5fR6FU5fMUJd",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-df70-78d2-a028-e4bf0268989c",
+      "durationMs": 13141,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "809-1010",
+      "traceId": "76524209558d083edd84b5fcce0e648c",
+      "spanId": "838f5fac895958cb",
+      "responseId": "msg_01KbeNNwXrL8knNqQcuRk5BB",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95db-12cd-7caf-85ba-17a29a1ce89f",
+      "durationMs": 12259,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/codecov/endpoints/repository_token_regenerate/repository_token_regenerate.py",
+      "lineRange": "1-68",
+      "traceId": "5744a9750296bf4572cc6c4e12fa2ac5",
+      "spanId": "7657d227e47dd2b5",
+      "responseId": "msg_01N5np5ckfHaBfPvwV4r8b5D",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-e06f-7048-bd69-3d4f775d06f6",
+      "durationMs": 32907,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1011-1083",
+      "traceId": "76524209558d083edd84b5fcce0e648c",
+      "spanId": "63155492aecb2b93",
+      "responseId": "msg_01CcAcvKcwqCuFB5FmY3oLxq",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95db-42b7-7a07-9374-f2dc7fe14810",
+      "durationMs": 15235,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/organization_pinned_searches.py",
+      "lineRange": "1-113",
+      "traceId": "c1bbde91895769e4ad8309cacf1471d7",
+      "spanId": "f39a70e52257cf27",
+      "responseId": "msg_01LV7JnQpsPJu8jSbYzCzu2u",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-8771-762c-842d-de40fe2c1f29",
+      "durationMs": 64216,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "traceId": "4d32997bde41e08402dc5d237d712b43",
+      "spanId": "21a65bdad17d93d0",
+      "responseId": "msg_01RtQNxyoxd1nGtT7NiARMMr",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95da-876f-72a2-a133-0382126b9e34",
+      "durationMs": 64569,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/discover/endpoints/discover_saved_query_detail.py",
+      "lineRange": "1-191",
+      "traceId": "a47044fde8055c225750b83655c367d5",
+      "spanId": "1a03a433290cd748",
+      "responseId": "msg_01XKA3CDWrTehhh9qecmAU2m",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95db-610d-752d-988c-8c8967ce608c",
+      "durationMs": 30024,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/explore/endpoints/explore_saved_query_detail.py",
+      "lineRange": "1-195",
+      "traceId": "9ac48b28c5ba93ee78c0604f5430dfd2",
+      "spanId": "0b14aea1ffc520f6",
+      "responseId": "msg_01JAuLtqbQu4AK1uobBXfZAN",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95db-7e40-72bd-a717-f063291001df",
+      "durationMs": 38499,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "traceId": "56fba1d2de88d581ce75988c71251ec3",
+      "spanId": "f744e05048e36b0d",
+      "responseId": "msg_01AdnrABEFGXcACPWNMRkhXq",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95db-83b2-7c44-ab3d-78c151ffbca1",
+      "durationMs": 54803,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/api/endpoints/external_team_details.py",
+      "lineRange": "1-113",
+      "traceId": "a33ff89da5ca1e67b00c556d1ed15816",
+      "spanId": "4ef5379382d8e77d",
+      "responseId": "msg_01VuTmNE1tiUf68wgqtq57oU",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95db-d65d-7c90-be40-86f55fde8ed5",
+      "durationMs": 83895,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/jira/webhooks/installed.py",
+      "lineRange": "1-110",
+      "traceId": "5a28d64ce758fd4f312573189ab46e99",
+      "spanId": "a890e75b0746e514",
+      "responseId": "msg_01GZrwfjWp9Jh9RAY1ZudHwd",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95dc-14ae-7cf4-b3da-e8cce5ea67f1",
+      "durationMs": 84416,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "1-198",
+      "traceId": "594baeb44de4cd30dd0ad993c86b2ab1",
+      "spanId": "cda40384c59a02fb",
+      "responseId": "msg_014t5Kg4iDpZerBTQCZXYp7J",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95dc-59d0-7354-932c-8d2f96d2a07b",
+      "durationMs": 67401,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "1-197",
+      "traceId": "316665f705d0933f3cfa7410fb5c0384",
+      "spanId": "cc28b7a27301821b",
+      "responseId": "msg_0124En9o67avZm9SQGKpfoS5",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95dd-1e24-7b91-9cca-0381287e8899",
+      "durationMs": 102106,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "199-396",
+      "traceId": "594baeb44de4cd30dd0ad993c86b2ab1",
+      "spanId": "dbae032da70084f5",
+      "responseId": "msg_013bVcTcqZ6KKe3acWkmbVv3",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95dd-6124-7397-a959-4e01d4933b06",
+      "durationMs": 94701,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/flags/endpoints/secrets.py",
+      "lineRange": "1-140",
+      "traceId": "de095b8494f58192029df490c10e6eae",
+      "spanId": "b2314e05444aa5b1",
+      "responseId": "msg_01Db16fQLfDrKFNYH2Hj8MEa",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95db-8256-7511-9304-4607b855b330",
+      "durationMs": 242545,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "397-594",
+      "traceId": "594baeb44de4cd30dd0ad993c86b2ab1",
+      "spanId": "09909cf94625de3d",
+      "responseId": "msg_01UZYEzF7DrRjKXJaX8wDbQg",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95de-d31b-7acb-b07a-808c10bd2140",
+      "durationMs": 31287,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "1-202",
+      "traceId": "03878f907fa7f45a2dedcca3680fa874",
+      "spanId": "d793fd07e42692bf",
+      "responseId": "msg_01DH2FGtWPL5VrB1bzCVitDo",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95dd-5ea4-7368-b804-574fbd287e79",
+      "durationMs": 145718,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "595-677",
+      "traceId": "594baeb44de4cd30dd0ad993c86b2ab1",
+      "spanId": "9537ac1d8d90d2e9",
+      "responseId": "msg_01FHpniBSfwgaLGphWhuL352",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95df-4d59-7752-a418-cffd3ddae67e",
+      "durationMs": 23660,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "198-394",
+      "traceId": "316665f705d0933f3cfa7410fb5c0384",
+      "spanId": "6d71e98b7421fea9",
+      "responseId": "msg_01CkKvd6sksTQ5bLoadnAWHT",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95de-ad0f-722e-a4e6-668605935766",
+      "durationMs": 105653,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1-202",
+      "traceId": "1e518bda1b30750fa511c5401c2dcf44",
+      "spanId": "1f08f7a16b0ce717",
+      "responseId": "msg_01QeyWwPjaezk43trw9ah6Hr",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95df-35d5-7195-bb30-a034e0556016",
+      "durationMs": 74276,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "203-404",
+      "traceId": "03878f907fa7f45a2dedcca3680fa874",
+      "spanId": "c3287772b5269301",
+      "responseId": "msg_016ReffPVkeDybFTaNxWZ9ex",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95df-97f5-7b34-a48f-601629ac25c6",
+      "durationMs": 100542,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "203-404",
+      "traceId": "1e518bda1b30750fa511c5401c2dcf44",
+      "spanId": "471c6347f5b1e174",
+      "responseId": "msg_01PiDNLoNTBfR66fHgCTYYwp",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e0-5803-760c-9752-c779d6245b76",
+      "durationMs": 61213,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "405-606",
+      "traceId": "03878f907fa7f45a2dedcca3680fa874",
+      "spanId": "32bad24026c8ce34",
+      "responseId": "msg_01SCT7RHNmmC6ep9HfZftVs1",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e1-20c8-7b81-8664-51869afb3f0a",
+      "durationMs": 46869,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/options_load.py",
+      "lineRange": "1-115",
+      "traceId": "06c96128f653e3355a48db55444741d0",
+      "spanId": "e18d793f772df026",
+      "responseId": "msg_013VmJdjPsLUNtePZQDZqWdk",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95df-a9d2-7a21-b3f7-062aadd7de40",
+      "durationMs": 179199,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/notifications/notification_action/group_type_notification_registry/handlers/metric_alert_registry_handler.py",
+      "lineRange": "1-108",
+      "traceId": "f4f7fda585f09d29fef6d71fdcfa7f4f",
+      "spanId": "194c818ea8a3a5b9",
+      "responseId": "msg_012LDbKTBx8SdmkpxqsbgFx7",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e2-65de-7948-b5d6-1c57e7a62816",
+      "durationMs": 16925,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "405-606",
+      "traceId": "1e518bda1b30750fa511c5401c2dcf44",
+      "spanId": "6b23e7ff291b5fab",
+      "responseId": "msg_017Kgv72JHrBBRPzXZBmFgWr",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e1-472e-7fb9-8a25-6449f382974e",
+      "durationMs": 95976,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "607-681",
+      "traceId": "03878f907fa7f45a2dedcca3680fa874",
+      "spanId": "e5b04fe2b54210c8",
+      "responseId": "msg_01LXrjnn6SftC6Grj218FTFq",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e1-d7e7-77e5-b40f-5ede3bb1006e",
+      "durationMs": 115630,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py",
+      "lineRange": "1-128",
+      "traceId": "86586c54b886d6d10605ae7156d63bd0",
+      "spanId": "c571abb0bf759810",
+      "responseId": "msg_01Cqg5J65upV5x1MRLTxjAFN",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e2-a803-7998-b43d-860215e5b56f",
+      "durationMs": 66711,
+      "numTurns": 15,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_approve.py",
+      "lineRange": "1-104",
+      "traceId": "65bc0bfc83f100c2109b03ed1f468518",
+      "spanId": "1f0b19c92543cb49",
+      "responseId": "msg_01P79iPvBoBCSU7uEehxFWq9",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e3-9ba1-7421-98cf-95311ce6ec34",
+      "durationMs": 13545,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "1-199",
+      "traceId": "94ba85b7a2e7e27609d4287f8815a246",
+      "spanId": "e90e0465ea2b4382",
+      "responseId": "msg_01YJk6ndkKFXiEqQdsf461rb",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e3-d090-74c9-a253-74b300e27927",
+      "durationMs": 11908,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "607-808",
+      "traceId": "1e518bda1b30750fa511c5401c2dcf44",
+      "spanId": "7c6620c207765982",
+      "responseId": "msg_01L47JpH3VRLhPTWWUNtkZ6G",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e2-be26-74ca-8f24-ce0c8388cea6",
+      "durationMs": 86644,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "200-291",
+      "traceId": "94ba85b7a2e7e27609d4287f8815a246",
+      "spanId": "6f6d0ebf7dd74e49",
+      "responseId": "msg_01Wnehar1d3NBfWRthqx3sMS",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e3-ff19-776c-b8a7-88e4faef02b3",
+      "durationMs": 11945,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "1-191",
+      "traceId": "fc3b5ec7fd5592564db3f499dd5dccdb",
+      "spanId": "ec9c5742e5452a6c",
+      "responseId": "msg_01R8ycPwGimVYHkAHZccsH3C",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e3-aca2-7877-afbd-e84aeb4748fe",
+      "durationMs": 50056,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "809-1010",
+      "traceId": "1e518bda1b30750fa511c5401c2dcf44",
+      "spanId": "7e2618dbb091fea0",
+      "responseId": "msg_01QLA5tcZyNiE49UGd5JKJvK",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e4-10a2-77eb-b9a8-b21dc3f43fb9",
+      "durationMs": 46681,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1011-1037",
+      "traceId": "1e518bda1b30750fa511c5401c2dcf44",
+      "spanId": "65cc3bfc5ff4a053",
+      "responseId": "msg_01H9xCaE9iEhfDV17FKwnJtf",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e4-c704-71b1-842b-578aa755e5b5",
+      "durationMs": 2219,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/endpoints/data_export_notifications.py",
+      "lineRange": "1-26",
+      "traceId": "4a8833f2649ad72037b6b36309f67ddf",
+      "spanId": "c4d10890e480ba0f",
+      "responseId": "msg_013f3Z5baPuY1PfLX2do6DSD",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e4-2dd5-775a-9a90-83e93c47cbcd",
+      "durationMs": 49611,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "192-382",
+      "traceId": "fc3b5ec7fd5592564db3f499dd5dccdb",
+      "spanId": "e4a9803e9c419866",
+      "responseId": "msg_01QwumKdTqeZcXvjzhWLiMpy",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e4-7035-728e-9572-ae1d29ab44b1",
+      "durationMs": 47225,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "1-202",
+      "traceId": "aa385da2d331c705be31b58e574d6874",
+      "spanId": "30b8b25b7ded70bf",
+      "responseId": "msg_01AfCAoedbr5kqsyRNHjzqXR",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e4-efab-7c1c-88dd-d996e983ddae",
+      "durationMs": 25887,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/endpoints/project_replay_details.py",
+      "lineRange": "1-103",
+      "traceId": "ad200ca079e16414d5e5d80234de3731",
+      "spanId": "63e3fae72ad7e72c",
+      "responseId": "msg_01A67ss6opgiGqhhVCZJEGsb",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e4-cfb5-7220-a4ad-1db7997dda8c",
+      "durationMs": 44782,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "203-229",
+      "traceId": "aa385da2d331c705be31b58e574d6874",
+      "spanId": "09301befcc60a24a",
+      "responseId": "msg_01FYp2JgaFVuD7WviAgnnL2E",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e5-54d1-7aab-b9da-9b493b78a7ca",
+      "durationMs": 20923,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "1-231",
+      "traceId": "a1005c968dc45d97cf98edc6303b48e4",
+      "spanId": "507c5f4cd5fe3c30",
+      "responseId": "msg_01DkFLRmv7JWoeCia3BX8wVB",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e5-7eaa-76ca-9d62-aaf6f30c2105",
+      "durationMs": 20405,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "383-573",
+      "traceId": "fc3b5ec7fd5592564db3f499dd5dccdb",
+      "spanId": "dd37eb3a6e48f67d",
+      "responseId": "msg_01WPtFFMnJ7T55t5uwgzXs3L",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e5-28be-7de4-b217-824412c7038f",
+      "durationMs": 53036,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "232-462",
+      "traceId": "a1005c968dc45d97cf98edc6303b48e4",
+      "spanId": "03fb26f7941b6ab0",
+      "responseId": "msg_01CPyUz2xzNuCMEJVECgHGTw",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e5-ce63-72c3-8e7a-953ce554fcb6",
+      "durationMs": 36500,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "1-192",
+      "traceId": "4745f0d30f6fe169f07111701bb189c9",
+      "spanId": "586663c5ccde008e",
+      "responseId": "msg_015p7kapaF68pVbbvZX369pv",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e5-a694-7d1c-a4df-0fec801f6864",
+      "durationMs": 48247,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "574-754",
+      "traceId": "fc3b5ec7fd5592564db3f499dd5dccdb",
+      "spanId": "e615644d5655cc7e",
+      "responseId": "msg_01RSX4XAUFuk6UMPDP7aBuLj",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e5-f7f2-7c6c-98d2-1fc396d290c7",
+      "durationMs": 31536,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "193-384",
+      "traceId": "4745f0d30f6fe169f07111701bb189c9",
+      "spanId": "8c55a42d450bccc5",
+      "responseId": "msg_01Pb24CUCf6CBng7ZNDRrGnh",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e6-6313-743d-9429-1d607d6f13a7",
+      "durationMs": 38713,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "385-405",
+      "traceId": "4745f0d30f6fe169f07111701bb189c9",
+      "spanId": "87bce5dfd257e4ec",
+      "responseId": "msg_01GDKzu8j41oi7d8Yug7KeCM",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e6-fa5d-73eb-ac38-193777c07dc2",
+      "durationMs": 2238,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/supergroups/endpoints/organization_supergroups_by_group.py",
+      "lineRange": "1-103",
+      "traceId": "3f9fff899fffd52b8ab3de55901ac50a",
+      "spanId": "d443d7d5e19a435c",
+      "responseId": "msg_01HgGb2uzMDVJoN5n98V3oCP",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e6-7329-7886-9bc8-5ec1c1d113c0",
+      "durationMs": 68014,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "463-671",
+      "traceId": "a1005c968dc45d97cf98edc6303b48e4",
+      "spanId": "532b910e48a78e6a",
+      "responseId": "msg_01GTQr5Mi4eMeHYFxsd1tgb4",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e6-5cfe-79dd-92d4-d11d931099c2",
+      "durationMs": 112780,
+      "numTurns": 21,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/users/models/user_merge_verification_code.py",
+      "lineRange": "1-77",
+      "traceId": "252e62737059d8cd3ae804df2ec000c8",
+      "spanId": "79f81454afa83662",
+      "responseId": "msg_01BcQUhnKUceWaGH1ZFDh8eT",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e8-1595-770f-820d-0d6026d7f85f",
+      "durationMs": 42136,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_open_periods.py",
+      "lineRange": "1-173",
+      "traceId": "86b143d57584c10bad6836bc0ad05ba4",
+      "spanId": "21b6b18cb5bbd49a",
+      "responseId": "msg_01NtRfzD7Pyr4peqqfhUkQQR",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e8-ba36-7ffb-a75f-15ef79b8c8f9",
+      "durationMs": 18678,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "1-207",
+      "traceId": "956add19b8efca06502fc0fb818914d2",
+      "spanId": "c8fa6987256b5dc3",
+      "responseId": "msg_01PA2WCwyAG6cEigKoKTeunC",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e7-7ce0-729f-a2b5-f25d583db48d",
+      "durationMs": 121596,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "1-208",
+      "traceId": "1fe58ddbddca57bfb63780e877c67638",
+      "spanId": "dc5d7dd8de72fd5a",
+      "responseId": "msg_011dWVzoSWXJLFtoXegkYAU9",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e9-0333-7a16-8958-c42caa518f17",
+      "durationMs": 26395,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "209-371",
+      "traceId": "1fe58ddbddca57bfb63780e877c67638",
+      "spanId": "9410bcd4d6327d08",
+      "responseId": "msg_01EepHYn2NHfRjnWoqmrK4Uc",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e9-6a55-73c5-9e82-25dc04a5ed0c",
+      "durationMs": 20865,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "395-591",
+      "traceId": "316665f705d0933f3cfa7410fb5c0384",
+      "spanId": "1bc9388a3e75732f",
+      "responseId": "msg_01LFbV2gAnEkSvcrD3Sway55",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e0-49cd-7874-9eee-668fa6d69a64",
+      "durationMs": 623490,
+      "numTurns": 51,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "traceId": "6799ddf204b0e916177559d45e221b5a",
+      "spanId": "3942b4bad3ba306e",
+      "responseId": "msg_012MATRVsXtT1EFvpcU5KkEZ",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e7-0322-7255-a29e-abd190029822",
+      "durationMs": 202163,
+      "numTurns": 29,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "208-414",
+      "traceId": "956add19b8efca06502fc0fb818914d2",
+      "spanId": "d54d80526c56182f",
+      "responseId": "msg_01SCZREXKpLBnnbJ796zzFge",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e9-57e4-7f17-bb83-79419c14d7b4",
+      "durationMs": 121562,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "415-621",
+      "traceId": "956add19b8efca06502fc0fb818914d2",
+      "spanId": "c86810425fc4afe1",
+      "responseId": "msg_018uuii4jQEH6jyoyPbvDiHG",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95eb-32ce-71ac-8fe6-58a114037817",
+      "durationMs": 51430,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "622",
+      "traceId": "956add19b8efca06502fc0fb818914d2",
+      "spanId": "338d1ad0e519acc2",
+      "responseId": "msg_01C1R8qHUu4dTjQvXFac624u",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95eb-fbbf-7e7d-ba02-1f8bf3a34071",
+      "durationMs": 1482,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "592-747",
+      "traceId": "316665f705d0933f3cfa7410fb5c0384",
+      "spanId": "9c9c9080793ce7c3",
+      "responseId": "msg_012LF9GAbLAdz7dwkf9s4JdH",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95e9-cd8f-779a-8350-13d1333b12fc",
+      "durationMs": 208836,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "filename": "src/sentry/api/endpoints/organization_events_root_cause_analysis.py",
+      "lineRange": "1-218",
+      "traceId": "1cba9872bb986401933d106819ad4662",
+      "spanId": "820eeb76a7db1dfc",
+      "responseId": "msg_01EsGujSsAPzPaqbwPwe4bi6",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95d5-485e-7a36-9629-d09731d7b713",
+      "durationMs": 149840,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "traceId": "ef52899a9cf32ad54cd49c7e346793c8",
+      "spanId": "bb7dfa7ff1a70fe9",
+      "responseId": "msg_01ULUsLD98eoeimDJzzqsYZH",
+      "responseModel": "claude-opus-4-6",
+      "sessionId": "019e95d5-4860-7588-87fa-aeb719ad6da4",
+      "durationMs": 262801,
+      "numTurns": 18,
+      "status": "success"
+    }
+  ],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA using --runtime pi --model anthropic/claude-opus-4-6 --effort high --traces. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. The initial 9fc06de5 shard hit a turn_limit on src/sentry/integrations/msteams/webhook.py:395-591 with the default maxTurns cap; that artifact is withheld as a failed diagnostic and the shard was rerun cleanly with maxTurns = 100. Raw JSONL artifacts are withheld pending sensitive-data review; committed traceSummaries retain sanitized per-chunk metadata only.",
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-06-05",
+    "knownFindingCount": 86,
+    "knownFound": 23,
+    "knownMissed": 63,
+    "knownPartial": 0,
+    "knownFoundRate": 0.2674,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count."
+  },
+  "scores": [
+    {
+      "findingId": "63J-QSY",
+      "matchedCorpusIds": [
+        "sentry-vuln-007"
+      ],
+      "verdict": "known-found",
+      "notes": "Same release threshold empty project-list leak."
+    },
+    {
+      "findingId": "H65-ZNN",
+      "matchedCorpusIds": [
+        "sentry-vuln-008"
+      ],
+      "verdict": "known-found",
+      "notes": "Same system options allowlist tuple bug."
+    },
+    {
+      "findingId": "BDW-E6V",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Reports password logging through validated_data, not the AuthIndexEndpoint superuser reauth fail-open bug."
+    },
+    {
+      "findingId": "TEL-2CL",
+      "matchedCorpusIds": [
+        "sentry-vuln-001"
+      ],
+      "verdict": "known-found",
+      "notes": "Same accept-invite missing-return token-validation/member-deletion bug."
+    },
+    {
+      "findingId": "VPQ-YJQ",
+      "matchedCorpusIds": [
+        "sentry-vuln-064"
+      ],
+      "verdict": "known-found",
+      "notes": "Same invalid Bitbucket webhook signature computed-HMAC logging bug."
+    },
+    {
+      "findingId": "FW9-3QL",
+      "matchedCorpusIds": [
+        "sentry-vuln-062"
+      ],
+      "verdict": "known-found",
+      "notes": "Same client_secret_jwt missing-exp and short replay-cache issue."
+    },
+    {
+      "findingId": "KYC-SL6",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-safe comparison issue is not the Statsig timestamp freshness bug in the corpus."
+    },
+    {
+      "findingId": "J47-GQN",
+      "matchedCorpusIds": [
+        "sentry-vuln-046",
+        "sentry-vuln-048"
+      ],
+      "verdict": "known-found",
+      "notes": "Same preprod size-analysis project-access bypass for pull-request and comparison downloads."
+    },
+    {
+      "findingId": "DGW-WAQ",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Reports SSRF through external issue action URI handling, not the existing Sentry App external issue action scope/project-access corpus entries."
+    },
+    {
+      "findingId": "SVY-MMV",
+      "matchedCorpusIds": [
+        "sentry-vuln-072"
+      ],
+      "verdict": "known-found",
+      "notes": "Same OAuth redirect URI prefix-match bug."
+    },
+    {
+      "findingId": "UT7-VQP",
+      "matchedCorpusIds": [
+        "sentry-vuln-081"
+      ],
+      "verdict": "known-found",
+      "notes": "Same copy-as-curl shell injection bug."
+    },
+    {
+      "findingId": "DE4-CWC",
+      "matchedCorpusIds": [
+        "sentry-vuln-079"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Jira JQL autocomplete escaping bug."
+    },
+    {
+      "findingId": "UKV-X4M",
+      "matchedCorpusIds": [
+        "sentry-vuln-082",
+        "sentry-vuln-084",
+        "sentry-vuln-085"
+      ],
+      "verdict": "known-found",
+      "notes": "Same ECharts tooltip HTML injection pattern across feature flag, mobile build, and app-size treemap tooltips."
+    },
+    {
+      "findingId": "4XT-A7Z",
+      "matchedCorpusIds": [
+        "sentry-vuln-021"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Codecov repository token regeneration scope bug."
+    },
+    {
+      "findingId": "FXF-FAY",
+      "matchedCorpusIds": [
+        "sentry-vuln-018"
+      ],
+      "verdict": "known-found",
+      "notes": "Same pinned-search shared GroupSearchView mutation bug."
+    },
+    {
+      "findingId": "RZX-5L5",
+      "matchedCorpusIds": [
+        "sentry-vuln-041",
+        "sentry-vuln-022"
+      ],
+      "verdict": "known-found",
+      "notes": "Same saved-query visit endpoint object-permission bug in Discover and Explore."
+    },
+    {
+      "findingId": "NJB-3QP",
+      "matchedCorpusIds": [
+        "sentry-vuln-025"
+      ],
+      "verdict": "known-found",
+      "notes": "Same external team lookup scoped by organization instead of team."
+    },
+    {
+      "findingId": "D9Z-YUW",
+      "matchedCorpusIds": [
+        "sentry-vuln-013"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Perforce configData secret disclosure."
+    },
+    {
+      "findingId": "8JL-ESD",
+      "matchedCorpusIds": [
+        "sentry-vuln-014"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Slack options-load cross-tenant disclosure."
+    },
+    {
+      "findingId": "TYM-NZ6",
+      "matchedCorpusIds": [
+        "sentry-vuln-015"
+      ],
+      "verdict": "known-found",
+      "notes": "Same replay data-export notification endpoint authentication/origin bug."
+    },
+    {
+      "findingId": "GVM-9U3",
+      "matchedCorpusIds": [
+        "sentry-vuln-034"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Seer autofix run_id ownership bug."
+    },
+    {
+      "findingId": "4NV-MTV",
+      "matchedCorpusIds": [
+        "sentry-vuln-037"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Sentry App cell service optional-user project-access bypass."
+    },
+    {
+      "findingId": "39P-AM7",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Reports SSRF through external issue action URI handling, not the existing GroupEventJsonView project-access corpus bug."
+    },
+    {
+      "findingId": "W4X-779",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Same MS Teams handler area, but reports unscoped Rule IDs rather than the target group/integration organization-binding corpus bug."
+    }
+  ]
+}

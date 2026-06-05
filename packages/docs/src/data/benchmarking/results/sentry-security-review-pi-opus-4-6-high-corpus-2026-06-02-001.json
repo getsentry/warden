@@ -1,5 +1,6 @@
 {
   "runId": "sentry-security-review-pi-opus-4-6-high-corpus-2026-06-02-001",
+  "supersededBy": "sentry-security-review-pi-opus-4-6-high-traced-corpus-2026-06-05-001",
   "corpusId": "sentry-vulnerability-corpus",
   "repository": "getsentry/sentry",
   "wardenVersion": "0.35.1",

@@ -73,12 +73,10 @@ When the raw artifacts preserve verifier usage, it is included under
 `auxiliaryUsage.verification`; some run shapes only persist the final total or
 per-chunk analysis usage.
 
-Some run shapes persist only per-chunk analysis usage. The Opus 4.6 high-effort
-Pi run completed with no failed chunks, but its live CLI shard summaries showed
-approximately $38.43 total including auxiliary/post-processing work while the
-persisted JSONL artifacts contain $30.89 of scan cost. Until the artifact
-format preserves that auxiliary usage exactly, the table uses the persisted
-JSONL cost and the run note records the gap. Treat recorded cost as operational
+Older rows can lack auxiliary usage or trace summaries when the raw artifacts
+were produced before those fields were captured consistently. Superseded rows
+stay in the result data for audit history, but the stable matrix uses the
+cleaner traced replacement when one exists. Treat recorded cost as operational
 accounting for a row, not normalized model pricing.
 
 Treat duration as an operational measurement, not a stable model quality
@@ -196,53 +194,45 @@ but each turn carries a much smaller input/cache footprint. Claude SDK's extra
 cost is mostly repeated context volume and verifier context volume, not
 additional tool fanout.
 
-### Why Opus 4.8 high scored below Sonnet 4.6
+### Opus 4.8 High vs Opus 4.6 High
 
-Opus 4.8 high is also cleanly comparable with the Sonnet 4.6 rows. All four
-runs scan the same 156 chunks, complete with zero failed chunks, use Warden's
-finding verifier, and have agent-verified scoring. The lower score is not a
-coverage problem.
+The traced Pi rows are the direct Opus comparison. Both rows scan the same 156
+chunks, complete with zero failed chunks, use Warden's finding verifier, and
+have agent-verified scoring. Opus 4.6 high found 23 of 86 known corpus entries.
+Opus 4.8 high found 21 of 86. Both emitted 24 total findings.
 
-The main difference is recall. On Pi, Sonnet 4.6 found 25 of 86 known corpus
-entries and emitted 32 findings. Opus 4.8 high found 21 of 86 and emitted 24
-findings. Through the Claude SDK, Sonnet 4.6 found 24 of 86 and emitted 32
-findings. Opus 4.8 high found 17 of 86 and emitted 17 findings.
+That means Opus 4.8 high did not score lower because it produced a smaller or
+noisier report. It emitted the same number of final findings and had slightly
+fewer findings without a known-corpus match: 4 versus 5. The issue is recall
+against this specific corpus.
 
-That is not because Opus 4.8 high was noisier. It emitted fewer findings that
-did not match the known corpus: 4 on Pi versus Sonnet's 7, and 2 through the
-Claude SDK versus Sonnet's 8. The tradeoff went the wrong way for this corpus:
-Opus 4.8 high produced a cleaner candidate set, but the set was too small.
+The traces explain the difference. Opus 4.6 high did much more investigation:
+981 turns, 1,101 tool executions, 13.6M scan input tokens, and $30.11 scan
+cost. Opus 4.8 high used 426 turns, 371 tool executions, 5.2M scan input tokens,
+and $17.39 scan cost. Average turns per chunk dropped from 6.29 to 2.73, and
+the maximum chunk dropped from 51 turns to 11.
 
-The traces support that read. Opus 4.8 high used fewer turns and produced less
-scan output than Sonnet 4.6 in both runtimes. On Pi, Opus 4.8 high used 426
-turns and 316k scan output tokens; Sonnet 4.6 used 628 turns and 365k scan
-output tokens. Through the Claude SDK, Opus 4.8 high used 375 turns and 308k
-scan output tokens; Sonnet 4.6 used 939 turns and 890k scan output tokens. The
-Claude SDK contrast is especially sharp: Opus 4.8 high ended 86 chunks in one
-turn, while Sonnet 4.6 did that on only 8 chunks.
+No-finding chunks show the same shape. Opus 4.6 high averaged 5.4 turns, 6.0
+tool executions, 73.4k scan input tokens, and $0.17 scan cost on chunks that
+ended without a finding. Opus 4.8 high averaged 2.3 turns, 1.8 tool executions,
+25.8k scan input tokens, and $0.09. Finding chunks were also shorter: 11.0
+turns on Opus 4.6 high versus 5.5 on Opus 4.8 high.
 
-The matched corpus IDs also do not point to one narrow vulnerability category.
-On Pi, Opus 4.8 high recovered 15 of Sonnet's 25 known matches and found 6
-different known issues. Through the Claude SDK, it recovered 10 of Sonnet's 24
-known matches and found 7 different known issues. Across both runtimes, Sonnet
-4.6 found 31 unique known corpus entries, Opus 4.8 high found 23, and only 17
-overlap. Sonnet-only coverage includes invite-token validation, release
-threshold project scoping, OAuth token lifetime and replay checks, webhook
-freshness checks, identity unlinking, and frontend URL handling. Opus-only
-coverage includes OAuth userinfo validation, replay delete scope, preprod
-size-analysis access, relocation retry state leakage, and GitHub Actions output
-injection.
+The matched corpus IDs shifted, not just shrank. The two rows overlap on 12
+known corpus entries. Opus 4.6 high has 11 unique matches that Opus 4.8 high
+missed, and Opus 4.8 high has 9 unique matches that Opus 4.6 high missed. Opus
+4.6 high is better on aggregate recall here, but it is not a strict superset of
+Opus 4.8 high.
 
-The best supported conclusion is that Opus 4.8 high is more selective under
-this Warden prompt and corpus. It scans every chunk, and it does not fail more
-often. It simply exits many investigations earlier and reports fewer candidate
-issues. That improves apparent precision but misses enough known vulnerabilities
-to trail Sonnet 4.6 on recall.
+The best supported conclusion is that Opus 4.8 high is more selective under the
+current Warden prompt and corpus. It scans every chunk and does not fail more
+often. It exits more investigations earlier, which lowers cost and tool fanout,
+but misses enough known vulnerabilities to trail Opus 4.6 high on this corpus.
 
-The older Opus 4.7 and default-medium Opus 4.8 Pi rows still have an unusual
-shape. They complete cleanly, but many no-finding chunks are very short. Treat
-that as historical context for default-runtime behavior, not as the current
-high-effort Opus 4.8 comparison.
+The Opus 4.6 high traced row also shows why benchmark runs now set
+`maxTurns = 100`. One heavy MS Teams chunk hit the default turn cap and was
+rerun cleanly with the higher cap. Without that, the row would measure a runner
+limit instead of model behavior.
 
 ## Current Takeaway
 

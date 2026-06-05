@@ -101,6 +101,7 @@ version = 1
 
 [defaults]
 reportOn = "low"
+maxTurns = 100
 
 [defaults.verification]
 enabled = true
@@ -112,6 +113,10 @@ concurrency = 4
 name = "security-review"
 EOF
 ```
+
+Set `maxTurns` explicitly for corpus runs. The default is lower and can make
+heavy security chunks fail with `turn_limit`, which turns a model comparison
+into a runner-limit comparison.
 
 ## Run
 
@@ -175,6 +180,7 @@ Record:
 - model
 - runtime
 - effort level, or `provider-default`
+- configured `maxTurns`, plus any shard reruns done after a turn-limit failure
 - whether Warden's post-analysis finding verifier was enabled
 - whether `--traces` was enabled, plus any run-level trace IDs preserved in
   the JSONL metadata
