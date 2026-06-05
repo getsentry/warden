@@ -30,6 +30,7 @@ export BENCH_RUNTIME_SLUG="pi"
 export BENCH_EFFORT="high"
 export BENCH_RUN_SLUG="pi-gpt-5-5-high"
 export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_RUN_SLUG}"
+export BENCH_PARALLEL="4"
 mkdir -p "$BENCH_ROOT"
 ```
 
@@ -37,6 +38,16 @@ Set the provider API key required by the model. For GPT 5.5 through Pi, set
 `WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
 For the Claude SDK runtime, use Claude Code model IDs such as
 `claude-sonnet-4-6` instead of Pi provider/model selectors.
+
+If you load credentials from a local env file, export them before running
+`pnpm`. A plain `source .env.local` sets shell variables, but child processes
+will not see them unless they are exported:
+
+```bash
+set -a
+source .env.local
+set +a
+```
 
 The older GPT 5.5 run used `openai/gpt-5.5`. The installed Pi registry did not
 expose `openai/gpt-5.5-codex`. It did not pass an explicit effort flag, so the
@@ -132,6 +143,13 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
   sha=${target##*/targets-}
   sha=${sha%.txt}
   short=${sha:0:8}
+  output="$BENCH_ROOT/sentry-security-review-${BENCH_RUN_SLUG}-corpus-${short}.jsonl"
+  validated="$output.validated"
+
+  if [ -f "$validated" ]; then
+    echo "Skipping ${short}; validated marker exists"
+    continue
+  fi
 
   git -C /tmp/sentry-benchmark checkout "$sha"
 
@@ -146,12 +164,44 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
     --traces \
     --report-on low \
     --min-confidence low \
-    --parallel 4 \
-    -o "$BENCH_ROOT/sentry-security-review-${BENCH_RUN_SLUG}-corpus-${short}.jsonl" \
+    --parallel "$BENCH_PARALLEL" \
+    -o "$output" \
     -v \
     --log
+
+  node - "$output" <<'NODE'
+const {readFileSync} = require("node:fs");
+
+const output = process.argv[2];
+const lines = readFileSync(output, "utf8").trim().split("\n").filter(Boolean);
+if (lines.length === 0) {
+  throw new Error(`${output} is empty`);
+}
+
+const records = lines.map((line) => JSON.parse(line));
+const failed = records.filter((record) => record.status && record.status !== "ok");
+const summary = records.find((record) => record.type === "summary");
+if (failed.length > 0) {
+  throw new Error(`${output} has ${failed.length} failed records`);
+}
+if (!summary) {
+  throw new Error(`${output} is missing a summary record`);
+}
+NODE
+
+  touch "$validated"
 done
 ```
+
+Use a separate `.validated` marker for resumable benchmark scripts. Do not use
+Warden's `.jsonl.done` marker as proof that a shard is usable; it can exist for
+failed JSONL artifacts.
+
+`BENCH_PARALLEL=4` is the standard corpus setting. If a new, slow, or
+high-effort provider repeatedly fails with 503s, timeouts, or provider
+disconnects, retry the failed shard with a lower `BENCH_PARALLEL` and record
+that in the result notes. Do not mix failed and clean attempts in one stitched
+summary.
 
 Inspect the stitched output:
 
@@ -161,6 +211,12 @@ pnpm cli -- runs show "$BENCH_ROOT"/sentry-security-review-"$BENCH_RUN_SLUG"-cor
   --report-on low \
   --min-confidence low
 ```
+
+Only stitch clean shard JSONL files. If a shard fails because of auth,
+provider 503s, timeouts, `turn_limit`, or a manual abort, move that artifact out
+of the `*.jsonl` glob before running `runs show`, remove any stale validation
+marker, and rerun the shard. Keep the failed artifact with a `.withheld` suffix
+if it is useful for diagnosis.
 
 ## Record Results
 
