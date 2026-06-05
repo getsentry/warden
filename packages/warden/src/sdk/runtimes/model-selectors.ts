@@ -87,10 +87,14 @@ export function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): 
       );
     }
 
-    // Valid shape but unknown provider — give a pointer to the docs rather than
-    // saying "must use provider/model format" (which is already met).
+    // Valid shape but provider/model could not be resolved — this happens either
+    // when the provider is not registered in Pi (unknown provider) or when the
+    // provider is known but the model ID is wrong or stale. Avoid saying
+    // "unknown provider" because it may mislead users with a valid provider
+    // name and a stale model ID.
     return (
-      `Pi runtime ${invalid.option}${target} uses an unknown Pi provider: "${provider}" in ${model}. ` +
+      `Pi runtime ${invalid.option}${target} could not find provider or model: ${model}. ` +
+      `Verify the Pi provider name and model ID are correct. ` +
       `See https://warden.sentry.dev/config/models for supported providers and selectors.`
     );
   }
@@ -158,29 +162,34 @@ export function findMissingCloudflareEnv(
   for (const target of targets) {
     if ((target.runtime ?? 'pi') !== 'pi') continue;
 
-    // Check the model fields in precedence order; use the first one set.
-    const model = target.model ?? target.auxiliaryModel ?? target.synthesisModel;
-    if (!model || !isPiModelSelector(model)) continue;
+    // Check each model lane independently. A target can mix providers across
+    // lanes (e.g. anthropic for `model`, cloudflare-workers-ai for
+    // `auxiliaryModel`), so each lane that resolves to a Cloudflare provider
+    // must be validated independently.
+    for (const lane of ['model', 'auxiliaryModel', 'synthesisModel'] as const) {
+      const model = target[lane];
+      if (!model || !isPiModelSelector(model)) continue;
 
-    const slashIndex = model.indexOf('/');
-    const provider = model.slice(0, slashIndex);
+      const slashIndex = model.indexOf('/');
+      const provider = model.slice(0, slashIndex);
 
-    if (provider !== 'cloudflare-workers-ai' && provider !== 'cloudflare-ai-gateway') continue;
+      if (provider !== 'cloudflare-workers-ai' && provider !== 'cloudflare-ai-gateway') continue;
 
-    const missing: string[] = [];
+      const missing: string[] = [];
 
-    if (!env['CLOUDFLARE_ACCOUNT_ID'] && !env['WARDEN_CLOUDFLARE_ACCOUNT_ID']) {
-      missing.push('CLOUDFLARE_ACCOUNT_ID');
-    }
-
-    if (provider === 'cloudflare-ai-gateway') {
-      if (!env['CLOUDFLARE_GATEWAY_ID'] && !env['WARDEN_CLOUDFLARE_GATEWAY_ID']) {
-        missing.push('CLOUDFLARE_GATEWAY_ID');
+      if (!env['CLOUDFLARE_ACCOUNT_ID'] && !env['WARDEN_CLOUDFLARE_ACCOUNT_ID']) {
+        missing.push('CLOUDFLARE_ACCOUNT_ID');
       }
-    }
 
-    if (missing.length > 0) {
-      return { provider, missing };
+      if (provider === 'cloudflare-ai-gateway') {
+        if (!env['CLOUDFLARE_GATEWAY_ID'] && !env['WARDEN_CLOUDFLARE_GATEWAY_ID']) {
+          missing.push('CLOUDFLARE_GATEWAY_ID');
+        }
+      }
+
+      if (missing.length > 0) {
+        return { provider, missing };
+      }
     }
   }
 

@@ -63,11 +63,21 @@ describe('invalidPiModelSelectorMessage', () => {
     expect(msg).not.toContain('must use provider/model format');
   });
 
-  it('emits unknown-provider guidance for valid-shape selectors with unrecognized providers', () => {
+  it('emits provider-or-model-not-found guidance for valid-shape selectors (unknown or stale model)', () => {
+    // Covers both: unknown provider name and known provider with stale/wrong model ID
     const msg = invalidPiModelSelectorMessage({ option: 'model', model: 'unknown-provider/gpt-5.5' });
-    expect(msg).toContain('unknown Pi provider');
-    expect(msg).toContain('unknown-provider');
+    expect(msg).toContain('could not find provider or model');
+    expect(msg).toContain('unknown-provider/gpt-5.5');
     expect(msg).not.toContain('must use provider/model format');
+    expect(msg).not.toContain('unknown Pi provider');
+  });
+
+  it('uses same could-not-find wording for known providers with stale model IDs', () => {
+    const msg = invalidPiModelSelectorMessage({ option: 'model', model: 'openai/nonexistent-model' });
+    expect(msg).toContain('could not find provider or model');
+    expect(msg).toContain('openai/nonexistent-model');
+    // Does not claim openai is an unknown provider
+    expect(msg).not.toContain('unknown Pi provider');
   });
 
   it('emits standard format guidance for plain model IDs without a provider', () => {
@@ -225,5 +235,35 @@ describe('findMissingCloudflareEnv', () => {
       {},
     );
     expect(result).toBeUndefined();
+  });
+
+  it('detects missing account ID when Cloudflare provider is in auxiliaryModel but not model', () => {
+    const result = findMissingCloudflareEnv(
+      [{
+        runtime: 'pi',
+        model: 'anthropic/claude-sonnet-4-6',
+        auxiliaryModel: 'cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6',
+      }],
+      { CLOUDFLARE_API_KEY: 'key' },
+    );
+    expect(result).toMatchObject({
+      provider: 'cloudflare-workers-ai',
+      missing: ['CLOUDFLARE_ACCOUNT_ID'],
+    });
+  });
+
+  it('detects missing account ID when Cloudflare provider is in synthesisModel only', () => {
+    const result = findMissingCloudflareEnv(
+      [{
+        runtime: 'pi',
+        model: 'openai/gpt-5.5',
+        synthesisModel: 'cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6',
+      }],
+      { CLOUDFLARE_API_KEY: 'key' },
+    );
+    expect(result).toMatchObject({
+      provider: 'cloudflare-workers-ai',
+      missing: ['CLOUDFLARE_ACCOUNT_ID'],
+    });
   });
 });
