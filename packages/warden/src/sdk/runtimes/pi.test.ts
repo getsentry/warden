@@ -188,7 +188,10 @@ describe('piRuntime.runSkill', () => {
     expect(SessionManager.inMemory).toHaveBeenCalledWith('/repo');
     expect(SettingsManager.inMemory).toHaveBeenCalledWith(expect.objectContaining({
       compaction: { enabled: false },
-      retry: expect.objectContaining({ enabled: false }),
+      retry: expect.objectContaining({
+        enabled: true,
+        provider: expect.objectContaining({ maxRetries: 2 }),
+      }),
     }));
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
@@ -514,6 +517,7 @@ describe('piRuntime structured calls', () => {
 
     expect(SettingsManager.inMemory).toHaveBeenCalledWith(expect.objectContaining({
       retry: expect.objectContaining({
+        enabled: true,
         provider: expect.objectContaining({ maxRetries: 4 }),
       }),
     }));

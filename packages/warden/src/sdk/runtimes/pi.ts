@@ -69,6 +69,7 @@ import type {
 const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
+const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_TOOL_NAMES: Record<Exclude<ToolName, 'WebFetch' | 'WebSearch'>, string[]> = {
   Read: ['read'],
   Write: ['write'],
@@ -282,13 +283,14 @@ function normalizePiResult(run: PiPromptResult): SkillRunResult | undefined {
 }
 
 function buildSettingsManager(timeout: number | undefined, maxRetries: number | undefined): SettingsManager {
+  const providerMaxRetries = maxRetries ?? DEFAULT_PI_PROVIDER_MAX_RETRIES;
   return SettingsManager.inMemory({
     compaction: { enabled: false },
     retry: {
-      enabled: false,
+      enabled: providerMaxRetries > 0,
       provider: {
         ...(timeout !== undefined ? { timeoutMs: timeout } : {}),
-        ...(maxRetries !== undefined ? { maxRetries } : {}),
+        maxRetries: providerMaxRetries,
       },
     },
   });
