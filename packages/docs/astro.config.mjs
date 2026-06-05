@@ -78,6 +78,7 @@ export default defineConfig({
                 { label: "Triggers", link: "/config/triggers" },
                 { label: "Output and Defaults", link: "/config/output" },
                 { label: "Runner", link: "/config/runner" },
+                { label: "Scan Policy", link: "/config/scan" },
                 { label: "Chunking", link: "/config/chunking" },
               ],
             },

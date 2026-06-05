@@ -639,7 +639,14 @@ interface ProcessedResults {
 
 type SkillRunnerOptionOverrides = Pick<
   SkillRunnerOptions,
-  'model' | 'maxTurns' | 'effort' | 'runtime' | 'auxiliaryModel' | 'synthesisModel' | 'auxiliaryMaxRetries' | 'verifyFindings'
+  | 'model'
+  | 'maxTurns'
+  | 'effort'
+  | 'runtime'
+  | 'auxiliaryModel'
+  | 'synthesisModel'
+  | 'auxiliaryMaxRetries'
+  | 'verifyFindings'
 >;
 
 const BUILTIN_SKILL_SOURCE = 'built-in (@sentry/warden)';
@@ -714,6 +721,26 @@ export function mergeSkillRunnerOptions(
 
 function needsClaudeAuth(items: { runtime?: SkillRunnerOptions['runtime'] }[]): boolean {
   return items.some((item) => (item.runtime ?? 'pi') === 'claude');
+}
+
+function findRepoPath(cwd: string): string | undefined {
+  try {
+    return getRepoRoot(cwd);
+  } catch {
+    return undefined;
+  }
+}
+
+function loadOptionalConfig(options: CLIOptions, repoPath?: string): WardenConfig | null {
+  const configPath = options.configPath
+    ? resolveConfigInput(options.configPath)
+    : repoPath
+      ? resolve(repoPath, 'warden.toml')
+      : null;
+
+  return configPath && existsSync(configPath)
+    ? loadWardenConfigFile(configPath)
+    : null;
 }
 
 /**
@@ -1042,26 +1069,8 @@ export async function runSkills(
   // Claude runtime can fall back to local Claude Code auth.
   const apiKey = getAnthropicApiKey();
 
-  // Try to find repo root for config loading
-  let repoPath: string | undefined;
-  try {
-    repoPath = getRepoRoot(cwd);
-  } catch {
-    // Not in a git repo - that's fine for file mode
-  }
-
-  // Resolve config path
-  let configPath: string | null = null;
-  if (options.configPath) {
-    configPath = resolveConfigInput(options.configPath);
-  } else if (repoPath) {
-    configPath = resolve(repoPath, 'warden.toml');
-  }
-
-  // Load config if available
-  const config = configPath && existsSync(configPath)
-    ? loadWardenConfigFile(configPath)
-    : null;
+  const repoPath = findRepoPath(cwd);
+  const config = loadOptionalConfig(options, repoPath);
   const defaultModel = resolveCliDefaultModel(config, options.model);
   const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
   const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
@@ -1168,6 +1177,9 @@ export async function runSkills(
     effort: defaultEffort,
     batchDelayMs: config?.defaults?.batchDelayMs,
     maxContextFiles: config?.defaults?.chunking?.maxContextFiles,
+    ignore: config?.defaults?.ignore,
+    scan: config?.defaults?.scan,
+    chunking: config?.defaults?.chunking,
     auxiliaryMaxRetries:
       config?.defaults?.auxiliary?.maxRetries ??
       config?.defaults?.auxiliaryMaxRetries,
@@ -1255,12 +1267,14 @@ export async function runSkills(
 
 async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
+  const config = loadOptionalConfig(options, findRepoPath(cwd));
 
   // Build context from files
   reporter.step('Building context from files...');
   const context = await buildFileEventContext({
     patterns: filePatterns,
     cwd,
+    scan: config?.defaults?.scan,
   });
 
   const pullRequest = context.pullRequest;

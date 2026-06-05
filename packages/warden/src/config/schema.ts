@@ -191,6 +191,31 @@ export const ChunkingConfigSchema = z.object({
 });
 export type ChunkingConfig = z.infer<typeof ChunkingConfigSchema>;
 
+export const IgnoreConfigSchema = z.object({
+  /** Gitignore-style path patterns to ignore. Prefix with ! to re-include. */
+  paths: z.array(z.string()).optional(),
+}).strict();
+export type IgnoreConfig = z.infer<typeof IgnoreConfigSchema>;
+
+export const ScanConfigSchema = z.object({
+  /** Max files to analyze after ignores are applied. Default: 150 */
+  maxFiles: z.number().int().positive().optional(),
+  /** Max changed lines to analyze after ignores are applied. Default: 10000 */
+  maxChangedLines: z.number().int().positive().optional(),
+  /** Max file size in bytes for files whose contents may be read. Default: 1048576 */
+  maxFileBytes: z.number().int().positive().optional(),
+  /** Max file length in lines for files whose contents may be read. Default: 3000 */
+  maxFileLines: z.number().int().positive().optional(),
+}).strict();
+export type ScanConfig = z.infer<typeof ScanConfigSchema>;
+
+export const DEFAULT_SCAN_LIMITS: Required<ScanConfig> = {
+  maxFiles: 150,
+  maxChangedLines: 10_000,
+  maxFileBytes: 1_048_576,
+  maxFileLines: 3_000,
+};
+
 // Default configuration that skills inherit from
 export const DefaultsSchema = z.object({
   /** Fail the build when findings meet this severity */
@@ -226,6 +251,10 @@ export const DefaultsSchema = z.object({
   defaultBranch: z.string().optional(),
   /** Chunking configuration for controlling how files are processed */
   chunking: ChunkingConfigSchema.optional(),
+  /** Global file ignore policy applied before scan limits and chunking */
+  ignore: IgnoreConfigSchema.optional(),
+  /** Global scan limits applied after ignore filtering */
+  scan: ScanConfigSchema.optional(),
   /** Delay in milliseconds between batch starts when processing files in parallel. Default: 0 */
   batchDelayMs: z.number().int().nonnegative().optional(),
   /** Max retries for auxiliary structured model calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */

@@ -288,6 +288,9 @@ export async function runSkillTask(
         // Prepare files (parse patches into hunks)
         const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
           contextLines: runnerOptions.contextLines,
+          ignore: runnerOptions.ignore,
+          scan: runnerOptions.scan,
+          chunking: runnerOptions.chunking,
         });
 
         if (preparedFiles.length === 0) {

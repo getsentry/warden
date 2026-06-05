@@ -72,6 +72,23 @@ describe('createSyntheticFileChange', () => {
 
     expect(change.filename).toBe('src/utils/helper.ts');
   });
+
+  it('does not read oversized files while creating synthetic file changes', () => {
+    const filePath = join(tempDir, 'large.ts');
+    writeFileSync(filePath, 'x'.repeat(20));
+
+    const change = createSyntheticFileChange(filePath, tempDir, {
+      scan: { maxFileBytes: 10 },
+    });
+
+    expect(change).toEqual({
+      filename: 'large.ts',
+      status: 'added',
+      additions: 0,
+      deletions: 0,
+      chunks: 0,
+    });
+  });
 });
 
 describe('expandFileGlobs', () => {

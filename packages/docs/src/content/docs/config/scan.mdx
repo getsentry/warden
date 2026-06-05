@@ -1,0 +1,63 @@
+---
+title: Scan Policy
+description: Configure Warden's global file ignore policy and scan limits.
+editUrl: false
+---
+
+Warden applies a global scan policy before chunking files for analysis. The
+default policy skips common generated, build, lock, binary, media, archive, and
+large data artifacts.
+
+Use `defaults.ignore.paths` for gitignore-style path overrides. Prefix a pattern
+with `!` to re-include a file that would otherwise be ignored.
+
+```toml title="warden.toml"
+[defaults.ignore]
+paths = [
+  "**/fixtures/**",
+  "!**/fixtures/security-regressions/**",
+]
+
+[defaults.scan]
+maxFiles = 150
+maxChangedLines = 10000
+maxFileBytes = 1048576
+maxFileLines = 3000
+```
+
+## Limits
+
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>maxFiles</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Max files to analyze after ignores are applied. Default: <code>150</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxChangedLines</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Max changed lines to analyze after ignores are applied. Default: <code>10000</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxFileBytes</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Max file size for files whose contents may be read. Default: <code>1048576</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxFileLines</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Max file length for files whose contents may be read. Default: <code>3000</code>.</dd>
+  </div>
+</dl>
+
+When a run exceeds `maxFiles` or `maxChangedLines`, Warden scans files in the
+existing diff order until the budget is exhausted and records the remaining
+files as skipped.

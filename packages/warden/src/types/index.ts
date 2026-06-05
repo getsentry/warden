@@ -184,7 +184,18 @@ export type AuxiliaryUsageAttributionMap = z.infer<typeof AuxiliaryUsageAttribut
 // Skipped file info for chunking
 export const SkippedFileSchema = z.object({
   filename: z.string(),
-  reason: z.enum(['pattern', 'builtin']),
+  reason: z.enum([
+    'pattern',
+    'builtin',
+    'ignored:builtin',
+    'ignored:user',
+    'ignored:generated',
+    'limit:file_size',
+    'limit:file_lines',
+    'limit:file_read',
+    'limit:file_count',
+    'limit:changed_lines',
+  ]),
   pattern: z.string().optional(),
 });
 export type SkippedFile = z.infer<typeof SkippedFileSchema>;

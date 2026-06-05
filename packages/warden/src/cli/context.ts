@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import type { EventContext, FileChange } from '../types/index.js';
+import type { ScanConfig } from '../config/schema.js';
 import { pluralize } from './output/index.js';
 import { expandAndCreateFileChanges } from './files.js';
 import {
@@ -110,6 +111,7 @@ export function buildLocalEventContext(options: LocalContextOptions = {}): Event
 export interface FileContextOptions {
   patterns: string[];
   cwd?: string;
+  scan?: ScanConfig;
 }
 
 /**
@@ -121,7 +123,9 @@ export async function buildFileEventContext(options: FileContextOptions): Promis
   const cwd = options.cwd ?? process.cwd();
   const dirName = basename(cwd);
 
-  const files = await expandAndCreateFileChanges(options.patterns, cwd);
+  const files = await expandAndCreateFileChanges(options.patterns, cwd, {
+    scan: options.scan,
+  });
 
   return {
     eventType: 'pull_request',

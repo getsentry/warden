@@ -35,6 +35,15 @@ maxFindings = 50                      # Max findings to report (0 = unlimited)
 reportOnSuccess = false               # Post report even with no findings
 ignorePaths = ["*.test.ts"]           # Exclude matching files
 
+[defaults.ignore]
+paths = ["**/fixtures/**", "!**/fixtures/regressions/**"] # Gitignore-style global ignore overrides
+
+[defaults.scan]
+maxFiles = 150                        # Max files analyzed after ignores
+maxChangedLines = 10000               # Max changed lines analyzed after ignores
+maxFileBytes = 1048576                # Max bytes for files whose contents may be read
+maxFileLines = 3000                   # Max lines for files whose contents may be read
+
 [defaults.agent]
 model = "openai/gpt-5.5"              # Default repo-aware analysis model
 maxTurns = 50                         # Max agentic turns per hunk
@@ -115,11 +124,12 @@ Used in `failOn` and `reportOn`:
 
 ## Built-in Skip Patterns
 
-Always skipped (cannot be overridden):
+Skipped by default, with `!` patterns in `[defaults.ignore].paths` available for re-inclusion:
 - Package locks: `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `Cargo.lock`, etc.
-- Minified files: `**/*.min.js`, `**/*.min.css`
-- Build artifacts: `dist/`, `build/`, `node_modules/`, `.next/`, `__pycache__/`
-- Generated code: `*.generated.*`, `*.g.ts`, `__generated__/`
+- Minified, bundled, and source map files.
+- Build/vendor/cache artifacts: `dist/`, `build/`, `node_modules/`, `vendor/`, `.next/`, `coverage/`, etc.
+- Generated code paths and suffixes: `*.generated.*`, `*.g.ts`, `*.pb.go`, `*_pb2.py`, `__generated__/`, etc.
+- Binary, media, archive, font, and bulky data files.
 
 ## Environment Variables
 

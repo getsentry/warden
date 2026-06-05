@@ -8,6 +8,7 @@ import {
   type HunkWithContext,
 } from '../diff/index.js';
 import type { PreparedFile, PrepareFilesOptions, PrepareFilesResult } from './types.js';
+import { applyScanPolicy } from './scan-policy.js';
 
 /**
  * Group hunks by filename into PreparedFile entries.
@@ -45,10 +46,16 @@ export function prepareFiles(
   const allHunks: HunkWithContext[] = [];
   const skippedFiles: SkippedFile[] = [];
 
-  for (const file of pr.files) {
+  const scanPolicy = applyScanPolicy(pr.files, {
+    repoPath: context.repoPath,
+    ignore: options.ignore,
+    scan: options.scan,
+  });
+  skippedFiles.push(...scanPolicy.skippedFiles);
+
+  for (const file of scanPolicy.files) {
     if (!file.patch) continue;
 
-    // Check if this file should be skipped based on chunking patterns
     const mode = classifyFile(file.filename, chunking?.filePatterns);
     if (mode === 'skip') {
       skippedFiles.push({

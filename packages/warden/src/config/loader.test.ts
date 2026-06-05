@@ -57,6 +57,26 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.model).toBe('claude-sonnet-4-20250514');
   });
 
+  it('carries global ignore and scan defaults to resolved triggers', () => {
+    const config: WardenConfig = {
+      ...baseConfig,
+      defaults: {
+        ignore: { paths: ['**/fixtures/**', '!**/fixtures/regressions/**'] },
+        scan: { maxFiles: 25, maxChangedLines: 500 },
+      },
+    };
+
+    const [resolved] = resolveSkillConfigs(config);
+
+    expect(resolved?.ignore).toEqual({
+      paths: ['**/fixtures/**', '!**/fixtures/regressions/**'],
+    });
+    expect(resolved?.scan).toEqual({
+      maxFiles: 25,
+      maxChangedLines: 500,
+    });
+  });
+
   it('skill config overrides defaults', () => {
     const skill: SkillConfig = {
       name: 'test-skill',
@@ -570,6 +590,8 @@ describe('mergeWardenConfigs', () => {
       defaults: {
         failOn: 'high',
         ignorePaths: ['dist/**'],
+        ignore: { paths: ['**/vendor/**'] },
+        scan: { maxFiles: 100, maxFileBytes: 1000 },
         chunking: {
           filePatterns: [{ pattern: '**/*.lock', mode: 'skip' }],
           coalesce: { enabled: true, maxGapLines: 20, maxChunkSize: 4000 },
@@ -587,6 +609,8 @@ describe('mergeWardenConfigs', () => {
       defaults: {
         reportOn: 'medium',
         ignorePaths: ['coverage/**'],
+        ignore: { paths: ['!**/vendor/kept.ts', '**/fixtures/**'] },
+        scan: { maxFiles: 50, maxChangedLines: 2000 },
         chunking: {
           filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
           coalesce: { maxGapLines: 5, maxChunkSize: 2000, enabled: true },
@@ -605,6 +629,14 @@ describe('mergeWardenConfigs', () => {
       failOn: 'high',
       reportOn: 'medium',
       ignorePaths: ['dist/**', 'coverage/**'],
+      ignore: {
+        paths: ['**/vendor/**', '!**/vendor/kept.ts', '**/fixtures/**'],
+      },
+      scan: {
+        maxFiles: 50,
+        maxFileBytes: 1000,
+        maxChangedLines: 2000,
+      },
       chunking: {
         filePatterns: [
           { pattern: '**/*.lock', mode: 'skip' },
@@ -1485,6 +1517,45 @@ describe('defaults.ignorePaths config', () => {
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     expect(result.data?.defaults?.ignorePaths).toEqual(['dist/**', 'node_modules/**']);
+  });
+});
+
+describe('defaults.ignore and defaults.scan config', () => {
+  it('accepts global ignore paths and scan limits', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        ignore: { paths: ['**/fixtures/**', '!**/fixtures/regressions/**'] },
+        scan: {
+          maxFiles: 150,
+          maxChangedLines: 10_000,
+          maxFileBytes: 1_048_576,
+          maxFileLines: 3_000,
+        },
+      },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.ignore?.paths).toEqual([
+      '**/fixtures/**',
+      '!**/fixtures/regressions/**',
+    ]);
+    expect(result.data?.defaults?.scan?.maxFiles).toBe(150);
+  });
+
+  it('rejects non-positive scan limits', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        scan: { maxFiles: 0 },
+      },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
   });
 });
 

@@ -1,9 +1,11 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import fg from 'fast-glob';
 import ignore, { type Ignore } from 'ignore';
 import { countPatchChunks } from '../types/index.js';
 import type { FileChange } from '../types/index.js';
+import type { ScanConfig } from '../config/schema.js';
+import { getFileLimitSkip } from '../sdk/scan-policy.js';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 
@@ -12,6 +14,10 @@ export interface ExpandGlobOptions {
   cwd?: string;
   /** Respect .gitignore files (default: true) */
   gitignore?: boolean;
+}
+
+export interface SyntheticFileChangeOptions {
+  scan?: ScanConfig;
 }
 
 function hasGlobCharacters(pattern: string): boolean {
@@ -47,7 +53,7 @@ function findGitRoot(startPath: string): string | null {
     const root = execGitNonInteractive(['rev-parse', '--show-toplevel'], {
       cwd: resolve(startPath),
     });
-    return root ? resolve(root) : null;
+    return root ? realpathSync(resolve(root)) : null;
   } catch {
     return null;
   }
@@ -195,7 +201,8 @@ export async function expandFileGlobs(
   // Filter files using gitignore rules
   // Normalize paths to forward slashes for consistent matching
   const filteredFiles = files.filter((file) => {
-    const relativePath = normalizePath(relative(gitRoot, file));
+    const resolvedFile = realpathSync(file);
+    const relativePath = normalizePath(relative(gitRoot, resolvedFile));
     if (!isRepoRelativePath(relativePath)) {
       return true;
     }
@@ -232,12 +239,24 @@ export function createPatchFromContent(content: string): string {
  */
 export function createSyntheticFileChange(
   absolutePath: string,
-  basePath: string
+  basePath: string,
+  options: SyntheticFileChangeOptions = {}
 ): FileChange {
+  const relativePath = normalizePath(relative(basePath, absolutePath));
+  const limitSkip = getFileLimitSkip(relativePath, basePath, options.scan);
+  if (limitSkip) {
+    return {
+      filename: relativePath,
+      status: 'added',
+      additions: 0,
+      deletions: 0,
+      chunks: 0,
+    };
+  }
+
   const content = readFileSync(absolutePath, 'utf-8');
   const lines = content.split('\n');
   const lineCount = lines.length;
-  const relativePath = normalizePath(relative(basePath, absolutePath));
   const patch = createPatchFromContent(content);
 
   return {
@@ -255,9 +274,10 @@ export function createSyntheticFileChange(
  */
 export function createSyntheticFileChanges(
   absolutePaths: string[],
-  basePath: string
+  basePath: string,
+  options: SyntheticFileChangeOptions = {}
 ): FileChange[] {
-  return absolutePaths.map((filePath) => createSyntheticFileChange(filePath, basePath));
+  return absolutePaths.map((filePath) => createSyntheticFileChange(filePath, basePath, options));
 }
 
 /**
@@ -265,9 +285,10 @@ export function createSyntheticFileChanges(
  */
 export async function expandAndCreateFileChanges(
   patterns: string[],
-  cwd: string = process.cwd()
+  cwd: string = process.cwd(),
+  options: SyntheticFileChangeOptions = {}
 ): Promise<FileChange[]> {
   const resolvedCwd = resolve(cwd);
   const files = await expandFileGlobs(patterns, resolvedCwd);
-  return createSyntheticFileChanges(files, resolvedCwd);
+  return createSyntheticFileChanges(files, resolvedCwd, options);
 }

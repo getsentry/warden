@@ -953,8 +953,9 @@ async function runSkillAnalysis(
 
   const { files: fileHunks, skippedFiles } = prepareFiles(context, {
     contextLines: options.contextLines,
-    // Note: chunking config should come from the caller (e.g., from warden.toml defaults)
-    // For now, we use built-in defaults. The caller can pass explicit chunking config.
+    ignore: options.ignore,
+    scan: options.scan,
+    chunking: options.chunking,
   });
 
   if (fileHunks.length === 0) {

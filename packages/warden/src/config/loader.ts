@@ -13,6 +13,8 @@ import {
   type Defaults,
   type ChunkingConfig,
   type CoalesceConfig,
+  type IgnoreConfig,
+  type ScanConfig,
   type RunnerConfig,
   type LogsConfig,
   type RuntimeName,
@@ -109,6 +111,25 @@ function mergeChunkingConfig(
   };
 }
 
+function mergeIgnoreConfig(
+  base?: IgnoreConfig,
+  overlay?: IgnoreConfig
+): IgnoreConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  const paths = mergeArray(base.paths, overlay.paths);
+  return paths ? { paths } : undefined;
+}
+
+function mergeScanConfig(
+  base?: ScanConfig,
+  overlay?: ScanConfig
+): ScanConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return { ...base, ...overlay };
+}
+
 function mergeNestedConfig<T extends object>(base?: T, overlay?: T): T | undefined {
   if (!base) return overlay;
   if (!overlay) return base;
@@ -127,6 +148,8 @@ function mergeDefaults(base?: Defaults, overlay?: Defaults): Defaults | undefine
     verification: mergeNestedConfig(base.verification, overlay.verification),
     ignorePaths: mergeArray(base.ignorePaths, overlay.ignorePaths),
     chunking: mergeChunkingConfig(base.chunking, overlay.chunking),
+    ignore: mergeIgnoreConfig(base.ignore, overlay.ignore),
+    scan: mergeScanConfig(base.scan, overlay.scan),
   };
 }
 
@@ -389,6 +412,12 @@ export interface ResolvedTrigger {
   batchDelayMs?: number;
   /** Max number of context files to include in prompts for this trigger */
   maxContextFiles?: number;
+  /** Global file ignore policy applied before scan limits and chunking */
+  ignore?: IgnoreConfig;
+  /** Global scan limits applied after ignore filtering */
+  scan?: ScanConfig;
+  /** Chunking configuration for eligible files */
+  chunking?: ChunkingConfig;
   /** Schedule-specific configuration */
   schedule?: ScheduleConfig;
 }
@@ -521,6 +550,9 @@ export function resolveSkillConfigs(
         minConfidence: skill.minConfidence ?? defaults?.minConfidence,
         batchDelayMs: defaults?.batchDelayMs,
         maxContextFiles: defaults?.chunking?.maxContextFiles,
+        ignore: defaults?.ignore,
+        scan: defaults?.scan,
+        chunking: defaults?.chunking,
       });
     } else {
       for (const trigger of skill.triggers) {
@@ -553,6 +585,9 @@ export function resolveSkillConfigs(
           minConfidence: trigger.minConfidence ?? skill.minConfidence ?? defaults?.minConfidence,
           batchDelayMs: defaults?.batchDelayMs,
           maxContextFiles: defaults?.chunking?.maxContextFiles,
+          ignore: defaults?.ignore,
+          scan: defaults?.scan,
+          chunking: defaults?.chunking,
           schedule: trigger.schedule,
         });
       }
