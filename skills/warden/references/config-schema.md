@@ -128,6 +128,9 @@ Always skipped (cannot be overridden):
 | `WARDEN_MODEL` | Default model (lowest priority) |
 | `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
+| `WARDEN_CLOUDFLARE_API_KEY` | Cloudflare API key (bridged to `CLOUDFLARE_API_KEY`) |
+| `WARDEN_CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (required for Cloudflare providers; bridged to `CLOUDFLARE_ACCOUNT_ID`) |
+| `WARDEN_CLOUDFLARE_GATEWAY_ID` | Cloudflare AI Gateway ID (required for `cloudflare-ai-gateway`; bridged to `CLOUDFLARE_GATEWAY_ID`) |
 | `WARDEN_STATE_DIR` | Override cache location (default: `~/.local/warden`) |
 | `WARDEN_SKILL_CACHE_TTL` | Cache TTL in seconds for unpinned remotes (default: 86400) |
 

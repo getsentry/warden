@@ -15,7 +15,7 @@ import type { LayeredSkillRootsByName, ResolvedTrigger } from '../../config/load
 import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
-import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
+import { assertValidPiModelSelectors, findMissingCloudflareEnv, missingCloudflareEnvMessage } from '../../sdk/runtimes/model-selectors.js';
 import { createOrUpdateIssue } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -178,6 +178,11 @@ async function runScheduleWorkflowInner(
 
     try {
       assertValidPiModelSelectors([resolved]);
+
+      const missingCloudflare = findMissingCloudflareEnv([resolved]);
+      if (missingCloudflare) {
+        throw new Error(missingCloudflareEnvMessage(missingCloudflare));
+      }
 
       // Build context from paths filter
       const patterns = resolved.filters?.paths ?? ['**/*'];

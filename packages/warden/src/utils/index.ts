@@ -60,9 +60,34 @@ export function getAnthropicApiKey(): string | undefined {
 }
 
 /**
- * Mirrors WARDEN-prefixed provider API keys to the env names expected by SDKs.
+ * Additional WARDEN-prefixed env vars to bridge for providers that require
+ * non-API-key credentials alongside their API key.
+ *
+ * These cannot be inferred from the WARDEN_X_API_KEY → X_API_KEY pattern
+ * because they do not follow the _API_KEY suffix convention.
+ *
+ * Each entry is [warden-alias, native-env-var].
+ */
+const WARDEN_PROVIDER_ENV_BRIDGE: ReadonlyArray<readonly [string, string]> = [
+  // Cloudflare Workers AI: requires account ID in addition to API key
+  ['WARDEN_CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT_ID'],
+  // Cloudflare AI Gateway: additionally requires a gateway ID
+  ['WARDEN_CLOUDFLARE_GATEWAY_ID', 'CLOUDFLARE_GATEWAY_ID'],
+];
+
+/**
+ * Mirrors WARDEN-prefixed provider credentials to the env names expected by SDKs.
+ *
+ * Handles two classes of bridging:
+ *
+ * 1. Generic API keys: WARDEN_X_API_KEY → X_API_KEY for any provider.
+ * 2. Provider-specific non-key vars: explicit list for credentials that
+ *    providers require beyond their API key (e.g. Cloudflare account ID).
+ *
+ * Existing native env vars are never overwritten.
  */
 export function bridgeWardenProviderApiKeyEnv(env: NodeJS.ProcessEnv = process.env): void {
+  // Bridge WARDEN_X_API_KEY → X_API_KEY for all providers
   for (const [key, value] of Object.entries(env)) {
     if (!value || !key.startsWith('WARDEN_') || !key.endsWith('_API_KEY')) {
       continue;
@@ -71,6 +96,14 @@ export function bridgeWardenProviderApiKeyEnv(env: NodeJS.ProcessEnv = process.e
     const providerKey = key.slice('WARDEN_'.length);
     if (!env[providerKey]) {
       env[providerKey] = value;
+    }
+  }
+
+  // Bridge provider-specific non-key credentials
+  for (const [wardenKey, nativeKey] of WARDEN_PROVIDER_ENV_BRIDGE) {
+    const value = env[wardenKey];
+    if (value && !env[nativeKey]) {
+      env[nativeKey] = value;
     }
   }
 }

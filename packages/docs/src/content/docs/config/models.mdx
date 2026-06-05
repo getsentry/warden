@@ -44,15 +44,23 @@ Examples:
 | `groq/llama-3.3-70b-versatile` | `WARDEN_GROQ_API_KEY` |
 | `openrouter/meta-llama/llama-3.3-70b-instruct` | `WARDEN_OPENROUTER_API_KEY` |
 | `together/meta-llama/Llama-3.3-70B-Instruct-Turbo` | `WARDEN_TOGETHER_API_KEY` |
+| `cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6` | `WARDEN_CLOUDFLARE_API_KEY` + `CLOUDFLARE_ACCOUNT_ID` |
+| `cloudflare-ai-gateway/...` | `WARDEN_CLOUDFLARE_API_KEY` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_GATEWAY_ID` |
 
 Warden splits Pi selectors at the first `/`. The provider comes before it and the
 provider-specific model ID comes after it, so model IDs may contain additional
-slashes.
+slashes. For example, `cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6` sets
+provider `cloudflare-workers-ai` and model ID `@cf/moonshotai/kimi-k2.6`.
 
 **Credential convention:** Set `WARDEN_{PROVIDER}_API_KEY` to authenticate with a provider.
 Warden mirrors these to the native `{PROVIDER}_API_KEY` expected by each SDK at runtime.
 If you already have a native provider key set (e.g. `OPENAI_API_KEY`), Warden will use it
 directly and the `WARDEN_`-prefixed form is not required.
+
+**Multi-part credentials:** Some providers require additional env vars beyond an API key.
+Cloudflare providers require `CLOUDFLARE_ACCOUNT_ID` (or `WARDEN_CLOUDFLARE_ACCOUNT_ID`).
+Cloudflare AI Gateway additionally requires `CLOUDFLARE_GATEWAY_ID` (or `WARDEN_CLOUDFLARE_GATEWAY_ID`).
+Warden mirrors these automatically when the `WARDEN_`-prefixed form is set.
 
 ## Claude Runtime Models
 

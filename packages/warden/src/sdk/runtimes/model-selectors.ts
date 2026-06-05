@@ -1,9 +1,23 @@
 /**
  * Return true when a Pi model selector uses provider/model-id syntax.
+ *
+ * Valid Pi selectors split at the first slash: the segment before it is the Pi
+ * provider name and the segment after is the provider-specific model ID.
+ *
+ * Pi provider names are lowercase alphanumeric strings with hyphens, e.g.
+ * `openai`, `anthropic`, `cloudflare-workers-ai`. Provider-native namespaces
+ * such as Cloudflare's `@cf/...` model IDs must be prefixed with the Pi
+ * provider name to form a valid Warden selector.
  */
 export function isPiModelSelector(model: string): boolean {
   const slashIndex = model.indexOf('/');
-  return slashIndex > 0 && slashIndex < model.length - 1;
+  if (slashIndex <= 0 || slashIndex >= model.length - 1) return false;
+
+  // Pi provider names are lowercase letters, digits, and hyphens.
+  // Reject provider-native namespace prefixes (e.g. @cf/...) and other
+  // non-conforming provider segments that would silently fail at model lookup.
+  const provider = model.slice(0, slashIndex);
+  return /^[a-z0-9][a-z0-9-]*$/.test(provider);
 }
 
 export type PiModelSelectorOption = 'model' | 'auxiliaryModel' | 'synthesisModel';
@@ -24,10 +38,52 @@ export interface InvalidPiModelSelector {
 
 /**
  * Format the user-facing error for an invalid Pi model selector.
+ *
+ * Emits targeted guidance for known misuse patterns such as Cloudflare
+ * Workers AI native model IDs being passed without a Pi provider prefix.
  */
 export function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): string {
   const target = invalid.specName ? ` for ${invalid.specName}` : '';
-  return `Pi runtime ${invalid.option}${target} must use provider/model format: ${invalid.model}`;
+  const { model } = invalid;
+
+  // Cloudflare Workers AI native model IDs start with @cf/. Users sometimes
+  // set these directly instead of using the Warden Pi provider prefix.
+  if (model.startsWith('@cf/')) {
+    return (
+      `Pi runtime ${invalid.option}${target} received a Cloudflare Workers AI native model ID: ${model}. ` +
+      `Use cloudflare-workers-ai/${model} as the Warden Pi selector instead. ` +
+      `Set CLOUDFLARE_API_KEY (or WARDEN_CLOUDFLARE_API_KEY) and CLOUDFLARE_ACCOUNT_ID ` +
+      `(or WARDEN_CLOUDFLARE_ACCOUNT_ID) for this provider.`
+    );
+  }
+
+  // Generic provider-native namespace prefix (@vendor/...) without a Pi provider.
+  const slashIndex = model.indexOf('/');
+  if (model.startsWith('@') && slashIndex > 0) {
+    const namespace = model.slice(0, slashIndex + 1);
+    return (
+      `Pi runtime ${invalid.option}${target} received a provider-native model ID: ${model}. ` +
+      `"${namespace}..." is a provider-native namespace, not a Pi provider name. ` +
+      `Prefix with the Pi provider name, e.g. provider-name/${model}. ` +
+      `See https://warden.sentry.dev/config/models for supported providers.`
+    );
+  }
+
+  return `Pi runtime ${invalid.option}${target} must use provider/model format: ${model}`;
+}
+
+/**
+ * Return a contextual repair tip for an invalid Pi model selector.
+ * Used alongside invalidPiModelSelectorMessage to give actionable next steps.
+ */
+export function piModelSelectorTip(model: string): string {
+  if (model.startsWith('@cf/')) {
+    return `Use cloudflare-workers-ai/${model} and set CLOUDFLARE_API_KEY + CLOUDFLARE_ACCOUNT_ID.`;
+  }
+  if (model.startsWith('@')) {
+    return 'Prefix the model with its Pi provider name, e.g. provider-name/@vendor/model-id.';
+  }
+  return 'Set a Pi model selector such as anthropic/claude-sonnet-4-6.';
 }
 
 /**
@@ -41,6 +97,72 @@ export class InvalidPiModelSelectorError extends Error {
     this.name = 'InvalidPiModelSelectorError';
     this.invalid = invalid;
   }
+}
+
+export interface MissingCloudflareEnv {
+  provider: string;
+  /** The env var names that are missing (native form, e.g. CLOUDFLARE_ACCOUNT_ID). */
+  missing: string[];
+}
+
+/**
+ * Find required Cloudflare provider env vars that are not set.
+ *
+ * Cloudflare Workers AI requires CLOUDFLARE_ACCOUNT_ID in addition to an API
+ * key. Cloudflare AI Gateway additionally requires CLOUDFLARE_GATEWAY_ID.
+ * Neither can be inferred from model selectors alone and both must be set as
+ * environment variables (Pi does not read them from its auth.json).
+ *
+ * Both the native form (CLOUDFLARE_ACCOUNT_ID) and the Warden alias
+ * (WARDEN_CLOUDFLARE_ACCOUNT_ID) are accepted.
+ *
+ * Returns the first target with missing required vars, or undefined.
+ */
+export function findMissingCloudflareEnv(
+  targets: PiModelSelectorTarget[],
+  env: NodeJS.ProcessEnv = process.env,
+): MissingCloudflareEnv | undefined {
+  for (const target of targets) {
+    if ((target.runtime ?? 'pi') !== 'pi') continue;
+
+    // Check the model fields in precedence order; use the first one set.
+    const model = target.model ?? target.auxiliaryModel ?? target.synthesisModel;
+    if (!model || !isPiModelSelector(model)) continue;
+
+    const slashIndex = model.indexOf('/');
+    const provider = model.slice(0, slashIndex);
+
+    if (provider !== 'cloudflare-workers-ai' && provider !== 'cloudflare-ai-gateway') continue;
+
+    const missing: string[] = [];
+
+    if (!env['CLOUDFLARE_ACCOUNT_ID'] && !env['WARDEN_CLOUDFLARE_ACCOUNT_ID']) {
+      missing.push('CLOUDFLARE_ACCOUNT_ID');
+    }
+
+    if (provider === 'cloudflare-ai-gateway') {
+      if (!env['CLOUDFLARE_GATEWAY_ID'] && !env['WARDEN_CLOUDFLARE_GATEWAY_ID']) {
+        missing.push('CLOUDFLARE_GATEWAY_ID');
+      }
+    }
+
+    if (missing.length > 0) {
+      return { provider, missing };
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Format the user-facing error for missing required Cloudflare env vars.
+ */
+export function missingCloudflareEnvMessage(missing: MissingCloudflareEnv): string {
+  const vars = missing.missing.map((v) => `${v} (or WARDEN_${v})`).join(', ');
+  return (
+    `Pi provider ${missing.provider} requires additional environment variables: ${vars}. ` +
+    `Set these alongside CLOUDFLARE_API_KEY before running Warden.`
+  );
 }
 
 /**

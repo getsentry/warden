@@ -28,7 +28,7 @@ import { SkillRunnerError } from '../../sdk/errors.js';
 import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
-import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
+import { assertValidPiModelSelectors, findMissingCloudflareEnv, missingCloudflareEnvMessage } from '../../sdk/runtimes/model-selectors.js';
 import { captureActionTriggerError } from '../error-reporting.js';
 
 /** Log-mode output for CI: no TTY, no color. */
@@ -134,6 +134,11 @@ export async function executeTrigger(
 
       try {
         assertValidPiModelSelectors([trigger]);
+
+        const missingCloudflare = findMissingCloudflareEnv([trigger]);
+        if (missingCloudflare) {
+          throw new Error(missingCloudflareEnvMessage(missingCloudflare));
+        }
 
         const taskOptions: SkillTaskOptions = {
           name: trigger.name,

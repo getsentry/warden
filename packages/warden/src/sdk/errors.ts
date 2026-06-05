@@ -67,8 +67,12 @@ https://console.anthropic.com/ for API keys`;
 
 /** User-friendly error message for authentication failures (Pi runtime) */
 const PI_AUTH_GUIDANCE = `
-  export WARDEN_MODEL=provider/model-id    # e.g. openai/gpt-5.5
-  export WARDEN_{PROVIDER}_API_KEY=...     # WARDEN-prefixed key for that provider
+  export WARDEN_MODEL=provider/model-id          # e.g. openai/gpt-5.5, cloudflare-workers-ai/@cf/model
+  export WARDEN_{PROVIDER}_API_KEY=...           # WARDEN-prefixed API key for that provider
+
+Note: Some providers require additional env vars beyond an API key.
+Cloudflare providers also require CLOUDFLARE_ACCOUNT_ID (or WARDEN_CLOUDFLARE_ACCOUNT_ID).
+Cloudflare AI Gateway additionally requires CLOUDFLARE_GATEWAY_ID (or WARDEN_CLOUDFLARE_GATEWAY_ID).
 
 See https://warden.sentry.dev/config/models for provider selectors and credential names.`;
 

@@ -118,4 +118,50 @@ describe('bridgeWardenProviderApiKeyEnv', () => {
     expect(env['MODEL']).toBeUndefined();
     expect(env['SENTRY_DSN']).toBeUndefined();
   });
+
+  it('bridges WARDEN_CLOUDFLARE_ACCOUNT_ID to CLOUDFLARE_ACCOUNT_ID', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_CLOUDFLARE_API_KEY: 'cf-key',
+      WARDEN_CLOUDFLARE_ACCOUNT_ID: 'cf-account',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['CLOUDFLARE_API_KEY']).toBe('cf-key');
+    expect(env['CLOUDFLARE_ACCOUNT_ID']).toBe('cf-account');
+  });
+
+  it('bridges WARDEN_CLOUDFLARE_GATEWAY_ID to CLOUDFLARE_GATEWAY_ID', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_CLOUDFLARE_API_KEY: 'cf-key',
+      WARDEN_CLOUDFLARE_ACCOUNT_ID: 'cf-account',
+      WARDEN_CLOUDFLARE_GATEWAY_ID: 'cf-gateway',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['CLOUDFLARE_ACCOUNT_ID']).toBe('cf-account');
+    expect(env['CLOUDFLARE_GATEWAY_ID']).toBe('cf-gateway');
+  });
+
+  it('does not overwrite native CLOUDFLARE_ACCOUNT_ID when Warden alias is also set', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_CLOUDFLARE_ACCOUNT_ID: 'warden-account',
+      CLOUDFLARE_ACCOUNT_ID: 'native-account',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['CLOUDFLARE_ACCOUNT_ID']).toBe('native-account');
+  });
+
+  it('does not bridge Cloudflare account ID when the Warden alias is empty', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_CLOUDFLARE_ACCOUNT_ID: '',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['CLOUDFLARE_ACCOUNT_ID']).toBeUndefined();
+  });
 });
