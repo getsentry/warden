@@ -145,27 +145,70 @@ but it did make the run materially more expensive.
 Pi runs without an explicit Warden `--effort` use Pi's default thinking level,
 which is currently medium.
 
-The Opus 4.7 and 4.8 Pi runs currently have an unusual shape. They complete
-cleanly, but many no-finding chunks are very short. In the traced Opus 4.8 Pi
-rerun, chunks with findings averaged 4.3 turns and 3.1k output tokens, while
-no-finding chunks averaged 1.8 turns and 824 output tokens. Eighty-one of 137
-no-finding chunks were one-turn scans, and 32 of 68 missed corpus entries were
-covered by one-turn no-finding scans. The Opus 4.7 run predates trace capture,
-but its low token use and short timings show a similar pattern.
+## Opus 4.8 High: Claude SDK vs Pi
 
-Treat this as a hypothesis, not a model diagnosis. Through Pi, the traces
-suggest many no-finding chunks terminate early. The miss pattern is consistent
-with under-exploration of cross-file authorization and data-boundary invariants,
-not a proven inability to reason about a found issue.
+The Opus 4.8 high-effort comparison now has a fresh traced pair. Both rows scan
+the same 156 analysis chunks, complete with zero failed chunks, use Warden's
+finding verifier, and have agent-verified scoring. Pi found 21 of 86 known
+corpus entries and emitted 24 total findings. The Claude SDK found 17 of 86 and
+emitted 17 total findings.
+
+The cost gap is still large, but the trace shape is different from Sonnet 4.6.
+Claude SDK records $79.56 total cost, including $61.08 for scan work. Pi
+records $21.31 total cost, including $17.39 for scan work. On scan work alone,
+Claude SDK cost is 3.5x Pi, input tokens are 4.35x Pi, cache reads are 3.82x
+Pi, and cache creation is 6.10x Pi. Output tokens do not explain the gap: Pi
+actually emitted slightly more scan output tokens than Claude SDK.
+
+The traces do not show Claude SDK doing more tool work. Claude SDK used 375
+turns and 219 tool executions. Pi used 426 turns and 371 tool executions. Pi
+also produced more final findings. The difference is that each Claude SDK turn
+carried much more input context: about 60.0k scan input tokens per turn versus
+12.1k for Pi.
+
+No-finding chunks show the same pattern. Claude SDK no-finding chunks averaged
+2.0 turns, 1.0 tool executions, 118.4k scan input tokens, and $0.35 scan cost.
+Pi no-finding chunks averaged 2.3 turns, 1.8 tool executions, 25.8k scan input
+tokens, and $0.09 scan cost. Finding chunks were similar on turns but not on
+context size: Claude SDK averaged 5.6 turns and $0.76 scan cost; Pi averaged
+5.5 turns and $0.22.
+
+Representative chunks make the point. On `project_rules.py:607-808`, both
+runtimes used one turn and no tools. Claude SDK used 48.4k scan input tokens
+and cost $0.18. Pi used 8.7k scan input tokens and cost $0.03. On
+`replay_counts.py:1-202`, both again used one turn and no tools. Claude SDK
+used 48.3k scan input tokens and cost $0.19. Pi used 8.7k scan input tokens
+and cost $0.04.
+
+The heavier files do not reverse the conclusion. Across
+`integrations/perforce/integration.py`, Claude SDK used 18 turns, 14 tool
+executions, 1.43M scan input tokens, and $2.66 scan cost, producing one final
+finding. Pi used 28 turns, 30 tool executions, 460k scan input tokens, and
+$1.11 scan cost, producing two final findings. Across
+`integrations/msteams/webhook.py`, Claude SDK used 15 turns, 11 tool
+executions, 1.40M scan input tokens, and $3.13 scan cost, producing no final
+finding. Pi used 17 turns, 13 tool executions, 260k scan input tokens, and
+$0.85 scan cost, producing one final finding.
+
+The practical read is that Opus 4.8 on Pi is not cheaper because it skips more
+work. In this high-effort pair, Pi does more turns and more tool executions,
+but each turn carries a much smaller input/cache footprint. Claude SDK's extra
+cost is mostly repeated context volume and verifier context volume, not
+additional tool fanout.
+
+The older Opus 4.7 and default-medium Opus 4.8 Pi rows still have an unusual
+shape. They complete cleanly, but many no-finding chunks are very short. Treat
+that as historical context for default-runtime behavior, not as the current
+high-effort Opus 4.8 comparison.
 
 ## Current Takeaway
 
 In the current clean, agent-verified rows, GPT 5.5 on Pi found 41 of 86 with
 explicit high effort and 28 of 86 with explicit low effort. Sonnet 4.6 found 25
 of 86 on Pi and 24 of 86 through the Claude SDK. Opus 4.6 on Pi with explicit
-high effort found 23 of 86. Opus 4.8 found 18 of 86 on Pi at Pi's default level,
-14 of 86 on Pi with explicit high effort, and 17 of 86 through the Claude SDK.
-Opus 4.7 on Pi found 6 of 86 at Pi's default level.
+high effort found 23 of 86. Opus 4.8 with explicit high effort found 21 of 86
+on Pi and 17 of 86 through the Claude SDK. Opus 4.8 found 18 of 86 on Pi at
+Pi's default level. Opus 4.7 on Pi found 6 of 86 at Pi's default level.
 
 Use those numbers as a relative comparison for this corpus. They are not a
 general pass rate for Sentry.

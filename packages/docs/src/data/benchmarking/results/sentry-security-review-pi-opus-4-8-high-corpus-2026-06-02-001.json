@@ -270,5 +270,6 @@
       "notes": "System options allowlist tuple bug was found at this commit, but the corpus entries for this commit are different issues."
     }
   ],
+  "supersededBy": "sentry-security-review-pi-opus-4-8-high-traced-corpus-2026-06-05-001",
   "notes": "Full benchmark result stitched from one Warden run per corpus SHA. The 2d929588 and 7f41cc50 shards were rerun after initial auth/runtime failures; only clean rerun artifacts are recorded. Persisted JSONL analysis cost is used for the table, and auxiliary/post-processing verifier cost may be under-recorded when the raw artifact does not preserve it."
 }

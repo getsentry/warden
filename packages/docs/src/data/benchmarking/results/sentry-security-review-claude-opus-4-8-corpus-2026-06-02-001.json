@@ -289,5 +289,6 @@
       "notes": "Same file as the fbecd17d system-options corpus entry, but this reports the allowlist tuple issue rather than plaintext option logging."
     }
   ],
+  "supersededBy": "sentry-security-review-claude-opus-4-8-high-traced-corpus-2026-06-05-001",
   "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This result was reconstructed from chunk records because the explicit output JSONL shards did not include final summary records. Costs use SDK-reported per-chunk total_cost_usd values persisted in JSONL. No explicit reasoning level was configured in warden.toml or CLI args, so the run used Claude SDK/Anthropic's default model behavior."
 }
