@@ -63,6 +63,16 @@ describe('invalidPiModelSelectorMessage', () => {
     expect(msg).not.toContain('must use provider/model format');
   });
 
+  it('emits invalid-provider-segment guidance when provider fails Pi naming rules', () => {
+    // e.g. uppercase, underscores — valid shape but invalid provider segment format
+    const msg = invalidPiModelSelectorMessage({ option: 'model', model: 'OPENAI/gpt-5.5' });
+    expect(msg).toContain('invalid provider segment');
+    expect(msg).toContain('OPENAI');
+    expect(msg).toContain('lowercase');
+    expect(msg).not.toContain('could not find provider or model');
+    expect(msg).not.toContain('must use provider/model format');
+  });
+
   it('emits provider-or-model-not-found guidance for valid-shape selectors (unknown or stale model)', () => {
     // Covers both: unknown provider name and known provider with stale/wrong model ID
     const msg = invalidPiModelSelectorMessage({ option: 'model', model: 'unknown-provider/gpt-5.5' });

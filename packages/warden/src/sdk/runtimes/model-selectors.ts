@@ -72,12 +72,27 @@ export function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): 
     );
   }
 
-  // When the model already has provider/model shape, the selector is structurally
-  // valid but the provider segment is either wrong or unknown to Pi.
+  // The model has provider/model shape (contains a slash with content on both sides).
+  // Distinguish between three sub-cases:
+  //   (a) provider segment has invalid format (fails Pi naming rules)
+  //   (b) known wrong provider alias (e.g. "gemini" instead of "google")
+  //   (c) valid format and provider alias, but not found in Pi's registry
   if (slashIndex > 0 && slashIndex < model.length - 1) {
     const provider = model.slice(0, slashIndex);
 
-    // Google Gemini: Pi provider name is "google", env var is GEMINI_API_KEY.
+    // (a) Provider segment contains characters Pi doesn't accept.
+    // Pi provider names use lowercase letters, digits, and hyphens only.
+    // This catches e.g. OPENAI/gpt-5.5 or My_Provider/model being rejected
+    // by the regex — the issue is the format, not a registry miss.
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(provider)) {
+      return (
+        `Pi runtime ${invalid.option}${target} has an invalid provider segment "${provider}" in ${model}. ` +
+        `Pi provider names use lowercase letters, digits, and hyphens (e.g. openai, cloudflare-workers-ai). ` +
+        `See https://warden.sentry.dev/config/models for supported providers and selectors.`
+      );
+    }
+
+    // (b) Google Gemini: Pi provider name is "google", env var is GEMINI_API_KEY.
     // Users commonly guess "gemini/..." from the product name.
     if (provider === 'gemini') {
       const modelId = model.slice(slashIndex + 1);
@@ -87,11 +102,8 @@ export function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): 
       );
     }
 
-    // Valid shape but provider/model could not be resolved — this happens either
-    // when the provider is not registered in Pi (unknown provider) or when the
-    // provider is known but the model ID is wrong or stale. Avoid saying
-    // "unknown provider" because it may mislead users with a valid provider
-    // name and a stale model ID.
+    // (c) Valid format, valid name, but provider or model not in Pi's registry.
+    // Covers both unknown providers and known providers with stale model IDs.
     return (
       `Pi runtime ${invalid.option}${target} could not find provider or model: ${model}. ` +
       `Verify the Pi provider name and model ID are correct. ` +

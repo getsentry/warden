@@ -1198,6 +1198,11 @@ export async function runSkills(
     emitInvalidPiModelSelectorRunLog(repoPath ?? cwd, options, invalidModelSelector);
     return 1;
   }
+  const missingCloudflare = findMissingCloudflareEnv(specs.map((s) => ({ ...s.runnerOptions })));
+  if (missingCloudflare) {
+    reportMissingCloudflareEnv(reporter, missingCloudflare);
+    return 1;
+  }
   let tasks: SkillTaskOptions[];
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
   try {
