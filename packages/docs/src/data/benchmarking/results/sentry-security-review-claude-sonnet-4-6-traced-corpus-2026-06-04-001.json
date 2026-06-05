@@ -6,7 +6,7 @@
   "skill": "@sentry/warden:security-review@0.36.1",
   "model": "claude-sonnet-4-6",
   "runtime": "claude",
-  "reasoningLevel": "provider-default",
+  "reasoningLevel": "high",
   "reportOn": "low",
   "minConfidence": "low",
   "targetMode": "all-corpus-files-by-sha",
@@ -26,7 +26,7 @@
   "runOptions": {
     "runtime": "claude",
     "model": "claude-sonnet-4-6",
-    "effort": "provider-default",
+    "effort": "high",
     "traces": true,
     "parallel": 4,
     "reportOn": "low",
@@ -2953,7 +2953,7 @@
       "status": "success"
     }
   ],
-  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run used --runtime claude --model claude-sonnet-4-6 --traces. Warden post-analysis verification was enabled by benchmark config. The raw JSONL artifacts contain per-chunk traces and verifier usage, but remain withheld pending sensitive-data review.",
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run used --runtime claude --model claude-sonnet-4-6 --traces with no explicit --effort; Warden's Claude runtime applied its high adaptive-thinking default. Warden post-analysis verification was enabled by benchmark config. The raw JSONL artifacts contain per-chunk trace metadata and verifier usage, but remain withheld pending sensitive-data review.",
   "scoring": {
     "reviewer": "agent-semantic-match-pass",
     "scoredAt": "2026-06-04",

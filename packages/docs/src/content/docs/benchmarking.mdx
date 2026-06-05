@@ -95,6 +95,53 @@ explicit reasoning effort, cache behavior, output verbosity, retries, runtime
 accounting, and Warden's finding verifier can all move the total even when the
 corpus and target files are identical.
 
+## Sonnet 4.6: Claude SDK vs Pi
+
+The Sonnet 4.6 comparison is clean enough to compare directly. Both rows scan
+the same 156 analysis chunks, complete with zero failed chunks, use Warden's
+finding verifier, and have agent-verified scoring. Pi found 25 of 86 known
+corpus entries. The Claude SDK found 24 of 86. Both emitted 32 total findings.
+
+The difference is cost and runtime behavior, not benchmark quality. The Claude
+SDK row records $103.59 total cost, including $61.61 for scan work. The Pi row
+records $19.84 total cost, including $11.20 for scan work. On scan work alone,
+Claude SDK cost is 5.5x Pi, input tokens are 6.34x Pi, output tokens are 2.44x
+Pi, cache reads are 5.72x Pi, and cache creation is 9.56x Pi.
+
+Total cost does include Warden's auxiliary post-processing work. That matters:
+Sonnet 4.6 verification cost $41.97 through the Claude SDK and $8.54 through
+Pi. But it is not the whole explanation. Removing verifier and merge work still
+leaves $61.61 of Claude SDK scan cost against $11.20 of Pi scan cost. The
+auxiliary gap has the same shape because verifier calls use the configured
+runtime unless a separate auxiliary model is set.
+
+Turns do not explain the whole gap. The stored trace summaries show 939 Claude
+SDK turns versus 628 Pi turns, a 1.5x increase. The larger multiplier is the
+amount of context the Claude SDK runtime carries through those turns. It reads
+and searches more, then repeats a larger conversation and tool-result context
+through later model calls.
+
+Targeted child-span reruns of representative Sonnet 4.6 files show the same
+shape. Those reruns are diagnostic, not the scoring source of truth, and their
+sanitized summary is checked into the benchmark data. On
+`src/sentry/replays/usecases/replay_counts.py`, Claude SDK used 9 turns, 7 tool
+executions, 346.7k scan input tokens, and $0.55 scan cost. Pi used 3 turns, 2
+tool executions, 19.8k scan input tokens, and $0.10 scan cost. On
+`src/sentry/api/endpoints/project_rules.py`, Claude SDK used 47 turns, 41 tool
+executions, 2.23M scan input tokens, and $1.87 scan cost. Pi used 18 turns, 15
+tool executions, 176k scan input tokens, and $0.27 scan cost.
+
+In the targeted rerun, the clearest chunk was `project_rules.py:607-808`.
+Claude SDK spent 28 turns and 27 tool executions there: 10 `Read`, 16 `Grep`,
+and 1 `Glob`. That single chunk cost $0.89 and consumed 1.39M scan input tokens.
+Pi handled the same chunk in one turn with no tools, 6.7k scan input tokens, and
+$0.01 scan cost.
+
+The practical read is that Claude SDK explores more aggressively and carries
+more context through each step. Pi exits many clean chunks earlier. On this
+corpus, the extra Claude SDK exploration did not improve the Sonnet 4.6 score,
+but it did make the run materially more expensive.
+
 Pi runs without an explicit Warden `--effort` use Pi's default thinking level,
 which is currently medium.
 

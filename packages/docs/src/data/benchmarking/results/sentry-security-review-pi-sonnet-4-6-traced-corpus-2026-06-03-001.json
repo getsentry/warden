@@ -3030,5 +3030,5 @@
       "notes": "Same system options cleartext credential logging bug."
     }
   ],
-  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run used --runtime pi --model anthropic/claude-sonnet-4-6 --traces with no explicit --effort, so it captures Pi default medium thinking. Warden post-analysis verification was enabled by benchmark config. The raw JSONL artifacts contain complete per-chunk traces and verifier usage, but remain withheld pending sensitive-data review."
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run used --runtime pi --model anthropic/claude-sonnet-4-6 --traces with no explicit --effort, so it captures Pi default medium thinking. Warden post-analysis verification was enabled by benchmark config. The raw JSONL artifacts contain per-chunk trace metadata and verifier usage, but remain withheld pending sensitive-data review."
 }

@@ -6,7 +6,7 @@
   "skill": "@sentry/warden:security-review@0.35.1",
   "model": "claude-sonnet-4-6",
   "runtime": "claude",
-  "reasoningLevel": "provider-default",
+  "reasoningLevel": "high",
   "reportOn": "low",
   "minConfidence": "low",
   "targetMode": "all-corpus-files-by-sha",
