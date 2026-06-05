@@ -164,4 +164,38 @@ describe('bridgeWardenProviderApiKeyEnv', () => {
 
     expect(env['CLOUDFLARE_ACCOUNT_ID']).toBeUndefined();
   });
+
+  it('bridges WARDEN_VERCEL_AI_GATEWAY_API_KEY to AI_GATEWAY_API_KEY', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_VERCEL_AI_GATEWAY_API_KEY: 'vercel-key',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['AI_GATEWAY_API_KEY']).toBe('vercel-key');
+  });
+
+  it('does not overwrite AI_GATEWAY_API_KEY when already set via WARDEN_AI_GATEWAY_API_KEY', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_AI_GATEWAY_API_KEY: 'direct-alias',
+      WARDEN_VERCEL_AI_GATEWAY_API_KEY: 'provider-alias',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    // Generic API-key bridge runs first: WARDEN_AI_GATEWAY_API_KEY -> AI_GATEWAY_API_KEY
+    // Explicit bridge then does not overwrite the already-set value.
+    expect(env['AI_GATEWAY_API_KEY']).toBe('direct-alias');
+  });
+
+  it('does not overwrite native AI_GATEWAY_API_KEY when Vercel alias is set', () => {
+    const env: NodeJS.ProcessEnv = {
+      WARDEN_VERCEL_AI_GATEWAY_API_KEY: 'warden-key',
+      AI_GATEWAY_API_KEY: 'native-key',
+    };
+
+    bridgeWardenProviderApiKeyEnv(env);
+
+    expect(env['AI_GATEWAY_API_KEY']).toBe('native-key');
+  });
 });

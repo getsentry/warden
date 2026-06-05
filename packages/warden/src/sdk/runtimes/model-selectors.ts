@@ -39,12 +39,16 @@ export interface InvalidPiModelSelector {
 /**
  * Format the user-facing error for an invalid Pi model selector.
  *
- * Emits targeted guidance for known misuse patterns such as Cloudflare
- * Workers AI native model IDs being passed without a Pi provider prefix.
+ * Emits targeted guidance for known misuse patterns:
+ * - @cf/... Cloudflare-native model IDs without a Pi provider prefix
+ * - Other @namespace/... provider-native IDs without a Pi provider prefix
+ * - Common wrong provider names (e.g. "gemini" instead of "google")
+ * - Valid-shape selectors with an unknown Pi provider name
  */
 export function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): string {
   const target = invalid.specName ? ` for ${invalid.specName}` : '';
   const { model } = invalid;
+  const slashIndex = model.indexOf('/');
 
   // Cloudflare Workers AI native model IDs start with @cf/. Users sometimes
   // set these directly instead of using the Warden Pi provider prefix.
@@ -58,7 +62,6 @@ export function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): 
   }
 
   // Generic provider-native namespace prefix (@vendor/...) without a Pi provider.
-  const slashIndex = model.indexOf('/');
   if (model.startsWith('@') && slashIndex > 0) {
     const namespace = model.slice(0, slashIndex + 1);
     return (
@@ -66,6 +69,29 @@ export function invalidPiModelSelectorMessage(invalid: InvalidPiModelSelector): 
       `"${namespace}..." is a provider-native namespace, not a Pi provider name. ` +
       `Prefix with the Pi provider name, e.g. provider-name/${model}. ` +
       `See https://warden.sentry.dev/config/models for supported providers.`
+    );
+  }
+
+  // When the model already has provider/model shape, the selector is structurally
+  // valid but the provider segment is either wrong or unknown to Pi.
+  if (slashIndex > 0 && slashIndex < model.length - 1) {
+    const provider = model.slice(0, slashIndex);
+
+    // Google Gemini: Pi provider name is "google", env var is GEMINI_API_KEY.
+    // Users commonly guess "gemini/..." from the product name.
+    if (provider === 'gemini') {
+      const modelId = model.slice(slashIndex + 1);
+      return (
+        `Pi runtime ${invalid.option}${target} received "gemini/..." but Google Gemini's Pi provider name is "google", not "gemini". ` +
+        `Use google/${modelId} as the selector and set WARDEN_GEMINI_API_KEY or GEMINI_API_KEY.`
+      );
+    }
+
+    // Valid shape but unknown provider — give a pointer to the docs rather than
+    // saying "must use provider/model format" (which is already met).
+    return (
+      `Pi runtime ${invalid.option}${target} uses an unknown Pi provider: "${provider}" in ${model}. ` +
+      `See https://warden.sentry.dev/config/models for supported providers and selectors.`
     );
   }
 
@@ -83,7 +109,14 @@ export function piModelSelectorTip(model: string): string {
   if (model.startsWith('@')) {
     return 'Prefix the model with its Pi provider name, e.g. provider-name/@vendor/model-id.';
   }
-  return 'Set a Pi model selector such as anthropic/claude-sonnet-4-6.';
+  const slashIndex = model.indexOf('/');
+  if (slashIndex > 0) {
+    const provider = model.slice(0, slashIndex);
+    if (provider === 'gemini') {
+      return `Use google/${model.slice(slashIndex + 1)} (Pi provider name is "google") and set WARDEN_GEMINI_API_KEY.`;
+    }
+  }
+  return 'Set a Pi model selector such as anthropic/claude-sonnet-4-6 or google/gemini-2.5-flash.';
 }
 
 /**

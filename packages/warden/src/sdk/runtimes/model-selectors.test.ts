@@ -56,6 +56,20 @@ describe('invalidPiModelSelectorMessage', () => {
     expect(msg).toContain('provider-native');
   });
 
+  it('emits targeted guidance for gemini/... (wrong provider name for Google)', () => {
+    const msg = invalidPiModelSelectorMessage({ option: 'model', model: 'gemini/gemini-2.5-flash' });
+    expect(msg).toContain('google/gemini-2.5-flash');
+    expect(msg).toContain('WARDEN_GEMINI_API_KEY');
+    expect(msg).not.toContain('must use provider/model format');
+  });
+
+  it('emits unknown-provider guidance for valid-shape selectors with unrecognized providers', () => {
+    const msg = invalidPiModelSelectorMessage({ option: 'model', model: 'unknown-provider/gpt-5.5' });
+    expect(msg).toContain('unknown Pi provider');
+    expect(msg).toContain('unknown-provider');
+    expect(msg).not.toContain('must use provider/model format');
+  });
+
   it('emits standard format guidance for plain model IDs without a provider', () => {
     const msg = invalidPiModelSelectorMessage({ option: 'model', model: 'gpt-5.5' });
     expect(msg).toContain('provider/model format');
@@ -82,6 +96,12 @@ describe('piModelSelectorTip', () => {
   it('gives generic namespace tip for non-Cloudflare @ models', () => {
     const tip = piModelSelectorTip('@vendor/model');
     expect(tip).toContain('provider-name/@vendor/model');
+  });
+
+  it('gives targeted Google tip for gemini/... models', () => {
+    const tip = piModelSelectorTip('gemini/gemini-2.5-flash');
+    expect(tip).toContain('google/gemini-2.5-flash');
+    expect(tip).toContain('WARDEN_GEMINI_API_KEY');
   });
 
   it('gives standard tip for plain model IDs', () => {

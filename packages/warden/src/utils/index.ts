@@ -68,12 +68,16 @@ export function getAnthropicApiKey(): string | undefined {
  *
  * Each entry is [warden-alias, native-env-var].
  */
-const WARDEN_PROVIDER_ENV_BRIDGE: ReadonlyArray<readonly [string, string]> = [
+const WARDEN_PROVIDER_ENV_BRIDGE = [
   // Cloudflare Workers AI: requires account ID in addition to API key
   ['WARDEN_CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT_ID'],
   // Cloudflare AI Gateway: additionally requires a gateway ID
   ['WARDEN_CLOUDFLARE_GATEWAY_ID', 'CLOUDFLARE_GATEWAY_ID'],
-];
+  // Vercel AI Gateway: Pi uses AI_GATEWAY_API_KEY, not VERCEL_AI_GATEWAY_API_KEY.
+  // Accept the provider-name-derived alias so users following the WARDEN_{PROVIDER}_API_KEY
+  // convention can discover the correct native env var through Warden's bridging.
+  ['WARDEN_VERCEL_AI_GATEWAY_API_KEY', 'AI_GATEWAY_API_KEY'],
+] as const;
 
 /**
  * Mirrors WARDEN-prefixed provider credentials to the env names expected by SDKs.
