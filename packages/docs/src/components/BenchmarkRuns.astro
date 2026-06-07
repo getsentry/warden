@@ -82,6 +82,9 @@ const modelLabel = (model: string) => {
   if (model === "openai/gpt-5.5") {
     return "GPT 5.5";
   }
+  if (model === "openrouter/deepseek/deepseek-v4-pro") {
+    return "DeepSeek V4 Pro";
+  }
   if (model === "anthropic/claude-sonnet-4-6") {
     return "Claude Sonnet 4.6";
   }
@@ -131,6 +134,9 @@ const reasoningLabel = (reasoningLevel: string | undefined) => {
   }
   if (reasoningLevel === "high") {
     return "high";
+  }
+  if (reasoningLevel === "xhigh") {
+    return "xhigh";
   }
   return undefined;
 };

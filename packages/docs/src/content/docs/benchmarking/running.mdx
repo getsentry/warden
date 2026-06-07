@@ -36,6 +36,8 @@ mkdir -p "$BENCH_ROOT"
 
 Set the provider API key required by the model. For GPT 5.5 through Pi, set
 `WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
+For OpenRouter models through Pi, set `WARDEN_OPENROUTER_API_KEY` and use the
+full OpenRouter selector, such as `openrouter/deepseek/deepseek-v4-pro`.
 For the Claude SDK runtime, use Claude Code model IDs such as
 `claude-sonnet-4-6` instead of Pi provider/model selectors.
 
@@ -181,11 +183,16 @@ if (lines.length === 0) {
 const records = lines.map((line) => JSON.parse(line));
 const failed = records.filter((record) => record.status && record.status !== "ok");
 const summary = records.find((record) => record.type === "summary");
+const sourceChunks = records.filter((record) => record.status === "ok" && record.chunk?.file);
+const missingTraces = sourceChunks.filter((record) => !record.trace);
 if (failed.length > 0) {
   throw new Error(`${output} has ${failed.length} failed records`);
 }
 if (!summary) {
   throw new Error(`${output} is missing a summary record`);
+}
+if (missingTraces.length > 0) {
+  throw new Error(`${output} has ${missingTraces.length} untraced source chunks`);
 }
 NODE
 
@@ -202,6 +209,12 @@ high-effort provider repeatedly fails with 503s, timeouts, or provider
 disconnects, retry the failed shard with a lower `BENCH_PARALLEL` and record
 that in the result notes. Do not mix failed and clean attempts in one stitched
 summary.
+
+If only a few chunks fail in an otherwise expensive shard, move the dirty JSONL
+aside, rerun the affected target files with `BENCH_PARALLEL=1`, and rebuild the
+shard by replacing only the failed chunk records with traced, successful repair
+records. Keep the repair usage in the aggregate cost and note the repair in the
+result. Do not fabricate missing chunk records.
 
 Inspect the stitched output:
 
