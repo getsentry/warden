@@ -83,4 +83,38 @@ describe('runAction', () => {
       expect(mocks.runPRWorkflow).not.toHaveBeenCalled();
     }
   );
+
+  it.each(['analyze', 'report'] as const)(
+    'rejects %s mode for non-pull-request workflows before dispatching',
+    async (mode) => {
+      process.env['GITHUB_EVENT_NAME'] = 'push';
+      mocks.parseActionInputs.mockReturnValue({
+        ...baseInputs,
+        mode,
+        findingsFile: mode === 'report' ? 'warden-findings.json' : undefined,
+      });
+
+      await expect(runAction()).rejects.toThrow(
+        `${mode} mode is only supported for pull request workflows`
+      );
+
+      expect(mocks.runScheduleWorkflow).not.toHaveBeenCalled();
+      expect(mocks.runPRWorkflow).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps legacy run mode dispatching non-schedule workflows', async () => {
+    process.env['GITHUB_EVENT_NAME'] = 'push';
+
+    await runAction();
+
+    expect(mocks.runScheduleWorkflow).not.toHaveBeenCalled();
+    expect(mocks.runPRWorkflow).toHaveBeenCalledWith(
+      mocks.octokit,
+      baseInputs,
+      'push',
+      '/tmp/event.json',
+      '/tmp/workspace'
+    );
+  });
 });
