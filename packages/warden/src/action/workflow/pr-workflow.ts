@@ -1472,7 +1472,8 @@ async function cleanupOrphanedComments(
   octokit: Octokit,
   context: EventContext,
   inputs: ActionInputs,
-  auxiliaryOptions: AuxiliaryWorkflowOptions
+  auxiliaryOptions: AuxiliaryWorkflowOptions,
+  options: { failOnWriteError?: boolean } = {}
 ): Promise<FindingObservation[]> {
   if (!context.pullRequest) {
     return [];
@@ -1504,7 +1505,9 @@ async function cleanupOrphanedComments(
 
   const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck, findingObservations } =
     await evaluateFixesAndResolveStale(
-      octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, auxiliaryOptions
+      octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, auxiliaryOptions, {
+        failOnWriteError: options.failOnWriteError,
+      }
     );
   const activeSpan = Sentry.getActiveSpan();
   activeSpan?.setAttribute('warden.feedback.auto_resolve.fix_eval_count', autoResolvedByFixEvaluation);
@@ -1525,6 +1528,9 @@ async function cleanupOrphanedComments(
         logAction('Dismissed previous CHANGES_REQUESTED review');
       } catch (error) {
         warnAction(`Failed to dismiss previous review: ${error}`);
+        if (options.failOnWriteError) {
+          throw new ReportWriteError('Failed to dismiss previous review', error);
+        }
       }
     }
   }
@@ -1650,7 +1656,8 @@ async function runReportMode(
         octokit,
         context,
         inputs,
-        auxiliaryOptions
+        auxiliaryOptions,
+        { failOnWriteError: true }
       );
       const outputs = { findingsCount: 0, highCount: 0, summary: 'No triggers matched' };
       setWorkflowOutputs(outputs);

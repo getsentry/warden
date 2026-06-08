@@ -882,6 +882,55 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('report mode fails no-trigger cleanup write errors', async () => {
+      const findingsFile = writeFindingsArtifact([], []);
+      mockFetchExistingComments.mockResolvedValue([
+        createExistingWardenComment({
+          title: 'Old finding',
+          description: 'Old description',
+          contentHash: 'stale-hash',
+        }),
+      ]);
+      vi.mocked(mockOctokit.graphql).mockRejectedValueOnce(
+        new Error('Resource not accessible by integration')
+      );
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            NO_MATCH_FIXTURES_DIR
+          )
+        ).rejects.toThrow('Failed to resolve stale comments');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('Failed to resolve stale comments'),
+          }),
+        })
+      );
+      expect(mockOctokit.checks.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'No triggers matched',
+          }),
+        })
+      );
+    });
+
     it('report mode fails duplicate comment write failures', async () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });
