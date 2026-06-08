@@ -180,11 +180,16 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
     continue
   fi
 
-  if node - "$output" <<'NODE'
+  if node - "$output" "$target" <<'NODE'
 const {readFileSync} = require("node:fs");
 
 const output = process.argv[2];
+const target = process.argv[3];
 const lines = readFileSync(output, "utf8").trim().split("\n").filter(Boolean);
+const expectedFiles = readFileSync(target, "utf8")
+  .trim()
+  .split("\n")
+  .filter(Boolean);
 if (lines.length === 0) {
   throw new Error(`${output} is empty`);
 }
@@ -192,13 +197,49 @@ if (lines.length === 0) {
 const records = lines.map((line) => JSON.parse(line));
 const failed = records.filter((record) => record.status && record.status !== "ok");
 const summary = records.find((record) => record.type === "summary");
-const sourceChunks = records.filter((record) => record.status === "ok" && record.chunk?.file);
+const sourceChunks = records.filter(
+  (record) => record.status === "ok" && record.chunk?.file,
+);
 const missingTraces = sourceChunks.filter((record) => !record.trace);
+const chunksByFile = new Map();
+for (const record of sourceChunks) {
+  const chunks = chunksByFile.get(record.chunk.file) ?? [];
+  chunks.push(record.chunk);
+  chunksByFile.set(record.chunk.file, chunks);
+}
+
 if (failed.length > 0) {
   throw new Error(`${output} has ${failed.length} failed records`);
 }
 if (!summary) {
   throw new Error(`${output} is missing a summary record`);
+}
+const expectedFileSet = new Set(expectedFiles);
+const missingFiles = expectedFiles.filter((file) => !chunksByFile.has(file));
+const unexpectedFiles = [...chunksByFile.keys()].filter(
+  (file) => !expectedFileSet.has(file),
+);
+if (missingFiles.length > 0) {
+  throw new Error(`${output} is missing ${missingFiles.length} target files`);
+}
+if (unexpectedFiles.length > 0) {
+  throw new Error(`${output} has ${unexpectedFiles.length} unexpected target files`);
+}
+for (const [file, chunks] of chunksByFile) {
+  const totals = new Set(chunks.map((chunk) => chunk.total));
+  if (totals.size !== 1) {
+    throw new Error(`${output} has inconsistent chunk totals for ${file}`);
+  }
+  const total = chunks[0].total;
+  const indices = new Set(chunks.map((chunk) => chunk.index));
+  if (indices.size !== chunks.length) {
+    throw new Error(`${output} has duplicate chunk records for ${file}`);
+  }
+  for (let index = 1; index <= total; index += 1) {
+    if (!indices.has(index)) {
+      throw new Error(`${output} is missing chunk ${index}/${total} for ${file}`);
+    }
+  }
 }
 if (missingTraces.length > 0) {
   throw new Error(`${output} has ${missingTraces.length} untraced source chunks`);
