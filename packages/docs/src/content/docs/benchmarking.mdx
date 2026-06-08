@@ -36,9 +36,9 @@ runs remain in the result data but are hidden here.
 
 ## Reading Results
 
-- `Known found` is the headline score. It counts corpus entries where scoring
+- **Known found** is the headline score. It counts corpus entries where scoring
   verified that Warden found the same bug in roughly the same location.
-- `Total findings` is review volume before scoring. More findings can mean
+- **Total findings** is review volume before scoring. More findings can mean
   better recall, but it also means more human review.
 - Scoring is semantic. Same-file findings about different bugs do not count,
   duplicate findings do not double-count, and one finding can cover multiple
@@ -46,9 +46,10 @@ runs remain in the result data but are hidden here.
 - Benchmark runs use Warden's post-analysis finding verifier unless a row opts
   out. The verifier filters candidate findings during the run; benchmark
   scoring happens later. Verifier calls add provider cost.
-- Treat cost and duration as operational measurements. Recorded cost is not
-  normalized model pricing or cost per finding. Total duration includes verifier
-  work, provider latency, queueing, retries, and runtime overhead.
+- Treat cost and duration as operational measurements. **Recorded cost** is not
+  normalized model pricing or cost per finding. **P50** and **P90** are
+  per-analysis-chunk durations. **Total** includes verifier work, provider
+  latency, queueing, retries, and runtime overhead.
 - The stable matrix only shows clean comparison runs: 156 analysis chunks, zero
   failed chunks, and per-chunk timing metadata. Partial and superseded rows stay
   in the result data for audit history.
