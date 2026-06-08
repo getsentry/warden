@@ -26,11 +26,13 @@ Sentry repository.
 
 ## Comparison Matrix
 
-The score table is the headline. The cost and timing tables below it are
-operational context for understanding why two runs with similar scores may look
-very different to operate. This matrix only shows stable comparison runs with
-per-chunk timing metadata and no failed chunks; older incomplete or partial
-runs remain in the result data but are hidden here.
+The score table is the headline and sorts by known-corpus recall. The cost and
+timing tables below it are operational context for understanding why two runs
+with similar scores may look very different to operate. They sort separately:
+cost by recorded cost, timing by P50 analysis-chunk duration. This matrix only
+shows stable comparison runs with per-chunk timing metadata and no failed
+chunks; older incomplete or partial runs remain in the result data but are
+hidden here.
 
 <BenchmarkRuns />
 
@@ -202,10 +204,15 @@ limit instead of model behavior.
 
 ### DeepSeek V4 XHigh
 
-The DeepSeek V4 rows use Pi through OpenRouter with explicit `--effort xhigh`.
-Both scan the same 156 chunks and use Warden's finding verifier. V4 Pro found
-23 of 86 known corpus entries and emitted 30 total findings. V4 Flash found 18
-of 86 known corpus entries and emitted 27 total findings.
+The DeepSeek V4 rows use Pi 0.78.0 through OpenRouter with explicit
+`--effort xhigh`. That setting was applied: Warden passes the effort to Pi as
+`thinkingLevel`, and Pi's OpenRouter model entry for
+`deepseek/deepseek-v4-flash` exposes `off`, `high`, and `xhigh` thinking
+levels with `reasoning: true`. Pi keeps `xhigh` after model-capability
+clamping and sends it as `reasoning: {effort: "xhigh"}`. Both rows scan the
+same 156 chunks and use Warden's finding verifier. V4 Pro found 23 of 86 known
+corpus entries and emitted 30 total findings. V4 Flash found 18 of 86 known
+corpus entries and emitted 27 total findings.
 
 Flash is cheaper because the model price is lower, not because it does less
 work. V4 Pro used 3,019 turns and 3,502 tool executions across the corpus. V4

@@ -184,7 +184,7 @@ const compareResults = (a: BenchmarkResult, b: BenchmarkResult) => {
   return sortLabel(a).localeCompare(sortLabel(b));
 };
 
-const comparisonResults = Object.values(resultModules)
+const stableResults = Object.values(resultModules)
   .filter(
     (result) =>
       result.corpusId === "sentry-vulnerability-corpus" &&
@@ -193,12 +193,48 @@ const comparisonResults = Object.values(resultModules)
       result.summary.chunksFailed === 0 &&
       result.summary.chunksAnalyzed === result.summary.chunksTotal &&
       result.timing?.analysisChunkMs,
-  )
-  .sort(compareResults);
+  );
+
+const compareCostResults = (a: BenchmarkResult, b: BenchmarkResult) => {
+  const costDiff = a.summary.costUSD - b.summary.costUSD;
+  if (costDiff !== 0) {
+    return costDiff;
+  }
+
+  return compareResults(a, b);
+};
+
+const compareTimingResults = (a: BenchmarkResult, b: BenchmarkResult) => {
+  const aTiming = a.timing?.analysisChunkMs;
+  const bTiming = b.timing?.analysisChunkMs;
+
+  const p50Diff = (aTiming?.p50 ?? Number.POSITIVE_INFINITY) - (bTiming?.p50 ?? Number.POSITIVE_INFINITY);
+  if (p50Diff !== 0) {
+    return p50Diff;
+  }
+
+  const p90Diff = (aTiming?.p90 ?? Number.POSITIVE_INFINITY) - (bTiming?.p90 ?? Number.POSITIVE_INFINITY);
+  if (p90Diff !== 0) {
+    return p90Diff;
+  }
+
+  const totalDiff =
+    (a.timing?.shardWallMs?.total ?? a.summary.durationMs) -
+    (b.timing?.shardWallMs?.total ?? b.summary.durationMs);
+  if (totalDiff !== 0) {
+    return totalDiff;
+  }
+
+  return compareResults(a, b);
+};
+
+const scoreResults = [...stableResults].sort(compareResults);
+const costResults = [...stableResults].sort(compareCostResults);
+const timingResults = [...stableResults].sort(compareTimingResults);
 ---
 
 <section class="benchmark-runs" aria-label="Stable benchmark comparison matrix">
-  {comparisonResults.length === 0 ? (
+  {stableResults.length === 0 ? (
     <p>No stable benchmark comparisons recorded yet.</p>
   ) : (
     <div class="run-table score-table" role="table" aria-label="Stable benchmark comparison scores">
@@ -208,7 +244,7 @@ const comparisonResults = Object.values(resultModules)
         <span role="columnheader">Findings</span>
         <span role="columnheader">Recorded Cost</span>
       </div>
-      {comparisonResults.map((result) => {
+      {scoreResults.map((result) => {
         const scoring = result.scoring;
         const scoreRate = scoring ? knownFoundRate(scoring) : undefined;
         return (
@@ -243,10 +279,11 @@ const comparisonResults = Object.values(resultModules)
     </div>
   )}
 
-  {comparisonResults.length > 0 && (
+  {stableResults.length > 0 && (
     <div class="detail-tables">
       <section class="detail-section" aria-labelledby="benchmark-cost-breakdown">
         <h3 id="benchmark-cost-breakdown">Cost and Tokens</h3>
+        <p class="sort-note">Sorted by recorded cost, lowest first.</p>
         <div class="detail-table-wrap">
           <div class="run-table cost-table" role="table" aria-label="Cost breakdown">
             <div class="run-header" role="row">
@@ -255,7 +292,7 @@ const comparisonResults = Object.values(resultModules)
               <span role="columnheader">Input Tokens</span>
               <span role="columnheader">Output Tokens</span>
             </div>
-            {comparisonResults.map((result) => (
+            {costResults.map((result) => (
               <article class="run-row" role="row">
                 <div class="run-name" role="cell">
                   <h3>
@@ -284,6 +321,7 @@ const comparisonResults = Object.values(resultModules)
 
       <section class="detail-section" aria-labelledby="benchmark-timing-breakdown">
         <h3 id="benchmark-timing-breakdown">Timing</h3>
+        <p class="sort-note">Sorted by P50 analysis chunk duration, lowest first.</p>
         <div class="detail-table-wrap">
           <div class="run-table timing-table" role="table" aria-label="Timing breakdown">
             <div class="run-header" role="row">
@@ -292,7 +330,7 @@ const comparisonResults = Object.values(resultModules)
               <span role="columnheader">P90</span>
               <span role="columnheader">Total</span>
             </div>
-            {comparisonResults.map((result) => {
+            {timingResults.map((result) => {
               const chunkTiming = result.timing?.analysisChunkMs;
               const shardTiming = result.timing?.shardWallMs;
               return (
@@ -341,7 +379,8 @@ const comparisonResults = Object.values(resultModules)
   .benchmark-runs .metric-value,
   .benchmark-runs .metric-detail,
   .benchmark-runs .cell-label,
-  .benchmark-runs .detail-section h3 {
+  .benchmark-runs .detail-section h3,
+  .benchmark-runs .sort-note {
     margin: 0;
   }
 
@@ -460,7 +499,7 @@ const comparisonResults = Object.values(resultModules)
 
   .detail-section {
     display: grid;
-    gap: 0.45rem;
+    gap: 0.25rem;
   }
 
   .detail-section h3 {
@@ -469,7 +508,14 @@ const comparisonResults = Object.values(resultModules)
     line-height: 1.3;
   }
 
+  .sort-note {
+    color: var(--sl-color-gray-3);
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
   .detail-table-wrap {
+    margin-top: 0.2rem;
     overflow-x: auto;
     width: 100%;
   }
