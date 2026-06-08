@@ -259,6 +259,23 @@ Pro has 12 unique matches that Flash missed, while Flash has 7 unique matches
 that Pro missed. Flash is not a strict subset, but V4 Pro is the better
 aggregate scorer on this corpus.
 
+The closest Claude-family row to V4 Flash is Opus 4.8 on Pi at Pi's default
+medium effort: both found 18 of 86 known corpus entries. They got there very
+differently. Opus used 330 turns, 3.4M scan input tokens, and 172k scan output
+tokens. Flash used 3,138 turns, 72.2M scan input tokens, and 2.0M scan output
+tokens. Opus had an 11.9-second P50 chunk duration and a 51.7-second P90; Flash
+had a 2.9-minute P50 and an 18.5-minute P90. The exact-score Opus run predates
+full span-array capture, so its trace can show turns and timing but not
+per-tool counts.
+
+The span-complete Opus 4.8 high rows make the tool-call difference explicit.
+Opus 4.8 high on Pi found 21 of 86 with 426 turns and 371 tool executions.
+Opus 4.8 high through the Claude SDK found 17 of 86 with 375 turns and 219
+tool executions. Flash found 18 of 86 with 3,138 turns and 4,191 tool
+executions, mostly `read` and `grep` calls. The result is not just a slower
+version of Opus. Flash explores far more context, loops through many more tool
+calls, and still lands on a different set of known findings.
+
 The cost win also comes with a latency warning. V4 Pro needed targeted repair
 reruns on the 7f41cc50 and 9fc06de5 shards after provider and extraction
 failures. V4 Flash needed one targeted 9fc06de5 repair for three no-finding
