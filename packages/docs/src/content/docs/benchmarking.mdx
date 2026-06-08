@@ -234,32 +234,40 @@ The Opus 4.6 high traced row also shows why benchmark runs now set
 rerun cleanly with the higher cap. Without that, the row would measure a runner
 limit instead of model behavior.
 
-## DeepSeek V4 Pro XHigh
+## DeepSeek V4 XHigh
 
-The DeepSeek V4 Pro row uses Pi through OpenRouter with explicit `--effort
-xhigh`. It scans the same 156 chunks with zero failed chunks after targeted
-repairs, uses Warden's finding verifier, and has agent-verified scoring.
-DeepSeek found 23 of 86 known corpus entries and emitted 30 total findings.
+The DeepSeek V4 rows use Pi through OpenRouter with explicit `--effort xhigh`.
+Both scan the same 156 chunks, use Warden's finding verifier, and have
+agent-verified scoring. V4 Pro found 23 of 86 known corpus entries and emitted
+30 total findings. V4 Flash found 18 of 86 known corpus entries and emitted 27
+total findings.
 
-That ties Opus 4.6 high on known matches, beats Opus 4.8 high on Pi by two
+V4 Pro ties Opus 4.6 high on known matches, beats Opus 4.8 high on Pi by two
 known matches, and trails Sonnet 4.6 on Pi by two. It does not reach GPT 5.5
-high, which found 41 of 86. Six emitted DeepSeek findings did not match the
-corpus, and one cell-service issue was reported twice from adjacent chunks but
-only counted once for known-corpus coverage.
+high, which found 41 of 86. V4 Flash lands below Opus 4.8 high on Pi by three
+known matches, but it still beats the Claude SDK Opus 4.8 high row by one.
 
-The operational shape is different from the Claude rows. DeepSeek used 3,019
-turns and 3,502 tool executions across the corpus: much more tool work than
-Opus 4.6 high's 981 turns and 1,101 tool executions. It also consumed 62.2M
-scan input tokens. Recorded scan cost was still only $9.76, with $18.70 total
-including verifier and repair work, because the OpenRouter/DeepSeek token price
-is low.
+Flash is cheaper because the model price is lower, not because it does less
+work. V4 Pro used 3,019 turns and 3,502 tool executions across the corpus. V4
+Flash used 3,138 turns and 4,191 tool executions. V4 Flash also consumed more
+scan input tokens: 72.2M, compared to V4 Pro's 62.2M. Recorded scan cost was
+still lower for Flash at $3.44, versus $9.76 for V4 Pro. Total recorded cost
+was $10.11 for Flash and $18.70 for V4 Pro.
 
-The cost win comes with a reliability and latency warning. The 7f41cc50 and
-9fc06de5 shards needed targeted repair reruns after provider and extraction
-failures. Those repair records are traced and included in the committed
-aggregate cost; abandoned failed attempts are excluded. P50 chunk duration was
-3.8 minutes and P90 was 19.3 minutes, so this row is not pleasant to operate
-even though the provider bill is low.
+The recall tradeoff is real. The rows overlap on 11 known corpus entries. V4
+Pro has 12 unique matches that Flash missed, while Flash has 7 unique matches
+that Pro missed. Flash is not a strict subset, but V4 Pro is the better
+aggregate scorer on this corpus.
+
+The cost win also comes with a latency warning. V4 Pro needed targeted repair
+reruns on the 7f41cc50 and 9fc06de5 shards after provider and extraction
+failures. V4 Flash needed one targeted 9fc06de5 repair for three no-finding
+extraction errors. Those final records are traced and included in the committed
+aggregate; abandoned failed attempts are excluded. Flash had a faster P50 chunk
+duration at 2.9 minutes, compared to Pro's 3.8 minutes, and a similar P90 at
+18.5 minutes versus Pro's 19.3 minutes. Its worst chunk was slower, though:
+60.3 minutes versus Pro's 39.0 minutes. This is still a low-bill, high-patience
+row.
 
 ## Current Takeaway
 
@@ -269,7 +277,9 @@ of 86 on Pi and 24 of 86 through the Claude SDK. Opus 4.6 on Pi with explicit
 high effort found 23 of 86. Opus 4.8 with explicit high effort found 21 of 86
 on Pi and 17 of 86 through the Claude SDK. Opus 4.8 found 18 of 86 on Pi at
 Pi's default level. DeepSeek V4 Pro through OpenRouter and Pi found 23 of 86
-with explicit xhigh effort. Opus 4.7 on Pi found 6 of 86 at Pi's default level.
+with explicit xhigh effort. DeepSeek V4 Flash through OpenRouter and Pi found
+18 of 86 with explicit xhigh effort. Opus 4.7 on Pi found 6 of 86 at Pi's
+default level.
 
 Use those numbers as a relative comparison for this corpus. They are not a
 general pass rate for Sentry.
