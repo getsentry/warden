@@ -160,7 +160,7 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
   rm -f "$validated"
   git -C /tmp/sentry-benchmark checkout "$sha"
 
-  pnpm cli -- run \
+  if ! pnpm cli -- run \
     -C /tmp/sentry-benchmark \
     @"$target" \
     --skill security-review \
@@ -175,8 +175,12 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
     -o "$output" \
     -v \
     --log
+  then
+    echo "Run failed for ${short}; leaving validated marker absent"
+    continue
+  fi
 
-  node - "$output" <<'NODE'
+  if node - "$output" <<'NODE'
 const {readFileSync} = require("node:fs");
 
 const output = process.argv[2];
@@ -200,8 +204,12 @@ if (missingTraces.length > 0) {
   throw new Error(`${output} has ${missingTraces.length} untraced source chunks`);
 }
 NODE
-
-  touch "$validated"
+  then
+    touch "$validated"
+  else
+    echo "Validation failed for ${short}; leaving validated marker absent"
+    continue
+  fi
 done
 ```
 
