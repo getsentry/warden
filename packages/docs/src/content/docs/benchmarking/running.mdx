@@ -138,6 +138,8 @@ Run from the Warden repository:
 ```bash
 set -euo pipefail
 
+BENCH_PARALLEL="${BENCH_PARALLEL:-4}"
+
 effort_args=()
 if [ -n "${BENCH_EFFORT:-}" ]; then
   effort_args=(--effort "$BENCH_EFFORT")
