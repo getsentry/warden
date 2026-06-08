@@ -136,6 +136,8 @@ into a runner-limit comparison.
 Run from the Warden repository:
 
 ```bash
+set -euo pipefail
+
 effort_args=()
 if [ -n "${BENCH_EFFORT:-}" ]; then
   effort_args=(--effort "$BENCH_EFFORT")
@@ -148,11 +150,12 @@ for target in "$BENCH_ROOT"/targets-*.txt; do
   output="$BENCH_ROOT/sentry-security-review-${BENCH_RUN_SLUG}-corpus-${short}.jsonl"
   validated="$output.validated"
 
-  if [ -f "$validated" ]; then
-    echo "Skipping ${short}; validated marker exists"
+  if [ -s "$output" ] && [ -f "$validated" ]; then
+    echo "Skipping ${short}; output and validated marker exist"
     continue
   fi
 
+  rm -f "$validated"
   git -C /tmp/sentry-benchmark checkout "$sha"
 
   pnpm cli -- run \
