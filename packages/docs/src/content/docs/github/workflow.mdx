@@ -9,8 +9,8 @@ which skills run and how findings are reported. The workflow controls when
 GitHub starts Warden, which credentials are available, and which action inputs
 are passed.
 
-`warden init` generates the starter workflow. Uncomment the GitHub App section
-when you want branded comments.
+`warden init` generates a split analyze/report starter workflow. Add a GitHub App
+token step immediately before reporting when you want branded comments.
 
 ```yaml title=".github/workflows/warden.yml"
 name: Warden
@@ -18,6 +18,7 @@ name: Warden
 permissions:
   contents: write
   pull-requests: write
+  checks: write
 
 on:
   pull_request:
@@ -36,9 +37,17 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: getsentry/warden@v0
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          mode: analyze
+
+      - name: Report
+        uses: getsentry/warden@v0
+        with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
 ```
 
 ## Global Workflow With Layered Config
@@ -53,6 +62,7 @@ name: Warden
 permissions:
   contents: write
   pull-requests: write
+  checks: write
 
 on:
   pull_request:
@@ -78,9 +88,19 @@ jobs:
           repository: ${{ github.repository_owner }}/.github
           path: .warden-org
 
-      - uses: getsentry/warden@v0
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          mode: analyze
+          base-config-path: .warden-org/warden.toml
+          base-skill-root: .warden-org
+
+      - name: Report
+        uses: getsentry/warden@v0
+        with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
           base-config-path: .warden-org/warden.toml
           base-skill-root: .warden-org
 ```
@@ -91,6 +111,56 @@ provides the org-wide base config and local shared skills.
 If the target repo also has a root `warden.toml`, Warden loads it in the same
 run. Repo-local config can add skills and repo-local defaults, but it does not
 weaken org-enforced base skills.
+
+## Split Analyze and Report
+
+The recommended workflow runs analysis and reporting as separate action steps.
+This keeps long analysis runs from holding GitHub write credentials. GitHub App
+installation tokens expire after 1 hour, and a long analysis run can outlive a
+token that was created before Warden starts.
+
+Use `mode: analyze` first. It runs skills and writes a structured findings file
+without creating checks, posting comments, or resolving stale comments. Then
+create the GitHub App token and run `mode: report` against that findings file.
+Split modes are only supported for pull request workflows. Report mode reloads
+`warden.toml`, applies the report step's current reporting settings, creates
+completed checks, and posts comments.
+
+```yaml title=".github/workflows/warden.yml"
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
+        with:
+          mode: analyze
+
+      - name: Create Warden app token
+        id: warden-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.WARDEN_APP_ID }}
+          private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
+
+      - name: Report
+        uses: getsentry/warden@v0
+        with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
+          github-token: ${{ steps.warden-token.outputs.token }}
+```
+
+If you use `config-path`, `base-config-path`, `base-skill-root`, or action-level
+reporting inputs such as `fail-on`, `report-on`, `request-changes`,
+`fail-check`, or `max-findings`, pass the intended values to the report step.
+Report mode reads config again from the checkout and applies the report step's
+inputs; the findings file does not store a copy of `warden.toml`.
 
 ## Required Status Checks
 
@@ -105,6 +175,20 @@ that do not actually run for the current event complete as neutral.
 ## Action Inputs
 
 <dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>mode</code>
+      <span class="sentry-property-meta">run | analyze | report</span>
+    </dt>
+    <dd>Action mode. Default: <code>run</code> for compatibility. New pull request workflows should use <code>analyze</code> and <code>report</code> to split analysis from GitHub write reporting.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>findings-file</code>
+      <span class="sentry-property-meta">path</span>
+    </dt>
+    <dd>Structured findings file to read in <code>mode: report</code>. Usually the <code>findings-file</code> output from the analyze step.</dd>
+  </div>
   <div>
     <dt>
       <code>github-token</code>

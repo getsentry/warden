@@ -3,12 +3,26 @@ import { mkdirSync, rmSync, existsSync, readFileSync, readlinkSync, lstatSync, w
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
+import { parse as parseYaml } from 'yaml';
 import { runInit } from './init.js';
 import { Reporter } from '../output/reporter.js';
 import { detectOutputMode } from '../output/tty.js';
 import { Verbosity } from '../output/verbosity.js';
 import type { CLIOptions } from '../args.js';
 import { getMajorVersion } from '../../utils/index.js';
+
+interface WorkflowYaml {
+  jobs?: {
+    review?: {
+      steps?: {
+        name?: string;
+        id?: string;
+        uses?: string;
+        with?: Record<string, string>;
+      }[];
+    };
+  };
+}
 
 function createMockReporter(): Reporter {
   return new Reporter(detectOutputMode(false), Verbosity.Normal);
@@ -93,6 +107,26 @@ describe('init command', () => {
       expect(content).not.toContain('env.ANTHROPIC_API_KEY');
       expect(content).not.toContain('anthropic-api-key');
       expect(content).toContain(`getsentry/warden@v${getMajorVersion()}`);
+
+      const workflow = parseYaml(content) as WorkflowYaml;
+      const steps = workflow.jobs?.review?.steps ?? [];
+      const analyzeIndex = steps.findIndex((step) => step.id === 'warden-analyze');
+      const reportIndex = steps.findIndex((step) => step.name === 'Report');
+
+      expect(analyzeIndex).toBeGreaterThan(-1);
+      expect(reportIndex).toBe(analyzeIndex + 1);
+      expect(steps[analyzeIndex]).toMatchObject({
+        name: 'Analyze',
+        with: {
+          mode: 'analyze',
+        },
+      });
+      expect(steps[reportIndex]).toMatchObject({
+        with: {
+          mode: 'report',
+          'findings-file': '${{ steps.warden-analyze.outputs.findings-file }}',
+        },
+      });
     });
   });
 

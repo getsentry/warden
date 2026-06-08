@@ -133,6 +133,7 @@ function createDefaultInputs(overrides: Partial<ActionInputs> = {}): ActionInput
     anthropicApiKey: 'test-api-key',
     oauthToken: '',
     githubToken: 'test-github-token',
+    mode: 'run',
     configPath: 'warden.toml',
     maxFindings: 50,
     parallel: 2,

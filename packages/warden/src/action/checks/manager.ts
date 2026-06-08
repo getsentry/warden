@@ -16,16 +16,20 @@ import type { TriggerResult } from '../triggers/executor.js';
 // Re-export types and functions that are used directly
 export {
   createCoreCheck,
+  createCompletedCoreCheck,
   updateCoreCheck,
   createSkillCheck,
+  createCompletedSkillCheck,
   updateSkillCheck,
   failSkillCheck,
+  createFailedSkillCheck,
   aggregateSeverityCounts,
   determineConclusion,
 } from '../../output/github-checks.js';
 
 export type {
   CheckOptions,
+  CreateCompletedSkillCheckOptions,
   UpdateSkillCheckOptions,
   CreateCheckResult,
   CoreCheckSummaryData,

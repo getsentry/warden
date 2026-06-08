@@ -39,6 +39,8 @@ export interface ReviewPostingContext {
   runtime?: RuntimeName;
   model?: string;
   maxRetries?: number;
+  /** Throw review posting failures instead of converting them to warnings. */
+  failOnPostError?: boolean;
 }
 
 /**
@@ -344,7 +346,11 @@ export async function postTriggerReview(
         logAction(`Added reactions to ${actionCounts.reacted} existing external comments`);
       }
       if (actionCounts.failed > 0) {
-        warnAction(`Failed to process ${actionCounts.failed} duplicate actions`);
+        const message = `Failed to process ${actionCounts.failed} duplicate actions`;
+        if (ctx.failOnPostError) {
+          throw new Error(message);
+        }
+        warnAction(message);
       }
     }
 
@@ -421,6 +427,9 @@ export async function postTriggerReview(
 
     return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
   } catch (error) {
+    if (ctx.failOnPostError) {
+      throw error;
+    }
     warnAction(`Failed to post review for ${result.triggerName}: ${error}`);
     return {
       posted: false,

@@ -1,10 +1,14 @@
 /**
  * PR Workflow
  *
- * Handles pull_request and push events.
+ * Handles pull_request and push events. PR runs may execute in legacy `run`
+ * mode or the split `analyze`/`report` flow: analyze owns skill execution and
+ * artifact creation, while report owns GitHub writes and must only replay an
+ * artifact that matches the current PR context.
  */
 
 import { readFileSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { Sentry, logger, emitStaleResolutionMetric, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import {
@@ -36,7 +40,7 @@ import { findBotReviewState } from '../review-state.js';
 import type { BotReviewInfo } from '../review-state.js';
 import type { ActionInputs } from '../inputs.js';
 import { executeTrigger } from '../triggers/executor.js';
-import type { TriggerResult } from '../triggers/executor.js';
+import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
@@ -45,17 +49,22 @@ import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
   createCoreCheck,
+  createCompletedCoreCheck,
+  createCompletedSkillCheck,
   createSkillCheck,
+  createFailedSkillCheck,
   failSkillCheck,
   updateCoreCheck,
   updateSkillCheck,
   buildCoreSummaryData,
   determineCoreConclusion,
   type CheckOptions,
+  type CoreCheckSummaryData,
 } from '../checks/manager.js';
 import {
   setOutput,
   setFailed,
+  ActionFailedError,
   ensureClaudeAuth,
   logGroup,
   logGroupEnd,
@@ -67,6 +76,12 @@ import {
   getAuthenticatedBotLogin,
   writeFindingsOutput,
 } from './base.js';
+import { renderSkillReport } from '../../output/renderer.js';
+import {
+  FindingsOutputSchema,
+  type FindingsOutput,
+  type ReplayTriggerResult,
+} from '../reporting/output.js';
 
 // -----------------------------------------------------------------------------
 // Phase Result Types
@@ -111,6 +126,13 @@ interface AuxiliaryWorkflowOptions {
 interface SkippedCoreCheck {
   title: string;
   message: string;
+}
+
+class ReportWriteError extends Error {
+  constructor(operation: string, error: unknown) {
+    super(`${operation}: ${error instanceof Error ? error.message : String(error)}`);
+    this.name = 'ReportWriteError';
+  }
 }
 
 function existingCommentToFinding(comment: ExistingComment): Finding {
@@ -422,14 +444,40 @@ async function setupGitHubState(
 }
 
 /**
- * Run all matched triggers in parallel batches.
+ * Build the context-bound check lifecycle used by legacy run mode.
+ * Analyze mode omits this capability so trigger execution cannot write checks.
  */
+function createTriggerCheckReporter(
+  octokit: Octokit,
+  context: EventContext
+): TriggerCheckReporter | undefined {
+  const checkOptions = checkOptionsForPullRequest(context);
+  if (!checkOptions) {
+    return undefined;
+  }
+
+  return {
+    async start(skillName) {
+      const check = await createSkillCheck(octokit, skillName, checkOptions);
+      return {
+        url: check.url,
+        complete: (report, options) =>
+          updateSkillCheck(octokit, check.checkRunId, report, {
+            ...checkOptions,
+            ...options,
+          }),
+        fail: (error) => failSkillCheck(octokit, check.checkRunId, error, checkOptions),
+      };
+    },
+  };
+}
+
 async function executeAllTriggers(
   matchedTriggers: ResolvedTrigger[],
-  octokit: Octokit,
   context: EventContext,
   runnerConcurrency: number | undefined,
-  inputs: ActionInputs
+  inputs: ActionInputs,
+  options: { checks?: TriggerCheckReporter } = {}
 ): Promise<TriggerResult[]> {
   const concurrency = runnerConcurrency ?? inputs.parallel;
   const runtimeEnv = await prepareRuntimeEnvironment(matchedTriggers, inputs);
@@ -444,7 +492,6 @@ async function executeAllTriggers(
     concurrency,
     (trigger) =>
       executeTrigger(trigger, {
-        octokit,
         context,
         anthropicApiKey: inputs.anthropicApiKey,
         claudePath: runtimeEnv.pathToClaudeCodeExecutable,
@@ -456,6 +503,7 @@ async function executeAllTriggers(
         semaphore,
         abortController,
         circuitBreaker,
+        checks: options.checks,
       }),
     { shouldAbort: () => abortController.signal.aborted },
   );
@@ -469,7 +517,8 @@ async function postReviewsAndTrackFailures(
   context: EventContext,
   results: TriggerResult[],
   inputs: ActionInputs,
-  auxiliaryOptions: AuxiliaryWorkflowOptions
+  auxiliaryOptions: AuxiliaryWorkflowOptions,
+  options: { failOnPostError?: boolean } = {}
 ): Promise<ReviewPhaseResult> {
   // Fetch existing comments for deduplication (only for PRs)
   // Keep original list separate for stale detection (modified list includes newly posted comments)
@@ -517,6 +566,7 @@ async function postReviewsAndTrackFailures(
           runtime: auxiliaryOptions.runtime,
           model: auxiliaryOptions.model,
           maxRetries: auxiliaryOptions.maxRetries,
+          failOnPostError: options.failOnPostError,
         },
         { octokit, context }
       );
@@ -553,6 +603,7 @@ async function postReviewsAndTrackFailures(
  * Evaluate fix attempts on unresolved comments and resolve stale comments.
  *
  * Returns whether all Warden comments are resolved after evaluation.
+ * Report mode passes failOnWriteError so GitHub write failures abort delivery.
  */
 async function evaluateFixesAndResolveStale(
   octokit: Octokit,
@@ -562,7 +613,8 @@ async function evaluateFixesAndResolveStale(
   activeWardenCommentIds: ReadonlySet<number>,
   canResolveStale: boolean,
   anthropicApiKey: string,
-  auxiliaryOptions: AuxiliaryWorkflowOptions
+  auxiliaryOptions: AuxiliaryWorkflowOptions,
+  options: { failOnWriteError?: boolean } = {}
 ): Promise<{
   allResolved: boolean;
   autoResolvedByFixEvaluation: number;
@@ -643,7 +695,16 @@ async function evaluateFixesAndResolveStale(
 
       // Resolve successful fixes
       if (fixEvaluation.toResolve.length > 0) {
-        const { resolvedCount, resolvedIds } = await resolveStaleComments(octokit, fixEvaluation.toResolve);
+        const { resolvedCount, resolvedIds } = await resolveStaleComments(
+          octokit,
+          fixEvaluation.toResolve,
+          { failOnError: options.failOnWriteError }
+        ).catch((error: unknown) => {
+          if (options.failOnWriteError) {
+            throw new ReportWriteError('Failed to resolve comments via fix evaluation', error);
+          }
+          throw error;
+        });
         if (resolvedCount > 0) {
           logAction(`Resolved ${resolvedCount} comments via fix evaluation`);
         }
@@ -668,6 +729,9 @@ async function evaluateFixesAndResolveStale(
             await postThreadReply(octokit, reply.comment.threadId, reply.replyBody);
           } catch (error) {
             Sentry.captureException(error, { tags: { operation: 'post_thread_reply' } });
+            if (options.failOnWriteError) {
+              throw new ReportWriteError('Failed to post fix evaluation reply', error);
+            }
           }
         }
       }
@@ -688,6 +752,10 @@ async function evaluateFixesAndResolveStale(
       logGroupEnd();
     } catch (error) {
       Sentry.captureException(error, { tags: { operation: 'evaluate_fix_attempts' } });
+      if (error instanceof ReportWriteError) {
+        logGroupEnd();
+        throw error;
+      }
       warnAction(`Failed to evaluate fix attempts: ${error}`);
       logGroupEnd();
     }
@@ -707,7 +775,16 @@ async function evaluateFixesAndResolveStale(
       const staleComments = findStaleComments(commentsForStaleCheck, allFindings, scope);
 
       if (staleComments.length > 0) {
-        const { resolvedCount, resolvedIds } = await resolveStaleComments(octokit, staleComments);
+        const { resolvedCount, resolvedIds } = await resolveStaleComments(
+          octokit,
+          staleComments,
+          { failOnError: options.failOnWriteError }
+        ).catch((error: unknown) => {
+          if (options.failOnWriteError) {
+            throw new ReportWriteError('Failed to resolve stale comments', error);
+          }
+          throw error;
+        });
         if (resolvedCount > 0) {
           logAction(`Resolved ${resolvedCount} stale Warden comments`);
           emitStaleResolutionMetric(resolvedCount);
@@ -737,6 +814,9 @@ async function evaluateFixesAndResolveStale(
       }
     } catch (error) {
       Sentry.captureException(error, { tags: { operation: 'resolve_stale_comments' } });
+      if (error instanceof ReportWriteError) {
+        throw error;
+      }
       warnAction(`Failed to resolve stale comments: ${error}`);
     }
   } else if (!canResolveStale && wardenComments.length > 0) {
@@ -758,20 +838,16 @@ async function evaluateFixesAndResolveStale(
 }
 
 /**
- * Dismiss review, set outputs, update core check, fail action.
+ * Dismiss a prior blocking Warden review only when current results prove it is clear.
+ * Report mode sets failOnWriteError so dismissal write failures fail delivery.
  */
-async function finalizeWorkflow(
+async function dismissPreviousReviewIfResolved(
   octokit: Octokit,
   context: EventContext,
   previousReviewInfo: BotReviewInfo | null,
-  coreCheckId: number | undefined,
   results: TriggerResult[],
-  reports: SkillReport[],
-  findingObservations: FindingObservation[],
-  shouldFailAction: boolean,
-  failureReasons: string[],
   canResolveStale: boolean,
-  triggerErrors: string[]
+  options: { failOnWriteError?: boolean } = {}
 ): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, current run would not request changes,
@@ -800,9 +876,37 @@ async function finalizeWorkflow(
       logAction('Dismissed previous CHANGES_REQUESTED review');
     } catch (error) {
       Sentry.captureException(error, { tags: { operation: 'dismiss_review' } });
+      if (options.failOnWriteError) {
+        throw new ReportWriteError('Failed to dismiss previous review', error);
+      }
       warnAction(`Failed to dismiss previous review: ${error}`);
     }
   }
+}
+
+/**
+ * Dismiss review, set outputs, update core check, fail action.
+ */
+async function finalizeWorkflow(
+  octokit: Octokit,
+  context: EventContext,
+  previousReviewInfo: BotReviewInfo | null,
+  coreCheckId: number | undefined,
+  results: TriggerResult[],
+  reports: SkillReport[],
+  findingObservations: FindingObservation[],
+  shouldFailAction: boolean,
+  failureReasons: string[],
+  canResolveStale: boolean,
+  triggerErrors: string[]
+): Promise<void> {
+  await dismissPreviousReviewIfResolved(
+    octokit,
+    context,
+    previousReviewInfo,
+    results,
+    canResolveStale
+  );
 
   // Set outputs
   const outputs = computeWorkflowOutputs(reports);
@@ -810,7 +914,9 @@ async function finalizeWorkflow(
 
   // Write structured findings to file for external export (GCS, S3, etc.)
   try {
-    const findingsPath = writeFindingsOutput(reports, context, findingObservations);
+    const findingsPath = writeFindingsOutput(reports, context, findingObservations, {
+      triggerResults: toReplayTriggerResults(results),
+    });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
     warnAction(`Failed to write findings output: ${error}`);
@@ -998,6 +1104,363 @@ async function runOrFailCore<T>(
   }
 }
 
+function resolveFindingsFilePath(inputPath: string | undefined, repoPath: string): string {
+  if (!inputPath) {
+    setFailed('findings-file is required when mode is report');
+  }
+  return isAbsolute(inputPath) ? inputPath : join(repoPath, inputPath);
+}
+
+/**
+ * Reads the analyze-mode findings artifact that report mode replays.
+ */
+function readFindingsFile(inputPath: string | undefined, repoPath: string): FindingsOutput {
+  const filePath = resolveFindingsFilePath(inputPath, repoPath);
+
+  try {
+    return FindingsOutputSchema.parse(JSON.parse(readFileSync(filePath, 'utf-8')));
+  } catch (error) {
+    setFailed(`Failed to read findings file ${filePath}: ${error}`);
+  }
+}
+
+/**
+ * Ensures a replay artifact was produced for the same repository, event, PR,
+ * and head SHA before report mode performs GitHub writes.
+ */
+function validateFindingsMatchContext(output: FindingsOutput, context: EventContext): void {
+  if (output.repository.fullName !== context.repository.fullName) {
+    setFailed(
+      `Findings file is for ${output.repository.fullName}, but this workflow is for ${context.repository.fullName}`
+    );
+  }
+
+  if (output.event !== context.eventType) {
+    setFailed(`Findings file event ${output.event} does not match ${context.eventType}`);
+  }
+
+  if (!context.pullRequest) {
+    return;
+  }
+
+  if (!output.pullRequest) {
+    setFailed('Findings file is missing pull request metadata');
+  }
+
+  if (output.pullRequest.number !== context.pullRequest.number) {
+    setFailed(
+      `Findings file is for PR #${output.pullRequest.number}, but this workflow is for PR #${context.pullRequest.number}`
+    );
+  }
+
+  if (output.pullRequest.headSha !== context.pullRequest.headSha) {
+    setFailed(
+      `Findings file head SHA ${output.pullRequest.headSha} does not match current head SHA ${context.pullRequest.headSha}`
+    );
+  }
+}
+
+function deserializeTriggerError(
+  error: NonNullable<FindingsOutput['triggerResults']>[number]['error'],
+  fallback: string
+): Error {
+  const deserialized = new Error(error?.message ?? fallback);
+  if (error?.name) {
+    deserialized.name = error.name;
+  }
+  return deserialized;
+}
+
+function resultKey(triggerName: string, skillName: string): string {
+  return `${triggerName}\0${skillName}`;
+}
+
+function toReplayTriggerResults(results: TriggerResult[]): ReplayTriggerResult[] {
+  return results.map((result) => ({
+    triggerName: result.triggerName,
+    skillName: result.skillName,
+    report: result.report,
+    error: result.error,
+  }));
+}
+
+/**
+ * Rebuild report-mode trigger results by joining artifact rows to the current
+ * configured trigger name and skill identity.
+ */
+function buildReportModeResults(
+  output: FindingsOutput,
+  matchedTriggers: ResolvedTrigger[],
+  inputs: ActionInputs
+): TriggerResult[] {
+  if (!output.triggerResults) {
+    setFailed('Findings file was not produced by mode: analyze; missing triggerResults');
+  }
+
+  const outputResults = new Map<string, typeof output.triggerResults>();
+  for (const result of output.triggerResults) {
+    const key = resultKey(result.triggerName, result.skillName);
+    const existing = outputResults.get(key);
+    if (existing) {
+      existing.push(result);
+    } else {
+      outputResults.set(key, [result]);
+    }
+  }
+
+  return matchedTriggers.map((trigger) => {
+    const failOn = trigger.failOn ?? inputs.failOn;
+    const reportOn = trigger.reportOn ?? inputs.reportOn;
+    const minConfidence = trigger.minConfidence ?? 'medium';
+    const requestChanges = trigger.requestChanges ?? inputs.requestChanges;
+    const failCheck = trigger.failCheck ?? inputs.failCheck;
+    const maxFindings = trigger.maxFindings ?? inputs.maxFindings;
+    const baseResult = {
+      triggerName: trigger.name,
+      skillName: trigger.skill,
+      failOn,
+      reportOn,
+      minConfidence,
+      reportOnSuccess: trigger.reportOnSuccess,
+      requestChanges,
+      failCheck,
+      maxFindings,
+    };
+    const outputResult = outputResults.get(resultKey(trigger.name, trigger.skill))?.shift();
+
+    if (!outputResult) {
+      return {
+        ...baseResult,
+        error: new Error(`Findings file has no result for trigger ${trigger.name} (${trigger.skill})`),
+      };
+    }
+
+    if (outputResult.status === 'error' || !outputResult.report) {
+      return {
+        ...baseResult,
+        error: deserializeTriggerError(
+          outputResult.error,
+          `Trigger ${trigger.name} (${trigger.skill}) failed during analysis`
+        ),
+      };
+    }
+
+    return {
+      ...baseResult,
+      report: outputResult.report,
+    };
+  });
+}
+
+function withRenderedReviewResult(result: TriggerResult): TriggerResult {
+  if (!result.report) {
+    return result;
+  }
+
+  return {
+    ...result,
+    renderResult:
+      result.reportOn !== 'off'
+        ? renderSkillReport(result.report, {
+            maxFindings: result.maxFindings,
+            reportOn: result.reportOn,
+            minConfidence: result.minConfidence,
+            failOn: result.failOn,
+            requestChanges: result.requestChanges,
+            checkRunUrl: result.checkRunUrl,
+            totalFindings: result.report.findings.length,
+          })
+        : undefined,
+  };
+}
+
+/**
+ * Create report-mode skill checks directly as completed check runs.
+ */
+async function createCompletedSkillChecksForReport(
+  octokit: Octokit,
+  context: EventContext,
+  results: TriggerResult[]
+): Promise<TriggerResult[]> {
+  const options = checkOptionsForPullRequest(context);
+  if (!options) {
+    return results.map(withRenderedReviewResult);
+  }
+
+  const updatedResults: TriggerResult[] = [];
+  for (const result of results) {
+    if (result.report) {
+      const check = await createCompletedSkillCheck(octokit, result.report, {
+        ...options,
+        checkName: result.skillName,
+        failOn: result.failOn,
+        reportOn: result.reportOn,
+        minConfidence: result.minConfidence,
+        failCheck: result.failCheck,
+      });
+      updatedResults.push(withRenderedReviewResult({ ...result, checkRunUrl: check.url }));
+      continue;
+    }
+
+    await createFailedSkillCheck(
+      octokit,
+      result.skillName,
+      result.error ?? new Error('Trigger did not produce a report'),
+      options
+    );
+    updatedResults.push(result);
+  }
+
+  return updatedResults;
+}
+
+/**
+ * Create neutral completed checks for triggers report mode intentionally skipped.
+ */
+async function createCompletedSkippedSkillChecks(
+  octokit: Octokit,
+  context: EventContext,
+  skippedTriggers: ResolvedTrigger[]
+): Promise<void> {
+  const options = checkOptionsForPullRequest(context);
+  if (!options || skippedTriggers.length === 0) {
+    return;
+  }
+
+  for (const trigger of skippedTriggers) {
+    await createCompletedSkillCheck(
+      octokit,
+      {
+        skill: trigger.skill,
+        summary: 'Trigger did not run for this event.',
+        findings: [],
+      },
+      {
+        ...options,
+        failOn: trigger.failOn,
+        reportOn: trigger.reportOn,
+        minConfidence: trigger.minConfidence ?? 'medium',
+        failCheck: trigger.failCheck,
+        conclusion: 'neutral',
+        title: 'Skipped',
+      }
+    );
+  }
+}
+
+/**
+ * Create the report-mode core check directly as a completed check run.
+ */
+async function createCompletedCoreCheckForReport(
+  octokit: Octokit,
+  context: EventContext,
+  results: TriggerResult[],
+  reports: SkillReport[],
+  shouldFailAction: boolean,
+  outputs: { findingsCount: number },
+  overrides: Partial<CoreCheckSummaryData> = {},
+  conclusion?: 'success' | 'failure' | 'neutral'
+): Promise<void> {
+  const options = checkOptionsForPullRequest(context);
+  if (!options) {
+    return;
+  }
+
+  await createCompletedCoreCheck(
+    octokit,
+    {
+      ...buildCoreSummaryData(results, reports),
+      ...overrides,
+    },
+    conclusion ?? determineCoreConclusion(shouldFailAction, outputs.findingsCount),
+    options
+  );
+}
+
+/**
+ * Create the report-mode core failure check directly as a completed check run.
+ */
+async function createFailedCoreCheckForReport(
+  octokit: Octokit,
+  context: EventContext,
+  error: unknown
+): Promise<void> {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  try {
+    await createCompletedCoreCheckForReport(
+      octokit,
+      context,
+      [],
+      [],
+      true,
+      { findingsCount: 0 },
+      {
+        title: 'Warden failed',
+        message: `Error: ${errorMessage}`,
+      },
+      'failure'
+    );
+  } catch (checkError) {
+    Sentry.captureException(checkError, { tags: { operation: 'create_failed_core_check_report' } });
+    warnAction(`Failed to create failed core check: ${checkError}`);
+  }
+}
+
+/**
+ * Finalize report mode after replay: write outputs, handle review dismissal,
+ * create direct completed checks, and fail the action when policy requires it.
+ */
+async function finalizeReportWorkflow(
+  octokit: Octokit,
+  context: EventContext,
+  previousReviewInfo: BotReviewInfo | null,
+  results: TriggerResult[],
+  reports: SkillReport[],
+  findingObservations: FindingObservation[],
+  shouldFailAction: boolean,
+  failureReasons: string[],
+  canResolveStale: boolean,
+  triggerErrors: string[],
+  options: { failOnWriteError?: boolean } = {}
+): Promise<void> {
+  await dismissPreviousReviewIfResolved(
+    octokit,
+    context,
+    previousReviewInfo,
+    results,
+    canResolveStale,
+    { failOnWriteError: options.failOnWriteError }
+  );
+
+  const outputs = computeWorkflowOutputs(reports);
+  setWorkflowOutputs(outputs);
+
+  try {
+    const findingsPath = writeFindingsOutput(reports, context, findingObservations, {
+      triggerResults: toReplayTriggerResults(results),
+    });
+    logAction(`Findings written to ${findingsPath}`);
+  } catch (error) {
+    warnAction(`Failed to write findings output: ${error}`);
+  }
+
+  await createCompletedCoreCheckForReport(
+    octokit,
+    context,
+    results,
+    reports,
+    shouldFailAction || triggerErrors.length > 0,
+    outputs
+  );
+
+  if (shouldFailAction) {
+    setFailed(failureReasons.join('; '));
+  }
+
+  logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
+}
+
 /**
  * Clean up orphaned Warden comments when no triggers matched.
  *
@@ -1069,10 +1532,222 @@ async function cleanupOrphanedComments(
   return findingObservations;
 }
 
+/**
+ * Run the analysis phase without GitHub reporting writes.
+ * It executes matched triggers and writes the replay artifact for report mode.
+ */
+async function runAnalyzeMode(
+  inputs: ActionInputs,
+  initResult: InitResult,
+  span: { setAttribute: (name: string, value: number) => void }
+): Promise<void> {
+  const {
+    context,
+    runnerConcurrency,
+    matchedTriggers,
+    skipCoreCheck,
+  } = initResult;
+
+  if (skipCoreCheck || matchedTriggers.length === 0) {
+    setOutput('findings-count', 0);
+    setOutput('high-count', 0);
+    setOutput('summary', skipCoreCheck?.title ?? 'No triggers matched');
+    try {
+      const findingsPath = writeFindingsOutput([], context, [], { triggerResults: [] });
+      logAction(`Findings written to ${findingsPath}`);
+    } catch (error) {
+      warnAction(`Failed to write findings output: ${error}`);
+    }
+    logAction('Analysis complete: 0 total findings');
+    return;
+  }
+
+  const results = await Sentry.startSpan(
+    {
+      op: 'workflow.execute',
+      name: 'execute triggers',
+      attributes: { 'warden.trigger.count': matchedTriggers.length },
+    },
+    () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs),
+  );
+
+  const reports = results.flatMap((result) => (result.report ? [result.report] : []));
+  const outputs = computeWorkflowOutputs(reports);
+  setWorkflowOutputs(outputs);
+  span.setAttribute('warden.finding.count', reports.flatMap((r) => r.findings).length);
+
+  try {
+    const findingsPath = writeFindingsOutput(reports, context, [], {
+      triggerResults: toReplayTriggerResults(results),
+    });
+    logAction(`Findings written to ${findingsPath}`);
+  } catch (error) {
+    warnAction(`Failed to write findings output: ${error}`);
+  }
+
+  handleTriggerErrors(collectTriggerErrors(results), matchedTriggers.length, { failAll: false });
+  logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
+}
+
+/**
+ * Run the reporting phase without rerunning skills.
+ * It replays analyze output against the current PR config and owns GitHub writes.
+ */
+async function runReportMode(
+  octokit: Octokit,
+  inputs: ActionInputs,
+  initResult: InitResult,
+  repoPath: string,
+  span: { setAttribute: (name: string, value: number) => void }
+): Promise<void> {
+  const {
+    context,
+    auxiliaryOptions,
+    matchedTriggers,
+    skippedTriggers,
+    skipCoreCheck,
+  } = initResult;
+  const findingsOutput = readFindingsFile(inputs.findingsFile, repoPath);
+  validateFindingsMatchContext(findingsOutput, context);
+
+  let results: TriggerResult[] = [];
+  let previousReviewInfo: BotReviewInfo | null = null;
+  let reviewPhase!: ReviewPhaseResult;
+  let triggerErrors!: string[];
+  let canResolveStale!: boolean;
+
+  try {
+    await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers);
+
+    if (skipCoreCheck) {
+      const outputs = { findingsCount: 0, highCount: 0, summary: skipCoreCheck.title };
+      setWorkflowOutputs(outputs);
+      try {
+        const findingsPath = writeFindingsOutput([], context, [], { triggerResults: [] });
+        logAction(`Findings written to ${findingsPath}`);
+      } catch (error) {
+        warnAction(`Failed to write findings output: ${error}`);
+      }
+      await createCompletedCoreCheckForReport(
+        octokit,
+        context,
+        [],
+        [],
+        false,
+        outputs,
+        {
+          title: skipCoreCheck.title,
+          message: skipCoreCheck.message,
+        },
+        'neutral'
+      );
+      logAction('Analysis complete: 0 total findings');
+      return;
+    }
+
+    if (matchedTriggers.length === 0) {
+      const cleanupFindingObservations = await cleanupOrphanedComments(
+        octokit,
+        context,
+        inputs,
+        auxiliaryOptions
+      );
+      const outputs = { findingsCount: 0, highCount: 0, summary: 'No triggers matched' };
+      setWorkflowOutputs(outputs);
+      try {
+        const findingsPath = writeFindingsOutput([], context, cleanupFindingObservations, {
+          triggerResults: [],
+        });
+        logAction(`Findings written to ${findingsPath}`);
+      } catch (error) {
+        warnAction(`Failed to write findings output: ${error}`);
+      }
+      await createCompletedCoreCheckForReport(
+        octokit,
+        context,
+        [],
+        [],
+        false,
+        outputs,
+        {
+          title: 'No triggers matched',
+          message: 'No triggers matched for this event.',
+        },
+        'neutral'
+      );
+      logAction('Analysis complete: 0 total findings');
+      return;
+    }
+
+    results = buildReportModeResults(findingsOutput, matchedTriggers, inputs);
+    results = await createCompletedSkillChecksForReport(octokit, context, results);
+
+    previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
+    if (previousReviewInfo) {
+      logAction(`Previous Warden review state: ${previousReviewInfo.state}`);
+    }
+
+    reviewPhase = await Sentry.startSpan(
+      { op: 'workflow.review', name: 'post reviews' },
+      () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, {
+        failOnPostError: true,
+      }),
+    );
+
+    triggerErrors = collectTriggerErrors(results);
+    canResolveStale = shouldResolveStaleComments(results);
+    const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+    span.setAttribute('warden.finding.count', allFindings.length);
+
+    await Sentry.startSpan(
+      { op: 'workflow.resolve', name: 'resolve stale comments' },
+      async (resolveSpan) => {
+        const resolutionResult = await evaluateFixesAndResolveStale(
+          octokit, context, reviewPhase.fetchedComments,
+          allFindings, reviewPhase.activeWardenCommentIds,
+          canResolveStale, inputs.anthropicApiKey,
+          auxiliaryOptions,
+          { failOnWriteError: true },
+        );
+        resolveSpan.setAttribute(
+          'warden.feedback.auto_resolve.fix_eval_count',
+          resolutionResult.autoResolvedByFixEvaluation
+        );
+        resolveSpan.setAttribute(
+          'warden.feedback.auto_resolve.stale_count',
+          resolutionResult.autoResolvedByStaleCheck
+        );
+        reviewPhase.findingObservations.push(...resolutionResult.findingObservations);
+      },
+    );
+
+    await finalizeReportWorkflow(
+      octokit, context, previousReviewInfo,
+      results, reviewPhase.reports,
+      reviewPhase.findingObservations,
+      reviewPhase.shouldFailAction, reviewPhase.failureReasons,
+      canResolveStale,
+      triggerErrors,
+      { failOnWriteError: true },
+    );
+  } catch (error) {
+    if (error instanceof ActionFailedError) {
+      throw error;
+    }
+    await createFailedCoreCheckForReport(octokit, context, error);
+    throw error;
+  }
+
+  handleTriggerErrors(triggerErrors, matchedTriggers.length);
+}
+
 // -----------------------------------------------------------------------------
 // Main PR Workflow
 // -----------------------------------------------------------------------------
 
+/**
+ * Dispatch PR and push events through legacy run mode or split analyze/report mode.
+ */
 export async function runPRWorkflow(
   octokit: Octokit,
   inputs: ActionInputs,
@@ -1121,6 +1796,14 @@ export async function runPRWorkflow(
         'warden.trigger.count': matchedTriggers.length,
         'trace.id': traceId,
       });
+
+      if (inputs.mode === 'analyze') {
+        return runAnalyzeMode(inputs, initResult, span);
+      }
+
+      if (inputs.mode === 'report') {
+        return runReportMode(octokit, inputs, initResult, repoPath, span);
+      }
 
       const { coreCheckId, previousReviewInfo } = await Sentry.startSpan(
         { op: 'workflow.setup', name: 'setup github state' },
@@ -1174,7 +1857,9 @@ export async function runPRWorkflow(
             name: 'execute triggers',
             attributes: { 'warden.trigger.count': matchedTriggers.length },
           },
-          () => executeAllTriggers(matchedTriggers, octokit, context, runnerConcurrency, inputs),
+          () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
+            checks: createTriggerCheckReporter(octokit, context),
+          }),
         );
       } catch (error) {
         await failUndispatchedSkillChecks(octokit, context, matchedTriggers, error);

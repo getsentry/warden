@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Octokit } from '@octokit/rest';
-import { executeTrigger, type TriggerExecutorDeps } from './executor.js';
+import {
+  executeTrigger,
+  type TriggerCheckCompleteOptions,
+  type TriggerExecutorDeps,
+} from './executor.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
@@ -64,7 +68,29 @@ describe('executeTrigger', () => {
 
   const mockOctokit = {} as Octokit;
 
-const mockContext: EventContext = {
+  const checkOptions = {
+    owner: 'test-owner',
+    repo: 'test-repo',
+    headSha: 'abc123',
+  };
+
+  const createTestCheckReporter = () => ({
+    async start(skillName: string) {
+      const check = await createSkillCheck(mockOctokit, skillName, checkOptions);
+      return {
+        url: check.url,
+        complete: (report: SkillReport, options: TriggerCheckCompleteOptions) =>
+          updateSkillCheck(mockOctokit, check.checkRunId, report, {
+            ...checkOptions,
+            ...options,
+          }),
+        fail: (error: unknown) =>
+          failSkillCheck(mockOctokit, check.checkRunId, error, checkOptions),
+      };
+    },
+  });
+
+  const mockContext: EventContext = {
     eventType: 'pull_request',
     action: 'opened',
     repository: { owner: 'test-owner', name: 'test-repo', fullName: 'test-owner/test-repo', defaultBranch: 'main' },
@@ -91,11 +117,11 @@ const mockContext: EventContext = {
   };
 
   const mockDeps: TriggerExecutorDeps = {
-    octokit: mockOctokit,
     context: mockContext,
     anthropicApiKey: 'test-key',
     claudePath: '/test/claude',
     globalMaxFindings: 10,
+    checks: createTestCheckReporter(),
   };
 
   const createReport = (findings: SkillReport['findings'] = []): SkillReport => ({
@@ -336,6 +362,19 @@ const mockContext: EventContext = {
     expect(result.triggerName).toBe('test-trigger');
     expect(result.report).toBe(mockReport);
     expect(result.error).toBeUndefined();
+  });
+
+  it('skips check writes when no check reporter is provided', async () => {
+    const mockReport = createReport();
+
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
+
+    const result = await executeTrigger(mockTrigger, { ...mockDeps, checks: undefined });
+
+    expect(createSkillCheck).not.toHaveBeenCalled();
+    expect(updateSkillCheck).not.toHaveBeenCalled();
+    expect(result.triggerName).toBe('test-trigger');
+    expect(result.report).toBe(mockReport);
   });
 
   it('uses trigger-specific failOn over global', async () => {

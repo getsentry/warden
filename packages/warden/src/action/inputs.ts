@@ -12,12 +12,18 @@ import { DEFAULT_CONCURRENCY } from '../utils/index.js';
 // Types
 // -----------------------------------------------------------------------------
 
+export type ActionMode = 'run' | 'analyze' | 'report';
+
 export interface ActionInputs {
   /** API key for Anthropic API (empty if using OAuth) */
   anthropicApiKey: string;
   /** OAuth token for Claude Code (empty if using API key) */
   oauthToken: string;
   githubToken: string;
+  /** Action execution mode */
+  mode: ActionMode;
+  /** Structured findings file used by report mode */
+  findingsFile?: string;
   /** Optional org-wide base config that is loaded before the repo config */
   baseConfigPath?: string;
   /** Optional repo root containing org-shared local skills for the base config */
@@ -63,6 +69,14 @@ function parseBooleanInput(value: string): boolean | undefined {
   return undefined;
 }
 
+function parseModeInput(value: string): ActionMode {
+  const mode = value || 'run';
+  if (mode === 'run' || mode === 'analyze' || mode === 'report') {
+    return mode;
+  }
+  throw new Error(`Invalid mode "${mode}". Expected run, analyze, or report.`);
+}
+
 /**
  * Parse action inputs from the GitHub Actions environment.
  * Runtime-specific auth can be absent here; runtime setup validates it when needed.
@@ -102,6 +116,8 @@ export function parseActionInputs(): ActionInputs {
     anthropicApiKey,
     oauthToken,
     githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
+    mode: parseModeInput(getInput('mode')),
+    findingsFile: getInput('findings-file') || undefined,
     baseConfigPath: getInput('base-config-path') || undefined,
     baseSkillRoot: getInput('base-skill-root') || undefined,
     configPath: getInput('config-path') || 'warden.toml',
@@ -124,6 +140,9 @@ export function validateInputs(inputs: ActionInputs): void {
   }
   if (inputs.baseSkillRoot && !inputs.baseConfigPath) {
     throw new Error('base-skill-root requires base-config-path');
+  }
+  if (inputs.mode === 'report' && !inputs.findingsFile) {
+    throw new Error('findings-file is required when mode is report');
   }
 }
 

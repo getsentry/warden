@@ -1,11 +1,11 @@
 /**
  * Trigger Executor
  *
- * Executes a single trigger and manages associated GitHub check runs.
+ * Executes a single trigger. GitHub check writes are optional and must be
+ * injected by legacy run mode; split analyze mode omits that capability.
  * Extracted from main.ts to enable isolated testing and clearer dependencies.
  */
 
-import type { Octokit } from '@octokit/rest';
 import { Sentry } from '../../sentry.js';
 import { ActionFailedError } from '../workflow/base.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
@@ -17,11 +17,6 @@ import { filterContextByPaths } from '../../triggers/matcher.js';
 import { runSkillTask, createDefaultCallbacks } from '../../cli/output/tasks.js';
 import type { SkillTaskOptions } from '../../cli/output/tasks.js';
 import { renderSkillReport } from '../../output/renderer.js';
-import {
-  createSkillCheck,
-  updateSkillCheck,
-  failSkillCheck,
-} from '../../output/github-checks.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
 import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
 import { SkillRunnerError } from '../../sdk/errors.js';
@@ -39,11 +34,36 @@ const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns
 // -----------------------------------------------------------------------------
 
 /**
+ * Optional check lifecycle for trigger execution.
+ */
+export interface TriggerCheckRun {
+  url?: string;
+  complete(report: SkillReport, options: TriggerCheckCompleteOptions): Promise<void>;
+  fail(error: unknown): Promise<void>;
+}
+
+/**
+ * Reporting policy applied when completing a trigger check.
+ */
+export interface TriggerCheckCompleteOptions {
+  failOn?: SeverityThreshold;
+  reportOn?: SeverityThreshold;
+  minConfidence?: ConfidenceThreshold;
+  failCheck?: boolean;
+}
+
+/**
+ * Optional context-bound check capability. Omit for analyze mode.
+ */
+export interface TriggerCheckReporter {
+  start(skillName: string): Promise<TriggerCheckRun>;
+}
+
+/**
  * Dependencies required for trigger execution.
  * Making these explicit enables testing with mock implementations.
  */
 export interface TriggerExecutorDeps {
-  octokit: Octokit;
   context: EventContext;
   anthropicApiKey: string;
   claudePath?: string;
@@ -63,6 +83,8 @@ export interface TriggerExecutorDeps {
   abortController?: AbortController;
   /** Shared circuit breaker for auth/provider failures */
   circuitBreaker?: ProviderFailureCircuitBreaker;
+  /** Optional context-bound check writer. Omit for analyze mode. */
+  checks?: TriggerCheckReporter;
 }
 
 /**
@@ -70,6 +92,7 @@ export interface TriggerExecutorDeps {
  */
 export interface TriggerResult {
   triggerName: string;
+  skillName: string;
   report?: SkillReport;
   renderResult?: RenderResult;
   failOn?: SeverityThreshold;
@@ -91,9 +114,9 @@ export interface TriggerResult {
  * Execute a single trigger and return results.
  *
  * Handles:
- * - Creating/updating GitHub check runs
  * - Running the skill via Claude Code SDK
  * - Rendering results for GitHub review
+ * - Creating/updating GitHub check runs only when a check reporter is provided
  */
 export async function executeTrigger(
   trigger: ResolvedTrigger,
@@ -104,21 +127,16 @@ export async function executeTrigger(
     async (span) => {
       span.setAttribute('gen_ai.agent.name', trigger.skill);
       span.setAttribute('warden.trigger.name', trigger.name);
-      const { octokit, context, anthropicApiKey, claudePath } = deps;
+      const { context, anthropicApiKey, claudePath } = deps;
 
       logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
 
       // Create skill check (only for PRs)
-      let skillCheckId: number | undefined;
+      let skillCheck: TriggerCheckRun | undefined;
       let skillCheckUrl: string | undefined;
-      if (context.pullRequest) {
+      if (deps.checks && context.pullRequest) {
         try {
-          const skillCheck = await createSkillCheck(octokit, trigger.skill, {
-            owner: context.repository.owner,
-            repo: context.repository.name,
-            headSha: context.pullRequest.headSha,
-          });
-          skillCheckId = skillCheck.checkRunId;
+          skillCheck = await deps.checks.start(trigger.skill);
           skillCheckUrl = skillCheck.url;
         } catch (error) {
           console.error(`::warning::Failed to create skill check for ${trigger.skill}: ${error}`);
@@ -185,12 +203,9 @@ export async function executeTrigger(
         console.log(`Found ${report.findings.length} findings`);
 
         // Update skill check with results
-        if (skillCheckId && context.pullRequest) {
+        if (skillCheck && context.pullRequest) {
           try {
-            await updateSkillCheck(octokit, skillCheckId, report, {
-              owner: context.repository.owner,
-              repo: context.repository.name,
-              headSha: context.pullRequest.headSha,
+            await skillCheck.complete(report, {
               failOn,
               reportOn,
               minConfidence,
@@ -218,6 +233,7 @@ export async function executeTrigger(
         logGroupEnd();
         return {
           triggerName: trigger.name,
+          skillName: trigger.skill,
           report,
           renderResult,
           failOn,
@@ -237,13 +253,9 @@ export async function executeTrigger(
         });
 
         // Mark skill check as failed
-        if (skillCheckId && context.pullRequest) {
+        if (skillCheck && context.pullRequest) {
           try {
-            await failSkillCheck(octokit, skillCheckId, error, {
-              owner: context.repository.owner,
-              repo: context.repository.name,
-              headSha: context.pullRequest.headSha,
-            });
+            await skillCheck.fail(error);
           } catch (checkError) {
             console.error(`::warning::Failed to mark skill check as failed: ${checkError}`);
           }
@@ -251,7 +263,7 @@ export async function executeTrigger(
 
         console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
         logGroupEnd();
-        return { triggerName: trigger.name, error };
+        return { triggerName: trigger.name, skillName: trigger.skill, error };
       }
     },
   );

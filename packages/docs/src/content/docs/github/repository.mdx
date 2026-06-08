@@ -88,4 +88,6 @@ Add the generated app secrets:
   </div>
 </dl>
 
-Then use `actions/create-github-app-token` and pass the app token to Warden.
+Then use the split workflow from [Workflow](/github/workflow/): run
+`mode: analyze`, create the GitHub App token, then pass that token to
+`mode: report`.

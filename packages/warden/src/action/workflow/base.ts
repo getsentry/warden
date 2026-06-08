@@ -14,10 +14,11 @@ import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import { buildFindingsOutput } from '../reporting/output.js';
+import type { ReplayTriggerResult } from '../reporting/output.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
-import type { TriggerResult } from '../triggers/executor.js';
 import type { ActionInputs } from '../inputs.js';
+import type { TriggerResult } from '../triggers/executor.js';
 
 /**
  * Sentinel error thrown by setFailed() so the top-level catch handler
@@ -222,9 +223,13 @@ export async function findClaudeCodeExecutable(): Promise<string> {
 // -----------------------------------------------------------------------------
 
 /**
- * Log trigger error summary and fail if all triggers failed.
+ * Log trigger error summary and, by default, fail if all triggers failed.
  */
-export function handleTriggerErrors(triggerErrors: string[], totalTriggers: number): void {
+export function handleTriggerErrors(
+  triggerErrors: string[],
+  totalTriggers: number,
+  options: { failAll?: boolean } = {}
+): void {
   if (triggerErrors.length === 0) {
     return;
   }
@@ -236,7 +241,7 @@ export function handleTriggerErrors(triggerErrors: string[], totalTriggers: numb
   logGroupEnd();
 
   // Fail if ALL triggers failed (no successful analysis was performed)
-  if (triggerErrors.length === totalTriggers && totalTriggers > 0) {
+  if ((options.failAll ?? true) && triggerErrors.length === totalTriggers && totalTriggers > 0) {
     setFailed(`All ${totalTriggers} trigger(s) failed: ${triggerErrors.join('; ')}`);
   }
 }
@@ -374,10 +379,13 @@ export function getFindingsOutputPath(repoPath?: string): string {
 export function writeFindingsOutput(
   reports: SkillReport[],
   context: EventContext,
-  findingObservations: FindingObservation[] = []
+  findingObservations: FindingObservation[] = [],
+  options: { triggerResults?: ReplayTriggerResult[] } = {}
 ): string {
   const filePath = getFindingsOutputPath(context.repoPath);
-  const output = buildFindingsOutput(reports, context, findingObservations);
+  const output = buildFindingsOutput(reports, context, findingObservations, {
+    triggerResults: options.triggerResults,
+  });
 
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, JSON.stringify(output, null, 2));

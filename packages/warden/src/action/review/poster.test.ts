@@ -95,6 +95,7 @@ describe('postTriggerReview', () => {
   it('returns early when no report exists', async () => {
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: undefined,
     };
 
@@ -115,6 +116,7 @@ describe('postTriggerReview', () => {
   it('skips posting when no findings and reportOnSuccess is false', async () => {
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'No issues found',
@@ -142,6 +144,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding({ severity: 'low' });
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -161,6 +164,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -191,6 +195,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -235,6 +240,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -305,6 +311,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -366,6 +373,7 @@ describe('postTriggerReview', () => {
     const newFinding = createFinding({ id: 'new-finding', location: { path: 'test.ts', startLine: 20 } });
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 2 issues',
@@ -427,10 +435,68 @@ describe('postTriggerReview', () => {
     ]);
   });
 
+  it('throws duplicate action write failures when post errors are fatal', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    const existingComment = createExistingComment({
+      isWarden: true,
+      findingId: finding.id,
+    });
+
+    vi.mocked(deduplicateFindings).mockResolvedValue({
+      newFindings: [],
+      duplicateActions: [
+        {
+          type: 'update_warden',
+          originalFindingId: finding.id,
+          finding,
+          existingComment,
+          matchType: 'hash',
+        },
+      ],
+    });
+    vi.mocked(processDuplicateActions).mockResolvedValue({
+      updated: 0,
+      reacted: 0,
+      skipped: 0,
+      failed: 1,
+    });
+
+    await expect(
+      postTriggerReview(
+        {
+          result,
+          existingComments: [existingComment],
+          apiKey: 'test-key',
+          failOnPostError: true,
+        },
+        mockDeps
+      )
+    ).rejects.toThrow('Failed to process 1 duplicate actions');
+  });
+
   it('posts REQUEST_CHANGES when all findings deduplicated but failOn threshold met', async () => {
     const finding = createFinding({ severity: 'high' });
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -514,6 +580,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -549,6 +616,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -592,6 +660,7 @@ describe('postTriggerReview', () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -627,6 +696,7 @@ describe('postTriggerReview', () => {
     const finding2 = createFinding({ id: 'f2', location: { path: 'test.ts', startLine: 20 } });
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 2 issues',
@@ -677,6 +747,7 @@ describe('postTriggerReview', () => {
 
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 2 issues',
@@ -751,6 +822,7 @@ describe('postTriggerReview', () => {
 
     const result: TriggerResult = {
       triggerName: 'test-trigger',
+      skillName: 'test-skill',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',

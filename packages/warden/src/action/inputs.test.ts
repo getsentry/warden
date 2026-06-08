@@ -135,6 +135,26 @@ describe('parseActionInputs', () => {
       expect(inputs.baseConfigPath).toBeUndefined();
     });
   });
+
+  describe('mode handling', () => {
+    it('defaults to run mode', () => {
+      const inputs = parseActionInputs();
+      expect(inputs.mode).toBe('run');
+    });
+
+    it('parses report mode and findings-file', () => {
+      process.env['INPUT_MODE'] = 'report';
+      process.env['INPUT_FINDINGS_FILE'] = 'warden-findings.json';
+      const inputs = parseActionInputs();
+      expect(inputs.mode).toBe('report');
+      expect(inputs.findingsFile).toBe('warden-findings.json');
+    });
+
+    it('rejects invalid mode', () => {
+      process.env['INPUT_MODE'] = 'later';
+      expect(() => parseActionInputs()).toThrow('Invalid mode "later"');
+    });
+  });
 });
 
 describe('setupAuthEnv', () => {
@@ -149,6 +169,7 @@ describe('setupAuthEnv', () => {
       anthropicApiKey: 'sk-ant-api-key',
       oauthToken: '',
       githubToken: 'test',
+      mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
       parallel: 4,
@@ -163,6 +184,7 @@ describe('setupAuthEnv', () => {
       anthropicApiKey: '',
       oauthToken: 'sk-ant-oat-oauth-token',
       githubToken: 'test',
+      mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
       parallel: 4,
@@ -180,6 +202,7 @@ describe('setupAuthEnv', () => {
       anthropicApiKey: '',
       oauthToken: 'sk-ant-oat-oauth-token',
       githubToken: 'test',
+      mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
       parallel: 4,
@@ -199,6 +222,7 @@ describe('setupAuthEnv', () => {
       anthropicApiKey: '',
       oauthToken: '',
       githubToken: 'test',
+      mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
       parallel: 4,
@@ -216,10 +240,23 @@ describe('validateInputs', () => {
       anthropicApiKey: 'sk-ant-api-key',
       oauthToken: '',
       githubToken: 'test',
+      mode: 'run',
       baseSkillRoot: '.warden-org',
       configPath: 'warden.toml',
       maxFindings: 50,
       parallel: 4,
     })).toThrow('base-skill-root requires base-config-path');
+  });
+
+  it('requires findings-file in report mode', () => {
+    expect(() => validateInputs({
+      anthropicApiKey: 'sk-ant-api-key',
+      oauthToken: '',
+      githubToken: 'test',
+      mode: 'report',
+      configPath: 'warden.toml',
+      maxFindings: 50,
+      parallel: 4,
+    })).toThrow('findings-file is required when mode is report');
   });
 });

@@ -139,7 +139,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: \${{ github.event.pull_request.head.sha }}
-      - uses: getsentry/warden@v${majorVersion}
+
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v${majorVersion}
+        with:
+          mode: analyze
+
+      - name: Report
+        uses: getsentry/warden@v${majorVersion}
+        with:
+          mode: report
+          findings-file: \${{ steps.warden-analyze.outputs.findings-file }}
 `;
 }
 

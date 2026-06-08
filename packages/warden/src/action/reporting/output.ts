@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import {
+  AuxiliaryUsageMapSchema,
   FindingSchema,
   GitHubEventTypeSchema,
   LocationSchema,
@@ -20,6 +21,42 @@ const ExportedFindingSchema = z.object({
   additionalLocations: z.array(LocationSchema).optional(),
   sourceSnippet: SourceSnippetSchema.optional(),
 });
+
+const TriggerErrorSchema = z.object({
+  name: z.string().optional(),
+  message: z.string(),
+});
+
+// Durable analyze/report replay rows join by triggerName plus configured
+// skillName. `report.skill` is preserved as report identity and may differ for
+// local path skills with frontmatter names.
+const TriggerRunResultBaseSchema = z.object({
+  triggerName: z.string(),
+  skillName: z.string(),
+});
+
+const ReplaySkillReportSchema = z.object({
+  skill: z.string(),
+  summary: z.string(),
+  findings: z.array(FindingSchema),
+  durationMs: z.number().nonnegative().optional(),
+  usage: UsageStatsSchema.optional(),
+  auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+  model: z.string().optional(),
+});
+
+export const TriggerRunResultSchema = z.discriminatedUnion('status', [
+  TriggerRunResultBaseSchema.extend({
+    status: z.literal('success'),
+    report: ReplaySkillReportSchema,
+    error: z.never().optional(),
+  }),
+  TriggerRunResultBaseSchema.extend({
+    status: z.literal('error'),
+    report: z.never().optional(),
+    error: TriggerErrorSchema,
+  }),
+]);
 
 export const FindingsOutputSchema = z.object({
   version: z.literal('1'),
@@ -56,14 +93,64 @@ export const FindingsOutputSchema = z.object({
     usage: UsageStatsSchema.optional(),
     findings: z.array(ExportedFindingSchema),
   })),
+  triggerResults: z.array(TriggerRunResultSchema).optional(),
   findingObservations: z.array(FindingObservationSchema),
 });
 
 export type FindingsOutput = z.infer<typeof FindingsOutputSchema>;
 
+export interface ReplayTriggerResult {
+  triggerName: string;
+  skillName: string;
+  report?: SkillReport;
+  error?: unknown;
+}
+
 interface BuildFindingsOutputOptions {
   timestamp?: string;
   runId?: string;
+  triggerResults?: ReplayTriggerResult[];
+}
+
+function serializeTriggerError(error: unknown): z.infer<typeof TriggerErrorSchema> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  return { message: String(error) };
+}
+
+function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillReportSchema> {
+  return {
+    skill: report.skill,
+    summary: report.summary,
+    findings: report.findings,
+    durationMs: report.durationMs,
+    usage: report.usage,
+    auxiliaryUsage: report.auxiliaryUsage,
+    model: report.model,
+  };
+}
+
+function serializeTriggerResult(result: ReplayTriggerResult): z.infer<typeof TriggerRunResultSchema> {
+  if (result.report) {
+    return {
+      triggerName: result.triggerName,
+      skillName: result.skillName,
+      status: 'success',
+      report: serializeReplayReport(result.report),
+    };
+  }
+
+  return {
+    triggerName: result.triggerName,
+    skillName: result.skillName,
+    status: 'error',
+    error: serializeTriggerError(result.error ?? 'Trigger did not produce a report'),
+  };
 }
 
 /** Build the public findings export payload. */
@@ -120,6 +207,9 @@ export function buildFindingsOutput(
         sourceSnippet: f.sourceSnippet,
       })),
     })),
+    ...(options.triggerResults && {
+      triggerResults: options.triggerResults.map(serializeTriggerResult),
+    }),
     findingObservations,
   };
 

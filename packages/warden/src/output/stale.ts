@@ -139,14 +139,20 @@ export interface ResolveResult {
   resolvedIds: Set<number>;
 }
 
+interface ResolveOptions {
+  failOnError?: boolean;
+}
+
 /**
  * Resolve stale comment threads via GraphQL.
  * Returns the count and IDs of threads successfully resolved.
  * Limited to MAX_STALE_RESOLUTIONS per run as a safeguard.
+ * Set failOnError when stale cleanup is part of report-mode delivery.
  */
 export async function resolveStaleComments(
   octokit: Octokit,
-  staleComments: ExistingComment[]
+  staleComments: ExistingComment[],
+  options: ResolveOptions = {}
 ): Promise<ResolveResult> {
   const resolvedIds = new Set<number>();
 
@@ -171,11 +177,16 @@ export async function resolveStaleComments(
       const errorMessage = String(error);
       if (errorMessage.includes('Resource not accessible')) {
         // Permission error affects all threads; log once and stop trying
-        console.warn(
-          `Failed to resolve thread: GitHub App may need 'contents:write' permission. ` +
-            `See: https://github.com/orgs/community/discussions/44650`
-        );
+        const message = `Failed to resolve thread: GitHub App may need 'contents:write' permission. ` +
+          `See: https://github.com/orgs/community/discussions/44650`;
+        if (options.failOnError) {
+          throw new Error(message);
+        }
+        console.warn(message);
         break;
+      }
+      if (options.failOnError) {
+        throw error;
       }
       console.warn(`Failed to resolve thread for comment ${comment.id}: ${error}`);
     }

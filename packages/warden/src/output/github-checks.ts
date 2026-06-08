@@ -48,6 +48,14 @@ export interface UpdateSkillCheckOptions extends CheckOptions {
 }
 
 /**
+ * Options for creating a completed skill check.
+ */
+export interface CreateCompletedSkillCheckOptions extends UpdateSkillCheckOptions {
+  /** Optional check run name override. Defaults to the report skill name. */
+  checkName?: string;
+}
+
+/**
  * Summary data for the core warden check.
  */
 export interface CoreCheckSummaryData {
@@ -213,16 +221,17 @@ export async function createSkillCheck(
   };
 }
 
-/**
- * Update a skill check with results.
- * Completes the check with conclusion, summary, and annotations.
- */
-export async function updateSkillCheck(
-  octokit: Octokit,
-  checkRunId: number,
+function buildSkillCheckPayload(
   report: SkillReport,
   options: UpdateSkillCheckOptions
-): Promise<void> {
+): {
+  conclusion: CheckConclusion;
+  output: {
+    title: string;
+    summary: string;
+    annotations: CheckAnnotation[];
+  };
+} {
   // Conclusion is based on confidence-filtered findings (consistent with CLI path)
   const filteredForConclusion = filterFindings(report.findings, undefined, options.minConfidence);
   const conclusion =
@@ -237,18 +246,63 @@ export async function updateSkillCheck(
     ? 'No issues'
     : `${filteredCount} issue${filteredCount === 1 ? '' : 's'}`);
 
-  await octokit.checks.update({
-    owner: options.owner,
-    repo: options.repo,
-    check_run_id: checkRunId,
-    status: 'completed',
+  return {
     conclusion,
-    completed_at: new Date().toISOString(),
     output: {
       title,
       summary,
       annotations,
     },
+  };
+}
+
+/**
+ * Create a completed skill check with results.
+ */
+export async function createCompletedSkillCheck(
+  octokit: Octokit,
+  report: SkillReport,
+  options: CreateCompletedSkillCheckOptions
+): Promise<CreateCheckResult> {
+  const payload = buildSkillCheckPayload(report, options);
+
+  const { data } = await octokit.checks.create({
+    owner: options.owner,
+    repo: options.repo,
+    name: `warden: ${options.checkName ?? report.skill}`,
+    head_sha: options.headSha,
+    status: 'completed',
+    conclusion: payload.conclusion,
+    completed_at: new Date().toISOString(),
+    output: payload.output,
+  });
+
+  return {
+    checkRunId: data.id,
+    url: data.html_url ?? '',
+  };
+}
+
+/**
+ * Update a skill check with results.
+ * Completes the check with conclusion, summary, and annotations.
+ */
+export async function updateSkillCheck(
+  octokit: Octokit,
+  checkRunId: number,
+  report: SkillReport,
+  options: UpdateSkillCheckOptions
+): Promise<void> {
+  const payload = buildSkillCheckPayload(report, options);
+
+  await octokit.checks.update({
+    owner: options.owner,
+    repo: options.repo,
+    check_run_id: checkRunId,
+    status: 'completed',
+    conclusion: payload.conclusion,
+    completed_at: new Date().toISOString(),
+    output: payload.output,
   });
 }
 
@@ -278,6 +332,37 @@ export async function failSkillCheck(
 }
 
 /**
+ * Create a completed failed skill check without first creating an in-progress check.
+ */
+export async function createFailedSkillCheck(
+  octokit: Octokit,
+  skillName: string,
+  error: unknown,
+  options: CheckOptions
+): Promise<CreateCheckResult> {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  const { data } = await octokit.checks.create({
+    owner: options.owner,
+    repo: options.repo,
+    name: `warden: ${skillName}`,
+    head_sha: options.headSha,
+    status: 'completed',
+    conclusion: 'failure',
+    completed_at: new Date().toISOString(),
+    output: {
+      title: 'Skill execution failed',
+      summary: `Error: ${errorMessage}`,
+    },
+  });
+
+  return {
+    checkRunId: data.id,
+    url: data.html_url ?? '',
+  };
+}
+
+/**
  * Create the core warden check run.
  * The check is created with status: in_progress.
  */
@@ -292,6 +377,43 @@ export async function createCoreCheck(
     head_sha: options.headSha,
     status: 'in_progress',
     started_at: new Date().toISOString(),
+  });
+
+  return {
+    checkRunId: data.id,
+    url: data.html_url ?? '',
+  };
+}
+
+/**
+ * Create a completed core warden check with overall summary.
+ */
+export async function createCompletedCoreCheck(
+  octokit: Octokit,
+  summaryData: CoreCheckSummaryData,
+  conclusion: CheckConclusion,
+  options: CheckOptions
+): Promise<CreateCheckResult> {
+  const summary = buildCoreSummary(summaryData);
+
+  const title = summaryData.title ?? (
+    summaryData.totalFindings === 0
+      ? 'No issues'
+      : `${summaryData.totalFindings} issue${summaryData.totalFindings === 1 ? '' : 's'}`
+  );
+
+  const { data } = await octokit.checks.create({
+    owner: options.owner,
+    repo: options.repo,
+    name: 'warden',
+    head_sha: options.headSha,
+    status: 'completed',
+    conclusion,
+    completed_at: new Date().toISOString(),
+    output: {
+      title,
+      summary,
+    },
   });
 
   return {

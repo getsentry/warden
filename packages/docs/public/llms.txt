@@ -558,6 +558,7 @@ name: Warden
 permissions:
   contents: write
   pull-requests: write
+  checks: write
 
 on:
   pull_request:
@@ -573,15 +574,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: getsentry/warden@v0
+
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          mode: analyze
+
+      - name: Report
+        uses: getsentry/warden@v0
+        with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
 ```
 
 ### Action Inputs
 
 | Input | Default | Description |
 |-------|---------|-------------|
+| `mode` | `run` | Action mode: `analyze`, `report`, or legacy `run`. Split `analyze`/`report` modes are pull request workflow only. |
+| `findings-file` | - | Structured findings file to read in `mode: report` |
 | `github-token` | `GITHUB_TOKEN` | GitHub token for posting comments |
 | `anthropic-api-key` | - | Anthropic API key input. Prefer `WARDEN_ANTHROPIC_API_KEY` env for new workflows. |
 | `config-path` | `warden.toml` | Path to config file |
@@ -591,6 +603,38 @@ jobs:
 | `request-changes` | `false` | Whether to request changes on PR reviews |
 | `fail-check` | `false` | Whether to fail the check run |
 | `parallel` | `5` | Maximum concurrent trigger executions |
+
+### Split Analyze and Report
+
+Use `mode: analyze` first to run skills and write a structured findings file
+without creating checks or comments. Then run `mode: report` with
+`findings-file` to create completed checks and post comments. For GitHub App
+runs, create the app token between those steps so reporting uses fresh write
+credentials. Pass the intended `config-path`, `base-config-path`,
+`base-skill-root`, and action-level reporting inputs to the report step; report
+mode reloads config and applies the report step's inputs.
+
+```yaml
+- name: Analyze
+  id: warden-analyze
+  uses: getsentry/warden@v0
+  with:
+    mode: analyze
+
+- name: Create Warden app token
+  id: warden-token
+  uses: actions/create-github-app-token@v3
+  with:
+    app-id: ${{ secrets.WARDEN_APP_ID }}
+    private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
+
+- name: Report
+  uses: getsentry/warden@v0
+  with:
+    mode: report
+    findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
+    github-token: ${{ steps.warden-token.outputs.token }}
+```
 
 ## GitHub App (Optional)
 
@@ -607,17 +651,26 @@ Add these organization secrets:
 | `WARDEN_APP_ID` | App ID from the setup command output |
 | `WARDEN_PRIVATE_KEY` | Private key (full PEM contents) |
 
-Then update your workflow to use the app token:
+Create the app token immediately before the report step:
 
 ```yaml
-- uses: actions/create-github-app-token@v1
+- name: Analyze
+  id: warden-analyze
+  uses: getsentry/warden@v0
+  with:
+    mode: analyze
+
+- uses: actions/create-github-app-token@v3
   id: app-token
   with:
     app-id: ${{ secrets.WARDEN_APP_ID }}
     private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
 
-- uses: getsentry/warden@v0
+- name: Report
+  uses: getsentry/warden@v0
   with:
+    mode: report
+    findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
     github-token: ${{ steps.app-token.outputs.token }}
 ```
 

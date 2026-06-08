@@ -14,6 +14,13 @@ inputs:
     description: 'GitHub token for API access (defaults to GITHUB_TOKEN)'
     required: false
     default: ${{ github.token }}
+  mode:
+    description: 'Action mode: analyze, report, or legacy run. analyze/report are pull request workflow only. Defaults to run for compatibility.'
+    required: false
+    default: 'run'
+  findings-file:
+    description: 'Path to structured JSON findings file to read in report mode.'
+    required: false
   base-config-path:
     description: 'Path to the org-wide base warden.toml file to load before the repo config (relative to repo root)'
     required: false
@@ -72,6 +79,8 @@ runs:
       env:
         INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_FINDINGS_FILE: ${{ inputs.findings-file }}
         INPUT_BASE_CONFIG_PATH: ${{ inputs.base-config-path }}
         INPUT_BASE_SKILL_ROOT: ${{ inputs.base-skill-root }}
         INPUT_CONFIG_PATH: ${{ inputs.config-path }}

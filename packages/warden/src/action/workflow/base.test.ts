@@ -171,6 +171,7 @@ function createInputs(overrides: Partial<ActionInputs> = {}): ActionInputs {
     anthropicApiKey: 'test-key',
     oauthToken: '',
     githubToken: 'github-token',
+    mode: 'run',
     configPath: 'warden.toml',
     maxFindings: 50,
     parallel: 4,

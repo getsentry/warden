@@ -102,6 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     env:
       WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
       WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
@@ -112,15 +113,24 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: actions/create-github-app-token@v2
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
+        with:
+          mode: analyze
+
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.WARDEN_APP_ID }}
           private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
-      - uses: getsentry/warden@v0
+      - name: Report
+        uses: getsentry/warden@v0
         with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
           github-token: ${{ steps.app-token.outputs.token }}
 ```
 

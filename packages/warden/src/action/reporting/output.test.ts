@@ -23,6 +23,130 @@ describe('findings output schema', () => {
     });
   });
 
+  it('includes trigger run results for split report mode', () => {
+    const report = createReport();
+    const output = buildFindingsOutput([report], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+      triggerResults: [
+        {
+          triggerName: 'test-trigger',
+          skillName: 'test-skill',
+          report,
+        },
+        {
+          triggerName: 'failed-trigger',
+          skillName: 'failed-skill',
+          error: new Error('Token expired'),
+        },
+      ],
+    });
+
+    expect(FindingsOutputSchema.parse(output)).toEqual(output);
+    expect(output.triggerResults).toEqual([
+      {
+        triggerName: 'test-trigger',
+        skillName: 'test-skill',
+        status: 'success',
+        report,
+      },
+      {
+        triggerName: 'failed-trigger',
+        skillName: 'failed-skill',
+        status: 'error',
+        error: {
+          name: 'Error',
+          message: 'Token expired',
+        },
+      },
+    ]);
+  });
+
+  it('serializes trigger results with the configured skill identity', () => {
+    const report = createReport({ skill: 'frontmatter-skill' });
+    const output = buildFindingsOutput([report], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+      triggerResults: [
+        {
+          triggerName: 'test-trigger',
+          skillName: 'config-skill',
+          report,
+        },
+      ],
+    });
+
+    expect(output.triggerResults?.[0]).toMatchObject({
+      triggerName: 'test-trigger',
+      skillName: 'config-skill',
+      status: 'success',
+      report,
+    });
+  });
+
+  it('projects trigger reports to fields needed for split-mode replay', () => {
+    const report = createReport({
+      metadata: { internal: true },
+      runtime: 'pi',
+      failedHunks: 1,
+    });
+    const output = buildFindingsOutput([report], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+      triggerResults: [
+        {
+          triggerName: 'test-trigger',
+          skillName: 'test-skill',
+          report,
+        },
+      ],
+    });
+
+    expect(output.triggerResults?.[0]).toMatchObject({
+      status: 'success',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+      },
+    });
+    expect(output.triggerResults?.[0]).not.toHaveProperty('report.metadata');
+    expect(output.triggerResults?.[0]).not.toHaveProperty('report.runtime');
+    expect(output.triggerResults?.[0]).not.toHaveProperty('report.failedHunks');
+  });
+
+  it('requires status-specific trigger result data', () => {
+    const output = buildFindingsOutput([createReport()], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+    });
+
+    expect(() =>
+      FindingsOutputSchema.parse({
+        ...output,
+        triggerResults: [
+          {
+            triggerName: 'test-trigger',
+            skillName: 'test-skill',
+            status: 'success',
+          },
+        ],
+      })
+    ).toThrow();
+
+    expect(() =>
+      FindingsOutputSchema.parse({
+        ...output,
+        triggerResults: [
+          {
+            triggerName: 'failed-trigger',
+            skillName: 'test-skill',
+            status: 'error',
+          },
+        ],
+      })
+    ).toThrow();
+  });
+
   it('rejects outcome details that do not match the observation kind', () => {
     const output = buildFindingsOutput([createReport()], createContext(), [], {
       timestamp: '2026-01-01T00:00:00.000Z',
@@ -81,11 +205,12 @@ function createFinding(): Finding {
   };
 }
 
-function createReport(): SkillReport {
+function createReport(overrides: Partial<SkillReport> = {}): SkillReport {
   return {
     skill: 'test-skill',
     summary: 'Found 1 issue',
     findings: [createFinding()],
+    ...overrides,
   };
 }
 

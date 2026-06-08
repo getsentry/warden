@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { join } from 'node:path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Octokit } from '@octokit/rest';
 import type { ActionInputs } from '../inputs.js';
-import type { SkillReport, Finding } from '../../types/index.js';
+import type { EventContext, SkillReport, Finding } from '../../types/index.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import type * as BaseWorkflow from './base.js';
 
@@ -15,6 +17,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const FIXTURES_DIR = join(__dirname, '__fixtures__');
 const ACTION_MISMATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'action-mismatch');
 const BASE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'base-only');
+const DUPLICATE_TRIGGER_FIXTURES_DIR = join(FIXTURES_DIR, 'duplicate-trigger');
 const NO_MATCH_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match');
 const NO_MATCH_RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-runtime-claude');
 const NO_CONFIG_FIXTURES_DIR = join(FIXTURES_DIR, 'no-config');
@@ -52,7 +55,7 @@ vi.mock('../../output/dedup.js', async () => {
     ),
     // Mock functions that make GitHub API calls
     fetchExistingComments: vi.fn(() => Promise.resolve([])),
-    processDuplicateActions: vi.fn(() => Promise.resolve({ updated: 0, reacted: 0, failed: 0 })),
+    processDuplicateActions: vi.fn(() => Promise.resolve({ updated: 0, reacted: 0, skipped: 0, failed: 0 })),
   };
 });
 
@@ -113,17 +116,19 @@ vi.mock('./base.js', async () => {
 
 // Import after mocks
 import { runSkillTask } from '../../cli/output/tasks.js';
-import { fetchExistingComments, deduplicateFindings } from '../../output/dedup.js';
+import { fetchExistingComments, deduplicateFindings, processDuplicateActions } from '../../output/dedup.js';
 import { evaluateFixAttempts } from '../fix-evaluation/index.js';
 import { setFailed, writeFindingsOutput } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { Semaphore } from '../../utils/index.js';
+import { buildFindingsOutput } from '../reporting/output.js';
 
 // Type the mocks
 const mockRunSkillTask = vi.mocked(runSkillTask);
 const mockFetchExistingComments = vi.mocked(fetchExistingComments);
 const mockDeduplicateFindings = vi.mocked(deduplicateFindings);
+const mockProcessDuplicateActions = vi.mocked(processDuplicateActions);
 const mockEvaluateFixAttempts = vi.mocked(evaluateFixAttempts);
 const mockSetFailed = vi.mocked(setFailed);
 const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
@@ -209,6 +214,7 @@ function createDefaultInputs(overrides: Partial<ActionInputs> = {}): ActionInput
     anthropicApiKey: 'test-api-key',
     oauthToken: '',
     githubToken: 'test-github-token',
+    mode: 'run',
     configPath: 'warden.toml',
     maxFindings: 50,
     parallel: 2,
@@ -234,6 +240,48 @@ function createSkillReport(overrides: Partial<SkillReport> = {}): SkillReport {
     findings: [],
     ...overrides,
   };
+}
+
+function createEventContext(repoPath: string): EventContext {
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: {
+      owner: 'test-owner',
+      name: 'test-repo',
+      fullName: 'test-owner/test-repo',
+      defaultBranch: 'main',
+    },
+    pullRequest: {
+      number: 123,
+      title: 'Test PR',
+      body: 'Test body',
+      author: 'test-user',
+      baseBranch: 'main',
+      headBranch: 'feature',
+      headSha: PR_HEAD_SHA,
+      baseSha: 'base123sha456',
+      files: [],
+    },
+    repoPath,
+  };
+}
+
+function writeFindingsArtifact(
+  reports: SkillReport[],
+  triggerResults: NonNullable<Parameters<typeof buildFindingsOutput>[3]>['triggerResults'],
+  mutate?: (output: ReturnType<typeof buildFindingsOutput>) => void
+): string {
+  const tempDir = mkdtempSync(join(tmpdir(), 'warden-report-mode-'));
+  const filePath = join(tempDir, 'warden-findings.json');
+  const output = buildFindingsOutput(reports, createEventContext(FIXTURES_DIR), [], {
+    timestamp: '2026-01-01T00:00:00.000Z',
+    runId: '123',
+    triggerResults,
+  });
+  mutate?.(output);
+  writeFileSync(filePath, JSON.stringify(output, null, 2));
+  return filePath;
 }
 
 function createExistingWardenComment(overrides: Partial<ExistingComment> = {}): ExistingComment {
@@ -280,6 +328,616 @@ describe('runPRWorkflow', () => {
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();
+  });
+
+  describe('split action modes', () => {
+    it('analyze mode writes findings without creating GitHub checks or reviews', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput).toHaveBeenCalledWith(
+        [report],
+        expect.objectContaining({
+          repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
+        }),
+        [],
+        {
+          triggerResults: [
+            expect.objectContaining({
+              triggerName: 'test-skill',
+              skillName: 'test-skill',
+              report,
+            }),
+          ],
+        }
+      );
+    });
+
+    it('report mode publishes completed checks from the findings file without rerunning skills', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: test-skill',
+          status: 'completed',
+        })
+      );
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+        })
+      );
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+          pull_number: 123,
+          commit_id: PR_HEAD_SHA,
+        })
+      );
+    });
+
+    it('report mode renders checks and reviews from report-step inputs', async () => {
+      const report = createSkillReport({
+        findings: [
+          createFinding({
+            id: 'finding-1',
+            severity: 'high',
+            location: { path: 'src/test.ts', startLine: 10 },
+          }),
+          createFinding({
+            id: 'finding-2',
+            severity: 'high',
+            location: { path: 'src/test.ts', startLine: 11 },
+          }),
+        ],
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({
+            mode: 'report',
+            findingsFile,
+            failOn: 'high',
+            reportOn: 'high',
+            failCheck: false,
+            maxFindings: 1,
+            requestChanges: true,
+          }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      const skillCheck = vi.mocked(mockOctokit.checks.create).mock.calls.find(([payload]) =>
+        payload?.name === 'warden: test-skill'
+      )?.[0];
+      expect(skillCheck).toMatchObject({
+        conclusion: 'neutral',
+      });
+
+      const review = vi.mocked(mockOctokit.pulls.createReview).mock.calls[0]?.[0];
+      expect(review).toMatchObject({
+        event: 'REQUEST_CHANGES',
+      });
+      expect(review?.comments).toHaveLength(1);
+      expect(review?.comments?.[0]).toMatchObject({
+        line: 10,
+      });
+    });
+
+    it('report mode joins findings by configured skill name when the report skill differs', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({
+        skill: 'frontmatter-skill',
+        findings: [finding],
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: test-skill',
+          status: 'completed',
+        })
+      );
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pull_number: 123,
+          commit_id: PR_HEAD_SHA,
+        })
+      );
+      expect(mockSetFailed).not.toHaveBeenCalledWith(
+        expect.stringContaining('Findings file has no result')
+      );
+    });
+
+    it('report mode replays duplicate skill trigger results in artifact order', async () => {
+      const highFinding = createFinding({ id: 'high-finding', severity: 'high' });
+      const lowFinding = createFinding({ id: 'low-finding', severity: 'low' });
+      const highReport = createSkillReport({
+        summary: 'High report',
+        findings: [highFinding],
+      });
+      const lowReport = createSkillReport({
+        summary: 'Low report',
+        findings: [lowFinding],
+      });
+      const findingsFile = writeFindingsArtifact([highReport, lowReport], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report: highReport,
+        },
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report: lowReport,
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          DUPLICATE_TRIGGER_FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: test-skill',
+          output: expect.objectContaining({
+            summary: expect.stringContaining('High report'),
+          }),
+        })
+      );
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: test-skill',
+          output: expect.objectContaining({
+            summary: expect.stringContaining('Low report'),
+          }),
+        })
+      );
+    });
+
+    it('report mode fails GitHub check write errors without creating in-progress checks', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+      vi.mocked(mockOctokit.checks.create).mockRejectedValueOnce(new Error('Bad credentials'));
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('Bad credentials');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: test-skill',
+          status: 'completed',
+        })
+      );
+      expect(mockOctokit.checks.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'in_progress',
+        })
+      );
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('Bad credentials'),
+          }),
+        })
+      );
+      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+    });
+
+    it('report mode creates a failed core check when a skipped check write fails', async () => {
+      const report = createSkillReport({
+        skill: 'run-skill',
+        findings: [createFinding()],
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'run-skill',
+          skillName: 'run-skill',
+          report,
+        },
+      ]);
+      vi.mocked(mockOctokit.checks.create).mockRejectedValueOnce(
+        new Error('Skipped check credentials failed')
+      );
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            PARTIAL_MATCH_FIXTURES_DIR
+          )
+        ).rejects.toThrow('Skipped check credentials failed');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: skipped-skill',
+          status: 'completed',
+        })
+      );
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('Skipped check credentials failed'),
+          }),
+        })
+      );
+      expect(mockOctokit.checks.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: run-skill',
+        })
+      );
+    });
+
+    it('report mode publishes failed checks for analyze-phase trigger errors', async () => {
+      const findingsFile = writeFindingsArtifact([], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          error: new Error('Analyze failed'),
+        },
+      ]);
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('All 1 trigger(s) failed: test-skill: Analyze failed');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: test-skill',
+          status: 'completed',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            summary: expect.stringContaining('Analyze failed'),
+          }),
+        })
+      );
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+        })
+      );
+    });
+
+    it.each([
+      {
+        name: 'repository',
+        expected: 'Findings file is for other/repo',
+        mutate: (output: ReturnType<typeof buildFindingsOutput>) => {
+          output.repository = {
+            owner: 'other',
+            name: 'repo',
+            fullName: 'other/repo',
+          };
+        },
+      },
+      {
+        name: 'event',
+        expected: 'Findings file event schedule does not match pull_request',
+        mutate: (output: ReturnType<typeof buildFindingsOutput>) => {
+          output.event = 'schedule';
+        },
+      },
+      {
+        name: 'missing pull request metadata',
+        expected: 'Findings file is missing pull request metadata',
+        mutate: (output: ReturnType<typeof buildFindingsOutput>) => {
+          delete output.pullRequest;
+        },
+      },
+      {
+        name: 'pull request number',
+        expected: 'Findings file is for PR #456',
+        mutate: (output: ReturnType<typeof buildFindingsOutput>) => {
+          output.pullRequest!.number = 456;
+        },
+      },
+      {
+        name: 'head SHA',
+        expected: 'Findings file head SHA stale-sha',
+        mutate: (output: ReturnType<typeof buildFindingsOutput>) => {
+          output.pullRequest!.headSha = 'stale-sha';
+        },
+      },
+    ])('report mode rejects findings files with mismatched $name', async ({ expected, mutate }) => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const findingsFile = writeFindingsArtifact(
+        [report],
+        [
+          {
+            triggerName: 'test-skill',
+            skillName: 'test-skill',
+            report,
+          },
+        ],
+        mutate
+      );
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('setFailed');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockSetFailed).toHaveBeenCalledWith(expect.stringContaining(expected));
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+    });
+
+    it('report mode creates a failed core check when review posting fails', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+      vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(
+        new Error('Bad review credentials')
+      );
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('Bad review credentials');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('Bad review credentials'),
+          }),
+        })
+      );
+    });
+
+    it('report mode creates a failed core check when stale comment resolution fails', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      mockFetchExistingComments.mockResolvedValue([
+        createExistingWardenComment({
+          title: 'Old finding',
+          description: 'Old description',
+          contentHash: 'stale-hash',
+        }),
+      ]);
+      vi.mocked(mockOctokit.graphql).mockRejectedValueOnce(
+        new Error('Resource not accessible by integration')
+      );
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('Failed to resolve stale comments');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('Failed to resolve stale comments'),
+          }),
+        })
+      );
+    });
+
+    it('report mode fails duplicate comment write failures', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      const existingComment = createExistingWardenComment({
+        findingId: finding.id,
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      mockFetchExistingComments.mockResolvedValue([existingComment]);
+      mockDeduplicateFindings.mockResolvedValue({
+        newFindings: [],
+        duplicateActions: [
+          {
+            type: 'update_warden',
+            originalFindingId: finding.id,
+            finding,
+            existingComment,
+            matchType: 'hash',
+          },
+        ],
+      });
+      mockProcessDuplicateActions.mockResolvedValue({
+        updated: 0,
+        reacted: 0,
+        skipped: 0,
+        failed: 1,
+      });
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('Failed to process 1 duplicate actions');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+        })
+      );
+    });
   });
 
   describe('review posting integration', () => {
