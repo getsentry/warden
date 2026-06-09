@@ -347,6 +347,34 @@ export function getFileLimitSkip(
 }
 
 /**
+ * Return scan-policy skips that can be decided before synthetic patch creation.
+ */
+export function getPrePatchFileSkip(
+  filename: string,
+  options: ScanPolicyOptions,
+  file?: FileChange
+): SkippedFile | undefined {
+  const diffContextSource = options.diffContextSource ?? { type: 'working-tree' };
+  const fileForGeneratedCheck: FileChange = file ?? {
+    filename,
+    status: 'added',
+    additions: 0,
+    deletions: 0,
+  };
+
+  const ignored = ignoredByBuiltinOrUser(filename, options.ignore);
+  if (ignored) {
+    return ignored;
+  }
+
+  if (!userIncludesFile(filename, options.ignore?.paths) && isGeneratedFile(fileForGeneratedCheck, options.repoPath, diffContextSource)) {
+    return { filename, reason: 'ignored:generated' };
+  }
+
+  return getFileLimitSkip(filename, options.repoPath, options.scan, diffContextSource);
+}
+
+/**
  * Apply Warden's global file ignore policy and scan budgets.
  *
  * The budget pass intentionally keeps existing file order for now. If large PRs
@@ -363,20 +391,12 @@ export function applyScanPolicy(
   const eligible: ScannableFileChange[] = [];
 
   for (const file of files) {
-    const ignored = ignoredByBuiltinOrUser(file.filename, options.ignore);
-    if (ignored) {
-      skippedFiles.push(ignored);
-      continue;
-    }
-
-    if (!userIncludesFile(file.filename, options.ignore?.paths) && isGeneratedFile(file, options.repoPath, diffContextSource)) {
-      skippedFiles.push({ filename: file.filename, reason: 'ignored:generated' });
-      continue;
-    }
-
-    const limitSkip = getFileLimitSkip(file.filename, options.repoPath, options.scan, diffContextSource);
-    if (limitSkip) {
-      skippedFiles.push(limitSkip);
+    const prePatchSkip = getPrePatchFileSkip(file.filename, {
+      ...options,
+      diffContextSource,
+    }, file);
+    if (prePatchSkip) {
+      skippedFiles.push(prePatchSkip);
       continue;
     }
 

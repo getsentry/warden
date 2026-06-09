@@ -39,4 +39,31 @@ describe('buildScheduleEventContext', () => {
       },
     ]);
   });
+
+  it('applies ignore policy while creating scheduled file changes', async () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'warden-schedule-'));
+    tempDirs.push(repoPath);
+    mkdirSync(join(repoPath, 'src'), { recursive: true });
+    writeFileSync(join(repoPath, 'src/ignored.ts'), 'const ignored = true;');
+
+    const context = await buildScheduleEventContext({
+      patterns: ['src/**/*.ts'],
+      ignore: { paths: ['src/ignored.ts'] },
+      repoPath,
+      owner: 'test',
+      name: 'repo',
+      defaultBranch: 'main',
+      headSha: 'abc123',
+    });
+
+    expect(context.pullRequest?.files).toEqual([
+      {
+        filename: 'src/ignored.ts',
+        status: 'added',
+        additions: 0,
+        deletions: 0,
+        chunks: 0,
+      },
+    ]);
+  });
 });

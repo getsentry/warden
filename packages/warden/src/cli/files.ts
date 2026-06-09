@@ -4,8 +4,8 @@ import fg from 'fast-glob';
 import ignore, { type Ignore } from 'ignore';
 import { countPatchChunks } from '../types/index.js';
 import type { FileChange } from '../types/index.js';
-import type { ScanConfig } from '../config/schema.js';
-import { getFileLimitSkip } from '../sdk/scan-policy.js';
+import type { IgnoreConfig, ScanConfig } from '../config/schema.js';
+import { getPrePatchFileSkip } from '../sdk/scan-policy.js';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 
@@ -17,6 +17,7 @@ export interface ExpandGlobOptions {
 }
 
 export interface SyntheticFileChangeOptions {
+  ignore?: IgnoreConfig;
   scan?: ScanConfig;
 }
 
@@ -53,7 +54,7 @@ function findGitRoot(startPath: string): string | null {
     const root = execGitNonInteractive(['rev-parse', '--show-toplevel'], {
       cwd: resolve(startPath),
     });
-    return root ? realpathSync(resolve(root)) : null;
+    return root ? resolve(root) : null;
   } catch {
     return null;
   }
@@ -197,12 +198,15 @@ export async function expandFileGlobs(
 
   // Load and apply gitignore rules
   const ig = loadGitignoreRules(gitRoot);
+  const cwdRelativeToGitRoot = normalizePath(relative(gitRoot, realpathSync(cwd)));
 
   // Filter files using gitignore rules
   // Normalize paths to forward slashes for consistent matching
   const filteredFiles = files.filter((file) => {
-    const resolvedFile = realpathSync(file);
-    const relativePath = normalizePath(relative(gitRoot, resolvedFile));
+    const fileRelativeToCwd = normalizePath(relative(cwd, file));
+    const relativePath = cwdRelativeToGitRoot
+      ? normalizePath(`${cwdRelativeToGitRoot}/${fileRelativeToCwd}`)
+      : fileRelativeToCwd;
     if (!isRepoRelativePath(relativePath)) {
       return true;
     }
@@ -244,8 +248,12 @@ export function createSyntheticFileChange(
   options: SyntheticFileChangeOptions = {}
 ): FileChange {
   const relativePath = normalizePath(relative(basePath, absolutePath));
-  const limitSkip = getFileLimitSkip(relativePath, basePath, options.scan);
-  if (limitSkip) {
+  const prePatchSkip = getPrePatchFileSkip(relativePath, {
+    repoPath: basePath,
+    ignore: options.ignore,
+    scan: options.scan,
+  });
+  if (prePatchSkip) {
     return {
       filename: relativePath,
       status: 'added',

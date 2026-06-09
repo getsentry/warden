@@ -1274,6 +1274,7 @@ async function runFileMode(filePatterns: string[], options: CLIOptions, reporter
   const context = await buildFileEventContext({
     patterns: filePatterns,
     cwd,
+    ignore: config?.defaults?.ignore,
     scan: config?.defaults?.scan,
   });
 

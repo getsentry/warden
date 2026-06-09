@@ -1,5 +1,5 @@
 import type { EventContext, FileChange } from '../types/index.js';
-import type { ScanConfig } from '../config/schema.js';
+import type { IgnoreConfig, ScanConfig } from '../config/schema.js';
 import { expandAndCreateFileChanges } from '../cli/files.js';
 import { matchGlob } from '../triggers/matcher.js';
 
@@ -8,6 +8,8 @@ export interface ScheduleContextOptions {
   patterns: string[];
   /** Glob patterns from trigger's filters.ignorePaths */
   ignorePatterns?: string[];
+  /** Ignore policy used while synthetic file changes are created */
+  ignore?: IgnoreConfig;
   /** Scan limits used while synthetic file changes are created */
   scan?: ScanConfig;
   /** Repository root path (GITHUB_WORKSPACE) */
@@ -34,6 +36,7 @@ export async function buildScheduleEventContext(
   const {
     patterns,
     ignorePatterns,
+    ignore,
     scan,
     repoPath,
     owner,
@@ -43,7 +46,7 @@ export async function buildScheduleEventContext(
   } = options;
 
   // Expand glob patterns and create FileChange objects with full content as patch
-  let fileChanges = await expandAndCreateFileChanges(patterns, repoPath, { scan });
+  let fileChanges = await expandAndCreateFileChanges(patterns, repoPath, { ignore, scan });
 
   // Filter out ignored patterns
   if (ignorePatterns && ignorePatterns.length > 0) {

@@ -186,6 +186,7 @@ async function runScheduleWorkflowInner(
       const context = await buildScheduleEventContext({
         patterns,
         ignorePatterns,
+        ignore: resolved.ignore,
         scan: resolved.scan,
         repoPath,
         owner,
