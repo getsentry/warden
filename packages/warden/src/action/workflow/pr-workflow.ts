@@ -1574,7 +1574,7 @@ async function runAnalyzeMode(
       const findingsPath = writeFindingsOutput([], context, [], { triggerResults: [] });
       logAction(`Findings written to ${findingsPath}`);
     } catch (error) {
-      warnAction(`Failed to write findings output: ${error}`);
+      setFailed(`Failed to write findings output: ${error}`);
     }
     logAction('Analysis complete: 0 total findings');
     return;
@@ -1600,7 +1600,7 @@ async function runAnalyzeMode(
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
-    warnAction(`Failed to write findings output: ${error}`);
+    setFailed(`Failed to write findings output: ${error}`);
   }
 
   handleTriggerErrors(collectTriggerErrors(results), matchedTriggers.length, { failAll: false });

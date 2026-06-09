@@ -366,6 +366,30 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('analyze mode fails when the findings artifact cannot be written', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+      mockWriteFindingsOutput.mockImplementationOnce(() => {
+        throw new Error('Disk full');
+      });
+
+      await expect(
+        runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'analyze' }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        )
+      ).rejects.toThrow('setFailed');
+
+      expect(mockSetFailed).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to write findings output: Error: Disk full')
+      );
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+    });
+
     it('report mode publishes completed checks from the findings file without rerunning skills', async () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });
