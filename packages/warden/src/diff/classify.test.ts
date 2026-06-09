@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  classifyFile,
-  shouldSkipFile,
-} from './classify.js';
+import { classifyFile } from './classify.js';
 import type { FilePattern } from '../config/schema.js';
 
 describe('classifyFile', () => {
@@ -40,18 +37,5 @@ describe('classifyFile', () => {
       // First matching pattern wins
       expect(classifyFile('src/index.ts', userPatterns)).toBe('skip');
     });
-  });
-});
-
-describe('shouldSkipFile', () => {
-  it('returns true for skipped files', () => {
-    expect(shouldSkipFile('src/fixtures/data.json', [
-      { pattern: '**/fixtures/**', mode: 'skip' },
-    ])).toBe(true);
-  });
-
-  it('returns false for non-skipped files', () => {
-    expect(shouldSkipFile('src/index.ts')).toBe(false);
-    expect(shouldSkipFile('pnpm-lock.yaml')).toBe(false);
   });
 });

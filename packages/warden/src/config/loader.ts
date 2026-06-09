@@ -117,6 +117,7 @@ function mergeIgnoreConfig(
 ): IgnoreConfig | undefined {
   if (!base) return overlay;
   if (!overlay) return base;
+  // Preserve order: overlay negations must be able to re-include base ignores.
   const paths = mergeArray(base.paths, overlay.paths);
   return paths ? { paths } : undefined;
 }

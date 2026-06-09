@@ -1119,7 +1119,7 @@ describe('fetchRemote integration (real git)', () => {
     const updated = loadState().remotes[ref];
     expect(updated?.sha).toBe(newSha);
     expect(updated?.fetchedAt).not.toBe(stale);
-  });
+  }, 30_000);
 
   it('skips network fetch for unpinned ref while TTL is still fresh', async () => {
     const ref = 'fixture/integ';

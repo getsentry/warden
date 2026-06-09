@@ -5,7 +5,9 @@ editUrl: false
 ---
 
 By default, Warden analyzes each diff hunk separately. Chunking lets you skip
-files, review whole files, or merge nearby hunks for more context.
+files, review whole files, or merge nearby hunks for more context. The global
+scan policy runs before chunking; use `defaults.ignore.paths` to re-include
+built-in ignored files before assigning them a chunking mode.
 
 ## File Pattern Modes
 
@@ -45,11 +47,11 @@ files, review whole files, or merge nearby hunks for more context.
 [defaults.chunking]
 
 [[defaults.chunking.filePatterns]]
-pattern = "**/pnpm-lock.yaml"
-mode = "skip"
+pattern = "**/migrations/*.sql"
+mode = "whole-file"
 
 [[defaults.chunking.filePatterns]]
-pattern = "**/migrations/*.sql"
+pattern = "**/snapshots/*.snap"
 mode = "whole-file"
 
 [defaults.chunking.coalesce]

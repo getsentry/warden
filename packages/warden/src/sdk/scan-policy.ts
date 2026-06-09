@@ -1,9 +1,10 @@
+import { spawnSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import ignore from 'ignore';
 import { DEFAULT_SCAN_LIMITS, type IgnoreConfig, type ScanConfig } from '../config/schema.js';
-import { matchGlob } from '../triggers/matcher.js';
-import type { FileChange, SkippedFile } from '../types/index.js';
+import type { DiffContextSource, FileChange, SkippedFile } from '../types/index.js';
+import { GIT_NON_INTERACTIVE_ENV } from '../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 
 const GENERATED_PREFIX_BYTES = 64 * 1024;
@@ -81,6 +82,7 @@ export interface ScanPolicyOptions {
   repoPath: string;
   ignore?: IgnoreConfig;
   scan?: ScanConfig;
+  diffContextSource?: DiffContextSource;
 }
 
 export type ScannableFileChange = FileChange & { patch: string };
@@ -105,38 +107,36 @@ function stripNegation(pattern: string): string {
   return pattern.startsWith('!') ? pattern.slice(1) : pattern;
 }
 
-function userIncludesFile(filename: string, paths?: string[]): boolean {
-  return (paths ?? []).some((pattern) => pattern.startsWith('!') && matchGlob(stripNegation(pattern), filename));
+function matchesIgnorePattern(filename: string, pattern: string): boolean {
+  return ignore().add(stripNegation(pattern)).ignores(filename);
 }
 
-function userIgnoresFile(filename: string, paths?: string[]): string | undefined {
-  let ignoredPattern: string | undefined;
-  for (const pattern of paths ?? []) {
-    if (pattern.startsWith('!')) {
-      if (matchGlob(stripNegation(pattern), filename)) {
-        ignoredPattern = undefined;
-      }
-      continue;
-    }
-    if (matchGlob(pattern, filename)) {
-      ignoredPattern = pattern;
-    }
-  }
-  return ignoredPattern;
+function userIncludesFile(filename: string, paths?: string[]): boolean {
+  return (paths ?? []).some((pattern) => pattern.startsWith('!') && matchesIgnorePattern(filename, pattern));
 }
 
 function ignoredByBuiltinOrUser(filename: string, config?: IgnoreConfig): SkippedFile | undefined {
-  const matcher = ignore().add([...BUILTIN_IGNORE_PATTERNS, ...(config?.paths ?? [])]);
-  if (!matcher.ignores(filename)) {
-    return undefined;
+  let skip: SkippedFile | undefined;
+
+  // Built-ins establish the baseline; user paths replay afterward in order so
+  // later `!` patterns can re-include files.
+  for (const pattern of BUILTIN_IGNORE_PATTERNS) {
+    if (matchesIgnorePattern(filename, pattern)) {
+      skip = { filename, reason: 'ignored:builtin' };
+    }
   }
 
-  const userPattern = userIgnoresFile(filename, config?.paths);
-  if (userPattern) {
-    return { filename, reason: 'ignored:user', pattern: userPattern };
+  for (const pattern of config?.paths ?? []) {
+    if (!matchesIgnorePattern(filename, pattern)) {
+      continue;
+    }
+
+    skip = pattern.startsWith('!')
+      ? undefined
+      : { filename, reason: 'ignored:user', pattern };
   }
 
-  return { filename, reason: 'ignored:builtin' };
+  return skip;
 }
 
 function filePathFor(repoPath: string, filename: string): string | undefined {
@@ -163,6 +163,54 @@ function readPrefix(filePath: string, maxBytes: number): string | undefined {
       closeSync(fd);
     }
   }
+}
+
+type SourceReadResult =
+  | { type: 'content'; content: Buffer }
+  | { type: 'too_large' }
+  | { type: 'unavailable' };
+
+/** Convert non-working-tree sources to the git-show refspec used for content reads. */
+function sourceRefPath(filename: string, source: DiffContextSource): string | undefined {
+  if (source.type === 'working-tree') {
+    return undefined;
+  }
+
+  return source.type === 'git-index'
+    ? `:${filename}`
+    : `${source.ref}:${filename}`;
+}
+
+function readGitSource(repoPath: string, filename: string, source: DiffContextSource, maxBytes: number): SourceReadResult {
+  const refPath = sourceRefPath(filename, source);
+  if (!refPath) {
+    return { type: 'unavailable' };
+  }
+
+  const result = spawnSync('git', ['show', refPath], {
+    cwd: repoPath,
+    encoding: 'buffer',
+    env: { ...process.env, ...GIT_NON_INTERACTIVE_ENV },
+    maxBuffer: maxBytes + 1,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (result.error) {
+    const error = result.error as Error & { code?: string };
+    return error.code === 'ENOBUFS'
+      ? { type: 'too_large' }
+      : { type: 'unavailable' };
+  }
+
+  if (result.status !== 0 || !Buffer.isBuffer(result.stdout)) {
+    return { type: 'unavailable' };
+  }
+
+  if (result.stdout.length > maxBytes) {
+    return { type: 'too_large' };
+  }
+
+  return { type: 'content', content: result.stdout };
 }
 
 function countLinesUpTo(filePath: string, maxLines: number): number | undefined {
@@ -197,6 +245,24 @@ function countLinesUpTo(filePath: string, maxLines: number): number | undefined 
   }
 }
 
+function countBufferLinesUpTo(content: Buffer, maxLines: number): number {
+  if (content.length === 0) {
+    return 0;
+  }
+
+  let lines = 0;
+  for (const byte of content) {
+    if (byte === 10) {
+      lines++;
+      if (lines > maxLines) {
+        return lines;
+      }
+    }
+  }
+
+  return content[content.length - 1] === 10 ? lines : lines + 1;
+}
+
 function generatedMarkerIn(content: string): boolean {
   const sample = content
     .split('\n')
@@ -205,9 +271,14 @@ function generatedMarkerIn(content: string): boolean {
   return GENERATED_MARKER_PATTERNS.some((pattern) => pattern.test(sample));
 }
 
-function isGeneratedFile(file: FileChange, repoPath: string): boolean {
+function isGeneratedFile(file: FileChange, repoPath: string, contentSource: DiffContextSource): boolean {
   if (file.patch && generatedMarkerIn(file.patch)) {
     return true;
+  }
+
+  if (contentSource.type !== 'working-tree') {
+    const source = readGitSource(repoPath, file.filename, contentSource, GENERATED_PREFIX_BYTES);
+    return source.type === 'content' ? generatedMarkerIn(source.content.toString('utf-8')) : false;
   }
 
   const filePath = filePathFor(repoPath, file.filename);
@@ -219,16 +290,38 @@ function isGeneratedFile(file: FileChange, repoPath: string): boolean {
   return prefix ? generatedMarkerIn(prefix) : false;
 }
 
+/**
+ * Return the scan-limit skip reason for a file without reading more content than needed.
+ */
 export function getFileLimitSkip(
   filename: string,
   repoPath: string,
-  config?: ScanConfig
+  config?: ScanConfig,
+  diffContextSource: DiffContextSource = { type: 'working-tree' }
 ): SkippedFile | undefined {
   const scan = effectiveScanConfig(config);
   const filePath = filePathFor(repoPath, filename);
   if (!filePath) {
     return undefined;
   }
+
+  if (diffContextSource.type !== 'working-tree') {
+    const source = readGitSource(repoPath, filename, diffContextSource, scan.maxFileBytes);
+    if (source.type === 'unavailable') {
+      return undefined;
+    }
+    if (source.type === 'too_large') {
+      return { filename, reason: 'limit:file_size' };
+    }
+
+    const lines = countBufferLinesUpTo(source.content, scan.maxFileLines);
+    if (lines > scan.maxFileLines) {
+      return { filename, reason: 'limit:file_lines' };
+    }
+
+    return undefined;
+  }
+
   if (!existsSync(filePath)) {
     return undefined;
   }
@@ -265,6 +358,7 @@ export function applyScanPolicy(
   options: ScanPolicyOptions
 ): ApplyScanPolicyResult {
   const scan = effectiveScanConfig(options.scan);
+  const diffContextSource = options.diffContextSource ?? { type: 'working-tree' };
   const skippedFiles: SkippedFile[] = [];
   const eligible: ScannableFileChange[] = [];
 
@@ -275,12 +369,12 @@ export function applyScanPolicy(
       continue;
     }
 
-    if (!userIncludesFile(file.filename, options.ignore?.paths) && isGeneratedFile(file, options.repoPath)) {
+    if (!userIncludesFile(file.filename, options.ignore?.paths) && isGeneratedFile(file, options.repoPath, diffContextSource)) {
       skippedFiles.push({ filename: file.filename, reason: 'ignored:generated' });
       continue;
     }
 
-    const limitSkip = getFileLimitSkip(file.filename, options.repoPath, options.scan);
+    const limitSkip = getFileLimitSkip(file.filename, options.repoPath, options.scan, diffContextSource);
     if (limitSkip) {
       skippedFiles.push(limitSkip);
       continue;

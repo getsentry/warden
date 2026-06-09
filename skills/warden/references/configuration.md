@@ -132,8 +132,8 @@ preferred in CI so they do not collide with locally-set provider keys.
 - Use `-v` to see which files are being analyzed
 
 **Files being skipped:**
-- Built-in skip patterns: lock files, minified, `node_modules/`, `dist/`
-- Check `ignorePaths` in config
+- Built-in scan policy: lock files, minified, `node_modules/`, `dist/`
+- Check `[defaults.ignore].paths` and skill `ignorePaths` in config
 - Use `-vv` to see skip reasons
 
 **Token/cost issues:**

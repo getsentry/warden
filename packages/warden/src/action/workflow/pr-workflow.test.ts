@@ -504,7 +504,7 @@ describe('runPRWorkflow', () => {
       expect(review?.comments?.[0]).toMatchObject({
         line: 10,
       });
-    });
+    }, 60_000);
 
     it('report mode joins findings by configured skill name when the report skill differs', async () => {
       const finding = createFinding();

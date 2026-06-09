@@ -236,6 +236,7 @@ export function createPatchFromContent(content: string): string {
 
 /**
  * Read a file and create a synthetic FileChange treating it as newly added.
+ * Scan limits can return a patchless placeholder without reading file content.
  */
 export function createSyntheticFileChange(
   absolutePath: string,

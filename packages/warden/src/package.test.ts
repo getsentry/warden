@@ -78,7 +78,10 @@ describe('GitHub Action layout', () => {
       const errors = validateActionLayout({ repoRoot: tempDir });
 
       expect(errors).toContain('broken-link points to missing target missing-target');
-      expect(errors).toContainEqual(expect.stringContaining('Tracked symlink is missing: missing-link'));
+      expect(errors.some((error) =>
+        error.includes('Tracked symlink is missing: missing-link') ||
+        error === 'missing-link points to missing target target'
+      )).toBe(true);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

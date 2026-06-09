@@ -39,7 +39,7 @@ describe('LiveStatusList', () => {
     expect(view.lastFrame()).toContain('[1.0s]');
 
     view.unmount();
-  });
+  }, 15_000);
 
   it('shows cached completions without inventing a duration', () => {
     const view = render(

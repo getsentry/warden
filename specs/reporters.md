@@ -529,7 +529,7 @@ New run logs are chunk-result records while the run is in progress. At finalizat
 | `usageBreakdown` | `UsageBreakdown` | no | Detailed per-record usage. `scan` mirrors primary hunk usage, `auxiliary` is keyed by aux agent/stage, and required `total.usage` is scan plus auxiliary usage |
 | `durationMs` | `number` | yes | Chunk execution time |
 | `error` | `SkillError` | no | Chunk failure details. Present when `status` is `"error"` |
-| `skippedFiles` | `SkippedFile[]` | no | Files skipped before chunking. Present only on synthetic no-chunk records |
+| `skippedFiles` | `SkippedFile[]` | no | Files skipped by scan policy, ignore policy, or chunking. Present only on synthetic no-chunk records |
 
 ### Summary Record
 
@@ -555,7 +555,7 @@ The final line of a completed run is a `type: "summary"` record. It carries aggr
 
 **FileRecord**: Legacy reader type: `{ filename: string, findings: int, durationMs?: number, usage?: UsageStats }`
 
-**SkippedFile**: `{ filename: string, reason: "pattern" | "builtin", pattern?: string }`
+**SkippedFile**: `{ filename: string, reason: "pattern" | "builtin" | "ignored:builtin" | "ignored:user" | "ignored:generated" | "limit:file_size" | "limit:file_lines" | "limit:file_read" | "limit:file_count" | "limit:changed_lines" | "limit:missing_patch", pattern?: string }`
 
 **SkillError**: `{ code: ErrorCode, message: string, timestamp?: string }`
 

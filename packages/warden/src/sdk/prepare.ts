@@ -10,6 +10,13 @@ import {
 import type { PreparedFile, PrepareFilesOptions, PrepareFilesResult } from './types.js';
 import { applyScanPolicy } from './scan-policy.js';
 
+function matchingChunkingSkipPattern(
+  filename: string,
+  patterns: NonNullable<PrepareFilesOptions['chunking']>['filePatterns']
+): string | undefined {
+  return patterns?.find((pattern) => classifyFile(filename, [pattern]) === 'skip')?.pattern;
+}
+
 /**
  * Group hunks by filename into PreparedFile entries.
  */
@@ -50,6 +57,7 @@ export function prepareFiles(
     repoPath: context.repoPath,
     ignore: options.ignore,
     scan: options.scan,
+    diffContextSource: context.diffContextSource,
   });
   skippedFiles.push(...scanPolicy.skippedFiles);
 
@@ -58,7 +66,8 @@ export function prepareFiles(
     if (mode === 'skip') {
       skippedFiles.push({
         filename: file.filename,
-        reason: 'builtin', // Could be enhanced to track which pattern matched
+        reason: 'pattern',
+        pattern: matchingChunkingSkipPattern(file.filename, chunking?.filePatterns),
       });
       continue;
     }

@@ -93,6 +93,10 @@ export {
   AgentRuntimeConfigSchema,
   AuxiliaryRuntimeConfigSchema,
   SynthesisRuntimeConfigSchema,
+  IgnoreConfigSchema,
+  ScanConfigSchema,
+  ChunkingConfigSchema,
+  DEFAULT_SCAN_LIMITS,
   WardenConfigSchema,
   // Functions
   loadWardenConfig,
@@ -111,6 +115,9 @@ export type {
   AgentRuntimeConfig,
   AuxiliaryRuntimeConfig,
   SynthesisRuntimeConfig,
+  IgnoreConfig,
+  ScanConfig,
+  ChunkingConfig,
   WardenConfig,
   ResolvedTrigger,
 } from './config/index.js';

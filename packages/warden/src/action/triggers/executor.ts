@@ -18,7 +18,7 @@ import { runSkillTask, createDefaultCallbacks } from '../../cli/output/tasks.js'
 import type { SkillTaskOptions } from '../../cli/output/tasks.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
-import { DEFAULT_FILE_CONCURRENCY } from '../../sdk/types.js';
+import { DEFAULT_FILE_CONCURRENCY, type AnalysisChunkingConfig } from '../../sdk/types.js';
 import { SkillRunnerError } from '../../sdk/errors.js';
 import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
@@ -28,6 +28,26 @@ import { captureActionTriggerError } from '../error-reporting.js';
 
 /** Log-mode output for CI: no TTY, no color. */
 const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns: 120 };
+
+function toAnalysisChunkingConfig(
+  chunking: ResolvedTrigger['chunking']
+): AnalysisChunkingConfig | undefined {
+  if (!chunking) {
+    return undefined;
+  }
+
+  const analysisChunking: AnalysisChunkingConfig = {};
+  if (chunking.filePatterns) {
+    analysisChunking.filePatterns = chunking.filePatterns;
+  }
+  if (chunking.coalesce) {
+    analysisChunking.coalesce = chunking.coalesce;
+  }
+
+  return analysisChunking.filePatterns || analysisChunking.coalesce
+    ? analysisChunking
+    : undefined;
+}
 
 // -----------------------------------------------------------------------------
 // Types
@@ -173,6 +193,9 @@ export async function executeTrigger(
             maxTurns: trigger.maxTurns,
             batchDelayMs: trigger.batchDelayMs,
             maxContextFiles: trigger.maxContextFiles,
+            ignore: trigger.ignore,
+            scan: trigger.scan,
+            chunking: toAnalysisChunkingConfig(trigger.chunking),
             pathToClaudeCodeExecutable: claudePath,
             auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
             verifyFindings: trigger.verifyFindings,

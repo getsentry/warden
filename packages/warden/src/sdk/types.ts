@@ -137,7 +137,7 @@ export interface SkillRunnerOptions {
   /** Global scan limits applied after ignore filtering. */
   scan?: ScanConfig;
   /** Chunking configuration for file patterns and coalescing. */
-  chunking?: ChunkingConfig;
+  chunking?: AnalysisChunkingConfig;
   /** Max retries for auxiliary structured model calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
   auxiliaryMaxRetries?: number;
   /** Verify candidate findings in a second read-only pass. Defaults to true. */
@@ -149,6 +149,8 @@ export interface SkillRunnerOptions {
   /** Capture per-hunk runtime traces in structured run output. Defaults to false. */
   captureTraces?: boolean;
 }
+
+export type AnalysisChunkingConfig = Pick<ChunkingConfig, 'filePatterns' | 'coalesce'>;
 
 /**
  * A file prepared for analysis with its hunks.
@@ -169,7 +171,7 @@ export interface PrepareFilesOptions {
   /** Global scan limits applied after ignore filtering */
   scan?: ScanConfig;
   /** Chunking configuration for file patterns and coalescing */
-  chunking?: ChunkingConfig;
+  chunking?: AnalysisChunkingConfig;
 }
 
 /**
@@ -178,7 +180,7 @@ export interface PrepareFilesOptions {
 export interface PrepareFilesResult {
   /** Files prepared for analysis */
   files: PreparedFile[];
-  /** Files that were skipped due to chunking patterns */
+  /** Files skipped by scan policy, ignore policy, or chunking rules */
   skippedFiles: SkippedFile[];
 }
 

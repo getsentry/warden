@@ -471,7 +471,16 @@
           "type": "string",
           "enum": [
             "pattern",
-            "builtin"
+            "builtin",
+            "ignored:builtin",
+            "ignored:user",
+            "ignored:generated",
+            "limit:file_size",
+            "limit:file_lines",
+            "limit:file_read",
+            "limit:file_count",
+            "limit:changed_lines",
+            "limit:missing_patch"
           ]
         },
         "pattern": {

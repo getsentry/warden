@@ -9,7 +9,8 @@ default policy skips common generated, build, lock, binary, media, archive, and
 large data artifacts.
 
 Use `defaults.ignore.paths` for gitignore-style path overrides. Prefix a pattern
-with `!` to re-include a file that would otherwise be ignored.
+with `!` to re-include a file that would otherwise be ignored. Re-included files
+still use normal chunking rules.
 
 ```toml title="warden.toml"
 [defaults.ignore]

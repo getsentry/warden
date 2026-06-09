@@ -27,13 +27,3 @@ export function classifyFile(
 
   return 'per-hunk';
 }
-
-/**
- * Check if a file should be skipped based on classification.
- */
-export function shouldSkipFile(
-  filename: string,
-  userPatterns?: FilePattern[]
-): boolean {
-  return classifyFile(filename, userPatterns) === 'skip';
-}

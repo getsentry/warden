@@ -196,6 +196,9 @@ describe('executeTrigger', () => {
       ...mockTrigger,
       batchDelayMs: 250,
       maxContextFiles: 12,
+      ignore: { paths: ['**/fixtures/**'] },
+      scan: { maxFiles: 5 },
+      chunking: { maxContextFiles: 12, filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }] },
       auxiliaryMaxRetries: 9,
     }, {
       ...mockDeps,
@@ -206,6 +209,9 @@ describe('executeTrigger', () => {
         runnerOptions: expect.objectContaining({
           batchDelayMs: 250,
           maxContextFiles: 12,
+          ignore: { paths: ['**/fixtures/**'] },
+          scan: { maxFiles: 5 },
+          chunking: { filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }] },
           auxiliaryMaxRetries: 9,
         }),
       }),

@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -121,7 +121,7 @@ describe('local SDK skill resolution', () => {
     }));
     expect(result.skill).toMatchObject({
       name: 'local-skill',
-      rootDir: skillDir,
+      rootDir: realpathSync(skillDir),
     });
   });
 
