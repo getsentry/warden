@@ -1208,7 +1208,7 @@ function buildReportModeResults(
     }
   }
 
-  return matchedTriggers.map((trigger) => {
+  const results = matchedTriggers.map((trigger) => {
     const failOn = trigger.failOn ?? inputs.failOn;
     const reportOn = trigger.reportOn ?? inputs.reportOn;
     const minConfidence = trigger.minConfidence ?? 'medium';
@@ -1250,6 +1250,18 @@ function buildReportModeResults(
       report: outputResult.report,
     };
   });
+
+  const unreportedResults = [...outputResults.values()].flat();
+  if (unreportedResults.length > 0) {
+    const triggerList = unreportedResults
+      .map((result) => `${result.triggerName} (${result.skillName})`)
+      .join(', ');
+    throw new Error(
+      `Findings file contains ${unreportedResults.length} result(s) that do not match current config: ${triggerList}`
+    );
+  }
+
+  return results;
 }
 
 function withRenderedReviewResult(result: TriggerResult): TriggerResult {
@@ -1623,6 +1635,7 @@ async function runReportMode(
   let canResolveStale!: boolean;
 
   try {
+    results = buildReportModeResults(findingsOutput, matchedTriggers, inputs);
     await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers);
 
     if (skipCoreCheck) {
@@ -1686,7 +1699,6 @@ async function runReportMode(
       return;
     }
 
-    results = buildReportModeResults(findingsOutput, matchedTriggers, inputs);
     results = await createCompletedSkillChecksForReport(octokit, context, results);
 
     previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);

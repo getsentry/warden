@@ -517,6 +517,52 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('report mode fails when current config would drop analyze results', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            NO_MATCH_FIXTURES_DIR
+          )
+        ).rejects.toThrow('do not match current config');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            title: 'Warden failed',
+            summary: expect.stringContaining('do not match current config'),
+          }),
+        })
+      );
+      expect(mockOctokit.checks.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'No triggers matched',
+          }),
+        })
+      );
+    });
+
     it('report mode replays duplicate skill trigger results in artifact order', async () => {
       const highFinding = createFinding({ id: 'high-finding', severity: 'high' });
       const lowFinding = createFinding({ id: 'low-finding', severity: 'low' });
