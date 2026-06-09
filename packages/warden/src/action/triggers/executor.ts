@@ -91,6 +91,7 @@ export interface TriggerExecutorDeps {
  * Result from executing a single trigger.
  */
 export interface TriggerResult {
+  triggerId?: string;
   triggerName: string;
   skillName: string;
   report?: SkillReport;
@@ -232,6 +233,7 @@ export async function executeTrigger(
 
         logGroupEnd();
         return {
+          triggerId: trigger.id,
           triggerName: trigger.name,
           skillName: trigger.skill,
           report,
@@ -263,7 +265,7 @@ export async function executeTrigger(
 
         console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
         logGroupEnd();
-        return { triggerName: trigger.name, skillName: trigger.skill, error };
+        return { triggerId: trigger.id, triggerName: trigger.name, skillName: trigger.skill, error };
       }
     },
   );

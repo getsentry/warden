@@ -109,6 +109,7 @@ describe('executeTrigger', () => {
   };
 
   const mockTrigger: ResolvedTrigger = {
+    id: 'test-trigger-id',
     name: 'test-trigger',
     skill: 'test-skill',
     type: 'pull_request',

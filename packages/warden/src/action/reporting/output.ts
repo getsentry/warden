@@ -31,6 +31,7 @@ const TriggerErrorSchema = z.object({
 // skillName. `report.skill` is preserved as report identity and may differ for
 // local path skills with frontmatter names.
 const TriggerRunResultBaseSchema = z.object({
+  triggerId: z.string().optional(),
   triggerName: z.string(),
   skillName: z.string(),
 });
@@ -100,6 +101,7 @@ export const FindingsOutputSchema = z.object({
 export type FindingsOutput = z.infer<typeof FindingsOutputSchema>;
 
 export interface ReplayTriggerResult {
+  triggerId?: string;
   triggerName: string;
   skillName: string;
   report?: SkillReport;
@@ -138,6 +140,7 @@ function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillR
 function serializeTriggerResult(result: ReplayTriggerResult): z.infer<typeof TriggerRunResultSchema> {
   if (result.report) {
     return {
+      triggerId: result.triggerId,
       triggerName: result.triggerName,
       skillName: result.skillName,
       status: 'success',
@@ -146,6 +149,7 @@ function serializeTriggerResult(result: ReplayTriggerResult): z.infer<typeof Tri
   }
 
   return {
+    triggerId: result.triggerId,
     triggerName: result.triggerName,
     skillName: result.skillName,
     status: 'error',

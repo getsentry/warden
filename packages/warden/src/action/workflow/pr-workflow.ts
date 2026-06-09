@@ -1175,8 +1175,21 @@ function resultKey(triggerName: string, skillName: string): string {
   return `${triggerName}\0${skillName}`;
 }
 
+function replayKey(result: { triggerId?: string; triggerName: string; skillName: string }): string {
+  return result.triggerId ?? resultKey(result.triggerName, result.skillName);
+}
+
+function triggerReplayKey(trigger: ResolvedTrigger): string {
+  return trigger.id;
+}
+
+function describeResultKey(result: { triggerName: string; skillName: string }): string {
+  return `${result.triggerName} (${result.skillName})`;
+}
+
 function toReplayTriggerResults(results: TriggerResult[]): ReplayTriggerResult[] {
   return results.map((result) => ({
+    triggerId: result.triggerId,
     triggerName: result.triggerName,
     skillName: result.skillName,
     report: result.report,
@@ -1199,13 +1212,51 @@ function buildReportModeResults(
 
   const outputResults = new Map<string, typeof output.triggerResults>();
   for (const result of output.triggerResults) {
-    const key = resultKey(result.triggerName, result.skillName);
+    const key = replayKey(result);
     const existing = outputResults.get(key);
     if (existing) {
       existing.push(result);
     } else {
       outputResults.set(key, [result]);
     }
+  }
+
+  const duplicateConfiguredResults = new Map<string, ResolvedTrigger[]>();
+  for (const trigger of matchedTriggers) {
+    const key = triggerReplayKey(trigger);
+    const existing = duplicateConfiguredResults.get(key);
+    if (existing) {
+      existing.push(trigger);
+    } else {
+      duplicateConfiguredResults.set(key, [trigger]);
+    }
+  }
+
+  const ambiguousKeys = [
+    ...new Set([
+      ...[...outputResults.entries()]
+        .filter(([, results]) => results.length > 1)
+        .map(([key]) => key),
+      ...[...duplicateConfiguredResults.entries()]
+        .filter(([, triggers]) => triggers.length > 1)
+        .map(([key]) => key),
+    ]),
+  ];
+
+  if (ambiguousKeys.length > 0) {
+    const triggerList = ambiguousKeys
+      .map((key) => {
+        const result = outputResults.get(key)?.[0];
+        const trigger = duplicateConfiguredResults.get(key)?.[0];
+        return result
+          ? describeResultKey(result)
+          : `${trigger?.name ?? 'unknown'} (${trigger?.skill ?? 'unknown'})`;
+      })
+      .join(', ');
+
+    throw new Error(
+      `Findings file contains ambiguous duplicate trigger result(s): ${triggerList}`
+    );
   }
 
   const results = matchedTriggers.map((trigger) => {
@@ -1216,6 +1267,7 @@ function buildReportModeResults(
     const failCheck = trigger.failCheck ?? inputs.failCheck;
     const maxFindings = trigger.maxFindings ?? inputs.maxFindings;
     const baseResult = {
+      triggerId: trigger.id,
       triggerName: trigger.name,
       skillName: trigger.skill,
       failOn,
@@ -1226,7 +1278,9 @@ function buildReportModeResults(
       failCheck,
       maxFindings,
     };
-    const outputResult = outputResults.get(resultKey(trigger.name, trigger.skill))?.shift();
+    const outputResult =
+      outputResults.get(triggerReplayKey(trigger))?.shift() ??
+      outputResults.get(resultKey(trigger.name, trigger.skill))?.shift();
 
     if (!outputResult) {
       return {
@@ -1254,7 +1308,7 @@ function buildReportModeResults(
   const unreportedResults = [...outputResults.values()].flat();
   if (unreportedResults.length > 0) {
     const triggerList = unreportedResults
-      .map((result) => `${result.triggerName} (${result.skillName})`)
+      .map(describeResultKey)
       .join(', ');
     throw new Error(
       `Findings file contains ${unreportedResults.length} result(s) that do not match current config: ${triggerList}`

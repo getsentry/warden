@@ -7,6 +7,7 @@ import {
   WardenConfigSchema,
   type WardenConfig,
   type SkillConfig,
+  type SkillTrigger,
   type ScheduleConfig,
   type TriggerType,
   type Defaults,
@@ -335,6 +336,8 @@ export function loadLayeredWardenConfig(
  * Skills with no triggers produce a wildcard entry (type: '*').
  */
 export interface ResolvedTrigger {
+  /** Stable replay identity derived from the skill and trigger configuration */
+  id: string;
   /** Skill name (used for display and deduplication) */
   name: string;
   /** Skill reference (same as name, for downstream compatibility) */
@@ -388,6 +391,29 @@ export interface ResolvedTrigger {
   maxContextFiles?: number;
   /** Schedule-specific configuration */
   schedule?: ScheduleConfig;
+}
+
+function triggerIdentity(skill: SkillConfig, trigger: SkillTrigger | undefined): string {
+  return JSON.stringify({
+    skill: skill.name,
+    remote: skill.remote,
+    paths: skill.paths,
+    ignorePaths: skill.ignorePaths,
+    failOn: trigger?.failOn ?? skill.failOn,
+    reportOn: trigger?.reportOn ?? skill.reportOn,
+    maxFindings: trigger?.maxFindings ?? skill.maxFindings,
+    reportOnSuccess: trigger?.reportOnSuccess ?? skill.reportOnSuccess,
+    requestChanges: trigger?.requestChanges ?? skill.requestChanges,
+    failCheck: trigger?.failCheck ?? skill.failCheck,
+    model: trigger?.model ?? skill.model,
+    maxTurns: trigger?.maxTurns ?? skill.maxTurns,
+    minConfidence: trigger?.minConfidence ?? skill.minConfidence,
+    type: trigger?.type ?? '*',
+    actions: trigger?.actions,
+    draft: trigger?.draft,
+    labels: trigger?.labels,
+    schedule: trigger?.schedule,
+  });
 }
 
 function resolveSkillSource(
@@ -471,6 +497,7 @@ export function resolveSkillConfigs(
     if (!skill.triggers || skill.triggers.length === 0) {
       // Wildcard: no triggers means run everywhere
       result.push({
+        id: triggerIdentity(skill, undefined),
         name: skill.name,
         skill: skill.name,
         type: '*',
@@ -498,6 +525,7 @@ export function resolveSkillConfigs(
     } else {
       for (const trigger of skill.triggers) {
         result.push({
+          id: triggerIdentity(skill, trigger),
           name: skill.name,
           skill: skill.name,
           type: trigger.type,

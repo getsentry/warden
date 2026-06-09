@@ -284,6 +284,15 @@ function writeFindingsArtifact(
   return filePath;
 }
 
+function duplicateTriggerId(reportOn: 'high' | 'low'): string {
+  return JSON.stringify({
+    skill: 'test-skill',
+    reportOn,
+    type: 'pull_request',
+    actions: ['opened', 'synchronize'],
+  });
+}
+
 function createExistingWardenComment(overrides: Partial<ExistingComment> = {}): ExistingComment {
   return {
     id: 1,
@@ -587,7 +596,7 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('report mode replays duplicate skill trigger results in artifact order', async () => {
+    it('report mode replays duplicate skill trigger results by trigger identity', async () => {
       const highFinding = createFinding({ id: 'high-finding', severity: 'high' });
       const lowFinding = createFinding({ id: 'low-finding', severity: 'low' });
       const highReport = createSkillReport({
@@ -600,11 +609,13 @@ describe('runPRWorkflow', () => {
       });
       const findingsFile = writeFindingsArtifact([highReport, lowReport], [
         {
+          triggerId: duplicateTriggerId('high'),
           triggerName: 'test-skill',
           skillName: 'test-skill',
           report: highReport,
         },
         {
+          triggerId: duplicateTriggerId('low'),
           triggerName: 'test-skill',
           skillName: 'test-skill',
           report: lowReport,
@@ -637,6 +648,48 @@ describe('runPRWorkflow', () => {
           name: 'warden: test-skill',
           output: expect.objectContaining({
             summary: expect.stringContaining('Low report'),
+          }),
+        })
+      );
+    });
+
+    it('report mode rejects legacy duplicate skill trigger replay keys', async () => {
+      const highReport = createSkillReport({ summary: 'High report' });
+      const lowReport = createSkillReport({ summary: 'Low report' });
+      const findingsFile = writeFindingsArtifact([highReport, lowReport], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report: highReport,
+        },
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report: lowReport,
+        },
+      ]);
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            DUPLICATE_TRIGGER_FIXTURES_DIR
+          )
+        ).rejects.toThrow('ambiguous duplicate trigger result');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          conclusion: 'failure',
+          output: expect.objectContaining({
+            summary: expect.stringContaining('ambiguous duplicate trigger result'),
           }),
         })
       );
