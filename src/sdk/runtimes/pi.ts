@@ -258,7 +258,7 @@ function emitPiToolSpans(
     }
     try {
       Sentry.startSpan(
-        { op: 'gen_ai.execute_tool', name: call.name, attributes: attrs },
+        { op: 'gen_ai.execute_tool', name: `execute_tool ${call.name}`, attributes: attrs },
         () => undefined,
       );
     } catch {

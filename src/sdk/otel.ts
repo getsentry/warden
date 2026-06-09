@@ -34,8 +34,8 @@ export function genAiProviderName(runtime: string | undefined, model: string | u
 export function setGenAiUsageAttrs(span: SpanLike, usage: UsageStats): void {
   span.setAttribute('gen_ai.usage.input_tokens', usage.inputTokens);
   span.setAttribute('gen_ai.usage.output_tokens', usage.outputTokens);
-  span.setAttribute('gen_ai.usage.input_tokens.cached', usage.cacheReadInputTokens ?? 0);
-  span.setAttribute('gen_ai.usage.input_tokens.cache_write', usage.cacheCreationInputTokens ?? 0);
+  span.setAttribute('gen_ai.usage.cache_read.input_tokens', usage.cacheReadInputTokens ?? 0);
+  span.setAttribute('gen_ai.usage.cache_creation.input_tokens', usage.cacheCreationInputTokens ?? 0);
   span.setAttribute('gen_ai.usage.total_tokens', usage.inputTokens + usage.outputTokens);
 }
 

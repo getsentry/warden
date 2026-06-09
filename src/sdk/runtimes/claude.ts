@@ -371,8 +371,8 @@ export const claudeRuntime: Runtime = {
               'gen_ai.response.model': turn.model,
               'gen_ai.usage.input_tokens': totalInput,
               'gen_ai.usage.output_tokens': turn.outputTokens,
-              'gen_ai.usage.input_tokens.cached': turn.cacheRead,
-              'gen_ai.usage.input_tokens.cache_write': turn.cacheWrite,
+              'gen_ai.usage.cache_read.input_tokens': turn.cacheRead,
+              'gen_ai.usage.cache_creation.input_tokens': turn.cacheWrite,
               'gen_ai.usage.total_tokens': totalInput + turn.outputTokens,
             };
             if (turn.id) {
@@ -388,7 +388,7 @@ export const claudeRuntime: Runtime = {
             Sentry.startSpan(
               {
                 op: 'gen_ai.chat',
-                name: `chat ${skillName} turn ${turnCount}`,
+                name: `chat ${modelId}`,
                 attributes: chatAttributes,
               },
               (chatSpan) => {
@@ -416,7 +416,7 @@ export const claudeRuntime: Runtime = {
                     const parentSpan = Sentry.getActiveSpan();
                     const span = Sentry.startInactiveSpan({
                       op: 'gen_ai.execute_tool',
-                      name: toolUse.name,
+                      name: `execute_tool ${toolUse.name}`,
                       ...(parentSpan && { parentSpan }),
                       startTime: Math.max(0, endTime - elapsed),
                       attributes,
@@ -426,7 +426,7 @@ export const claudeRuntime: Runtime = {
                     Sentry.startSpan(
                       {
                         op: 'gen_ai.execute_tool',
-                        name: toolUse.name,
+                        name: `execute_tool ${toolUse.name}`,
                         attributes,
                       },
                       () => undefined
