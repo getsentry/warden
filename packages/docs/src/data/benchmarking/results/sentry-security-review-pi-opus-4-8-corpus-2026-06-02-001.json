@@ -1,0 +1,282 @@
+{
+  "runId": "sentry-security-review-pi-opus-4-8-corpus-2026-06-02-001",
+  "supersededBy": "sentry-security-review-pi-opus-4-8-traced-corpus-2026-06-03-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.35.1",
+  "skill": "@sentry/warden:security-review@0.35.1",
+  "model": "anthropic/claude-opus-4-8",
+  "runtime": "pi",
+  "reasoningLevel": "pi-default-medium",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "316a8b13-976e-4fc3-bb4d-963f30215a06",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 2,
+      "durationMs": 95640,
+      "costUSD": 0.6093787500000001,
+      "rawJsonl": "sentry-security-review-pi-opus-4-8-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "53808902-e426-46eb-b4ca-d012b50b4ad8",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 36037,
+      "costUSD": 0.14157475,
+      "rawJsonl": "sentry-security-review-pi-opus-4-8-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "c1634c4d-326c-4f28-949e-c8b09616f3f1",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 54692,
+      "costUSD": 0.19319150000000002,
+      "rawJsonl": "sentry-security-review-pi-opus-4-8-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "52b5e734-81f8-480d-8076-cc420f1283aa",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 7,
+      "durationMs": 523798,
+      "costUSD": 5.149280249999999,
+      "rawJsonl": "sentry-security-review-pi-opus-4-8-corpus-7f41cc50.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "96288d04-547c-4447-b2f8-32f8008d87e9",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 8,
+      "durationMs": 508072,
+      "costUSD": 4.741508500000001,
+      "rawJsonl": "sentry-security-review-pi-opus-4-8-corpus-9fc06de5.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "95a9f9e0-9d3e-4e9b-9160-93fb3d7556f5",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 93617,
+      "costUSD": 0.2762235,
+      "rawJsonl": "sentry-security-review-pi-opus-4-8-corpus-fbecd17d.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 17,
+    "findingsBySeverity": {
+      "high": 3,
+      "medium": 9,
+      "low": 5
+    },
+    "findingsByConfidence": {
+      "high": 3,
+      "medium": 13,
+      "low": 1
+    },
+    "durationMs": 1311856,
+    "inputTokens": 3435331,
+    "outputTokens": 179993,
+    "cacheReadInputTokens": 2584112,
+    "cacheCreationInputTokens": 850545,
+    "analysisCostUSD": 11.111157249999996,
+    "auxiliaryCostUSD": 0,
+    "costUSD": 11.111157249999996
+  },
+  "timing": {
+    "shardWallMs": {
+      "source": "result-shard-durationMs",
+      "total": 1311856,
+      "count": 6,
+      "p50": 94629,
+      "p75": 404964,
+      "p90": 515935,
+      "p95": 519867,
+      "max": 523798
+    },
+    "analysisChunkMs": {
+      "source": "jsonl-chunk-durationMs",
+      "count": 156,
+      "p50": 12349,
+      "p75": 24357,
+      "p90": 45483,
+      "p95": 61751,
+      "max": 142433
+    }
+  },
+  "auxiliaryUsage": {},
+  "findingVerification": {
+    "enabled": true,
+    "source": "warden-default",
+    "notes": "The benchmark config did not disable defaults.verification. Warden enables the post-analysis finding verifier unless defaults.verification.enabled is false."
+  },
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-06-02",
+    "knownFindingCount": 86,
+    "knownFound": 16,
+    "knownMissed": 70,
+    "knownPartial": 0,
+    "knownFoundRate": 0.186,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count."
+  },
+  "scores": [
+    {
+      "findingId": "JJF-ZZX",
+      "matchedCorpusIds": ["sentry-vuln-008"],
+      "verdict": "known-found",
+      "notes": "Same system options allowlist tuple bug."
+    },
+    {
+      "findingId": "7HB-BW9",
+      "matchedCorpusIds": ["sentry-vuln-003"],
+      "verdict": "known-found",
+      "notes": "Same InternalEAFeaturesEndpoint permission bypass."
+    },
+    {
+      "findingId": "HGU-LKD",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-safe comparison issue is not the Statsig timestamp freshness bug in the corpus."
+    },
+    {
+      "findingId": "SSQ-KPU",
+      "matchedCorpusIds": ["sentry-vuln-051"],
+      "verdict": "known-found",
+      "notes": "Same unsigned Bitbucket Server webhook bug."
+    },
+    {
+      "findingId": "KKX-SP3",
+      "matchedCorpusIds": ["sentry-vuln-073"],
+      "verdict": "known-found",
+      "notes": "Same uuid1 release webhook token bug."
+    },
+    {
+      "findingId": "HGF-4SS",
+      "matchedCorpusIds": ["sentry-vuln-048"],
+      "verdict": "known-found",
+      "notes": "Same project size-analysis comparison download IDOR."
+    },
+    {
+      "findingId": "284-PW6",
+      "matchedCorpusIds": ["sentry-vuln-055"],
+      "verdict": "known-found",
+      "notes": "Same public org-level Seer RPC project-access bypass."
+    },
+    {
+      "findingId": "6V2-V2E",
+      "matchedCorpusIds": ["sentry-vuln-078"],
+      "verdict": "known-found",
+      "notes": "Same Jira plugin TLS verification bug."
+    },
+    {
+      "findingId": "MUP-MPA",
+      "matchedCorpusIds": ["sentry-vuln-082"],
+      "verdict": "known-found",
+      "notes": "Same feature flag tooltip XSS."
+    },
+    {
+      "findingId": "GWV-QRM",
+      "matchedCorpusIds": ["sentry-vuln-041"],
+      "verdict": "known-found",
+      "notes": "Same DiscoverSavedQueryVisitEndpoint object-permission gap."
+    },
+    {
+      "findingId": "5QB-GDR",
+      "matchedCorpusIds": ["sentry-vuln-019"],
+      "verdict": "known-found",
+      "notes": "Same SSO owner override wrong-key exclusion bug."
+    },
+    {
+      "findingId": "LWC-CFF",
+      "matchedCorpusIds": ["sentry-vuln-014"],
+      "verdict": "known-found",
+      "notes": "Same Slack options-load cross-tenant disclosure."
+    },
+    {
+      "findingId": "SKY-8FP",
+      "matchedCorpusIds": ["sentry-vuln-013"],
+      "verdict": "known-found",
+      "notes": "Same Perforce configData secret disclosure."
+    },
+    {
+      "findingId": "4N2-7ZQ",
+      "matchedCorpusIds": ["sentry-vuln-015"],
+      "verdict": "known-found",
+      "notes": "Same unverified PubSub transfer job trigger."
+    },
+    {
+      "findingId": "SAL-57H",
+      "matchedCorpusIds": ["sentry-vuln-012"],
+      "verdict": "known-found",
+      "notes": "Same MS Teams action submission org scoping bug."
+    },
+    {
+      "findingId": "GED-XBD",
+      "matchedCorpusIds": ["sentry-vuln-034"],
+      "verdict": "known-found",
+      "notes": "Same Seer autofix run_id ownership bug."
+    },
+    {
+      "findingId": "9DY-FYG",
+      "matchedCorpusIds": ["sentry-vuln-039"],
+      "verdict": "known-found",
+      "notes": "Same open periods project-access bypass."
+    }
+  ],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. This run required @earendil-works/pi-ai and @earendil-works/pi-coding-agent 0.78.0 so the Pi registry exposed anthropic/claude-opus-4-8. No explicit reasoning level was configured in warden.toml or CLI args, so the run used Pi's default medium thinking level."
+}

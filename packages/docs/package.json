@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "check": "node scripts/validate-benchmark-results.mjs && astro build",
     "preview": "astro preview"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
     "@sentry/starlight-theme": "^0.7.0",
     "@sentry/warden": "workspace:*",
     "astro": "^6.3.7",
+    "astro-expressive-code": "^0.42.0",
     "shiki": "^4.1.0"
   },
   "devDependencies": {

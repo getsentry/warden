@@ -1,0 +1,15 @@
+{
+  "given": "permission filtering uses a role hierarchy where higher roles include lower-role permissions",
+  "files": [
+    "fixtures/permission-level-comparison/permissions.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "canPerform uses <= instead of >=, so lower roles are granted higher-role actions while owners are denied lower-role actions"
+    }
+  ],
+  "should_not_find": [
+    "style, formatting, or naming issues",
+    "using string literal role names instead of an enum"
+  ]
+}

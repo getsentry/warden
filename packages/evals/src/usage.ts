@@ -1,5 +1,5 @@
 import { normalizeMetadata, type UsageSummary } from 'vitest-evals/harness';
-import type { UsageStats } from '../../../src/types/index.js';
+import type { UsageStats } from '@sentry/warden';
 
 export interface EvalUsageSummaryInput {
   provider: string;

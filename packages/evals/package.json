@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
     "@octokit/rest": "^22.0.1",
+    "@sentry/warden": "workspace:*",
     "dotenv": "^17.4.2",
     "vitest-evals": "0.11.0",
     "yaml": "^2.9.0",

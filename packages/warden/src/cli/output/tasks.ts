@@ -1,0 +1,1062 @@
+/**
+ * Task execution for skills.
+ * Callback-based state updates for CLI and Ink rendering.
+ *
+ * Reporter spec: specs/reporters.md
+ */
+
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode, HunkTrace } from '../../types/index.js';
+import type { SkillDefinition } from '../../config/schema.js';
+import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
+import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
+import {
+  prepareFiles,
+  analyzeFile,
+  aggregateUsage,
+  aggregateAuxiliaryUsage,
+  postProcessFindings,
+  generateSummary,
+  type AuxiliaryUsageEntry,
+  type SkillRunnerOptions,
+  type FileAnalysisCallbacks,
+  type PreparedFile,
+  type PRPromptContext,
+  type ChunkAnalysisResult,
+  type FindingProcessingEvent,
+} from '../../sdk/runner.js';
+import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
+import { buildFileReports } from '../../sdk/report-files.js';
+import chalk from 'chalk';
+import figures from 'figures';
+import { Verbosity } from './verbosity.js';
+import type { OutputMode } from './tty.js';
+import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
+import { timestamp } from './tty.js';
+import { formatDuration, formatCost, formatLocation, formatSeverityPlain, formatFindingCountsPlain, countBySeverity, pluralize } from './formatters.js';
+import { runPool, Semaphore } from '../../utils/index.js';
+
+/**
+ * Result from processing a single file within a skill task.
+ */
+interface FileProcessResult {
+  findings: Finding[];
+  usage?: UsageStats;
+  durationMs: number;
+  failedHunks: number;
+  failedExtractions: number;
+  hunkFailures: HunkFailure[];
+  auxiliaryUsage?: AuxiliaryUsageEntry[];
+  traces?: HunkTrace[];
+}
+
+function allAnalysisFailuresHaveCode(
+  hunkFailures: HunkFailure[],
+  code: ErrorCode,
+): boolean {
+  const analysisFailures = hunkFailures.filter((failure) => failure.type === 'analysis');
+  return (
+    analysisFailures.length > 0
+    && analysisFailures.every((failure) => failure.code === code)
+  );
+}
+
+function firstAnalysisFailureMessage(hunkFailures: HunkFailure[], code: ErrorCode): string | undefined {
+  return hunkFailures.find((failure) => failure.type === 'analysis' && failure.code === code)?.message;
+}
+
+function summarizeRunFailure(args: {
+  totalHunks: number;
+  hunkFailures: HunkFailure[];
+  circuitReason?: { code: ErrorCode; message: string };
+  runtime?: SkillRunnerOptions['runtime'];
+}): { code: ErrorCode; message: string } {
+  const { totalHunks, hunkFailures, circuitReason, runtime } = args;
+  if (circuitReason) {
+    return circuitReason;
+  }
+  if (allAnalysisFailuresHaveCode(hunkFailures, 'auth_failed')) {
+    return {
+      code: 'auth_failed',
+      message: 'Authentication failed. Warden stopped early.',
+    };
+  }
+  if (allAnalysisFailuresHaveCode(hunkFailures, 'invalid_model_selector')) {
+    return {
+      code: 'invalid_model_selector',
+      message: firstAnalysisFailureMessage(hunkFailures, 'invalid_model_selector') ?? 'Invalid Pi model selector.',
+    };
+  }
+  if (allAnalysisFailuresHaveCode(hunkFailures, 'provider_unavailable')) {
+    return {
+      code: 'provider_unavailable',
+      message: `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
+    };
+  }
+  return {
+    code: 'all_hunks_failed',
+    message:
+      `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
+      `This usually indicates an authentication problem. ` +
+      ((runtime ?? 'pi') === 'claude'
+        ? `Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' when using the Claude runtime without an API key.`
+        : `Verify WARDEN_MODEL and the WARDEN-prefixed provider API key for that model are set correctly.`),
+  };
+}
+
+/**
+ * Write a log-mode message to stderr with timestamp prefix.
+ * Used for non-TTY / plain output.
+ */
+function logPlain(message: string): void {
+  console.error(`[${timestamp()}] warden: ${message}`);
+}
+
+/**
+ * Write a debug-level message to stderr.
+ * Uses chalk.dim formatting in TTY mode, timestamped "DEBUG:" prefix otherwise.
+ */
+function debugLog(mode: OutputMode, message: string): void {
+  if (mode.isTTY) {
+    console.error(chalk.dim(`[debug] ${message}`));
+  } else {
+    logPlain(`DEBUG: ${message}`);
+  }
+}
+
+/**
+ * Format a finding's location as a compact string, falling back to 'unknown'.
+ */
+function findingLocation(finding: Finding): string {
+  if (!finding.location) return 'unknown';
+  return formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine);
+}
+
+function findingSummary(finding: Finding): string {
+  return `${findingLocation(finding)}: ${finding.title}`;
+}
+
+function formatFindingProcessingEvent(event: FindingProcessingEvent): string {
+  const reason = event.reason ? ` (${event.reason})` : '';
+  const replacement = event.replacement ? ` -> ${findingSummary(event.replacement)}` : '';
+  return `${event.stage}:${event.action} ${findingSummary(event.finding)}${replacement}${reason}`;
+}
+
+/**
+ * State of a file being processed by a skill.
+ */
+export interface FileState {
+  filename: string;
+  status: 'pending' | 'running' | 'done' | 'skipped';
+  currentHunk: number;
+  totalHunks: number;
+  findings: Finding[];
+  usage?: UsageStats;
+  durationMs?: number;
+}
+
+/**
+ * State of a skill being executed.
+ */
+export interface SkillState {
+  name: string;
+  displayName: string;
+  status: 'pending' | 'running' | 'done' | 'skipped' | 'error';
+  startTime?: number;
+  durationMs?: number;
+  files: FileState[];
+  findings: Finding[];
+  usage?: UsageStats;
+  auxiliaryUsage?: AuxiliaryUsageMap;
+  error?: string;
+}
+
+/**
+ * Result from running a skill task.
+ */
+export interface SkillTaskResult {
+  name: string;
+  report?: SkillReport;
+  failOn?: SeverityThreshold;
+  minConfidence?: ConfidenceThreshold;
+  error?: unknown;
+}
+
+/**
+ * Options for creating a skill task.
+ */
+export interface SkillTaskOptions {
+  name: string;
+  displayName?: string;
+  triggerName?: string;
+  failOn?: SeverityThreshold;
+  minConfidence?: ConfidenceThreshold;
+  /** Resolve the skill definition (may be async for loading) */
+  resolveSkill: () => Promise<SkillDefinition>;
+  /** The event context with files to analyze */
+  context: EventContext;
+  /** Options passed to the runner */
+  runnerOptions?: SkillRunnerOptions;
+}
+
+/**
+ * Options for running skill tasks.
+ */
+export interface RunTasksOptions {
+  mode: OutputMode;
+  verbosity: Verbosity;
+  concurrency: number;
+  /** Controller that fires when fail-fast detects a finding. Created by caller. */
+  failFastController?: AbortController;
+  /** Hook fired after each skill finishes; used by the CLI to stream JSONL to disk. */
+  onSkillComplete?: (report: SkillReport) => void;
+  /** Hook fired after each chunk finishes; used by the CLI to stream JSONL to disk. */
+  onChunkComplete?: (skillName: string, chunk: ChunkAnalysisResult) => void;
+}
+
+/**
+ * Callbacks for reporting skill execution progress to the UI.
+ */
+export interface SkillProgressCallbacks {
+  onSkillStart: (skill: SkillState) => void;
+  onSkillUpdate: (name: string, updates: Partial<SkillState>) => void;
+  onFileUpdate: (skillName: string, filename: string, updates: Partial<FileState>) => void;
+  /** Called when a hunk analysis starts (one SDK invocation per hunk) */
+  onHunkStart?: (skillName: string, filename: string, hunkNum: number, totalHunks: number, lineRange: string) => void;
+  onChunkComplete?: (skillName: string, chunk: ChunkAnalysisResult) => void;
+  onSkillComplete: (name: string, report: SkillReport) => void;
+  onSkillSkipped: (name: string) => void;
+  onSkillError: (name: string, error: string) => void;
+  /** Called when a prompt exceeds the large prompt threshold */
+  onLargePrompt?: (skillName: string, filename: string, lineRange: string, chars: number, estimatedTokens: number) => void;
+  /** Called with prompt size info in debug mode */
+  onPromptSize?: (skillName: string, filename: string, lineRange: string, systemChars: number, userChars: number, totalChars: number, estimatedTokens: number) => void;
+  /** Called with extraction result details (debug mode) */
+  onExtractionResult?: (skillName: string, filename: string, lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
+  /** Called when findings are dropped, revised, merged, or stripped after analysis */
+  onFindingProcessing?: (skillName: string, event: FindingProcessingEvent) => void;
+  /** Called when hunk analysis fails (SDK error, API error, abort) */
+  onHunkFailed?: (skillName: string, filename: string, lineRange: string, error: string) => void;
+  /** Called when findings extraction fails (both regex and LLM fallback failed) */
+  onExtractionFailure?: (skillName: string, filename: string, lineRange: string, error: string, preview: string) => void;
+  /** Called when a retry attempt is made */
+  onRetry?: (skillName: string, filename: string, lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
+}
+
+/**
+ * Run a single skill task.
+ */
+export async function runSkillTask(
+  options: SkillTaskOptions,
+  fileConcurrency: number,
+  callbacks: SkillProgressCallbacks,
+  semaphore?: Semaphore
+): Promise<SkillTaskResult> {
+  const { name, displayName = name, triggerName, failOn, minConfidence, resolveSkill, context, runnerOptions = {} } = options;
+
+  return Sentry.startSpan(
+    { op: 'skill.run', name: `run ${displayName}` },
+    async (span) => {
+      span.setAttribute('gen_ai.agent.name', displayName);
+      if (triggerName) {
+        span.setAttribute('warden.trigger.name', triggerName);
+      }
+      const files = context.pullRequest?.files ?? [];
+      span.setAttribute('warden.file.count', files.length);
+      logger.info(logger.fmt`Skill execution started: ${displayName}`, {
+        'warden.file.count': files.length,
+      });
+
+      const startTime = Date.now();
+      const runtime = runnerOptions.runtime ?? 'pi';
+      // Mirror of the inner-scope `skill` so the outer catch can use
+      // report.skill when resolveSkill succeeded but a later step threw.
+      // Stays undefined only if resolveSkill itself failed.
+      let resolvedSkillName: string | undefined;
+
+      try {
+        let skill: SkillDefinition;
+        try {
+          skill = await resolveSkill();
+          resolvedSkillName = skill.name;
+          span.setAttribute('gen_ai.agent.name', skill.name);
+        } catch (err) {
+          if (err instanceof WardenAuthenticationError) throw err;
+          const message = err instanceof Error ? err.message : String(err);
+          throw new SkillRunnerError(message, { cause: err, code: 'skill_resolution_failed' });
+        }
+
+        // Prepare files (parse patches into hunks)
+        const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
+          contextLines: runnerOptions.contextLines,
+        });
+
+        if (preparedFiles.length === 0) {
+          // No files to analyze - skip
+          const skippedReport: SkillReport = {
+            skill: skill.name,
+            summary: 'No code changes to analyze',
+            findings: [],
+            usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+            durationMs: Date.now() - startTime,
+            model: runnerOptions?.model,
+            runtime,
+            skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
+          };
+          span.setAttribute('warden.finding.count', 0);
+          callbacks.onSkillSkipped(name);
+          // Also fire onSkillComplete so the incremental JSONL writer records the skipped skill.
+          callbacks.onSkillComplete(name, skippedReport);
+          return {
+            name,
+            report: skippedReport,
+            failOn,
+            minConfidence,
+          };
+        }
+
+        // Initialize file states
+        const fileStates: FileState[] = preparedFiles.map((file) => ({
+          filename: file.filename,
+          status: 'pending',
+          currentHunk: 0,
+          totalHunks: file.hunks.length,
+          findings: [],
+        }));
+
+        // Notify skill start
+        callbacks.onSkillStart({
+          name,
+          displayName,
+          status: 'running',
+          startTime,
+          files: fileStates,
+          findings: [],
+        });
+
+        // Build PR context for inclusion in prompts (if available)
+        // For non-PR contexts (CLI file/diff mode), skip the "Other Files" list to avoid
+        // bloating every hunk prompt with thousands of filenames.
+        const isPullRequest = context.pullRequest ? context.pullRequest.number !== 0 : false;
+        const prContext: PRPromptContext | undefined = context.pullRequest
+          ? {
+              changedFiles: isPullRequest ? context.pullRequest.files.map((f) => f.filename) : [],
+              title: context.pullRequest.title,
+              body: context.pullRequest.body,
+              maxContextFiles: runnerOptions.maxContextFiles,
+            }
+          : undefined;
+
+        // Process files with concurrency
+        const processFile = async (prepared: PreparedFile, index: number): Promise<FileProcessResult> => {
+          const filename = prepared.filename;
+          const fileStartTime = Date.now();
+
+          // Update file state to running (local + callback)
+          const localState = fileStates[index];
+          if (localState) localState.status = 'running';
+          callbacks.onFileUpdate(name, filename, { status: 'running' });
+
+          const fileCallbacks: FileAnalysisCallbacks = {
+            skillStartTime: startTime,
+            onHunkStart: (hunkNum, totalHunks, lineRange) => {
+              callbacks.onFileUpdate(name, filename, {
+                currentHunk: hunkNum,
+                totalHunks,
+              });
+              callbacks.onHunkStart?.(name, filename, hunkNum, totalHunks, lineRange);
+            },
+            onHunkComplete: (_hunkNum, findings, usage) => {
+              // Accumulate findings and usage for this file
+              const current = fileStates[index];
+              if (current) {
+                current.findings.push(...findings);
+                if (current.usage) {
+                  current.usage.inputTokens += usage.inputTokens;
+                  current.usage.outputTokens += usage.outputTokens;
+                  current.usage.costUSD += usage.costUSD;
+                  if (usage.cacheReadInputTokens) {
+                    current.usage.cacheReadInputTokens = (current.usage.cacheReadInputTokens ?? 0) + usage.cacheReadInputTokens;
+                  }
+                  if (usage.cacheCreationInputTokens) {
+                    current.usage.cacheCreationInputTokens = (current.usage.cacheCreationInputTokens ?? 0) + usage.cacheCreationInputTokens;
+                  }
+                  if (usage.cacheCreation5mInputTokens) {
+                    current.usage.cacheCreation5mInputTokens = (current.usage.cacheCreation5mInputTokens ?? 0) + usage.cacheCreation5mInputTokens;
+                  }
+                  if (usage.cacheCreation1hInputTokens) {
+                    current.usage.cacheCreation1hInputTokens = (current.usage.cacheCreation1hInputTokens ?? 0) + usage.cacheCreation1hInputTokens;
+                  }
+                  if (usage.webSearchRequests) {
+                    current.usage.webSearchRequests = (current.usage.webSearchRequests ?? 0) + usage.webSearchRequests;
+                  }
+                } else {
+                  current.usage = { ...usage };
+                }
+                callbacks.onFileUpdate(name, filename, { usage: current.usage });
+              }
+            },
+            onLargePrompt: callbacks.onLargePrompt
+              ? (lineRange, chars, estimatedTokens) => {
+                  callbacks.onLargePrompt?.(name, filename, lineRange, chars, estimatedTokens);
+                }
+              : undefined,
+            onPromptSize: callbacks.onPromptSize
+              ? (lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
+                  callbacks.onPromptSize?.(name, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens);
+                }
+              : undefined,
+            onExtractionResult: callbacks.onExtractionResult
+              ? (lineRange, findingsCount, method) => {
+                  callbacks.onExtractionResult?.(name, filename, lineRange, findingsCount, method);
+                }
+              : undefined,
+            onChunkComplete: callbacks.onChunkComplete
+              ? (chunk) => {
+                  callbacks.onChunkComplete?.(skill.name, chunk);
+                }
+              : undefined,
+            onHunkFailed: callbacks.onHunkFailed
+              ? (lineRange, error) => {
+                  callbacks.onHunkFailed?.(name, filename, lineRange, error);
+                }
+              : undefined,
+            onExtractionFailure: callbacks.onExtractionFailure
+              ? (lineRange, error, preview) => {
+                  callbacks.onExtractionFailure?.(name, filename, lineRange, error, preview);
+                }
+              : undefined,
+            onRetry: callbacks.onRetry
+              ? (lineRange, attempt, maxRetries, error, delayMs) => {
+                  callbacks.onRetry?.(name, filename, lineRange, attempt, maxRetries, error, delayMs);
+                }
+              : undefined,
+          };
+
+          const result = await analyzeFile(
+            skill,
+            prepared,
+            context.repoPath,
+            runnerOptions,
+            fileCallbacks,
+            prContext
+          );
+
+          // Detect if this file was aborted before any real work happened
+          const fileDurationMs = Date.now() - fileStartTime;
+          const aborted = runnerOptions.abortController?.signal.aborted ?? false;
+          const noWork = !result.usage || (result.usage.inputTokens === 0 && result.usage.outputTokens === 0);
+          const fileStatus = (aborted && noWork) ? 'skipped' : 'done';
+
+          if (localState) localState.status = fileStatus;
+          callbacks.onFileUpdate(name, filename, {
+            status: fileStatus,
+            findings: result.findings,
+            usage: result.usage,
+            durationMs: fileDurationMs,
+          });
+
+          return {
+            findings: result.findings,
+            usage: result.usage,
+            durationMs: fileDurationMs,
+            failedHunks: result.failedHunks,
+            failedExtractions: result.failedExtractions,
+            hunkFailures: result.hunkFailures,
+            auxiliaryUsage: result.auxiliaryUsage,
+            traces: result.traces,
+          };
+        };
+
+        // Return an empty result for files skipped due to abort
+        const processSkippedFile = (index: number): FileProcessResult => {
+          const localState = fileStates[index];
+          if (localState) localState.status = 'skipped';
+          const filename = preparedFiles[index]?.filename ?? 'unknown';
+          callbacks.onFileUpdate(name, filename, { status: 'skipped' });
+          return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0, hunkFailures: [] };
+        };
+
+        // Process files with sliding-window concurrency pool
+        const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
+        const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
+        // The effective concurrency for batch delay: when a semaphore gates work,
+        // use its permit count (the actual concurrency limit) rather than fileConcurrency.
+        const effectiveConcurrency = semaphore ? semaphore.initialPermits : fileConcurrency;
+        const allResults = await runPool(preparedFiles, fileConcurrency,
+          async (file, index) => {
+            if (semaphore) await semaphore.acquire();
+            try {
+              // Check abort after acquiring the semaphore -- the file may have
+              // been queued behind others and a SIGINT could have arrived while waiting.
+              if (shouldAbort()) return processSkippedFile(index);
+              // Rate-limit: delay items beyond the first concurrent wave
+              if (index >= effectiveConcurrency && batchDelayMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+              }
+              return await processFile(file, index);
+            } finally {
+              if (semaphore) semaphore.release();
+            }
+          },
+          { shouldAbort }
+        );
+
+        // Mark never-dispatched files as skipped
+        for (const fileState of fileStates) {
+          if (fileState.status === 'pending') {
+            callbacks.onFileUpdate(name, fileState.filename, { status: 'skipped' });
+          }
+        }
+
+        // Build report
+        const duration = Date.now() - startTime;
+        const allFindings = allResults.flatMap((r) => r.findings);
+        const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
+        const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
+        const allTraces = allResults.flatMap((r) => r.traces ?? []);
+        const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
+        const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
+        const allHunkFailures: HunkFailure[] = allResults.flatMap((r) => r.hunkFailures);
+        const totalHunks = preparedFiles.reduce((sum, f) => sum + f.hunks.length, 0);
+        // Each hunk contributes to at most one of failedHunks / failedExtractions
+        // (mutually exclusive in analyzeFile), so summing them gives the total
+        // failed-hunk count. Counting only analysis failures would miss the
+        // scenario where every hunk's SDK call succeeded but every extraction
+        // failed — a silent zero-findings run otherwise.
+        const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
+
+        const circuitReason = runnerOptions.circuitBreaker?.reason;
+        if (
+          totalHunks > 0
+          && allFindings.length === 0
+          && totalAttemptFailures > 0
+          && (
+            circuitReason
+            || (
+              totalAttemptFailures === totalHunks
+              && !(runnerOptions.abortController?.signal.aborted ?? false)
+            )
+          )
+        ) {
+          const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
+          const error = summarizeRunFailure({
+            totalHunks,
+            hunkFailures: allHunkFailures,
+            circuitReason,
+            runtime: runnerOptions.runtime,
+          });
+          const errorReport: SkillReport = {
+            skill: skill.name,
+            summary: `${skill.name}: failed (${error.code})`,
+            findings: [],
+            usage: aggregateUsage(allUsage),
+            durationMs: duration,
+            model: runnerOptions?.model,
+            runtime,
+            // Preserve per-file metadata (timing, partial usage, attempted
+            // filenames) on failure runs too — `warden runs` and JSONL
+            // consumers iterate this array to count attempted files. Without
+            // it, a failed run shows totalFiles: 0.
+            files: preparedFiles.map((file, i) => {
+              const r = allResults[i];
+              return {
+                filename: file.filename,
+                findings: r?.findings.length ?? 0,
+                durationMs: r?.durationMs,
+                usage: r?.usage,
+              };
+            }),
+            failedHunks: totalFailedHunks,
+            hunkFailures: allHunkFailures,
+            error: {
+              code: error.code,
+              message: error.message,
+              timestamp: new Date().toISOString(),
+            },
+          };
+          if (totalFailedExtractions > 0) errorReport.failedExtractions = totalFailedExtractions;
+          if (skippedFiles.length > 0) errorReport.skippedFiles = skippedFiles;
+          if (auxUsage) errorReport.auxiliaryUsage = auxUsage;
+          if (runnerOptions.captureTraces && allTraces.length > 0) errorReport.traces = allTraces;
+          span.setAttribute('warden.finding.count', 0);
+          callbacks.onSkillError(name, error.message);
+          // Mirror the success path: emit a final completion event with the
+          // (errored) report so terminal renderers print the per-skill
+          // summary line. Without this, console mode shows the error string
+          // alone with no breakdown of timing, cost, or attempted files.
+          callbacks.onSkillUpdate(name, {
+            status: 'error',
+            durationMs: duration,
+            findings: [],
+            usage: errorReport.usage,
+            auxiliaryUsage: errorReport.auxiliaryUsage,
+          });
+          callbacks.onSkillComplete(name, errorReport);
+          // Carry a typed error alongside the report so consumers that re-throw
+          // (action executor, Sentry.captureException) preserve the ErrorCode.
+          const runnerError = new SkillRunnerError(error.message, { code: error.code });
+          return { name, report: errorReport, error: runnerError, failOn, minConfidence };
+        }
+
+        const processed = await postProcessFindings(allFindings, {
+          skill,
+          repoPath: context.repoPath,
+          apiKey: runnerOptions.apiKey,
+          runtime: runnerOptions.runtime,
+          auxiliaryModel: runnerOptions.auxiliaryModel,
+          synthesisModel: runnerOptions.synthesisModel,
+          auxiliaryMaxRetries: runnerOptions.auxiliaryMaxRetries,
+          verifyFindings: runnerOptions.verifyFindings,
+          maxTurns: runnerOptions.maxTurns,
+          abortController: runnerOptions.abortController,
+          pathToClaudeCodeExecutable: runnerOptions.pathToClaudeCodeExecutable,
+          prContext,
+          onFindingProcessing: (event) => {
+            callbacks.onFindingProcessing?.(name, event);
+          },
+        });
+        const finalFindings = processed.findings;
+        allAuxEntries.push(...processed.auxiliaryUsage);
+
+        const report: SkillReport = {
+          skill: skill.name,
+          summary: generateSummary(skill.name, finalFindings),
+          findings: finalFindings,
+          usage: aggregateUsage(allUsage),
+          durationMs: duration,
+          model: runnerOptions?.model,
+          runtime,
+          files: buildFileReports(
+            preparedFiles.map((file, i) => {
+              const r = allResults[i];
+              return {
+                filename: file.filename,
+                durationMs: r?.durationMs,
+                usage: r?.usage,
+              };
+            }),
+            finalFindings,
+          ),
+        };
+        if (skippedFiles.length > 0) {
+          report.skippedFiles = skippedFiles;
+        }
+        if (totalFailedHunks > 0) {
+          report.failedHunks = totalFailedHunks;
+        }
+        if (totalFailedExtractions > 0) {
+          report.failedExtractions = totalFailedExtractions;
+        }
+        if (allHunkFailures.length > 0) {
+          report.hunkFailures = allHunkFailures;
+        }
+        if (runnerOptions.captureTraces && allTraces.length > 0) {
+          report.traces = allTraces;
+        }
+        const auxUsage = aggregateAuxiliaryUsage(allAuxEntries);
+        if (auxUsage) {
+          report.auxiliaryUsage = auxUsage;
+        }
+        span.setAttribute('warden.finding.count', report.findings.length);
+
+        // Emit metrics and log completion
+        emitSkillMetrics(report);
+        logger.info(logger.fmt`Skill execution complete: ${displayName}`, {
+          'warden.finding.count': report.findings.length,
+          'duration_ms': report.durationMs,
+        });
+
+        // Notify skill complete
+        callbacks.onSkillUpdate(name, {
+          status: 'done',
+          durationMs: duration,
+          findings: finalFindings,
+          usage: report.usage,
+          auxiliaryUsage: report.auxiliaryUsage,
+        });
+        callbacks.onSkillComplete(name, report);
+
+        return { name, report, failOn, minConfidence };
+      } catch (err) {
+        const { code, message } = classifyError(err);
+        callbacks.onSkillError(name, message);
+        // Use the resolved skill name when available so JSONL output matches
+        // the success path's identifier. Falls back to the trigger name only
+        // when resolveSkill itself threw.
+        const skillName = resolvedSkillName ?? name;
+        const errorReport: SkillReport = {
+          skill: skillName,
+          summary: `${skillName}: failed (${code})`,
+          findings: [],
+          durationMs: Date.now() - startTime,
+          model: runnerOptions?.model,
+          runtime,
+          error: { code, message, timestamp: new Date().toISOString() },
+        };
+        span.setAttribute('warden.finding.count', 0);
+        // Mirror the success / all-hunks-fail paths: emit a final completion
+        // event so non-TTY (log-mode) renderers print a per-skill summary
+        // line for the failure. Without this, log mode shows only the
+        // bare error string with no timing or duration.
+        callbacks.onSkillUpdate(name, {
+          status: 'error',
+          durationMs: errorReport.durationMs,
+          findings: [],
+        });
+        callbacks.onSkillComplete(name, errorReport);
+        return { name, report: errorReport, error: err, failOn, minConfidence };
+      }
+    },
+  );
+}
+
+/**
+ * Create default progress callbacks for console output.
+ * In TTY mode: colored icons, chalk formatting.
+ * In non-TTY/log mode: timestamped lines with finding details.
+ */
+export function createDefaultCallbacks(
+  tasks: SkillTaskOptions[],
+  mode: OutputMode,
+  verbosity: Verbosity
+): SkillProgressCallbacks {
+  /** Resolve the display name for a skill, falling back to the raw name. */
+  function displayNameFor(name: string): string {
+    return tasks.find((t) => t.name === name)?.displayName ?? name;
+  }
+
+  /** Track per-skill skipped file counts for collapsed summary in non-TTY mode. */
+  const skippedCounts = new Map<string, number>();
+
+  // Skipped skills also fire onSkillComplete (for the JSONL writer).
+  // Suppress the duplicate "completed" line for those names.
+  const skippedSkills = new Set<string>();
+
+  return {
+    onSkillStart: (skill) => {
+      if (verbosity === Verbosity.Quiet) return;
+      if (!mode.isTTY) {
+        const fileCount = skill.files.length;
+        logPlain(`Running ${displayNameFor(skill.name)} (${fileCount} ${pluralize(fileCount, 'file')})...`);
+      }
+    },
+    onSkillUpdate: () => { /* no-op for default callbacks */ },
+    onFileUpdate: (_skillName, filename, updates) => {
+      if (updates.status === 'skipped') {
+        skippedCounts.set(_skillName, (skippedCounts.get(_skillName) ?? 0) + 1);
+        return;
+      }
+      if (verbosity === Verbosity.Quiet || mode.isTTY) return;
+      if (updates.status !== 'done') return;
+      const duration = updates.durationMs !== undefined ? formatDuration(updates.durationMs) : '?';
+      const cost = updates.usage ? ` ${formatCost(updates.usage.costUSD)}` : '';
+      const n = updates.findings?.length ?? 0;
+      const suffix = n > 0 ? ` ${n} ${pluralize(n, 'finding')}` : '';
+      logPlain(`  ${displayNameFor(_skillName)} > ${filename} done ${duration}${cost}${suffix}`);
+    },
+    onHunkStart: (skillName, filename, hunkNum, totalHunks, lineRange) => {
+      if (verbosity === Verbosity.Quiet || mode.isTTY) return;
+      logPlain(`  ${displayNameFor(skillName)} > ${filename} [${hunkNum}/${totalHunks}] ${lineRange}`);
+    },
+    onSkillComplete: (name, report) => {
+      if (verbosity === Verbosity.Quiet) return;
+      if (skippedSkills.has(name)) return;
+      const displayName = displayNameFor(name);
+
+      // Errored runs render as failures, not as misleading "completed -
+      // 0 findings" lines with a green checkmark. onSkillError already
+      // printed the error message; this line carries timing only.
+      if (report.error) {
+        if (mode.isTTY) {
+          const duration = report.durationMs !== undefined ? ` ${chalk.dim(`[${formatDuration(report.durationMs)}]`)}` : '';
+          console.error(`${chalk.red('✗')} ${displayName}${duration} ${chalk.red(`(${report.error.code})`)}`);
+        } else {
+          const duration = report.durationMs !== undefined ? formatDuration(report.durationMs) : '?';
+          logPlain(`${displayName} failed in ${duration} (${report.error.code})`);
+        }
+        return;
+      }
+
+      if (mode.isTTY) {
+        const duration = report.durationMs !== undefined ? ` ${chalk.dim(`[${formatDuration(report.durationMs)}]`)}` : '';
+        console.error(`${chalk.green(ICON_CHECK)} ${displayName}${duration}`);
+
+        // Debug: log finding details
+        if (verbosity >= Verbosity.Debug && report.findings.length > 0) {
+          for (const finding of report.findings) {
+            debugLog(mode, `${formatSeverityPlain(finding.severity)} ${findingLocation(finding)}: ${finding.title}`);
+
+          }
+        }
+      } else {
+        // Log mode: timestamped completion with duration and finding summary
+        const duration = report.durationMs !== undefined ? formatDuration(report.durationMs) : '?';
+        const counts = countBySeverity(report.findings);
+        const summary = formatFindingCountsPlain(counts);
+        logPlain(`${displayName} completed in ${duration} - ${summary}`);
+
+        // Show per-finding lines at Verbose+ verbosity in log mode
+        // (the final report already shows findings with full detail)
+        if (verbosity >= Verbosity.Verbose) {
+          for (const finding of report.findings) {
+            logPlain(`  ${formatSeverityPlain(finding.severity)} ${findingLocation(finding)}: ${finding.title}`);
+
+          }
+        }
+
+        const skipped = skippedCounts.get(name) ?? 0;
+        if (skipped > 0) {
+          logPlain(`  ${skipped} ${pluralize(skipped, 'file')} skipped`);
+        }
+      }
+    },
+    onSkillSkipped: (name) => {
+      skippedSkills.add(name);
+      if (verbosity === Verbosity.Quiet) return;
+      const displayName = displayNameFor(name);
+      if (mode.isTTY) {
+        console.error(`${chalk.yellow(ICON_SKIPPED)} ${displayName} ${chalk.dim('[skipped]')}`);
+      } else {
+        logPlain(`${displayName} skipped`);
+      }
+    },
+    onSkillError: (name, error) => {
+      if (verbosity === Verbosity.Quiet) return;
+      const displayName = displayNameFor(name);
+      if (mode.isTTY) {
+        console.error(`${chalk.red('\u2717')} ${displayName} - ${chalk.red(error)}`);
+      } else {
+        logPlain(`ERROR: ${displayName} - ${error}`);
+        const skipped = skippedCounts.get(name) ?? 0;
+        if (skipped > 0) {
+          logPlain(`  ${skipped} ${pluralize(skipped, 'file')} skipped`);
+        }
+      }
+    },
+    // Warn about large prompts (always shown unless quiet)
+    onLargePrompt: (_skillName, filename, lineRange, chars, estimatedTokens) => {
+      if (verbosity === Verbosity.Quiet) return;
+      const location = `${filename}:${lineRange}`;
+      const size = `${Math.round(chars / 1000)}k chars (~${Math.round(estimatedTokens / 1000)}k tokens)`;
+      if (mode.isTTY) {
+        console.error(`${chalk.yellow(figures.warning)}  Large prompt for ${location}: ${size}`);
+      } else {
+        logPlain(`WARN: Large prompt for ${location}: ${size}`);
+      }
+    },
+    // Debug mode: show prompt sizes
+    onPromptSize: verbosity >= Verbosity.Debug
+      ? (_skillName, filename, lineRange, systemChars, userChars, totalChars, estimatedTokens) => {
+          const location = `${filename}:${lineRange}`;
+          debugLog(mode, `Prompt for ${location}: system=${systemChars}, user=${userChars}, total=${totalChars} chars (~${estimatedTokens} tokens)`);
+        }
+      : undefined,
+    // Debug mode: show extraction results
+    onExtractionResult: verbosity >= Verbosity.Debug
+      ? (_skillName, filename, lineRange, findingsCount, method) => {
+          debugLog(mode, `Extracted ${findingsCount} ${pluralize(findingsCount, 'finding')} from ${filename}:${lineRange} via ${method}`);
+        }
+      : undefined,
+    onFindingProcessing: verbosity >= Verbosity.Debug
+      ? (_skillName, event) => {
+          debugLog(mode, formatFindingProcessingEvent(event));
+        }
+      : undefined,
+    // Verbose mode: show per-hunk analysis failures (spec: event #16 hunk_failed)
+    onHunkFailed: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, error) => {
+          const location = `${filename}:${lineRange}`;
+          if (mode.isTTY) {
+            console.error(`${chalk.yellow(figures.warning)}  Chunk failed: ${location} ${chalk.dim(`\u2014 ${error}`)}`);
+          } else {
+            logPlain(`WARN: Chunk failed: ${location} \u2014 ${error}`);
+          }
+        }
+      : undefined,
+    // Verbose mode: show per-hunk extraction failures (spec: event #17 extraction_failure)
+    onExtractionFailure: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, error, preview) => {
+          const location = `${filename}:${lineRange}`;
+          if (mode.isTTY) {
+            console.error(`${chalk.yellow(figures.warning)}  Extraction failed: ${location} ${chalk.dim(`\u2014 ${error}`)}`);
+            if (verbosity >= Verbosity.Debug && preview) {
+              debugLog(mode, `  Output preview: ${preview.slice(0, 200)}`);
+            }
+          } else {
+            logPlain(`WARN: Extraction failed: ${location} \u2014 ${error}`);
+            if (verbosity >= Verbosity.Debug && preview) {
+              logPlain(`DEBUG: Output preview: ${preview.slice(0, 200)}`);
+            }
+          }
+        }
+      : undefined,
+    // Verbose mode: show retry attempts (spec: event #18 retry)
+    onRetry: verbosity >= Verbosity.Verbose
+      ? (_skillName, filename, lineRange, attempt, maxRetries, error, delayMs) => {
+          const location = `${filename}:${lineRange}`;
+          const retryInfo = `attempt ${attempt}/${maxRetries}`;
+          const delay = delayMs > 0 ? `, retrying in ${Math.round(delayMs / 1000)}s` : '';
+          if (mode.isTTY) {
+            debugLog(mode, `Retry ${location} (${retryInfo}${delay}): ${error}`);
+          } else {
+            logPlain(`WARN: Retry ${location} (${retryInfo}${delay}): ${error}`);
+          }
+        }
+      : undefined,
+  };
+}
+
+/**
+ * Share abort/circuit state across task runner options.
+ */
+export function composeTasksWithFailFast(
+  tasks: SkillTaskOptions[],
+  failFastController?: AbortController,
+  circuitBreaker?: ProviderFailureCircuitBreaker,
+  circuitAbortController?: AbortController,
+): SkillTaskOptions[] {
+  if (!failFastController && !circuitBreaker && !circuitAbortController) return tasks;
+
+  const sharedAbortController = new AbortController();
+  const taskControllers = new Set<AbortController>();
+  const composedTaskControllers = new WeakMap<AbortController, AbortController>();
+
+  const abortAll = () => {
+    sharedAbortController.abort();
+    for (const controller of taskControllers) {
+      controller.abort();
+    }
+  };
+
+  for (const source of [failFastController, circuitAbortController]) {
+    if (!source) continue;
+    if (source.signal.aborted) {
+      abortAll();
+    } else {
+      source.signal.addEventListener('abort', abortAll, { once: true });
+    }
+  }
+
+  const composeAbortController = (taskController: AbortController | undefined): AbortController => {
+    if (!taskController) return sharedAbortController;
+
+    const cached = composedTaskControllers.get(taskController);
+    if (cached) return cached;
+
+    const composed = new AbortController();
+    composedTaskControllers.set(taskController, composed);
+    taskControllers.add(composed);
+
+    const abortTask = () => composed.abort();
+
+    if (sharedAbortController.signal.aborted || taskController.signal.aborted) {
+      abortTask();
+    } else {
+      taskController.signal.addEventListener('abort', abortTask, { once: true });
+    }
+
+    return composed;
+  };
+
+  return tasks.map((task) => ({
+    ...task,
+    runnerOptions: {
+      ...task.runnerOptions,
+      abortController: composeAbortController(task.runnerOptions?.abortController),
+      circuitBreaker: task.runnerOptions?.circuitBreaker ?? circuitBreaker,
+    },
+  }));
+}
+
+/**
+ * Launch all skill tasks in parallel using a shared semaphore for concurrency.
+ */
+export async function runComposedSkillTasks(
+  tasks: SkillTaskOptions[],
+  callbacks: SkillProgressCallbacks,
+  semaphore: Semaphore
+): Promise<SkillTaskResult[]> {
+  const results = await runPool(tasks, tasks.length,
+    (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, callbacks, semaphore),
+    { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
+  );
+
+  return results;
+}
+
+/**
+ * Run multiple skill tasks with optional concurrency.
+ * Uses callbacks to report progress for Ink rendering.
+ */
+export async function runSkillTasks(
+  tasks: SkillTaskOptions[],
+  options: RunTasksOptions,
+  callbacks?: SkillProgressCallbacks
+): Promise<SkillTaskResult[]> {
+  const { mode, verbosity, concurrency, failFastController, onSkillComplete, onChunkComplete } = options;
+
+  // Global semaphore gates file-level work across all skills.
+  // All skills launch immediately so the UI shows them as "running",
+  // but only `concurrency` files will be analysed at any time.
+  const semaphore = new Semaphore(concurrency);
+
+  const effectiveCallbacks = callbacks ?? createDefaultCallbacks(tasks, mode, verbosity);
+
+  const wrappedCallbacks: SkillProgressCallbacks = {
+    ...effectiveCallbacks,
+    ...(onSkillComplete || failFastController
+      ? {
+          onSkillComplete: (name: string, report: SkillReport) => {
+            effectiveCallbacks.onSkillComplete(name, report);
+            try { onSkillComplete?.(report); } catch { /* streaming hook must not break the run */ }
+            if (failFastController && report.findings.length > 0) {
+              failFastController.abort();
+            }
+          },
+        }
+      : {}),
+    ...(onChunkComplete
+      ? {
+          onChunkComplete: (name: string, chunk: ChunkAnalysisResult) => {
+            effectiveCallbacks.onChunkComplete?.(name, chunk);
+            try { onChunkComplete(name, chunk); } catch { /* streaming hook must not break the run */ }
+          },
+        }
+      : {}),
+  };
+
+  // Output SKILLS header (TTY only - in log mode, "Running..." lines are sufficient)
+  if (verbosity !== Verbosity.Quiet && tasks.length > 0 && mode.isTTY) {
+    console.error(chalk.bold('SKILLS'));
+  }
+
+  const circuitAbortController = new AbortController();
+  const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+  const composedTasks = composeTasksWithFailFast(
+    tasks,
+    failFastController,
+    circuitBreaker,
+    circuitAbortController,
+  );
+
+  // Listen for abort signal to show interrupt message (non-TTY only; Ink handles TTY)
+  const abortSignal = composedTasks[0]?.runnerOptions?.abortController?.signal;
+  if (abortSignal && !abortSignal.aborted && !mode.isTTY && verbosity !== Verbosity.Quiet) {
+    abortSignal.addEventListener('abort', () => {
+      // Only show interrupt message for user SIGINT, not fail-fast
+      if (!failFastController?.signal.aborted && !circuitAbortController.signal.aborted) {
+        logPlain('Interrupted, finishing up... (press Ctrl+C again to force exit)');
+      }
+    }, { once: true });
+  }
+
+  // Show fail-fast message when triggered (non-TTY only)
+  if (failFastController && !mode.isTTY && verbosity !== Verbosity.Quiet) {
+    failFastController.signal.addEventListener('abort', () => {
+      logPlain('Stopping \u2014 finding detected (--fail-fast)');
+    }, { once: true });
+  }
+
+  // Launch all skills in parallel; the semaphore is the sole concurrency gate.
+  return runComposedSkillTasks(composedTasks, wrappedCallbacks, semaphore);
+}

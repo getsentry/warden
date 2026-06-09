@@ -13,7 +13,7 @@ ignorePaths = ["dist/**", "packages/evals/**"]
 [[skills]]
 name = "security-review"
 paths = [
-  "src/**/*.ts",
+  "packages/warden/src/**/*.ts",
   ".github/workflows/*.yml",
   ".github/workflows/*.yaml",
   ".github/actions/**/*.yml",
@@ -21,7 +21,7 @@ paths = [
   "action.yml",
   "action.yaml",
 ]
-ignorePaths = ["src/**/*.test.ts"]
+ignorePaths = ["packages/warden/src/**/*.test.ts"]
 
 [[skills.triggers]]
 type = "pull_request"
@@ -30,7 +30,7 @@ actions = ["opened", "synchronize", "reopened"]
 [[skills]]
 name = "code-review"
 paths = [
-  "src/**/*.ts",
+  "packages/warden/src/**/*.ts",
   ".github/workflows/*.yml",
   ".github/workflows/*.yaml",
   ".github/actions/**/*.yml",

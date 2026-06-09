@@ -10,10 +10,14 @@ import {
   type Harness,
   type JsonValue,
 } from 'vitest-evals/harness';
-import { resolveSkillAsync } from '../../../src/skills/loader.js';
-import { verifyFindings } from '../../../src/sdk/verify.js';
-import { FindingSchema, type Finding, type UsageStats } from '../../../src/types/index.js';
-import { RuntimeNameSchema, type RuntimeName } from '../../../src/sdk/runtimes/types.js';
+import {
+  FindingSchema,
+  RuntimeNameSchema,
+  verifyLocalFindings,
+  type Finding,
+  type RuntimeName,
+  type UsageStats,
+} from '@sentry/warden';
 import { discoverEvalScenarioFiles, resolveEvalSkillName } from './index.js';
 import { evalFixtureRepoPath, singleEvalFixtureSourceRepository } from './fixtures.js';
 import { formatEvalId } from './names.js';
@@ -198,14 +202,14 @@ export async function runVerificationEval(
     const skillPath = existsSync(join(skillSrcDir, 'SKILL.md'))
       ? join(repoDir, '.warden', 'skills', basename(skillSrcDir))
       : join(repoDir, '.warden', 'skills', basename(meta.skillPath));
-    const skill = await resolveSkillAsync(skillPath);
     const runtime = options.runtime ?? meta.runtime;
     const model = options.model ?? meta.model;
 
     log(`Verifying candidate with model: ${model} [${runtime}]`);
-    const result = await verifyFindings([meta.candidate], {
+    const result = await verifyLocalFindings({
+      findings: [meta.candidate],
       repoPath: repoDir,
-      skill,
+      skillPath,
       apiKey: options.apiKey,
       runtime,
       model,

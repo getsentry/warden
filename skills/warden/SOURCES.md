@@ -6,8 +6,8 @@
 |--------|------------|------------|-------------------|
 | `skills/warden/SKILL.md` | canonical runtime | high | Keep concise; runtime instructions only. |
 | `skills/warden/references/*.md` | bundled runtime references | high | Keep focused by lookup need. |
-| `src/cli/` | implementation | high | Verify CLI flags and behavior here before changing examples. |
-| `src/config/` and `src/types/` | implementation | high | Verify config field names, defaults, and validation rules here. |
+| `packages/warden/src/cli/` | implementation | high | Verify CLI flags and behavior here before changing examples. |
+| `packages/warden/src/config/` and `packages/warden/src/types/` | implementation | high | Verify config field names, defaults, and validation rules here. |
 | `packages/docs/src/pages/cli.astro` | generated/user docs source | medium | Useful for CLI descriptions, but implementation wins on conflicts. |
 | `packages/docs/src/pages/config.astro` | generated/user docs source | medium | Useful for config examples, but implementation wins on conflicts. |
 | `packages/docs/src/pages/skill.astro` | generated/user docs source | medium | Useful for install and skill-discovery language. |

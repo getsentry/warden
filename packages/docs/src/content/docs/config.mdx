@@ -16,14 +16,18 @@ name = "security-review"
 
 [[skills.triggers]]
 type = "pull_request"
-actions = ["opened", "synchronize"]
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
 
 [[skills]]
 name = "code-review"
 
 [[skills.triggers]]
 type = "pull_request"
-actions = ["opened", "synchronize"]
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
 ```
 
 ## Sections
@@ -78,6 +82,13 @@ actions = ["opened", "synchronize"]
       <span class="sentry-property-meta">secret</span>
     </dt>
     <dd>Anthropic API key when using an Anthropic Pi model or the Claude runtime.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENROUTER_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenRouter API key when using an OpenRouter Pi model.</dd>
   </div>
   <div>
     <dt>

@@ -12,8 +12,7 @@ import { runJudge } from './judge.js';
 import { runEvalSkill, type RunEvalOptions } from './runner.js';
 import { evalPassed, type EvalMeta, type JudgeResponse } from './types.js';
 import { usageToSummary } from './usage.js';
-import { FindingSchema } from '../../../src/types/index.js';
-import type { Finding, SkillReport, UsageStats } from '../../../src/types/index.js';
+import { FindingSchema, type Finding, type SkillReport, type UsageStats } from '@sentry/warden';
 
 export const WardenEvalOutputSchema = z.object({
   name: z.string(),

@@ -1,4 +1,134 @@
 # Changelog
+## 0.37.0
+
+### New Features ✨
+
+- (jsonl) Add canonical usage breakdown accounting by @dcramer in [#388](https://github.com/getsentry/warden/pull/388)
+- Remove suggestedFix feature entirely by @sentry-junior in [#389](https://github.com/getsentry/warden/pull/389)
+
+### Bug Fixes 🐛
+
+- (sdk) Force short Claude prompt cache TTL by @dcramer in [#387](https://github.com/getsentry/warden/pull/387)
+- (warden) Capture runtime child spans in traces by @dcramer in [#393](https://github.com/getsentry/warden/pull/393)
+
+### Documentation 📚
+
+#### Benchmark
+
+- Publish Opus 4.8 high comparison by @dcramer in [#395](https://github.com/getsentry/warden/pull/395)
+- Publish Sonnet 4.6 runtime comparison by @dcramer in [#394](https://github.com/getsentry/warden/pull/394)
+
+#### Other
+
+- (benchmarking) Refresh Sentry corpus benchmark results by @dcramer in [#390](https://github.com/getsentry/warden/pull/390)
+- (benchmarks) Add Sentry corpus benchmark by @dcramer in [#366](https://github.com/getsentry/warden/pull/366)
+
+## 0.36.1
+
+### Bug Fixes 🐛
+
+- (sdk) Capture GenAI tool trace content by @dcramer in [#386](https://github.com/getsentry/warden/pull/386)
+
+## 0.36.0
+
+### New Features ✨
+
+#### Cli
+
+- Add explicit Claude runtime selection by @dcramer in [#384](https://github.com/getsentry/warden/pull/384)
+- Add per-run effort option by @dcramer in [#383](https://github.com/getsentry/warden/pull/383)
+
+#### Other
+
+- (traces) Capture run traces in output by @dcramer in [#385](https://github.com/getsentry/warden/pull/385)
+
+### Bug Fixes 🐛
+
+- (circuit-breaker) Humanize provider error messages on circuit open by @sentry-junior in [#382](https://github.com/getsentry/warden/pull/382)
+
+### Internal Changes 🔧
+
+- (skills) Hoist warden skills to repo root ./skills/ by @sentry-junior in [#380](https://github.com/getsentry/warden/pull/380)
+
+### Other
+
+- Align GenAI telemetry with current OTel cache semantics by @dcramer in [#381](https://github.com/getsentry/warden/pull/381)
+
+## 0.35.1
+
+### Internal Changes 🔧
+
+- (action) Validate release action layout by @dcramer in [#377](https://github.com/getsentry/warden/pull/377)
+
+## 0.35.0
+
+### New Features ✨
+
+#### Triggers
+
+- Add pull request label gating by @dcramer in [#359](https://github.com/getsentry/warden/pull/359)
+- Support non-draft pull request filters by @dcramer in [#355](https://github.com/getsentry/warden/pull/355)
+
+#### Other
+
+- (config) Add agent reasoning effort option by @tmustier in [#373](https://github.com/getsentry/warden/pull/373)
+- (warden) Emit reporting observations by @dcramer in [#362](https://github.com/getsentry/warden/pull/362)
+- (workflow) Nightly model pricing update PR by @dcramer in [#361](https://github.com/getsentry/warden/pull/361)
+
+### Bug Fixes 🐛
+
+#### Sdk
+
+- Runtime-aware auth errors and provider credential docs by @sentry-junior in [#369](https://github.com/getsentry/warden/pull/369)
+- Allow Pi model IDs with slashes by @Destreyf in [#368](https://github.com/getsentry/warden/pull/368)
+
+#### Workflow
+
+- Stop impersonating release bot by @dcramer in [#376](https://github.com/getsentry/warden/pull/376)
+- Use app token for pricing push by @dcramer in [#374](https://github.com/getsentry/warden/pull/374)
+
+#### Other
+
+- (cli) Rename --config to --config-path; handle directory input by @sentry-junior in [#365](https://github.com/getsentry/warden/pull/365)
+- (fix-eval) Anchor fix evaluation to original comment commit by @sentry-junior in [#370](https://github.com/getsentry/warden/pull/370)
+
+### Internal Changes 🔧
+
+- (evals) Add real-world code review fixtures by @dcramer in [#363](https://github.com/getsentry/warden/pull/363)
+- (monorepo) Move Warden into workspace package by @dcramer in [#357](https://github.com/getsentry/warden/pull/357)
+- Update model pricing by @sentry-release-bot in [#375](https://github.com/getsentry/warden/pull/375)
+
+## 0.34.0
+
+### Bug Fixes 🐛
+
+- (action) Report skipped PR trigger checks by @dcramer in [#353](https://github.com/getsentry/warden/pull/353)
+- (docs) Remove stray sentryAgentMarkdown from shikiConfig by @sentry-junior in [#350](https://github.com/getsentry/warden/pull/350)
+
+### Documentation 📚
+
+- (config) Document model runtime selection by @dcramer in [#338](https://github.com/getsentry/warden/pull/338)
+- Use tabbed install with dotagents as default by @sentry-junior in [#342](https://github.com/getsentry/warden/pull/342)
+- Add architecture flow guide by @dcramer in [#339](https://github.com/getsentry/warden/pull/339)
+- Migrate site docs to Starlight by @dcramer in [#337](https://github.com/getsentry/warden/pull/337)
+
+### Internal Changes 🔧
+
+#### Docs
+
+- Bump @sentry/starlight-theme to 0.7.0 by @sentry-junior in [#352](https://github.com/getsentry/warden/pull/352)
+- Bump @sentry/starlight-theme to ^0.5.0 by @sentry-junior in [#345](https://github.com/getsentry/warden/pull/345)
+- Bump @sentry/starlight-theme to ^0.4.0 by @sentry-junior in [#343](https://github.com/getsentry/warden/pull/343)
+- Update @sentry/starlight-theme to ^0.3.0 by @sentry-junior in [#341](https://github.com/getsentry/warden/pull/341)
+- Bump starlight theme to 0.2.0, adopt key/value lists by @sentry-junior in [#340](https://github.com/getsentry/warden/pull/340)
+
+#### Other
+
+- (deps) Bump @sentry/starlight-theme to 0.6.0 and add sentryAgentMarkdown plugin by @sentry-junior in [#348](https://github.com/getsentry/warden/pull/348)
+- (evals) Only trigger on eval path changes by @dcramer in [#347](https://github.com/getsentry/warden/pull/347)
+- Update workspace dependencies by @dcramer in [#354](https://github.com/getsentry/warden/pull/354)
+- Add docs build verification workflow by @dcramer in [#346](https://github.com/getsentry/warden/pull/346)
+
 ## 0.33.1
 
 ### Bug Fixes 🐛

@@ -96,7 +96,7 @@ Agent/model calls for token or provider symptoms.
 
 ```text
 dataset=spans query='span.op:gen_ai.invoke_agent gen_ai.agent.name:"<skill_name>"'
-fields=timestamp,trace,span_id,span.duration,gen_ai.conversation.id,gen_ai.request.model,gen_ai.response.model,gen_ai.usage.total_tokens,error.type
+fields=timestamp,trace,span_id,span.duration,gen_ai.conversation.id,gen_ai.request.model,gen_ai.response.model,gen_ai.usage.input_tokens,gen_ai.usage.output_tokens,gen_ai.usage.cache_read.input_tokens,gen_ai.usage.cache_creation.input_tokens,error.type
 sort=-timestamp
 ```
 
@@ -231,7 +231,8 @@ Spans: `gen_ai.invoke_agent`, `gen_ai.chat`, `gen_ai.execute_tool`
 
 Attributes: `gen_ai.agent.name`, `gen_ai.conversation.id`,
 `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.usage.input_tokens`,
-`gen_ai.usage.output_tokens`, `gen_ai.usage.total_tokens`,
+`gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read.input_tokens`,
+`gen_ai.usage.cache_creation.input_tokens`,
 `gen_ai.tool.name`
 
 ### Finding Pipeline

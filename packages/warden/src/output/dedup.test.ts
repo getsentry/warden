@@ -1,0 +1,1031 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Octokit } from '@octokit/rest';
+import {
+  generateContentHash,
+  generateFindingMetadata,
+  generateMarker,
+  parseWardenFindingMetadata,
+  parseMarker,
+  parseWardenComment,
+  parseWardenFindingId,
+  isWardenComment,
+  deduplicateFindings,
+  findingToExistingComment,
+  fetchExistingComments,
+  parseWardenSkills,
+  updateWardenCommentBody,
+  consolidateBatchFindings,
+} from './dedup.js';
+import type { Finding } from '../types/index.js';
+import type { ExistingComment } from './dedup.js';
+
+describe('generateContentHash', () => {
+  it('generates consistent 8-char hex hash', () => {
+    const hash = generateContentHash('SQL Injection', 'User input passed to query');
+    expect(hash).toMatch(/^[a-f0-9]{8}$/);
+  });
+
+  it('returns same hash for same content', () => {
+    const hash1 = generateContentHash('Title', 'Description');
+    const hash2 = generateContentHash('Title', 'Description');
+    expect(hash1).toBe(hash2);
+  });
+
+  it('returns different hash for different content', () => {
+    const hash1 = generateContentHash('Title A', 'Description');
+    const hash2 = generateContentHash('Title B', 'Description');
+    expect(hash1).not.toBe(hash2);
+  });
+});
+
+describe('generateMarker', () => {
+  it('generates marker in expected format', () => {
+    const marker = generateMarker('src/db.ts', 42, 'a1b2c3d4');
+    expect(marker).toBe('<!-- warden:v1:src/db.ts:42:a1b2c3d4 -->');
+  });
+
+  it('handles paths with special characters', () => {
+    const marker = generateMarker('src/utils/db-helper.ts', 100, 'abcd1234');
+    expect(marker).toBe('<!-- warden:v1:src/utils/db-helper.ts:100:abcd1234 -->');
+  });
+});
+
+describe('parseMarker', () => {
+  it('parses valid marker', () => {
+    const body = `**:warning: SQL Injection**
+
+User input passed to query.
+
+---
+<sub>warden: security-review</sub>
+<!-- warden:v1:src/db.ts:42:a1b2c3d4 -->`;
+
+    const marker = parseMarker(body);
+    expect(marker).toEqual({
+      path: 'src/db.ts',
+      line: 42,
+      contentHash: 'a1b2c3d4',
+    });
+  });
+
+  it('returns null for body without marker', () => {
+    const body = '**:warning: Some Issue**\n\nDescription';
+    expect(parseMarker(body)).toBeNull();
+  });
+
+  it('returns null for invalid marker format', () => {
+    const body = '<!-- warden:invalid -->';
+    expect(parseMarker(body)).toBeNull();
+  });
+});
+
+describe('parseWardenComment', () => {
+  it('parses comment with emoji', () => {
+    const body = `**:warning: SQL Injection**
+
+User input passed directly to query.
+
+---
+<sub>warden: security-review</sub>`;
+
+    const parsed = parseWardenComment(body);
+    expect(parsed).toEqual({
+      title: 'SQL Injection',
+      description: 'User input passed directly to query.',
+    });
+  });
+
+  it('parses comment without emoji', () => {
+    const body = `**Missing Validation**
+
+No input validation on user data.
+
+---
+<sub>warden: code-review</sub>`;
+
+    const parsed = parseWardenComment(body);
+    expect(parsed).toEqual({
+      title: 'Missing Validation',
+      description: 'No input validation on user data.',
+    });
+  });
+
+  it('strips legacy [ID] prefix from title', () => {
+    const body = `**:warning: [2K5-29B] wasFailFastAborted checks wrong controller**
+
+The function checks abortController.signal.aborted.
+
+---
+<sub>warden: notseer</sub>`;
+
+    const parsed = parseWardenComment(body);
+    expect(parsed).toEqual({
+      title: 'wasFailFastAborted checks wrong controller',
+      description: 'The function checks abortController.signal.aborted.',
+    });
+  });
+
+  it('parses new format comment without emoji or ID prefix', () => {
+    const body = `**wasFailFastAborted never detects fail-fast abort**
+
+The function checks the wrong signal.
+
+<sub>Identified by Warden [notseer] · 2K5-29B</sub>`;
+
+    const parsed = parseWardenComment(body);
+    expect(parsed).toEqual({
+      title: 'wasFailFastAborted never detects fail-fast abort',
+      description: 'The function checks the wrong signal.\n\n<sub>Identified by Warden [notseer] · 2K5-29B</sub>',
+    });
+  });
+
+  it('returns null for non-Warden comment', () => {
+    const body = 'This is a regular comment without the expected format.';
+    expect(parseWardenComment(body)).toBeNull();
+  });
+});
+
+describe('parseWardenFindingId', () => {
+  it('parses finding ID from current muted attribution', () => {
+    const body = `**Issue**
+
+Description
+
+<sub>Identified by Warden security-review · WRZ-XPL</sub>`;
+
+    expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
+  });
+
+  it('parses finding ID from legacy title prefix', () => {
+    const body = `**:warning: [2K5-29B] Legacy issue title**
+
+Description
+
+---
+<sub>warden: security-review</sub>`;
+
+    expect(parseWardenFindingId(body)).toBe('2K5-29B');
+  });
+
+  it('does not treat legacy severity attribution as a finding ID', () => {
+    const body = `<sub>Identified by Warden via \`security-review\` · high</sub>`;
+    expect(parseWardenFindingId(body)).toBeUndefined();
+  });
+});
+
+describe('isWardenComment', () => {
+  it('returns true for comment with attribution', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: skill</sub>`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
+  it('returns true for comment with marker', () => {
+    const body = `**Issue**\n\n<!-- warden:v1:file.ts:10:abc12345 -->`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
+  it('returns true for via format attribution', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill\` · high</sub>`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
+  it('returns true for bracket format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [skill] · ABC-123</sub>`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
+  it('returns true for current muted attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden skill · ABC-123</sub>`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
+  it('returns true for current backtick format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`skill\` · ABC-123`;
+    expect(isWardenComment(body)).toBe(true);
+  });
+
+  it('returns false for regular comment', () => {
+    const body = 'This is a regular comment.';
+    expect(isWardenComment(body)).toBe(false);
+  });
+});
+
+describe('fetchExistingComments', () => {
+  it('preserves parsed Warden skill and finding ID from review comments', async () => {
+    const graphql = vi.fn().mockResolvedValue({
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [
+              {
+                id: 'thread-1',
+                isResolved: false,
+                comments: {
+                  nodes: [
+                    {
+                      id: 'comment-node-1',
+                      databaseId: 123,
+                      body: `**SQL injection**
+
+User input reaches a query.
+
+<sub>Identified by Warden security-review · WRZ-XPL</sub>
+<!-- warden:v1:src/db.ts:42:abc12345 -->`,
+                      path: 'src/db.ts',
+                      line: 42,
+                      originalLine: 40,
+                      author: { login: 'warden-bot' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const comments = await fetchExistingComments(
+      { graphql } as unknown as Octokit,
+      'getsentry',
+      'warden',
+      123
+    );
+
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toMatchObject({
+      id: 123,
+      path: 'src/db.ts',
+      line: 42,
+      findingId: 'WRZ-XPL',
+      isWarden: true,
+      skills: ['security-review'],
+      threadId: 'thread-1',
+      actor: 'warden-bot',
+    });
+  });
+
+  it('derives plain-text title and description for external review comments', async () => {
+    const graphql = vi.fn().mockResolvedValue({
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [
+              {
+                id: 'thread-1',
+                isResolved: true,
+                comments: {
+                  nodes: [
+                    {
+                      id: 'comment-node-1',
+                      databaseId: 456,
+                      body: `<!-- metadata -->
+<details><summary>Trace</summary>Hidden marker</details>
+
+**Needs guard**
+
+Use \`Number.isFinite\` before saving [the value](https://example.com).`,
+                      path: 'src/db.ts',
+                      line: 42,
+                      originalLine: 40,
+                      author: { login: 'reviewer' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const comments = await fetchExistingComments(
+      { graphql } as unknown as Octokit,
+      'getsentry',
+      'warden',
+      123
+    );
+
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toMatchObject({
+      id: 456,
+      isWarden: false,
+      title: 'Needs guard Use Number.isFinite before saving the value.',
+      description: 'Needs guard Use Number.isFinite before saving the value.',
+    });
+  });
+});
+
+describe('deduplicateFindings', () => {
+  const baseFinding: Finding = {
+    id: 'f1',
+    severity: 'high',
+    title: 'SQL Injection',
+    description: 'User input passed to query',
+    location: {
+      path: 'src/db.ts',
+      startLine: 42,
+    },
+  };
+
+  it('returns all findings when no existing comments', async () => {
+    const findings = [baseFinding];
+    const result = await deduplicateFindings(findings, [], { hashOnly: true });
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.newFindings[0]).toBe(baseFinding);
+    expect(result.duplicateActions).toHaveLength(0);
+  });
+
+  it('returns all findings when findings array is empty', async () => {
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+      },
+    ];
+
+    const result = await deduplicateFindings([], existingComments, { hashOnly: true });
+    expect(result.newFindings).toHaveLength(0);
+    expect(result.duplicateActions).toHaveLength(0);
+  });
+
+  it('filters out exact hash matches and creates duplicate action', async () => {
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: true,
+        findingId: 'WRZ-XPL',
+      },
+    ];
+
+    const result = await deduplicateFindings([baseFinding], existingComments, { hashOnly: true });
+    expect(result.newFindings).toHaveLength(0);
+    expect(result.duplicateActions).toHaveLength(1);
+    expect(result.duplicateActions[0]!.type).toBe('update_warden');
+    expect(result.duplicateActions[0]!.matchType).toBe('hash');
+    expect(result.duplicateActions[0]!.finding.id).toBe('WRZ-XPL');
+  });
+
+  it('keeps findings with different content', async () => {
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+      },
+    ];
+
+    const differentFinding: Finding = {
+      ...baseFinding,
+      id: 'f2',
+      title: 'XSS Vulnerability',
+      description: 'Unescaped output in HTML',
+    };
+
+    const result = await deduplicateFindings([differentFinding], existingComments, {
+      hashOnly: true,
+    });
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.newFindings[0]!.title).toBe('XSS Vulnerability');
+    expect(result.duplicateActions).toHaveLength(0);
+  });
+
+  it('filters multiple duplicates and keeps unique findings', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'medium',
+      title: 'Missing Error Handling',
+      description: 'No try-catch block',
+      location: { path: 'src/api.ts', startLine: 100 },
+    };
+
+    const finding3: Finding = {
+      id: 'f3',
+      severity: 'low',
+      title: 'Code Style',
+      description: 'Inconsistent indentation',
+      location: { path: 'src/utils.ts', startLine: 50 },
+    };
+
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: true,
+      },
+      {
+        id: 2,
+        path: 'src/utils.ts',
+        line: 50,
+        title: 'Code Style',
+        description: 'Inconsistent indentation',
+        contentHash: generateContentHash('Code Style', 'Inconsistent indentation'),
+        isWarden: false,
+      },
+    ];
+
+    const result = await deduplicateFindings([finding1, finding2, finding3], existingComments, {
+      hashOnly: true,
+    });
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.newFindings[0]!.id).toBe('f2');
+    expect(result.duplicateActions).toHaveLength(2);
+    // First should be update_warden (isWarden: true)
+    expect(result.duplicateActions[0]!.type).toBe('update_warden');
+    // Second should be react_external (isWarden: false)
+    expect(result.duplicateActions[1]!.type).toBe('react_external');
+  });
+
+  it('works without API key (hash-only mode)', async () => {
+    const findings = [baseFinding];
+    const existingComments: ExistingComment[] = [];
+
+    const result = await deduplicateFindings(findings, existingComments, {});
+    expect(result.newFindings).toHaveLength(1);
+  });
+
+  it('matches additional locations against Warden comments', async () => {
+    // Simulates winner-flip: finding primary is now at b.ts, but our old comment is at a.ts
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/b.ts', startLine: 20 },
+      additionalLocations: [{ path: 'src/db.ts', startLine: 42 }],
+    };
+
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: true,
+      },
+    ];
+
+    const result = await deduplicateFindings([finding], existingComments, { hashOnly: true });
+    expect(result.newFindings).toHaveLength(0);
+    expect(result.duplicateActions).toHaveLength(1);
+    expect(result.duplicateActions[0]!.type).toBe('update_warden');
+  });
+
+  it('does not match additional locations against external comments', async () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/b.ts', startLine: 20 },
+      additionalLocations: [{ path: 'src/db.ts', startLine: 42 }],
+    };
+
+    const existingComments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'src/db.ts',
+        line: 42,
+        title: 'SQL Injection',
+        description: 'User input passed to query',
+        contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+        isWarden: false,
+      },
+    ];
+
+    const result = await deduplicateFindings([finding], existingComments, { hashOnly: true });
+    expect(result.newFindings).toHaveLength(1);
+    expect(result.duplicateActions).toHaveLength(0);
+  });
+});
+
+describe('parseWardenSkills', () => {
+  it('parses single skill', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: security-review</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['security-review']);
+  });
+
+  it('parses multiple skills', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: security-review, code-quality, performance</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['security-review', 'code-quality', 'performance']);
+  });
+
+  it('handles extra whitespace', () => {
+    const body = `<sub>warden:  skill1 ,  skill2 </sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('returns empty array for non-Warden comment', () => {
+    const body = 'Regular comment without attribution';
+    expect(parseWardenSkills(body)).toEqual([]);
+  });
+
+  it('parses single skill from current muted format', () => {
+    const body = `<sub>Identified by Warden notseer · ABC-123</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from current muted format', () => {
+    const body = `<sub>Identified by Warden skill1, skill2, skill3 · XYZ-789</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
+
+  it('parses new format with severity', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`security-review\` · high</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['security-review']);
+  });
+
+  it('parses new format with severity and confidence', () => {
+    const body = `<sub>Identified by Warden via \`notseer\` · critical, high confidence</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from new format', () => {
+    const body = `<sub>Identified by Warden via \`skill1\`, \`skill2\` · high</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('parses multiple skills with extra whitespace in new format', () => {
+    const body = `<sub>Identified by Warden via \`skill1\`,  \`skill2\`,\`skill3\` · medium</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
+
+  it('parses single skill from bracket format', () => {
+    const body = `<sub>Identified by Warden [notseer] · ABC-123</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from bracket format', () => {
+    const body = `<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('parses bracket format with three skills', () => {
+    const body = `<sub>Identified by Warden [skill1], [skill2], [skill3] · XYZ-789</sub>`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
+
+  it('parses single skill from current backtick format', () => {
+    const body = `Identified by Warden \`notseer\` · ABC-123`;
+    expect(parseWardenSkills(body)).toEqual(['notseer']);
+  });
+
+  it('parses multiple skills from current backtick format', () => {
+    const body = `Identified by Warden \`skill1\`, \`skill2\` · ABC-123`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
+  });
+
+  it('parses current backtick format with three skills', () => {
+    const body = `Identified by Warden \`skill1\`, \`skill2\`, \`skill3\` · XYZ-789`;
+    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  });
+});
+
+describe('updateWardenCommentBody', () => {
+  it('adds new skill to attribution', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: skill1</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>warden: skill1, skill2</sub>');
+  });
+
+  it('returns null if skill already listed', () => {
+    const body = `<sub>warden: skill1, skill2</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('adds new skill to current muted attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden skill1 · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>Identified by Warden skill1, skill2 · ABC-123</sub>');
+    expect(result).not.toContain('`skill1`');
+    expect(result).not.toContain('[skill1]');
+  });
+
+  it('returns null if skill already listed in current muted attribution', () => {
+    const body = `<sub>Identified by Warden skill1, skill2 · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('preserves rest of comment body', () => {
+    const body = `**:warning: SQL Injection**\n\nUser input passed to query\n\n---\n<sub>warden: security-review</sub>\n<!-- warden:v1:file.ts:10:abc123 -->`;
+    const result = updateWardenCommentBody(body, 'code-quality');
+    expect(result).toContain('**:warning: SQL Injection**');
+    expect(result).toContain('User input passed to query');
+    expect(result).toContain('<sub>warden: security-review, code-quality</sub>');
+    expect(result).toContain('<!-- warden:v1:file.ts:10:abc123 -->');
+  });
+
+  it('adds new skill to new format attribution', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill1\` · high</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>Identified by Warden via `skill1`, `skill2` · high</sub>');
+  });
+
+  it('preserves severity and confidence in new format', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`notseer\` · critical, high confidence</sub>`;
+    const result = updateWardenCommentBody(body, 'security-review');
+    expect(result).toContain('<sub>Identified by Warden via `notseer`, `security-review` · critical, high confidence</sub>');
+  });
+
+  it('returns null if skill already listed in new format', () => {
+    const body = `<sub>Identified by Warden via \`skill1\` · medium</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('adds skill to new format with multiple existing skills without duplication', () => {
+    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill1\`, \`skill2\` · high</sub>`;
+    const result = updateWardenCommentBody(body, 'skill3');
+    expect(result).toContain('<sub>Identified by Warden via `skill1`, `skill2`, `skill3` · high</sub>');
+    // Ensure no duplication - skill2 should appear exactly once
+    expect(result!.match(/`skill2`/g)).toHaveLength(1);
+  });
+
+  it('adds new skill to bracket format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [skill1] · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>');
+  });
+
+  it('returns null if skill already listed in bracket format', () => {
+    const body = `<sub>Identified by Warden [skill1] · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('preserves finding ID in bracket format', () => {
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [notseer] · 2K5-29B</sub>`;
+    const result = updateWardenCommentBody(body, 'security-review');
+    expect(result).toContain('<sub>Identified by Warden [notseer], [security-review] · 2K5-29B</sub>');
+  });
+
+  it('adds skill to bracket format with multiple existing skills', () => {
+    const body = `<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>`;
+    const result = updateWardenCommentBody(body, 'skill3');
+    expect(result).toContain('<sub>Identified by Warden [skill1], [skill2], [skill3] · ABC-123</sub>');
+  });
+
+  it('adds new skill to current backtick format attribution', () => {
+    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`skill1\` · ABC-123`;
+    const result = updateWardenCommentBody(body, 'skill2');
+    expect(result).toContain('Identified by Warden `skill1`, `skill2` · ABC-123');
+  });
+
+  it('returns null if skill already listed in current backtick format', () => {
+    const body = `Identified by Warden \`skill1\` · ABC-123`;
+    const result = updateWardenCommentBody(body, 'skill1');
+    expect(result).toBeNull();
+  });
+
+  it('preserves finding ID in current backtick format', () => {
+    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`notseer\` · 2K5-29B`;
+    const result = updateWardenCommentBody(body, 'security-review');
+    expect(result).toContain('Identified by Warden `notseer`, `security-review` · 2K5-29B');
+  });
+
+  it('adds skill to current backtick format with multiple existing skills', () => {
+    const body = `Identified by Warden \`skill1\`, \`skill2\` · ABC-123`;
+    const result = updateWardenCommentBody(body, 'skill3');
+    expect(result).toContain('Identified by Warden `skill1`, `skill2`, `skill3` · ABC-123');
+  });
+});
+
+describe('findingToExistingComment', () => {
+  it('converts finding with location to ExistingComment', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: {
+        path: 'src/db.ts',
+        startLine: 42,
+        endLine: 45,
+      },
+    };
+
+    const comment = findingToExistingComment(finding);
+    expect(comment).toEqual({
+      id: -1,
+      path: 'src/db.ts',
+      line: 45,
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      findingId: 'f1',
+      contentHash: generateContentHash('SQL Injection', 'User input passed to query'),
+      isWarden: true,
+      skills: [],
+      severity: 'high',
+    });
+  });
+
+  it('includes skill when provided', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: {
+        path: 'src/db.ts',
+        startLine: 42,
+      },
+    };
+
+    const comment = findingToExistingComment(finding, 'security-review');
+    expect(comment).not.toBeNull();
+    expect(comment!.isWarden).toBe(true);
+    expect(comment!.skills).toEqual(['security-review']);
+  });
+
+  it('uses startLine when endLine is not set', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'medium',
+      title: 'Missing Error Handling',
+      description: 'No try-catch block',
+      location: {
+        path: 'src/api.ts',
+        startLine: 100,
+      },
+    };
+
+    const comment = findingToExistingComment(finding);
+    expect(comment).not.toBeNull();
+    expect(comment!.line).toBe(100);
+  });
+
+  it('returns null for finding without location', () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'low',
+      title: 'General Issue',
+      description: 'Some general finding',
+    };
+
+    const comment = findingToExistingComment(finding);
+    expect(comment).toBeNull();
+  });
+});
+
+describe('renderer marker integration', () => {
+  it('marker can be parsed after being generated', () => {
+    const path = 'src/db.ts';
+    const line = 42;
+    const hash = generateContentHash('SQL Injection', 'User input passed to query');
+    const marker = generateMarker(path, line, hash);
+
+    const body = `**:warning: SQL Injection**
+
+User input passed to query
+
+---
+<sub>warden: security-review</sub>
+${marker}`;
+
+    const parsed = parseMarker(body);
+    expect(parsed).toEqual({ path, line, contentHash: hash });
+  });
+});
+
+describe('finding metadata', () => {
+  it('round-trips severity and confidence from hidden metadata', () => {
+    const metadata = generateFindingMetadata({ severity: 'high', confidence: 'medium' });
+    const body = `**Issue**\n\nDetails\n${metadata}`;
+
+    expect(parseWardenFindingMetadata(body)).toEqual({
+      severity: 'high',
+      confidence: 'medium',
+    });
+  });
+});
+
+describe('consolidateBatchFindings', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns single finding unchanged', async () => {
+    const finding: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const result = await consolidateBatchFindings([finding]);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toBe(finding);
+    expect(result.removedCount).toBe(0);
+    expect(result.removedFindings).toEqual([]);
+  });
+
+  it('returns empty array unchanged', async () => {
+    const result = await consolidateBatchFindings([]);
+    expect(result.findings).toHaveLength(0);
+    expect(result.removedCount).toBe(0);
+    expect(result.removedFindings).toEqual([]);
+  });
+
+  it('removes exact hash duplicates within batch', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toBe(finding1);
+    expect(result.removedCount).toBe(1);
+    expect(result.removedFindings).toEqual([finding2]);
+  });
+
+  it('keeps findings with different hashes at same location in hashOnly mode', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'allResolved incorrectly reports true',
+      description: 'Resolution API calls may fail',
+      location: { path: 'src/workflow.ts', startLine: 438 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'medium',
+      title: 'commentsResolvedByStale tracks all stale comments',
+      description: 'Not just successfully resolved ones',
+      location: { path: 'src/workflow.ts', startLine: 438 },
+    };
+
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('does not group findings more than 5 lines apart', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Bug A',
+      description: 'Description A',
+      location: { path: 'src/file.ts', startLine: 10 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'Bug B',
+      description: 'Description B',
+      location: { path: 'src/file.ts', startLine: 20 },
+    };
+
+    // In hashOnly mode, these should both pass through since they're different hashes
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('does not group findings in different files', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Same Issue',
+      description: 'Same description',
+      location: { path: 'src/a.ts', startLine: 42 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'Same Issue',
+      description: 'Same description but different file',
+      location: { path: 'src/b.ts', startLine: 42 },
+    };
+
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('skips LLM when no proximity clusters exist', async () => {
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Bug A',
+      description: 'Description A',
+      location: { path: 'src/file.ts', startLine: 10 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'medium',
+      title: 'Bug B',
+      description: 'Description B',
+      location: { path: 'src/file.ts', startLine: 100 },
+    };
+
+    // Even with an API key, no LLM call should be made since findings are far apart
+    const result = await consolidateBatchFindings([finding1, finding2], { apiKey: 'test-key' });
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+    expect(result.usage).toBeUndefined();
+  });
+
+  it('groups findings within 5 lines of each other for proximity check', async () => {
+    // This tests the proximity grouping logic (without LLM since no API key)
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'Bug A at line 10',
+      description: 'Issue at line 10',
+      location: { path: 'src/file.ts', startLine: 10 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'medium',
+      title: 'Bug B at line 13',
+      description: 'Issue at line 13',
+      location: { path: 'src/file.ts', startLine: 13 },
+    };
+
+    // Without API key, LLM phase is skipped, both findings kept
+    const result = await consolidateBatchFindings([finding1, finding2]);
+    expect(result.findings).toHaveLength(2);
+    expect(result.removedCount).toBe(0);
+  });
+
+  it('preserves locations from losers via mergeGroup (hash dedup)', async () => {
+    // Two exact-duplicate findings at the same location: hash dedup should pick first
+    const finding1: Finding = {
+      id: 'f1',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+    };
+
+    const finding2: Finding = {
+      id: 'f2',
+      severity: 'high',
+      title: 'SQL Injection',
+      description: 'User input passed to query',
+      location: { path: 'src/db.ts', startLine: 42 },
+      additionalLocations: [{ path: 'src/api.ts', startLine: 100 }],
+    };
+
+    // Hash dedup removes exact duplicates before LLM phase
+    // Since they have the same hash+line, finding2 is dropped
+    const result = await consolidateBatchFindings([finding1, finding2], { hashOnly: true });
+    expect(result.findings).toHaveLength(1);
+    // Hash dedup just drops duplicates (doesn't merge locations)
+    // That's expected: mergeGroup is used for LLM-grouped findings
+    expect(result.findings[0]).toBe(finding1);
+  });
+});

@@ -1,0 +1,369 @@
+---
+title: Running Benchmarks
+description: How to reproduce and record Sentry benchmark runs.
+editUrl: false
+---
+
+This page is the runbook for the Sentry benchmark. The overview page is the
+readout. This page is for creating a new result.
+
+## Shape
+
+Run one Warden shard per corpus commit. Each shard checks out the public
+`getsentry/sentry` repository at that commit and scans only the files referenced
+by corpus entries for that commit.
+
+Do not run this benchmark against all of Sentry. The point is a repeatable
+comparison against known vulnerable files.
+
+## Setup
+
+Clone Sentry and pick a runtime/model pair:
+
+```bash
+git clone git@github.com:getsentry/sentry.git /tmp/sentry-benchmark
+
+export BENCH_MODEL="openai/gpt-5.5"
+export BENCH_MODEL_SLUG="gpt-5-5"
+export BENCH_RUNTIME="pi"
+export BENCH_RUNTIME_SLUG="pi"
+export BENCH_EFFORT="high"
+export BENCH_RUN_SLUG="pi-gpt-5-5-high"
+export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_RUN_SLUG}"
+export BENCH_PARALLEL="4"
+mkdir -p "$BENCH_ROOT"
+```
+
+Set the provider API key required by the model. For GPT 5.5 through Pi, set
+`WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
+For OpenRouter models through Pi, set `WARDEN_OPENROUTER_API_KEY` and use the
+full OpenRouter selector, such as `openrouter/deepseek/deepseek-v4-pro`.
+For the Claude SDK runtime, use Claude Code model IDs such as
+`claude-sonnet-4-6` instead of Pi provider/model selectors.
+
+If you load credentials from a local env file, export them before running
+`pnpm`. A plain `source .env.local` sets shell variables, but child processes
+will not see them unless they are exported:
+
+```bash
+set -a
+source .env.local
+set +a
+```
+
+The older GPT 5.5 run used `openai/gpt-5.5`. The installed Pi registry did not
+expose `openai/gpt-5.5-codex`. It did not pass an explicit effort flag, so the
+run used the runtime/provider default. New benchmark runs should pass
+`--effort high` or `--effort low` when testing reasoning behavior, and omit
+`--effort` only when intentionally measuring the runtime default.
+
+## Target Lists
+
+From the Warden repository, write one target list per corpus commit:
+
+```bash
+node <<'NODE'
+const {execFileSync} = require("node:child_process");
+const {mkdirSync, readFileSync, writeFileSync} = require("node:fs");
+
+const corpus = JSON.parse(
+  readFileSync("packages/docs/src/data/benchmarking/sentry-vulnerability-corpus.json", "utf8"),
+);
+const repo = "/tmp/sentry-benchmark";
+const outDir = process.env.BENCH_ROOT;
+mkdirSync(outDir, {recursive: true});
+
+const bySha = new Map();
+for (const finding of corpus.findings) {
+  const entry = bySha.get(finding.sha) ?? {findings: 0, paths: new Set()};
+  entry.findings += 1;
+  entry.paths.add(finding.code.path);
+  bySha.set(finding.sha, entry);
+}
+
+for (const [sha, entry] of [...bySha.entries()].sort()) {
+  const paths = [...entry.paths].sort();
+  const missing = [];
+  for (const path of paths) {
+    try {
+      execFileSync("git", ["-C", repo, "cat-file", "-e", `${sha}:${path}`], {stdio: "ignore"});
+    } catch {
+      missing.push(path);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`${sha} missing corpus paths:\n${missing.join("\n")}`);
+  }
+  writeFileSync(`${outDir}/targets-${sha}.txt`, `${paths.join("\n")}\n`);
+  console.error(`${sha}: ${paths.length} target files for ${entry.findings} corpus findings`);
+}
+NODE
+```
+
+The current corpus produces 79 target files across 6 commits.
+
+## Warden Config
+
+Write the config outside the Sentry checkout. Keep runtime, model, and effort
+explicit on the CLI so the invocation captures the run shape. The config keeps
+the benchmark skill, thresholds, concurrency, and verifier policy stable.
+
+```bash
+cat > "$BENCH_ROOT/warden.toml" <<EOF
+version = 1
+
+[defaults]
+reportOn = "low"
+maxTurns = 100
+
+[defaults.verification]
+enabled = true
+
+[runner]
+concurrency = 4
+
+[[skills]]
+name = "security-review"
+EOF
+```
+
+Set `maxTurns` explicitly for corpus runs. The default is lower and can make
+heavy security chunks fail with `turn_limit`, which turns a model comparison
+into a runner-limit comparison.
+
+## Run
+
+Run from the Warden repository:
+
+```bash
+set -euo pipefail
+
+BENCH_PARALLEL="${BENCH_PARALLEL:-4}"
+
+effort_args=()
+if [ -n "${BENCH_EFFORT:-}" ]; then
+  effort_args=(--effort "$BENCH_EFFORT")
+fi
+
+for target in "$BENCH_ROOT"/targets-*.txt; do
+  sha=${target##*/targets-}
+  sha=${sha%.txt}
+  short=${sha:0:8}
+  output="$BENCH_ROOT/sentry-security-review-${BENCH_RUN_SLUG}-corpus-${short}.jsonl"
+  validated="$output.validated"
+
+  if [ -s "$output" ] && [ -f "$validated" ]; then
+    echo "Skipping ${short}; output and validated marker exist"
+    continue
+  fi
+
+  rm -f "$validated"
+  git -C /tmp/sentry-benchmark checkout "$sha"
+
+  if ! pnpm cli -- run \
+    -C /tmp/sentry-benchmark \
+    @"$target" \
+    --skill security-review \
+    --config-path "$BENCH_ROOT/warden.toml" \
+    --runtime "$BENCH_RUNTIME" \
+    --model "$BENCH_MODEL" \
+    "${effort_args[@]}" \
+    --traces \
+    --report-on low \
+    --min-confidence low \
+    --parallel "$BENCH_PARALLEL" \
+    -o "$output" \
+    -v \
+    --log
+  then
+    echo "Run failed for ${short}; leaving validated marker absent"
+    continue
+  fi
+
+  if node - "$output" "$target" <<'NODE'
+const {readFileSync} = require("node:fs");
+
+const output = process.argv[2];
+const target = process.argv[3];
+const lines = readFileSync(output, "utf8").trim().split("\n").filter(Boolean);
+const expectedFiles = readFileSync(target, "utf8")
+  .trim()
+  .split("\n")
+  .filter(Boolean);
+if (lines.length === 0) {
+  throw new Error(`${output} is empty`);
+}
+
+const records = lines.map((line) => JSON.parse(line));
+const failed = records.filter((record) => record.status && record.status !== "ok");
+const summary = records.find((record) => record.type === "summary");
+const sourceChunks = records.filter(
+  (record) => record.status === "ok" && record.chunk?.file,
+);
+const missingTraces = sourceChunks.filter((record) => !record.trace);
+const chunksByFile = new Map();
+for (const record of sourceChunks) {
+  const chunks = chunksByFile.get(record.chunk.file) ?? [];
+  chunks.push(record.chunk);
+  chunksByFile.set(record.chunk.file, chunks);
+}
+
+if (failed.length > 0) {
+  throw new Error(`${output} has ${failed.length} failed records`);
+}
+if (!summary) {
+  throw new Error(`${output} is missing a summary record`);
+}
+const expectedFileSet = new Set(expectedFiles);
+const missingFiles = expectedFiles.filter((file) => !chunksByFile.has(file));
+const unexpectedFiles = [...chunksByFile.keys()].filter(
+  (file) => !expectedFileSet.has(file),
+);
+if (missingFiles.length > 0) {
+  throw new Error(`${output} is missing ${missingFiles.length} target files`);
+}
+if (unexpectedFiles.length > 0) {
+  throw new Error(`${output} has ${unexpectedFiles.length} unexpected target files`);
+}
+for (const [file, chunks] of chunksByFile) {
+  const totals = new Set(chunks.map((chunk) => chunk.total));
+  if (totals.size !== 1) {
+    throw new Error(`${output} has inconsistent chunk totals for ${file}`);
+  }
+  const total = chunks[0].total;
+  const indices = new Set(chunks.map((chunk) => chunk.index));
+  if (indices.size !== chunks.length) {
+    throw new Error(`${output} has duplicate chunk records for ${file}`);
+  }
+  for (let index = 1; index <= total; index += 1) {
+    if (!indices.has(index)) {
+      throw new Error(`${output} is missing chunk ${index}/${total} for ${file}`);
+    }
+  }
+}
+if (missingTraces.length > 0) {
+  throw new Error(`${output} has ${missingTraces.length} untraced source chunks`);
+}
+NODE
+  then
+    touch "$validated"
+  else
+    echo "Validation failed for ${short}; leaving validated marker absent"
+    continue
+  fi
+done
+```
+
+Use a separate `.validated` marker for resumable benchmark scripts. Do not use
+Warden's `.jsonl.done` marker as proof that a shard is usable; it can exist for
+failed JSONL artifacts.
+
+`BENCH_PARALLEL=4` is the standard corpus setting. If a new, slow, or
+high-effort provider repeatedly fails with 503s, timeouts, or provider
+disconnects, retry the failed shard with a lower `BENCH_PARALLEL` and record
+that in the result notes. Do not mix failed and clean attempts in one stitched
+summary.
+
+If only a few chunks fail in an otherwise expensive shard, move the dirty JSONL
+aside, rerun the affected target files with `BENCH_PARALLEL=1`, and rebuild the
+shard by replacing only the failed chunk records with traced, successful repair
+records. Keep the repair usage in the aggregate cost and note the repair in the
+result. Do not fabricate missing chunk records.
+
+Inspect the stitched output:
+
+```bash
+pnpm cli -- runs show "$BENCH_ROOT"/sentry-security-review-"$BENCH_RUN_SLUG"-corpus-*.jsonl \
+  -C /tmp/sentry-benchmark \
+  --report-on low \
+  --min-confidence low
+```
+
+Only stitch clean shard JSONL files. If a shard fails because of auth,
+provider 503s, timeouts, `turn_limit`, or a manual abort, move that artifact out
+of the `*.jsonl` glob before running `runs show`, remove any stale validation
+marker, and rerun the shard. Keep the failed artifact with a `.withheld` suffix
+if it is useful for diagnosis.
+
+## Record Results
+
+Keep every raw JSONL shard with the result summary, but do not commit raw
+JSONL until it has been reviewed for sensitive data. The raw artifacts are the
+source of truth for cost, duration, token counts, and future rescoring.
+
+Store results in `packages/docs/src/data/benchmarking/results/`.
+
+Record:
+
+- stable `runId`
+- corpus ID
+- repository
+- Warden version
+- skill
+- model
+- runtime
+- effort level, or `provider-default`
+- configured `maxTurns`, plus any shard reruns done after a turn-limit failure
+- whether Warden's post-analysis finding verifier was enabled
+- whether `--traces` was enabled, plus any run-level trace IDs preserved in
+  the JSONL metadata
+- report and confidence thresholds
+- one shard per corpus commit, including SHA, target list, raw JSONL artifact
+  name, and raw artifact review status
+- total files, chunks, failed chunks, findings, cost, duration, and tokens
+- `timing.analysisChunkMs` from top-level per-record `durationMs` values in
+  the raw JSONL artifacts, when all raw shard artifacts are available
+- total wall duration from the stitched run summary
+- scoring summary once a reviewer matches findings back to the corpus
+
+Warden's finding verifier is enabled by default. Benchmark runs should leave it
+enabled unless they are deliberately testing verifier-off behavior. It is
+disabled only when `defaults.verification.enabled = false` is set in
+`warden.toml`. Record this as `findingVerification.enabled` in the result JSON.
+
+Verifier calls are part of Warden's analysis pipeline, not benchmark scoring.
+They can add provider cost, and runs with more candidate findings generally do
+more verifier work. Keep this separate from the benchmark `scores` field, which
+is the later semantic match against the corpus.
+
+The timing breakdown has the same separation. Per-chunk P50 and P90 timing is
+recorded before Warden's post-analysis verifier runs. Total timing includes
+post-analysis work and upstream provider latency, so treat it as flaky
+operational context rather than a stable comparison metric.
+
+## Score
+
+Score by agent-verified semantic match, not exact wording or line number. A
+result counts as found when it identifies the same bug in roughly the same
+location as an existing corpus finding.
+
+This is not deterministic. An agent reviews every emitted finding against the
+existing corpus findings for that commit. Same-file findings about different
+bugs do not count. One emitted finding may count for multiple corpus entries
+when it clearly covers the same bug represented by multiple existing entries.
+Duplicate emitted findings do not double-count the same corpus entry.
+
+Use this scoring checklist:
+
+- Read every emitted finding from the raw JSONL shards for the run.
+- For each finding, compare it against corpus entries from the same commit.
+- Use same path and nearby line range as the first candidate filter, but make
+  the final decision semantically.
+- Count `known-found` only when the finding would lead a reviewer to the same
+  bug in roughly the same code location.
+- Mark same-file findings about different bugs as `not-known`.
+- Record one `scores` entry for every emitted finding, including non-matches.
+- Set `scoring.knownFound` to the number of unique matched corpus entries, not
+  the number of emitted findings.
+- Leave the run unscored when the raw findings are missing or cannot be
+  semantically verified.
+
+Keep the distinction clear:
+
+- known found: corpus vulnerabilities Warden found
+- total findings: all findings Warden emitted before scoring
+- unexpected valid: real vulnerabilities not already in the corpus
+- false positives: findings rejected by review
+
+Do not treat the score as a universal pass rate. It is a relative comparison
+for this corpus and this run shape.

@@ -114,7 +114,7 @@ All other files are generated artifacts. The authoring provider decides whether 
 
 1. Reads or creates `.warden/skills/<name>/warden.yaml`
 2. Synthesizes internal Warden context for the build
-3. Resolves an authoring provider, defaulting to the vendored `src/internal-skills/skill-writer`
+3. Resolves an authoring provider, defaulting to the vendored `packages/warden/src/internal-skills/skill-writer`
 4. Plans the authoring run: brief, topics, ordered tasks, source plan, and review rubric
 5. Runs implementation through the authoring provider in the target skill root
 6. Reads generated artifacts from disk and runs qualitative review against skill-writer and Warden's acceptance bar

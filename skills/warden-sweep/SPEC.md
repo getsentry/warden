@@ -66,7 +66,7 @@ Authoritative sources:
 
 - `skills/warden-sweep/SKILL.md` and bundled references.
 - `skills/warden-sweep/scripts/*.py`.
-- Warden JSONL output schema and renderer code in `src/cli/output/`.
+- Warden JSONL output schema and renderer code in `packages/warden/src/cli/output/`.
 - GitHub CLI behavior for PRs, issues, labels, and repo metadata.
 
 Useful improvement sources:

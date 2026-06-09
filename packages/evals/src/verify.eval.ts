@@ -10,7 +10,7 @@ import { formatEvalTestName } from './names.js';
 const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 const evals = discoverVerificationEvalScenarios({
   category: 'verification',
-  skill: '../../src/builtin-skills/security-review/SKILL.md',
+  skill: '../warden/src/builtin-skills/security-review/SKILL.md',
   runtime: 'pi',
   model: 'anthropic/claude-sonnet-4-6',
 });

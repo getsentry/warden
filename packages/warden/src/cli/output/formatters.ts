@@ -1,0 +1,375 @@
+import chalk from 'chalk';
+import figures from 'figures';
+import type { Severity, Confidence, Finding, FileChange, UsageStats, AuxiliaryUsageMap } from '../../types/index.js';
+
+/**
+ * Capitalize the first letter of a string.
+ * @example capitalize('critical') // 'Critical'
+ */
+export function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Pluralize a word based on count.
+ * @example pluralize(1, 'file') // 'file'
+ * @example pluralize(2, 'file') // 'files'
+ * @example pluralize(1, 'fix', 'fixes') // 'fix'
+ * @example pluralize(2, 'fix', 'fixes') // 'fixes'
+ */
+export function pluralize(count: number, singular: string, plural?: string): string {
+  if (count === 1) return singular;
+  return plural ?? `${singular}s`;
+}
+
+/**
+ * Format a duration in milliseconds to a human-readable string.
+ * Under 1s: "50ms". Under 60s: "3.2s". Over 60s: "5m 3s".
+ */
+export function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
+  }
+  const totalSeconds = ms / 1000;
+  if (totalSeconds < 60) {
+    const formatted = totalSeconds.toFixed(1);
+    // toFixed(1) can round 59.95 to "60.0" — fall through to minutes format
+    if (formatted !== '60.0') {
+      return `${formatted}s`;
+    }
+  }
+  let minutes = Math.floor(totalSeconds / 60);
+  let seconds = Math.round(totalSeconds % 60);
+  if (seconds === 60) {
+    minutes += 1;
+    seconds = 0;
+  }
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+  return `${minutes}m ${seconds}s`;
+}
+
+/**
+ * Format an elapsed time for display (e.g., "+0.8s", "+2m 3s").
+ */
+export function formatElapsed(ms: number): string {
+  return `+${formatDuration(ms)}`;
+}
+
+/**
+ * Format bytes into a compact human-readable size.
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes.toLocaleString()} B`;
+  }
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+  }
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+}
+
+/**
+ * Severity configuration for display.
+ */
+const SEVERITY_CONFIG: Record<Severity, { color: typeof chalk.red; symbol: string }> = {
+  high: { color: chalk.red, symbol: figures.bullet },
+  medium: { color: chalk.yellow, symbol: figures.bullet },
+  low: { color: chalk.green, symbol: figures.bullet },
+};
+
+/**
+ * Format a severity dot for terminal output.
+ */
+export function formatSeverityDot(severity: Severity): string {
+  const config = SEVERITY_CONFIG[severity];
+  return config.color(config.symbol);
+}
+
+/**
+ * Format a severity badge for terminal output (colored dot + severity text).
+ */
+export function formatSeverityBadge(severity: Severity): string {
+  const config = SEVERITY_CONFIG[severity];
+  return `${config.color(config.symbol)} ${config.color(`(${severity})`)}`;
+}
+
+/**
+ * Format a severity for plain text (CI mode).
+ */
+export function formatSeverityPlain(severity: Severity): string {
+  return `[${severity}]`;
+}
+
+/**
+ * Confidence configuration for display.
+ */
+const CONFIDENCE_CONFIG: Record<Confidence, { color: typeof chalk.dim }> = {
+  high: { color: chalk.green },
+  medium: { color: chalk.yellow },
+  low: { color: chalk.red },
+};
+
+/**
+ * Format a confidence badge for terminal output.
+ * Returns empty string if confidence is undefined.
+ */
+export function formatConfidenceBadge(confidence: Confidence | undefined): string {
+  if (!confidence) return '';
+  const config = CONFIDENCE_CONFIG[confidence];
+  return config.color(`[${confidence} confidence]`);
+}
+
+
+/**
+ * Format a file location string.
+ */
+export function formatLocation(path: string, startLine?: number, endLine?: number): string {
+  if (!startLine) {
+    return path;
+  }
+  if (endLine && endLine !== startLine) {
+    return `${path}:${startLine}-${endLine}`;
+  }
+  return `${path}:${startLine}`;
+}
+
+/**
+ * Format a finding for terminal display.
+ */
+export function formatFindingCompact(finding: Finding): string {
+  const badge = formatSeverityBadge(finding.severity);
+  const id = chalk.dim(`[${finding.id}]`);
+  const location = finding.location
+    ? chalk.dim(formatLocation(finding.location.path, finding.location.startLine, finding.location.endLine))
+    : '';
+
+  return `${badge} ${id} ${finding.title}${location ? ` ${location}` : ''}`;
+}
+
+/**
+ * Format finding counts for display (with colored dots).
+ */
+export function formatFindingCounts(counts: Record<Severity, number>): string {
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  if (total === 0) {
+    return chalk.green('No findings');
+  }
+
+  const parts: string[] = [];
+  if (counts.high > 0) parts.push(`${formatSeverityDot('high')} ${counts.high} high`);
+  if (counts.medium > 0) parts.push(`${formatSeverityDot('medium')} ${counts.medium} medium`);
+  if (counts.low > 0) parts.push(`${formatSeverityDot('low')} ${counts.low} low`);
+
+  return `${total} finding${total === 1 ? '' : 's'}: ${parts.join('  ')}`;
+}
+
+/**
+ * Format finding counts for plain text.
+ */
+export function formatFindingCountsPlain(counts: Record<Severity, number>): string {
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  if (total === 0) {
+    return 'No findings';
+  }
+
+  const parts: string[] = [];
+  if (counts.high > 0) parts.push(`${counts.high} high`);
+  if (counts.medium > 0) parts.push(`${counts.medium} medium`);
+  if (counts.low > 0) parts.push(`${counts.low} low`);
+
+  return `${total} finding${total === 1 ? '' : 's'} (${parts.join(', ')})`;
+}
+
+/**
+ * Format a progress indicator like [1/3].
+ */
+export function formatProgress(current: number, total: number): string {
+  return chalk.dim(`[${current}/${total}]`);
+}
+
+/**
+ * Format file change summary.
+ */
+export function formatFileStats(files: FileChange[]): string {
+  const added = files.filter((f) => f.status === 'added').length;
+  const modified = files.filter((f) => f.status === 'modified').length;
+  const removed = files.filter((f) => f.status === 'removed').length;
+
+  const parts: string[] = [];
+  if (added > 0) parts.push(chalk.green(`+${added}`));
+  if (modified > 0) parts.push(chalk.yellow(`~${modified}`));
+  if (removed > 0) parts.push(chalk.red(`-${removed}`));
+
+  return parts.length > 0 ? parts.join(' ') : '';
+}
+
+/**
+ * Truncate a string to fit within a width, adding ellipsis if needed.
+ */
+export function truncate(str: string, maxWidth: number): string {
+  if (str.length <= maxWidth) {
+    return str;
+  }
+  if (maxWidth <= 3) {
+    return str.slice(0, maxWidth);
+  }
+  return str.slice(0, maxWidth - 1) + figures.ellipsis;
+}
+
+/**
+ * Pad a string on the right to reach a certain width.
+ */
+export function padRight(str: string, width: number): string {
+  if (str.length >= width) {
+    return str;
+  }
+  return str + ' '.repeat(width - str.length);
+}
+
+/**
+ * Count findings by severity.
+ */
+export function countBySeverity(findings: Finding[]): Record<Severity, number> {
+  const counts: Record<Severity, number> = {
+    high: 0,
+    medium: 0,
+    low: 0,
+  };
+
+  for (const finding of findings) {
+    counts[finding.severity]++;
+  }
+
+  return counts;
+}
+
+/**
+ * Format a USD cost for display.
+ */
+export function formatCost(costUSD: number): string {
+  return `$${costUSD.toFixed(2)}`;
+}
+
+/**
+ * Calculate total usage across primary and auxiliary calls.
+ */
+export function totalUsageStats(usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): UsageStats | undefined {
+  const hasAuxiliaryUsage = auxiliaryUsage !== undefined && Object.keys(auxiliaryUsage).length > 0;
+  if (!usage && !hasAuxiliaryUsage) return undefined;
+
+  const total: UsageStats = {
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0,
+    costUSD: usage?.costUSD ?? 0,
+  };
+
+  const addOptional = (key: keyof Omit<UsageStats, 'inputTokens' | 'outputTokens' | 'costUSD'>, value: number | undefined): void => {
+    if (value === undefined && total[key] === undefined) return;
+    total[key] = (total[key] ?? 0) + (value ?? 0);
+  };
+
+  if (usage) {
+    addOptional('cacheReadInputTokens', usage.cacheReadInputTokens);
+    addOptional('cacheCreationInputTokens', usage.cacheCreationInputTokens);
+    addOptional('cacheCreation5mInputTokens', usage.cacheCreation5mInputTokens);
+    addOptional('cacheCreation1hInputTokens', usage.cacheCreation1hInputTokens);
+    addOptional('webSearchRequests', usage.webSearchRequests);
+  }
+
+  for (const auxiliary of Object.values(auxiliaryUsage ?? {})) {
+    total.inputTokens += auxiliary.inputTokens;
+    total.outputTokens += auxiliary.outputTokens;
+    total.costUSD += auxiliary.costUSD;
+    addOptional('cacheReadInputTokens', auxiliary.cacheReadInputTokens);
+    addOptional('cacheCreationInputTokens', auxiliary.cacheCreationInputTokens);
+    addOptional('cacheCreation5mInputTokens', auxiliary.cacheCreation5mInputTokens);
+    addOptional('cacheCreation1hInputTokens', auxiliary.cacheCreation1hInputTokens);
+    addOptional('webSearchRequests', auxiliary.webSearchRequests);
+  }
+
+  return total;
+}
+
+/**
+ * Calculate total cost across primary and auxiliary usage.
+ */
+export function totalUsageCost(usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): number | undefined {
+  return totalUsageStats(usage, auxiliaryUsage)?.costUSD;
+}
+
+/**
+ * Format token counts for display.
+ */
+export function formatTokens(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}k`;
+  }
+  return String(tokens);
+}
+
+/**
+ * Format usage stats for terminal display.
+ */
+export function formatUsage(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
+  const total = totalUsageStats(usage, auxiliaryUsage) ?? usage;
+  const inputStr = formatTokens(total.inputTokens);
+  const outputStr = formatTokens(total.outputTokens);
+  const costStr = formatCost(total.costUSD);
+  return `${inputStr} in / ${outputStr} out · ${costStr}`;
+}
+
+/**
+ * Format usage stats for plain text display.
+ */
+export function formatUsagePlain(usage: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
+  const total = totalUsageStats(usage, auxiliaryUsage) ?? usage;
+  const inputStr = formatTokens(total.inputTokens);
+  const outputStr = formatTokens(total.outputTokens);
+  const costStr = formatCost(total.costUSD);
+  return `${inputStr} input, ${outputStr} output, ${costStr}`;
+}
+
+/**
+ * Calculate total auxiliary cost from an AuxiliaryUsageMap.
+ */
+export function totalAuxiliaryCost(auxiliaryUsage: AuxiliaryUsageMap): number {
+  return Object.values(auxiliaryUsage).reduce((sum, u) => sum + u.costUSD, 0);
+}
+
+/**
+ * Format stats (duration, tokens, cost) into a compact single-line format.
+ * Used for markdown footers in PR comments and check annotations.
+ *
+ * When auxiliaryUsage is provided, tokens and cost are primary + auxiliary totals.
+ *
+ * @example formatStatsCompact(15800, { inputTokens: 3000, outputTokens: 680, costUSD: 0.0048 })
+ * // Returns: "⏱ 15.8s · 3.0k in / 680 out · $0.00"
+ *
+ * @example formatStatsCompact(15800, usage, { extraction: { inputTokens: 100, outputTokens: 50, costUSD: 0.001 } })
+ * // Returns: "⏱ 15.8s · 3.1k in / 730 out · $0.01"
+ */
+export function formatStatsCompact(durationMs?: number, usage?: UsageStats, auxiliaryUsage?: AuxiliaryUsageMap): string {
+  const parts: string[] = [];
+  const total = totalUsageStats(usage, auxiliaryUsage);
+
+  if (durationMs !== undefined) {
+    parts.push(`⏱ ${formatDuration(durationMs)}`);
+  }
+
+  if (total) {
+    parts.push(`${formatTokens(total.inputTokens)} in / ${formatTokens(total.outputTokens)} out`);
+
+    parts.push(formatCost(total.costUSD));
+  }
+
+  return parts.join(' · ');
+}

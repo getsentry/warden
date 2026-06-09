@@ -1,0 +1,15 @@
+{
+  "given": "search request building supports limit 0 as a metadata-only request but defaults falsey limits with ||",
+  "files": [
+    "fixtures/falsey-default-limit/search.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "buildSearchRequest treats limit: 0 as absent because it uses options.limit || DEFAULT_LIMIT, so metadata-only searches fetch 50 rows instead of zero"
+    }
+  ],
+  "should_not_find": [
+    "style, formatting, or naming issues",
+    "includeArchived defaulting to false"
+  ]
+}

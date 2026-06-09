@@ -1,0 +1,32 @@
+{
+  "given": "Sentry similar issues formatting receives multiple parent hashes for the same group sorted by best similarity first",
+  "files": [
+    "fixtures/sentry-similar-issues-duplicate-score/group_similar_issues_embeddings.py"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-similar-issues-duplicate-score/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "get_formatted_results overwrites group_data for duplicate parent_group_id values, so the first best-ranked duplicate keeps its insertion position but displays the later worse similarity score"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/4c02626bf661b631ca26883a2919d4f672a35666",
+    "repository": "getsentry/sentry",
+    "source_ref": "1a9590be44235dfe22b52c3bf363df361ab273f6",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-similar-issues-duplicate-score/group_similar_issues_embeddings.py",
+        "sourcePath": "src/sentry/issues/endpoints/group_similar_issues_embeddings.py",
+        "ref": "1a9590be44235dfe22b52c3bf363df361ab273f6"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix 4c02626bf661b631ca26883a2919d4f672a35666. get_formatted_results overwrites group_data for duplicate parent_group_id values, so the first best-ranked duplicate keeps its insertion position but displays the later worse similarity score"
+  }
+}

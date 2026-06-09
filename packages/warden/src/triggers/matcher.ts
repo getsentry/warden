@@ -1,0 +1,277 @@
+import type { ResolvedTrigger } from '../config/loader.js';
+import type { TriggerType } from '../config/schema.js';
+import { SEVERITY_ORDER } from '../types/index.js';
+import type { EventContext, Severity, SeverityThreshold, SkillReport } from '../types/index.js';
+
+/** Maximum number of patterns to cache (LRU eviction when exceeded) */
+const GLOB_CACHE_MAX_SIZE = 1000;
+
+/** Cache for compiled glob patterns with LRU eviction */
+const globCache = new Map<string, RegExp>();
+
+/** Clear the glob cache (useful for testing) */
+export function clearGlobCache(): void {
+  globCache.clear();
+}
+
+/** Get current cache size (useful for testing) */
+export function getGlobCacheSize(): number {
+  return globCache.size;
+}
+
+/**
+ * Convert a glob pattern to a regex (cached with LRU eviction).
+ */
+function globToRegex(pattern: string): RegExp {
+  const cached = globCache.get(pattern);
+  if (cached) {
+    // Move to end for LRU ordering (delete and re-add)
+    globCache.delete(pattern);
+    globCache.set(pattern, cached);
+    return cached;
+  }
+
+  let regexPattern = '';
+
+  for (let index = 0; index < pattern.length; index++) {
+    const char = pattern[index];
+    const nextChar = pattern[index + 1];
+    const nextNextChar = pattern[index + 2];
+
+    if (char === undefined) {
+      break;
+    }
+
+    if (char === '*' && nextChar === '*' && nextNextChar === '/') {
+      regexPattern += '(?:.*/)?';
+      index += 2;
+      continue;
+    }
+
+    if (char === '*' && nextChar === '*') {
+      regexPattern += '.*';
+      index += 1;
+      continue;
+    }
+
+    if (char === '*') {
+      regexPattern += '[^/]*';
+      continue;
+    }
+
+    if (char === '?') {
+      regexPattern += '[^/]';
+      continue;
+    }
+
+    regexPattern += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+
+  const regex = new RegExp(`^${regexPattern}$`);
+
+  // Evict oldest entry if cache is full
+  if (globCache.size >= GLOB_CACHE_MAX_SIZE) {
+    const oldestKey = globCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      globCache.delete(oldestKey);
+    }
+  }
+
+  globCache.set(pattern, regex);
+  return regex;
+}
+
+/**
+ * Match a glob pattern against a file path.
+ * Supports ** for recursive matching and * for single directory matching.
+ */
+export function matchGlob(pattern: string, path: string): boolean {
+  return globToRegex(pattern).test(path);
+}
+
+/**
+ * Check if a file list matches the path filters.
+ * Returns true if paths match (or no filters), false if all files are excluded.
+ */
+function matchPathFilters(
+  filters: { paths?: string[]; ignorePaths?: string[] },
+  filenames: string[] | undefined
+): boolean {
+  const { paths: pathPatterns, ignorePaths: ignorePatterns } = filters;
+
+  // Fail trigger match when path filters are defined but filenames unavailable
+  if ((pathPatterns || ignorePatterns) && (!filenames || filenames.length === 0)) {
+    return false;
+  }
+
+  if (pathPatterns && filenames) {
+    const hasMatch = filenames.some((file) =>
+      pathPatterns.some((pattern) => matchGlob(pattern, file))
+    );
+    if (!hasMatch) {
+      return false;
+    }
+  }
+
+  if (ignorePatterns && filenames) {
+    const allIgnored = filenames.every((file) =>
+      ignorePatterns.some((pattern) => matchGlob(pattern, file))
+    );
+    if (allIgnored) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function matchPullRequestState(trigger: ResolvedTrigger, context: EventContext): boolean {
+  const labels = context.pullRequest?.labels ?? [];
+  const labelMatches =
+    trigger.labels !== undefined &&
+    trigger.labels.some((label) => labels.includes(label));
+  const eventLabelMatches =
+    trigger.labels !== undefined &&
+    context.label !== undefined &&
+    trigger.labels.includes(context.label);
+
+  if (context.action === 'labeled' && trigger.labels !== undefined && !eventLabelMatches) {
+    return false;
+  }
+
+  if (trigger.draft === undefined) {
+    return trigger.labels === undefined || labelMatches;
+  }
+
+  const draftMatches = (context.pullRequest?.draft ?? false) === trigger.draft;
+  return draftMatches || labelMatches;
+}
+
+/**
+ * Return a copy of the context with only files matching the path filters.
+ * If no filters are set, returns the original context unchanged (no copy).
+ */
+export function filterContextByPaths(
+  context: EventContext,
+  filters: { paths?: string[]; ignorePaths?: string[] }
+): EventContext {
+  const { paths: pathPatterns, ignorePaths: ignorePatterns } = filters;
+
+  // No filters — return original reference
+  if (!pathPatterns && !ignorePatterns) {
+    return context;
+  }
+
+  // No PR context — nothing to filter
+  if (!context.pullRequest) {
+    return context;
+  }
+
+  let files = context.pullRequest.files;
+
+  if (pathPatterns) {
+    files = files.filter((f) =>
+      pathPatterns.some((pattern) => matchGlob(pattern, f.filename))
+    );
+  }
+
+  if (ignorePatterns) {
+    files = files.filter(
+      (f) => !ignorePatterns.some((pattern) => matchGlob(pattern, f.filename))
+    );
+  }
+
+  return {
+    ...context,
+    pullRequest: {
+      ...context.pullRequest,
+      files,
+    },
+  };
+}
+
+/**
+ * Check if a trigger matches the given event context and environment.
+ *
+ * Trigger types:
+ * - '*' (wildcard): matches all environments, skips event/action checks
+ * - 'local': matches only when environment is 'local' (local-only skills)
+ * - 'pull_request': matches in 'github' (with event/action checks) and 'local' (path filters only)
+ * - 'schedule': matches when event is schedule
+ */
+export function matchTrigger(
+  trigger: ResolvedTrigger,
+  context: EventContext,
+  environment?: TriggerType | 'github'
+): boolean {
+  // Wildcard triggers match everywhere, only check path filters
+  if (trigger.type === '*') {
+    const filenames = context.pullRequest?.files.map((f) => f.filename);
+    return matchPathFilters(trigger.filters, filenames);
+  }
+
+  // Type-based matching with early returns
+  if (trigger.type === 'local') {
+    if (environment !== 'local') {
+      return false;
+    }
+  }
+
+  if (trigger.type === 'pull_request') {
+    if (environment === 'local') {
+      // Local mode runs all skills — skip event/action checks, fall through to path filters
+    } else {
+      if (context.eventType !== 'pull_request') {
+        return false;
+      }
+      if (!trigger.actions?.includes(context.action)) {
+        return false;
+      }
+      if (!matchPullRequestState(trigger, context)) {
+        return false;
+      }
+    }
+  }
+
+  if (trigger.type === 'schedule') {
+    if (context.eventType !== 'schedule') {
+      return false;
+    }
+    return (context.pullRequest?.files.length ?? 0) > 0;
+  }
+
+  // Apply path filters
+  const filenames = context.pullRequest?.files.map((f) => f.filename);
+  return matchPathFilters(trigger.filters, filenames);
+}
+
+/**
+ * Check if a report has any findings at or above the given severity threshold.
+ * Returns false if failOn is 'off' (disabled).
+ */
+export function shouldFail(report: SkillReport, failOn: SeverityThreshold): boolean {
+  if (failOn === 'off') return false;
+  const threshold = SEVERITY_ORDER[failOn];
+  return report.findings.some((f) => SEVERITY_ORDER[f.severity] <= threshold);
+}
+
+/**
+ * Count findings at or above the given severity threshold.
+ * Returns 0 if failOn is 'off' (disabled).
+ */
+export function countFindingsAtOrAbove(report: SkillReport, failOn: SeverityThreshold): number {
+  if (failOn === 'off') return 0;
+  const threshold = SEVERITY_ORDER[failOn];
+  return report.findings.filter((f) => SEVERITY_ORDER[f.severity] <= threshold).length;
+}
+
+/**
+ * Count findings of a specific severity across multiple reports.
+ */
+export function countSeverity(reports: SkillReport[], severity: Severity): number {
+  return reports.reduce(
+    (count, report) =>
+      count + report.findings.filter((f) => f.severity === severity).length,
+    0
+  );
+}

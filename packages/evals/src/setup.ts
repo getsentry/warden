@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
+import { bridgeWardenProviderApiKeyEnv } from '../../warden/src/utils/index.js';
 
 /**
  * Load environment variables for evals.
@@ -23,3 +24,4 @@ function loadTestEnv(): void {
 }
 
 loadTestEnv();
+bridgeWardenProviderApiKeyEnv();

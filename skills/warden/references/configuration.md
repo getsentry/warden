@@ -21,6 +21,7 @@ version = 1
 
 [defaults.agent]
 model = "openai/gpt-5.5"
+effort = "medium"
 
 [[skills]]
 name = "my-skill"           # matches .agents/skills/my-skill/SKILL.md
@@ -93,6 +94,8 @@ Warden uses different model lanes for different kinds of work:
 
 If `[defaults.synthesis].model` is omitted, synthesis falls back to `[defaults.auxiliary].model`.
 
+`[defaults.agent].effort` optionally controls repo-aware skill reasoning across runtimes. Supported values are `off`, `low`, `medium`, `high`, and `xhigh`. When omitted, Warden sends explicit `high` adaptive thinking to the Claude runtime; Pi uses its own default thinking level.
+
 ## Model Precedence
 
 From highest to lowest priority:
@@ -109,10 +112,17 @@ From highest to lowest priority:
 | Variable | Purpose |
 |----------|---------|
 | `WARDEN_MODEL` | Default model (lowest priority) |
+| `WARDEN_{PROVIDER}_API_KEY` | API key for the named Pi provider (e.g. `WARDEN_OPENAI_API_KEY`, `WARDEN_FIREWORKS_API_KEY`). Mirrored to the native `{PROVIDER}_API_KEY` at runtime. |
 | `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
 | `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
+| `WARDEN_FIREWORKS_API_KEY` | Fireworks API key for Fireworks Pi models |
+| `WARDEN_GROQ_API_KEY` | Groq API key for Groq Pi models |
+| `WARDEN_OPENROUTER_API_KEY` | OpenRouter API key for OpenRouter Pi models |
 | `WARDEN_STATE_DIR` | Override cache location (default: `~/.local/warden`) |
 | `WARDEN_SKILL_CACHE_TTL` | Cache TTL in seconds for unpinned remotes (default: 86400) |
+
+Native provider env vars (e.g. `OPENAI_API_KEY`) also work. The `WARDEN_`-prefixed forms are
+preferred in CI so they do not collide with locally-set provider keys.
 
 ## Troubleshooting
 
@@ -128,5 +138,6 @@ From highest to lowest priority:
 
 **Token/cost issues:**
 - Reduce `maxTurns` (default: 50)
+- Lower `[defaults.agent].effort` when the runtime supports cheaper reasoning levels
 - Use chunking settings to control chunk size
 - Filter to relevant files with `paths`

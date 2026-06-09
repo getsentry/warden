@@ -178,7 +178,7 @@ describe('standalone scenario files', () => {
     const scenario = loadEvalScenarioFile(file);
     const meta = resolveEvalScenarioMeta(scenario, file, {
       category: 'security-review',
-      skill: '../../src/builtin-skills/security-review/SKILL.md',
+      skill: '../warden/src/builtin-skills/security-review/SKILL.md',
       runtime: 'pi',
       model: 'anthropic/claude-sonnet-4-6',
       baseDir: evalsDir,
@@ -196,20 +196,20 @@ describe('standalone scenario files', () => {
   it('discovers all standalone scenarios for a category', () => {
     const metas = discoverEvalScenarios({
       category: 'security-review',
-      skill: '../../src/builtin-skills/security-review/SKILL.md',
+      skill: '../warden/src/builtin-skills/security-review/SKILL.md',
       runtime: 'pi',
       model: 'anthropic/claude-sonnet-4-6',
       baseDir: evalsDir,
     });
 
-    expect(metas.length).toBe(10);
+    expect(metas.length).toBe(11);
     expect(metas.map((meta) => meta.name)).toContain('sentry-replay-delete-read-scope');
   });
 
   it('discovers standalone code-review scenarios', () => {
     const metas = discoverEvalScenarios({
       category: 'code-review',
-      skill: '../../src/builtin-skills/code-review/SKILL.md',
+      skill: '../warden/src/builtin-skills/code-review/SKILL.md',
       runtime: 'pi',
       model: 'anthropic/claude-sonnet-4-6',
       baseDir: evalsDir,
@@ -312,7 +312,7 @@ describe('standalone scenario files', () => {
 
     expect(() => resolveEvalScenarioMeta(scenario, join(evalsDir, 'security-review', 'missing-fixture.json'), {
       category: 'security-review',
-      skill: '../../src/builtin-skills/security-review/SKILL.md',
+      skill: '../warden/src/builtin-skills/security-review/SKILL.md',
       baseDir: evalsDir,
     })).toThrow('Eval fixture not found for security-review/missing-fixture');
   });
@@ -389,7 +389,7 @@ describe('EvalFileSchema', () => {
 
   it('accepts a Pi runtime with provider-qualified model', () => {
     const valid = {
-      skill: '../../src/builtin-skills/security-review/SKILL.md',
+      skill: '../warden/src/builtin-skills/security-review/SKILL.md',
       runtime: 'pi',
       model: 'anthropic/claude-sonnet-4-6',
       evals: [{

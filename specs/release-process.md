@@ -10,7 +10,7 @@ Warden ships two independent artifacts from the same repo:
 
 | Artifact | Consumers | Built by | Published via |
 |----------|-----------|----------|--------------|
-| **npm package** (`@sentry/warden`) | CLI users, library consumers | `tsc` + `pnpm pack` in CI | Craft downloads CI tarball, publishes to npm |
+| **npm package** (`@sentry/warden`) | CLI users, library consumers | `tsc` + `pnpm --filter @sentry/warden pack` in CI | Craft downloads CI tarball, publishes to npm |
 | **GitHub Action** (`getsentry/warden@v0`) | GitHub Action users | `ncc` in `update-major-tag` workflow | Force-pushed to release tags |
 
 Neither artifact is committed to main. All of `dist/` is gitignored.
@@ -19,7 +19,7 @@ Neither artifact is committed to main. All of `dist/` is gitignored.
 
 | Command | Output | Purpose |
 |---------|--------|---------|
-| `pnpm build` | `dist/` (tsc) | Library + CLI for npm |
+| `pnpm build` | `packages/warden/dist/` (tsc) | Library + CLI for npm |
 | `pnpm build:action` | `dist/action/` (ncc) | Self-contained GitHub Action bundle |
 
 The ncc bundle is built with `--no-source-map-register`. No sourcemaps, declaration files, or type maps should ever appear in git history.
@@ -30,7 +30,7 @@ The ncc bundle is built with `--no-source-map-register`. No sourcemaps, declarat
 main branch          Source + action.yml. No dist/.
 v0.7.0 tag           Source + action.yml + dist/action/ (ncc bundle only).
 v0 tag               Same commit as latest v0.x.y tag.
-npm tarball          dist/ (tsc output). No dist/action/, no source.
+npm tarball          packages/warden/dist/ (tsc output) plus runtime skill assets. No dist/action/.
 ```
 
 ## Gitignore Policy
@@ -54,8 +54,8 @@ The release workflow does not create this tag. It fails fast if the previous rel
 The workflow runs `getsentry/action-prepare-release@v1` which:
 
 1. Runs `preReleaseCommand` from `.craft.yml` (`bash bin/bump-version.sh`)
-2. `bump-version.sh` bumps `package.json`, installs deps, and runs `pnpm build` as a compilation check
-3. Since `dist/` is gitignored, only `package.json` is committed
+2. `bump-version.sh` bumps `packages/warden/package.json`, installs deps, and runs `pnpm build` as a compilation check
+3. Since `dist/` is gitignored, only package metadata and lockfile changes are committed
 4. A PR is opened on a `releases/X.Y.Z` branch
 
 ### 4. CI builds the npm tarball
@@ -64,14 +64,14 @@ CI (`ci.yml`) runs on the release branch push and again on merge to main:
 
 1. Builds tsc output (`pnpm build`)
 2. Builds ncc bundle (`pnpm build:action`) as a validation step
-3. Creates a tarball (`pnpm pack`) which respects `.npmignore`
+3. Creates a tarball (`pnpm --filter @sentry/warden pack`) which respects `packages/warden/.npmignore`
 4. Uploads the tarball as a GitHub Actions artifact
 
-The `.npmignore` excludes `dist/action/`, `action.yml`, source files, tests, and dev config. The tarball contains only the tsc-compiled library and CLI.
+The package `.npmignore` excludes `action.yml`, non-runtime source files, tests, and dev config. The tarball contains the tsc-compiled library and CLI plus runtime skill assets.
 
 ### 5. Merge
 
-A maintainer reviews and merges the release PR into main. Main gets the version bump in `package.json` and nothing else.
+A maintainer reviews and merges the release PR into main. Main gets the version bump in `packages/warden/package.json` and lockfile updates, but no build artifacts.
 
 ### 6. Craft publishes
 
@@ -150,5 +150,6 @@ Controls what goes into the npm tarball. Key exclusions:
 | `.github/workflows/update-major-tag.yml` | Creates `-src` tags, builds ncc bundle, commits to release tags |
 | `action.yml` | GitHub Action definition, references `dist/action/index.js` |
 | `.gitignore` | Ignores all of `dist/` |
-| `.npmignore` | Excludes `dist/action/` and non-library files from npm tarball |
-| `package.json` | Build scripts (`build`, `build:action`) |
+| `packages/warden/.npmignore` | Excludes non-library files from npm tarball |
+| `package.json` | Workspace scripts that delegate to `packages/warden` |
+| `packages/warden/package.json` | Package metadata and build scripts (`build`, `build:action`) |

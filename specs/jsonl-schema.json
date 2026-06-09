@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://warden.dev/schemas/jsonl-v1.json",
   "title": "Warden JSONL Output",
-  "description": "Schema for a single line in Warden's JSONL output. New run logs are homogeneous chunk records; legacy skill, summary, and fix-evaluation records remain parseable. Generated from src/cli/output/jsonl-schema-gen.ts — do not edit by hand.",
+  "description": "Schema for a single line in Warden's JSONL output. Finalized run logs contain chunk records plus a summary record; legacy skill and fix-evaluation records remain parseable. Generated from packages/warden/src/cli/output/jsonl-schema-gen.ts — do not edit by hand.",
   "anyOf": [
     {
       "$ref": "#/$defs/ChunkRecord"
@@ -76,15 +76,12 @@
             "$ref": "#/$defs/Finding"
           }
         },
-        "usage": {
-          "$ref": "#/$defs/UsageStats"
+        "usageBreakdown": {
+          "$ref": "#/$defs/UsageBreakdown"
         },
         "durationMs": {
           "type": "number",
           "minimum": 0
-        },
-        "auxiliaryUsage": {
-          "$ref": "#/$defs/AuxiliaryUsage"
         },
         "error": {
           "$ref": "#/$defs/SkillError"
@@ -94,6 +91,9 @@
           "items": {
             "$ref": "#/$defs/SkippedFile"
           }
+        },
+        "trace": {
+          "$ref": "#/$defs/HunkTrace"
         }
       },
       "required": [
@@ -183,8 +183,69 @@
             "$ref": "#/$defs/Location"
           }
         },
-        "suggestedFix": {
-          "$ref": "#/$defs/SuggestedFix"
+        "sourceSnippet": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string"
+            },
+            "startLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "endLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "targetStartLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "targetEndLine": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "line": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "highlighted": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "line",
+                  "content"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "path",
+            "startLine",
+            "endLine",
+            "targetStartLine",
+            "targetEndLine",
+            "lines"
+          ],
+          "additionalProperties": false
         },
         "elapsedMs": {
           "type": "number",
@@ -222,21 +283,80 @@
       ],
       "additionalProperties": false
     },
-    "SuggestedFix": {
+    "UsageBreakdown": {
       "type": "object",
       "properties": {
-        "description": {
-          "type": "string"
+        "scan": {
+          "$ref": "#/$defs/__schema0"
         },
-        "diff": {
-          "type": "string"
+        "auxiliary": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "total": {
+          "$ref": "#/$defs/UsageBreakdownEntry"
         }
       },
       "required": [
-        "description",
-        "diff"
+        "total"
+      ],
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "scan"
+          ]
+        },
+        {
+          "required": [
+            "auxiliary"
+          ]
+        }
+      ]
+    },
+    "__schema0": {
+      "$ref": "#/$defs/UsageBreakdownEntry"
+    },
+    "UsageBreakdownEntry": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "models": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "runtime": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "runtimes": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats"
+        }
+      },
+      "required": [
+        "usage"
       ],
       "additionalProperties": false
+    },
+    "__schema1": {
+      "type": "string"
+    },
+    "__schema2": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "__schema3": {
+      "type": "string"
+    },
+    "__schema4": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "UsageStats": {
       "type": "object",
@@ -288,13 +408,13 @@
       ],
       "additionalProperties": false
     },
-    "AuxiliaryUsage": {
+    "__schema5": {
       "type": "object",
       "propertyNames": {
         "type": "string"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/UsageStats"
+        "$ref": "#/$defs/UsageBreakdownEntry"
       }
     },
     "SkillError": {
@@ -364,6 +484,142 @@
       ],
       "additionalProperties": false
     },
+    "HunkTrace": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string"
+        },
+        "lineRange": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        },
+        "spanId": {
+          "type": "string"
+        },
+        "responseId": {
+          "type": "string"
+        },
+        "responseModel": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationApiMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "numTurns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TraceSpan"
+          }
+        }
+      },
+      "required": [
+        "filename",
+        "lineRange",
+        "runtime",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "TraceSpan": {
+      "type": "object",
+      "properties": {
+        "traceId": {
+          "type": "string"
+        },
+        "spanId": {
+          "type": "string"
+        },
+        "parentSpanId": {
+          "type": "string"
+        },
+        "op": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "startTimeUnixMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endTimeUnixMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "traceId",
+        "spanId"
+      ],
+      "additionalProperties": false
+    },
     "SkillRecord": {
       "type": "object",
       "properties": {
@@ -415,11 +671,41 @@
             "$ref": "#/$defs/HunkFailure"
           }
         },
+        "traces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HunkTrace"
+          }
+        },
         "error": {
           "$ref": "#/$defs/SkillError"
         },
         "auxiliaryUsage": {
           "$ref": "#/$defs/AuxiliaryUsage"
+        },
+        "auxiliaryUsageAttribution": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "$ref": "#/$defs/__schema1"
+              },
+              "models": {
+                "$ref": "#/$defs/__schema2"
+              },
+              "runtime": {
+                "$ref": "#/$defs/__schema3"
+              },
+              "runtimes": {
+                "$ref": "#/$defs/__schema4"
+              }
+            },
+            "additionalProperties": false
+          }
         },
         "files": {
           "type": "array",
@@ -435,6 +721,9 @@
         },
         "run": {
           "$ref": "#/$defs/RunMetadata"
+        },
+        "usageBreakdown": {
+          "$ref": "#/$defs/UsageBreakdown"
         }
       },
       "required": [
@@ -484,6 +773,15 @@
         "message"
       ],
       "additionalProperties": false
+    },
+    "AuxiliaryUsage": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/UsageStats"
+      }
     },
     "FileRecord": {
       "type": "object",
@@ -551,16 +849,13 @@
           ],
           "additionalProperties": false
         },
-        "usage": {
-          "$ref": "#/$defs/UsageStats"
+        "usageBreakdown": {
+          "$ref": "#/$defs/UsageBreakdown"
         },
         "totalSkippedFiles": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
-        },
-        "auxiliaryUsage": {
-          "$ref": "#/$defs/AuxiliaryUsage"
         },
         "failedSkills": {
           "type": "array",

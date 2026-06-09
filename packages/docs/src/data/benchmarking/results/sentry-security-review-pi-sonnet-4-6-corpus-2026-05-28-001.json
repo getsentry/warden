@@ -1,0 +1,160 @@
+{
+  "runId": "sentry-security-review-pi-sonnet-4-6-corpus-2026-05-28-001",
+  "supersededBy": "sentry-security-review-pi-sonnet-4-6-traced-corpus-2026-06-03-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.34.0",
+  "skill": "@sentry/warden:security-review@0.34.0",
+  "model": "anthropic/claude-sonnet-4-6",
+  "runtime": "pi",
+  "reasoningLevel": "pi-default-medium",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "shards": [
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "d82622c7-da45-4d91-a13d-f5edcb3dcd07",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 385014,
+      "costUSD": 0.33453765,
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "8d4c9f40-0c43-4412-912a-fc870e787018",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 2,
+      "durationMs": 254733,
+      "costUSD": 0.89804175,
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "d2171bee-e4dc-47a2-b983-37df3adc44a1",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 2,
+      "durationMs": 195734,
+      "costUSD": 0.43556055,
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-corpus-fbecd17d.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "931d21b6-7524-412b-9700-47327c9d5407",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 168213,
+      "costUSD": 0.2325786,
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "3ecac058-36f2-4118-84c4-449699056312",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 12,
+      "durationMs": 1131430,
+      "costUSD": 6.01382865,
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-corpus-7f41cc50.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "ac061d7b-6cb1-4ec7-9f0e-f7217eb5b99d",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 14,
+      "durationMs": 1227886,
+      "costUSD": 6.51631515,
+      "rawJsonl": "sentry-security-review-pi-sonnet-4-6-corpus-9fc06de5.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 32,
+    "findingsBySeverity": {
+      "high": 3,
+      "medium": 25,
+      "low": 4
+    },
+    "findingsByConfidence": {
+      "high": 28,
+      "medium": 3,
+      "low": 1
+    },
+    "durationMs": 3363010,
+    "inputTokens": 9318068,
+    "outputTokens": 467133,
+    "cacheReadInputTokens": 7952202,
+    "cacheCreationInputTokens": 1359133,
+    "analysisCostUSD": 14.43086235,
+    "auxiliaryCostUSD": 0.131235,
+    "costUSD": 14.56209735
+  },
+  "timing": {
+    "shardWallMs": {
+      "source": "result-shard-durationMs",
+      "total": 3363010,
+      "count": 6,
+      "p50": 319874,
+      "p75": 944826,
+      "p90": 1179658,
+      "p95": 1203772,
+      "max": 1227886
+    }
+  },
+  "auxiliaryUsage": {
+    "extraction": {
+      "inputTokens": 5622,
+      "outputTokens": 4125,
+      "costUSD": 0.131235
+    }
+  },
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. The previous manual score was removed pending agent-verified semantic rescoring from raw findings."
+}

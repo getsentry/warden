@@ -21,7 +21,7 @@ permissions:
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 env:
   WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
@@ -56,7 +56,7 @@ permissions:
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 env:
   WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}

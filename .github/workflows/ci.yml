@@ -66,10 +66,22 @@ jobs:
           fail-ci-if-error: true
       - run: pnpm build
       - run: pnpm build:action
+      - name: Smoke test action built-in skill resolution
+        run: |
+          GITHUB_ACTION_PATH="$PWD" node --input-type=module -e "
+            const skills = await import('./packages/warden/dist/skills/loader.js');
+            const skill = await skills.resolveSkillAsync('security-review');
+            if (skill.name !== 'security-review') {
+              throw new Error('Expected security-review built-in skill, got ' + skill.name);
+            }
+          "
 
-      - run: pnpm pack
+      - run: pnpm --filter @sentry/warden pack
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ github.sha }}
-          path: "*.tgz"
+          path: |
+            *.tgz
+            packages/warden/*.tgz
+          if-no-files-found: error

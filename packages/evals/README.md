@@ -191,7 +191,7 @@ positive.
 ## Running Evals
 
 ```bash
-# Run all evals (requires ANTHROPIC_API_KEY)
+# Run all evals (requires ANTHROPIC_API_KEY or WARDEN_ANTHROPIC_API_KEY)
 pnpm evals
 
 # Run evals for a specific skill
@@ -214,6 +214,8 @@ pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
 Evals make real API calls and are skipped when `ANTHROPIC_API_KEY` is not set.
+`WARDEN_ANTHROPIC_API_KEY` is bridged into `ANTHROPIC_API_KEY` during eval
+setup, so the usual Warden-prefixed environment works too.
 Suites choose the runtime and model. The checked-in full-pipeline suites
 currently run Pi with `anthropic/claude-sonnet-4-6`.
 
@@ -249,7 +251,7 @@ to improve discovery, verification, merging, or judging later.
 If a new category needs a different test skill, add it to `packages/evals/skills/`.
 To exercise a built-in directory-format skill, point `skill` at its `SKILL.md`
 relative to `packages/evals/`, for example
-`../../src/builtin-skills/security-review/SKILL.md`.
+`../warden/src/builtin-skills/security-review/SKILL.md`.
 
 ### Scaffolding From GitHub
 

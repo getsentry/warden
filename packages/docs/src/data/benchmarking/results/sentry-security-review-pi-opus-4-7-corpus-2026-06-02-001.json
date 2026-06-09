@@ -1,0 +1,219 @@
+{
+  "runId": "sentry-security-review-pi-opus-4-7-corpus-2026-06-02-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.35.1",
+  "skill": "@sentry/warden:security-review@0.35.1",
+  "model": "anthropic/claude-opus-4-7",
+  "runtime": "pi",
+  "reasoningLevel": "pi-default-medium",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "02c32009-8a81-4aa6-91cf-bd8d21cd1d03",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 3,
+      "durationMs": 114049,
+      "costUSD": 0.4854975,
+      "rawJsonl": "sentry-security-review-pi-opus-4-7-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "d7e5b445-3360-4a48-9ab5-08198e0fb6de",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 2538,
+      "costUSD": 0.05201925,
+      "rawJsonl": "sentry-security-review-pi-opus-4-7-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "9d4333c3-6ec3-449f-a520-7cc4140a14dc",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 15804,
+      "costUSD": 0.06773075,
+      "rawJsonl": "sentry-security-review-pi-opus-4-7-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "fa8ec42b-4364-47b7-85e0-4fbbabd9d1b3",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 3,
+      "durationMs": 145498,
+      "costUSD": 2.1923810000000006,
+      "rawJsonl": "sentry-security-review-pi-opus-4-7-corpus-7f41cc50.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "eff5fcc1-7b88-47ac-8464-79a1b3e01037",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 57823,
+      "costUSD": 1.5085250000000003,
+      "rawJsonl": "sentry-security-review-pi-opus-4-7-corpus-9fc06de5.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "4921de3b-1364-417d-a09c-53630dcec8b9",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 61608,
+      "costUSD": 0.08108175,
+      "rawJsonl": "sentry-security-review-pi-opus-4-7-corpus-fbecd17d.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 7,
+    "findingsBySeverity": {
+      "medium": 4,
+      "low": 3
+    },
+    "findingsByConfidence": {
+      "high": 1,
+      "medium": 6
+    },
+    "durationMs": 397320,
+    "inputTokens": 1533683,
+    "outputTokens": 20772,
+    "cacheReadInputTokens": 994153,
+    "cacheCreationInputTokens": 538567,
+    "analysisCostUSD": 4.387235249999999,
+    "auxiliaryCostUSD": 0,
+    "costUSD": 4.387235249999999
+  },
+  "timing": {
+    "shardWallMs": {
+      "source": "result-shard-durationMs",
+      "total": 397320,
+      "count": 6,
+      "p50": 59716,
+      "p75": 100939,
+      "p90": 129774,
+      "p95": 137636,
+      "max": 145498
+    },
+    "analysisChunkMs": {
+      "source": "jsonl-chunk-durationMs",
+      "count": 156,
+      "p50": 1171,
+      "p75": 1544,
+      "p90": 9635,
+      "p95": 16784,
+      "max": 46587
+    }
+  },
+  "auxiliaryUsage": {},
+  "findingVerification": {
+    "enabled": true,
+    "source": "warden-default",
+    "notes": "The benchmark config did not disable defaults.verification. Warden enables the post-analysis finding verifier unless defaults.verification.enabled is false."
+  },
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-06-02",
+    "knownFindingCount": 86,
+    "knownFound": 6,
+    "knownMissed": 80,
+    "knownPartial": 0,
+    "knownFoundRate": 0.0698,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count."
+  },
+  "scores": [
+    {
+      "findingId": "8T7-L4N",
+      "matchedCorpusIds": ["sentry-vuln-008"],
+      "verdict": "known-found",
+      "notes": "Same system options allowlist tuple bug."
+    },
+    {
+      "findingId": "7D6-T4L",
+      "matchedCorpusIds": ["sentry-vuln-007"],
+      "verdict": "known-found",
+      "notes": "Same release threshold empty project-list leak."
+    },
+    {
+      "findingId": "JDA-6MK",
+      "matchedCorpusIds": ["sentry-vuln-003"],
+      "verdict": "known-found",
+      "notes": "Same InternalEAFeaturesEndpoint permission bypass."
+    },
+    {
+      "findingId": "3QT-9WZ",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-safe comparison issue is not the Statsig timestamp freshness bug in the corpus."
+    },
+    {
+      "findingId": "2NF-SB3",
+      "matchedCorpusIds": ["sentry-vuln-072"],
+      "verdict": "known-found",
+      "notes": "Same OAuth redirect URI prefix-match bug."
+    },
+    {
+      "findingId": "83Z-NXW",
+      "matchedCorpusIds": ["sentry-vuln-082"],
+      "verdict": "known-found",
+      "notes": "Same feature flag tooltip XSS."
+    },
+    {
+      "findingId": "PWN-6G5",
+      "matchedCorpusIds": ["sentry-vuln-015"],
+      "verdict": "known-found",
+      "notes": "Same unverified PubSub transfer job trigger."
+    }
+  ],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. No explicit reasoning level was configured in warden.toml or CLI args, so the run used Pi's default medium thinking level."
+}

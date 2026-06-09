@@ -1,0 +1,431 @@
+import { describe, it, expect, vi } from 'vitest';
+import {
+  severityToAnnotationLevel,
+  findingsToAnnotations,
+  determineConclusion,
+  aggregateSeverityCounts,
+  updateCoreCheck,
+} from './github-checks.js';
+import type { Finding, SkillReport } from '../types/index.js';
+
+describe('severityToAnnotationLevel', () => {
+  it('maps high to failure', () => {
+    expect(severityToAnnotationLevel('high')).toBe('failure');
+  });
+
+  it('maps medium to warning', () => {
+    expect(severityToAnnotationLevel('medium')).toBe('warning');
+  });
+
+  it('maps low to notice', () => {
+    expect(severityToAnnotationLevel('low')).toBe('notice');
+  });
+});
+
+describe('findingsToAnnotations', () => {
+  it('converts findings with location to annotations', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'Security Issue',
+        description: 'Details about the issue',
+        location: {
+          path: 'src/file.ts',
+          startLine: 10,
+          endLine: 15,
+        },
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings);
+
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]).toEqual({
+      path: 'src/file.ts',
+      start_line: 10,
+      end_line: 15,
+      annotation_level: 'failure',
+      message: 'Details about the issue',
+      title: 'Security Issue',
+    });
+  });
+
+  it('uses startLine for end_line when endLine not provided', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'medium',
+        title: 'Issue',
+        description: 'Details',
+        location: {
+          path: 'src/file.ts',
+          startLine: 25,
+        },
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings);
+
+    expect(annotations[0]!.start_line).toBe(25);
+    expect(annotations[0]!.end_line).toBe(25);
+  });
+
+  it('filters out findings without location', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'General Issue',
+        description: 'No location',
+      },
+      {
+        id: 'f2',
+        severity: 'medium',
+        title: 'Located Issue',
+        description: 'Has location',
+        location: {
+          path: 'src/file.ts',
+          startLine: 5,
+        },
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings);
+
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]!.title).toBe('Located Issue');
+  });
+
+  it('sorts by severity (most severe first)', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'low',
+        title: 'Low',
+        description: 'Low severity',
+        location: { path: 'a.ts', startLine: 1 },
+      },
+      {
+        id: 'f2',
+        severity: 'high',
+        title: 'High',
+        description: 'High severity',
+        location: { path: 'b.ts', startLine: 2 },
+      },
+      {
+        id: 'f3',
+        severity: 'medium',
+        title: 'Medium',
+        description: 'Medium severity',
+        location: { path: 'c.ts', startLine: 3 },
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings);
+
+    expect(annotations[0]!.title).toBe('High');
+    expect(annotations[1]!.title).toBe('Medium');
+    expect(annotations[2]!.title).toBe('Low');
+  });
+
+  it('limits to 50 annotations', () => {
+    const findings: Finding[] = Array.from({ length: 60 }, (_, i) => ({
+      id: `f${i}`,
+      severity: 'low' as const,
+      title: `Finding ${i}`,
+      description: `Description ${i}`,
+      location: { path: `file${i}.ts`, startLine: i + 1 },
+    }));
+
+    const annotations = findingsToAnnotations(findings);
+
+    expect(annotations).toHaveLength(50);
+  });
+
+  it('filters by reportOn threshold', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'High',
+        description: 'High issue',
+        location: { path: 'a.ts', startLine: 1 },
+      },
+      {
+        id: 'f2',
+        severity: 'medium',
+        title: 'Medium',
+        description: 'Medium issue',
+        location: { path: 'b.ts', startLine: 2 },
+      },
+      {
+        id: 'f3',
+        severity: 'low',
+        title: 'Low',
+        description: 'Low issue',
+        location: { path: 'c.ts', startLine: 3 },
+      },
+    ];
+
+    // reportOn='high' should only include high
+    const annotations = findingsToAnnotations(findings, 'high');
+
+    expect(annotations).toHaveLength(1);
+    expect(annotations.map((a) => a.title)).toEqual(['High']);
+  });
+
+  it('filters by minConfidence threshold', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'High Confidence',
+        description: 'High confidence issue',
+        confidence: 'high',
+        location: { path: 'a.ts', startLine: 1 },
+      },
+      {
+        id: 'f2',
+        severity: 'high',
+        title: 'Low Confidence',
+        description: 'Low confidence issue',
+        confidence: 'low',
+        location: { path: 'b.ts', startLine: 2 },
+      },
+      {
+        id: 'f3',
+        severity: 'high',
+        title: 'No Confidence',
+        description: 'No confidence set',
+        location: { path: 'c.ts', startLine: 3 },
+      },
+    ];
+
+    // minConfidence='medium' should exclude low confidence but keep no-confidence
+    const annotations = findingsToAnnotations(findings, undefined, 'medium');
+
+    expect(annotations).toHaveLength(2);
+    expect(annotations.map((a) => a.title)).toEqual(['High Confidence', 'No Confidence']);
+  });
+
+  it('generates annotations for additional locations', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'Missing null check',
+        description: 'Input not validated',
+        location: { path: 'src/a.ts', startLine: 10, endLine: 15 },
+        additionalLocations: [
+          { path: 'src/b.ts', startLine: 20 },
+          { path: 'src/c.ts', startLine: 30, endLine: 35 },
+        ],
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings);
+
+    expect(annotations).toHaveLength(3);
+    // Primary annotation
+    expect(annotations[0]).toEqual({
+      path: 'src/a.ts',
+      start_line: 10,
+      end_line: 15,
+      annotation_level: 'failure',
+      message: 'Input not validated',
+      title: 'Missing null check',
+    });
+    // Additional location annotations
+    expect(annotations[1]!.path).toBe('src/b.ts');
+    expect(annotations[1]!.title).toBe('[f1] Missing null check (additional location)');
+    expect(annotations[2]!.path).toBe('src/c.ts');
+    expect(annotations[2]!.start_line).toBe(30);
+    expect(annotations[2]!.end_line).toBe(35);
+  });
+
+  it('respects annotation limit with additional locations', () => {
+    // Create 45 findings, each with 2 additional locations = 135 total annotations
+    const findings: Finding[] = Array.from({ length: 45 }, (_, i) => ({
+      id: `f${i}`,
+      severity: 'low' as const,
+      title: `Finding ${i}`,
+      description: `Desc ${i}`,
+      location: { path: `file${i}.ts`, startLine: i + 1 },
+      additionalLocations: [
+        { path: `extra1-${i}.ts`, startLine: 1 },
+        { path: `extra2-${i}.ts`, startLine: 1 },
+      ],
+    }));
+
+    const annotations = findingsToAnnotations(findings);
+    expect(annotations.length).toBeLessThanOrEqual(50);
+  });
+
+  it('returns all findings when reportOn is undefined', () => {
+    const findings: Finding[] = [
+      {
+        id: 'f1',
+        severity: 'high',
+        title: 'High',
+        description: 'High issue',
+        location: { path: 'a.ts', startLine: 1 },
+      },
+      {
+        id: 'f2',
+        severity: 'low',
+        title: 'Low',
+        description: 'Low issue',
+        location: { path: 'b.ts', startLine: 2 },
+      },
+    ];
+
+    const annotations = findingsToAnnotations(findings, undefined);
+
+    expect(annotations).toHaveLength(2);
+  });
+});
+
+describe('determineConclusion', () => {
+  it('returns success for empty findings', () => {
+    expect(determineConclusion([], 'high')).toBe('success');
+  });
+
+  it('returns neutral when no failOn threshold', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'Issue', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, undefined)).toBe('neutral');
+  });
+
+  it('returns failure when findings meet threshold and failCheck is true', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'High Issue', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, 'high', true)).toBe('failure');
+    expect(determineConclusion(findings, 'medium', true)).toBe('failure');
+  });
+
+  it('returns neutral when findings meet threshold but failCheck is default (false)', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'High Issue', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, 'high')).toBe('neutral');
+    expect(determineConclusion(findings, 'medium')).toBe('neutral');
+  });
+
+  it('returns neutral when findings below threshold', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'medium', title: 'Medium Issue', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, 'high')).toBe('neutral');
+  });
+
+  it('considers high more severe than medium', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'High', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, 'medium', true)).toBe('failure');
+  });
+
+  it('returns neutral when failCheck is explicitly false and threshold is met', () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'High Issue', description: 'Details' },
+    ];
+
+    expect(determineConclusion(findings, 'high', false)).toBe('neutral');
+  });
+
+  it('returns success for empty findings regardless of failCheck', () => {
+    expect(determineConclusion([], 'high', true)).toBe('success');
+    expect(determineConclusion([], 'high', false)).toBe('success');
+  });
+});
+
+describe('aggregateSeverityCounts', () => {
+  it('counts findings by severity across reports', () => {
+    const reports: SkillReport[] = [
+      {
+        skill: 'skill-1',
+        summary: 'Summary 1',
+        findings: [
+          { id: 'f1', severity: 'high', title: 'A', description: 'D' },
+          { id: 'f2', severity: 'high', title: 'B', description: 'D' },
+        ],
+      },
+      {
+        skill: 'skill-2',
+        summary: 'Summary 2',
+        findings: [
+          { id: 'f3', severity: 'medium', title: 'C', description: 'D' },
+          { id: 'f4', severity: 'medium', title: 'E', description: 'D' },
+          { id: 'f5', severity: 'low', title: 'F', description: 'D' },
+        ],
+      },
+    ];
+
+    const counts = aggregateSeverityCounts(reports);
+
+    expect(counts).toEqual({
+      high: 2,
+      medium: 2,
+      low: 1,
+    });
+  });
+
+  it('returns all zeros for empty reports', () => {
+    const counts = aggregateSeverityCounts([]);
+
+    expect(counts).toEqual({
+      high: 0,
+      medium: 0,
+      low: 0,
+    });
+  });
+});
+
+describe('updateCoreCheck', () => {
+  it('renders total skill cost including auxiliary usage', async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    const octokit = { checks: { update } } as unknown as Parameters<typeof updateCoreCheck>[0];
+
+    await updateCoreCheck(
+      octokit,
+      123,
+      {
+        totalSkills: 1,
+        totalFindings: 0,
+        findingsBySeverity: { high: 0, medium: 0, low: 0 },
+        totalDurationMs: 1000,
+        totalUsage: { inputTokens: 3000, outputTokens: 680, costUSD: 20 },
+        totalAuxiliaryUsage: {
+          verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+        },
+        findings: [],
+        skillResults: [
+          {
+            name: 'find-warden-bugs',
+            findingCount: 0,
+            conclusion: 'success',
+            durationMs: 1000,
+            usage: { inputTokens: 3000, outputTokens: 680, costUSD: 20 },
+            auxiliaryUsage: {
+              verification: { inputTokens: 100, outputTokens: 50, costUSD: 6.19 },
+            },
+          },
+        ],
+      },
+      'success',
+      { owner: 'getsentry', repo: 'warden' },
+    );
+
+    const request = update.mock.calls[0]![0] as { output: { summary: string } };
+    expect(request.output.summary).toContain('| find-warden-bugs | 0 | 1.0s | $26.19 |');
+    expect(request.output.summary).toContain('<sub>⏱ 1.0s · 3.1k in / 730 out · $26.19</sub>');
+  });
+});
