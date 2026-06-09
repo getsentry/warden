@@ -30,12 +30,21 @@ jobs:
       - run: pnpm build
       - run: pnpm build:action
 
+      - name: Analyze
+        id: warden-analyze
+        uses: ./
+        with:
+          mode: analyze
+
       - uses: actions/create-github-app-token@v1
         id: app-token
         with:
           app-id: ${{ secrets.WARDEN_APP_ID }}
           private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
 
-      - uses: ./
+      - name: Report
+        uses: ./
         with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
           github-token: ${{ steps.app-token.outputs.token }}
