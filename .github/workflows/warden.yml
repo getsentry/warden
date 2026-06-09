@@ -4,6 +4,8 @@ name: Warden
 # See: https://github.com/orgs/community/discussions/44650
 permissions:
   contents: write
+  pull-requests: write
+  checks: write
 
 on:
   pull_request:
