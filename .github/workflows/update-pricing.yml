@@ -11,7 +11,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: update-pricing
@@ -23,8 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Keep the default read-only GITHUB_TOKEN out of git config so the
-          # later app-token remote URL is used for the automation branch push.
           persist-credentials: false
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
@@ -86,30 +85,19 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Only mint a write-capable token when we actually need to push.
-      - name: Get auth token
-        if: steps.diff.outputs.changed == 'true'
-        id: token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          client-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-
       - name: Open or refresh pricing PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           GIT_AUTHOR_NAME: Warden Pricing Workflow
           GIT_AUTHOR_EMAIL: actions@github.com
           GIT_COMMITTER_NAME: Warden Pricing Workflow
           GIT_COMMITTER_EMAIL: actions@github.com
         run: |
-          # Swap the origin remote over to the app-token credential so
-          # both git push and gh CLI use write-capable auth. Commit identity
-          # stays the explicit workflow identity above, not the app credential.
+          # Use the default GITHUB_TOKEN (github-actions[bot]) for push and PR
+          # creation. persist-credentials: false above keeps it out of git
+          # config; we set it explicitly here so both git and gh CLI use it.
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GH_REPO}.git"
           pnpm --filter @sentry/warden update-pricing-pr
