@@ -55,6 +55,14 @@
     "cacheWrite1hPerMTok": 6,
     "webSearchPer1K": 10
   },
+  "claude-fable-5": {
+    "inputPerMTok": 10,
+    "outputPerMTok": 50,
+    "cacheReadPerMTok": 1,
+    "cacheWritePerMTok": 12.5,
+    "cacheWrite1hPerMTok": 20,
+    "webSearchPer1K": 10
+  },
   "claude-haiku-4-5": {
     "inputPerMTok": 1,
     "outputPerMTok": 5,
