@@ -9,11 +9,64 @@ import { getPrePatchFileSkip } from '../sdk/scan-policy.js';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 
+/**
+ * Directory patterns that are safe to prune at traversal time — before fast-glob
+ * returns results. These are the same large dependency / generated-output
+ * directories that BUILTIN_IGNORE_PATTERNS in scan-policy blocks after the fact.
+ * Pruning them early prevents fast-glob from traversing tens-of-thousands of
+ * files inside a vendor/ or node_modules/ tree when a broad glob like
+ * `dieter/**\/*.php` is used against a new Laravel app.
+ *
+ * Exported so the gitignore fallback scan can reuse the list consistently.
+ */
+export const BUILTIN_PRUNE_DIRECTORY_PATTERNS = [
+  '**/node_modules/**',
+  '**/vendor/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/.next/**',
+  '**/.nuxt/**',
+  '**/out/**',
+  '**/coverage/**',
+  '**/.cache/**',
+] as const;
+
+/**
+ * Compute the fast-glob ignore list, starting from BUILTIN_PRUNE_DIRECTORY_PATTERNS
+ * and removing any directory whose name is explicitly un-ignored by a user
+ * negation pattern (e.g. `!vendor/**`).  This lets advanced users opt a
+ * dependency directory back in without breaking the default safety behaviour.
+ */
+export function getEffectivePrunePatterns(userIgnorePaths?: string[]): string[] {
+  const negations = (userIgnorePaths ?? [])
+    .filter((p) => p.startsWith('!'))
+    .map((p) => p.slice(1));
+
+  if (!negations.length) {
+    return [...BUILTIN_PRUNE_DIRECTORY_PATTERNS];
+  }
+
+  return BUILTIN_PRUNE_DIRECTORY_PATTERNS.filter((prunePattern) => {
+    // Extract the bare directory name from a pattern like '**/vendor/**'
+    const match = prunePattern.match(/\*\*\/([^/]+)\/\*\*/);
+    if (!match) return true;
+    const dirName = match[1];
+    // Drop this prune entry if any negation path mentions the directory
+    return !negations.some((neg) => neg.includes(`${dirName}/`) || neg.includes(`/${dirName}`));
+  });
+}
+
 export interface ExpandGlobOptions {
   /** Working directory for glob expansion (default: process.cwd()) */
   cwd?: string;
   /** Respect .gitignore files (default: true) */
   gitignore?: boolean;
+  /**
+   * User-configured ignore rules from warden config.  Negation patterns inside
+   * `paths` (e.g. `!vendor/**`) override the built-in directory prune list so
+   * that users who intentionally want to scan dependency trees can do so.
+   */
+  ignore?: IgnoreConfig;
 }
 
 export interface SyntheticFileChangeOptions {
@@ -121,13 +174,14 @@ function loadGitignoreRules(gitRoot: string): Ignore {
       : [];
   } catch {
     // Not a real git repo or git not available. Walk directories manually,
-    // skipping common large directories that would never contain relevant
-    // .gitignore files.
+    // skipping large directories that would never contain relevant .gitignore
+    // files.  Reuse the same prune list used by expandFileGlobs() so behaviour
+    // is consistent across both code paths.
     gitignoreFiles = fg.sync('**/.gitignore', {
       cwd: gitRoot,
       absolute: true,
       dot: true,
-      ignore: ['**/.git/**', '**/node_modules/**'],
+      ignore: ['**/.git/**', ...BUILTIN_PRUNE_DIRECTORY_PATTERNS],
     });
   }
 
@@ -163,6 +217,12 @@ function loadGitignoreRules(gitRoot: string): Ignore {
  * By default, respects .gitignore files to automatically exclude ignored
  * directories like node_modules/. This can be disabled by setting
  * gitignore: false.
+ *
+ * Large dependency and generated-output directories (vendor/, node_modules/,
+ * dist/, …) are also pruned at traversal time via BUILTIN_PRUNE_DIRECTORY_PATTERNS
+ * so that broad globs like `dieter/**\/*.php` against a Laravel app do not
+ * cause fast-glob to enumerate tens-of-thousands of files before the
+ * post-enumeration scan policy has a chance to skip them.
  */
 export async function expandFileGlobs(
   patterns: string[],
@@ -175,14 +235,19 @@ export async function expandFileGlobs(
   const useGitignore = options.gitignore ?? true;
   const expandedPatterns = patterns.map((pattern) => expandDirectoryPattern(pattern, cwd));
 
-  // Get all matching files first
+  // Compute directory prune list, honouring user negation overrides.
+  const prunePatterns = getEffectivePrunePatterns(options.ignore?.paths);
+
+  // Enumerate matching files.  Built-in directory prune patterns are applied at
+  // this stage so fast-glob never descends into vendor/ or node_modules/ trees,
+  // preventing excessive memory use when scanning broad globs.  Gitignore-based
+  // filtering and the full BUILTIN_IGNORE_PATTERNS check happen afterward.
   const files = await fg(expandedPatterns, {
     cwd,
     onlyFiles: true,
     absolute: true,
     dot: false,
-    // Always exclude .git directory
-    ignore: ['**/.git/**'],
+    ignore: ['**/.git/**', ...prunePatterns],
   });
 
   // If gitignore is disabled, return files as-is
@@ -298,6 +363,8 @@ export async function expandAndCreateFileChanges(
   options: SyntheticFileChangeOptions = {}
 ): Promise<FileChange[]> {
   const resolvedCwd = resolve(cwd);
-  const files = await expandFileGlobs(patterns, resolvedCwd);
+  // Pass the ignore config so that user negation patterns can override built-in
+  // prune directories at traversal time (e.g. `!vendor/**` re-includes vendor).
+  const files = await expandFileGlobs(patterns, { cwd: resolvedCwd, ignore: options.ignore });
   return createSyntheticFileChanges(files, resolvedCwd, options);
 }
