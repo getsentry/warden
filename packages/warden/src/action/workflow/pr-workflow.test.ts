@@ -270,13 +270,15 @@ function createEventContext(repoPath: string): EventContext {
 function writeFindingsArtifact(
   reports: SkillReport[],
   triggerResults: NonNullable<Parameters<typeof buildFindingsOutput>[3]>['triggerResults'],
-  mutate?: (output: ReturnType<typeof buildFindingsOutput>) => void
+  mutate?: (output: ReturnType<typeof buildFindingsOutput>) => void,
+  workflow?: NonNullable<Parameters<typeof buildFindingsOutput>[3]>['workflow']
 ): string {
   const tempDir = mkdtempSync(join(tmpdir(), 'warden-report-mode-'));
   const filePath = join(tempDir, 'warden-findings.json');
   const output = buildFindingsOutput(reports, createEventContext(FIXTURES_DIR), [], {
     timestamp: '2026-01-01T00:00:00.000Z',
     runId: '123',
+    workflow,
     triggerResults,
   });
   mutate?.(output);
@@ -364,6 +366,9 @@ describe('runPRWorkflow', () => {
         }),
         [],
         {
+          workflow: {
+            auxiliary: expect.objectContaining({ runtime: 'pi' }),
+          },
           triggerResults: [
             expect.objectContaining({
               triggerName: 'test-skill',
@@ -397,6 +402,37 @@ describe('runPRWorkflow', () => {
       );
       expect(mockOctokit.checks.create).not.toHaveBeenCalled();
       expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+    });
+
+    it('analyze mode stores the skipped core check when config is missing', async () => {
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        NO_CONFIG_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
+        }),
+        [],
+        {
+          workflow: {
+            auxiliary: expect.objectContaining({ runtime: 'pi' }),
+            skippedCoreCheck: {
+              title: 'No warden.toml found',
+              message: 'No warden.toml found. Skipping analysis.',
+            },
+          },
+          triggerResults: [],
+        }
+      );
     });
 
     it('report mode publishes completed checks from the findings file without rerunning skills', async () => {
@@ -446,7 +482,113 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('report mode renders checks and reviews from report-step inputs', async () => {
+    it('report mode replays the skipped core check from the findings file', async () => {
+      const findingsFile = writeFindingsArtifact(
+        [],
+        [],
+        undefined,
+        {
+          auxiliary: { runtime: 'pi' },
+          skippedCoreCheck: {
+            title: 'No warden.toml found',
+            message: 'No warden.toml found. Skipping analysis.',
+          },
+        }
+      );
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          NO_CONFIG_FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden',
+          status: 'completed',
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: 'No warden.toml found',
+            summary: expect.stringContaining('No warden.toml found. Skipping analysis.'),
+          }),
+        })
+      );
+      expect(mockWriteFindingsOutput).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
+        }),
+        [],
+        {
+          workflow: expect.objectContaining({
+            skippedCoreCheck: {
+              title: 'No warden.toml found',
+              message: 'No warden.toml found. Skipping analysis.',
+            },
+          }),
+          triggerResults: [],
+        }
+      );
+    });
+
+    it('report mode uses workflow auxiliary settings from the findings file', async () => {
+      const report = createSkillReport({ findings: [] });
+      const findingsFile = writeFindingsArtifact(
+        [report],
+        [
+          {
+            triggerName: 'test-skill',
+            skillName: 'test-skill',
+            report,
+          },
+        ],
+        undefined,
+        {
+          auxiliary: {
+            runtime: 'pi',
+            model: 'artifact-aux-model',
+            maxRetries: 9,
+          },
+        }
+      );
+      mockFetchExistingComments.mockResolvedValue([createExistingWardenComment()]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          LAYERED_AUXILIARY_MODEL_FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockEvaluateFixAttempts).toHaveBeenCalledWith(
+        mockOctokit,
+        expect.arrayContaining([expect.objectContaining({ isWarden: true })]),
+        expect.any(Object),
+        expect.any(Array),
+        'test-api-key',
+        expect.objectContaining({
+          runtime: 'pi',
+          model: 'artifact-aux-model',
+          maxRetries: 9,
+        })
+      );
+    });
+
+    it('report mode renders checks and reviews from artifact settings', async () => {
       const report = createSkillReport({
         findings: [
           createFinding({
@@ -465,6 +607,11 @@ describe('runPRWorkflow', () => {
         {
           triggerName: 'test-skill',
           skillName: 'test-skill',
+          failOn: 'high',
+          reportOn: 'high',
+          failCheck: false,
+          maxFindings: 1,
+          requestChanges: true,
           report,
         },
       ]);
@@ -475,11 +622,11 @@ describe('runPRWorkflow', () => {
           createDefaultInputs({
             mode: 'report',
             findingsFile,
-            failOn: 'high',
-            reportOn: 'high',
-            failCheck: false,
-            maxFindings: 1,
-            requestChanges: true,
+            failOn: 'off',
+            reportOn: 'off',
+            failCheck: true,
+            maxFindings: 2,
+            requestChanges: false,
           }),
           'pull_request',
           EVENT_PAYLOAD_PATH,
@@ -550,26 +697,30 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('report mode fails when current config would drop analyze results', async () => {
+    it('report mode replays analyze results when current config would drop them', async () => {
       const report = createSkillReport({ findings: [createFinding()] });
       const findingsFile = writeFindingsArtifact([report], [
         {
+          triggerId: 'analyzed-trigger-id',
           triggerName: 'test-skill',
           skillName: 'test-skill',
+          failOn: 'off',
+          reportOn: 'medium',
+          minConfidence: 'medium',
+          requestChanges: false,
+          failCheck: true,
           report,
         },
       ]);
 
       try {
-        await expect(
-          runPRWorkflow(
-            mockOctokit,
-            createDefaultInputs({ mode: 'report', findingsFile }),
-            'pull_request',
-            EVENT_PAYLOAD_PATH,
-            NO_MATCH_FIXTURES_DIR
-          )
-        ).rejects.toThrow('do not match current config');
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          NO_MATCH_FIXTURES_DIR
+        );
       } finally {
         rmSync(dirname(findingsFile), { recursive: true, force: true });
       }
@@ -577,12 +728,10 @@ describe('runPRWorkflow', () => {
       expect(mockRunSkillTask).not.toHaveBeenCalled();
       expect(mockOctokit.checks.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: 'warden',
+          name: 'warden: test-skill',
           status: 'completed',
-          conclusion: 'failure',
           output: expect.objectContaining({
-            title: 'Warden failed',
-            summary: expect.stringContaining('do not match current config'),
+            summary: expect.stringContaining(report.summary),
           }),
         })
       );
@@ -653,48 +802,6 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('report mode rejects legacy duplicate skill trigger replay keys', async () => {
-      const highReport = createSkillReport({ summary: 'High report' });
-      const lowReport = createSkillReport({ summary: 'Low report' });
-      const findingsFile = writeFindingsArtifact([highReport, lowReport], [
-        {
-          triggerName: 'test-skill',
-          skillName: 'test-skill',
-          report: highReport,
-        },
-        {
-          triggerName: 'test-skill',
-          skillName: 'test-skill',
-          report: lowReport,
-        },
-      ]);
-
-      try {
-        await expect(
-          runPRWorkflow(
-            mockOctokit,
-            createDefaultInputs({ mode: 'report', findingsFile }),
-            'pull_request',
-            EVENT_PAYLOAD_PATH,
-            DUPLICATE_TRIGGER_FIXTURES_DIR
-          )
-        ).rejects.toThrow('ambiguous duplicate trigger result');
-      } finally {
-        rmSync(dirname(findingsFile), { recursive: true, force: true });
-      }
-
-      expect(mockRunSkillTask).not.toHaveBeenCalled();
-      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'warden',
-          conclusion: 'failure',
-          output: expect.objectContaining({
-            summary: expect.stringContaining('ambiguous duplicate trigger result'),
-          }),
-        })
-      );
-    });
-
     it('report mode fails GitHub check write errors without creating in-progress checks', async () => {
       const report = createSkillReport({ findings: [createFinding()] });
       const findingsFile = writeFindingsArtifact([report], [
@@ -752,9 +859,16 @@ describe('runPRWorkflow', () => {
       });
       const findingsFile = writeFindingsArtifact([report], [
         {
+          triggerId: 'run-trigger-id',
           triggerName: 'run-skill',
           skillName: 'run-skill',
           report,
+        },
+        {
+          status: 'skipped',
+          triggerId: 'skipped-trigger-id',
+          triggerName: 'skipped-skill',
+          skillName: 'skipped-skill',
         },
       ]);
       vi.mocked(mockOctokit.checks.create).mockRejectedValueOnce(

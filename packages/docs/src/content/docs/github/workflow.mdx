@@ -122,9 +122,9 @@ token that was created before Warden starts.
 Use `mode: analyze` first. It runs skills and writes a structured findings file
 without creating checks, posting comments, or resolving stale comments. Then
 create the GitHub App token and run `mode: report` against that findings file.
-Split modes are only supported for pull request workflows. Report mode reloads
-`warden.toml`, applies the report step's current reporting settings, creates
-completed checks, and posts comments.
+Split modes are only supported for pull request workflows. Report mode validates
+the findings file against the workflow event, then creates completed checks and
+posts comments from the stored analyze results.
 
 ```yaml title=".github/workflows/warden.yml"
 jobs:
@@ -158,9 +158,10 @@ jobs:
 
 If you use `config-path`, `base-config-path`, `base-skill-root`, or action-level
 reporting inputs such as `fail-on`, `report-on`, `request-changes`,
-`fail-check`, or `max-findings`, pass the intended values to the report step.
-Report mode reads config again from the checkout and applies the report step's
-inputs; the findings file does not store a copy of `warden.toml`.
+`fail-check`, or `max-findings`, pass the intended values to the analyze step.
+Analyze mode writes the resolved trigger and reporting settings into the
+findings file. Report mode validates that file against the workflow event, then
+publishes the stored results without reloading trigger config from the checkout.
 
 ## Required Status Checks
 

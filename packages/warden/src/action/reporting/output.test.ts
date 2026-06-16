@@ -28,10 +28,20 @@ describe('findings output schema', () => {
     const output = buildFindingsOutput([report], createContext(), [], {
       timestamp: '2026-01-01T00:00:00.000Z',
       runId: '123',
+      workflow: {
+        skippedCoreCheck: {
+          title: 'No warden.toml found',
+          message: 'No warden.toml found. Skipping analysis.',
+        },
+      },
       triggerResults: [
         {
           triggerName: 'test-trigger',
           skillName: 'test-skill',
+          failOn: 'high',
+          reportOn: 'medium',
+          minConfidence: 'medium',
+          requestChanges: true,
           report,
         },
         {
@@ -39,14 +49,30 @@ describe('findings output schema', () => {
           skillName: 'failed-skill',
           error: new Error('Token expired'),
         },
+        {
+          status: 'skipped',
+          triggerName: 'skipped-trigger',
+          skillName: 'skipped-skill',
+          failCheck: false,
+        },
       ],
     });
 
     expect(FindingsOutputSchema.parse(output)).toEqual(output);
+    expect(output.workflow).toEqual({
+      skippedCoreCheck: {
+        title: 'No warden.toml found',
+        message: 'No warden.toml found. Skipping analysis.',
+      },
+    });
     expect(output.triggerResults).toEqual([
       {
         triggerName: 'test-trigger',
         skillName: 'test-skill',
+        failOn: 'high',
+        reportOn: 'medium',
+        minConfidence: 'medium',
+        requestChanges: true,
         status: 'success',
         report,
       },
@@ -58,6 +84,12 @@ describe('findings output schema', () => {
           name: 'Error',
           message: 'Token expired',
         },
+      },
+      {
+        triggerName: 'skipped-trigger',
+        skillName: 'skipped-skill',
+        failCheck: false,
+        status: 'skipped',
       },
     ]);
   });

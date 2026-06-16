@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import type { EventContext, SkillReport } from '../../types/index.js';
+import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import {
   AuxiliaryUsageMapSchema,
+  ConfidenceThresholdSchema,
   FindingSchema,
   GitHubEventTypeSchema,
   LocationSchema,
+  SeverityThresholdSchema,
   SourceSnippetSchema,
   UsageStatsSchema,
 } from '../../types/index.js';
@@ -27,6 +30,20 @@ const TriggerErrorSchema = z.object({
   message: z.string(),
 });
 
+const WorkflowReplaySchema = z.object({
+  auxiliary: z.object({
+    runtime: z.enum(['claude', 'pi'] satisfies RuntimeName[]).optional(),
+    model: z.string().optional(),
+    maxRetries: z.number().int().nonnegative().optional(),
+  }).optional(),
+  skippedCoreCheck: z.object({
+    title: z.string(),
+    message: z.string(),
+  }).optional(),
+});
+
+export type WorkflowReplay = z.infer<typeof WorkflowReplaySchema>;
+
 // Durable analyze/report replay rows join by triggerName plus configured
 // skillName. `report.skill` is preserved as report identity and may differ for
 // local path skills with frontmatter names.
@@ -34,6 +51,13 @@ const TriggerRunResultBaseSchema = z.object({
   triggerId: z.string().optional(),
   triggerName: z.string(),
   skillName: z.string(),
+  failOn: SeverityThresholdSchema.optional(),
+  reportOn: SeverityThresholdSchema.optional(),
+  minConfidence: ConfidenceThresholdSchema.optional(),
+  reportOnSuccess: z.boolean().optional(),
+  requestChanges: z.boolean().optional(),
+  failCheck: z.boolean().optional(),
+  maxFindings: z.number().int().nonnegative().optional(),
 });
 
 const ReplaySkillReportSchema = z.object({
@@ -56,6 +80,11 @@ export const TriggerRunResultSchema = z.discriminatedUnion('status', [
     status: z.literal('error'),
     report: z.never().optional(),
     error: TriggerErrorSchema,
+  }),
+  TriggerRunResultBaseSchema.extend({
+    status: z.literal('skipped'),
+    report: z.never().optional(),
+    error: z.never().optional(),
   }),
 ]);
 
@@ -86,6 +115,7 @@ export const FindingsOutputSchema = z.object({
     }),
     totalSkills: z.number().int().nonnegative(),
   }),
+  workflow: WorkflowReplaySchema.optional(),
   skills: z.array(z.object({
     name: z.string(),
     summary: z.string(),
@@ -104,6 +134,14 @@ export interface ReplayTriggerResult {
   triggerId?: string;
   triggerName: string;
   skillName: string;
+  status?: 'skipped';
+  failOn?: z.infer<typeof SeverityThresholdSchema>;
+  reportOn?: z.infer<typeof SeverityThresholdSchema>;
+  minConfidence?: z.infer<typeof ConfidenceThresholdSchema>;
+  reportOnSuccess?: boolean;
+  requestChanges?: boolean;
+  failCheck?: boolean;
+  maxFindings?: number;
   report?: SkillReport;
   error?: unknown;
 }
@@ -111,6 +149,7 @@ export interface ReplayTriggerResult {
 interface BuildFindingsOutputOptions {
   timestamp?: string;
   runId?: string;
+  workflow?: z.infer<typeof WorkflowReplaySchema>;
   triggerResults?: ReplayTriggerResult[];
 }
 
@@ -138,20 +177,36 @@ function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillR
 }
 
 function serializeTriggerResult(result: ReplayTriggerResult): z.infer<typeof TriggerRunResultSchema> {
+  const base = {
+    triggerId: result.triggerId,
+    triggerName: result.triggerName,
+    skillName: result.skillName,
+    failOn: result.failOn,
+    reportOn: result.reportOn,
+    minConfidence: result.minConfidence,
+    reportOnSuccess: result.reportOnSuccess,
+    requestChanges: result.requestChanges,
+    failCheck: result.failCheck,
+    maxFindings: result.maxFindings,
+  };
+
+  if (result.status === 'skipped') {
+    return {
+      ...base,
+      status: 'skipped',
+    };
+  }
+
   if (result.report) {
     return {
-      triggerId: result.triggerId,
-      triggerName: result.triggerName,
-      skillName: result.skillName,
+      ...base,
       status: 'success',
       report: serializeReplayReport(result.report),
     };
   }
 
   return {
-    triggerId: result.triggerId,
-    triggerName: result.triggerName,
-    skillName: result.skillName,
+    ...base,
     status: 'error',
     error: serializeTriggerError(result.error ?? 'Trigger did not produce a report'),
   };
@@ -194,6 +249,7 @@ export function buildFindingsOutput(
       },
       totalSkills: reports.length,
     },
+    ...(options.workflow && { workflow: options.workflow }),
     skills: reports.map((r) => ({
       name: r.skill,
       summary: r.summary,

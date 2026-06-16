@@ -173,6 +173,23 @@ function checkOptionsForPullRequest(context: EventContext): CheckOptions | undef
   };
 }
 
+function setSentryWorkflowContext(context: EventContext): void {
+  if (context.pullRequest) {
+    Sentry.setUser({ username: context.pullRequest.author });
+  }
+  Sentry.setContext('repository', {
+    owner: context.repository.owner,
+    name: context.repository.name,
+  });
+  if (context.pullRequest) {
+    Sentry.setContext('pull_request', {
+      number: context.pullRequest.number,
+      baseBranch: context.pullRequest.baseBranch,
+      headBranch: context.pullRequest.headBranch,
+    });
+  }
+}
+
 function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): AuxiliaryWorkflowOptions {
   const baseDefaults = layered.baseConfig?.defaults;
   const repoDefaults = layered.repoConfig?.defaults ?? layered.config.defaults;
@@ -267,6 +284,38 @@ function mergeFixEvaluationResults(
 // Phase Functions
 // -----------------------------------------------------------------------------
 
+function readEventPayload(eventPath: string): unknown {
+  try {
+    return JSON.parse(readFileSync(eventPath, 'utf-8'));
+  } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'read_event_payload' } });
+    setFailed(`Failed to read event payload: ${error}`);
+  }
+}
+
+async function buildWorkflowContext(
+  octokit: Octokit,
+  eventName: string,
+  eventPath: string,
+  repoPath: string
+): Promise<EventContext> {
+  const eventPayload = readEventPayload(eventPath);
+
+  logGroup('Building event context');
+  console.log(`Event: ${eventName}`);
+  console.log(`Workspace: ${repoPath}`);
+  logGroupEnd();
+
+  try {
+    const context = await buildEventContext(eventName, eventPayload, repoPath, octokit);
+    setRepositoryScope(context.repository.fullName);
+    return context;
+  } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'build_event_context' } });
+    setFailed(`Failed to build event context: ${error}`);
+  }
+}
+
 /**
  * Parse event payload, build context, load config, match triggers.
  */
@@ -277,27 +326,7 @@ async function initializeWorkflow(
   eventPath: string,
   repoPath: string
 ): Promise<InitResult> {
-  let eventPayload: unknown;
-  try {
-    eventPayload = JSON.parse(readFileSync(eventPath, 'utf-8'));
-  } catch (error) {
-    Sentry.captureException(error, { tags: { operation: 'read_event_payload' } });
-    setFailed(`Failed to read event payload: ${error}`);
-  }
-
-  logGroup('Building event context');
-  console.log(`Event: ${eventName}`);
-  console.log(`Workspace: ${repoPath}`);
-  logGroupEnd();
-
-  let context: EventContext;
-  try {
-    context = await buildEventContext(eventName, eventPayload, repoPath, octokit);
-  } catch (error) {
-    Sentry.captureException(error, { tags: { operation: 'build_event_context' } });
-    setFailed(`Failed to build event context: ${error}`);
-  }
-  setRepositoryScope(context.repository.fullName);
+  const context = await buildWorkflowContext(octokit, eventName, eventPath, repoPath);
 
   logGroup('Loading configuration');
   if (inputs.baseConfigPath) {
@@ -1171,18 +1200,6 @@ function deserializeTriggerError(
   return deserialized;
 }
 
-function resultKey(triggerName: string, skillName: string): string {
-  return `${triggerName}\0${skillName}`;
-}
-
-function replayKey(result: { triggerId?: string; triggerName: string; skillName: string }): string {
-  return result.triggerId ?? resultKey(result.triggerName, result.skillName);
-}
-
-function triggerReplayKey(trigger: ResolvedTrigger): string {
-  return trigger.id;
-}
-
 function describeResultKey(result: { triggerName: string; skillName: string }): string {
   return `${result.triggerName} (${result.skillName})`;
 }
@@ -1192,130 +1209,148 @@ function toReplayTriggerResults(results: TriggerResult[]): ReplayTriggerResult[]
     triggerId: result.triggerId,
     triggerName: result.triggerName,
     skillName: result.skillName,
+    failOn: result.failOn,
+    reportOn: result.reportOn,
+    minConfidence: result.minConfidence,
+    reportOnSuccess: result.reportOnSuccess,
+    requestChanges: result.requestChanges,
+    failCheck: result.failCheck,
+    maxFindings: result.maxFindings,
     report: result.report,
     error: result.error,
   }));
 }
 
-/**
- * Rebuild report-mode trigger results by joining artifact rows to the current
- * configured trigger name and skill identity.
- */
-function buildReportModeResults(
-  output: FindingsOutput,
-  matchedTriggers: ResolvedTrigger[],
+function toReplaySkippedTriggerResults(
+  triggers: ResolvedTrigger[],
   inputs: ActionInputs
-): TriggerResult[] {
+): ReplayTriggerResult[] {
+  return triggers.map((trigger) => ({
+    status: 'skipped',
+    triggerId: trigger.id,
+    triggerName: trigger.name,
+    skillName: trigger.skill,
+    failOn: trigger.failOn ?? inputs.failOn,
+    reportOn: trigger.reportOn ?? inputs.reportOn,
+    minConfidence: trigger.minConfidence ?? 'medium',
+    reportOnSuccess: trigger.reportOnSuccess,
+    requestChanges: trigger.requestChanges ?? inputs.requestChanges,
+    failCheck: trigger.failCheck ?? inputs.failCheck,
+    maxFindings: trigger.maxFindings ?? inputs.maxFindings,
+  }));
+}
+
+function toReplayRows(results: TriggerResult[], skippedTriggers: ResolvedTrigger[], inputs: ActionInputs): ReplayTriggerResult[] {
+  return [...toReplayTriggerResults(results), ...toReplaySkippedTriggerResults(skippedTriggers, inputs)];
+}
+
+function toReplayWorkflow(
+  auxiliaryOptions: AuxiliaryWorkflowOptions,
+  skippedCoreCheck?: SkippedCoreCheck
+): FindingsOutput['workflow'] {
+  return {
+    auxiliary: auxiliaryOptions,
+    ...(skippedCoreCheck && { skippedCoreCheck }),
+  };
+}
+
+/**
+ * Preserve skipped rows as part of the analyze artifact so report mode does not
+ * reload config just to create neutral checks.
+ */
+function toReplayReportRows(results: TriggerResult[], skippedResults: TriggerResult[]): ReplayTriggerResult[] {
+  return [
+    ...toReplayTriggerResults(results),
+    ...skippedResults.map((result) => ({
+      status: 'skipped' as const,
+      triggerId: result.triggerId,
+      triggerName: result.triggerName,
+      skillName: result.skillName,
+      failOn: result.failOn,
+      reportOn: result.reportOn,
+      minConfidence: result.minConfidence,
+      reportOnSuccess: result.reportOnSuccess,
+      requestChanges: result.requestChanges,
+      failCheck: result.failCheck,
+      maxFindings: result.maxFindings,
+    })),
+  ];
+}
+
+/**
+ * Convert a stored analyze row into the report-mode publish shape. Artifact
+ * values are the source of truth; report-step inputs do not fill missing fields.
+ */
+function artifactRowToTriggerResult(
+  result: NonNullable<FindingsOutput['triggerResults']>[number]
+): TriggerResult {
+  const baseResult = {
+    triggerId: result.triggerId,
+    triggerName: result.triggerName,
+    skillName: result.skillName,
+    failOn: result.failOn,
+    reportOn: result.reportOn,
+    minConfidence: result.minConfidence ?? 'medium',
+    reportOnSuccess: result.reportOnSuccess,
+    requestChanges: result.requestChanges,
+    failCheck: result.failCheck,
+    maxFindings: result.maxFindings,
+  };
+
+  if (result.status === 'success') {
+    return {
+      ...baseResult,
+      report: result.report,
+    };
+  }
+
+  if (result.status === 'error') {
+    return {
+      ...baseResult,
+      error: deserializeTriggerError(
+        result.error,
+        `Trigger ${result.triggerName} (${result.skillName}) failed during analysis`
+      ),
+    };
+  }
+
+  setFailed(`Unexpected skipped trigger ${describeResultKey(result)} in report replay results`);
+}
+
+/**
+ * Rebuild skipped checks from artifact rows instead of current config.
+ */
+function buildSkippedReportModeResults(output: FindingsOutput): TriggerResult[] {
+  return (output.triggerResults ?? []).flatMap((result) => {
+    if (result.status !== 'skipped') {
+      return [];
+    }
+
+    return [{
+      triggerId: result.triggerId,
+      triggerName: result.triggerName,
+      skillName: result.skillName,
+      failOn: result.failOn,
+      reportOn: result.reportOn,
+      minConfidence: result.minConfidence ?? 'medium',
+      reportOnSuccess: result.reportOnSuccess,
+      requestChanges: result.requestChanges,
+      failCheck: result.failCheck,
+      maxFindings: result.maxFindings,
+    }];
+  });
+}
+
+/**
+ * Rebuild report-mode trigger results from the analyze artifact.
+ */
+function buildReportModeResults(output: FindingsOutput): TriggerResult[] {
   if (!output.triggerResults) {
     setFailed('Findings file was not produced by mode: analyze; missing triggerResults');
   }
 
-  const outputResults = new Map<string, typeof output.triggerResults>();
-  for (const result of output.triggerResults) {
-    const key = replayKey(result);
-    const existing = outputResults.get(key);
-    if (existing) {
-      existing.push(result);
-    } else {
-      outputResults.set(key, [result]);
-    }
-  }
-
-  const duplicateConfiguredResults = new Map<string, ResolvedTrigger[]>();
-  for (const trigger of matchedTriggers) {
-    const key = triggerReplayKey(trigger);
-    const existing = duplicateConfiguredResults.get(key);
-    if (existing) {
-      existing.push(trigger);
-    } else {
-      duplicateConfiguredResults.set(key, [trigger]);
-    }
-  }
-
-  const ambiguousKeys = [
-    ...new Set([
-      ...[...outputResults.entries()]
-        .filter(([, results]) => results.length > 1)
-        .map(([key]) => key),
-      ...[...duplicateConfiguredResults.entries()]
-        .filter(([, triggers]) => triggers.length > 1)
-        .map(([key]) => key),
-    ]),
-  ];
-
-  if (ambiguousKeys.length > 0) {
-    const triggerList = ambiguousKeys
-      .map((key) => {
-        const result = outputResults.get(key)?.[0];
-        const trigger = duplicateConfiguredResults.get(key)?.[0];
-        return result
-          ? describeResultKey(result)
-          : `${trigger?.name ?? 'unknown'} (${trigger?.skill ?? 'unknown'})`;
-      })
-      .join(', ');
-
-    throw new Error(
-      `Findings file contains ambiguous duplicate trigger result(s): ${triggerList}`
-    );
-  }
-
-  const results = matchedTriggers.map((trigger) => {
-    const failOn = trigger.failOn ?? inputs.failOn;
-    const reportOn = trigger.reportOn ?? inputs.reportOn;
-    const minConfidence = trigger.minConfidence ?? 'medium';
-    const requestChanges = trigger.requestChanges ?? inputs.requestChanges;
-    const failCheck = trigger.failCheck ?? inputs.failCheck;
-    const maxFindings = trigger.maxFindings ?? inputs.maxFindings;
-    const baseResult = {
-      triggerId: trigger.id,
-      triggerName: trigger.name,
-      skillName: trigger.skill,
-      failOn,
-      reportOn,
-      minConfidence,
-      reportOnSuccess: trigger.reportOnSuccess,
-      requestChanges,
-      failCheck,
-      maxFindings,
-    };
-    const outputResult =
-      outputResults.get(triggerReplayKey(trigger))?.shift() ??
-      outputResults.get(resultKey(trigger.name, trigger.skill))?.shift();
-
-    if (!outputResult) {
-      return {
-        ...baseResult,
-        error: new Error(`Findings file has no result for trigger ${trigger.name} (${trigger.skill})`),
-      };
-    }
-
-    if (outputResult.status === 'error' || !outputResult.report) {
-      return {
-        ...baseResult,
-        error: deserializeTriggerError(
-          outputResult.error,
-          `Trigger ${trigger.name} (${trigger.skill}) failed during analysis`
-        ),
-      };
-    }
-
-    return {
-      ...baseResult,
-      report: outputResult.report,
-    };
-  });
-
-  const unreportedResults = [...outputResults.values()].flat();
-  if (unreportedResults.length > 0) {
-    const triggerList = unreportedResults
-      .map(describeResultKey)
-      .join(', ');
-    throw new Error(
-      `Findings file contains ${unreportedResults.length} result(s) that do not match current config: ${triggerList}`
-    );
-  }
-
-  return results;
+  const replayRows = output.triggerResults.filter((result) => result.status !== 'skipped');
+  return replayRows.map((result) => artifactRowToTriggerResult(result));
 }
 
 function withRenderedReviewResult(result: TriggerResult): TriggerResult {
@@ -1386,27 +1421,27 @@ async function createCompletedSkillChecksForReport(
 async function createCompletedSkippedSkillChecks(
   octokit: Octokit,
   context: EventContext,
-  skippedTriggers: ResolvedTrigger[]
+  skippedResults: TriggerResult[]
 ): Promise<void> {
   const options = checkOptionsForPullRequest(context);
-  if (!options || skippedTriggers.length === 0) {
+  if (!options || skippedResults.length === 0) {
     return;
   }
 
-  for (const trigger of skippedTriggers) {
+  for (const result of skippedResults) {
     await createCompletedSkillCheck(
       octokit,
       {
-        skill: trigger.skill,
+        skill: result.skillName,
         summary: 'Trigger did not run for this event.',
         findings: [],
       },
       {
         ...options,
-        failOn: trigger.failOn,
-        reportOn: trigger.reportOn,
-        minConfidence: trigger.minConfidence ?? 'medium',
-        failCheck: trigger.failCheck,
+        failOn: result.failOn,
+        reportOn: result.reportOn,
+        minConfidence: result.minConfidence ?? 'medium',
+        failCheck: result.failCheck,
         conclusion: 'neutral',
         title: 'Skipped',
       }
@@ -1482,6 +1517,8 @@ async function finalizeReportWorkflow(
   context: EventContext,
   previousReviewInfo: BotReviewInfo | null,
   results: TriggerResult[],
+  skippedResults: TriggerResult[],
+  workflow: FindingsOutput['workflow'],
   reports: SkillReport[],
   findingObservations: FindingObservation[],
   shouldFailAction: boolean,
@@ -1504,7 +1541,8 @@ async function finalizeReportWorkflow(
 
   try {
     const findingsPath = writeFindingsOutput(reports, context, findingObservations, {
-      triggerResults: toReplayTriggerResults(results),
+      workflow,
+      triggerResults: toReplayReportRows(results, skippedResults),
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
@@ -1616,7 +1654,9 @@ async function runAnalyzeMode(
   const {
     context,
     runnerConcurrency,
+    auxiliaryOptions,
     matchedTriggers,
+    skippedTriggers,
     skipCoreCheck,
   } = initResult;
 
@@ -1625,7 +1665,12 @@ async function runAnalyzeMode(
     setOutput('high-count', 0);
     setOutput('summary', skipCoreCheck?.title ?? 'No triggers matched');
     try {
-      const findingsPath = writeFindingsOutput([], context, [], { triggerResults: [] });
+      const findingsPath = writeFindingsOutput([], context, [], {
+        workflow: toReplayWorkflow(auxiliaryOptions, skipCoreCheck),
+        triggerResults: skipCoreCheck
+          ? []
+          : toReplaySkippedTriggerResults(skippedTriggers, inputs),
+      });
       logAction(`Findings written to ${findingsPath}`);
     } catch (error) {
       setFailed(`Failed to write findings output: ${error}`);
@@ -1650,7 +1695,8 @@ async function runAnalyzeMode(
 
   try {
     const findingsPath = writeFindingsOutput(reports, context, [], {
-      triggerResults: toReplayTriggerResults(results),
+      workflow: toReplayWorkflow(auxiliaryOptions),
+      triggerResults: toReplayRows(results, skippedTriggers, inputs),
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
@@ -1663,74 +1709,53 @@ async function runAnalyzeMode(
 
 /**
  * Run the reporting phase without rerunning skills.
- * It replays analyze output against the current PR config and owns GitHub writes.
+ * It validates artifact identity, publishes stored analyze results, and owns
+ * live GitHub writes without recomputing trigger membership from current config.
  */
 async function runReportMode(
   octokit: Octokit,
   inputs: ActionInputs,
-  initResult: InitResult,
+  context: EventContext,
   repoPath: string,
   span: { setAttribute: (name: string, value: number) => void }
 ): Promise<void> {
-  const {
-    context,
-    auxiliaryOptions,
-    matchedTriggers,
-    skippedTriggers,
-    skipCoreCheck,
-  } = initResult;
   const findingsOutput = readFindingsFile(inputs.findingsFile, repoPath);
   validateFindingsMatchContext(findingsOutput, context);
+  const auxiliaryOptions = findingsOutput.workflow?.auxiliary ?? { runtime: 'pi' };
 
   let results: TriggerResult[] = [];
+  let skippedResults: TriggerResult[] = [];
   let previousReviewInfo: BotReviewInfo | null = null;
   let reviewPhase!: ReviewPhaseResult;
   let triggerErrors!: string[];
   let canResolveStale!: boolean;
 
   try {
-    results = buildReportModeResults(findingsOutput, matchedTriggers, inputs);
-    await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers);
+    results = buildReportModeResults(findingsOutput);
+    skippedResults = buildSkippedReportModeResults(findingsOutput);
+    await createCompletedSkippedSkillChecks(octokit, context, skippedResults);
 
-    if (skipCoreCheck) {
-      const outputs = { findingsCount: 0, highCount: 0, summary: skipCoreCheck.title };
-      setWorkflowOutputs(outputs);
-      try {
-        const findingsPath = writeFindingsOutput([], context, [], { triggerResults: [] });
-        logAction(`Findings written to ${findingsPath}`);
-      } catch (error) {
-        warnAction(`Failed to write findings output: ${error}`);
-      }
-      await createCompletedCoreCheckForReport(
-        octokit,
-        context,
-        [],
-        [],
-        false,
-        outputs,
-        {
-          title: skipCoreCheck.title,
-          message: skipCoreCheck.message,
-        },
-        'neutral'
-      );
-      logAction('Analysis complete: 0 total findings');
-      return;
-    }
-
-    if (matchedTriggers.length === 0) {
-      const cleanupFindingObservations = await cleanupOrphanedComments(
-        octokit,
-        context,
-        inputs,
-        auxiliaryOptions,
-        { failOnWriteError: true }
-      );
-      const outputs = { findingsCount: 0, highCount: 0, summary: 'No triggers matched' };
+    if (results.length === 0) {
+      const skippedCoreCheck = findingsOutput.workflow?.skippedCoreCheck;
+      const cleanupFindingObservations = skippedCoreCheck
+        ? []
+        : await cleanupOrphanedComments(
+            octokit,
+            context,
+            inputs,
+            auxiliaryOptions,
+            { failOnWriteError: true }
+          );
+      const coreCheck = skippedCoreCheck ?? {
+        title: 'No triggers matched',
+        message: 'No triggers matched for this event.',
+      };
+      const outputs = { findingsCount: 0, highCount: 0, summary: coreCheck.title };
       setWorkflowOutputs(outputs);
       try {
         const findingsPath = writeFindingsOutput([], context, cleanupFindingObservations, {
-          triggerResults: [],
+          workflow: findingsOutput.workflow,
+          triggerResults: toReplayReportRows(results, skippedResults),
         });
         logAction(`Findings written to ${findingsPath}`);
       } catch (error) {
@@ -1743,10 +1768,7 @@ async function runReportMode(
         [],
         false,
         outputs,
-        {
-          title: 'No triggers matched',
-          message: 'No triggers matched for this event.',
-        },
+        coreCheck,
         'neutral'
       );
       logAction('Analysis complete: 0 total findings');
@@ -1796,7 +1818,7 @@ async function runReportMode(
 
     await finalizeReportWorkflow(
       octokit, context, previousReviewInfo,
-      results, reviewPhase.reports,
+      results, skippedResults, findingsOutput.workflow, reviewPhase.reports,
       reviewPhase.findingObservations,
       reviewPhase.shouldFailAction, reviewPhase.failureReasons,
       canResolveStale,
@@ -1811,7 +1833,7 @@ async function runReportMode(
     throw error;
   }
 
-  handleTriggerErrors(triggerErrors, matchedTriggers.length);
+  handleTriggerErrors(triggerErrors, results.length);
 }
 
 // -----------------------------------------------------------------------------
@@ -1831,6 +1853,21 @@ export async function runPRWorkflow(
   return Sentry.startSpan(
     { op: 'workflow.run', name: 'review pull_request' },
     async (span) => {
+      if (inputs.mode === 'report') {
+        const context = await Sentry.startSpan(
+          { op: 'workflow.init', name: 'initialize report workflow' },
+          () => buildWorkflowContext(octokit, eventName, eventPath, repoPath),
+        );
+        setSentryWorkflowContext(context);
+        span.setAttribute('warden.trigger.count', 0);
+        emitRunMetric();
+        logger.info('Workflow initialized', {
+          'warden.trigger.count': 0,
+          'trace.id': span.spanContext().traceId,
+        });
+        return runReportMode(octokit, inputs, context, repoPath, span);
+      }
+
       const initResult = await Sentry.startSpan(
         { op: 'workflow.init', name: 'initialize workflow' },
         () => initializeWorkflow(octokit, inputs, eventName, eventPath, repoPath),
@@ -1846,21 +1883,7 @@ export async function runPRWorkflow(
       } = initResult;
       span.setAttribute('warden.trigger.count', matchedTriggers.length);
 
-      // Set Sentry context after building event context
-      if (context.pullRequest) {
-        Sentry.setUser({ username: context.pullRequest.author });
-      }
-      Sentry.setContext('repository', {
-        owner: context.repository.owner,
-        name: context.repository.name,
-      });
-      if (context.pullRequest) {
-        Sentry.setContext('pull_request', {
-          number: context.pullRequest.number,
-          baseBranch: context.pullRequest.baseBranch,
-          headBranch: context.pullRequest.headBranch,
-        });
-      }
+      setSentryWorkflowContext(context);
 
       emitRunMetric();
 
@@ -1872,10 +1895,6 @@ export async function runPRWorkflow(
 
       if (inputs.mode === 'analyze') {
         return runAnalyzeMode(inputs, initResult, span);
-      }
-
-      if (inputs.mode === 'report') {
-        return runReportMode(octokit, inputs, initResult, repoPath, span);
       }
 
       const { coreCheckId, previousReviewInfo } = await Sentry.startSpan(
