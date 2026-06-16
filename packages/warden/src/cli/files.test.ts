@@ -469,3 +469,31 @@ describe('expandAndCreateFileChanges', () => {
     expect(withOverride.some(f => f.filename.includes('vendor/'))).toBe(true);
   });
 });
+
+describe('WardenGlobExpansionError / MAX_GLOB_FILE_RESULTS guardrail', () => {
+  it('throws WardenGlobExpansionError when glob matches too many files', async () => {
+    const { WardenGlobExpansionError, MAX_GLOB_FILE_RESULTS } = await import('./files.js');
+    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const tempDir = join(tmpdir(), `warden-guardrail-test-${Date.now()}`);
+    mkdirSync(tempDir, { recursive: true });
+
+    try {
+      // Write MAX_GLOB_FILE_RESULTS + 1 files to trigger the guardrail
+      const count = MAX_GLOB_FILE_RESULTS + 1;
+      for (let i = 0; i < count; i++) {
+        writeFileSync(join(tempDir, `file${i}.ts`), `// file ${i}`);
+      }
+
+      await expect(expandFileGlobs(['**/*.ts'], tempDir))
+        .rejects.toThrow(WardenGlobExpansionError);
+
+      await expect(expandFileGlobs(['**/*.ts'], tempDir))
+        .rejects.toThrow(/Glob pattern matched/);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});

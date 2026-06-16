@@ -19,6 +19,35 @@ import { isRepoRelativePath, normalizePath } from '../utils/path.js';
  *
  * Exported so the gitignore fallback scan can reuse the list consistently.
  */
+/**
+ * Hard upper bound on the number of files fast-glob may return from a single
+ * expandFileGlobs call.  Exceeding this almost always means a dependency tree
+ * (vendor/, node_modules/, …) escaped the prune list — likely because the user
+ * negated the prune pattern in their config.  Fail fast with an actionable
+ * message rather than silently burning memory.
+ */
+export const MAX_GLOB_FILE_RESULTS = 10_000;
+
+/**
+ * Thrown by expandFileGlobs when the glob expansion returns more than
+ * MAX_GLOB_FILE_RESULTS candidates.
+ */
+export class WardenGlobExpansionError extends Error {
+  constructor(count: number, limit: number) {
+    super(
+      `Glob pattern matched ${count.toLocaleString()} files (limit is ${limit.toLocaleString()}).\n` +
+      `This usually means a dependency directory (vendor/, node_modules/, …) is being scanned.\n` +
+      `\nTry one of:\n` +
+      `  • Quote the pattern to avoid shell expansion:  warden 'dieter/**/*.php'\n` +
+      `  • Narrow to your application code:            warden dieter/app/**/*.php\n` +
+      `  • Keep dependency dirs explicitly excluded in warden.toml:\n` +
+      `      [defaults.ignore]\n` +
+      `      paths = ["**/vendor/**"]`,
+    );
+    this.name = 'WardenGlobExpansionError';
+  }
+}
+
 export const BUILTIN_PRUNE_DIRECTORY_PATTERNS = [
   '**/node_modules/**',
   '**/vendor/**',
@@ -249,6 +278,12 @@ export async function expandFileGlobs(
     dot: false,
     ignore: ['**/.git/**', ...prunePatterns],
   });
+
+  // Guard against pathological expansion — e.g. user negated all prune patterns
+  // while pointing at a directory with tens-of-thousands of files.
+  if (files.length >= MAX_GLOB_FILE_RESULTS) {
+    throw new WardenGlobExpansionError(files.length, MAX_GLOB_FILE_RESULTS);
+  }
 
   // If gitignore is disabled, return files as-is
   if (!useGitignore) {
