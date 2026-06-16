@@ -8,7 +8,6 @@ import {
   createSyntheticFileChange,
   expandFileGlobs,
   expandAndCreateFileChanges,
-  getEffectivePrunePatterns,
 } from './files.js';
 
 function initGitRepo(dir: string): void {
@@ -109,45 +108,6 @@ describe('createSyntheticFileChange', () => {
   });
 });
 
-describe('getEffectivePrunePatterns', () => {
-  it('returns all built-in prune patterns when no user overrides', () => {
-    const patterns = getEffectivePrunePatterns();
-    expect(patterns).toContain('**/vendor/**');
-    expect(patterns).toContain('**/node_modules/**');
-    expect(patterns).toContain('**/dist/**');
-  });
-
-  it('returns all built-in prune patterns when user paths have no negations', () => {
-    const patterns = getEffectivePrunePatterns(['*.log', 'tmp/']);
-    expect(patterns).toContain('**/vendor/**');
-    expect(patterns).toContain('**/node_modules/**');
-  });
-
-  it('removes vendor prune when user has a !vendor negation', () => {
-    const patterns = getEffectivePrunePatterns(['!vendor/**']);
-    expect(patterns).not.toContain('**/vendor/**');
-    // other prune patterns are unaffected
-    expect(patterns).toContain('**/node_modules/**');
-  });
-
-  it('removes node_modules prune when user has a !node_modules negation', () => {
-    const patterns = getEffectivePrunePatterns(['!node_modules/**']);
-    expect(patterns).not.toContain('**/node_modules/**');
-    expect(patterns).toContain('**/vendor/**');
-  });
-
-  it('handles negation with path separator prefix', () => {
-    const patterns = getEffectivePrunePatterns(['!src/vendor/special/**']);
-    expect(patterns).not.toContain('**/vendor/**');
-  });
-
-  it('handles undefined user paths gracefully', () => {
-    expect(() => getEffectivePrunePatterns(undefined)).not.toThrow();
-    const patterns = getEffectivePrunePatterns(undefined);
-    expect(patterns).toContain('**/vendor/**');
-  });
-});
-
 describe('expandFileGlobs', () => {
   let tempDir: string;
 
@@ -231,61 +191,6 @@ describe('expandFileGlobs', () => {
   it('returns empty for no matches', async () => {
     const files = await expandFileGlobs(['*.nonexistent'], tempDir);
     expect(files).toHaveLength(0);
-  });
-
-  describe('built-in directory pruning', () => {
-    it('prunes vendor/ directory by default without gitignore', async () => {
-      // Simulate a new laravel-style app: app code + vendor/ with PHP files
-      mkdirSync(join(tempDir, 'app'), { recursive: true });
-      mkdirSync(join(tempDir, 'vendor', 'laravel', 'framework'), { recursive: true });
-      writeFileSync(join(tempDir, 'app', 'Controller.php'), '<?php class Controller {}');
-      writeFileSync(join(tempDir, 'vendor', 'laravel', 'framework', 'Framework.php'), '<?php');
-
-      const files = await expandFileGlobs(['**/*.php'], tempDir);
-
-      expect(files.some(f => f.includes('app/Controller.php'))).toBe(true);
-      expect(files.some(f => f.includes('vendor/'))).toBe(false);
-    });
-
-    it('prunes node_modules/ directory by default', async () => {
-      mkdirSync(join(tempDir, 'src'), { recursive: true });
-      mkdirSync(join(tempDir, 'node_modules', 'pkg'), { recursive: true });
-      writeFileSync(join(tempDir, 'src', 'index.ts'), 'export {}');
-      writeFileSync(join(tempDir, 'node_modules', 'pkg', 'index.ts'), 'module');
-
-      const files = await expandFileGlobs(['**/*.ts'], tempDir);
-
-      expect(files.some(f => f.includes('src/index.ts'))).toBe(true);
-      expect(files.some(f => f.includes('node_modules/'))).toBe(false);
-    });
-
-    it('prunes vendor/ even when not in a git repo (no gitignore fallback needed)', async () => {
-      // No git init — this tests that the fast-glob level prune works independently
-      mkdirSync(join(tempDir, 'app'), { recursive: true });
-      mkdirSync(join(tempDir, 'vendor', 'lib'), { recursive: true });
-      writeFileSync(join(tempDir, 'app', 'main.php'), '<?php');
-      writeFileSync(join(tempDir, 'vendor', 'lib', 'dep.php'), '<?php');
-
-      const files = await expandFileGlobs(['**/*.php'], tempDir);
-
-      expect(files.some(f => f.includes('app/main.php'))).toBe(true);
-      expect(files.some(f => f.includes('vendor/'))).toBe(false);
-    });
-
-    it('re-includes vendor/ when user ignore has a !vendor negation', async () => {
-      mkdirSync(join(tempDir, 'app'), { recursive: true });
-      mkdirSync(join(tempDir, 'vendor', 'lib'), { recursive: true });
-      writeFileSync(join(tempDir, 'app', 'main.php'), '<?php class App {}');
-      writeFileSync(join(tempDir, 'vendor', 'lib', 'dep.php'), '<?php class Dep {}');
-
-      const files = await expandFileGlobs(['**/*.php'], {
-        cwd: tempDir,
-        ignore: { paths: ['!vendor/**'] },
-      });
-
-      expect(files.some(f => f.includes('app/main.php'))).toBe(true);
-      expect(files.some(f => f.includes('vendor/lib/dep.php'))).toBe(true);
-    });
   });
 
   describe('gitignore support', () => {
@@ -419,6 +324,49 @@ describe('expandFileGlobs', () => {
         rmSync(outsideDir, { recursive: true, force: true });
       }
     });
+
+    it('picks up .gitignore from a brand-new untracked subdirectory', async () => {
+      // Simulate the reported bug: a new Laravel app added in `dieter/` with
+      // vendor/ in its .gitignore, but nothing yet committed.  The gitignore
+      // detection must find dieter/.gitignore even though dieter/ has never
+      // been git-tracked.
+      initGitRepo(tempDir);
+      // Commit something so the repo is real
+      mkdirSync(join(tempDir, 'src'), { recursive: true });
+      writeFileSync(join(tempDir, 'src', '.gitkeep'), '');
+      execFileSync('git', ['add', '.'], { cwd: tempDir, stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', 'init', '--allow-empty'], { cwd: tempDir, stdio: 'ignore' });
+
+      // Now add a brand-new untracked Laravel-style app directory (never staged)
+      const appDir = join(tempDir, 'dieter');
+      mkdirSync(join(appDir, 'app'), { recursive: true });
+      mkdirSync(join(appDir, 'vendor', 'laravel', 'framework'), { recursive: true });
+      writeFileSync(join(appDir, '.gitignore'), 'vendor/\n');
+      writeFileSync(join(appDir, 'app', 'Controller.php'), '<?php class Controller {}');
+      writeFileSync(join(appDir, 'vendor', 'laravel', 'framework', 'Framework.php'), '<?php');
+
+      const files = await expandFileGlobs(['dieter/**/*.php'], tempDir);
+
+      expect(files.some(f => f.includes('app/Controller.php'))).toBe(true);
+      expect(files.some(f => f.includes('vendor/'))).toBe(false);
+    });
+  });
+
+  describe('MAX_GLOB_FILE_RESULTS guardrail', () => {
+    it('throws WardenGlobExpansionError when filtered result exceeds limit', async () => {
+      const { WardenGlobExpansionError, MAX_GLOB_FILE_RESULTS } = await import('./files.js');
+
+      // No git repo so gitignore can't shrink the set; create limit+1 files
+      const count = MAX_GLOB_FILE_RESULTS + 1;
+      for (let i = 0; i < count; i++) {
+        writeFileSync(join(tempDir, `file${i}.ts`), `// ${i}`);
+      }
+
+      await expect(expandFileGlobs(['**/*.ts'], tempDir))
+        .rejects.toThrow(WardenGlobExpansionError);
+      await expect(expandFileGlobs(['**/*.ts'], tempDir))
+        .rejects.toThrow(/Glob pattern matched/);
+    });
   });
 });
 
@@ -450,50 +398,5 @@ describe('expandAndCreateFileChanges', () => {
     const file2 = changes.find(c => c.filename === 'file2.ts');
     expect(file2).toBeDefined();
     expect(file2?.additions).toBe(2);
-  });
-
-  it('passes ignore config through so user negations can re-include pruned dirs', async () => {
-    mkdirSync(join(tempDir, 'app'), { recursive: true });
-    mkdirSync(join(tempDir, 'vendor', 'lib'), { recursive: true });
-    writeFileSync(join(tempDir, 'app', 'main.php'), '<?php class App {}');
-    writeFileSync(join(tempDir, 'vendor', 'lib', 'dep.php'), '<?php class Dep {}');
-
-    // Without negation: vendor is pruned
-    const withoutOverride = await expandAndCreateFileChanges(['**/*.php'], tempDir);
-    expect(withoutOverride.some(f => f.filename.includes('vendor/'))).toBe(false);
-
-    // With negation: vendor is re-included at traversal time
-    const withOverride = await expandAndCreateFileChanges(['**/*.php'], tempDir, {
-      ignore: { paths: ['!vendor/**'] },
-    });
-    expect(withOverride.some(f => f.filename.includes('vendor/'))).toBe(true);
-  });
-});
-
-describe('WardenGlobExpansionError / MAX_GLOB_FILE_RESULTS guardrail', () => {
-  it('throws WardenGlobExpansionError when glob matches too many files', async () => {
-    const { WardenGlobExpansionError, MAX_GLOB_FILE_RESULTS } = await import('./files.js');
-    const { writeFileSync, mkdirSync, rmSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const { tmpdir } = await import('node:os');
-
-    const tempDir = join(tmpdir(), `warden-guardrail-test-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
-
-    try {
-      // Write MAX_GLOB_FILE_RESULTS + 1 files to trigger the guardrail
-      const count = MAX_GLOB_FILE_RESULTS + 1;
-      for (let i = 0; i < count; i++) {
-        writeFileSync(join(tempDir, `file${i}.ts`), `// file ${i}`);
-      }
-
-      await expect(expandFileGlobs(['**/*.ts'], tempDir))
-        .rejects.toThrow(WardenGlobExpansionError);
-
-      await expect(expandFileGlobs(['**/*.ts'], tempDir))
-        .rejects.toThrow(/Glob pattern matched/);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
   });
 });
