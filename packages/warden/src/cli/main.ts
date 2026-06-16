@@ -21,7 +21,7 @@ import { isRepoRelativePath, normalizePath, resolveConfigInput } from '../utils/
 import { parseCliArgs, showVersion, classifyTargets, expandTargetFileReferences, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
-import { WardenGlobExpansionError } from './files.js';
+import { WardenGlobExpansionError, MAX_GLOB_FILE_RESULTS } from './files.js';
 import { getRepoRoot, getHeadSha, refExists, getDefaultBranch } from './git.js';
 import { renderTerminalReport, filterReports } from './terminal.js';
 import {
@@ -1268,6 +1268,16 @@ export async function runSkills(
 
 async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
+
+  // Early guard: if the shell already expanded a glob to thousands of individual
+  // paths, the patterns array itself is oversized.  Check this before any I/O.
+  if (filePatterns.length >= MAX_GLOB_FILE_RESULTS) {
+    reporter.error(
+      new WardenGlobExpansionError(filePatterns.length, MAX_GLOB_FILE_RESULTS).message,
+    );
+    return 1;
+  }
+
   const config = loadOptionalConfig(options, findRepoPath(cwd));
 
   // Build context from files
