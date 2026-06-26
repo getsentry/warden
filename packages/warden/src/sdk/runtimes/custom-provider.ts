@@ -84,7 +84,9 @@ export function buildPiProviderOptions(
 export function isLoopbackBaseUrl(baseUrl: string): boolean {
   try {
     const host = new URL(baseUrl).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+    // Node's WHATWG URL returns IPv6 hosts bracketed (e.g. `[::1]`); the
+    // unbracketed `::1` is kept as a defensive fallback for pre-normalized input.
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
   } catch {
     return false;
   }
