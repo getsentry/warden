@@ -54,6 +54,9 @@ describe('isLoopbackBaseUrl', () => {
     expect(isLoopbackBaseUrl('http://127.0.0.1:4000')).toBe(true);
     expect(isLoopbackBaseUrl('https://gw.example.com/v1')).toBe(false);
   });
+  it('recognizes bracketed IPv6 loopback', () => {
+    expect(isLoopbackBaseUrl('http://[::1]:4000/v1')).toBe(true);
+  });
 });
 
 describe('assertCustomProviderAuth', () => {

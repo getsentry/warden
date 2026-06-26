@@ -9,6 +9,10 @@ const DEFAULT_CONTEXT_WINDOW = 128_000;
 const DEFAULT_MAX_TOKENS = 8_192;
 const DEFAULT_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as const;
 
+function sanitizeProviderName(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+}
+
 export interface PiProviderModel {
   id: string;
   name: string;
@@ -37,7 +41,7 @@ export function resolveProviderApiKey(
   apiKeyEnv: string | undefined,
   env: NodeJS.ProcessEnv,
 ): string | undefined {
-  const upper = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  const upper = sanitizeProviderName(name);
   const candidates = apiKeyEnv ? [apiKeyEnv] : [`WARDEN_${upper}_API_KEY`, `${upper}_API_KEY`];
   for (const candidate of candidates) {
     const value = env[candidate];
@@ -93,7 +97,7 @@ export function assertCustomProviderAuth(options: PiProviderOptions): void {
     if (!provider.apiKey && !isLoopbackBaseUrl(provider.baseUrl)) {
       throw new Error(
         `Custom provider "${provider.name}" has no API key. ` +
-        `Set WARDEN_${provider.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_API_KEY ` +
+        `Set WARDEN_${sanitizeProviderName(provider.name)}_API_KEY ` +
         `(or the configured apiKeyEnv), or use a localhost baseUrl for an unauthenticated endpoint.`,
       );
     }
