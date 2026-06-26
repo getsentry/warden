@@ -1644,3 +1644,51 @@ describe('logs config', () => {
     expect(result.data?.logs).toBeUndefined();
   });
 });
+
+describe('providers config', () => {
+  const base = { version: 1 as const, skills: [] };
+
+  it('accepts a valid custom provider', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: {
+        providers: {
+          litellm: {
+            baseUrl: 'http://localhost:4000/v1',
+            models: [{ id: 'my-model' }],
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const p = result.data.defaults?.providers?.['litellm'];
+      expect(p?.api).toBe('openai-completions'); // default applied
+      expect(p?.models[0]?.id).toBe('my-model');
+    }
+  });
+
+  it('rejects a non-URL baseUrl', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: { providers: { litellm: { baseUrl: 'not a url', models: [{ id: 'm' }] } } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unsupported api value', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: { providers: { x: { baseUrl: 'http://h/v1', api: 'cohere', models: [{ id: 'm' }] } } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty models array', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: { providers: { x: { baseUrl: 'http://h/v1', models: [] } } },
+    });
+    expect(result.success).toBe(false);
+  });
+});
