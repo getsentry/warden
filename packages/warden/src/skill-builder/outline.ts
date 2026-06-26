@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
-import type { SkillDefinition } from '../config/schema.js';
+import type { ProvidersConfig, SkillDefinition } from '../config/schema.js';
 import type { Runtime, RuntimeName } from '../sdk/runtimes/index.js';
-import { getRuntime } from '../sdk/runtimes/index.js';
+import { getRuntime, getRuntimeProviderOptions } from '../sdk/runtimes/index.js';
 import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
 import {
   GENERATED_SKILL_DEFINITION_FILE,
@@ -51,6 +51,7 @@ export interface BuildSkillOutlineOptions {
   repairMaxRetries?: number;
   onStatus?: (message: string) => void;
   source?: SkillBuildSource;
+  providers?: ProvidersConfig;
 }
 
 export class SkillBuildOutlineError extends Error {
@@ -359,6 +360,7 @@ export async function buildSkillOutline(
         maxTurns: options.maxTurns ?? SKILL_BUILD_MAX_TURNS,
         apiKey,
         abortController: options.abortController,
+        providers: options.providers,
         repair: {
           apiKey,
           model: options.repairModel,
@@ -408,6 +410,7 @@ export async function buildSkillOutline(
     maxTokens: SKILL_BUILD_MAX_TOKENS,
     timeout: SKILL_BUILD_TIMEOUT_MS,
     maxRetries,
+    providerOptions: getRuntimeProviderOptions(runtime.name, { providers: options.providers }),
   });
 
   if (!result.success) {

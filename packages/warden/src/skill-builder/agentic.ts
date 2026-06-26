@@ -1,11 +1,12 @@
 import { performance } from 'node:perf_hooks';
 import { z } from 'zod';
-import type { ToolName } from '../config/schema.js';
+import type { ProvidersConfig, ToolName } from '../config/schema.js';
 import type { UsageStats } from '../types/index.js';
 import { parseJsonFromOutput, type ParseJsonFromOutputResult } from '../sdk/json-output.js';
 import { buildJsonOutputSection, buildTaggedSection, joinPromptSections } from '../sdk/prompt-sections.js';
 import { aggregateUsage, emptyUsage } from '../sdk/usage.js';
 import type { Runtime, SkillRunResult } from '../sdk/runtimes/index.js';
+import { getRuntimeProviderOptions } from '../sdk/runtimes/index.js';
 
 const SKILL_BUILDER_READ_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch'];
 const SKILL_BUILDER_WRITE_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob', 'Write', 'Edit', 'Bash', 'WebFetch', 'WebSearch'];
@@ -135,6 +136,7 @@ async function repairStructuredSkillBuilderOutput<T>(args: {
   reason: string;
   model?: string;
   abortController?: AbortController;
+  providers?: ProvidersConfig;
 }): Promise<ParseJsonFromOutputResult<T>> {
   const response = await args.runtime.runSkill({
     apiKey: args.apiKey,
@@ -152,6 +154,7 @@ async function repairStructuredSkillBuilderOutput<T>(args: {
       maxTurns: STRUCTURED_REPAIR_MAX_TURNS,
       abortController: args.abortController,
     },
+    providerOptions: getRuntimeProviderOptions(args.runtime.name, { providers: args.providers }),
   });
 
   if (response.authError) {
@@ -208,6 +211,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
   writeAccess?: boolean;
   abortController?: AbortController;
   apiKey?: string;
+  providers?: ProvidersConfig;
   repair?: {
     apiKey?: string;
     model?: string;
@@ -229,6 +233,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
       maxTurns: args.maxTurns,
       abortController: args.abortController,
     },
+    providerOptions: getRuntimeProviderOptions(runtime.name, { providers: args.providers }),
   });
 
   if (response.authError) {
@@ -263,6 +268,7 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
       reason: parsed.error,
       model: args.repair?.model ?? args.model,
       abortController: args.abortController,
+      providers: args.providers,
     });
     if (skillRepair.usage) {
       repairUsages.push(skillRepair.usage);

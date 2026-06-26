@@ -331,6 +331,7 @@ async function runGeneratedSkillCommand(
       : collectSkillBuildSource(skill);
 
     const runtimeName = config?.defaults?.runtime ?? 'pi';
+    const providers = config?.defaults?.providers;
     const model = resolveSynthesisModel(config, options);
     const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
     const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
@@ -387,6 +388,7 @@ async function runGeneratedSkillCommand(
         source,
         repairModel,
         repairMaxRetries: maxRetries,
+        providers,
         onStatus: setDetail,
       }),
     });
@@ -435,6 +437,7 @@ async function runGeneratedSkillCommand(
         repairMaxRetries: maxRetries,
         abortController: state?.abortController,
         regenerate: options.regenerate || outlineResult.source === 'generated' || mode === 'improve',
+        providers,
         onStatus: setDetail,
       }),
     });
