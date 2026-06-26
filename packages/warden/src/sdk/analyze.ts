@@ -164,6 +164,7 @@ async function parseHunkOutput(
   const fallback = await extractFindingsWithLLM(result.text, {
     apiKey: options.apiKey,
     runtime: options.runtime,
+    providers: options.providers,
     model: options.auxiliaryModel,
     maxRetries: options.auxiliaryMaxRetries,
     agentName: skillName,
@@ -396,6 +397,7 @@ async function analyzeHunk(
             },
             providerOptions: getRuntimeProviderOptions(runtimeName, {
               pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+              providers: options.providers,
             }),
           }));
 
@@ -1159,6 +1161,7 @@ async function runSkillAnalysis(
       repoPath: context.repoPath,
       apiKey: options.apiKey,
       runtime: options.runtime,
+      providers: options.providers,
       auxiliaryModel: options.auxiliaryModel,
       synthesisModel: options.synthesisModel,
       auxiliaryMaxRetries: options.auxiliaryMaxRetries,

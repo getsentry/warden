@@ -19,6 +19,7 @@ describe('evaluateFix runtime options', () => {
 
     vi.doMock('../../sdk/runtimes/index.js', () => ({
       getRuntime,
+      getRuntimeProviderOptions: vi.fn(() => undefined),
     }));
 
     const { evaluateFix } = await import('./judge.js');

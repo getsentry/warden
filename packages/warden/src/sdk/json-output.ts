@@ -3,7 +3,8 @@ import type { UsageStats } from '../types/index.js';
 import { extractJson } from './haiku.js';
 import { canUseRuntimeAuth } from './extract.js';
 import { buildJsonOutputSection, buildTaggedSection, joinPromptSections } from './prompt-sections.js';
-import { getRuntime, type Runtime, type RuntimeName } from './runtimes/index.js';
+import { getRuntime, getRuntimeProviderOptions, type Runtime, type RuntimeName } from './runtimes/index.js';
+import type { ProvidersConfig } from '../config/schema.js';
 
 const JSON_REPAIR_MAX_CHARS = 60_000;
 const JSON_REPAIR_MAX_TOKENS = 16_384;
@@ -18,6 +19,8 @@ export interface JsonOutputRepairOptions {
   agentName?: string;
   runtime?: Runtime;
   runtimeName?: RuntimeName;
+  /** Custom OpenAI-compatible providers to register for the Pi runtime. */
+  providers?: ProvidersConfig;
   model?: string;
   maxRetries?: number;
   maxTokens?: number;
@@ -86,6 +89,7 @@ async function repairJsonOutput<T>(
     maxTokens: repair.maxTokens ?? JSON_REPAIR_MAX_TOKENS,
     timeout: repair.timeout ?? JSON_REPAIR_TIMEOUT_MS,
     schema,
+    providerOptions: getRuntimeProviderOptions(runtime.name, { providers: repair.providers }),
     prompt: joinPromptSections([
       `<task>
 Extract and repair the JSON value from this model output.

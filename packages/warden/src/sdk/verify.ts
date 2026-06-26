@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Effort, SkillDefinition } from '../config/schema.js';
+import type { Effort, ProvidersConfig, SkillDefinition } from '../config/schema.js';
 import { FindingSchema, type Finding, type UsageStats } from '../types/index.js';
 import { aggregateUsage } from './usage.js';
 import { extractBalancedJson } from './extract.js';
@@ -32,6 +32,8 @@ export interface VerifyFindingsOptions {
   skill: SkillDefinition;
   apiKey?: string;
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers to register for the Pi runtime. */
+  providers?: ProvidersConfig;
   model?: string;
   maxTurns?: number;
   effort?: Effort;
@@ -267,6 +269,7 @@ export async function verifyFindings(
           tools: options.skill.tools,
           providerOptions: getRuntimeProviderOptions(runtimeName, {
             pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
+            providers: options.providers,
           }),
         });
 

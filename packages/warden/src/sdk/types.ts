@@ -1,6 +1,6 @@
 import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure, HunkTrace } from '../types/index.js';
 import type { HunkWithContext } from '../diff/index.js';
-import type { ChunkingConfig, Effort, IgnoreConfig, ScanConfig } from '../config/schema.js';
+import type { ChunkingConfig, Effort, IgnoreConfig, ProvidersConfig, ScanConfig } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
 import type { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
 
@@ -114,6 +114,8 @@ export interface SkillRunnerOptions {
   effort?: Effort;
   /** Runtime backend for all model-backed execution. Defaults to Pi. */
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers to register for the Pi runtime. */
+  providers?: ProvidersConfig;
   /** Model to use for auxiliary structured model calls. Uses runtime default if not specified. */
   auxiliaryModel?: string;
   /** Model to use for post-analysis synthesis/consolidation. Falls back to auxiliaryModel when not specified. */

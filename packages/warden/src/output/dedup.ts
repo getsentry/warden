@@ -3,7 +3,7 @@ import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { Confidence, Finding, Severity, UsageStats } from '../types/index.js';
 import { findingLine } from '../types/index.js';
-import { getRuntime } from '../sdk/runtimes/index.js';
+import { getRuntime, getRuntimeProviderOptions } from '../sdk/runtimes/index.js';
 import { applyMergeGroups, canUseRuntimeAuth } from '../sdk/extract.js';
 import type { AuxiliaryCallOptions } from '../sdk/extract.js';
 import {
@@ -581,7 +581,7 @@ async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
   apiKey: string | undefined,
-  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'maxRetries' | 'currentSkill'> = {}
+  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'maxRetries' | 'currentSkill' | 'providers'> = {}
 ): Promise<SemanticDuplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
     return { matches: new Map() };
@@ -622,6 +622,7 @@ Return [] if none are duplicates.`),
     model: options.model,
     maxTokens: 512,
     maxRetries: options.maxRetries,
+    providerOptions: getRuntimeProviderOptions(options.runtime ?? 'claude', { providers: options.providers }),
   });
 
   if (!result.success) {
@@ -925,6 +926,7 @@ Singletons (findings with no duplicates) should not appear in any group.
     model: options.model,
     maxTokens: 512,
     maxRetries: options.maxRetries,
+    providerOptions: getRuntimeProviderOptions(options.runtime ?? 'claude', { providers: options.providers }),
   });
 
   if (!result.success) {

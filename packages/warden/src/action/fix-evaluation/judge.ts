@@ -7,7 +7,8 @@ import {
   buildTaggedSection,
   joinPromptSections,
 } from '../../sdk/prompt-sections.js';
-import { getRuntime, type AuxiliaryTool, type RuntimeName } from '../../sdk/runtimes/index.js';
+import { getRuntime, getRuntimeProviderOptions, type AuxiliaryTool, type RuntimeName } from '../../sdk/runtimes/index.js';
+import type { ProvidersConfig } from '../../config/schema.js';
 import { emptyUsage } from '../../sdk/usage.js';
 import { FixJudgeVerdictSchema } from './types.js';
 import type { FixJudgeResult } from './types.js';
@@ -33,6 +34,8 @@ export interface FixJudgeContext {
 
 export interface FixJudgeRuntimeOptions {
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers to register for the Pi runtime. */
+  providers?: ProvidersConfig;
   model?: string;
   maxRetries?: number;
 }
@@ -234,6 +237,7 @@ export async function evaluateFix(
     model: runtimeOptions.model,
     maxIterations: 5,
     maxRetries: runtimeOptions.maxRetries,
+    providerOptions: getRuntimeProviderOptions(runtimeOptions.runtime ?? 'claude', { providers: runtimeOptions.providers }),
   });
 
   if (result.success) {
