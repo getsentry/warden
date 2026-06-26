@@ -53,6 +53,9 @@ export function getRuntimeProviderOptions(
   }
 
   if (name === 'pi') {
+    // Resolve provider API keys from the live process env at the runtime
+    // boundary. Preflight (verifyCustomProviderAuthForRun) resolves against the
+    // same env, so both phases agree as long as env is not mutated mid-run.
     return buildPiProviderOptions(options.providers, process.env);
   }
 

@@ -92,8 +92,8 @@ model = "litellm/my-model"
 **Authentication:** the API key is read from the environment, never from
 `warden.toml`. Warden looks up `apiKeyEnv` if set, otherwise
 `WARDEN_<NAME>_API_KEY` then `<NAME>_API_KEY` (e.g. `WARDEN_LITELLM_API_KEY`).
-A `localhost` / `127.0.0.1` base URL may run without a key; any other host
-requires one or Warden fails before analysis starts.
+A loopback base URL (`localhost`, `127.0.0.1`, or `::1`) may run without a key;
+any other host requires one or Warden fails before analysis starts.
 
 ### Alternative: Pi `models.json`
 
