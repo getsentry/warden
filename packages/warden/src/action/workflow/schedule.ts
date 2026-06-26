@@ -214,6 +214,7 @@ async function runScheduleWorkflowInner(
         apiKey: inputs.anthropicApiKey,
         model: resolved.model,
         runtime: resolved.runtime,
+        providers: resolved.providers,
         effort: resolved.effort,
         auxiliaryModel: resolved.auxiliaryModel,
         synthesisModel: resolved.synthesisModel,

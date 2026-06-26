@@ -21,6 +21,7 @@ import type { ExistingComment, DeduplicateResult } from '../../output/dedup.js';
 import { mergeAuxiliaryUsage, mergeAuxiliaryUsageAttribution } from '../../sdk/usage.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
+import type { ProvidersConfig } from '../../config/schema.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
@@ -37,6 +38,7 @@ export interface ReviewPostingContext {
   existingComments: ExistingComment[];
   apiKey: string;
   runtime?: RuntimeName;
+  providers?: ProvidersConfig;
   model?: string;
   maxRetries?: number;
   /** Throw review posting failures instead of converting them to warnings. */
@@ -258,6 +260,7 @@ export async function postTriggerReview(
       const consolidateResult = await consolidateBatchFindings(findingsToPost, {
         apiKey,
         runtime: ctx.runtime,
+        providers: ctx.providers,
         model: ctx.model,
         hashOnly: !canUseAuxiliaryRuntime,
         maxRetries: ctx.maxRetries,
@@ -297,6 +300,7 @@ export async function postTriggerReview(
       dedupResult = await deduplicateFindings(findingsToPost, existingComments, {
         apiKey,
         runtime: ctx.runtime,
+        providers: ctx.providers,
         model: ctx.model,
         currentSkill: skill,
         maxRetries: ctx.maxRetries,

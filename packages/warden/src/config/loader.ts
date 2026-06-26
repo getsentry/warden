@@ -19,6 +19,7 @@ import {
   type LogsConfig,
   type RuntimeName,
   type AgentRuntimeConfig,
+  type ProvidersConfig,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -399,6 +400,8 @@ export interface ResolvedTrigger {
   effort?: AgentRuntimeConfig['effort'];
   /** Runtime backend for all model-backed execution. */
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers for the Pi runtime. */
+  providers?: ProvidersConfig;
   /** Model for auxiliary structured model calls. */
   auxiliaryModel?: string;
   /** Model for post-analysis synthesis/consolidation. */
@@ -493,6 +496,7 @@ export function resolveSkillConfigs(
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
   const result: ResolvedTrigger[] = [];
   const runtime = defaults?.runtime ?? 'pi';
+  const providers = defaults?.providers;
   const auxiliaryModel = emptyToUndefined(defaults?.auxiliary?.model);
   const synthesisModel =
     emptyToUndefined(defaults?.synthesis?.model) ??
@@ -544,6 +548,7 @@ export function resolveSkillConfigs(
         maxTurns: baseMaxTurns,
         effort,
         runtime,
+        providers,
         auxiliaryModel,
         synthesisModel,
         auxiliaryMaxRetries,
@@ -579,6 +584,7 @@ export function resolveSkillConfigs(
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
           effort,
           runtime,
+          providers,
           auxiliaryModel,
           synthesisModel,
           auxiliaryMaxRetries,

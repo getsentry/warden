@@ -187,6 +187,7 @@ export async function executeTrigger(
             apiKey: anthropicApiKey,
             model: trigger.model,
             runtime: trigger.runtime,
+            providers: trigger.providers,
             effort: trigger.effort,
             auxiliaryModel: trigger.auxiliaryModel,
             synthesisModel: trigger.synthesisModel,

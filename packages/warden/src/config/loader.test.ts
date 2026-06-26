@@ -581,6 +581,19 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.minConfidence).toBeUndefined();
     });
   });
+
+  it('propagates defaults.providers onto every resolved trigger', () => {
+    const config = WardenConfigSchema.parse({
+      version: 1,
+      defaults: { providers: { litellm: { baseUrl: 'http://localhost:4000/v1', models: [{ id: 'm' }] } } },
+      skills: [{ name: 'a' }, { name: 'b', triggers: [{ type: 'local' }] }],
+    });
+    const resolved = resolveSkillConfigs(config);
+    expect(resolved).toHaveLength(2);
+    for (const trigger of resolved) {
+      expect(trigger.providers?.['litellm']?.baseUrl).toBe('http://localhost:4000/v1');
+    }
+  });
 });
 
 describe('mergeWardenConfigs', () => {

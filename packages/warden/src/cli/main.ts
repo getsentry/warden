@@ -612,6 +612,7 @@ interface SkillToRun {
   maxTurns?: number;
   effort?: SkillRunnerOptions['effort'];
   runtime?: SkillRunnerOptions['runtime'];
+  providers?: SkillRunnerOptions['providers'];
   auxiliaryModel?: string;
   synthesisModel?: string;
   auxiliaryMaxRetries?: number;
@@ -643,6 +644,7 @@ type SkillRunnerOptionOverrides = Pick<
   | 'maxTurns'
   | 'effort'
   | 'runtime'
+  | 'providers'
   | 'auxiliaryModel'
   | 'synthesisModel'
   | 'auxiliaryMaxRetries'
@@ -709,6 +711,7 @@ export function mergeSkillRunnerOptions(
   if (overrides.maxTurns !== undefined) merged.maxTurns = overrides.maxTurns;
   if (overrides.effort !== undefined) merged.effort = overrides.effort;
   if (overrides.runtime !== undefined) merged.runtime = overrides.runtime;
+  if (overrides.providers !== undefined) merged.providers = overrides.providers;
   if (overrides.auxiliaryModel !== undefined) merged.auxiliaryModel = overrides.auxiliaryModel;
   if (overrides.synthesisModel !== undefined) merged.synthesisModel = overrides.synthesisModel;
   if (overrides.auxiliaryMaxRetries !== undefined) {
@@ -1098,6 +1101,7 @@ export async function runSkills(
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
       effort: options.effort ?? match?.effort ?? defaultEffort,
       runtime: options.runtime ?? match?.runtime ?? config?.defaults?.runtime ?? 'pi',
+      providers: match?.providers ?? config?.defaults?.providers,
       auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
       synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
       auxiliaryMaxRetries:
@@ -1125,6 +1129,7 @@ export async function runSkills(
         model: t.model,
         maxTurns: t.maxTurns,
         runtime: options.runtime ?? t.runtime,
+        providers: t.providers,
         effort: options.effort ?? t.effort,
         auxiliaryModel: t.auxiliaryModel,
         synthesisModel: t.synthesisModel,
@@ -1515,6 +1520,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       apiKey,
       model: trigger.model,
       runtime: options.runtime ?? trigger.runtime,
+      providers: trigger.providers,
       pathToClaudeCodeExecutable,
       effort: options.effort ?? trigger.effort,
       auxiliaryModel: trigger.auxiliaryModel,

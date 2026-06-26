@@ -45,6 +45,7 @@ import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
+import type { ProvidersConfig } from '../../config/schema.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
@@ -119,6 +120,7 @@ interface FixEvaluationCommentGroups {
 
 interface AuxiliaryWorkflowOptions {
   runtime?: RuntimeName;
+  providers?: ProvidersConfig;
   model?: string;
   maxRetries?: number;
 }
@@ -182,6 +184,7 @@ function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): Auxiliar
     // trigger, so the org base config remains the enforced baseline and the
     // repo layer only fills fields the base omits.
     runtime: baseDefaults?.runtime ?? repoDefaults?.runtime ?? 'pi',
+    providers: baseDefaults?.providers ?? repoDefaults?.providers,
     model:
       emptyToUndefined(baseDefaults?.auxiliary?.model) ??
       emptyToUndefined(repoDefaults?.auxiliary?.model),
@@ -564,6 +567,7 @@ async function postReviewsAndTrackFailures(
           existingComments,
           apiKey: inputs.anthropicApiKey,
           runtime: auxiliaryOptions.runtime,
+          providers: auxiliaryOptions.providers,
           model: auxiliaryOptions.model,
           maxRetries: auxiliaryOptions.maxRetries,
           failOnPostError: options.failOnPostError,
