@@ -10,6 +10,10 @@ import {
   invalidPiModelSelectorMessage,
   type InvalidPiModelSelector,
 } from '../sdk/runtimes/model-selectors.js';
+import {
+  buildPiProviderOptions,
+  assertCustomProviderAuth,
+} from '../sdk/runtimes/custom-provider.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { aggregateAuxiliaryUsageAttribution, mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
@@ -804,6 +808,26 @@ function verifyClaudeAuthForRun(args: {
   }
 }
 
+/**
+ * Verify that every pi-runtime item with a remote custom provider has a resolvable
+ * API key before analysis starts. Returns false (and emits an error) on first failure.
+ */
+export function verifyCustomProviderAuthForRun(
+  items: { runtime?: SkillRunnerOptions['runtime']; providers?: SkillRunnerOptions['providers'] }[],
+  reporter: Reporter,
+): boolean {
+  for (const item of items) {
+    if ((item.runtime ?? 'pi') !== 'pi') continue;
+    try {
+      assertCustomProviderAuth(buildPiProviderOptions(item.providers, process.env));
+    } catch (error) {
+      reporter.error(error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  }
+  return true;
+}
+
 function renderSkillRunHeader(args: {
   reporter: Reporter;
   skill: SkillDefinition;
@@ -1164,6 +1188,10 @@ export async function runSkills(
     return 1;
   }
 
+  if (!verifyCustomProviderAuthForRun(skillsToRun, reporter)) {
+    return 1;
+  }
+
   // Build skill tasks
   // Model precedence: defaults.agent.model > defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
   // sdkModel is undefined when no model is explicitly configured (lets SDK use its default).
@@ -1502,6 +1530,10 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     repoPath,
     options,
   })) {
+    return 1;
+  }
+
+  if (!verifyCustomProviderAuthForRun(triggersToRun, reporter)) {
     return 1;
   }
 

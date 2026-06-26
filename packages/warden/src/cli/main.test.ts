@@ -18,6 +18,7 @@ import {
   appendReportToRunLog,
   buildFinalChunkRecords,
   renderFinalRunLogContent,
+  verifyCustomProviderAuthForRun,
   type RunLog,
   type RunSkillSpec,
 } from './main.js';
@@ -826,5 +827,53 @@ describe('resolveInvocationCwd', () => {
 
   it('resolves a relative cwd override from the original working directory', () => {
     expect(resolveInvocationCwd('/launcher', '../repo')).toBe('/repo');
+  });
+});
+
+describe('verifyCustomProviderAuthForRun', () => {
+  const remoteProviders = {
+    litellm: {
+      baseUrl: 'https://gw.example.com/v1',
+      api: 'openai-completions' as const,
+      models: [{ id: 'my-model' }],
+    },
+  };
+
+  const loopbackProviders = {
+    local: {
+      baseUrl: 'http://localhost:4000/v1',
+      api: 'openai-completions' as const,
+      models: [{ id: 'my-model' }],
+    },
+  };
+
+  function fakeReporter() {
+    return { error: vi.fn() } as unknown as InstanceType<typeof Reporter>;
+  }
+
+  it('returns false and calls reporter.error when a pi item has a remote provider with no key', () => {
+    const reporter = fakeReporter();
+    const items = [{ runtime: 'pi' as const, providers: remoteProviders }];
+    // No key in env — process.env should not have WARDEN_LITELLM_API_KEY or LITELLM_API_KEY set
+    const result = verifyCustomProviderAuthForRun(items, reporter);
+    expect(result).toBe(false);
+    expect(reporter.error).toHaveBeenCalledOnce();
+    expect((reporter.error as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toContain('litellm');
+  });
+
+  it('returns true when a pi item has a loopback provider with no key', () => {
+    const reporter = fakeReporter();
+    const items = [{ runtime: 'pi' as const, providers: loopbackProviders }];
+    const result = verifyCustomProviderAuthForRun(items, reporter);
+    expect(result).toBe(true);
+    expect(reporter.error).not.toHaveBeenCalled();
+  });
+
+  it('returns true and skips auth check for claude runtime items even with remote providers', () => {
+    const reporter = fakeReporter();
+    const items = [{ runtime: 'claude' as const, providers: remoteProviders }];
+    const result = verifyCustomProviderAuthForRun(items, reporter);
+    expect(result).toBe(true);
+    expect(reporter.error).not.toHaveBeenCalled();
   });
 });
