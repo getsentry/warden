@@ -815,11 +815,12 @@ function verifyClaudeAuthForRun(args: {
 export function verifyCustomProviderAuthForRun(
   items: { runtime?: SkillRunnerOptions['runtime']; providers?: SkillRunnerOptions['providers'] }[],
   reporter: Reporter,
+  env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   for (const item of items) {
     if ((item.runtime ?? 'pi') !== 'pi') continue;
     try {
-      assertCustomProviderAuth(buildPiProviderOptions(item.providers, process.env));
+      assertCustomProviderAuth(buildPiProviderOptions(item.providers, env));
     } catch (error) {
       reporter.error(error instanceof Error ? error.message : String(error));
       return false;

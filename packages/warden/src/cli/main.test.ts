@@ -854,8 +854,8 @@ describe('verifyCustomProviderAuthForRun', () => {
   it('returns false and calls reporter.error when a pi item has a remote provider with no key', () => {
     const reporter = fakeReporter();
     const items = [{ runtime: 'pi' as const, providers: remoteProviders }];
-    // No key in env — process.env should not have WARDEN_LITELLM_API_KEY or LITELLM_API_KEY set
-    const result = verifyCustomProviderAuthForRun(items, reporter);
+    // Explicit empty env keeps the test hermetic regardless of the runner's environment.
+    const result = verifyCustomProviderAuthForRun(items, reporter, {});
     expect(result).toBe(false);
     expect(reporter.error).toHaveBeenCalledOnce();
     expect((reporter.error as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toContain('litellm');
@@ -864,7 +864,7 @@ describe('verifyCustomProviderAuthForRun', () => {
   it('returns true when a pi item has a loopback provider with no key', () => {
     const reporter = fakeReporter();
     const items = [{ runtime: 'pi' as const, providers: loopbackProviders }];
-    const result = verifyCustomProviderAuthForRun(items, reporter);
+    const result = verifyCustomProviderAuthForRun(items, reporter, {});
     expect(result).toBe(true);
     expect(reporter.error).not.toHaveBeenCalled();
   });
@@ -872,7 +872,7 @@ describe('verifyCustomProviderAuthForRun', () => {
   it('returns true and skips auth check for claude runtime items even with remote providers', () => {
     const reporter = fakeReporter();
     const items = [{ runtime: 'claude' as const, providers: remoteProviders }];
-    const result = verifyCustomProviderAuthForRun(items, reporter);
+    const result = verifyCustomProviderAuthForRun(items, reporter, {});
     expect(result).toBe(true);
     expect(reporter.error).not.toHaveBeenCalled();
   });
