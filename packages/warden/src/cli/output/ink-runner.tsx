@@ -18,6 +18,7 @@ import chalk from 'chalk';
 import {
   composeTasksWithFailFast,
   runComposedSkillTasks,
+  prepareSemanticPlansForTasks,
   type SkillTaskOptions,
   type SkillTaskResult,
   type RunTasksOptions,
@@ -280,8 +281,9 @@ export async function runSkillTasksWithInk(
     const semaphore = new Semaphore(concurrency);
     const circuitAbortController = new AbortController();
     const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+    const plannedTasks = await prepareSemanticPlansForTasks(tasks);
     const composedTasks = composeTasksWithFailFast(
-      tasks,
+      plannedTasks,
       failFastController,
       circuitBreaker,
       circuitAbortController,
@@ -480,8 +482,9 @@ export async function runSkillTasksWithInk(
   // Compose per-task abort controllers: fire on SIGINT, fail-fast, or provider circuit breaker.
   const circuitAbortController = new AbortController();
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+  const plannedTasks = await prepareSemanticPlansForTasks(tasks);
   const composedTasks = composeTasksWithFailFast(
-    tasks,
+    plannedTasks,
     failFastController,
     circuitBreaker,
     circuitAbortController,

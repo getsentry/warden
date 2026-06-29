@@ -13,6 +13,7 @@ import {
   type Defaults,
   type ChunkingConfig,
   type CoalesceConfig,
+  type SemanticChunkingConfig,
   type IgnoreConfig,
   type ScanConfig,
   type RunnerConfig,
@@ -97,6 +98,15 @@ function mergeCoalesceConfig(
   return { ...base, ...overlay };
 }
 
+function mergeSemanticChunkingConfig(
+  base?: SemanticChunkingConfig,
+  overlay?: SemanticChunkingConfig
+): SemanticChunkingConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return { ...base, ...overlay };
+}
+
 function mergeChunkingConfig(
   base?: ChunkingConfig,
   overlay?: ChunkingConfig
@@ -108,6 +118,7 @@ function mergeChunkingConfig(
     ...overlay,
     filePatterns: mergeArray(base.filePatterns, overlay.filePatterns),
     coalesce: mergeCoalesceConfig(base.coalesce, overlay.coalesce),
+    semantic: mergeSemanticChunkingConfig(base.semantic, overlay.semantic),
   };
 }
 

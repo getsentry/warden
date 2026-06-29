@@ -1,5 +1,5 @@
 import type { Finding, UsageStats, SkippedFile, RetryConfig, ErrorCode, HunkFailure, HunkTrace } from '../types/index.js';
-import type { HunkWithContext } from '../diff/index.js';
+import type { ReviewChunk } from '../diff/index.js';
 import type { ChunkingConfig, Effort, IgnoreConfig, ScanConfig } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
 import type { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
@@ -146,18 +146,27 @@ export interface SkillRunnerOptions {
   postProcessFindings?: boolean;
   /** Trigger name to attach to skill-level telemetry when the caller has one. */
   telemetryTriggerName?: string;
-  /** Capture per-hunk runtime traces in structured run output. Defaults to false. */
+  /** Capture per-chunk runtime traces in structured run output. Defaults to false. */
   captureTraces?: boolean;
 }
 
-export type AnalysisChunkingConfig = Pick<ChunkingConfig, 'filePatterns' | 'coalesce'>;
+export type AnalysisChunkingConfig = Pick<ChunkingConfig, 'filePatterns' | 'coalesce' | 'semantic'>;
 
 /**
- * A file prepared for analysis with its hunks.
+ * A file prepared for analysis with its review chunks.
  */
 export interface PreparedFile {
   filename: string;
-  hunks: HunkWithContext[];
+  chunks: ReviewChunk[];
+}
+
+/**
+ * One scanner-facing group of review chunks.
+ */
+export interface ReviewChunkGroup {
+  displayName: string;
+  filenames: string[];
+  chunks: ReviewChunk[];
 }
 
 /**
@@ -211,6 +220,7 @@ export interface FileAnalysisCallbacks {
  */
 export interface FileAnalysisResult {
   filename: string;
+  filenames?: string[];
   findings: Finding[];
   usage: UsageStats;
   /** Number of hunks that failed to analyze */

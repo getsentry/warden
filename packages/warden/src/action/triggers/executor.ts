@@ -43,8 +43,11 @@ function toAnalysisChunkingConfig(
   if (chunking.coalesce) {
     analysisChunking.coalesce = chunking.coalesce;
   }
+  if (chunking.semantic) {
+    analysisChunking.semantic = chunking.semantic;
+  }
 
-  return analysisChunking.filePatterns || analysisChunking.coalesce
+  return analysisChunking.filePatterns || analysisChunking.coalesce || analysisChunking.semantic
     ? analysisChunking
     : undefined;
 }
@@ -105,6 +108,8 @@ export interface TriggerExecutorDeps {
   circuitBreaker?: ProviderFailureCircuitBreaker;
   /** Optional context-bound check writer. Omit for analyze mode. */
   checks?: TriggerCheckReporter;
+  /** Prepared review chunks shared by the action workflow across matching triggers. */
+  preparedFiles?: SkillTaskOptions['preparedFiles'];
 }
 
 /**
@@ -131,6 +136,47 @@ export interface TriggerResult {
 // Executor
 // -----------------------------------------------------------------------------
 
+/** Build the skill task options used by action trigger execution. */
+export function createTriggerSkillTaskOptions(
+  trigger: ResolvedTrigger,
+  deps: TriggerExecutorDeps
+): SkillTaskOptions {
+  const { context, anthropicApiKey, claudePath } = deps;
+  const failOn = trigger.failOn ?? deps.globalFailOn;
+  const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
+
+  return {
+    name: trigger.name,
+    displayName: trigger.skill,
+    triggerName: trigger.name,
+    failOn,
+    resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
+      remote: trigger.remote,
+    }),
+    context: filterContextByPaths(context, trigger.filters),
+    preparedFiles: deps.preparedFiles,
+    runnerOptions: {
+      apiKey: anthropicApiKey,
+      model: trigger.model,
+      runtime: trigger.runtime,
+      effort: trigger.effort,
+      auxiliaryModel: trigger.auxiliaryModel,
+      synthesisModel: trigger.synthesisModel,
+      maxTurns: trigger.maxTurns,
+      batchDelayMs: trigger.batchDelayMs,
+      maxContextFiles: trigger.maxContextFiles,
+      ignore: trigger.ignore,
+      scan: trigger.scan,
+      chunking: toAnalysisChunkingConfig(trigger.chunking),
+      pathToClaudeCodeExecutable: claudePath,
+      auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
+      verifyFindings: trigger.verifyFindings,
+      abortController: deps.abortController,
+      circuitBreaker: deps.circuitBreaker,
+    },
+  };
+}
+
 /**
  * Execute a single trigger and return results.
  *
@@ -148,7 +194,7 @@ export async function executeTrigger(
     async (span) => {
       span.setAttribute('gen_ai.agent.name', trigger.skill);
       span.setAttribute('warden.trigger.name', trigger.name);
-      const { context, anthropicApiKey, claudePath } = deps;
+      const { context } = deps;
 
       logGroup(`Running trigger: ${trigger.name} (skill: ${trigger.skill})`);
 
@@ -169,40 +215,11 @@ export async function executeTrigger(
       const minConfidence = trigger.minConfidence ?? 'medium';
       const requestChanges = trigger.requestChanges ?? deps.globalRequestChanges;
       const failCheck = trigger.failCheck ?? deps.globalFailCheck;
-      const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
 
       try {
         assertValidPiModelSelectors([trigger]);
 
-        const taskOptions: SkillTaskOptions = {
-          name: trigger.name,
-          displayName: trigger.skill,
-          triggerName: trigger.name,
-          failOn,
-          resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
-            remote: trigger.remote,
-          }),
-          context: filterContextByPaths(context, trigger.filters),
-          runnerOptions: {
-            apiKey: anthropicApiKey,
-            model: trigger.model,
-            runtime: trigger.runtime,
-            effort: trigger.effort,
-            auxiliaryModel: trigger.auxiliaryModel,
-            synthesisModel: trigger.synthesisModel,
-            maxTurns: trigger.maxTurns,
-            batchDelayMs: trigger.batchDelayMs,
-            maxContextFiles: trigger.maxContextFiles,
-            ignore: trigger.ignore,
-            scan: trigger.scan,
-            chunking: toAnalysisChunkingConfig(trigger.chunking),
-            pathToClaudeCodeExecutable: claudePath,
-            auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
-            verifyFindings: trigger.verifyFindings,
-            abortController: deps.abortController,
-            circuitBreaker: deps.circuitBreaker,
-          },
-        };
+        const taskOptions = createTriggerSkillTaskOptions(trigger, deps);
 
         const callbacks = createDefaultCallbacks([taskOptions], CI_OUTPUT_MODE, Verbosity.Normal);
         const fileConcurrency = deps.semaphore ? Number.MAX_SAFE_INTEGER : DEFAULT_FILE_CONCURRENCY;

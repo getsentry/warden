@@ -29,7 +29,7 @@ export { anthropicUsageToStats, apiUsageToStats } from './pricing.js';
 export type { AnthropicApiUsage } from './pricing.js';
 
 // Re-export prompt building (with legacy alias)
-export { buildHunkSystemPrompt, buildHunkUserPrompt } from './prompt.js';
+export { buildHunkSystemPrompt, buildHunkUserPrompt, buildReviewChunkUserPrompt, formatReviewChunkForAnalysis } from './prompt.js';
 export type { PRPromptContext } from './prompt.js';
 // Legacy export for backwards compatibility
 export { buildHunkSystemPrompt as buildSystemPrompt } from './prompt.js';
@@ -57,6 +57,7 @@ export type {
 
 // Re-export file preparation
 export { prepareFiles } from './prepare.js';
+export { planSemanticReviewChunks } from './semantic-chunk-planner.js';
 
 // Re-export verification utilities
 export { verifyFindings } from './verify.js';
@@ -105,6 +106,7 @@ export type {
   SkillRunnerCallbacks,
   SkillRunnerOptions,
   PreparedFile,
+  ReviewChunkGroup,
   PrepareFilesOptions,
   PrepareFilesResult,
   FileAnalysisCallbacks,

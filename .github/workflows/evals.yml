@@ -85,6 +85,8 @@ jobs:
     timeout-minutes: 90
     env:
       ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_OPENROUTER_API_KEY: ${{ secrets.WARDEN_OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.WARDEN_OPENROUTER_API_KEY }}
       EVAL_SCORE_BASELINE: "0.75"
     steps:
       - uses: actions/checkout@v4
@@ -99,8 +101,8 @@ jobs:
 
       - name: Verify eval secret
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "WARDEN_ANTHROPIC_API_KEY is required to run evals in CI" >&2
+          if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$WARDEN_OPENROUTER_API_KEY" ]; then
+            echo "OPENROUTER_API_KEY or WARDEN_OPENROUTER_API_KEY is required to run evals in CI" >&2
             exit 1
           fi
 

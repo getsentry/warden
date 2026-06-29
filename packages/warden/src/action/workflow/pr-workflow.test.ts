@@ -40,6 +40,7 @@ vi.mock('../../cli/output/tasks.js', async () => {
   return {
     ...actual,
     runSkillTask: vi.fn(),
+    prepareSemanticPlansForTasks: vi.fn(async (tasks) => tasks),
   };
 });
 
@@ -115,7 +116,7 @@ vi.mock('./base.js', async () => {
 });
 
 // Import after mocks
-import { runSkillTask } from '../../cli/output/tasks.js';
+import { prepareSemanticPlansForTasks, runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings, processDuplicateActions } from '../../output/dedup.js';
 import { evaluateFixAttempts } from '../fix-evaluation/index.js';
 import { setFailed, writeFindingsOutput } from './base.js';
@@ -126,6 +127,7 @@ import { buildFindingsOutput } from '../reporting/output.js';
 
 // Type the mocks
 const mockRunSkillTask = vi.mocked(runSkillTask);
+const mockPrepareSemanticPlansForTasks = vi.mocked(prepareSemanticPlansForTasks);
 const mockFetchExistingComments = vi.mocked(fetchExistingComments);
 const mockDeduplicateFindings = vi.mocked(deduplicateFindings);
 const mockProcessDuplicateActions = vi.mocked(processDuplicateActions);
@@ -1251,6 +1253,12 @@ describe('runPRWorkflow', () => {
         name: 'test-skill',
         displayName: 'test-skill',
       }));
+      expect(mockPrepareSemanticPlansForTasks).toHaveBeenCalledWith([
+        expect.objectContaining({
+          name: 'test-skill',
+          displayName: 'test-skill',
+        }),
+      ]);
       // When a semaphore is provided, fileConcurrency is unlimited (semaphore is the gate)
       expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
       expect(semaphore).toBeInstanceOf(Semaphore);

@@ -944,7 +944,7 @@ describe('validateFindings', () => {
     expect(validated[0]!.id).not.toBe(validated[1]!.id);
   });
 
-  it('normalizes location path to the provided filename', () => {
+  it('preserves explicit location paths for multi-file chunks', () => {
     const rawFindings = [
       {
         id: 'id-1',
@@ -952,6 +952,21 @@ describe('validateFindings', () => {
         title: 'Issue',
         description: 'Details',
         location: { path: 'wrong-path.ts', startLine: 5 },
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, 'correct-path.ts');
+    expect(validated[0]!.location!.path).toBe('wrong-path.ts');
+  });
+
+  it('defaults missing location paths to the provided filename', () => {
+    const rawFindings = [
+      {
+        id: 'id-1',
+        severity: 'medium',
+        title: 'Issue',
+        description: 'Details',
+        location: { startLine: 5 },
       },
     ];
 

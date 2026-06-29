@@ -5,7 +5,7 @@
  * Reporter spec: specs/reporters.md
  */
 
-import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode, HunkTrace } from '../../types/index.js';
+import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode, HunkTrace, SkippedFile } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
@@ -15,11 +15,12 @@ import {
   aggregateUsage,
   aggregateAuxiliaryUsage,
   postProcessFindings,
+  planSemanticReviewChunks,
   generateSummary,
   type AuxiliaryUsageEntry,
   type SkillRunnerOptions,
   type FileAnalysisCallbacks,
-  type PreparedFile,
+  type ReviewChunkGroup,
   type PRPromptContext,
   type ChunkAnalysisResult,
   type FindingProcessingEvent,
@@ -196,6 +197,26 @@ export interface SkillTaskOptions {
   context: EventContext;
   /** Options passed to the runner */
   runnerOptions?: SkillRunnerOptions;
+  /** Prepared review chunks shared across skill tasks for the same changeset. */
+  preparedFiles?: PreparedTaskFiles;
+}
+
+export interface PreparedTaskFiles {
+  groups: ReviewChunkGroup[];
+  skippedFiles: SkippedFile[];
+  semanticUsage?: UsageStats;
+}
+
+function fileReportInputsFromGroup(args: {
+  group: ReviewChunkGroup;
+  durationMs?: number;
+  usage?: UsageStats;
+}) {
+  return args.group.filenames.map((filename, index) => ({
+    filename,
+    durationMs: index === 0 ? args.durationMs : undefined,
+    usage: index === 0 ? args.usage : undefined,
+  }));
 }
 
 /**
@@ -220,7 +241,7 @@ export interface SkillProgressCallbacks {
   onSkillStart: (skill: SkillState) => void;
   onSkillUpdate: (name: string, updates: Partial<SkillState>) => void;
   onFileUpdate: (skillName: string, filename: string, updates: Partial<FileState>) => void;
-  /** Called when a hunk analysis starts (one SDK invocation per hunk) */
+  /** Called when a chunk analysis starts (one SDK invocation per review chunk) */
   onHunkStart?: (skillName: string, filename: string, hunkNum: number, totalHunks: number, lineRange: string) => void;
   onChunkComplete?: (skillName: string, chunk: ChunkAnalysisResult) => void;
   onSkillComplete: (name: string, report: SkillReport) => void;
@@ -234,12 +255,40 @@ export interface SkillProgressCallbacks {
   onExtractionResult?: (skillName: string, filename: string, lineRange: string, findingsCount: number, method: 'regex' | 'llm' | 'none') => void;
   /** Called when findings are dropped, revised, merged, or stripped after analysis */
   onFindingProcessing?: (skillName: string, event: FindingProcessingEvent) => void;
-  /** Called when hunk analysis fails (SDK error, API error, abort) */
+  /** Called when chunk analysis fails (SDK error, API error, abort) */
   onHunkFailed?: (skillName: string, filename: string, lineRange: string, error: string) => void;
   /** Called when findings extraction fails (both regex and LLM fallback failed) */
   onExtractionFailure?: (skillName: string, filename: string, lineRange: string, error: string, preview: string) => void;
   /** Called when a retry attempt is made */
   onRetry?: (skillName: string, filename: string, lineRange: string, attempt: number, maxRetries: number, error: string, delayMs: number) => void;
+}
+
+async function prepareTaskFiles(
+  context: EventContext,
+  runnerOptions: SkillRunnerOptions,
+): Promise<PreparedTaskFiles> {
+  const { files: initialPreparedFiles, skippedFiles } = prepareFiles(context, {
+    contextLines: runnerOptions.contextLines,
+    ignore: runnerOptions.ignore,
+    scan: runnerOptions.scan,
+    chunking: runnerOptions.chunking,
+  });
+  const semanticPlan = await planSemanticReviewChunks(initialPreparedFiles, context, {
+    enabled: runnerOptions.chunking?.semantic?.enabled,
+    apiKey: runnerOptions.apiKey,
+    runtime: runnerOptions.runtime,
+    model: runnerOptions.auxiliaryModel ?? runnerOptions.model,
+    maxRetries: runnerOptions.auxiliaryMaxRetries,
+    maxChunks: runnerOptions.chunking?.semantic?.maxChunks,
+    maxChunkChars: runnerOptions.chunking?.semantic?.maxChunkChars,
+    maxHunksPerChunk: runnerOptions.chunking?.semantic?.maxHunksPerChunk,
+  });
+
+  return {
+    groups: semanticPlan.groups,
+    skippedFiles,
+    semanticUsage: semanticPlan.usage,
+  };
 }
 
 /**
@@ -285,15 +334,12 @@ export async function runSkillTask(
           throw new SkillRunnerError(message, { cause: err, code: 'skill_resolution_failed' });
         }
 
-        // Prepare files (parse patches into hunks)
-        const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
-          contextLines: runnerOptions.contextLines,
-          ignore: runnerOptions.ignore,
-          scan: runnerOptions.scan,
-          chunking: runnerOptions.chunking,
-        });
+        // Prepare files into review chunks before optional semantic planning.
+        const prepared = options.preparedFiles ?? await prepareTaskFiles(context, runnerOptions);
+        const chunkGroups = prepared.groups;
+        const skippedFiles = prepared.skippedFiles;
 
-        if (preparedFiles.length === 0) {
+        if (chunkGroups.length === 0) {
           // No files to analyze - skip
           const skippedReport: SkillReport = {
             skill: skill.name,
@@ -318,11 +364,11 @@ export async function runSkillTask(
         }
 
         // Initialize file states
-        const fileStates: FileState[] = preparedFiles.map((file) => ({
-          filename: file.filename,
+        const fileStates: FileState[] = chunkGroups.map((group) => ({
+          filename: group.displayName,
           status: 'pending',
           currentHunk: 0,
-          totalHunks: file.hunks.length,
+          totalHunks: group.chunks.length,
           findings: [],
         }));
 
@@ -338,7 +384,7 @@ export async function runSkillTask(
 
         // Build PR context for inclusion in prompts (if available)
         // For non-PR contexts (CLI file/diff mode), skip the "Other Files" list to avoid
-        // bloating every hunk prompt with thousands of filenames.
+        // bloating every chunk prompt with thousands of filenames.
         const isPullRequest = context.pullRequest ? context.pullRequest.number !== 0 : false;
         const prContext: PRPromptContext | undefined = context.pullRequest
           ? {
@@ -350,8 +396,8 @@ export async function runSkillTask(
           : undefined;
 
         // Process files with concurrency
-        const processFile = async (prepared: PreparedFile, index: number): Promise<FileProcessResult> => {
-          const filename = prepared.filename;
+        const processFile = async (group: ReviewChunkGroup, index: number): Promise<FileProcessResult> => {
+          const filename = group.displayName;
           const fileStartTime = Date.now();
 
           // Update file state to running (local + callback)
@@ -437,7 +483,7 @@ export async function runSkillTask(
 
           const result = await analyzeFile(
             skill,
-            prepared,
+            group,
             context.repoPath,
             runnerOptions,
             fileCallbacks,
@@ -474,7 +520,7 @@ export async function runSkillTask(
         const processSkippedFile = (index: number): FileProcessResult => {
           const localState = fileStates[index];
           if (localState) localState.status = 'skipped';
-          const filename = preparedFiles[index]?.filename ?? 'unknown';
+          const filename = chunkGroups[index]?.displayName ?? 'unknown';
           callbacks.onFileUpdate(name, filename, { status: 'skipped' });
           return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0, hunkFailures: [] };
         };
@@ -485,8 +531,8 @@ export async function runSkillTask(
         // The effective concurrency for batch delay: when a semaphore gates work,
         // use its permit count (the actual concurrency limit) rather than fileConcurrency.
         const effectiveConcurrency = semaphore ? semaphore.initialPermits : fileConcurrency;
-        const allResults = await runPool(preparedFiles, fileConcurrency,
-          async (file, index) => {
+        const allResults = await runPool(chunkGroups, fileConcurrency,
+          async (group, index) => {
             if (semaphore) await semaphore.acquire();
             try {
               // Check abort after acquiring the semaphore -- the file may have
@@ -496,7 +542,7 @@ export async function runSkillTask(
               if (index >= effectiveConcurrency && batchDelayMs > 0) {
                 await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
               }
-              return await processFile(file, index);
+              return await processFile(group, index);
             } finally {
               if (semaphore) semaphore.release();
             }
@@ -516,15 +562,23 @@ export async function runSkillTask(
         const allFindings = allResults.flatMap((r) => r.findings);
         const allUsage = allResults.map((r) => r.usage).filter((u): u is UsageStats => u !== undefined);
         const allAuxEntries = allResults.flatMap((r) => r.auxiliaryUsage ?? []);
+        if (prepared.semanticUsage) {
+          allAuxEntries.push({
+            agent: 'semantic-chunk-planner',
+            usage: prepared.semanticUsage,
+            model: runnerOptions.auxiliaryModel ?? runnerOptions.model,
+            runtime: runnerOptions.runtime,
+          });
+        }
         const allTraces = allResults.flatMap((r) => r.traces ?? []);
         const totalFailedHunks = allResults.reduce((sum, r) => sum + r.failedHunks, 0);
         const totalFailedExtractions = allResults.reduce((sum, r) => sum + r.failedExtractions, 0);
         const allHunkFailures: HunkFailure[] = allResults.flatMap((r) => r.hunkFailures);
-        const totalHunks = preparedFiles.reduce((sum, f) => sum + f.hunks.length, 0);
-        // Each hunk contributes to at most one of failedHunks / failedExtractions
+        const totalHunks = chunkGroups.reduce((sum, group) => sum + group.chunks.length, 0);
+        // Each chunk contributes to at most one of failedHunks / failedExtractions
         // (mutually exclusive in analyzeFile), so summing them gives the total
-        // failed-hunk count. Counting only analysis failures would miss the
-        // scenario where every hunk's SDK call succeeded but every extraction
+        // failed chunk count. Counting only analysis failures would miss the
+        // scenario where every chunk's SDK call succeeded but every extraction
         // failed — a silent zero-findings run otherwise.
         const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
 
@@ -556,19 +610,21 @@ export async function runSkillTask(
             durationMs: duration,
             model: runnerOptions?.model,
             runtime,
-            // Preserve per-file metadata (timing, partial usage, attempted
+            // Preserve per-group metadata (timing, partial usage, attempted
             // filenames) on failure runs too — `warden runs` and JSONL
             // consumers iterate this array to count attempted files. Without
             // it, a failed run shows totalFiles: 0.
-            files: preparedFiles.map((file, i) => {
-              const r = allResults[i];
-              return {
-                filename: file.filename,
-                findings: r?.findings.length ?? 0,
-                durationMs: r?.durationMs,
-                usage: r?.usage,
-              };
-            }),
+            files: buildFileReports(
+              chunkGroups.flatMap((group, i) => {
+                const r = allResults[i];
+                return fileReportInputsFromGroup({
+                  group,
+                  durationMs: r?.durationMs,
+                  usage: r?.usage,
+                });
+              }),
+              allFindings,
+            ),
             failedHunks: totalFailedHunks,
             hunkFailures: allHunkFailures,
             error: {
@@ -630,13 +686,13 @@ export async function runSkillTask(
           model: runnerOptions?.model,
           runtime,
           files: buildFileReports(
-            preparedFiles.map((file, i) => {
+            chunkGroups.flatMap((group, i) => {
               const r = allResults[i];
-              return {
-                filename: file.filename,
+              return fileReportInputsFromGroup({
+                group,
                 durationMs: r?.durationMs,
                 usage: r?.usage,
-              };
+              });
             }),
             finalFindings,
           ),
@@ -865,7 +921,7 @@ export function createDefaultCallbacks(
           debugLog(mode, formatFindingProcessingEvent(event));
         }
       : undefined,
-    // Verbose mode: show per-hunk analysis failures (spec: event #16 hunk_failed)
+    // Verbose mode: show per-chunk analysis failures (spec: event #16 hunk_failed)
     onHunkFailed: verbosity >= Verbosity.Verbose
       ? (_skillName, filename, lineRange, error) => {
           const location = `${filename}:${lineRange}`;
@@ -876,7 +932,7 @@ export function createDefaultCallbacks(
           }
         }
       : undefined,
-    // Verbose mode: show per-hunk extraction failures (spec: event #17 extraction_failure)
+    // Verbose mode: show per-chunk extraction failures (spec: event #17 extraction_failure)
     onExtractionFailure: verbosity >= Verbosity.Verbose
       ? (_skillName, filename, lineRange, error, preview) => {
           const location = `${filename}:${lineRange}`;
@@ -971,6 +1027,85 @@ export function composeTasksWithFailFast(
   }));
 }
 
+function semanticContextKey(context: EventContext): object {
+  const pullRequest = context.pullRequest
+    ? {
+        number: context.pullRequest.number,
+        title: context.pullRequest.title,
+        body: context.pullRequest.body,
+        headSha: context.pullRequest.headSha,
+        baseSha: context.pullRequest.baseSha,
+        files: [...context.pullRequest.files]
+          .map((file) => ({
+            filename: file.filename,
+            status: file.status,
+            additions: file.additions,
+            deletions: file.deletions,
+            patch: file.patch,
+            chunks: file.chunks,
+          }))
+          .sort((a, b) => a.filename.localeCompare(b.filename)),
+      }
+    : undefined;
+
+  return {
+    eventType: context.eventType,
+    action: context.action,
+    label: context.label,
+    repoPath: context.repoPath,
+    diffContextSource: context.diffContextSource,
+    repository: context.repository,
+    pullRequest,
+  };
+}
+
+function semanticPlanKey(task: SkillTaskOptions): string | undefined {
+  if (!task.runnerOptions?.chunking?.semantic?.enabled) return undefined;
+  return JSON.stringify({
+    context: semanticContextKey(task.context),
+    contextLines: task.runnerOptions.contextLines,
+    ignore: task.runnerOptions.ignore,
+    scan: task.runnerOptions.scan,
+    chunking: task.runnerOptions.chunking,
+    apiKey: Boolean(task.runnerOptions.apiKey),
+    runtime: task.runnerOptions.runtime,
+    model: task.runnerOptions.auxiliaryModel ?? task.runnerOptions.model,
+    auxiliaryMaxRetries: task.runnerOptions.auxiliaryMaxRetries,
+  });
+}
+
+/** Share semantic chunk planning across skill tasks for the same changeset. */
+export async function prepareSemanticPlansForTasks(tasks: SkillTaskOptions[]): Promise<SkillTaskOptions[]> {
+  const plansByKey = new Map<string, Promise<PreparedTaskFiles>>();
+  const chargedPlans = new Set<string>();
+
+  return Promise.all(tasks.map(async (task) => {
+    const key = semanticPlanKey(task);
+    if (!key || task.preparedFiles) {
+      return task;
+    }
+
+    let plan = plansByKey.get(key);
+    if (!plan) {
+      plan = prepareTaskFiles(task.context, task.runnerOptions ?? {});
+      plansByKey.set(key, plan);
+    }
+
+    const chargeSemanticUsage = !chargedPlans.has(key);
+    chargedPlans.add(key);
+
+    const preparedFiles = await plan;
+
+    return {
+      ...task,
+      preparedFiles: {
+        ...preparedFiles,
+        semanticUsage: chargeSemanticUsage ? preparedFiles.semanticUsage : undefined,
+      },
+    };
+  }));
+}
+
 /**
  * Launch all skill tasks in parallel using a shared semaphore for concurrency.
  */
@@ -1035,8 +1170,9 @@ export async function runSkillTasks(
 
   const circuitAbortController = new AbortController();
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
+  const plannedTasks = await prepareSemanticPlansForTasks(tasks);
   const composedTasks = composeTasksWithFailFast(
-    tasks,
+    plannedTasks,
     failFastController,
     circuitBreaker,
     circuitAbortController,

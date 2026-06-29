@@ -6,13 +6,20 @@ import {
   VerificationEvalOutputSchema,
 } from './verify.js';
 import { formatEvalTestName } from './names.js';
+import {
+  DEFAULT_EVAL_RUNTIME,
+  defaultEvalModel,
+  getEvalProviderApiKey,
+  getEvalRuntimeApiKey,
+} from './auth.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+const model = defaultEvalModel();
+const apiKey = getEvalRuntimeApiKey(model);
 const evals = discoverVerificationEvalScenarios({
   category: 'verification',
   skill: '../warden/src/builtin-skills/security-review/SKILL.md',
-  runtime: 'pi',
-  model: 'anthropic/claude-sonnet-4-6',
+  runtime: DEFAULT_EVAL_RUNTIME,
+  model,
 });
 
 describeEval(
@@ -24,7 +31,7 @@ describeEval(
     }),
     judges: [createVerificationEvalJudge()],
     judgeThreshold: 1,
-    skipIf: () => !apiKey,
+    skipIf: () => !getEvalRuntimeApiKey(model) && !getEvalProviderApiKey(model),
   },
   (it) => {
     for (const meta of evals) {

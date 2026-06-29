@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll, afterAll } from 'vitest';
 import { APIError } from '@anthropic-ai/sdk';
 import type { SkillDefinition } from '../config/schema.js';
-import type { HunkWithContext } from '../diff/index.js';
+import { reviewChunkFromHunk, type HunkWithContext } from '../diff/index.js';
 import type { EventContext, Finding, UsageStats } from '../types/index.js';
 import { analyzeFile, buildSourceSnippet, filterOutOfRangeFindings, runSkill } from './analyze.js';
 import type { PreparedFile } from './types.js';
@@ -30,14 +30,14 @@ afterAll(async () => {
   await Sentry.close(0);
 });
 
-function makeFinding(startLine: number, id = `f-${startLine}`): Finding {
+function makeFinding(startLine: number, id = `f-${startLine}`, path = 'file.ts'): Finding {
   return {
     id,
     severity: 'medium',
     confidence: 'high',
     title: `Finding at line ${startLine}`,
     description: 'test',
-    location: { path: 'file.ts', startLine },
+    location: { path, startLine },
   };
 }
 
@@ -81,7 +81,7 @@ function makePreparedFile(hunkCount = 1): PreparedFile {
   });
   return {
     filename: 'src/example.ts',
-    hunks,
+    chunks: hunks.map(reviewChunkFromHunk),
   };
 }
 
@@ -237,6 +237,27 @@ describe('filterOutOfRangeFindings', () => {
     expect(dropped).toEqual([belowRange, aboveRange]);
   });
 
+  it('filters findings against multi-file changed line maps', () => {
+    const firstFileFinding = makeFinding(15, 'first-file', 'src/one.ts');
+    const secondFileFinding = makeFinding(42, 'second-file', 'src/two.ts');
+    const wrongFileFinding = makeFinding(15, 'wrong-file', 'src/three.ts');
+    const partialRangeFinding: Finding = {
+      ...makeFinding(42, 'partial-range', 'src/two.ts'),
+      location: { path: 'src/two.ts', startLine: 42, endLine: 45 },
+    };
+
+    const { filtered, dropped } = filterOutOfRangeFindings(
+      [firstFileFinding, secondFileFinding, wrongFileFinding, partialRangeFinding],
+      [
+        { path: 'src/one.ts', start: 10, end: 20 },
+        { path: 'src/two.ts', start: 40, end: 43 },
+      ],
+    );
+
+    expect(filtered).toEqual([firstFileFinding, secondFileFinding]);
+    expect(dropped).toEqual([wrongFileFinding, partialRangeFinding]);
+  });
+
   it('returns empty arrays for empty input', () => {
     const { filtered, dropped } = filterOutOfRangeFindings([], hunkRange);
     expect(filtered).toEqual([]);
@@ -268,10 +289,10 @@ describe('buildSourceSnippet', () => {
       language: 'typescript',
     };
 
-    const snippet = buildSourceSnippet(makeFinding(11), hunk, 2);
+    const snippet = buildSourceSnippet(makeFinding(11, 'f-11', 'src/example.ts'), reviewChunkFromHunk(hunk), 2);
 
     expect(snippet).toEqual({
-      path: 'file.ts',
+      path: 'src/example.ts',
       language: 'typescript',
       startLine: 9,
       endLine: 13,
@@ -304,7 +325,7 @@ describe('buildSourceSnippet', () => {
       language: 'typescript',
     };
 
-    const snippet = buildSourceSnippet(makeFinding(10), hunk, 1);
+    const snippet = buildSourceSnippet(makeFinding(10, 'f-10', 'src/example.ts'), reviewChunkFromHunk(hunk), 1);
 
     expect(snippet?.lines).toEqual([
       { line: 10, content: 'newCall();', highlighted: true },
@@ -722,6 +743,73 @@ describe('runSkill', () => {
     expect(report.runtime).toBe('pi');
   });
 
+  it('sends planner-provided semantic chunks to the scanner', async () => {
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'success',
+        text: JSON.stringify({ findings: [] }),
+        errors: [],
+        usage: makeUsage(),
+      },
+    });
+    const runAuxiliaryMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve dashboard axis range',
+          summary: 'Dashboard charts now carry a widget-provided axis range through chart conversion, rendering, and tests.',
+          chunkIds: [
+            'src/example.ts:10',
+            'src/example.ts:100',
+            'src/example.ts:200',
+          ],
+        }],
+      },
+      usage: makeUsage(),
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: runSkillMock,
+      runAuxiliary: runAuxiliaryMock,
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithThreeHunks(),
+      {
+        runtime: 'pi',
+        model: 'anthropic/claude-sonnet-4-6',
+        chunking: {
+          semantic: {
+            enabled: true,
+            maxChunks: 20,
+            maxChunkChars: 30000,
+            maxHunksPerChunk: 50,
+            preferWholeFileBelowLines: 800,
+          },
+        },
+        postProcessFindings: false,
+      },
+    );
+
+    expect(runAuxiliaryMock).toHaveBeenCalledWith(expect.objectContaining({
+      task: 'semantic_chunking',
+      agentName: 'semantic-chunk-planner',
+    }));
+    expect(runSkillMock).toHaveBeenCalledTimes(1);
+    const request = runSkillMock.mock.calls[0]?.[0];
+    expect(request.userPrompt).toContain('## Semantic Summary: Dashboard charts now carry a widget-provided axis range through chart conversion, rendering, and tests.');
+    expect(request.userPrompt).toContain('- src/example.ts:10-10');
+    expect(request.userPrompt).toContain('- src/example.ts:100-100');
+    expect(request.userPrompt).toContain('- src/example.ts:200-200');
+    expect(report.auxiliaryUsageAttribution?.['semantic-chunk-planner']).toBeDefined();
+  });
+
   it('preserves candidate findings when verification is interrupted', async () => {
     const controller = new AbortController();
     const runSkillMock = vi.fn()
@@ -729,7 +817,7 @@ describe('runSkill', () => {
         result: {
           status: 'success',
           text: JSON.stringify({
-            findings: [makeFinding(10, 'candidate-finding')],
+            findings: [makeFinding(10, 'candidate-finding', 'src/example.ts')],
           }),
           errors: [],
           usage: makeUsage(),
@@ -777,7 +865,7 @@ describe('runSkill', () => {
         result: {
           status: 'success',
           text: JSON.stringify({
-            findings: [makeFinding(10, 'first-finding')],
+            findings: [makeFinding(10, 'first-finding', 'src/example.ts')],
           }),
           errors: [],
           usage: makeUsage(),

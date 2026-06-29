@@ -2,10 +2,10 @@ import { z } from 'zod';
 import { RuntimeNameSchema, SeveritySchema, type Finding, type RuntimeName } from '@sentry/warden';
 
 /** Default model for eval skill execution and judging. */
-export const DEFAULT_EVAL_MODEL = 'claude-sonnet-4-6';
+export const DEFAULT_EVAL_MODEL = 'openrouter/anthropic/claude-sonnet-4.6';
 
 /** Default runtime for eval skill execution. */
-export const DEFAULT_EVAL_RUNTIME: RuntimeName = 'claude';
+export const DEFAULT_EVAL_RUNTIME: RuntimeName = 'pi';
 
 /**
  * A "should find" assertion in BDD style.

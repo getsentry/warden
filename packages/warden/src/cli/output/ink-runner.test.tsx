@@ -36,6 +36,7 @@ vi.mock('ink', () => ({
 
 vi.mock('./tasks.js', () => ({
   composeTasksWithFailFast: vi.fn((tasks) => tasks),
+  prepareSemanticPlansForTasks: vi.fn(async (tasks) => tasks),
   runComposedSkillTasks: mockRunComposedSkillTasks,
 }));
 

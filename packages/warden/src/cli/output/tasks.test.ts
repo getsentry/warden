@@ -6,7 +6,7 @@ import type { OutputMode } from './tty.js';
 import type { SkillReport, Finding, HunkFailure } from '../../types/index.js';
 import type { SkillTaskOptions } from './tasks.js';
 import type { FileAnalysisResult } from '../../sdk/types.js';
-import type { HunkWithContext } from '../../diff/index.js';
+import type { ReviewChunk } from '../../diff/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Semaphore, runPool } from '../../utils/index.js';
 import { SkillRunnerError, WardenAuthenticationError } from '../../sdk/errors.js';
@@ -40,6 +40,23 @@ function makeTask(name: string, displayName?: string): SkillTaskOptions {
     displayName,
     resolveSkill: vi.fn(),
     context: {} as SkillTaskOptions['context'],
+  };
+}
+
+function makeReviewChunk(path = 'a.ts', start = 1, end = 10): ReviewChunk {
+  return {
+    id: `${path}:${start}-${end}`,
+    title: `${path}:${start}-${end}`,
+    summary: `Changes in ${path}`,
+    files: [{
+      path,
+      language: 'typescript',
+      changedRanges: [{ path, start, end }],
+      content: '@@ -1,1 +1,1 @@\n-old\n+new',
+      contentMode: 'raw-hunks',
+      sourceLines: [{ line: start, content: 'new' }],
+    }],
+    changedLineMap: [{ path, start, end }],
   };
 }
 
@@ -663,12 +680,10 @@ describe('runSkillTasks', () => {
   it('does not fail-fast on findings rejected by post-processing', async () => {
     const candidate = makeFinding();
     const controller = new AbortController();
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
 
     const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
     const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
@@ -711,15 +726,107 @@ describe('runSkillTasks', () => {
     postProcessFindings.mockRestore();
   });
 
+  it('shares semantic planning across skill tasks for the same changeset', async () => {
+    const fakeChunk = makeReviewChunk('a.ts', 1, 1);
+    const context = {
+      eventType: 'pull_request',
+      repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+      repoPath: '/tmp',
+      pullRequest: {
+        number: 1,
+        title: 't',
+        body: '',
+        author: 'octocat',
+        baseBranch: 'main',
+        headBranch: 'feature',
+        headSha: 'abc',
+        baseSha: 'def',
+        files: [{
+          filename: 'a.ts',
+          status: 'modified',
+          additions: 1,
+          deletions: 1,
+          patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+        }],
+      },
+    } as unknown as SkillTaskOptions['context'];
+    const copiedContext = {
+      ...context,
+      repository: { ...context.repository },
+      pullRequest: {
+        ...context.pullRequest,
+        files: [...(context.pullRequest?.files ?? [])],
+      },
+    } as SkillTaskOptions['context'];
+    const runnerOptions: SkillTaskOptions['runnerOptions'] = {
+      chunking: {
+        semantic: {
+          enabled: true,
+          maxChunks: 20,
+          maxChunkChars: 30000,
+          maxHunksPerChunk: 50,
+          preferWholeFileBelowLines: 800,
+        },
+      },
+      postProcessFindings: false,
+    };
+
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
+      skippedFiles: [],
+    });
+    const planSemanticReviewChunks = vi.spyOn(sdkRunner, 'planSemanticReviewChunks').mockResolvedValue({
+      groups: [{ displayName: 'a.ts', filenames: ['a.ts'], chunks: [fakeChunk] }],
+      usage: { inputTokens: 10, outputTokens: 5, costUSD: 0.001 },
+    });
+    const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    } satisfies FileAnalysisResult);
+
+    const results = await runSkillTasks([
+      {
+        name: 'skill-a',
+        resolveSkill: async () => ({ name: 'skill-a', description: '', prompt: '' }),
+        context,
+        runnerOptions,
+      },
+      {
+        name: 'skill-b',
+        resolveSkill: async () => ({ name: 'skill-b', description: '', prompt: '' }),
+        context: copiedContext,
+        runnerOptions,
+      },
+    ], {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 2,
+    });
+
+    expect(prepareFiles).toHaveBeenCalledTimes(1);
+    expect(planSemanticReviewChunks).toHaveBeenCalledTimes(1);
+    expect(analyzeFile).toHaveBeenCalledTimes(2);
+    expect(results).toHaveLength(2);
+    expect(results.filter((result) =>
+      Boolean(result.report?.auxiliaryUsage?.['semantic-chunk-planner'])
+    )).toHaveLength(1);
+
+    prepareFiles.mockRestore();
+    planSemanticReviewChunks.mockRestore();
+    analyzeFile.mockRestore();
+  });
+
   it('fail-fast aborts after final findings are post-processed', async () => {
     const finalFinding = makeFinding();
     const controller = new AbortController();
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
 
     const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
     const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
@@ -821,15 +928,13 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
   });
 
   it('synthesizes a report with error.code=auth_failed when every hunk fails with auth errors', async () => {
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
     const hunkFailures: HunkFailure[] = [
       { type: 'analysis', filename: 'a.ts', lineRange: '1-10', code: 'auth_failed', message: 'bad key' },
     ];
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
 
@@ -877,10 +982,10 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
   });
 
   it('preserves auth_failed when all analysis failures are auth alongside extraction failures', async () => {
-    const fakeHunks = [
-      { hunk: { newStart: 1, newCount: 10 } },
-      { hunk: { newStart: 20, newCount: 5 } },
-    ] as unknown as HunkWithContext[];
+    const fakeChunks = [
+      makeReviewChunk('a.ts', 1, 10),
+      makeReviewChunk('a.ts', 20, 24),
+    ];
     const hunkFailures: HunkFailure[] = [
       { type: 'analysis', filename: 'a.ts', lineRange: '1-10', code: 'auth_failed', message: 'bad key' },
       {
@@ -893,7 +998,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     ];
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: fakeHunks }],
+      files: [{ filename: 'a.ts', chunks: fakeChunks }],
       skippedFiles: [],
     });
     vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
@@ -926,9 +1031,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
   });
 
   it('synthesizes provider_unavailable when every hunk fails with provider errors', async () => {
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
     const hunkFailures: HunkFailure[] = [
       {
         type: 'analysis',
@@ -940,7 +1043,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     ];
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
     vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
@@ -972,9 +1075,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
   });
 
   it('preserves invalid_model_selector when every hunk fails from Pi model validation', async () => {
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
     const hunkFailures: HunkFailure[] = [
       {
         type: 'analysis',
@@ -986,7 +1087,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     ];
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
     vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
@@ -1018,16 +1119,14 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
   });
 
   it('ignores unrelated circuit state when this skill completed without failures', async () => {
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
     const circuitBreaker = new ProviderFailureCircuitBreaker({
       maxConsecutiveProviderFailures: 1,
     });
     circuitBreaker.recordFailure('provider_unavailable', 'temporary outage');
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
     vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
@@ -1070,9 +1169,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     // If every hunk fails extraction (SDK call succeeds, parsing fails)
     // then failedHunks is 0 — naive `failedHunks === totalHunks` checks
     // would silently produce a "0 findings" run. Detection must sum both.
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
     const hunkFailures: HunkFailure[] = [
       {
         type: 'extraction',
@@ -1084,7 +1181,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     ];
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
 
@@ -1119,16 +1216,14 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
   });
 
   it('does not convert user interruption into all_hunks_failed', async () => {
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
     const hunkFailures: HunkFailure[] = [
       { type: 'analysis', filename: 'a.ts', lineRange: '1-10', code: 'aborted', message: 'Analysis aborted' },
     ];
     const controller = new AbortController();
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
 
@@ -1237,13 +1332,11 @@ describe('runSkillTask model lanes', () => {
   });
 
   it('passes model lanes to shared finding post-processing', async () => {
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeChunk = makeReviewChunk();
     const finding = makeFinding();
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
     vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({

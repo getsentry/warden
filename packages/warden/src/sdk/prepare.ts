@@ -5,7 +5,8 @@ import {
   classifyFile,
   coalesceHunks,
   splitLargeHunks,
-  type HunkWithContext,
+  reviewChunkFromHunk,
+  type ReviewChunk,
 } from '../diff/index.js';
 import type { PreparedFile, PrepareFilesOptions, PrepareFilesResult } from './types.js';
 import { applyScanPolicy } from './scan-policy.js';
@@ -18,25 +19,27 @@ function matchingChunkingSkipPattern(
 }
 
 /**
- * Group hunks by filename into PreparedFile entries.
+ * Group review chunks by filename into PreparedFile entries.
  */
-export function groupHunksByFile(hunks: HunkWithContext[]): PreparedFile[] {
-  const fileMap = new Map<string, HunkWithContext[]>();
+export function groupChunksByFile(chunks: ReviewChunk[]): PreparedFile[] {
+  const fileMap = new Map<string, ReviewChunk[]>();
 
-  for (const hunk of hunks) {
-    const existing = fileMap.get(hunk.filename);
+  for (const chunk of chunks) {
+    const filename = chunk.files[0]?.path;
+    if (!filename) continue;
+    const existing = fileMap.get(filename);
     if (existing) {
-      existing.push(hunk);
+      existing.push(chunk);
     } else {
-      fileMap.set(hunk.filename, [hunk]);
+      fileMap.set(filename, [chunk]);
     }
   }
 
-  return Array.from(fileMap, ([filename, fileHunks]) => ({ filename, hunks: fileHunks }));
+  return Array.from(fileMap, ([filename, chunks]) => ({ filename, chunks }));
 }
 
 /**
- * Prepare files for analysis by parsing patches into hunks with context.
+ * Prepare files for analysis by parsing patches into review chunks with context.
  * Returns files that have changes to analyze and files that were skipped.
  */
 export function prepareFiles(
@@ -50,7 +53,7 @@ export function prepareFiles(
   }
 
   const pr = context.pullRequest;
-  const allHunks: HunkWithContext[] = [];
+  const allChunks: ReviewChunk[] = [];
   const skippedFiles: SkippedFile[] = [];
 
   const scanPolicy = applyScanPolicy(pr.files, {
@@ -109,11 +112,12 @@ export function prepareFiles(
       contextLines,
       contentSource: context.diffContextSource,
     });
-    allHunks.push(...hunksWithContext);
+    const rawChunks = hunksWithContext.map(reviewChunkFromHunk);
+    allChunks.push(...rawChunks);
   }
 
   return {
-    files: groupHunksByFile(allHunks),
+    files: groupChunksByFile(allChunks),
     skippedFiles,
   };
 }

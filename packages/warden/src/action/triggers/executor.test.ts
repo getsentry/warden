@@ -198,7 +198,11 @@ describe('executeTrigger', () => {
       maxContextFiles: 12,
       ignore: { paths: ['**/fixtures/**'] },
       scan: { maxFiles: 5 },
-      chunking: { maxContextFiles: 12, filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }] },
+      chunking: {
+        maxContextFiles: 12,
+        filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
+        semantic: { enabled: true, maxChunks: 20, maxChunkChars: 30000, maxHunksPerChunk: 50, preferWholeFileBelowLines: 800 },
+      },
       auxiliaryMaxRetries: 9,
     }, {
       ...mockDeps,
@@ -211,7 +215,10 @@ describe('executeTrigger', () => {
           maxContextFiles: 12,
           ignore: { paths: ['**/fixtures/**'] },
           scan: { maxFiles: 5 },
-          chunking: { filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }] },
+          chunking: {
+            filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
+            semantic: { enabled: true, maxChunks: 20, maxChunkChars: 30000, maxHunksPerChunk: 50, preferWholeFileBelowLines: 800 },
+          },
           auxiliaryMaxRetries: 9,
         }),
       }),

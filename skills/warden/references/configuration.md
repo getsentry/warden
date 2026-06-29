@@ -84,6 +84,16 @@ pattern = "*.config.*"
 mode = "whole-file"
 ```
 
+**Group small review chunks:**
+```toml
+[defaults.chunking.semantic]
+enabled = true
+maxChunks = 20
+maxChunkChars = 30000
+maxHunksPerChunk = 50
+preferWholeFileBelowLines = 800
+```
+
 ## Model Lanes
 
 Warden uses different model lanes for different kinds of work:

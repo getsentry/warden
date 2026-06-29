@@ -89,7 +89,9 @@ export interface AuxiliaryTool {
 export type AuxiliaryTask =
   | 'extraction'
   | 'deduplication'
-  | 'fix_evaluation';
+  | 'fix_evaluation'
+  | 'semantic_chunking'
+  | 'eval_judge';
 
 export type SynthesisTask =
   | 'consolidation'

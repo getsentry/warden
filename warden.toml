@@ -2,13 +2,20 @@ version = 1
 
 [defaults]
 runtime = "pi"
-model = "anthropic/claude-sonnet-4-6"
+model = "openrouter/anthropic/claude-sonnet-4.6"
 # Fail check on high+ severity findings (critical, high)
 failOn = "high"
 # Show annotations for medium+ severity findings
 reportOn = "medium"
 # Exclude build output and internal eval fixtures from all skills
 ignorePaths = ["dist/**", "packages/evals/**"]
+
+[defaults.chunking.semantic]
+enabled = true
+maxChunks = 20
+maxChunkChars = 30000
+maxHunksPerChunk = 50
+preferWholeFileBelowLines = 800
 
 [[skills]]
 name = "security-review"

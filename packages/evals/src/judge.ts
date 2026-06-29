@@ -1,11 +1,15 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { anthropicUsageToStats, parseJsonFromOutput, type Finding, type UsageStats } from '@sentry/warden';
+import { getRuntime, type Finding, type RuntimeName, type UsageStats } from '@sentry/warden';
 import type { EvalMeta, JudgeResponse } from './types.js';
-import { DEFAULT_EVAL_MODEL, JudgeResponseSchema } from './types.js';
+import { DEFAULT_EVAL_MODEL, DEFAULT_EVAL_RUNTIME, JudgeResponseSchema } from './types.js';
 
-const JUDGE_MODEL = DEFAULT_EVAL_MODEL;
 const JUDGE_MAX_TOKENS = 4096;
 const JUDGE_TIMEOUT_MS = 30_000;
+
+export interface RunJudgeOptions {
+  apiKey?: string;
+  runtime?: RuntimeName;
+  model?: string;
+}
 
 export interface JudgeResult {
   response: JudgeResponse;
@@ -107,22 +111,24 @@ Requirements:
 export async function runJudge(
   meta: EvalMeta,
   findings: Finding[],
-  apiKey: string
+  options: RunJudgeOptions = {}
 ): Promise<JudgeResult> {
-  const client = new Anthropic({ apiKey, timeout: JUDGE_TIMEOUT_MS, maxRetries: 0 });
-
+  const runtimeName = options.runtime ?? DEFAULT_EVAL_RUNTIME;
+  const model = options.model ?? DEFAULT_EVAL_MODEL;
   const prompt = buildJudgePrompt(meta, findings);
-
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
-
-  let response: Anthropic.Message;
+  const runtime = getRuntime(runtimeName);
+  let result: Awaited<ReturnType<typeof runtime.runAuxiliary<JudgeResponse>>>;
   try {
-    response = await client.messages.create({
-      model: JUDGE_MODEL,
-      max_tokens: JUDGE_MAX_TOKENS,
-      messages,
+    result = await runtime.runAuxiliary({
+      task: 'eval_judge',
+      agentName: 'warden-eval-judge',
+      apiKey: options.apiKey,
+      prompt,
+      schema: JudgeResponseSchema,
+      model,
+      maxTokens: JUDGE_MAX_TOKENS,
+      timeout: JUDGE_TIMEOUT_MS,
+      maxRetries: 0,
     });
   } catch (error) {
     const reason = `Judge API call failed: ${error instanceof Error ? error.message : String(error)}`;
@@ -144,58 +150,36 @@ export async function runJudge(
     };
   }
 
-  const usage = anthropicUsageToStats(JUDGE_MODEL, response.usage);
-
-  const textBlock = response.content.find(
-    (b): b is Anthropic.TextBlock => b.type === 'text'
-  );
-
-  if (!textBlock) {
-    return {
-      response: buildFallbackResponse(meta, 'No text in judge response'),
-      usage,
-      error: 'No text in judge response',
-    };
-  }
-
-  const parsed = await parseJsonFromOutput({
-    output: textBlock.text,
-    schema: JudgeResponseSchema,
-  });
-
-  if (!parsed.success) {
-    const reason = `Judge response parse failed: ${parsed.error}`;
+  if (!result.success) {
+    const reason = `Judge response failed: ${result.error}`;
     return {
       response: buildFallbackResponse(meta, reason),
-      usage,
+      usage: result.usage,
       error: reason,
     };
   }
 
   // Validate array lengths match assertions
-  const judgeResp = parsed.data;
+  const judgeResp = result.data;
   if (judgeResp.expectations.length !== meta.should_find.length) {
     return {
       response: buildFallbackResponse(meta, `Judge returned ${judgeResp.expectations.length} verdicts, expected ${meta.should_find.length}`),
-      usage,
+      usage: result.usage,
       error: `Judge returned ${judgeResp.expectations.length} verdicts, expected ${meta.should_find.length}`,
     };
   }
   if (judgeResp.antiExpectations.length !== meta.should_not_find.length) {
     return {
       response: buildFallbackResponse(meta, `Judge returned ${judgeResp.antiExpectations.length} anti-verdicts, expected ${meta.should_not_find.length}`),
-      usage,
+      usage: result.usage,
       error: `Judge returned ${judgeResp.antiExpectations.length} anti-verdicts, expected ${meta.should_not_find.length}`,
     };
   }
 
-  return { response: judgeResp, usage };
+  return { response: judgeResp, usage: result.usage };
 }
 
-/**
- * Build a fallback judge response when parsing fails.
- * Marks all assertions as not met with the error reason.
- */
+/** Build a failed judge response when the judge cannot produce a usable verdict. */
 function buildFallbackResponse(meta: EvalMeta, reason: string): JudgeResponse {
   return {
     expectations: meta.should_find.map(() => ({

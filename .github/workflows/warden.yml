@@ -18,6 +18,8 @@ jobs:
       WARDEN_MODEL: anthropic/claude-sonnet-4-6
       WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
       WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_OPENROUTER_API_KEY: ${{ secrets.WARDEN_OPENROUTER_API_KEY || secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.WARDEN_OPENROUTER_API_KEY }}
       WARDEN_SENTRY_DSN: ${{ secrets.WARDEN_SENTRY_DSN }}
     steps:
       - uses: actions/checkout@v4
