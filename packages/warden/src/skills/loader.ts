@@ -58,6 +58,7 @@ export const BUILTIN_SKILL_DIRECTORIES = [
 export const BUILTIN_SKILL_NAMES = [
   'code-review',
   'security-review',
+  'dos-review',
 ] as const;
 
 const BUILTIN_SKILL_NAME_SET = new Set<string>(BUILTIN_SKILL_NAMES);

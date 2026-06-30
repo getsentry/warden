@@ -20,6 +20,7 @@ Out of scope:
 - Full dependency CVE triage without reachable changed code.
 - Compliance checklists, infrastructure-only policy review, or exhaustive cloud IAM audits.
 - Style, maintainability, performance, or non-security correctness bugs.
+- Availability / denial-of-service (unbounded allocation, decompression bombs, uncontrolled recursion, resource exhaustion) — routed to the `dos-review` skill.
 - Benchmark-specific prompt compatibility.
 - Large language-specific catalogs in `SKILL.md`.
 
