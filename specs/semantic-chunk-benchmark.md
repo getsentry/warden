@@ -230,6 +230,11 @@ implementation and test-update chunks makes the scanner evaluate a coherent
 intentional migration, while raw hunk mode caught an isolated assertion removal
 as masking a regression.
 
+Rejected follow-up experiments isolated changed test assertions as scanner
+chunks. Those runs restored findings, but the rule was too benchmark-specific
+and worked against the broader goal: semantic grouping should collapse repeated
+small similar hunks into precise scanner slices, not special-case test syntax.
+
 ## Acceptance
 
 Before using this benchmark to make decisions:

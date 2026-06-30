@@ -212,6 +212,7 @@ function buildSemanticChunkPlanningPrompt(
     '',
     'Group atomic git chunks into semantic changes.',
     'A semantic change should contain chunks that a reviewer should understand together: one behavior change, API contract, data flow, migration, validation rule, or test expectation.',
+    'Collapse repeated small similar hunks into one semantic change when they apply the same transformation, update the same contract, or repeat the same expectation across call sites.',
     'For each planned group, write a semantic delta summary: what behavior, contract, data flow, API, or test expectation changed.',
     'Do not restate filenames or line ranges. Do not say "lines 10, 100, 200".',
     'Do not summarize the input shape. Explain the product, security, data-flow, API, or test behavior being changed.',

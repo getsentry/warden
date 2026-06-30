@@ -27,6 +27,17 @@ type SemanticChunkingEvalInput = z.infer<typeof SemanticChunkingEvalInputSchema>
 
 const SemanticChunkingEvalOutputSchema = z.object({
   atomicChunkCount: z.number().int().nonnegative(),
+  groups: z.array(z.object({
+    displayName: z.string(),
+    files: z.array(z.string()),
+    changedLineMap: z.array(z.object({
+      path: z.string(),
+      start: z.number().int(),
+      end: z.number().int(),
+    })),
+    summary: z.string().optional(),
+    scannerChunkCount: z.number().int().positive(),
+  })),
   chunks: z.array(z.object({
     summary: z.string().optional(),
     files: z.array(z.string()),
@@ -143,6 +154,13 @@ function createSemanticChunkingHarness(): Harness<SemanticChunkingEvalInput, Jso
         const chunks = planned.groups.flatMap((group) => group.chunks);
         const output = {
           atomicChunkCount: atomicChunks.length,
+          groups: planned.groups.map((group) => ({
+            displayName: group.displayName,
+            files: group.filenames,
+            changedLineMap: group.chunks.flatMap((chunk) => chunk.changedLineMap),
+            summary: group.chunks.find((chunk) => chunk.summary)?.summary,
+            scannerChunkCount: group.chunks.length,
+          })),
           chunks: chunks.map((chunk) => ({
             summary: chunk.summary,
             files: chunk.files.map((file) => file.path),
@@ -193,30 +211,31 @@ function createSemanticChunkingJudge() {
     }
 
     const chunks = output.data.chunks;
-    const crossFileChunk = chunks.find((chunk) => chunk.files.length > 1);
-    const summaryText = chunks.map((chunk) => chunk.summary ?? '').join(' ');
+    const groups = output.data.groups;
+    const crossFileGroup = groups.find((group) => group.files.length > 1);
+    const summaryText = groups.map((group) => group.summary ?? '').join(' ');
     const hasSemanticSummary = /axisRange|axis range|range/i.test(summaryText)
       && /widget|convert|render|chart/i.test(summaryText)
       && !/lines?\s+\d+/i.test(summaryText)
       && !/\b10\b.*\b80\b.*\b140\b/.test(summaryText);
-    const hasExpectedLineMap = Boolean(crossFileChunk)
+    const hasExpectedLineMap = Boolean(crossFileGroup)
       && [
         { path: 'src/dashboard.ts', start: 10, end: 10 },
         { path: 'src/dashboard.ts', start: 80, end: 80 },
         { path: 'src/dashboard.ts', start: 140, end: 140 },
         { path: 'tests/dashboard.test.ts', start: 220, end: 220 },
       ].every((range) =>
-        crossFileChunk?.changedLineMap.some((actual) =>
+        crossFileGroup?.changedLineMap.some((actual) =>
           actual.path === range.path && actual.start === range.start && actual.end === range.end
         )
       );
-    const crossFileContent = crossFileChunk?.content ?? '';
-    const hasExpectedContent = Boolean(crossFileChunk)
-      && crossFileContent.includes('convertWidgetToChart(widget, range)')
-      && crossFileContent.includes('renderChart(chart, series, range)')
-      && crossFileContent.includes('expect(rendered.range).toEqual(customAxisRange)');
+    const allContent = chunks.map((chunk) => chunk.content).join('\n');
+    const hasExpectedContent = Boolean(crossFileGroup)
+      && allContent.includes('convertWidgetToChart(widget, range)')
+      && allContent.includes('renderChart(chart, series, range)')
+      && allContent.includes('expect(rendered.range).toEqual(customAxisRange)');
     const reducedChunks = chunks.length < output.data.atomicChunkCount;
-    const passed = reducedChunks && Boolean(crossFileChunk) && hasExpectedLineMap
+    const passed = reducedChunks && Boolean(crossFileGroup) && hasExpectedLineMap
       && hasSemanticSummary && hasExpectedContent;
 
     return {
@@ -227,7 +246,7 @@ function createSemanticChunkingJudge() {
           : 'Planner did not produce the expected semantic cross-file chunk.',
         atomicChunkCount: output.data.atomicChunkCount,
         chunkCount: chunks.length,
-        hasCrossFileChunk: Boolean(crossFileChunk),
+        hasCrossFileGroup: Boolean(crossFileGroup),
         hasExpectedLineMap,
         hasSemanticSummary,
         hasExpectedContent,
@@ -252,7 +271,7 @@ describeEval(
 
       expect(output.atomicChunkCount).toBe(4);
       expect(chunks.length).toBeLessThan(output.atomicChunkCount);
-      expect(chunks.some((chunk) => chunk.files.length > 1)).toBe(true);
+      expect(output.groups.some((group) => group.files.length > 1)).toBe(true);
     });
   },
 );
