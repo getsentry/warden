@@ -226,7 +226,13 @@ export async function evaluateFix(
   const prompt = buildPrompt(input);
   const executeTool = createToolExecutor(context);
 
-  const result = await getRuntime(runtimeOptions.runtime).runAuxiliary({
+  // Resolve one effective runtime so getRuntime and getRuntimeProviderOptions
+  // never diverge. getRuntime defaults an omitted runtime to 'pi'; previously the
+  // provider-options lookup defaulted to 'claude', so on the omitted-runtime path
+  // the call ran on Pi but built Claude-shaped options and silently dropped any
+  // custom providers.
+  const runtime = runtimeOptions.runtime ?? 'pi';
+  const result = await getRuntime(runtime).runAuxiliary({
     task: 'fix_evaluation',
     agentName: input.skillName,
     apiKey,
@@ -237,7 +243,7 @@ export async function evaluateFix(
     model: runtimeOptions.model,
     maxIterations: 5,
     maxRetries: runtimeOptions.maxRetries,
-    providerOptions: getRuntimeProviderOptions(runtimeOptions.runtime ?? 'claude', { providers: runtimeOptions.providers }),
+    providerOptions: getRuntimeProviderOptions(runtime, { providers: runtimeOptions.providers }),
   });
 
   if (result.success) {
