@@ -139,6 +139,60 @@ function materializePlannedChunk(
   };
 }
 
+function reviewChunkContentChars(chunk: ReviewChunk): number {
+  return chunk.files.reduce((sum, file) => sum + file.content.length, 0);
+}
+
+function plannedChunkTitle(title: string, partIndex: number, totalParts: number): string {
+  return totalParts <= 1 ? title : `${title} (${partIndex}/${totalParts})`;
+}
+
+function splitPlannedChunks(
+  startIndex: number,
+  title: string,
+  summary: string,
+  chunks: ReviewChunk[],
+  limits: { maxChunkChars: number; maxHunksPerChunk: number }
+): ReviewChunk[] {
+  const batches: ReviewChunk[][] = [];
+  let current: ReviewChunk[] = [];
+
+  const pushCurrent = () => {
+    if (current.length > 0) {
+      batches.push(current);
+      current = [];
+    }
+  };
+
+  for (const chunk of chunks) {
+    if (current.length === 0) {
+      current = [chunk];
+      continue;
+    }
+
+    const candidate = [...current, chunk];
+    const candidateChunk = materializePlannedChunk(startIndex + batches.length, title, summary, candidate);
+    const exceedsHunks = candidate.length > limits.maxHunksPerChunk;
+    const exceedsChars = reviewChunkContentChars(candidateChunk) > limits.maxChunkChars;
+
+    if (exceedsHunks || exceedsChars) {
+      pushCurrent();
+      current = [chunk];
+    } else {
+      current = candidate;
+    }
+  }
+
+  pushCurrent();
+
+  return batches.map((batch, batchIndex) => materializePlannedChunk(
+    startIndex + batchIndex,
+    plannedChunkTitle(title, batchIndex + 1, batches.length),
+    summary,
+    batch,
+  ));
+}
+
 function groupFromPreparedFile(file: PreparedFile): ReviewChunkGroup {
   const filenames = [...new Set(file.chunks.flatMap((chunk) => chunk.files.map((chunkFile) => chunkFile.path)))];
   return {
@@ -204,13 +258,7 @@ export async function planSemanticReviewChunks(
     );
   }
 
-  for (const [index, group] of result.data.groups.entries()) {
-    if (group.chunkIds.length > maxHunksPerChunk) {
-      throw new SkillRunnerError(
-        `Semantic chunk planning returned ${group.chunkIds.length} chunks in one group, exceeding maxHunksPerChunk ${maxHunksPerChunk}`,
-        { code: 'sdk_error' },
-      );
-    }
+  for (const group of result.data.groups) {
     const groupChunks: ReviewChunk[] = [];
     for (const chunkId of group.chunkIds) {
       if (seen.has(chunkId)) {
@@ -227,15 +275,10 @@ export async function planSemanticReviewChunks(
       seen.add(chunkId);
       groupChunks.push(chunk);
     }
-    const plannedChunk = materializePlannedChunk(index, group.title, group.summary, groupChunks);
-    const plannedChunkChars = plannedChunk.files.reduce((sum, file) => sum + file.content.length, 0);
-    if (plannedChunkChars > maxChunkChars) {
-      throw new SkillRunnerError(
-        `Semantic chunk planning returned a ${plannedChunkChars} character group, exceeding maxChunkChars ${maxChunkChars}`,
-        { code: 'sdk_error' },
-      );
-    }
-    plannedChunks.push(plannedChunk);
+    plannedChunks.push(...splitPlannedChunks(plannedChunks.length, group.title, group.summary, groupChunks, {
+      maxChunkChars,
+      maxHunksPerChunk,
+    }));
   }
 
   const missing = chunks.filter((chunk) => !seen.has(chunk.id));

@@ -133,14 +133,14 @@ describe('planSemanticReviewChunks', () => {
     expect(prompt).toContain('Do not restate filenames or line ranges.');
   });
 
-  it('rejects planned groups that exceed maxChunkChars after materialization', async () => {
+  it('splits planned groups that exceed maxChunkChars after materialization', async () => {
     runAuxiliary.mockResolvedValueOnce({
       success: true,
       data: {
         groups: [{
           title: 'Preserve dashboard axis range',
           summary: 'Dashboard charts now carry a widget-provided axis range through chart construction and assert that custom range in tests.',
-          chunkIds: ['src/dashboard.ts:10', 'src/dashboard.ts:100'],
+          chunkIds: ['src/dashboard.ts:10', 'src/dashboard.ts:100', 'src/dashboard.ts:200'],
         }],
       },
       usage: {
@@ -158,11 +158,23 @@ describe('planSemanticReviewChunks', () => {
     const context = makeContext();
     const prepared = prepareFiles(context);
 
-    await expect(planSemanticReviewChunks(prepared.files, context, {
+    const planned = await planSemanticReviewChunks(prepared.files, context, {
       enabled: true,
       runtime: 'pi',
-      maxChunkChars: 10,
-    })).rejects.toThrow('exceeding maxChunkChars 10');
+      maxChunkChars: 200,
+    });
+
+    expect(planned.groups).toHaveLength(3);
+    expect(planned.groups.map((group) => group.chunks[0]?.title)).toEqual([
+      'Preserve dashboard axis range (1/3)',
+      'Preserve dashboard axis range (2/3)',
+      'Preserve dashboard axis range (3/3)',
+    ]);
+    expect(planned.groups.map((group) => group.chunks[0]?.changedLineMap)).toEqual([
+      [{ path: 'src/dashboard.ts', start: 10, end: 10 }],
+      [{ path: 'src/dashboard.ts', start: 100, end: 100 }],
+      [{ path: 'src/dashboard.ts', start: 200, end: 200 }],
+    ]);
   });
 
   it('materializes semantic groups across multiple files', async () => {
