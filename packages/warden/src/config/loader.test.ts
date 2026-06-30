@@ -509,6 +509,35 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.auxiliaryModel).toBe('claude-haiku-4-5');
       expect(resolved?.synthesisModel).toBe('claude-haiku-4-5');
     });
+
+    it('inherits the top-level model for the auxiliary and synthesis lanes when unset', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          model: 'litellm/gemma-4-12b-coder',
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+
+      expect(resolved?.auxiliaryModel).toBe('litellm/gemma-4-12b-coder');
+      expect(resolved?.synthesisModel).toBe('litellm/gemma-4-12b-coder');
+    });
+
+    it('prefers explicit auxiliary and synthesis models over the inherited top-level model', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          model: 'litellm/gemma-4-12b-coder',
+          auxiliary: { model: 'litellm/cheap' },
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+
+      expect(resolved?.auxiliaryModel).toBe('litellm/cheap');
+      expect(resolved?.synthesisModel).toBe('litellm/cheap');
+    });
   });
 
   describe('minConfidence merge', () => {

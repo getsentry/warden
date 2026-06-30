@@ -202,8 +202,19 @@ Main agent model precedence, from highest to lowest:
 | `WARDEN_MODEL` | Environment fallback. |
 | SDK/runtime default | Used when no explicit model is set. |
 
-Auxiliary and synthesis models only come from `[defaults.auxiliary]` and
-`[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
+The auxiliary lane (structured extraction, dedup, merge, fix evaluation) and the
+synthesis lane prefer `[defaults.auxiliary]` and `[defaults.synthesis]`. When
+unset, they fall back to the global default model
+(`defaults.agent.model` → `defaults.model` → `--model` → `WARDEN_MODEL`), so a
+single configured model drives every lane. Synthesis falls back to the auxiliary
+model before the global default. These lanes do not inherit skill- or
+trigger-level `model` overrides, which apply to the agent lane only.
+
+This matters for self-hosted providers: setting just `defaults.model` to a
+custom-provider model (e.g. `litellm/...`) keeps the auxiliary and synthesis
+lanes on that provider too, rather than escaping to a runtime default on another
+provider. Set `[defaults.auxiliary]` explicitly only when you want those lanes on
+a different (e.g. cheaper) model.
 
 Effort is separate from model selection. For local runs,
 `--effort` overrides `defaults.agent.effort` for that

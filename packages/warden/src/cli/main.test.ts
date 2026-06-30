@@ -667,6 +667,38 @@ describe('resolveCliDefaultModel', () => {
     expect(model).toBeUndefined();
   });
 
+  it('inherits the top-level model for the auxiliary lane when unset', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({ defaults: { model: 'litellm/gemma' } }),
+    ).toBe('litellm/gemma');
+  });
+
+  it('inherits the agent model for the auxiliary lane when unset', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({ defaults: { agent: { model: 'litellm/gemma' } } }),
+    ).toBe('litellm/gemma');
+  });
+
+  it('inherits the --model flag for the auxiliary lane when nothing else is set', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({ defaults: {} }, 'litellm/gemma'),
+    ).toBe('litellm/gemma');
+  });
+
+  it('prefers an explicit auxiliary model over the inherited top-level model', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({
+        defaults: { model: 'litellm/gemma', auxiliary: { model: 'litellm/cheap' } },
+      }),
+    ).toBe('litellm/cheap');
+  });
+
+  it('inherits the top-level model for synthesis through the auxiliary fallback', () => {
+    expect(
+      resolveCliDefaultSynthesisModel({ defaults: { model: 'litellm/gemma' } }),
+    ).toBe('litellm/gemma');
+  });
+
   it('prefers synthesis defaults and falls back to auxiliary defaults', () => {
     const explicit = resolveCliDefaultSynthesisModel({
       defaults: {

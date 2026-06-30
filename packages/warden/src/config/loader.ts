@@ -497,7 +497,18 @@ export function resolveSkillConfigs(
   const result: ResolvedTrigger[] = [];
   const runtime = defaults?.runtime ?? 'pi';
   const providers = defaults?.providers;
-  const auxiliaryModel = emptyToUndefined(defaults?.auxiliary?.model);
+  // Default agent/top-level model, used as the fallback for the auxiliary and
+  // synthesis lanes so one configured model drives every lane (and self-hosted
+  // providers stay self-contained instead of escaping to a runtime default on
+  // another provider). Explicit auxiliary/synthesis models still win.
+  const defaultAgentModel =
+    emptyToUndefined(defaults?.agent?.model) ??
+    emptyToUndefined(defaults?.model) ??
+    emptyToUndefined(cliModel) ??
+    envModel;
+  const auxiliaryModel =
+    emptyToUndefined(defaults?.auxiliary?.model) ??
+    defaultAgentModel;
   const synthesisModel =
     emptyToUndefined(defaults?.synthesis?.model) ??
     auxiliaryModel;

@@ -929,20 +929,30 @@ export function resolveCliDefaultModel(
   );
 }
 
-/** Resolve the default auxiliary model used for helper and repair passes. */
+/**
+ * Resolve the default auxiliary model used for helper and repair passes.
+ * Falls back to the resolved agent/top-level model so a single configured
+ * model drives every lane (and self-hosted providers stay self-contained
+ * instead of escaping to a runtime default on another provider).
+ */
 export function resolveCliDefaultAuxiliaryModel(
-  config: Pick<WardenConfig, 'defaults'> | null | undefined
+  config: Pick<WardenConfig, 'defaults'> | null | undefined,
+  cliModel?: string
 ): string | undefined {
-  return emptyToUndefined(config?.defaults?.auxiliary?.model);
+  return (
+    emptyToUndefined(config?.defaults?.auxiliary?.model) ??
+    resolveCliDefaultModel(config, cliModel)
+  );
 }
 
 /** Resolve the default synthesis model, falling back to the auxiliary lane when unset. */
 export function resolveCliDefaultSynthesisModel(
-  config: Pick<WardenConfig, 'defaults'> | null | undefined
+  config: Pick<WardenConfig, 'defaults'> | null | undefined,
+  cliModel?: string
 ): string | undefined {
   return (
     emptyToUndefined(config?.defaults?.synthesis?.model) ??
-    resolveCliDefaultAuxiliaryModel(config)
+    resolveCliDefaultAuxiliaryModel(config, cliModel)
   );
 }
 
@@ -1100,8 +1110,8 @@ export async function runSkills(
   const repoPath = findRepoPath(cwd);
   const config = loadOptionalConfig(options, repoPath);
   const defaultModel = resolveCliDefaultModel(config, options.model);
-  const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
-  const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
+  const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config, options.model);
+  const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config, options.model);
   const defaultEffort = resolveCliEffort(config, options.effort);
   const defaultRuntime = options.runtime ?? config?.defaults?.runtime ?? 'pi';
   const pathToClaudeCodeExecutable = resolveClaudeCodeExecutablePath();
