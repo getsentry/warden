@@ -201,15 +201,19 @@ Full reverse-patch run:
 
 | Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| non-semantic, partial | 1/13 completed | 1 | 2m53s | 160,637 | 9,024 | $0.3191 |
 | semantic on, bounded groups | 5 | 0 | 10m45s | 481,391 | 34,884 | $1.2564 |
 | semantic on, bounded groups plus summary anti-bias prompt | 4 | 0 | 8m19s | 472,104 | 26,978 | $1.1046 |
 | semantic on, bounded groups plus changed-range cap | 5 | 0 | 7m24s | 432,183 | 23,708 | $0.9862 |
 
-The full reverse-patch run preserved the real patch shape but did not find the
-expected axis-range regression. This makes the case useful as a recall warning:
-semantic grouping can make a bad behavior look like a coherent migration when
-tests are changed to match it. The scanner prompt now states that semantic
-summaries are grouping hints, not evidence of correctness.
+The full non-semantic run was interrupted after one completed scanner chunk, so
+it is not a clean cost comparison. That completed chunk did find the expected
+style of regression: removing `axisRange: 'auto'` assertions masked a behavior
+break. The semantic full-patch runs preserved the real patch shape but did not
+find the expected axis-range regression. This makes the case useful as a recall
+warning: semantic grouping can make a bad behavior look like a coherent
+migration when tests are changed to match it. The scanner prompt now states
+that semantic summaries are grouping hints, not evidence of correctness.
 
 The changed-range cap run is incomplete for score comparison because one
 test-heavy scanner chunk hit `turn_limit`. It is still useful operationally: it
