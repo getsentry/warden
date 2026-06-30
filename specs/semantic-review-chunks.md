@@ -60,7 +60,7 @@ Git hunks remain the evidence and anchoring primitive. Review chunks become the
 scanner-facing primitive.
 
 Benchmarking for this work is tracked in
-[`semantic-chunk-benchmark.md`](semantic-chunk-benchmark.md).
+[`chunking-strategy-benchmark.md`](chunking-strategy-benchmark.md).
 
 ## Module Boundary
 

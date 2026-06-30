@@ -428,6 +428,61 @@ describe('planSemanticReviewChunks', () => {
     ]);
   });
 
+  it('collapses repeated tiny similar hunks into one compact scanner chunk', async () => {
+    const context = makeContext();
+    context.pullRequest!.files = [{
+      filename: 'src/repeated.ts',
+      status: 'modified',
+      additions: 5,
+      deletions: 5,
+      chunks: 5,
+      patch: [10, 60, 110, 160, 210].map((line) => [
+        `@@ -${line},1 +${line},1 @@`,
+        "-params.push({axisRange: 'auto'});",
+        '+params.push({axisRange: undefined});',
+      ].join('\n')).join('\n'),
+    }];
+
+    const prepared = prepareFiles(context);
+    const chunkIds = prepared.files.flatMap((file) => file.chunks.map((chunk) => chunk.id));
+    expect(chunkIds).toHaveLength(5);
+
+    runAuxiliary.mockResolvedValueOnce({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Update repeated axisRange defaults',
+          summary: 'Repeated call sites now pass an undefined axis range instead of the auto default.',
+          chunkIds,
+        }],
+      },
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.001,
+      },
+    });
+
+    const planned = await planSemanticReviewChunks(prepared.files, context, {
+      enabled: true,
+      runtime: 'pi',
+      maxHunksPerChunk: 2,
+      maxChangedRangesPerChunk: 2,
+    });
+
+    const chunk = planned.groups[0]?.chunks[0];
+    expect(planned.groups).toHaveLength(1);
+    expect(planned.groups[0]?.chunks).toHaveLength(1);
+    expect(chunk?.changedLineMap).toHaveLength(5);
+    expect(chunk?.files[0]?.content).toContain("params.push({axisRange: 'auto'});");
+    expect(chunk?.files[0]?.content).not.toContain('### Context Before');
+  });
+
   it('rejects atomic chunks that exceed maxChunkChars', async () => {
     runAuxiliary.mockResolvedValueOnce({
       success: true,

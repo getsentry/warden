@@ -21,6 +21,8 @@ const MAX_EMBEDDED_DIFF_RANGES = 12;
 const MAX_CHUNK_CHARS = 20000;
 const MAX_HUNKS_PER_CHUNK = 4;
 const MAX_CHANGED_RANGES_PER_CHUNK = 4;
+const SIMILAR_TINY_RANGE_MULTIPLIER = 3;
+const MAX_TINY_CHANGED_LINES = 6;
 
 export interface SemanticChunkPlanningOptions {
   enabled?: boolean;
@@ -253,11 +255,86 @@ function mergeSourceLines(chunks: ReviewChunk[], path: string) {
     .sort((a, b) => a.line - b.line);
 }
 
+function changedDiffLines(content: string): string[] {
+  return content.split('\n').filter((line) =>
+    (line.startsWith('+') || line.startsWith('-')) && !line.startsWith('+++') && !line.startsWith('---')
+  );
+}
+
+function countChangedDiffLines(chunk: ReviewChunk): number {
+  return chunk.files.reduce((sum, file) => sum + changedDiffLines(file.content).length, 0);
+}
+
+function normalizeChangedLine(line: string): string {
+  const sign = line[0];
+  return `${sign}${line
+    .slice(1)
+    .replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '<string>')
+    .replace(/\b\d+(?:\.\d+)?\b/g, '<number>')
+    .replace(/\s+/g, ' ')
+    .trim()}`;
+}
+
+function similarityKey(chunk: ReviewChunk): string | undefined {
+  if (countChangedDiffLines(chunk) > MAX_TINY_CHANGED_LINES) return undefined;
+
+  const firstFile = chunk.files[0];
+  if (!firstFile) return undefined;
+
+  const normalized = chunk.files
+    .flatMap((file) => changedDiffLines(file.content).map(normalizeChangedLine))
+    .filter(Boolean);
+  if (normalized.length === 0) return undefined;
+
+  return [
+    firstFile.language,
+    normalized.join('\n'),
+  ].join(':');
+}
+
+function orderedSimilarityBatches(chunks: ReviewChunk[]): ReviewChunk[][] {
+  const batches: ReviewChunk[][] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const chunk of chunks) {
+    const key = similarityKey(chunk);
+    if (!key) {
+      batches.push([chunk]);
+      continue;
+    }
+
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex !== undefined) {
+      batches[existingIndex]?.push(chunk);
+      continue;
+    }
+
+    indexByKey.set(key, batches.length);
+    batches.push([chunk]);
+  }
+
+  return batches;
+}
+
+function compactRepeatedHunkContent(files: ReviewChunk['files'][number][]): string {
+  return files.map((file) => {
+    const lines = file.content.split('\n');
+    const compactLines = lines.filter((line) =>
+      line.startsWith('## Hunk:') ||
+      line.startsWith('## Scope:') ||
+      line.startsWith('@@') ||
+      ((line.startsWith('+') || line.startsWith('-')) && !line.startsWith('+++') && !line.startsWith('---'))
+    );
+    return compactLines.join('\n');
+  }).join('\n\n---\n\n');
+}
+
 function materializePlannedChunk(
   index: number,
   title: string,
   summary: string,
-  chunks: ReviewChunk[]
+  chunks: ReviewChunk[],
+  options: { compact?: boolean } = {}
 ): ReviewChunk {
   const changedLineMap = chunks.flatMap((chunk) => chunk.changedLineMap);
   const paths = [...new Set(chunks.flatMap((chunk) => chunk.files.map((file) => file.path)))];
@@ -272,7 +349,9 @@ function materializePlannedChunk(
       path,
       language: first.language,
       changedRanges: changedLineMap.filter((range) => range.path === path),
-      content: chunkFiles.map((file) => file.content).join('\n\n---\n\n'),
+      content: options.compact
+        ? compactRepeatedHunkContent(chunkFiles)
+        : chunkFiles.map((file) => file.content).join('\n\n---\n\n'),
       contentMode: 'raw-hunks' as const,
       sourceLines: mergeSourceLines(chunks, path),
     };
@@ -308,6 +387,7 @@ function splitPlannedChunks(
 ): ReviewChunk[] {
   const batches: ReviewChunk[][] = [];
   let current: ReviewChunk[] = [];
+  const plannedBatches = orderedSimilarityBatches(chunks);
 
   const pushCurrent = () => {
     if (current.length > 0) {
@@ -316,7 +396,7 @@ function splitPlannedChunks(
     }
   };
 
-  for (const chunk of chunks) {
+  const addChunk = (chunk: ReviewChunk, maxHunks: number, maxChangedRanges: number) => {
     const singleChunk = materializePlannedChunk(startIndex + batches.length, title, summary, [chunk]);
     if (reviewChunkContentChars(singleChunk) > limits.maxChunkChars) {
       throw new SkillRunnerError(
@@ -327,13 +407,13 @@ function splitPlannedChunks(
 
     if (current.length === 0) {
       current = [chunk];
-      continue;
+      return;
     }
 
     const candidate = [...current, chunk];
     const candidateChunk = materializePlannedChunk(startIndex + batches.length, title, summary, candidate);
-    const exceedsHunks = candidate.length > limits.maxHunksPerChunk;
-    const exceedsChangedRanges = candidateChunk.changedLineMap.length > limits.maxChangedRangesPerChunk;
+    const exceedsHunks = candidate.length > maxHunks;
+    const exceedsChangedRanges = candidateChunk.changedLineMap.length > maxChangedRanges;
     const exceedsChars = reviewChunkContentChars(candidateChunk) > limits.maxChunkChars;
 
     if (exceedsHunks || exceedsChangedRanges || exceedsChars) {
@@ -342,16 +422,38 @@ function splitPlannedChunks(
     } else {
       current = candidate;
     }
+  };
+
+  for (const plannedBatch of plannedBatches) {
+    const compactSimilar = plannedBatch.length > 1;
+    if (compactSimilar) pushCurrent();
+
+    const maxHunks = compactSimilar
+      ? limits.maxHunksPerChunk * SIMILAR_TINY_RANGE_MULTIPLIER
+      : limits.maxHunksPerChunk;
+    const maxChangedRanges = compactSimilar
+      ? limits.maxChangedRangesPerChunk * SIMILAR_TINY_RANGE_MULTIPLIER
+      : limits.maxChangedRangesPerChunk;
+
+    for (const chunk of plannedBatch) {
+      addChunk(chunk, maxHunks, maxChangedRanges);
+    }
+
+    if (compactSimilar) pushCurrent();
   }
 
   pushCurrent();
 
-  return batches.map((batch, batchIndex) => materializePlannedChunk(
-    startIndex + batchIndex,
-    plannedChunkTitle(title, batchIndex + 1, batches.length),
-    summary,
-    batch,
-  ));
+  return batches.map((batch, batchIndex) => {
+    const compact = batch.length > 1 && new Set(batch.map(similarityKey)).size === 1;
+    return materializePlannedChunk(
+      startIndex + batchIndex,
+      plannedChunkTitle(title, batchIndex + 1, batches.length),
+      summary,
+      batch,
+      { compact },
+    );
+  });
 }
 
 function groupFromPreparedFile(file: PreparedFile): ReviewChunkGroup {
