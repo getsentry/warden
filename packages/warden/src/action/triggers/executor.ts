@@ -136,7 +136,7 @@ export interface TriggerResult {
 // Executor
 // -----------------------------------------------------------------------------
 
-/** Build the skill task options used by action trigger execution. */
+/** Translate a resolved action trigger into the shared skill-task boundary. */
 export function createTriggerSkillTaskOptions(
   trigger: ResolvedTrigger,
   deps: TriggerExecutorDeps

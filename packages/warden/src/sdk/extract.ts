@@ -278,7 +278,7 @@ export function generateShortId(): string {
  */
 export function validateFindings(
   findings: unknown[],
-  defaultFilenameOrResolver?: string | FindingPathResolver
+  defaultFilenameOrResolver: string | FindingPathResolver
 ): Finding[] {
   const validated: Finding[] = [];
 

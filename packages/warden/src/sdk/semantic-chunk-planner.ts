@@ -129,12 +129,16 @@ function materializePlannedChunk(
       sourceLines: mergeSourceLines(chunks, path),
     };
   });
+  const firstFile = files[0];
+  if (!firstFile) {
+    throw new Error('Cannot materialize planned chunk without files');
+  }
 
   return {
     id: `semantic:${index + 1}`,
     title,
     summary,
-    files,
+    files: [firstFile, ...files.slice(1)],
     changedLineMap,
   };
 }

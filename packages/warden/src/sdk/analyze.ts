@@ -182,9 +182,10 @@ async function parseHunkOutput(
 
   // Tier 1: Try regex-based extraction first (fast)
   const extracted = extractFindingsJson(result.text);
+  const filenameOrResolver = defaultFilename ?? (() => undefined);
 
   if (extracted.success) {
-    return { findings: validateFindings(extracted.findings, defaultFilename), extractionFailed: false, extractionMethod: 'regex' };
+    return { findings: validateFindings(extracted.findings, filenameOrResolver), extractionFailed: false, extractionMethod: 'regex' };
   }
 
   // Tier 2: Try LLM fallback for malformed output
@@ -197,7 +198,7 @@ async function parseHunkOutput(
   });
 
   if (fallback.success) {
-    return { findings: validateFindings(fallback.findings, defaultFilename), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
+    return { findings: validateFindings(fallback.findings, filenameOrResolver), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
   }
 
   // Both tiers failed - return extraction failure info
@@ -270,11 +271,12 @@ export function filterOutOfRangeFindings(
     if (!finding.location) return true;
     const { path, startLine } = finding.location;
     const endLine = finding.location.endLine ?? startLine;
-    return ranges.some((range) =>
+    const lineInRange = (line: number): boolean => ranges.some((range) =>
       (range.path === undefined || range.path === path)
-      && startLine >= range.start
-      && endLine <= range.end
+      && line >= range.start
+      && line <= range.end
     );
+    return lineInRange(startLine) && lineInRange(endLine);
   }
 
   for (const finding of findings) {

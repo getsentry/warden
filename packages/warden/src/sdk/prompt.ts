@@ -18,9 +18,7 @@ function formatChangedLineMap(chunk: ReviewChunk): string {
     .join('\n');
 }
 
-/**
- * Format a review chunk for LLM analysis.
- */
+/** Format one semantic review chunk with its summary, line map, and file content. */
 export function formatReviewChunkForAnalysis(chunk: ReviewChunk): string {
   const lines: string[] = [];
 
@@ -99,7 +97,7 @@ Requirements:
 - Return valid JSON starting with {"findings":
 - "findings" array can be empty if no issues found
 - "location.path" must be one of the files in the changed line map. For single-file chunks, use that file path.
-- "location.startLine" MUST be within one of the changed line map ranges. If the issue originates in surrounding code, anchor to the nearest changed line in the changed line map and note the actual location in the description.
+- "location.startLine" MUST be within one of the changed line map ranges. If "location.endLine" is present, it must also be within one of the changed line map ranges for the same file. If the issue originates in surrounding code, anchor to the nearest changed line in the changed line map and note the actual location in the description.
 - "confidence" reflects how certain you are this is a real issue given the codebase context
 - "description" is rendered directly in GitHub inline comments. Keep it brief and actionable, usually one sentence.
 - Put the concrete evidence trace in "verification", not "description".
@@ -127,9 +125,7 @@ You can read files from ${dirList} subdirectories using the Read tool with the f
   return sections.join('\n\n');
 }
 
-/**
- * Builds the user prompt for a semantic review chunk.
- */
+/** Build the scanner prompt around one semantic chunk while preserving location constraints. */
 export function buildReviewChunkUserPrompt(
   skill: SkillDefinition,
   chunk: ReviewChunk,

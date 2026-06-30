@@ -18,9 +18,7 @@ function matchingChunkingSkipPattern(
   return patterns?.find((pattern) => classifyFile(filename, [pattern]) === 'skip')?.pattern;
 }
 
-/**
- * Group review chunks by filename into PreparedFile entries.
- */
+/** Adapt atomic review chunks into the per-file shape used before semantic planning. */
 export function groupChunksByFile(chunks: ReviewChunk[]): PreparedFile[] {
   const fileMap = new Map<string, ReviewChunk[]>();
 

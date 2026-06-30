@@ -19,12 +19,29 @@ export interface ReviewChunkFile {
   sourceLines: SourceSnippetLine[];
 }
 
+export type ReviewChunkFiles = [ReviewChunkFile, ...ReviewChunkFile[]];
+
 export interface ReviewChunk {
   id: string;
   title: string;
   summary?: string;
-  files: ReviewChunkFile[];
+  files: ReviewChunkFiles;
   changedLineMap: ChangedLineRange[];
+}
+
+function parseEmbeddedHunkHeader(line: string): { newStart: number; newCount: number } | undefined {
+  const match = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+  if (!match?.[1]) return undefined;
+  return {
+    newStart: parseInt(match[1], 10),
+    newCount: parseInt(match[2] ?? '1', 10),
+  };
+}
+
+function linesWithHunkBoundaries(hunkCtx: HunkWithContext): string[] {
+  const contentLines = hunkCtx.hunk.content.split('\n');
+  const hunkHeaderCount = contentLines.filter((line) => parseEmbeddedHunkHeader(line)).length;
+  return hunkHeaderCount > 1 ? contentLines : hunkCtx.hunk.lines;
 }
 
 function changedRangesFromHunk(path: string, hunkCtx: HunkWithContext): ChangedLineRange[] {
@@ -32,6 +49,10 @@ function changedRangesFromHunk(path: string, hunkCtx: HunkWithContext): ChangedL
   let newLine = hunkCtx.hunk.newStart;
   let currentStart: number | undefined;
   let currentEnd: number | undefined;
+  let segmentStart = hunkCtx.hunk.newStart;
+  let segmentEnd = Math.max(segmentStart, segmentStart + hunkCtx.hunk.newCount - 1);
+  let segmentHasAddedLine = false;
+  let segmentHasDeletedLine = false;
 
   function flush(): void {
     if (currentStart === undefined || currentEnd === undefined) return;
@@ -40,8 +61,27 @@ function changedRangesFromHunk(path: string, hunkCtx: HunkWithContext): ChangedL
     currentEnd = undefined;
   }
 
-  for (const diffLine of hunkCtx.hunk.lines) {
+  function flushDeletionOnlySegment(): void {
+    flush();
+    if (!segmentHasAddedLine && segmentHasDeletedLine) {
+      ranges.push({ path, start: segmentStart, end: segmentEnd });
+    }
+    segmentHasAddedLine = false;
+    segmentHasDeletedLine = false;
+  }
+
+  for (const diffLine of linesWithHunkBoundaries(hunkCtx)) {
+    const embeddedHeader = parseEmbeddedHunkHeader(diffLine);
+    if (embeddedHeader) {
+      flushDeletionOnlySegment();
+      newLine = embeddedHeader.newStart;
+      segmentStart = embeddedHeader.newStart;
+      segmentEnd = Math.max(segmentStart, segmentStart + embeddedHeader.newCount - 1);
+      continue;
+    }
+
     if (diffLine.startsWith('+')) {
+      segmentHasAddedLine = true;
       if (currentStart === undefined) {
         currentStart = newLine;
       }
@@ -51,21 +91,14 @@ function changedRangesFromHunk(path: string, hunkCtx: HunkWithContext): ChangedL
     }
 
     flush();
-    if (diffLine.startsWith(' ') || !diffLine.startsWith('-')) {
+    if (diffLine.startsWith('-')) {
+      segmentHasDeletedLine = true;
+    } else if (diffLine.startsWith(' ')) {
       newLine += 1;
     }
   }
 
-  flush();
-  if (
-    ranges.length === 0
-    && hunkCtx.hunk.lines.some((line) => line.startsWith('-'))
-  ) {
-    const start = hunkCtx.hunk.newStart;
-    const end = Math.max(start, hunkCtx.hunk.newStart + hunkCtx.hunk.newCount - 1);
-    return [{ path, start, end }];
-  }
-
+  flushDeletionOnlySegment();
   return ranges;
 }
 
@@ -76,7 +109,13 @@ function hunkSourceLines(hunkCtx: HunkWithContext): SourceSnippetLine[] {
   }
 
   let newLine = hunkCtx.hunk.newStart;
-  for (const diffLine of hunkCtx.hunk.lines) {
+  for (const diffLine of linesWithHunkBoundaries(hunkCtx)) {
+    const embeddedHeader = parseEmbeddedHunkHeader(diffLine);
+    if (embeddedHeader) {
+      newLine = embeddedHeader.newStart;
+      continue;
+    }
+
     if (diffLine.startsWith('-')) continue;
     if (!diffLine.startsWith('+') && !diffLine.startsWith(' ')) continue;
     const content = diffLine.slice(1);

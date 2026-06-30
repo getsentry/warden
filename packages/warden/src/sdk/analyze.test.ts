@@ -187,6 +187,48 @@ function makeContextWithOneHunk(): EventContext {
   };
 }
 
+function makeContextWithCrossFileHunks(): EventContext {
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: { owner: 'o', name: 'r', fullName: 'o/r', defaultBranch: 'main' },
+    repoPath: '/tmp/repo',
+    pullRequest: {
+      number: 1,
+      title: 'Test PR',
+      body: '',
+      author: 'test',
+      baseBranch: 'main',
+      headBranch: 'feature',
+      headSha: 'head',
+      baseSha: 'base',
+      files: [{
+        filename: 'src/example.ts',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        patch: [
+          '@@ -10,1 +10,1 @@',
+          '-old10',
+          '+new10',
+        ].join('\n'),
+        chunks: 1,
+      }, {
+        filename: 'tests/example.test.ts',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        patch: [
+          '@@ -50,1 +50,1 @@',
+          '-old50',
+          '+new50',
+        ].join('\n'),
+        chunks: 1,
+      }],
+    },
+  };
+}
+
 describe('filterOutOfRangeFindings', () => {
   const hunkRange = { start: 10, end: 20 };
 
@@ -245,16 +287,21 @@ describe('filterOutOfRangeFindings', () => {
       ...makeFinding(42, 'partial-range', 'src/two.ts'),
       location: { path: 'src/two.ts', startLine: 42, endLine: 45 },
     };
+    const crossRangeFinding: Finding = {
+      ...makeFinding(42, 'cross-range', 'src/two.ts'),
+      location: { path: 'src/two.ts', startLine: 42, endLine: 50 },
+    };
 
     const { filtered, dropped } = filterOutOfRangeFindings(
-      [firstFileFinding, secondFileFinding, wrongFileFinding, partialRangeFinding],
+      [firstFileFinding, secondFileFinding, wrongFileFinding, partialRangeFinding, crossRangeFinding],
       [
         { path: 'src/one.ts', start: 10, end: 20 },
         { path: 'src/two.ts', start: 40, end: 43 },
+        { path: 'src/two.ts', start: 50, end: 50 },
       ],
     );
 
-    expect(filtered).toEqual([firstFileFinding, secondFileFinding]);
+    expect(filtered).toEqual([firstFileFinding, secondFileFinding, crossRangeFinding]);
     expect(dropped).toEqual([wrongFileFinding, partialRangeFinding]);
   });
 
@@ -808,6 +855,79 @@ describe('runSkill', () => {
     expect(request.userPrompt).toContain('- src/example.ts:100-100');
     expect(request.userPrompt).toContain('- src/example.ts:200-200');
     expect(report.auxiliaryUsageAttribution?.['semantic-chunk-planner']).toBeDefined();
+  });
+
+  it('infers missing finding paths from cross-file semantic chunk line maps', async () => {
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'success',
+        text: JSON.stringify({
+          findings: [{
+            id: 'pathless-finding',
+            severity: 'medium',
+            confidence: 'high',
+            title: 'Pathless finding',
+            description: 'test',
+            location: { startLine: 50 },
+          }],
+        }),
+        errors: [],
+        usage: makeUsage(),
+      },
+    });
+    const runAuxiliaryMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve behavior and test expectation',
+          summary: 'The implementation and test update the same behavior contract.',
+          chunkIds: [
+            'src/example.ts:10',
+            'tests/example.test.ts:50',
+          ],
+        }],
+      },
+      usage: makeUsage(),
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: runSkillMock,
+      runAuxiliary: runAuxiliaryMock,
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithCrossFileHunks(),
+      {
+        runtime: 'pi',
+        model: 'anthropic/claude-sonnet-4-6',
+        chunking: {
+          semantic: {
+            enabled: true,
+            maxChunks: 20,
+            maxChunkChars: 30000,
+            maxHunksPerChunk: 50,
+            preferWholeFileBelowLines: 800,
+          },
+        },
+        postProcessFindings: false,
+      },
+    );
+
+    expect(report.findings).toEqual([
+      expect.objectContaining({
+        title: 'Pathless finding',
+        location: {
+          path: 'tests/example.test.ts',
+          startLine: 50,
+        },
+      }),
+    ]);
   });
 
   it('preserves candidate findings when verification is interrupted', async () => {

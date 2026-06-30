@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { expect } from 'vitest';
+import { createJudge, describeEval } from 'vitest-evals';
+import type { JudgeContext } from 'vitest-evals';
+import { normalizeContent, toJsonValue, type Harness, type JsonValue } from 'vitest-evals/harness';
+import { z } from 'zod';
 import type { EventContext } from '../../warden/src/types/index.js';
 import { prepareFiles } from '../../warden/src/sdk/prepare.js';
 import { planSemanticReviewChunks } from '../../warden/src/sdk/semantic-chunk-planner.js';
@@ -12,6 +16,25 @@ import {
 const model = process.env['WARDEN_SEMANTIC_CHUNK_EVAL_MODEL'] ?? defaultEvalModel();
 const apiKey = getEvalRuntimeApiKey(model);
 const providerApiKey = getEvalProviderApiKey(model);
+
+const SemanticChunkingEvalInputSchema = z.object({
+  name: z.string(),
+});
+type SemanticChunkingEvalInput = z.infer<typeof SemanticChunkingEvalInputSchema>;
+
+const SemanticChunkingEvalOutputSchema = z.object({
+  atomicChunkCount: z.number().int().nonnegative(),
+  chunks: z.array(z.object({
+    summary: z.string().optional(),
+    files: z.array(z.string()),
+    changedLineMap: z.array(z.object({
+      path: z.string(),
+      start: z.number().int(),
+      end: z.number().int(),
+    })),
+    content: z.string(),
+  })),
+});
 
 function makeSemanticChunkingContext(): EventContext {
   return {
@@ -66,58 +89,144 @@ function makeSemanticChunkingContext(): EventContext {
   };
 }
 
-describe.skipIf(!providerApiKey)('semantic chunking eval', () => {
-  it('plans a behavior-level delta for many tiny related hunks', { timeout: 120_000 }, async () => {
-    const context = makeSemanticChunkingContext();
-    const prepared = prepareFiles(context, {
-      chunking: {
-        semantic: {
-          enabled: true,
-          maxChunks: 20,
-          maxChunkChars: 30000,
-          maxHunksPerChunk: 50,
-          preferWholeFileBelowLines: 800,
+function createSemanticChunkingHarness(): Harness<SemanticChunkingEvalInput, JsonValue> {
+  return {
+    name: 'semantic-chunking',
+    run: async (input) => {
+      SemanticChunkingEvalInputSchema.parse(input);
+      const startTime = Date.now();
+      const context = makeSemanticChunkingContext();
+      const prepared = prepareFiles(context, {
+        chunking: {
+          semantic: {
+            enabled: true,
+            maxChunks: 20,
+            maxChunkChars: 30000,
+            maxHunksPerChunk: 50,
+            preferWholeFileBelowLines: 800,
+          },
         },
-      },
-    });
+      });
+      const atomicChunks = prepared.files.flatMap((file) => file.chunks);
+      const planned = await planSemanticReviewChunks(prepared.files, context, {
+        enabled: true,
+        apiKey,
+        runtime: DEFAULT_EVAL_RUNTIME,
+        model,
+        maxChunks: 20,
+        maxChunkChars: 30000,
+        maxHunksPerChunk: 50,
+      });
+      const chunks = planned.groups.flatMap((group) => group.chunks);
+      const output = {
+        atomicChunkCount: atomicChunks.length,
+        chunks: chunks.map((chunk) => ({
+          summary: chunk.summary,
+          files: chunk.files.map((file) => file.path),
+          changedLineMap: chunk.changedLineMap,
+          content: chunk.files.map((file) => file.content).join('\n'),
+        })),
+      };
 
-    const atomicChunks = prepared.files.flatMap((file) => file.chunks);
-    expect(atomicChunks).toHaveLength(4);
+      return {
+        output: toJsonValue(output) as JsonValue,
+        session: {
+          messages: [
+            {
+              role: 'user',
+              content: normalizeContent({
+                name: input.name,
+                goal: 'Group related dashboard range changes semantically across implementation and test files.',
+              }),
+            },
+            {
+              role: 'assistant',
+              content: normalizeContent(output),
+            },
+          ],
+          provider: DEFAULT_EVAL_RUNTIME,
+          model,
+        },
+        usage: {},
+        timings: { totalMs: Date.now() - startTime },
+        artifacts: {},
+        errors: [],
+      };
+    },
+  };
+}
 
-    const planned = await planSemanticReviewChunks(prepared.files, context, {
-      enabled: true,
-      apiKey,
-      runtime: DEFAULT_EVAL_RUNTIME,
-      model,
-      maxChunks: 20,
-      maxChunkChars: 30000,
-      maxHunksPerChunk: 50,
-    });
-
-    const chunks = planned.groups.flatMap((group) => group.chunks);
-    expect(chunks.length).toBeLessThan(atomicChunks.length);
-    const crossFileChunk = chunks.find((chunk) => chunk.files.length > 1);
-    expect(crossFileChunk).toBeDefined();
-    expect(crossFileChunk?.changedLineMap).toEqual(expect.arrayContaining([
-      { path: 'src/dashboard.ts', start: 10, end: 10 },
-      { path: 'src/dashboard.ts', start: 80, end: 80 },
-      { path: 'src/dashboard.ts', start: 140, end: 140 },
-      { path: 'tests/dashboard.test.ts', start: 220, end: 220 },
-    ]));
-
-    for (const chunk of chunks) {
-      expect(chunk.summary).toBeTruthy();
-      expect(chunk.summary).not.toMatch(/lines?\s+\d+/i);
-      expect(chunk.summary).not.toMatch(/\b10\b.*\b80\b.*\b140\b/);
+function createSemanticChunkingJudge() {
+  return createJudge<JudgeContext<SemanticChunkingEvalInput, JsonValue>>('SemanticChunkingJudge', async ({ run }) => {
+    const output = SemanticChunkingEvalOutputSchema.safeParse(run.output);
+    if (!output.success) {
+      return {
+        score: 0,
+        metadata: { rationale: `Invalid semantic chunking output: ${output.error.message}` },
+      };
     }
 
+    const chunks = output.data.chunks;
+    const crossFileChunk = chunks.find((chunk) => chunk.files.length > 1);
     const summaryText = chunks.map((chunk) => chunk.summary ?? '').join(' ');
-    expect(summaryText).toMatch(/axisRange|axis range|range/i);
-    expect(summaryText).toMatch(/widget|convert|render|chart/i);
+    const hasSemanticSummary = /axisRange|axis range|range/i.test(summaryText)
+      && /widget|convert|render|chart/i.test(summaryText)
+      && !/lines?\s+\d+/i.test(summaryText)
+      && !/\b10\b.*\b80\b.*\b140\b/.test(summaryText);
+    const hasExpectedLineMap = Boolean(crossFileChunk)
+      && [
+        { path: 'src/dashboard.ts', start: 10, end: 10 },
+        { path: 'src/dashboard.ts', start: 80, end: 80 },
+        { path: 'src/dashboard.ts', start: 140, end: 140 },
+        { path: 'tests/dashboard.test.ts', start: 220, end: 220 },
+      ].every((range) =>
+        crossFileChunk?.changedLineMap.some((actual) =>
+          actual.path === range.path && actual.start === range.start && actual.end === range.end
+        )
+      );
+    const crossFileContent = crossFileChunk?.content ?? '';
+    const hasExpectedContent = Boolean(crossFileChunk)
+      && crossFileContent.includes('convertWidgetToChart(widget, range)')
+      && crossFileContent.includes('renderChart(chart, series, range)')
+      && crossFileContent.includes('expect(rendered.range).toEqual(customAxisRange)');
+    const reducedChunks = chunks.length < output.data.atomicChunkCount;
+    const passed = reducedChunks && Boolean(crossFileChunk) && hasExpectedLineMap
+      && hasSemanticSummary && hasExpectedContent;
 
-    const chunkText = crossFileChunk?.files.map((file) => file.content).join('\n') ?? '';
-    expect(chunkText).toContain('convertWidgetToChart(widget, range)');
-    expect(chunkText).toContain('renderChart(chart, series, range)');
-    expect(chunkText).toContain('expect(rendered.range).toEqual(customAxisRange)');
+    return {
+      score: passed ? 1 : 0,
+      metadata: {
+        rationale: passed
+          ? 'Planner produced a semantic cross-file chunk with behavior-level summary.'
+          : 'Planner did not produce the expected semantic cross-file chunk.',
+        atomicChunkCount: output.data.atomicChunkCount,
+        chunkCount: chunks.length,
+        hasCrossFileChunk: Boolean(crossFileChunk),
+        hasExpectedLineMap,
+        hasSemanticSummary,
+        hasExpectedContent,
+      },
+    };
   });
-});
+}
+
+describeEval(
+  'semantic-chunking',
+  {
+    harness: createSemanticChunkingHarness(),
+    judges: [createSemanticChunkingJudge()],
+    judgeThreshold: 1,
+    skipIf: () => !providerApiKey,
+  },
+  (it) => {
+    it('plans a behavior-level delta for many tiny related hunks', { timeout: 120_000 }, async ({ run }) => {
+      const result = await run({ name: 'dashboard-axis-range' });
+      const output = SemanticChunkingEvalOutputSchema.parse(result.output);
+      const chunks = output.chunks;
+
+      expect(output.atomicChunkCount).toBe(4);
+      expect(chunks.length).toBeLessThan(output.atomicChunkCount);
+      expect(chunks.some((chunk) => chunk.files.length > 1)).toBe(true);
+    });
+  },
+);
