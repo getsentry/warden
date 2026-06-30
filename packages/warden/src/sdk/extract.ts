@@ -16,6 +16,8 @@ import {
 
 const ExtractedFindingSchema = FindingSchema.omit({ sourceSnippet: true });
 
+export type FindingPathResolver = (finding: Record<string, unknown>) => string | undefined;
+
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
 
@@ -274,13 +276,21 @@ export function generateShortId(): string {
  * Validate and normalize findings from extracted JSON.
  * Replaces the LLM-provided ID with a short ID for cross-referencing.
  */
-export function validateFindings(findings: unknown[], defaultFilename?: string): Finding[] {
+export function validateFindings(
+  findings: unknown[],
+  defaultFilenameOrResolver?: string | FindingPathResolver
+): Finding[] {
   const validated: Finding[] = [];
 
   for (const f of findings) {
     const candidate = typeof f === 'object' && f !== null
       ? { ...(f as Record<string, unknown>) }
       : f;
+    const defaultFilename = typeof defaultFilenameOrResolver === 'function'
+      && typeof candidate === 'object'
+      && candidate !== null
+      ? defaultFilenameOrResolver(candidate as Record<string, unknown>)
+      : defaultFilenameOrResolver;
 
     // Normalize missing location paths before validation. Multi-file review
     // chunks may provide explicit paths, so preserve them when present.

@@ -9,6 +9,7 @@ import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
 import { buildHunkSystemPrompt, buildReviewChunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
+import type { FindingPathResolver } from './extract.js';
 import { postProcessFindings } from './post-process.js';
 import { buildFileReports } from './report-files.js';
 import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
@@ -170,7 +171,7 @@ function buildHunkTrace(args: {
  */
 async function parseHunkOutput(
   result: SkillRunResult,
-  defaultFilename: string | undefined,
+  defaultFilename: string | FindingPathResolver | undefined,
   skillName: string,
   options: SkillRunnerOptions
 ): Promise<ParseHunkOutputResult> {
@@ -208,6 +209,47 @@ async function parseHunkOutput(
     extractionPreview: fallback.preview,
     extractionUsage: fallback.usage,
   };
+}
+
+function numberFromRecord(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key];
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function resolveFindingPathFromChangedLines(
+  changedLineMap: ChangedLineRange[],
+  fallbackFilename: string | undefined,
+  finding: Record<string, unknown>
+): string | undefined {
+  const location = finding['location'];
+  if (!location || typeof location !== 'object') {
+    return fallbackFilename;
+  }
+
+  const locationRecord = location as Record<string, unknown>;
+  const explicitPath = locationRecord['path'];
+  if (typeof explicitPath === 'string' && explicitPath.length > 0) {
+    return explicitPath;
+  }
+
+  if (fallbackFilename) {
+    return fallbackFilename;
+  }
+
+  const startLine = numberFromRecord(locationRecord, 'startLine');
+  if (!startLine) {
+    return undefined;
+  }
+
+  const endLine = numberFromRecord(locationRecord, 'endLine') ?? startLine;
+  const matchingPaths = new Set<string>();
+  for (const range of changedLineMap) {
+    if (startLine >= range.start && endLine <= range.end) {
+      matchingPaths.add(range.path);
+    }
+  }
+
+  return matchingPaths.size === 1 ? [...matchingPaths][0] : undefined;
 }
 
 /**
@@ -516,7 +558,11 @@ async function analyzeReviewChunk(
             traceRecorder,
             () => parseHunkOutput(
               resultMessage,
-              chunk.files.length === 1 ? primaryFile : undefined,
+              (finding) => resolveFindingPathFromChangedLines(
+                chunk.changedLineMap,
+                chunk.files.length === 1 ? primaryFile : undefined,
+                finding,
+              ),
               skill.name,
               options,
             ),

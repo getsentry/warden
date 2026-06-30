@@ -974,6 +974,43 @@ describe('validateFindings', () => {
     expect(validated[0]!.location!.path).toBe('correct-path.ts');
   });
 
+  it('defaults missing location paths with a resolver', () => {
+    const rawFindings = [
+      {
+        id: 'id-1',
+        severity: 'medium',
+        title: 'Issue',
+        description: 'Details',
+        location: { startLine: 42 },
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, (finding) => {
+      const location = finding['location'];
+      if (!location || typeof location !== 'object') return undefined;
+      return (location as Record<string, unknown>)['startLine'] === 42
+        ? 'src/cross-file.ts'
+        : undefined;
+    });
+
+    expect(validated[0]!.location!.path).toBe('src/cross-file.ts');
+  });
+
+  it('drops findings when the resolver cannot infer a missing path', () => {
+    const rawFindings = [
+      {
+        id: 'id-1',
+        severity: 'medium',
+        title: 'Issue',
+        description: 'Details',
+        location: { startLine: 42 },
+      },
+    ];
+
+    const validated = validateFindings(rawFindings, () => undefined);
+    expect(validated).toHaveLength(0);
+  });
+
   it('strips model-provided source snippets during extraction', () => {
     const rawFindings = [
       {
