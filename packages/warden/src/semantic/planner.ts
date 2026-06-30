@@ -18,6 +18,9 @@ const SemanticChunkPlanSchema = z.object({
 const MAX_EMBEDDED_DIFF_CHARS = 8000;
 const MAX_EMBEDDED_DIFF_CHUNKS = 12;
 const MAX_EMBEDDED_DIFF_RANGES = 12;
+const MAX_CHUNK_CHARS = 20000;
+const MAX_HUNKS_PER_CHUNK = 4;
+const MAX_CHANGED_RANGES_PER_CHUNK = 4;
 
 export interface SemanticChunkPlanningOptions {
   enabled?: boolean;
@@ -27,6 +30,7 @@ export interface SemanticChunkPlanningOptions {
   maxChunks?: number;
   maxChunkChars?: number;
   maxHunksPerChunk?: number;
+  maxChangedRangesPerChunk?: number;
   maxEmbeddedDiffChars?: number;
   maxEmbeddedDiffChunks?: number;
   maxEmbeddedDiffRanges?: number;
@@ -49,6 +53,7 @@ interface SemanticChunkLimits {
   maxChunks: number;
   maxChunkChars: number;
   maxHunksPerChunk: number;
+  maxChangedRangesPerChunk: number;
   maxEmbeddedDiffChars: number;
   maxEmbeddedDiffChunks: number;
   maxEmbeddedDiffRanges: number;
@@ -140,8 +145,9 @@ function formatFileInventory(context: EventContext): string {
 function semanticChunkLimits(options: SemanticChunkPlanningOptions): SemanticChunkLimits {
   return {
     maxChunks: options.maxChunks ?? 20,
-    maxChunkChars: options.maxChunkChars ?? 30000,
-    maxHunksPerChunk: options.maxHunksPerChunk ?? 50,
+    maxChunkChars: options.maxChunkChars ?? MAX_CHUNK_CHARS,
+    maxHunksPerChunk: options.maxHunksPerChunk ?? MAX_HUNKS_PER_CHUNK,
+    maxChangedRangesPerChunk: options.maxChangedRangesPerChunk ?? MAX_CHANGED_RANGES_PER_CHUNK,
     maxEmbeddedDiffChars: options.maxEmbeddedDiffChars ?? MAX_EMBEDDED_DIFF_CHARS,
     maxEmbeddedDiffChunks: options.maxEmbeddedDiffChunks ?? MAX_EMBEDDED_DIFF_CHUNKS,
     maxEmbeddedDiffRanges: options.maxEmbeddedDiffRanges ?? MAX_EMBEDDED_DIFF_RANGES,
@@ -200,12 +206,12 @@ function buildSemanticChunkPlanningPrompt(
   options: SemanticChunkPlanningOptions
 ): string {
   const plannerInput = buildSemanticChunkPlannerInput(context, chunks, options);
-  const { maxChunks, maxHunksPerChunk, maxChunkChars } = plannerInput.limits;
+  const { maxChunks, maxHunksPerChunk, maxChangedRangesPerChunk, maxChunkChars } = plannerInput.limits;
   const header = [
     'You are planning code review chunks for Warden.',
     '',
-    'Group atomic git chunks into semantic review chunks.',
-    'A semantic chunk should contain changes that a reviewer should understand together: one behavior change, API contract, data flow, migration, validation rule, or test expectation.',
+    'Group atomic git chunks into semantic changes.',
+    'A semantic change should contain chunks that a reviewer should understand together: one behavior change, API contract, data flow, migration, validation rule, or test expectation.',
     'For each planned group, write a semantic delta summary: what behavior, contract, data flow, API, or test expectation changed.',
     'Do not restate filenames or line ranges. Do not say "lines 10, 100, 200".',
     'Do not summarize the input shape. Explain the product, security, data-flow, API, or test behavior being changed.',
@@ -214,8 +220,10 @@ function buildSemanticChunkPlanningPrompt(
     'Use read_review_chunk to inspect exact hunk content for non-embedded chunks; read_changed_file only shows current head content.',
     'If embedded small diffs are present, use them as initial evidence and use tools only for missing relationships or context.',
     `Target at most ${maxChunks} planned groups.`,
-    `Use at most ${maxHunksPerChunk} atomic chunks per group.`,
-    `Keep each planned group under roughly ${maxChunkChars} characters once materialized for scanning.`,
+    `Warden may split a planned semantic change into bounded scanner chunks after planning.`,
+    `Each scanner chunk will use at most ${maxHunksPerChunk} atomic chunks.`,
+    `Each scanner chunk will use at most ${maxChangedRangesPerChunk} changed line ranges.`,
+    `Each scanner chunk will stay under roughly ${maxChunkChars} characters once materialized.`,
     `Embedded small diffs are only present when the changeset fits these planner limits: ${plannerInput.limits.maxEmbeddedDiffChars} chars, ${plannerInput.limits.maxEmbeddedDiffChunks} chunks, ${plannerInput.limits.maxEmbeddedDiffRanges} changed ranges.`,
     'Every input Chunk ID must appear in exactly one group. Do not invent Chunk IDs.',
   ].filter((line): line is string => Boolean(line));
@@ -295,7 +303,7 @@ function splitPlannedChunks(
   title: string,
   summary: string,
   chunks: ReviewChunk[],
-  limits: { maxChunkChars: number; maxHunksPerChunk: number }
+  limits: { maxChunkChars: number; maxHunksPerChunk: number; maxChangedRangesPerChunk: number }
 ): ReviewChunk[] {
   const batches: ReviewChunk[][] = [];
   let current: ReviewChunk[] = [];
@@ -324,9 +332,10 @@ function splitPlannedChunks(
     const candidate = [...current, chunk];
     const candidateChunk = materializePlannedChunk(startIndex + batches.length, title, summary, candidate);
     const exceedsHunks = candidate.length > limits.maxHunksPerChunk;
+    const exceedsChangedRanges = candidateChunk.changedLineMap.length > limits.maxChangedRangesPerChunk;
     const exceedsChars = reviewChunkContentChars(candidateChunk) > limits.maxChunkChars;
 
-    if (exceedsHunks || exceedsChars) {
+    if (exceedsHunks || exceedsChangedRanges || exceedsChars) {
       pushCurrent();
       current = [chunk];
     } else {
@@ -353,15 +362,12 @@ function groupFromPreparedFile(file: PreparedFile): ReviewChunkGroup {
   };
 }
 
-function groupFromPlannedChunk(chunk: ReviewChunk): ReviewChunkGroup {
-  const filenames = [...new Set(chunk.files.map((file) => file.path))];
-  const [firstFilename] = filenames;
+function groupFromPlannedChunks(title: string, chunks: ReviewChunk[]): ReviewChunkGroup {
+  const filenames = [...new Set(chunks.flatMap((chunk) => chunk.files.map((file) => file.path)))];
   return {
-    displayName: filenames.length <= 1
-      ? firstFilename ?? chunk.title
-      : `${firstFilename ?? chunk.title} + ${filenames.length - 1} file${filenames.length === 2 ? '' : 's'}`,
+    displayName: title,
     filenames,
-    chunks: [chunk],
+    chunks,
   };
 }
 
@@ -397,10 +403,12 @@ export async function planSemanticReviewChunks(
 
   const chunksById = new Map(chunks.map((chunk) => [chunk.id, chunk]));
   const seen = new Set<string>();
-  const plannedChunks: ReviewChunk[] = [];
+  const plannedGroups: ReviewChunkGroup[] = [];
+  let plannedChunkCount = 0;
   const maxChunks = options.maxChunks ?? 20;
-  const maxHunksPerChunk = options.maxHunksPerChunk ?? 50;
-  const maxChunkChars = options.maxChunkChars ?? 30000;
+  const maxHunksPerChunk = options.maxHunksPerChunk ?? MAX_HUNKS_PER_CHUNK;
+  const maxChangedRangesPerChunk = options.maxChangedRangesPerChunk ?? MAX_CHANGED_RANGES_PER_CHUNK;
+  const maxChunkChars = options.maxChunkChars ?? MAX_CHUNK_CHARS;
 
   if (result.data.groups.length > maxChunks) {
     throw new SkillRunnerError(
@@ -426,14 +434,17 @@ export async function planSemanticReviewChunks(
       seen.add(chunkId);
       groupChunks.push(chunk);
     }
-    plannedChunks.push(...splitPlannedChunks(plannedChunks.length, group.title, group.summary, groupChunks, {
+    const chunksForGroup = splitPlannedChunks(plannedChunkCount, group.title, group.summary, groupChunks, {
       maxChunkChars,
       maxHunksPerChunk,
-    }));
+      maxChangedRangesPerChunk,
+    });
+    plannedChunkCount += chunksForGroup.length;
+    plannedGroups.push(groupFromPlannedChunks(group.title, chunksForGroup));
 
-    if (plannedChunks.length > maxChunks) {
+    if (plannedChunkCount > maxChunks) {
       throw new SkillRunnerError(
-        `Semantic chunk planning materialized ${plannedChunks.length} groups, exceeding maxChunks ${maxChunks}`,
+        `Semantic chunk planning materialized ${plannedChunkCount} chunks, exceeding maxChunks ${maxChunks}`,
         { code: 'sdk_error' },
       );
     }
@@ -448,7 +459,7 @@ export async function planSemanticReviewChunks(
   }
 
   return {
-    groups: plannedChunks.map(groupFromPlannedChunk),
+    groups: plannedGroups,
     usage: result.usage,
   };
 }

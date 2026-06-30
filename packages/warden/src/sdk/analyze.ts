@@ -1037,6 +1037,7 @@ async function runSkillAnalysis(
     maxChunks: options.chunking?.semantic?.maxChunks,
     maxChunkChars: options.chunking?.semantic?.maxChunkChars,
     maxHunksPerChunk: options.chunking?.semantic?.maxHunksPerChunk,
+    maxChangedRangesPerChunk: options.chunking?.semantic?.maxChangedRangesPerChunk,
     maxEmbeddedDiffChars: options.chunking?.semantic?.maxEmbeddedDiffChars,
     maxEmbeddedDiffChunks: options.chunking?.semantic?.maxEmbeddedDiffChunks,
     maxEmbeddedDiffRanges: options.chunking?.semantic?.maxEmbeddedDiffRanges,

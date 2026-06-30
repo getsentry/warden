@@ -120,6 +120,7 @@ Record these for each semantic-off and semantic-on run:
 - wall time
 - scanner chunk count
 - semantic planner group count
+- scanner chunks per semantic group
 - semantic planner summaries
 - input tokens
 - output tokens
@@ -127,6 +128,9 @@ Record these for each semantic-off and semantic-on run:
 
 The semantic-on run is successful when it keeps the expected finding and reduces
 operational load. A lower chunk count is not enough if recall regresses.
+Semantic groups are allowed to contain multiple scanner chunks; the target is
+fewer, better bounded scanner calls than raw git chunks, not one giant scanner
+prompt per logical change.
 
 ## Output
 
@@ -182,6 +186,35 @@ be used as the dataset quality baseline.
 
 The semantic-on run grouped both changed ranges into one scanner chunk and kept
 the expected medium-confidence axis-range regression finding.
+
+Full reverse-patch run:
+
+- date: 2026-06-30
+- case: `sentry-dashboard-axis-range-existing-widget`
+- repository: `getsentry/sentry`
+- synthetic base: `01217a6efb90cd26f0f8ac8b33c4f255379fe21d`
+- synthetic head: `a4778dc5fcf`
+- model: `openrouter/anthropic/claude-sonnet-4.6`
+- runtime: `pi`
+- skill: `code-review`
+- verification: disabled
+
+| Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| semantic on, bounded groups | 5 | 0 | 10m45s | 481,391 | 34,884 | $1.2564 |
+| semantic on, bounded groups plus summary anti-bias prompt | 4 | 0 | 8m19s | 472,104 | 26,978 | $1.1046 |
+| semantic on, bounded groups plus changed-range cap | 5 | 0 | 7m24s | 432,183 | 23,708 | $0.9862 |
+
+The full reverse-patch run preserved the real patch shape but did not find the
+expected axis-range regression. This makes the case useful as a recall warning:
+semantic grouping can make a bad behavior look like a coherent migration when
+tests are changed to match it. The scanner prompt now states that semantic
+summaries are grouping hints, not evidence of correctness.
+
+The changed-range cap run is incomplete for score comparison because one
+test-heavy scanner chunk hit `turn_limit`. It is still useful operationally: it
+split one broad semantic group into two scanner chunks and reduced recorded
+cost, but the run cannot be treated as a clean recall result.
 
 ## Acceptance
 

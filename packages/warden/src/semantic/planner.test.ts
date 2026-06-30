@@ -265,7 +265,7 @@ describe('planSemanticReviewChunks', () => {
     expect(prompt).not.toContain('@@ -10,1 +10,1 @@');
   });
 
-  it('splits planned groups that exceed maxChunkChars after materialization', async () => {
+  it('splits planned semantic changes into bounded scanner chunks', async () => {
     runAuxiliary.mockResolvedValueOnce({
       success: true,
       data: {
@@ -296,12 +296,13 @@ describe('planSemanticReviewChunks', () => {
       maxChunkChars: 500,
     });
 
-    expect(planned.groups).toHaveLength(2);
-    expect(planned.groups.map((group) => group.chunks[0]?.title)).toEqual([
+    expect(planned.groups).toHaveLength(1);
+    expect(planned.groups[0]?.displayName).toBe('Preserve dashboard axis range');
+    expect(planned.groups[0]?.chunks.map((chunk) => chunk.title)).toEqual([
       'Preserve dashboard axis range (1/2)',
       'Preserve dashboard axis range (2/2)',
     ]);
-    expect(planned.groups.map((group) => group.chunks[0]?.changedLineMap)).toEqual([
+    expect(planned.groups[0]?.chunks.map((chunk) => chunk.changedLineMap)).toEqual([
       [
         { path: 'src/dashboard.ts', start: 10, end: 10 },
         { path: 'src/dashboard.ts', start: 100, end: 100 },
@@ -310,7 +311,7 @@ describe('planSemanticReviewChunks', () => {
     ]);
   });
 
-  it('rejects materialized groups that exceed maxChunks after splitting', async () => {
+  it('rejects materialized scanner chunks that exceed maxChunks after splitting', async () => {
     runAuxiliary.mockResolvedValueOnce({
       success: true,
       data: {
@@ -340,7 +341,91 @@ describe('planSemanticReviewChunks', () => {
       runtime: 'pi',
       maxChunks: 1,
       maxChunkChars: 500,
-    })).rejects.toThrow('materialized 2 groups, exceeding maxChunks 1');
+    })).rejects.toThrow('materialized 2 chunks, exceeding maxChunks 1');
+  });
+
+  it('preserves one semantic group when maxHunksPerChunk splits scanner chunks', async () => {
+    runAuxiliary.mockResolvedValueOnce({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve dashboard axis range',
+          summary: 'Dashboard charts now carry a widget-provided axis range through chart construction and assert that custom range in tests.',
+          chunkIds: ['src/dashboard.ts:10', 'src/dashboard.ts:100', 'src/dashboard.ts:200'],
+        }],
+      },
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.001,
+      },
+    });
+
+    const context = makeContext();
+    const prepared = prepareFiles(context);
+
+    const planned = await planSemanticReviewChunks(prepared.files, context, {
+      enabled: true,
+      runtime: 'pi',
+      maxHunksPerChunk: 2,
+    });
+
+    expect(planned.groups).toHaveLength(1);
+    expect(planned.groups[0]?.chunks).toHaveLength(2);
+    expect(planned.groups[0]?.chunks.map((chunk) => chunk.changedLineMap)).toEqual([
+      [
+        { path: 'src/dashboard.ts', start: 10, end: 10 },
+        { path: 'src/dashboard.ts', start: 100, end: 100 },
+      ],
+      [{ path: 'src/dashboard.ts', start: 200, end: 200 }],
+    ]);
+  });
+
+  it('preserves one semantic group when changed ranges split scanner chunks', async () => {
+    runAuxiliary.mockResolvedValueOnce({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve dashboard axis range',
+          summary: 'Dashboard charts now carry a widget-provided axis range through chart construction and assert that custom range in tests.',
+          chunkIds: ['src/dashboard.ts:10', 'src/dashboard.ts:100', 'src/dashboard.ts:200'],
+        }],
+      },
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.001,
+      },
+    });
+
+    const context = makeContext();
+    const prepared = prepareFiles(context);
+
+    const planned = await planSemanticReviewChunks(prepared.files, context, {
+      enabled: true,
+      runtime: 'pi',
+      maxChangedRangesPerChunk: 2,
+    });
+
+    expect(planned.groups).toHaveLength(1);
+    expect(planned.groups[0]?.chunks).toHaveLength(2);
+    expect(planned.groups[0]?.chunks.map((chunk) => chunk.changedLineMap)).toEqual([
+      [
+        { path: 'src/dashboard.ts', start: 10, end: 10 },
+        { path: 'src/dashboard.ts', start: 100, end: 100 },
+      ],
+      [{ path: 'src/dashboard.ts', start: 200, end: 200 }],
+    ]);
   });
 
   it('rejects atomic chunks that exceed maxChunkChars', async () => {

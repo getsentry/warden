@@ -281,6 +281,7 @@ async function prepareTaskFiles(
     maxChunks: runnerOptions.chunking?.semantic?.maxChunks,
     maxChunkChars: runnerOptions.chunking?.semantic?.maxChunkChars,
     maxHunksPerChunk: runnerOptions.chunking?.semantic?.maxHunksPerChunk,
+    maxChangedRangesPerChunk: runnerOptions.chunking?.semantic?.maxChangedRangesPerChunk,
     maxEmbeddedDiffChars: runnerOptions.chunking?.semantic?.maxEmbeddedDiffChars,
     maxEmbeddedDiffChunks: runnerOptions.chunking?.semantic?.maxEmbeddedDiffChunks,
     maxEmbeddedDiffRanges: runnerOptions.chunking?.semantic?.maxEmbeddedDiffRanges,

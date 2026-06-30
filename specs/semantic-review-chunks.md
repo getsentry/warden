@@ -137,13 +137,17 @@ chunking may use filenames and changed ranges.
 `summary` is optional and planner-owned. It must only be set when a semantic
 planner has described the logical change. Deterministic grouping must not
 populate `summary` with filenames or changed ranges and call that semantic.
+Scanner prompts must treat summaries as grouping hints, not evidence that the
+change is intended or correct.
 
 `files[].content` is the readable review packet. It can be larger than a hunk
 and may include unchanged surrounding code. This content is for understanding.
-One `ReviewChunk` may include multiple files when the same logical change spans
-implementation, tests, config, or call sites. The chunk title and summary
-describe the shared change; each `files[]` entry carries the file-local content
-needed to review that change.
+One semantic change may include multiple files when the same logical change
+spans implementation, tests, config, or call sites. That semantic change may
+still materialize as multiple bounded `ReviewChunk` scanner calls when the
+group would otherwise be too large. The chunk title and summary describe the
+shared change; each `files[]` entry carries the file-local content needed to
+review that scanner slice.
 
 `changedLineMap` is the hard validation boundary. A scanner finding may only
 anchor to a line inside this map. Surrounding content can explain a finding but
@@ -339,8 +343,9 @@ Semantic review chunks should be configured with a small public surface:
 [defaults.chunking.semantic]
 enabled = true
 maxChunks = 20
-maxChunkChars = 30000
-maxHunksPerChunk = 50
+maxChunkChars = 20000
+maxHunksPerChunk = 4
+maxChangedRangesPerChunk = 4
 maxEmbeddedDiffChars = 8000
 maxEmbeddedDiffChunks = 12
 maxEmbeddedDiffRanges = 12
@@ -411,6 +416,7 @@ Useful fields to expose:
 - files included
 - changed ranges included
 - atomic chunk count
+- scanner chunk count
 - content mode per file
 - scanner result count for the segment
 

@@ -183,12 +183,14 @@ export type CoalesceConfig = z.infer<typeof CoalesceConfigSchema>;
 export const SemanticChunkingConfigSchema = z.object({
   /** Enable semantic review chunk materialization (default: false) */
   enabled: z.boolean().optional(),
-  /** Maximum number of review chunks to emit after semantic grouping */
+  /** Maximum number of scanner review chunks to emit after semantic grouping */
   maxChunks: z.number().int().positive().optional(),
-  /** Target max size per semantic review chunk in characters */
+  /** Target max size per scanner review chunk in characters */
   maxChunkChars: z.number().int().positive().optional(),
-  /** Maximum atomic hunks to group into one semantic review chunk */
+  /** Maximum atomic hunks to place in one scanner review chunk inside a semantic change */
   maxHunksPerChunk: z.number().int().positive().optional(),
+  /** Maximum changed line ranges to place in one scanner review chunk inside a semantic change */
+  maxChangedRangesPerChunk: z.number().int().positive().optional(),
   /** Maximum total hunk content characters to embed in the semantic planner prompt */
   maxEmbeddedDiffChars: z.number().int().nonnegative().optional(),
   /** Maximum prepared chunks allowed before the semantic planner stops embedding full hunk content */
