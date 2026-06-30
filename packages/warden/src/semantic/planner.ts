@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import type { EventContext, UsageStats } from '../types/index.js';
-import type { ReviewChunk } from '../diff/index.js';
-import { SkillRunnerError } from './errors.js';
-import { getRuntime } from './runtimes/index.js';
-import type { RuntimeName } from './runtimes/index.js';
-import type { PreparedFile, ReviewChunkGroup } from './types.js';
+import type { ChangedLineRange, ReviewChunk } from '../diff/index.js';
+import { SkillRunnerError } from '../sdk/errors.js';
+import { getRuntime } from '../sdk/runtimes/index.js';
+import type { RuntimeName } from '../sdk/runtimes/index.js';
+import type { PreparedFile, ReviewChunkGroup } from '../sdk/types.js';
+import { createSemanticPlannerToolExecutor, SEMANTIC_PLANNER_TOOLS } from './tools.js';
 
 const SemanticChunkPlanSchema = z.object({
   groups: z.array(z.object({
@@ -14,15 +15,49 @@ const SemanticChunkPlanSchema = z.object({
   })),
 });
 
+const MAX_EMBEDDED_DIFF_CHARS = 8000;
+const MAX_EMBEDDED_DIFF_CHUNKS = 12;
+const MAX_EMBEDDED_DIFF_RANGES = 12;
+
 export interface SemanticChunkPlanningOptions {
   enabled?: boolean;
   apiKey?: string;
   runtime?: RuntimeName;
   model?: string;
-  maxRetries?: number;
   maxChunks?: number;
   maxChunkChars?: number;
   maxHunksPerChunk?: number;
+  maxEmbeddedDiffChars?: number;
+  maxEmbeddedDiffChunks?: number;
+  maxEmbeddedDiffRanges?: number;
+}
+
+interface AtomicHunkSummary {
+  id: string;
+  path: string;
+  language?: string;
+  changedRanges: ChangedLineRange[];
+  title: string;
+  contentMode: ReviewChunk['files'][number]['contentMode'];
+  additions: number;
+  deletions: number;
+  changedLinePreview: string[];
+  embeddedDiff?: string;
+}
+
+interface SemanticChunkLimits {
+  maxChunks: number;
+  maxChunkChars: number;
+  maxHunksPerChunk: number;
+  maxEmbeddedDiffChars: number;
+  maxEmbeddedDiffChunks: number;
+  maxEmbeddedDiffRanges: number;
+}
+
+interface SemanticChunkPlannerInput {
+  context: EventContext;
+  chunks: AtomicHunkSummary[];
+  limits: SemanticChunkLimits;
 }
 
 export interface SemanticChunkPlanningResult {
@@ -30,27 +65,133 @@ export interface SemanticChunkPlanningResult {
   usage?: UsageStats;
 }
 
-function formatChangedRanges(chunk: ReviewChunk): string {
-  return chunk.changedLineMap
-    .map((range) => `${range.path}:${range.start}-${range.end}`)
-    .join(', ');
+function countChangedLines(chunk: ReviewChunk, prefix: '+' | '-'): number {
+  return chunk.files.reduce((sum, file) => {
+    const matches = file.content.match(new RegExp(`^\\${prefix}(?!\\${prefix}|\\+\\+)`, 'gm'));
+    return sum + (matches?.length ?? 0);
+  }, 0);
 }
 
-function formatChunkForPlanning(chunk: ReviewChunk): string {
-  const fileSummaries = chunk.files.map((file) => [
-    `File: ${file.path}`,
-    `Language: ${file.language}`,
-    `Content mode: ${file.contentMode}`,
-    'Content:',
-    file.content,
-  ].join('\n')).join('\n\n');
+function compactChangedLinePreview(chunk: ReviewChunk, maxLines = 8): string[] {
+  const preview: string[] = [];
+  for (const file of chunk.files) {
+    for (const line of file.content.split('\n')) {
+      if ((!line.startsWith('+') && !line.startsWith('-')) || line.startsWith('+++') || line.startsWith('---')) {
+        continue;
+      }
+      preview.push(line.length > 180 ? `${line.slice(0, 177)}...` : line);
+      if (preview.length >= maxLines) return preview;
+    }
+  }
+  return preview;
+}
 
-  return [
-    `Chunk ID: ${chunk.id}`,
-    `Title: ${chunk.title}`,
-    `Changed ranges: ${formatChangedRanges(chunk)}`,
-    fileSummaries,
-  ].join('\n');
+function atomicHunkSummaryFromChunk(chunk: ReviewChunk): AtomicHunkSummary {
+  const firstFile = chunk.files[0];
+  return {
+    id: chunk.id,
+    path: firstFile.path,
+    language: firstFile.language,
+    changedRanges: chunk.changedLineMap,
+    title: chunk.title,
+    contentMode: firstFile.contentMode,
+    additions: countChangedLines(chunk, '+'),
+    deletions: countChangedLines(chunk, '-'),
+    changedLinePreview: compactChangedLinePreview(chunk),
+  };
+}
+
+function shouldEmbedDiffs(chunks: ReviewChunk[], limits: SemanticChunkLimits): boolean {
+  if (chunks.length > limits.maxEmbeddedDiffChunks) return false;
+  const changedRanges = chunks.reduce((sum, chunk) => sum + chunk.changedLineMap.length, 0);
+  if (changedRanges > limits.maxEmbeddedDiffRanges) return false;
+  const totalChars = chunks.reduce(
+    (sum, chunk) => sum + chunk.files.reduce((fileSum, file) => fileSum + file.content.length, 0),
+    0,
+  );
+  return totalChars <= limits.maxEmbeddedDiffChars;
+}
+
+function atomicHunkSummariesFromChunks(chunks: ReviewChunk[], limits: SemanticChunkLimits): AtomicHunkSummary[] {
+  const embedDiffs = shouldEmbedDiffs(chunks, limits);
+  return chunks.map((chunk) => {
+    const summary = atomicHunkSummaryFromChunk(chunk);
+    if (!embedDiffs) return summary;
+
+    return {
+      ...summary,
+      embeddedDiff: chunk.files.map((file) => [
+        `File: ${file.path}`,
+        file.content,
+      ].join('\n')).join('\n\n'),
+    };
+  });
+}
+
+function formatFileInventory(context: EventContext): string {
+  return (context.pullRequest?.files ?? []).map((file) => [
+    `${file.filename} (${file.status})`,
+    `  additions: ${file.additions}`,
+    `  deletions: ${file.deletions}`,
+    `  hunks: ${file.chunks}`,
+  ].join('\n')).join('\n');
+}
+
+function semanticChunkLimits(options: SemanticChunkPlanningOptions): SemanticChunkLimits {
+  return {
+    maxChunks: options.maxChunks ?? 20,
+    maxChunkChars: options.maxChunkChars ?? 30000,
+    maxHunksPerChunk: options.maxHunksPerChunk ?? 50,
+    maxEmbeddedDiffChars: options.maxEmbeddedDiffChars ?? MAX_EMBEDDED_DIFF_CHARS,
+    maxEmbeddedDiffChunks: options.maxEmbeddedDiffChunks ?? MAX_EMBEDDED_DIFF_CHUNKS,
+    maxEmbeddedDiffRanges: options.maxEmbeddedDiffRanges ?? MAX_EMBEDDED_DIFF_RANGES,
+  };
+}
+
+function buildSemanticChunkPlannerInput(
+  context: EventContext,
+  chunks: ReviewChunk[],
+  options: SemanticChunkPlanningOptions,
+): SemanticChunkPlannerInput {
+  const limits = semanticChunkLimits(options);
+  return {
+    context,
+    chunks: atomicHunkSummariesFromChunks(chunks, limits),
+    limits,
+  };
+}
+
+function formatPlannerInput(input: SemanticChunkPlannerInput): string {
+  const pr = input.context.pullRequest;
+  const sections = [
+    `Repository: ${input.context.repository.fullName}`,
+    pr ? `Pull request title: ${pr.title}` : undefined,
+    pr?.body ? `Pull request body: ${pr.body}` : undefined,
+    formatFileInventory(input.context)
+      ? ['Changed files:', formatFileInventory(input.context)].join('\n')
+      : undefined,
+    [
+      'Atomic chunks:',
+      input.chunks.map((chunk) => [
+        `Chunk ID: ${chunk.id}`,
+        `Path: ${chunk.path}`,
+        chunk.language ? `Language: ${chunk.language}` : undefined,
+        `Title: ${chunk.title}`,
+        `Changed ranges: ${chunk.changedRanges.map((range) => `${range.path}:${range.start}-${range.end}`).join(', ')}`,
+        `Content mode: ${chunk.contentMode}`,
+        `Additions: ${chunk.additions}`,
+        `Deletions: ${chunk.deletions}`,
+        chunk.changedLinePreview.length > 0
+          ? ['Changed-line preview:', ...chunk.changedLinePreview].join('\n')
+          : undefined,
+        chunk.embeddedDiff
+          ? ['Embedded small diff:', chunk.embeddedDiff].join('\n')
+          : undefined,
+      ].filter((line): line is string => Boolean(line)).join('\n')).join('\n\n---\n\n'),
+    ].join('\n'),
+  ];
+
+  return sections.filter((section): section is string => Boolean(section)).join('\n\n');
 }
 
 function buildSemanticChunkPlanningPrompt(
@@ -58,10 +199,8 @@ function buildSemanticChunkPlanningPrompt(
   chunks: ReviewChunk[],
   options: SemanticChunkPlanningOptions
 ): string {
-  const pr = context.pullRequest;
-  const maxChunks = options.maxChunks ?? 20;
-  const maxHunksPerChunk = options.maxHunksPerChunk ?? 50;
-  const maxChunkChars = options.maxChunkChars ?? 30000;
+  const plannerInput = buildSemanticChunkPlannerInput(context, chunks, options);
+  const { maxChunks, maxHunksPerChunk, maxChunkChars } = plannerInput.limits;
   const header = [
     'You are planning code review chunks for Warden.',
     '',
@@ -69,15 +208,16 @@ function buildSemanticChunkPlanningPrompt(
     'A semantic chunk should contain changes that a reviewer should understand together: one behavior change, API contract, data flow, migration, validation rule, or test expectation.',
     'For each planned group, write a semantic delta summary: what behavior, contract, data flow, API, or test expectation changed.',
     'Do not restate filenames or line ranges. Do not say "lines 10, 100, 200".',
+    'Do not summarize the input shape. Explain the product, security, data-flow, API, or test behavior being changed.',
     'Keep each summary one sentence. Be concrete enough that a scanner knows why the grouped changes belong together.',
+    'Inspect the changed code with tools before finalizing the plan, especially when grouping across files or distant hunks.',
+    'Use read_review_chunk to inspect exact hunk content for non-embedded chunks; read_changed_file only shows current head content.',
+    'If embedded small diffs are present, use them as initial evidence and use tools only for missing relationships or context.',
     `Target at most ${maxChunks} planned groups.`,
     `Use at most ${maxHunksPerChunk} atomic chunks per group.`,
-    `Keep each planned group under roughly ${maxChunkChars} characters of provided content.`,
+    `Keep each planned group under roughly ${maxChunkChars} characters once materialized for scanning.`,
+    `Embedded small diffs are only present when the changeset fits these planner limits: ${plannerInput.limits.maxEmbeddedDiffChars} chars, ${plannerInput.limits.maxEmbeddedDiffChunks} chunks, ${plannerInput.limits.maxEmbeddedDiffRanges} changed ranges.`,
     'Every input Chunk ID must appear in exactly one group. Do not invent Chunk IDs.',
-    '',
-    `Repository: ${context.repository.fullName}`,
-    pr ? `Pull request title: ${pr.title}` : undefined,
-    pr?.body ? `Pull request body: ${pr.body}` : undefined,
   ].filter((line): line is string => Boolean(line));
 
   return [
@@ -86,8 +226,7 @@ function buildSemanticChunkPlanningPrompt(
     'Return JSON with this exact shape:',
     '{"groups":[{"title":"semantic title","summary":"semantic delta summary","chunkIds":["chunk id"]}]}',
     '',
-    'Atomic chunks:',
-    chunks.map(formatChunkForPlanning).join('\n\n---\n\n'),
+    formatPlannerInput(plannerInput),
   ].join('\n');
 }
 
@@ -226,9 +365,7 @@ function groupFromPlannedChunk(chunk: ReviewChunk): ReviewChunkGroup {
   };
 }
 
-/**
- * Populate ReviewChunk semantic summaries with a model-backed planning pass.
- */
+/** Plan and materialize semantic review chunk groups with a model-backed planning pass. */
 export async function planSemanticReviewChunks(
   files: PreparedFile[],
   context: EventContext,
@@ -246,8 +383,10 @@ export async function planSemanticReviewChunks(
     apiKey: options.apiKey,
     prompt: buildSemanticChunkPlanningPrompt(context, chunks, options),
     schema: SemanticChunkPlanSchema,
+    tools: SEMANTIC_PLANNER_TOOLS,
+    executeTool: createSemanticPlannerToolExecutor(context, chunks),
+    maxIterations: 5,
     model: options.model,
-    maxRetries: options.maxRetries,
   });
 
   if (!result.success) {

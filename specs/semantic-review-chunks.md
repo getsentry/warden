@@ -50,7 +50,7 @@ The target pipeline is:
 ```text
 git patch
   -> atomic hunk inventory
-  -> semantic chunk planner
+  -> semantic planning module
   -> ReviewChunk materialization
   -> run one scanner call per ReviewChunk
   -> validate findings against changedLineMap
@@ -58,6 +58,53 @@ git patch
 
 Git hunks remain the evidence and anchoring primitive. Review chunks become the
 scanner-facing primitive.
+
+Benchmarking for this work is tracked in
+[`semantic-chunk-benchmark.md`](semantic-chunk-benchmark.md).
+
+## Module Boundary
+
+Semantic planning should be cleanly encapsulated in its own module because it is
+an input/output planning pass, not scanner logic. The rest of Warden should not
+know about planner prompts, tool definitions, model selection details, or
+planner validation internals.
+
+Current layout:
+
+```text
+packages/warden/src/semantic/
+  index.ts
+  planner.ts
+  tools.ts
+```
+
+Split `inventory.ts`, `materialize.ts`, or `types.ts` out later only if the
+module grows enough that the separation removes real complexity.
+
+Public surface:
+
+```ts
+export interface SemanticChunkPlannerInput {
+  context: EventContext;
+  chunks: AtomicHunkSummary[];
+  limits: SemanticChunkLimits;
+}
+
+```
+
+The integration point remains thin:
+
+```text
+prepareFiles()
+  -> atomic ReviewChunks
+semantic.planSemanticReviewChunks(...)
+  -> semantic ReviewChunkGroups
+run scanner on groups
+```
+
+`prepareFiles` remains responsible for parsing diffs and creating deterministic
+atomic chunks. The semantic module owns only the decision of which atomic chunks
+belong together and why.
 
 ## ReviewChunk Contract
 
@@ -107,16 +154,19 @@ cannot be used as the comment location.
 Before planning, Warden should normalize parsed hunks into stable atomic units:
 
 ```ts
-export interface AtomicHunk {
+export interface AtomicHunkSummary {
   id: string;
   path: string;
+  language?: string;
   oldStart: number;
   oldEnd: number;
   newStart: number;
   newEnd: number;
   header?: string;
-  changedLines: string[];
-  excerpt: string;
+  symbolHint?: string;
+  additions: number;
+  deletions: number;
+  changedLinePreview?: string[];
 }
 ```
 
@@ -124,17 +174,76 @@ The planner operates on this inventory. It does not invent changed lines. Each
 atomic hunk is either assigned to exactly one review chunk or excluded by an
 existing scan/ignore policy before planning.
 
+The planner should be tool-backed on every semantic run. It should have enough
+compact metadata to decide where to inspect, then use read-only tools to inspect
+the changed code before finalizing the grouping.
+
+Full content is still primarily for scanner execution after semantic grouping.
+Planning input should stay small enough that the planner can reason over the
+whole changeset without reproducing the same token cost that semantic chunking
+is meant to avoid.
+
+Small diffs can be embedded directly as an optimization. The cutoff should be
+tunable because model context windows and price/performance profiles vary. A
+conservative default is:
+
+- embed full atomic hunk content only when the total planner diff payload is at
+  most 8k characters
+- embed only when there are at most 12 atomic chunks
+- embed only when there are at most 12 changed ranges after deterministic
+  preparation
+- otherwise send compact metadata plus capped changed-line previews and require
+  tool inspection
+
+This keeps tiny PRs cheap while preserving the main goal for pathological PRs:
+avoid passing a huge fragmented patch to the planner.
+
+The knobs belong under semantic chunking config, for example:
+
+```toml
+[defaults.chunking.semantic]
+maxEmbeddedDiffChars = 8000
+maxEmbeddedDiffChunks = 12
+maxEmbeddedDiffRanges = 12
+```
+
+Smaller-context or expensive models can set these lower, including `0` to force
+metadata-plus-tools planning.
+
+Allowed compact inputs include:
+
+- repository metadata
+- PR title and body
+- commit messages, when available
+- changed file list and file statuses
+- atomic chunk ids
+- file paths and languages
+- changed ranges
+- hunk headers and symbol hints
+- additions, deletions, and hunk counts
+- small capped changed-line previews when useful
+- full atomic hunk content only when the whole semantic planning input is below
+  the small-diff threshold
+
+Disallowed by default:
+
+- full rendered hunk content for medium or large changesets
+- whole changed files
+- scanner skill prompts
+- full repository context
+
 ## Planner
 
-The semantic chunk planner groups atomic hunks into review chunks and selects a
-content mode for each file in each chunk.
+The semantic chunk planner groups atomic hunks into review chunks and writes a
+semantic summary for each planned group.
 
 Planner input:
 
 - repository and PR metadata
 - PR title and body
+- commit messages, when available
 - changed file list
-- atomic hunk inventory with compact excerpts
+- atomic hunk inventory with compact metadata
 - file sizes and line counts where available
 - hard limits for chunk size and count
 
@@ -142,16 +251,14 @@ Planner output:
 
 ```ts
 export interface PlannedReviewChunk {
-  id: string;
   title: string;
   summary: string;
-  hunkIds: string[];
-  files: Array<{
-    path: string;
-    contentMode: 'whole-file' | 'stitched-file' | 'raw-hunks';
-  }>;
+  chunkIds: string[];
 }
 ```
+
+Current materialization keeps planned groups as `raw-hunks` review chunks. Whole
+file and stitched-file materializers remain future work.
 
 The planner should optimize for scanner usefulness, not for diff prettiness.
 Good chunks are cohesive enough that the scanner can understand the change in
@@ -159,6 +266,35 @@ one pass and small enough that the scanner can stay precise.
 Cross-file groups are allowed and expected when the files are part of the same
 semantic delta. A source change and its test assertion should usually stay
 together if reviewing them independently would hide the behavior change.
+
+The planner should use the primary scanner model by default, not the auxiliary
+model. Semantic grouping is a hard reasoning task: it must infer relationships
+between files, tests, call sites, and behavior. Auxiliary models remain
+appropriate for extraction repair and other bounded post-processing work.
+
+### Tool-Using Planning Agent
+
+The planner should be a tool-using read-only agent, not only a single schema
+call over a rendered prompt. It should always have tools available and should
+inspect code before finalizing a plan. Embedded small diffs can reduce tool
+turns, but tools remain the primary way to resolve cross-file relationships,
+symbol usage, and behavior.
+
+Read-only tools should include:
+
+- read changed file content at head
+- read base content or changed-range context
+- inspect nearby symbols/functions
+- search usages/imports with bounded `rg`
+- inspect PR metadata and commit messages
+
+The planner must not have write tools. It should also not receive an unbounded
+repo dump. Tool calls should be driven by grouping uncertainty: inspect enough
+code to decide which chunks belong together, then stop.
+
+The scanner remains responsible for finding issues. The planner is responsible
+only for grouping and writing semantic summaries that explain why the grouped
+changes should be reviewed together.
 
 ## Materialization
 
@@ -205,6 +341,9 @@ enabled = true
 maxChunks = 20
 maxChunkChars = 30000
 maxHunksPerChunk = 50
+maxEmbeddedDiffChars = 8000
+maxEmbeddedDiffChunks = 12
+maxEmbeddedDiffRanges = 12
 preferWholeFileBelowLines = 800
 ```
 
@@ -259,19 +398,175 @@ Warden should record enough data to prove whether semantic chunking helps:
 This should make cost and latency changes visible without reading logs line by
 line.
 
+## User-Facing Visibility
+
+Semantic segments may be useful beyond internal execution. Warden should be able
+to expose them in debug or verbose output, and possibly in pull request reports,
+without making them noisy by default.
+
+Useful fields to expose:
+
+- segment title
+- semantic summary
+- files included
+- changed ranges included
+- atomic chunk count
+- content mode per file
+- scanner result count for the segment
+
+CLI presentation can show a compact plan before scanning when verbose output is
+enabled:
+
+```text
+Semantic plan: 7 review chunks from 42 atomic hunks
+  1. Enforce project access in token lookup
+     api/tokens.ts, auth/permissions.ts, api/tokens.test.ts
+  2. Update dashboard range validation
+     dashboard/range.ts, dashboard/range.test.ts
+```
+
+Pull request presentation should be more conservative. A collapsed report
+section can help reviewers understand why findings came from a cross-file
+chunk, but inline comments should remain focused on findings. The plan should
+not become another review surface unless it clearly helps explain Warden's
+coverage and cost.
+
+## Benchmarking and Evals
+
+Semantic chunking needs more than a chunk-count benchmark. We need fixtures
+where semantic grouping should materially improve or preserve scanner quality.
+
+Good fixtures:
+
+- real commit or PR SHA
+- known security regression or confirmed product bug
+- objective expected finding
+- issue spans multiple files or many tiny hunks
+- baseline hunk mode is worse in recall, duplicates, cost, or model calls
+
+Preferred security examples:
+
+- removed authorization check
+- unsafe command execution
+- path traversal
+- SSRF
+- SQL/query injection
+- secret exposure
+- unsafe deserialization
+
+Each fixture should run the same scanner twice:
+
+```text
+same fixture + same skill + semantic off
+same fixture + same skill + semantic on
+```
+
+Compare:
+
+- expected finding found or missed
+- severity and confidence
+- location correctness
+- duplicate findings
+- total findings
+- chunk count
+- model calls
+- input and output tokens
+- cost
+- wall time
+
+The eval should also inspect planner output directly:
+
+- at least one expected semantic group exists
+- group summary describes behavior, not files or line numbers
+- cross-file changes can be grouped when they are one logical change
+- unrelated edits remain separate
+
+The benchmark corpus already supports known Sentry vulnerabilities. We should
+reuse that machinery where possible, but semantic chunking needs fixtures
+selected for cross-file or many-hunk behavior, not just historical security
+coverage.
+
+## Prior Art Notes
+
+This space has enough prior art to shape the implementation, but not enough
+public detail to copy an architecture directly.
+
+- CodeRabbit documents context-aware PR review, path-specific instructions,
+  linked issue context, MCP context, multi-repo analysis, walkthrough comments,
+  and a review interface that reorganizes a PR into a logical walkthrough
+  rather than a flat file list:
+  <https://docs.coderabbit.ai/llms.txt>
+- CodeRabbit's path instructions and filters are a useful reminder that semantic
+  grouping should respect review scope and file-specific guidance. Generated
+  files, binaries, and lockfiles should be filtered before semantic planning,
+  and path-scoped review instructions should remain scanner inputs rather than
+  planner inputs:
+  <https://docs.coderabbit.ai/configuration/path-instructions>
+- Qodo describes its current review product as multi-agent PR analysis with
+  diff plus repository-aware reasoning, ticket-aware context, and a separate
+  semantic code intelligence layer for repository retrieval and multi-step
+  reasoning:
+  <https://docs.qodo.ai/llms.txt>
+- SWE-PRBench is the strongest warning against "just add more context." Its
+  results show AI review quality degrading as context expands, even with
+  structured semantic layers such as AST function context and import graph
+  resolution. It also found that a compact diff-with-summary context beat a
+  richer full-context prompt in their setup:
+  <https://arxiv.org/abs/2603.26130>
+- MutaGReP supports the same direction from code-use tasks: instead of putting
+  the whole repo into context, it builds grounded natural-language plans using
+  retrieval over relevant symbols. The reported plans use a small fraction of a
+  large context window while preserving task performance:
+  <https://arxiv.org/abs/2502.15872>
+- Semantic-aware AST diff work, especially RefactoringMiner-based approaches,
+  suggests a future deterministic enhancement: detect moved/renamed/refactored
+  code so the semantic planner starts with better symbol and relationship hints:
+  <https://arxiv.org/abs/2403.05939>
+- Empirical AI review studies suggest concise, actionable comments matter.
+  One study of GitHub Actions review tools found concise comments with code
+  snippets and hunk-level review tools were more likely to lead to code changes:
+  <https://arxiv.org/abs/2508.18771>
+- Industrial Qodo PR Agent studies found automated review can help bug
+  detection and awareness, but can also increase review time and produce faulty
+  or irrelevant comments:
+  <https://arxiv.org/abs/2412.18531>
+
+Implementation lessons for Warden:
+
+- Keep planner context compact. The planner should operate over an inventory and
+  retrieve extra context through bounded tools only when needed.
+- Treat semantic summaries as routing/context, not evidence. Findings still
+  need changed-line anchors and scanner evidence.
+- Separate planning from scanning. A planning agent can inspect the repo to
+  group work; skill scanners still own domain-specific finding generation.
+- Prefer explicit semantic segments over invisible behavior. Showing the plan in
+  verbose CLI output, JSONL, or a collapsed PR section can make Warden's work
+  auditable without overwhelming inline review.
+- Evaluate against expected findings, not only cost. A cheaper run that misses a
+  known bug is worse. A more expensive planner may be justified only when it
+  improves or preserves recall while reducing scanner fragmentation.
+- Avoid unbounded full-context prompts. Prior work suggests attention dilution
+  is a real failure mode; semantic chunking should reduce cognitive load, not
+  move the entire PR into an earlier prompt.
+
 ## Rollout
 
-1. Add `AtomicHunk`, `ReviewChunk`, and multi-range finding validation.
+1. Add `AtomicHunkSummary`, `ReviewChunk`, and multi-range finding validation.
 2. Adapt the existing hunk/coalescing flow to emit `ReviewChunk` values using
    `raw-hunks`.
 3. Update scanner prompt construction to accept `ReviewChunk`.
-4. Add the model-backed semantic planner behind `chunking.semantic.enabled`.
-   Planner output is the first place `ReviewChunk.summary` should be populated.
-5. Add materializers for `whole-file`, `stitched-file`, and `raw-hunks`.
-6. Add telemetry for chunk counts, cost, duration, and planner failures.
-7. Add regression fixtures for tiny-hunk pathological changes, including the
+4. Move semantic planning into `packages/warden/src/semantic/` with a narrow
+   public API.
+5. Replace the simple auxiliary schema call with a primary-model, read-only
+   tool-using planning agent.
+6. Keep planner input compact and make code inspection explicit through tools.
+7. Add materializers for `whole-file`, `stitched-file`, and `raw-hunks`.
+8. Add telemetry for chunk counts, cost, duration, and planner failures.
+9. Add regression fixtures for tiny-hunk pathological changes, including the
    `getsentry/sentry-mcp` style case from Warden issue 313.
-8. Enable selectively, compare eval recall and cost, then consider making it
+10. Add semantic-vs-hunk eval fixtures with known expected findings.
+11. Add optional verbose CLI and collapsed PR visibility for semantic segments.
+12. Enable selectively, compare eval recall and cost, then consider making it
    default.
 
 ## Non-Goals
@@ -281,3 +576,5 @@ line.
 - exposing planner recovery strategy as user config
 - building a full AST differ
 - reviewing unchanged lines as primary finding locations
+- passing full diffs or full repository context to the planner by default
+- making semantic segment display a required PR review surface

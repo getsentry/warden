@@ -189,6 +189,12 @@ export const SemanticChunkingConfigSchema = z.object({
   maxChunkChars: z.number().int().positive().optional(),
   /** Maximum atomic hunks to group into one semantic review chunk */
   maxHunksPerChunk: z.number().int().positive().optional(),
+  /** Maximum total hunk content characters to embed in the semantic planner prompt */
+  maxEmbeddedDiffChars: z.number().int().nonnegative().optional(),
+  /** Maximum prepared chunks allowed before the semantic planner stops embedding full hunk content */
+  maxEmbeddedDiffChunks: z.number().int().nonnegative().optional(),
+  /** Maximum changed ranges allowed before the semantic planner stops embedding full hunk content */
+  maxEmbeddedDiffRanges: z.number().int().nonnegative().optional(),
   /** Reserved for whole-file materialization below this line count */
   preferWholeFileBelowLines: z.number().int().positive().optional(),
 });

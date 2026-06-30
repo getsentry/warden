@@ -12,6 +12,7 @@ import { Semaphore, runPool } from '../../utils/index.js';
 import { SkillRunnerError, WardenAuthenticationError } from '../../sdk/errors.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import * as sdkRunner from '../../sdk/runner.js';
+import * as semanticPlanner from '../../semantic/index.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -775,7 +776,7 @@ describe('runSkillTasks', () => {
       files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
       skippedFiles: [],
     });
-    const planSemanticReviewChunks = vi.spyOn(sdkRunner, 'planSemanticReviewChunks').mockResolvedValue({
+    const planSemanticReviewChunks = vi.spyOn(semanticPlanner, 'planSemanticReviewChunks').mockResolvedValue({
       groups: [{ displayName: 'a.ts', filenames: ['a.ts'], chunks: [fakeChunk] }],
       usage: { inputTokens: 10, outputTokens: 5, costUSD: 0.001 },
     });
@@ -814,6 +815,85 @@ describe('runSkillTasks', () => {
     expect(results.filter((result) =>
       Boolean(result.report?.auxiliaryUsage?.['semantic-chunk-planner'])
     )).toHaveLength(1);
+
+    prepareFiles.mockRestore();
+    planSemanticReviewChunks.mockRestore();
+    analyzeFile.mockRestore();
+  });
+
+  it('keys shared semantic planning by primary model and not auxiliary model', async () => {
+    const fakeChunk = makeReviewChunk('a.ts', 1, 1);
+    const context = {
+      eventType: 'pull_request',
+      repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+      repoPath: '/tmp',
+      pullRequest: {
+        number: 1,
+        title: 't',
+        body: '',
+        author: 'octocat',
+        baseBranch: 'main',
+        headBranch: 'feature',
+        headSha: 'abc',
+        baseSha: 'def',
+        files: [{
+          filename: 'a.ts',
+          status: 'modified',
+          additions: 1,
+          deletions: 1,
+          patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+        }],
+      },
+    } as unknown as SkillTaskOptions['context'];
+    const baseRunnerOptions: SkillTaskOptions['runnerOptions'] = {
+      model: 'primary-a',
+      chunking: { semantic: { enabled: true } },
+      postProcessFindings: false,
+    };
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', chunks: [fakeChunk] }],
+      skippedFiles: [],
+    });
+    const planSemanticReviewChunks = vi.spyOn(semanticPlanner, 'planSemanticReviewChunks').mockResolvedValue({
+      groups: [{ displayName: 'a.ts', filenames: ['a.ts'], chunks: [fakeChunk] }],
+      usage: { inputTokens: 10, outputTokens: 5, costUSD: 0.001 },
+    });
+    const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    } satisfies FileAnalysisResult);
+
+    await runSkillTasks([
+      {
+        name: 'skill-a',
+        resolveSkill: async () => ({ name: 'skill-a', description: '', prompt: '' }),
+        context,
+        runnerOptions: { ...baseRunnerOptions, auxiliaryModel: 'aux-a' },
+      },
+      {
+        name: 'skill-b',
+        resolveSkill: async () => ({ name: 'skill-b', description: '', prompt: '' }),
+        context,
+        runnerOptions: { ...baseRunnerOptions, auxiliaryModel: 'aux-b', auxiliaryMaxRetries: 99 },
+      },
+      {
+        name: 'skill-c',
+        resolveSkill: async () => ({ name: 'skill-c', description: '', prompt: '' }),
+        context,
+        runnerOptions: { ...baseRunnerOptions, model: 'primary-b', auxiliaryModel: 'aux-a' },
+      },
+    ], {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 3,
+    });
+
+    expect(prepareFiles).toHaveBeenCalledTimes(2);
+    expect(planSemanticReviewChunks).toHaveBeenCalledTimes(2);
 
     prepareFiles.mockRestore();
     planSemanticReviewChunks.mockRestore();

@@ -57,7 +57,6 @@ export type {
 
 // Re-export file preparation
 export { prepareFiles } from './prepare.js';
-export { planSemanticReviewChunks } from './semantic-chunk-planner.js';
 
 // Re-export verification utilities
 export { verifyFindings } from './verify.js';

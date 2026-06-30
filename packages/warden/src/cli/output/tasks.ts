@@ -15,7 +15,6 @@ import {
   aggregateUsage,
   aggregateAuxiliaryUsage,
   postProcessFindings,
-  planSemanticReviewChunks,
   generateSummary,
   type AuxiliaryUsageEntry,
   type SkillRunnerOptions,
@@ -25,6 +24,7 @@ import {
   type ChunkAnalysisResult,
   type FindingProcessingEvent,
 } from '../../sdk/runner.js';
+import { planSemanticReviewChunks } from '../../semantic/index.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import { buildFileReports } from '../../sdk/report-files.js';
 import chalk from 'chalk';
@@ -277,11 +277,13 @@ async function prepareTaskFiles(
     enabled: runnerOptions.chunking?.semantic?.enabled,
     apiKey: runnerOptions.apiKey,
     runtime: runnerOptions.runtime,
-    model: runnerOptions.auxiliaryModel ?? runnerOptions.model,
-    maxRetries: runnerOptions.auxiliaryMaxRetries,
+    model: runnerOptions.model,
     maxChunks: runnerOptions.chunking?.semantic?.maxChunks,
     maxChunkChars: runnerOptions.chunking?.semantic?.maxChunkChars,
     maxHunksPerChunk: runnerOptions.chunking?.semantic?.maxHunksPerChunk,
+    maxEmbeddedDiffChars: runnerOptions.chunking?.semantic?.maxEmbeddedDiffChars,
+    maxEmbeddedDiffChunks: runnerOptions.chunking?.semantic?.maxEmbeddedDiffChunks,
+    maxEmbeddedDiffRanges: runnerOptions.chunking?.semantic?.maxEmbeddedDiffRanges,
   });
 
   return {
@@ -1069,8 +1071,7 @@ function semanticPlanKey(task: SkillTaskOptions): string | undefined {
     chunking: task.runnerOptions.chunking,
     apiKey: Boolean(task.runnerOptions.apiKey),
     runtime: task.runnerOptions.runtime,
-    model: task.runnerOptions.auxiliaryModel ?? task.runnerOptions.model,
-    auxiliaryMaxRetries: task.runnerOptions.auxiliaryMaxRetries,
+    model: task.runnerOptions.model,
   });
 }
 

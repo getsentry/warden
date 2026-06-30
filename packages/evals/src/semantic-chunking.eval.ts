@@ -1,3 +1,6 @@
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { expect } from 'vitest';
 import { createJudge, describeEval } from 'vitest-evals';
 import type { JudgeContext } from 'vitest-evals';
@@ -5,7 +8,7 @@ import { normalizeContent, toJsonValue, type Harness, type JsonValue } from 'vit
 import { z } from 'zod';
 import type { EventContext } from '../../warden/src/types/index.js';
 import { prepareFiles } from '../../warden/src/sdk/prepare.js';
-import { planSemanticReviewChunks } from '../../warden/src/sdk/semantic-chunk-planner.js';
+import { planSemanticReviewChunks } from '../../warden/src/semantic/index.js';
 import {
   DEFAULT_EVAL_RUNTIME,
   defaultEvalModel,
@@ -36,7 +39,22 @@ const SemanticChunkingEvalOutputSchema = z.object({
   })),
 });
 
-function makeSemanticChunkingContext(): EventContext {
+async function createSemanticChunkingRepo(): Promise<string> {
+  const repoPath = await mkdtemp(join(tmpdir(), 'warden-semantic-chunking-eval-'));
+  await mkdir(join(repoPath, 'src'), { recursive: true });
+  await mkdir(join(repoPath, 'tests'), { recursive: true });
+  await writeFile(join(repoPath, 'src/dashboard.ts'), [
+    'const range = widget.axisRange ?? getDefaultAxisRange(widget);',
+    'const chart = convertWidgetToChart(widget, range);',
+    'return renderChart(chart, series, range);',
+  ].join('\n'));
+  await writeFile(join(repoPath, 'tests/dashboard.test.ts'), [
+    'expect(rendered.range).toEqual(customAxisRange);',
+  ].join('\n'));
+  return repoPath;
+}
+
+function makeSemanticChunkingContext(repoPath: string): EventContext {
   return {
     eventType: 'pull_request',
     action: 'opened',
@@ -46,7 +64,7 @@ function makeSemanticChunkingContext(): EventContext {
       fullName: 'getsentry/semantic-chunking-eval',
       defaultBranch: 'main',
     },
-    repoPath: '/tmp/warden-semantic-chunking-eval',
+    repoPath,
     pullRequest: {
       number: 313,
       title: 'Update dashboard behavior',
@@ -95,63 +113,71 @@ function createSemanticChunkingHarness(): Harness<SemanticChunkingEvalInput, Jso
     run: async (input) => {
       SemanticChunkingEvalInputSchema.parse(input);
       const startTime = Date.now();
-      const context = makeSemanticChunkingContext();
-      const prepared = prepareFiles(context, {
-        chunking: {
-          semantic: {
-            enabled: true,
-            maxChunks: 20,
-            maxChunkChars: 30000,
-            maxHunksPerChunk: 50,
-            preferWholeFileBelowLines: 800,
+      const repoPath = await createSemanticChunkingRepo();
+      try {
+        const context = makeSemanticChunkingContext(repoPath);
+        const prepared = prepareFiles(context, {
+          chunking: {
+            semantic: {
+              enabled: true,
+              maxChunks: 20,
+              maxChunkChars: 30000,
+              maxHunksPerChunk: 50,
+              preferWholeFileBelowLines: 800,
+            },
           },
-        },
-      });
-      const atomicChunks = prepared.files.flatMap((file) => file.chunks);
-      const planned = await planSemanticReviewChunks(prepared.files, context, {
-        enabled: true,
-        apiKey,
-        runtime: DEFAULT_EVAL_RUNTIME,
-        model,
-        maxChunks: 20,
-        maxChunkChars: 30000,
-        maxHunksPerChunk: 50,
-      });
-      const chunks = planned.groups.flatMap((group) => group.chunks);
-      const output = {
-        atomicChunkCount: atomicChunks.length,
-        chunks: chunks.map((chunk) => ({
-          summary: chunk.summary,
-          files: chunk.files.map((file) => file.path),
-          changedLineMap: chunk.changedLineMap,
-          content: chunk.files.map((file) => file.content).join('\n'),
-        })),
-      };
-
-      return {
-        output: toJsonValue(output) as JsonValue,
-        session: {
-          messages: [
-            {
-              role: 'user',
-              content: normalizeContent({
-                name: input.name,
-                goal: 'Group related dashboard range changes semantically across implementation and test files.',
-              }),
-            },
-            {
-              role: 'assistant',
-              content: normalizeContent(output),
-            },
-          ],
-          provider: DEFAULT_EVAL_RUNTIME,
+        });
+        const atomicChunks = prepared.files.flatMap((file) => file.chunks);
+        const planned = await planSemanticReviewChunks(prepared.files, context, {
+          enabled: true,
+          apiKey,
+          runtime: DEFAULT_EVAL_RUNTIME,
           model,
-        },
-        usage: {},
-        timings: { totalMs: Date.now() - startTime },
-        artifacts: {},
-        errors: [],
-      };
+          maxChunks: 20,
+          maxChunkChars: 30000,
+          maxHunksPerChunk: 50,
+          maxEmbeddedDiffChars: 0,
+          maxEmbeddedDiffChunks: 0,
+          maxEmbeddedDiffRanges: 0,
+        });
+        const chunks = planned.groups.flatMap((group) => group.chunks);
+        const output = {
+          atomicChunkCount: atomicChunks.length,
+          chunks: chunks.map((chunk) => ({
+            summary: chunk.summary,
+            files: chunk.files.map((file) => file.path),
+            changedLineMap: chunk.changedLineMap,
+            content: chunk.files.map((file) => file.content).join('\n'),
+          })),
+        };
+
+        return {
+          output: toJsonValue(output) as JsonValue,
+          session: {
+            messages: [
+              {
+                role: 'user',
+                content: normalizeContent({
+                  name: input.name,
+                  goal: 'Group related dashboard range changes semantically across implementation and test files.',
+                }),
+              },
+              {
+                role: 'assistant',
+                content: normalizeContent(output),
+              },
+            ],
+            provider: DEFAULT_EVAL_RUNTIME,
+            model,
+          },
+          usage: {},
+          timings: { totalMs: Date.now() - startTime },
+          artifacts: {},
+          errors: [],
+        };
+      } finally {
+        await rm(repoPath, { recursive: true, force: true });
+      }
     },
   };
 }

@@ -615,7 +615,16 @@ describe('mergeWardenConfigs', () => {
         chunking: {
           filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
           coalesce: { maxGapLines: 5, maxChunkSize: 2000, enabled: true },
-          semantic: { enabled: true, maxChunks: 10, maxChunkChars: 12000, maxHunksPerChunk: 25, preferWholeFileBelowLines: 500 },
+          semantic: {
+            enabled: true,
+            maxChunks: 10,
+            maxChunkChars: 12000,
+            maxHunksPerChunk: 25,
+            maxEmbeddedDiffChars: 4000,
+            maxEmbeddedDiffChunks: 8,
+            maxEmbeddedDiffRanges: 8,
+            preferWholeFileBelowLines: 500,
+          },
           maxContextFiles: 10,
         },
       },
@@ -645,7 +654,16 @@ describe('mergeWardenConfigs', () => {
           { pattern: '**/*.snap', mode: 'skip' },
         ],
         coalesce: { enabled: true, maxGapLines: 5, maxChunkSize: 2000 },
-        semantic: { enabled: true, maxChunks: 10, maxChunkChars: 12000, maxHunksPerChunk: 25, preferWholeFileBelowLines: 500 },
+        semantic: {
+          enabled: true,
+          maxChunks: 10,
+          maxChunkChars: 12000,
+          maxHunksPerChunk: 25,
+          maxEmbeddedDiffChars: 4000,
+          maxEmbeddedDiffChunks: 8,
+          maxEmbeddedDiffRanges: 8,
+          preferWholeFileBelowLines: 500,
+        },
         maxContextFiles: 10,
       },
     });
@@ -661,6 +679,7 @@ describe('mergeWardenConfigs', () => {
             enabled: true,
             maxChunks: 20,
             maxChunkChars: 50000,
+            maxEmbeddedDiffChars: 8000,
           },
         },
       },
@@ -672,6 +691,7 @@ describe('mergeWardenConfigs', () => {
         chunking: {
           semantic: {
             maxChunks: 8,
+            maxEmbeddedDiffRanges: 6,
           },
         },
       },
@@ -682,6 +702,8 @@ describe('mergeWardenConfigs', () => {
       enabled: true,
       maxChunks: 8,
       maxChunkChars: 50000,
+      maxEmbeddedDiffChars: 8000,
+      maxEmbeddedDiffRanges: 6,
     });
   });
 

@@ -15,6 +15,9 @@ enabled = true
 maxChunks = 20
 maxChunkChars = 30000
 maxHunksPerChunk = 50
+maxEmbeddedDiffChars = 8000
+maxEmbeddedDiffChunks = 12
+maxEmbeddedDiffRanges = 12
 preferWholeFileBelowLines = 800
 
 [[skills]]

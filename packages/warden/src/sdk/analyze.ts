@@ -28,7 +28,7 @@ import {
   type ChunkAnalysisResult,
 } from './types.js';
 import { prepareFiles } from './prepare.js';
-import { planSemanticReviewChunks } from './semantic-chunk-planner.js';
+import { planSemanticReviewChunks } from '../semantic/index.js';
 import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace } from '../types/index.js';
 import type { SourceSnippet } from '../types/index.js';
 import { runPool } from '../utils/index.js';
@@ -1033,11 +1033,13 @@ async function runSkillAnalysis(
     enabled: options.chunking?.semantic?.enabled,
     apiKey: options.apiKey,
     runtime: options.runtime,
-    model: options.auxiliaryModel ?? options.model,
-    maxRetries: options.auxiliaryMaxRetries,
+    model: options.model,
     maxChunks: options.chunking?.semantic?.maxChunks,
     maxChunkChars: options.chunking?.semantic?.maxChunkChars,
     maxHunksPerChunk: options.chunking?.semantic?.maxHunksPerChunk,
+    maxEmbeddedDiffChars: options.chunking?.semantic?.maxEmbeddedDiffChars,
+    maxEmbeddedDiffChunks: options.chunking?.semantic?.maxEmbeddedDiffChunks,
+    maxEmbeddedDiffRanges: options.chunking?.semantic?.maxEmbeddedDiffRanges,
   });
   const chunkGroups = semanticPlan.groups;
 
@@ -1068,7 +1070,7 @@ async function runSkillAnalysis(
     allAuxiliaryUsage.push({
       agent: 'semantic-chunk-planner',
       usage: semanticPlan.usage,
-      model: options.auxiliaryModel ?? options.model,
+      model: options.model,
       runtime: options.runtime,
     });
   }

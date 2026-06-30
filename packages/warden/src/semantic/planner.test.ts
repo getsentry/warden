@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EventContext } from '../types/index.js';
-import { prepareFiles } from './prepare.js';
-import { planSemanticReviewChunks } from './semantic-chunk-planner.js';
-import type { Runtime } from './runtimes/index.js';
-import type * as RuntimeModule from './runtimes/index.js';
+import { prepareFiles } from '../sdk/prepare.js';
+import { planSemanticReviewChunks } from './planner.js';
+import type { Runtime } from '../sdk/runtimes/index.js';
+import type * as RuntimeModule from '../sdk/runtimes/index.js';
 
 const runAuxiliary = vi.fn();
 
-vi.mock('./runtimes/index.js', async (importOriginal) => {
+vi.mock('../sdk/runtimes/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeModule>();
   return {
     ...actual,
@@ -131,10 +131,138 @@ describe('planSemanticReviewChunks', () => {
     expect(runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({
       task: 'semantic_chunking',
       agentName: 'semantic-chunk-planner',
+      model: 'anthropic/claude-sonnet-4-6',
+      tools: expect.arrayContaining([
+        expect.objectContaining({ name: 'read_review_chunk' }),
+        expect.objectContaining({ name: 'read_changed_file' }),
+        expect.objectContaining({ name: 'search_repo' }),
+      ]),
+      executeTool: expect.any(Function),
+      maxIterations: 5,
     }));
     const prompt = runAuxiliary.mock.calls[0]?.[0].prompt as string;
-    expect(prompt).toContain('Group atomic git chunks into semantic review chunks.');
-    expect(prompt).toContain('Do not restate filenames or line ranges.');
+    expect(prompt).toContain('Changed-line preview:');
+    expect(prompt).toContain('Embedded small diff:');
+    expect(prompt).toContain('@@ -10,1 +10,1 @@');
+  });
+
+  it('keeps many-hunk planner prompts metadata-first and tool-backed', async () => {
+    const context = makeContext();
+    context.pullRequest!.files = [{
+      filename: 'src/dashboard.ts',
+      status: 'modified',
+      additions: 13,
+      deletions: 13,
+      chunks: 13,
+      patch: Array.from({ length: 13 }, (_, index) => {
+        const line = index + 1;
+        return [
+          `@@ -${line},1 +${line},1 @@`,
+          `-const value${line} = getDefaultRange(widget);`,
+          `+const value${line} = widget.axisRange ?? getDefaultRange(widget);`,
+        ].join('\n');
+      }).join('\n'),
+    }];
+    const prepared = prepareFiles(context, {
+      chunking: {
+        semantic: {
+          enabled: true,
+          maxChunks: 20,
+          maxChunkChars: 30000,
+          maxHunksPerChunk: 50,
+          preferWholeFileBelowLines: 800,
+        },
+      },
+    });
+    const chunkIds = prepared.files.flatMap((file) => file.chunks.map((chunk) => chunk.id));
+    runAuxiliary.mockResolvedValueOnce({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve dashboard axis range',
+          summary: 'Dashboard range values now prefer widget-provided axis ranges across repeated dashboard call sites.',
+          chunkIds,
+        }],
+      },
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.001,
+      },
+    });
+
+    await planSemanticReviewChunks(prepared.files, context, {
+      enabled: true,
+      runtime: 'pi',
+      model: 'anthropic/claude-sonnet-4-6',
+    });
+
+    const prompt = runAuxiliary.mock.calls[0]?.[0].prompt as string;
+    expect(prompt).toContain('Changed-line preview:');
+    expect(prompt).not.toContain('Embedded small diff:');
+    expect(prompt).not.toContain('@@ -1,1 +1,1 @@');
+    const executeTool = runAuxiliary.mock.calls[0]?.[0].executeTool as (
+      name: string,
+      input: Record<string, unknown>,
+    ) => Promise<string>;
+    await expect(executeTool('read_review_chunk', { chunkId: chunkIds[0] }))
+      .resolves.toContain('@@ -1,1 +1,1 @@');
+  });
+
+  it('uses configured embedded diff limits for smaller-context models', async () => {
+    runAuxiliary.mockResolvedValueOnce({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve dashboard axis range',
+          summary: 'Dashboard charts now carry a widget-provided axis range through chart construction and assert that custom range in tests.',
+          chunkIds: ['src/dashboard.ts:10', 'src/dashboard.ts:100', 'src/dashboard.ts:200'],
+        }],
+      },
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.001,
+      },
+    });
+
+    const context = makeContext();
+    const prepared = prepareFiles(context, {
+      chunking: {
+        semantic: {
+          enabled: true,
+          maxChunks: 20,
+          maxChunkChars: 30000,
+          maxHunksPerChunk: 50,
+          preferWholeFileBelowLines: 800,
+        },
+      },
+    });
+
+    await planSemanticReviewChunks(prepared.files, context, {
+      enabled: true,
+      runtime: 'pi',
+      model: 'small-context-model',
+      maxEmbeddedDiffChars: 0,
+      maxEmbeddedDiffChunks: 0,
+      maxEmbeddedDiffRanges: 0,
+    });
+
+    const prompt = runAuxiliary.mock.calls[0]?.[0].prompt as string;
+    expect(prompt).toContain('0 chars, 0 chunks, 0 changed ranges');
+    expect(prompt).toContain('Changed-line preview:');
+    expect(prompt).not.toContain('Embedded small diff:');
+    expect(prompt).not.toContain('@@ -10,1 +10,1 @@');
   });
 
   it('splits planned groups that exceed maxChunkChars after materialization', async () => {
