@@ -285,6 +285,10 @@ export async function runStructuredSkillBuilderAgent<T>(args: {
           apiKey: args.repair.apiKey,
           model: args.repair.model,
           maxRetries: args.repair.maxRetries,
+          // Forward custom providers like the primary repair path does, so the
+          // fallback auxiliary repair stays on the configured (e.g. self-hosted)
+          // provider instead of the runtime default.
+          providers: args.providers,
         },
       });
       if (auxiliaryRepair.usage) {
