@@ -165,6 +165,14 @@ function splitPlannedChunks(
   };
 
   for (const chunk of chunks) {
+    const singleChunk = materializePlannedChunk(startIndex + batches.length, title, summary, [chunk]);
+    if (reviewChunkContentChars(singleChunk) > limits.maxChunkChars) {
+      throw new SkillRunnerError(
+        `Semantic chunk planning cannot split atomic chunk ${chunk.id} under maxChunkChars ${limits.maxChunkChars}`,
+        { code: 'sdk_error' },
+      );
+    }
+
     if (current.length === 0) {
       current = [chunk];
       continue;
@@ -279,6 +287,13 @@ export async function planSemanticReviewChunks(
       maxChunkChars,
       maxHunksPerChunk,
     }));
+
+    if (plannedChunks.length > maxChunks) {
+      throw new SkillRunnerError(
+        `Semantic chunk planning materialized ${plannedChunks.length} groups, exceeding maxChunks ${maxChunks}`,
+        { code: 'sdk_error' },
+      );
+    }
   }
 
   const missing = chunks.filter((chunk) => !seen.has(chunk.id));

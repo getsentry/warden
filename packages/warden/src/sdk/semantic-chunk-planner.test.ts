@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EventContext } from '../types/index.js';
 import { prepareFiles } from './prepare.js';
 import { planSemanticReviewChunks } from './semantic-chunk-planner.js';
@@ -18,6 +18,10 @@ vi.mock('./runtimes/index.js', async (importOriginal) => {
       runSynthesis: vi.fn(),
     } satisfies Runtime)),
   };
+});
+
+beforeEach(() => {
+  runAuxiliary.mockReset();
 });
 
 function makeContext(): EventContext {
@@ -161,20 +165,86 @@ describe('planSemanticReviewChunks', () => {
     const planned = await planSemanticReviewChunks(prepared.files, context, {
       enabled: true,
       runtime: 'pi',
-      maxChunkChars: 200,
+      maxChunkChars: 500,
     });
 
-    expect(planned.groups).toHaveLength(3);
+    expect(planned.groups).toHaveLength(2);
     expect(planned.groups.map((group) => group.chunks[0]?.title)).toEqual([
-      'Preserve dashboard axis range (1/3)',
-      'Preserve dashboard axis range (2/3)',
-      'Preserve dashboard axis range (3/3)',
+      'Preserve dashboard axis range (1/2)',
+      'Preserve dashboard axis range (2/2)',
     ]);
     expect(planned.groups.map((group) => group.chunks[0]?.changedLineMap)).toEqual([
-      [{ path: 'src/dashboard.ts', start: 10, end: 10 }],
-      [{ path: 'src/dashboard.ts', start: 100, end: 100 }],
+      [
+        { path: 'src/dashboard.ts', start: 10, end: 10 },
+        { path: 'src/dashboard.ts', start: 100, end: 100 },
+      ],
       [{ path: 'src/dashboard.ts', start: 200, end: 200 }],
     ]);
+  });
+
+  it('rejects materialized groups that exceed maxChunks after splitting', async () => {
+    runAuxiliary.mockResolvedValueOnce({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve dashboard axis range',
+          summary: 'Dashboard charts now carry a widget-provided axis range through chart construction and assert that custom range in tests.',
+          chunkIds: ['src/dashboard.ts:10', 'src/dashboard.ts:100', 'src/dashboard.ts:200'],
+        }],
+      },
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.001,
+      },
+    });
+
+    const context = makeContext();
+    const prepared = prepareFiles(context);
+
+    await expect(planSemanticReviewChunks(prepared.files, context, {
+      enabled: true,
+      runtime: 'pi',
+      maxChunks: 1,
+      maxChunkChars: 500,
+    })).rejects.toThrow('materialized 2 groups, exceeding maxChunks 1');
+  });
+
+  it('rejects atomic chunks that exceed maxChunkChars', async () => {
+    runAuxiliary.mockResolvedValueOnce({
+      success: true,
+      data: {
+        groups: [{
+          title: 'Preserve dashboard axis range',
+          summary: 'Dashboard charts now carry a widget-provided axis range through chart construction and assert that custom range in tests.',
+          chunkIds: ['src/dashboard.ts:10'],
+        }],
+      },
+      usage: {
+        inputTokens: 100,
+        outputTokens: 25,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation5mInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+        webSearchRequests: 0,
+        costUSD: 0.001,
+      },
+    });
+
+    const context = makeContext();
+    const prepared = prepareFiles(context);
+
+    await expect(planSemanticReviewChunks(prepared.files, context, {
+      enabled: true,
+      runtime: 'pi',
+      maxChunkChars: 10,
+    })).rejects.toThrow('cannot split atomic chunk src/dashboard.ts:10 under maxChunkChars 10');
   });
 
   it('materializes semantic groups across multiple files', async () => {
