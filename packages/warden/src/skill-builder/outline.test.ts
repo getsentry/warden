@@ -250,4 +250,85 @@ describe('buildSkillOutline: custom providers forwarding', () => {
     const po = req.providerOptions as { providers: { name: string }[] };
     expect(po.providers[0]!.name).toBe('litellm');
   });
+
+  it('forwards providerOptions through the repoPath agentic branch', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'warden-outline-providers-repo-'));
+    tempDirs.push(rootDir);
+    writeFileSync(join(rootDir, 'warden.yaml'), `version: 1\nkind: generated-skill\nname: security\nprompt: Find security issues.\n`, 'utf-8');
+
+    const providers: ProvidersConfig = {
+      litellm: {
+        baseUrl: 'http://localhost:4000',
+        api: 'openai-completions',
+        models: [{ id: 'litellm/gpt-4o', name: 'gpt-4o' }],
+      },
+    };
+
+    const fakeOutline: SkillBuildOutline = {
+      version: SKILL_BUILD_OUTLINE_SCHEMA_VERSION,
+      skill: 'security',
+      sourceHash: 'placeholder',
+      buildVersion: SKILL_BUILD_VERSION,
+      scopeProfile: {
+        kind: 'domain',
+        subject: 'Generic security review',
+        localContextUsed: false,
+        observedContext: ['Generic security review'],
+        unresolvedContext: [],
+      },
+      build: {
+        phases: [{ id: 'build-tracks', status: 'generated' }],
+      },
+      tracks: [{
+        id: 'auth-bypass',
+        title: 'Authentication bypasses',
+        goal: 'Find broken authentication checks.',
+        rationale: 'Authentication bugs are core security issues.',
+        sourceSignals: ['Auth endpoints'],
+        owns: ['Missing auth checks'],
+        excludes: [],
+        relevanceSignals: ['Session checks'],
+        evidenceFocus: ['Changed auth conditions'],
+        checks: ['Trace auth preconditions'],
+        safeCounterpatterns: ['Explicit user verification'],
+        falsePositiveTraps: ['Defense-in-depth logging'],
+        researchHints: [],
+      }],
+    };
+
+    // The agentic branch (repoPath set) runs through runtime.runSkill and parses
+    // the structured outline from result.text. Echo the correct sourceHash back so
+    // validateOutlineIdentity passes.
+    const capturedRequests: { providerOptions?: unknown }[] = [];
+    const mockRuntime: Runtime = {
+      name: 'pi',
+      runSkill: vi.fn().mockImplementation(async (req: { userPrompt: string; providerOptions?: unknown }) => {
+        capturedRequests.push({ providerOptions: req.providerOptions });
+        const sourceHash = req.userPrompt.match(/sourceHash "([^"]+)"/)?.[1] ?? fakeOutline.sourceHash;
+        return {
+          result: {
+            status: 'success' as const,
+            text: JSON.stringify({ ...fakeOutline, sourceHash }),
+            errors: [],
+            usage: { inputTokens: 10, outputTokens: 5, costUSD: 0 },
+          },
+        };
+      }),
+      runAuxiliary: vi.fn().mockResolvedValue({ success: false, error: 'not used', usage: {} }),
+      runSynthesis: vi.fn().mockResolvedValue({ success: false, error: 'should not be called', usage: {} }),
+    };
+
+    await buildSkillOutline({
+      skill: { name: 'security', description: 'Security skill', prompt: 'Find security issues.', rootDir },
+      runtime: mockRuntime,
+      repoPath: rootDir,
+      providers,
+      regenerate: true,
+    });
+
+    expect(mockRuntime.runSynthesis).not.toHaveBeenCalled();
+    expect(capturedRequests).toHaveLength(1);
+    const po = capturedRequests[0]!.providerOptions as { providers: { name: string }[] };
+    expect(po.providers[0]!.name).toBe('litellm');
+  });
 });

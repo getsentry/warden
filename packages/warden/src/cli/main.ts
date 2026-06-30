@@ -1534,7 +1534,11 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  if (!verifyCustomProviderAuthForRun(triggersToRun, reporter)) {
+  const customProviderItems = triggersToRun.map((trigger) => ({
+    runtime: options.runtime ?? trigger.runtime,
+    providers: trigger.providers,
+  }));
+  if (!verifyCustomProviderAuthForRun(customProviderItems, reporter)) {
     return 1;
   }
 
