@@ -941,6 +941,47 @@ describe('resolveLayeredSkillConfigs', () => {
     expect(resolved[1]?.runtime).toBe('pi');
   });
 
+  it('lets repo-defined skills inherit base custom providers when repo defaults omit them', () => {
+    const providers = {
+      litellm: {
+        baseUrl: 'http://localhost:4000/v1',
+        api: 'openai-completions' as const,
+        models: [{ id: 'gemma', name: 'gemma' }],
+      },
+    };
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        runtime: 'pi',
+        providers,
+      },
+      skills: [{
+        name: 'org-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'repo-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const resolved = resolveLayeredSkillConfigs({
+      config: { version: 1, skills: [] },
+      baseConfig,
+      repoConfig,
+    });
+
+    expect(resolved).toHaveLength(2);
+    // Both the base-layer and the repo-layer trigger carry the org custom
+    // providers; previously the repo layer lost them.
+    expect(resolved.find((t) => t.name === 'org-skill')?.providers).toEqual(providers);
+    expect(resolved.find((t) => t.name === 'repo-skill')?.providers).toEqual(providers);
+  });
+
   it('lets repo-defined skills inherit base verification defaults when omitted', () => {
     const baseConfig: WardenConfig = {
       version: 1,

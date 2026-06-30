@@ -180,6 +180,14 @@ function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | 
     inherited.runtime = base.runtime;
   }
 
+  // Inherit the org base custom providers, like runtime, as an execution-
+  // environment default: a repo layer that only adds skills should still reach
+  // the providers the org defined. Per-skill policy defaults (model, failOn,
+  // ignorePaths, ...) intentionally do not cross layers.
+  if (base?.providers !== undefined && inherited.providers === undefined) {
+    inherited.providers = base.providers;
+  }
+
   const verification = mergeNestedConfig(base?.verification, repo?.verification);
   if (verification) {
     inherited.verification = verification;
