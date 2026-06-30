@@ -205,6 +205,8 @@ Full reverse-patch run:
 | semantic on, bounded groups | 5 | 0 | 10m45s | 481,391 | 34,884 | $1.2564 |
 | semantic on, bounded groups plus summary anti-bias prompt | 4 | 0 | 8m19s | 472,104 | 26,978 | $1.1046 |
 | semantic on, bounded groups plus changed-range cap | 5 | 0 | 7m24s | 432,183 | 23,708 | $0.9862 |
+| semantic on, neutral scanner prompt | 4 | 0 | 5m14s | 374,416 | 15,714 | $0.7504 |
+| semantic on, neutral prompt plus changed-range cap 2 | 7 | 0 | 13m40s | 807,047 | 45,554 | $2.0509 |
 
 The full non-semantic run was interrupted after one completed scanner chunk, so
 it is not a clean cost comparison. That completed chunk did find the expected
@@ -219,6 +221,14 @@ The changed-range cap run is incomplete for score comparison because one
 test-heavy scanner chunk hit `turn_limit`. It is still useful operationally: it
 split one broad semantic group into two scanner chunks and reduced recorded
 cost, but the run cannot be treated as a clean recall result.
+
+The neutral scanner prompt removed semantic summaries from scanner prompts. It
+reduced cost again but still missed recall, and a stricter changed-range cap of
+2 increased scanner calls and cost without recovering the finding. This points
+away from size alone. The stronger hypothesis is that semantically grouping
+implementation and test-update chunks makes the scanner evaluate a coherent
+intentional migration, while raw hunk mode caught an isolated assertion removal
+as masking a regression.
 
 ## Acceptance
 

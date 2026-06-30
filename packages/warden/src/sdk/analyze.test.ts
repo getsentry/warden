@@ -850,7 +850,9 @@ describe('runSkill', () => {
     }));
     expect(runSkillMock).toHaveBeenCalledTimes(1);
     const request = runSkillMock.mock.calls[0]?.[0];
-    expect(request.userPrompt).toContain('## Semantic Summary: Dashboard charts now carry a widget-provided axis range through chart conversion, rendering, and tests.');
+    expect(request.userPrompt).toContain('## Review Chunk: semantic scanner slice');
+    expect(request.userPrompt).not.toContain('## Semantic Summary:');
+    expect(request.userPrompt).not.toContain('Dashboard charts now carry a widget-provided axis range through chart conversion, rendering, and tests.');
     expect(request.userPrompt).toContain('- src/example.ts:10-10');
     expect(request.userPrompt).toContain('- src/example.ts:100-100');
     expect(request.userPrompt).toContain('- src/example.ts:200-200');

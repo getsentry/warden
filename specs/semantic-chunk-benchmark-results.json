@@ -160,12 +160,56 @@
         "outputTokens": 23708,
         "costUSD": 0.9861766500000001
       }
+    },
+    {
+      "name": "full-semantic-neutral-prompt",
+      "patch": "full reverse patch",
+      "semantic": true,
+      "complete": false,
+      "reason": "one scanner chunk hit turn_limit",
+      "rawArtifact": {
+        "path": "/tmp/warden-semantic-axis-full-neutral-prompt.jsonl",
+        "sha256": "9d8de49aefee67a7fc7fa06adfccecc6ce64c3a7f6edd29a9e91ea0798e7d5bb"
+      },
+      "scannerChunks": 4,
+      "completedScannerChunks": 3,
+      "failedScannerChunks": 1,
+      "findings": [],
+      "durationMs": 314311,
+      "usage": {
+        "inputTokens": 374416,
+        "outputTokens": 15714,
+        "costUSD": 0.7503958500000002
+      }
+    },
+    {
+      "name": "full-semantic-range-cap-2",
+      "patch": "full reverse patch",
+      "semantic": true,
+      "complete": false,
+      "reason": "one scanner chunk hit turn_limit",
+      "rawArtifact": {
+        "path": "/tmp/warden-semantic-axis-full-range2.jsonl",
+        "sha256": "27a9fc77a4522219dbd6bfb06b17c54c23a276c9514421d96425d58221ac6744"
+      },
+      "scannerChunks": 7,
+      "completedScannerChunks": 6,
+      "failedScannerChunks": 1,
+      "findings": [],
+      "durationMs": 820311,
+      "usage": {
+        "inputTokens": 807047,
+        "outputTokens": 45554,
+        "costUSD": 2.050875
+      }
     }
   ],
   "notes": [
     "The trimmed smoke case is useful for mechanics but not dataset quality.",
     "The full non-semantic run is incomplete but produced the expected-style test-regression finding before interruption.",
     "Full semantic runs completed faster after tuning but missed the expected finding.",
-    "The current evidence points to recall loss from semantic framing of implementation and test updates, not only oversized scanner chunks."
+    "Removing semantic summaries from scanner prompts reduced cost but did not restore recall.",
+    "A stricter changed-range cap increased scanner calls and cost without restoring recall.",
+    "The current evidence points to recall loss from semantic framing and test/update grouping, not only oversized scanner chunks."
   ]
 }

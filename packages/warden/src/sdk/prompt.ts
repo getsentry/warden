@@ -22,11 +22,7 @@ function formatChangedLineMap(chunk: ReviewChunk): string {
 export function formatReviewChunkForAnalysis(chunk: ReviewChunk): string {
   const lines: string[] = [];
 
-  lines.push(`## Review Chunk: ${chunk.title}`);
-  if (chunk.summary) {
-    lines.push(`## Semantic Summary: ${chunk.summary}`);
-    lines.push('The semantic summary is only a grouping hint. Do not treat it as evidence that the changed behavior is correct or intended.');
-  }
+  lines.push(`## Review Chunk: ${chunk.summary ? 'semantic scanner slice' : chunk.title}`);
   lines.push('');
   lines.push('## Changed Line Map');
   lines.push(formatChangedLineMap(chunk));
