@@ -36,6 +36,10 @@ import {
   invalidPiModelSelectorMessage,
   type InvalidPiModelSelector,
 } from '../../sdk/runtimes/model-selectors.js';
+import {
+  assertCustomProviderAuth,
+  buildPiProviderOptions,
+} from '../../sdk/runtimes/custom-provider.js';
 
 function renderHeader(args: {
   reporter: Reporter;
@@ -157,15 +161,42 @@ function resolvePromptValue(prompt: string): string {
   return prompt.trim();
 }
 
-function resolveSynthesisModel(
+/**
+ * Global default model chain shared by the build/improve lanes, mirroring the
+ * agent-lane resolution used elsewhere (agent.model -> model -> --model ->
+ * WARDEN_MODEL). Keeps the synthesis and repair lanes on the configured provider
+ * instead of escaping to a runtime default on another provider.
+ */
+function resolveDefaultModel(
+  config: WardenConfig | undefined,
+  options: CLIOptions,
+): string | undefined {
+  return (
+    emptyToUndefined(config?.defaults?.agent?.model) ??
+    emptyToUndefined(config?.defaults?.model) ??
+    emptyToUndefined(options.model) ??
+    emptyToUndefined(process.env['WARDEN_MODEL'])
+  );
+}
+
+export function resolveSynthesisModel(
   config: WardenConfig | undefined,
   options: CLIOptions,
 ): string | undefined {
   return (
     emptyToUndefined(config?.defaults?.synthesis?.model) ??
     emptyToUndefined(config?.defaults?.auxiliary?.model) ??
-    emptyToUndefined(options.model) ??
-    emptyToUndefined(process.env['WARDEN_MODEL'])
+    resolveDefaultModel(config, options)
+  );
+}
+
+export function resolveRepairModel(
+  config: WardenConfig | undefined,
+  options: CLIOptions,
+): string | undefined {
+  return (
+    emptyToUndefined(config?.defaults?.auxiliary?.model) ??
+    resolveDefaultModel(config, options)
   );
 }
 
@@ -333,7 +364,7 @@ async function runGeneratedSkillCommand(
     const runtimeName = config?.defaults?.runtime ?? 'pi';
     const providers = config?.defaults?.providers;
     const model = resolveSynthesisModel(config, options);
-    const repairModel = emptyToUndefined(config?.defaults?.auxiliary?.model);
+    const repairModel = resolveRepairModel(config, options);
     const maxRetries = config?.defaults?.auxiliary?.maxRetries ?? config?.defaults?.auxiliaryMaxRetries;
     const invalidModelSelector = findInvalidPiModelSelector([{
       runtime: runtimeName,
@@ -343,6 +374,17 @@ async function runGeneratedSkillCommand(
     if (invalidModelSelector) {
       reportInvalidPiModelSelector(reporter, invalidModelSelector);
       return 1;
+    }
+    // Fail fast when a remote custom provider has no resolvable key, matching the
+    // CLI, executor, and workflow entry points. Otherwise build would call the
+    // provider and fail mid-synthesis instead.
+    if (runtimeName === 'pi') {
+      try {
+        assertCustomProviderAuth(buildPiProviderOptions(providers, process.env));
+      } catch (error) {
+        reporter.error(error instanceof Error ? error.message : String(error));
+        return 1;
+      }
     }
     const runtime = getRuntime(runtimeName);
 
