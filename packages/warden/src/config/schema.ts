@@ -197,8 +197,6 @@ export const SemanticChunkingConfigSchema = z.object({
   maxEmbeddedDiffChunks: z.number().int().nonnegative().optional(),
   /** Maximum changed ranges allowed before the semantic planner stops embedding full hunk content */
   maxEmbeddedDiffRanges: z.number().int().nonnegative().optional(),
-  /** Reserved for whole-file materialization below this line count */
-  preferWholeFileBelowLines: z.number().int().positive().optional(),
 });
 export type SemanticChunkingConfig = z.infer<typeof SemanticChunkingConfigSchema>;
 

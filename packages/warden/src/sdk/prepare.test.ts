@@ -234,7 +234,6 @@ describe('prepareFiles', () => {
           maxChunks: 20,
           maxChunkChars: 30000,
           maxHunksPerChunk: 50,
-          preferWholeFileBelowLines: 800,
         },
       },
     });

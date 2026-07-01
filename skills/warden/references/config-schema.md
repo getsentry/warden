@@ -62,11 +62,10 @@ maxGapLines = 30               # Lines between hunks to merge
 maxChunkSize = 8000            # Max chars per chunk
 
 [defaults.chunking.semantic]
-enabled = true                 # Group small related review chunks
+enabled = false                # Experimental semantic grouping opt-in
 maxChunks = 20                 # Target max review chunks after grouping
 maxChunkChars = 30000          # Max chars per grouped review chunk
 maxHunksPerChunk = 50          # Max raw hunks per grouped review chunk
-preferWholeFileBelowLines = 800 # Reserved for whole-file materialization
 
 [[defaults.chunking.filePatterns]]
 pattern = "*.config.*"         # Glob pattern

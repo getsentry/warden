@@ -158,6 +158,7 @@ const BenchmarkFindingSchema = z.object({
 }).passthrough();
 
 const ChunkRecordSchema = z.object({
+  type: z.string().optional(),
   run: z.object({
     durationMs: z.number().optional(),
   }).optional(),
@@ -173,6 +174,13 @@ const ChunkRecordSchema = z.object({
         outputTokens: z.number().optional(),
         costUSD: z.number().optional(),
       }).optional(),
+    }).optional(),
+    total: z.object({
+      usage: z.object({
+        inputTokens: z.number().optional(),
+        outputTokens: z.number().optional(),
+        costUSD: z.number().optional(),
+      }),
     }).optional(),
   }).optional(),
 }).passthrough();
@@ -241,6 +249,63 @@ interface RunSummary {
   };
 }
 
+function addUsage(
+  target: RunSummary['usage'],
+  usage: Partial<RunSummary['usage']> | undefined
+): void {
+  target.inputTokens += usage?.inputTokens ?? 0;
+  target.outputTokens += usage?.outputTokens ?? 0;
+  target.costUSD += usage?.costUSD ?? 0;
+}
+
+function normalizedTokens(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[`'"]/g, '')
+      .split(/[^a-z0-9:_-]+/)
+      .filter((token) => token.length >= 4)
+  );
+}
+
+function findingText(finding: z.infer<typeof BenchmarkFindingSchema>): string {
+  const record = finding as Record<string, unknown>;
+  return [
+    finding.title,
+    record['description'],
+    record['verification'],
+    finding.location?.path,
+  ].filter((value): value is string => typeof value === 'string').join(' ');
+}
+
+function findingMatchesExpectation(
+  finding: z.infer<typeof BenchmarkFindingSchema>,
+  expected: string
+): boolean {
+  const expectedText = expected.toLowerCase();
+  const actualText = findingText(finding).toLowerCase();
+  if (actualText.includes(expectedText)) return true;
+
+  const expectedTokens = normalizedTokens(expected);
+  if (expectedTokens.size === 0) return false;
+  const actualTokens = normalizedTokens(actualText);
+  let matched = 0;
+  for (const token of expectedTokens) {
+    if (actualTokens.has(token)) matched += 1;
+  }
+  return matched / expectedTokens.size >= 0.45;
+}
+
+function expectedFindingsMatched(
+  findings: z.infer<typeof BenchmarkFindingSchema>[],
+  expectedFindings: string[]
+): boolean | null {
+  if (expectedFindings.length === 0) return null;
+  return expectedFindings.every((expected) =>
+    findings.some((finding) => findingMatchesExpectation(finding, expected))
+  );
+}
+
 interface ChunkProfile {
   fileCount: number;
   skippedFileCount: number;
@@ -268,7 +333,7 @@ function usage(exitCode = 2): never {
     '',
     'Options:',
     '  --suite <name>          historical or performance (default: historical)',
-    '  --mode <name>           nonsemantic, semantic, or both (default: both)',
+    '  --mode <name>           nonsemantic, semantic, or both (default: nonsemantic)',
     '  --sentry-repo <path>    Existing getsentry/sentry checkout for historical cases',
     '  --sentry-mcp-repo <path> Existing getsentry/sentry-mcp checkout for performance cases',
     '  --warden-repo <path>    Existing getsentry/warden checkout for performance cases',
@@ -291,7 +356,7 @@ function usage(exitCode = 2): never {
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     suite: 'historical',
-    mode: 'both',
+    mode: 'nonsemantic',
     cases: [],
     sentryMcpRepo: '/home/dcramer/src/sentry-mcp',
     wardenRepo: resolve(import.meta.dirname, '../..'),
@@ -443,7 +508,6 @@ function writeBenchmarkConfig(path: string, semantic: boolean, model: string, ru
     'maxEmbeddedDiffChars = 8000',
     'maxEmbeddedDiffChunks = 12',
     'maxEmbeddedDiffRanges = 12',
-    'preferWholeFileBelowLines = 800',
     '',
     '[[skills]]',
     `name = "${skill}"`,
@@ -453,9 +517,10 @@ function writeBenchmarkConfig(path: string, semantic: boolean, model: string, ru
   return configPath;
 }
 
-function summarizeJsonl(path: string, exitCode: number): RunSummary {
+function summarizeJsonl(path: string, exitCode: number, expectedFindings: string[] = []): RunSummary {
   const findings: z.infer<typeof BenchmarkFindingSchema>[] = [];
   const usage = { inputTokens: 0, outputTokens: 0, costUSD: 0 };
+  let summaryUsage: RunSummary['usage'] | undefined;
   let scannerChunks = 0;
   let completedScannerChunks = 0;
   let skippedScannerChunks = 0;
@@ -469,7 +534,7 @@ function summarizeJsonl(path: string, exitCode: number): RunSummary {
       complete: exitCode === 0,
       outputPath: path,
       exitCode,
-      expectedFindingMatched: null,
+      expectedFindingMatched: expectedFindings.length > 0 ? false : null,
       scannerChunks,
       completedScannerChunks,
       skippedScannerChunks,
@@ -485,6 +550,19 @@ function summarizeJsonl(path: string, exitCode: number): RunSummary {
     if (!parsed.success) continue;
     const record = parsed.data;
     if (record.run?.durationMs) durationMs = Math.max(durationMs, record.run.durationMs);
+    if (record.type === 'summary') {
+      const totalUsage = record.usageBreakdown?.total?.usage;
+      if (totalUsage) {
+        summaryUsage = {
+          inputTokens: totalUsage.inputTokens ?? 0,
+          outputTokens: totalUsage.outputTokens ?? 0,
+          costUSD: totalUsage.costUSD ?? 0,
+        };
+      }
+      continue;
+    }
+
+    addUsage(usage, record.usageBreakdown?.total?.usage);
     if (!record.chunk || record.chunk.lineRange === 'post-processing') continue;
 
     scannerChunks += 1;
@@ -492,11 +570,6 @@ function summarizeJsonl(path: string, exitCode: number): RunSummary {
     else if (record.status === 'skipped') skippedScannerChunks += 1;
     else failedScannerChunks += 1;
     findings.push(...(record.findings ?? []));
-
-    const scanUsage = record.usageBreakdown?.scan?.usage;
-    usage.inputTokens += scanUsage?.inputTokens ?? 0;
-    usage.outputTokens += scanUsage?.outputTokens ?? 0;
-    usage.costUSD += scanUsage?.costUSD ?? 0;
   }
 
   return {
@@ -504,21 +577,21 @@ function summarizeJsonl(path: string, exitCode: number): RunSummary {
     complete: exitCode === 0 && failedScannerChunks === 0,
     outputPath: path,
     exitCode,
-    expectedFindingMatched: null,
+    expectedFindingMatched: expectedFindingsMatched(findings, expectedFindings),
     scannerChunks,
     completedScannerChunks,
     skippedScannerChunks,
     failedScannerChunks,
     findings,
     durationMs,
-    usage,
+    usage: summaryUsage ?? usage,
   };
 }
 
 function runWarden(
   args: Args,
   worktree: string,
-  benchmarkCase: { name: string; base: string; skill: string },
+  benchmarkCase: { name: string; base: string; skill: string; expectedFindings?: string[] },
   semantic: boolean,
 ): RunSummary {
   const config = writeBenchmarkConfig(worktree, semantic, args.model, args.runtime, benchmarkCase.skill);
@@ -555,7 +628,7 @@ function runWarden(
     stdio: 'inherit',
   });
 
-  const summary = summarizeJsonl(outputPath, result.status ?? 1);
+  const summary = summarizeJsonl(outputPath, result.status ?? 1, benchmarkCase.expectedFindings);
   summary.semantic = semantic;
   return summary;
 }
@@ -752,7 +825,12 @@ if (args.suite === 'historical') {
         runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
           args,
           worktree,
-          { name: benchmarkCase.name, base: benchmarkCase.fixCommit, skill: benchmarkCase.skill },
+          {
+            name: benchmarkCase.name,
+            base: benchmarkCase.fixCommit,
+            skill: benchmarkCase.skill,
+            expectedFindings: benchmarkCase.expectedFindings,
+          },
           semantic,
         );
       }

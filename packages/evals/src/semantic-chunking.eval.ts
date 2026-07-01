@@ -134,7 +134,6 @@ function createSemanticChunkingHarness(): Harness<SemanticChunkingEvalInput, Jso
               maxChunks: 20,
               maxChunkChars: 30000,
               maxHunksPerChunk: 50,
-              preferWholeFileBelowLines: 800,
             },
           },
         });

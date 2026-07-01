@@ -84,14 +84,13 @@ pattern = "*.config.*"
 mode = "whole-file"
 ```
 
-**Group small review chunks:**
+**Experiment with semantic grouping:**
 ```toml
 [defaults.chunking.semantic]
-enabled = true
+enabled = false
 maxChunks = 20
 maxChunkChars = 30000
 maxHunksPerChunk = 50
-preferWholeFileBelowLines = 800
 ```
 
 ## Model Lanes

@@ -101,7 +101,6 @@ describe('planSemanticReviewChunks', () => {
           maxChunks: 20,
           maxChunkChars: 30000,
           maxHunksPerChunk: 50,
-          preferWholeFileBelowLines: 800,
         },
       },
     });
@@ -170,7 +169,6 @@ describe('planSemanticReviewChunks', () => {
           maxChunks: 20,
           maxChunkChars: 30000,
           maxHunksPerChunk: 50,
-          preferWholeFileBelowLines: 800,
         },
       },
     });
@@ -244,7 +242,6 @@ describe('planSemanticReviewChunks', () => {
           maxChunks: 20,
           maxChunkChars: 30000,
           maxHunksPerChunk: 50,
-          preferWholeFileBelowLines: 800,
         },
       },
     });

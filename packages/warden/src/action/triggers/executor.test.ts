@@ -201,7 +201,7 @@ describe('executeTrigger', () => {
       chunking: {
         maxContextFiles: 12,
         filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
-        semantic: { enabled: true, maxChunks: 20, maxChunkChars: 30000, maxHunksPerChunk: 50, preferWholeFileBelowLines: 800 },
+        semantic: { enabled: true, maxChunks: 20, maxChunkChars: 30000, maxHunksPerChunk: 50 },
       },
       auxiliaryMaxRetries: 9,
     }, {
@@ -217,7 +217,7 @@ describe('executeTrigger', () => {
           scan: { maxFiles: 5 },
           chunking: {
             filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
-            semantic: { enabled: true, maxChunks: 20, maxChunkChars: 30000, maxHunksPerChunk: 50, preferWholeFileBelowLines: 800 },
+            semantic: { enabled: true, maxChunks: 20, maxChunkChars: 30000, maxHunksPerChunk: 50 },
           },
           auxiliaryMaxRetries: 9,
         }),

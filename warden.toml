@@ -10,17 +10,6 @@ reportOn = "medium"
 # Exclude build output and internal eval fixtures from all skills
 ignorePaths = ["dist/**", "packages/evals/**"]
 
-[defaults.chunking.semantic]
-enabled = true
-maxChunks = 20
-maxChunkChars = 20000
-maxHunksPerChunk = 4
-maxChangedRangesPerChunk = 4
-maxEmbeddedDiffChars = 8000
-maxEmbeddedDiffChunks = 12
-maxEmbeddedDiffRanges = 12
-preferWholeFileBelowLines = 800
-
 [[skills]]
 name = "security-review"
 paths = [

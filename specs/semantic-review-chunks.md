@@ -1,5 +1,10 @@
 # Semantic Review Chunks
 
+Status: historical experiment. The current chunking benchmark rejects semantic
+grouping as an efficiency strategy: it did not produce same-or-better findings
+with lower wall time or total cost. Keep this document as design context for
+the experiment, not as the accepted optimization plan.
+
 Warden currently prepares code for review from git hunks. Git hunks are useful
 for changed-line anchoring, but they are a poor unit of review. A single logical
 change can produce dozens of tiny hunks, especially in tests, generated catalogs,
@@ -349,7 +354,6 @@ maxChangedRangesPerChunk = 4
 maxEmbeddedDiffChars = 8000
 maxEmbeddedDiffChunks = 12
 maxEmbeddedDiffRanges = 12
-preferWholeFileBelowLines = 800
 ```
 
 Do not expose fallback behavior as config. If semantic planning fails mechanical

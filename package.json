@@ -36,6 +36,9 @@
     "packages/evals/src/**/*.ts": [
       "oxlint --fix"
     ],
+    "packages/evals/scripts/**/*.ts": [
+      "oxlint --fix"
+    ],
     "benchmarks/**/*.ts": [
       "oxlint --fix"
     ],

@@ -448,13 +448,14 @@ At minimum, each result record should include:
     "outputTokens": 0,
     "costUSD": 0
   },
-  "expectedFindingMatched": null
+  "expectedFindingMatched": true
 }
 ```
 
-`expectedFindingMatched` stays `null` until the benchmark reuses the existing
-eval judge for semantic finding matching. Do not use exact title matching as a
-substitute; these reports often describe the same bug with different wording.
+`expectedFindingMatched` is a deterministic benchmark gate for historical cases.
+It is useful for rejecting obvious misses, but final benchmark decisions should
+still manually adjudicate finding equivalence until a judge is wired into this
+runner.
 
 ## Captured Baseline
 

@@ -766,7 +766,6 @@ describe('runSkillTasks', () => {
           maxChunks: 20,
           maxChunkChars: 30000,
           maxHunksPerChunk: 50,
-          preferWholeFileBelowLines: 800,
         },
       },
       postProcessFindings: false,
