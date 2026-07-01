@@ -40,6 +40,36 @@ const RECALL_CASES = [
       'Slack options-load resolves a Group by caller-controlled id without binding it to the requesting Slack integration organization.',
     ],
   },
+  {
+    name: 'sentry-preprod-snapshot-project-access',
+    repository: 'getsentry/sentry',
+    skill: 'security-review',
+    fixCommit: '8fac324d82c903c8022b99dcd4329f3944e57196',
+    vulnerableCommit: 'c1bc01ad419ac251e153c81f212628221f8c0628',
+    expectedFindings: [
+      'Preprod snapshot GET and DELETE load artifacts by organization only and do not check project access.',
+    ],
+  },
+  {
+    name: 'sentry-release-threshold-empty-project-filter',
+    repository: 'getsentry/sentry',
+    skill: 'security-review',
+    fixCommit: '8a93913509441a0c8e7d035f9c4bc24dabed2d86',
+    vulnerableCommit: '8f9fe309854228051dabac985fb813476a2a5b24',
+    expectedFindings: [
+      'ReleaseThreshold query omits project and organization scoping when accessible projects is empty.',
+    ],
+  },
+  {
+    name: 'sentry-replay-delete-read-scope',
+    repository: 'getsentry/sentry',
+    skill: 'security-review',
+    fixCommit: '9bf0ea738cd7847438d4a2cfb1fbdbb326426e01',
+    vulnerableCommit: 'c1bc01ad419ac251e153c81f212628221f8c0628',
+    expectedFindings: [
+      'Replay DELETE accepts project:read, allowing read-only project users to delete replay data.',
+    ],
+  },
 ] as const;
 
 const PERFORMANCE_CASES = [

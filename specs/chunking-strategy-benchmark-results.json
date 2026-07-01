@@ -505,6 +505,115 @@
       }
     },
     {
+      "case": "sentry-preprod-snapshot-project-access",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "8fac324d82c903c8022b99dcd4329f3944e57196",
+      "head": "synthetic reverse of c1bc01ad419ac251e153c81f212628221f8c0628..8fac324d82c903c8022b99dcd4329f3944e57196",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-security-recall-batch-artifacts/sentry-preprod-snapshot-project-access.nonsemantic.jsonl",
+        "sha256": "301d555e94c4876b1b4c2ce8a712447df2ca1b59ee8f35e0f170556cf82744d7"
+      },
+      "scannerChunks": 4,
+      "completedScannerChunks": 4,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "Project-level access check removed from DELETE endpoint, enabling cross-project artifact deletion",
+          "severity": "high",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+            "startLine": 140
+          }
+        }
+      ],
+      "durationMs": 36045,
+      "usage": {
+        "inputTokens": 21179,
+        "outputTokens": 1320,
+        "costUSD": 0.06993555
+      }
+    },
+    {
+      "case": "sentry-release-threshold-empty-project-filter",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "8a93913509441a0c8e7d035f9c4bc24dabed2d86",
+      "head": "synthetic reverse of 8f9fe309854228051dabac985fb813476a2a5b24..8a93913509441a0c8e7d035f9c4bc24dabed2d86",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-security-recall-batch-artifacts/sentry-release-threshold-empty-project-filter.nonsemantic.jsonl",
+        "sha256": "fb53cbf8a7324f7c96d72379bb0d4b7c436abb2c63943cf9ccbefdfab033b1c2"
+      },
+      "scannerChunks": 2,
+      "completedScannerChunks": 2,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "Authorization bypass: empty projects_list removes all project-scoping from ReleaseThreshold query",
+          "severity": "high",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+            "startLine": 50,
+            "endLine": 58
+          }
+        }
+      ],
+      "durationMs": 19481,
+      "usage": {
+        "inputTokens": 10631,
+        "outputTokens": 1042,
+        "costUSD": 0.05549175
+      }
+    },
+    {
+      "case": "sentry-replay-delete-read-scope",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "9bf0ea738cd7847438d4a2cfb1fbdbb326426e01",
+      "head": "synthetic reverse of c1bc01ad419ac251e153c81f212628221f8c0628..9bf0ea738cd7847438d4a2cfb1fbdbb326426e01",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-security-recall-batch-artifacts/sentry-replay-delete-read-scope.nonsemantic.jsonl",
+        "sha256": "4fd4bea3b9d7fc3a34945002cb4f8d8c8d6a2db77e6cf4374d352890652a63ff"
+      },
+      "scannerChunks": 2,
+      "completedScannerChunks": 2,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "DELETE permission expanded to allow project:read scope",
+          "severity": "medium",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/replays/endpoints/project_replay_details.py",
+            "startLine": 26
+          }
+        }
+      ],
+      "durationMs": 6754,
+      "usage": {
+        "inputTokens": 10365,
+        "outputTokens": 306,
+        "costUSD": 0.04345425
+      }
+    },
+    {
       "case": "warden-error-cause-chain-regression",
       "repository": "getsentry/warden",
       "suite": "historical",

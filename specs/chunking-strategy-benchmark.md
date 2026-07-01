@@ -104,6 +104,9 @@ use the fix PR body or linked Warden issue as the oracle.
 | Case | Repository | PR | Vulnerable commit | Fix commit | Shape | Skill | Expected finding |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `sentry-slack-options-load-unscoped-group` | `getsentry/sentry` | `#114185` | `c1bc01ad419ac251e153c81f212628221f8c0628` | `0f09491755f71a95343285cbe17c93bf272a0d62` | 2 files, 4 raw chunks, +29/-0 when fixed | `security-review` | Slack options-load can resolve a caller-controlled group id without binding it to the requesting Slack integration's organization. |
+| `sentry-preprod-snapshot-project-access` | `getsentry/sentry` | `#114169` | `c1bc01ad419ac251e153c81f212628221f8c0628` | `8fac324d82c903c8022b99dcd4329f3944e57196` | 2 files, 4 raw chunks, +66/-1 when fixed | `security-review` | Preprod snapshot GET and DELETE can access artifacts by organization without checking project access. |
+| `sentry-release-threshold-empty-project-filter` | `getsentry/sentry` | `#114049` | `8f9fe309854228051dabac985fb813476a2a5b24` | `8a93913509441a0c8e7d035f9c4bc24dabed2d86` | 2 files, 2 raw chunks, +39/-5 when fixed | `security-review` | ReleaseThreshold query can drop project scoping when the accessible-project list is empty. |
+| `sentry-replay-delete-read-scope` | `getsentry/sentry` | `#114159` | `c1bc01ad419ac251e153c81f212628221f8c0628` | `9bf0ea738cd7847438d4a2cfb1fbdbb326426e01` | 2 files, 2 raw chunks, +9/-4 when fixed | `security-review` | Replay DELETE can accept `project:read`, allowing read-only users to delete replay data. |
 | `warden-error-cause-chain-regression` | `getsentry/warden` | `#215` | `9273d82be6582d78c4809c3b4317dba09bf1b58b` | `9bf777889e554ac30216ebfbd1f15a68abf92529` | 7 files, 9 raw chunks, +18/-13 when fixed | `code-review` | Dropping `Error` causes loses original git/runtime error diagnostics. Candidate only; finding was not stable across reruns. |
 
 Captured non-semantic baseline:
@@ -113,23 +116,35 @@ Captured non-semantic baseline:
 - runtime: `pi`
 - verification: disabled
 - raw artifact for Slack case: `/tmp/warden-slack-options-low-runner-artifacts/sentry-slack-options-load-unscoped-group.nonsemantic.jsonl`
+- raw artifacts for additional security cases: `/tmp/warden-security-recall-batch-artifacts/*.nonsemantic.jsonl`
 - raw artifact for Warden #215 candidate: `/tmp/warden-pr215-runner-artifacts/warden-error-cause-chain-regression.nonsemantic.jsonl`
 
 | Case | Complete | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `sentry-slack-options-load-unscoped-group` | yes | 4 | 1 | 24.8s | 20,437 | 1,065 | $0.0633 |
+| `sentry-preprod-snapshot-project-access` | yes | 4 | 1 | 36.0s | 21,179 | 1,320 | $0.0699 |
+| `sentry-release-threshold-empty-project-filter` | yes | 2 | 1 | 19.5s | 10,631 | 1,042 | $0.0555 |
+| `sentry-replay-delete-read-scope` | yes | 2 | 1 | 6.8s | 10,365 | 306 | $0.0435 |
 | `warden-error-cause-chain-regression` | yes | 8 | 0 | 3m24s | 345,903 | 26,543 | $0.8320 |
 
-Finding produced by current `security-review`:
+Findings produced by current `security-review`:
 
 - `src/sentry/integrations/slack/webhooks/options_load.py:99-104` -
   Removed cross-organization authorization check allows IDOR on group assignment
   data
+- `src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py:140` -
+  Project-level access check removed from DELETE endpoint, enabling
+  cross-project artifact deletion
+- `src/sentry/api/endpoints/release_thresholds/release_threshold_index.py:50-58` -
+  Authorization bypass: empty projects list removes all project scoping
+- `src/sentry/replays/endpoints/project_replay_details.py:26` -
+  DELETE permission expanded to allow `project:read` scope
 
-The Slack case is a small known-positive case. It is not large enough to prove
-the high-fragmentation performance path. The Warden #215 case remains useful as
-a repeated small-hunk candidate, but it is not accepted as a recall baseline
-until the finding reproduces reliably.
+These are small known-positive security cases. They fix the benchmark's recall
+control gap, but they are not large enough to prove the high-fragmentation
+performance path. The Warden #215 case remains useful as a repeated small-hunk
+candidate, but it is not accepted as a recall baseline until the finding
+reproduces reliably.
 
 ## Performance Shape Cases
 
