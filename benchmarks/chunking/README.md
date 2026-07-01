@@ -468,7 +468,7 @@ Paired maintainer-runner baseline:
 - runtime: `pi`
 - skill: `code-review`
 - verification: disabled
-- results: `specs/chunking-strategy-benchmark-results.json`
+- results: `benchmarks/chunking/results.json`
 
 | Case | Mode | Expected found | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
