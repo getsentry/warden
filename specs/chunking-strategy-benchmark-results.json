@@ -466,6 +466,99 @@
       ]
     }
   ],
+  "candidateBaselines": [
+    {
+      "case": "sentry-slack-options-load-unscoped-group",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "0f09491755f71a95343285cbe17c93bf272a0d62",
+      "head": "synthetic reverse of c1bc01ad419ac251e153c81f212628221f8c0628..0f09491755f71a95343285cbe17c93bf272a0d62",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-slack-options-low-runner-artifacts/sentry-slack-options-load-unscoped-group.nonsemantic.jsonl",
+        "sha256": "d89d157b158fc854ad092598f77dda0109a280c3a8a4bde15e3725f146b9ddfc"
+      },
+      "scannerChunks": 4,
+      "completedScannerChunks": 4,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "Removed cross-organization authorization check allows IDOR on group assignment data",
+          "severity": "high",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/integrations/slack/webhooks/options_load.py",
+            "startLine": 99,
+            "endLine": 104
+          }
+        }
+      ],
+      "durationMs": 24815,
+      "usage": {
+        "inputTokens": 20437,
+        "outputTokens": 1065,
+        "costUSD": 0.06328665
+      }
+    },
+    {
+      "case": "warden-error-cause-chain-regression",
+      "repository": "getsentry/warden",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "code-review",
+      "base": "9bf777889e554ac30216ebfbd1f15a68abf92529",
+      "head": "synthetic reverse of 9273d82be6582d78c4809c3b4317dba09bf1b58b..9bf777889e554ac30216ebfbd1f15a68abf92529",
+      "complete": true,
+      "expectedFindingMatched": false,
+      "note": "Manual one-off produced the expected Error cause finding once, but the benchmark runner rerun produced no findings. Keep as an unstable candidate, not an accepted recall baseline.",
+      "rawArtifact": {
+        "path": "/tmp/warden-pr215-runner-artifacts/warden-error-cause-chain-regression.nonsemantic.jsonl",
+        "sha256": "edd93d525bca6e237fe45a912d344de6f7f8f7ca7e7ba73e7fcba5e2563e1a3e"
+      },
+      "scannerChunks": 8,
+      "completedScannerChunks": 8,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [],
+      "durationMs": 203827,
+      "usage": {
+        "inputTokens": 345903,
+        "outputTokens": 26543,
+        "costUSD": 0.83203875
+      }
+    },
+    {
+      "case": "sentry-mcp-ai-conversation-absolute-range-period-conflict",
+      "repository": "getsentry/sentry-mcp",
+      "suite": "performance",
+      "mode": "nonsemantic",
+      "skill": "code-review",
+      "base": "df680f28fa705c447679bb8e0afa3f24e72387e0",
+      "head": "e5df63d64bef3140deb88c8c80701f0583348afc",
+      "complete": true,
+      "expectedFindingMatched": false,
+      "note": "High-fragmentation branch-prefix candidate with a later fix commit, but current code-review produced no findings.",
+      "rawArtifact": {
+        "path": "/tmp/warden-branch-recall-absolute-artifacts/sentry-mcp-ai-conversation-absolute-range-period-conflict.nonsemantic.jsonl",
+        "sha256": "78e59e7e32ec461968f34df18cf0df1967c826e958cd458942936394ec38a7ae"
+      },
+      "scannerChunks": 95,
+      "completedScannerChunks": 94,
+      "skippedScannerChunks": 1,
+      "failedScannerChunks": 0,
+      "findings": [],
+      "durationMs": 1691226,
+      "usage": {
+        "inputTokens": 7056116,
+        "outputTokens": 245823,
+        "costUSD": 14.9409432
+      }
+    }
+  ],
   "priorOneOffRuns": [
     {
       "name": "axis-range-trimmed-semantic-off",

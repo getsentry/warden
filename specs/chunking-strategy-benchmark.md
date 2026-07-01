@@ -95,6 +95,42 @@ Treat these as the historical recall suite. They answer whether a chunking
 strategy still finds known bugs. They are not enough to answer whether a
 chunking strategy handles slow, high-fragmentation real pull requests.
 
+## PR-Shaped Recall Cases
+
+Use real fix PRs in reverse when they produce current Warden findings. These are
+not evals; they are benchmark fixtures that keep the full PR-shaped diff and
+use the fix PR body or linked Warden issue as the oracle.
+
+| Case | Repository | PR | Vulnerable commit | Fix commit | Shape | Skill | Expected finding |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `sentry-slack-options-load-unscoped-group` | `getsentry/sentry` | `#114185` | `c1bc01ad419ac251e153c81f212628221f8c0628` | `0f09491755f71a95343285cbe17c93bf272a0d62` | 2 files, 4 raw chunks, +29/-0 when fixed | `security-review` | Slack options-load can resolve a caller-controlled group id without binding it to the requesting Slack integration's organization. |
+| `warden-error-cause-chain-regression` | `getsentry/warden` | `#215` | `9273d82be6582d78c4809c3b4317dba09bf1b58b` | `9bf777889e554ac30216ebfbd1f15a68abf92529` | 7 files, 9 raw chunks, +18/-13 when fixed | `code-review` | Dropping `Error` causes loses original git/runtime error diagnostics. Candidate only; finding was not stable across reruns. |
+
+Captured non-semantic baseline:
+
+- date: 2026-06-30
+- model: `openrouter/anthropic/claude-sonnet-4.6`
+- runtime: `pi`
+- verification: disabled
+- raw artifact for Slack case: `/tmp/warden-slack-options-low-runner-artifacts/sentry-slack-options-load-unscoped-group.nonsemantic.jsonl`
+- raw artifact for Warden #215 candidate: `/tmp/warden-pr215-runner-artifacts/warden-error-cause-chain-regression.nonsemantic.jsonl`
+
+| Case | Complete | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sentry-slack-options-load-unscoped-group` | yes | 4 | 1 | 24.8s | 20,437 | 1,065 | $0.0633 |
+| `warden-error-cause-chain-regression` | yes | 8 | 0 | 3m24s | 345,903 | 26,543 | $0.8320 |
+
+Finding produced by current `security-review`:
+
+- `src/sentry/integrations/slack/webhooks/options_load.py:99-104` -
+  Removed cross-organization authorization check allows IDOR on group assignment
+  data
+
+The Slack case is a small known-positive case. It is not large enough to prove
+the high-fragmentation performance path. The Warden #215 case remains useful as
+a repeated small-hunk candidate, but it is not accepted as a recall baseline
+until the finding reproduces reliably.
+
 ## Performance Shape Cases
 
 Add a separate performance suite made of real pull requests that were slow or
@@ -204,6 +240,18 @@ Candidate cases from `getsentry/sentry-mcp#1130`:
 These are not replacements for the historical Sentry eval cases. They are a
 middle ground: real branch context, known later fix, and high-fragmentation PR
 shape.
+
+Current baseline attempt:
+
+- `sentry-mcp-ai-conversation-absolute-range-period-conflict`
+  - non-semantic run completed against the buggy prefix
+  - 95 scanner chunks, 94 completed, 1 skipped
+  - 0 findings
+  - 28m11s, 7,056,116 input tokens, 245,823 output tokens, $14.9409
+
+This case remains a strong performance stress case, but it is not a
+known-positive recall benchmark for current `code-review`. The scanner did not
+find the later fixed `start`/`end` versus `period` conflict in the baseline run.
 
 ## Expansion Cases
 

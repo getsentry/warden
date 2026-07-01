@@ -19,6 +19,29 @@ const DEFAULT_CASES = [
   'sentry-workflow-status-missing-foreign-key',
 ];
 
+const RECALL_CASES = [
+  {
+    name: 'warden-error-cause-chain-regression',
+    repository: 'getsentry/warden',
+    skill: 'code-review',
+    fixCommit: '9bf777889e554ac30216ebfbd1f15a68abf92529',
+    vulnerableCommit: '9273d82be6582d78c4809c3b4317dba09bf1b58b',
+    expectedFindings: [
+      'Removing Error cause propagation loses original error details when git and runtime errors are rethrown.',
+    ],
+  },
+  {
+    name: 'sentry-slack-options-load-unscoped-group',
+    repository: 'getsentry/sentry',
+    skill: 'security-review',
+    fixCommit: '0f09491755f71a95343285cbe17c93bf272a0d62',
+    vulnerableCommit: 'c1bc01ad419ac251e153c81f212628221f8c0628',
+    expectedFindings: [
+      'Slack options-load resolves a Group by caller-controlled id without binding it to the requesting Slack integration organization.',
+    ],
+  },
+] as const;
+
 const PERFORMANCE_CASES = [
   {
     name: 'sentry-mcp-search-issues-period-30d',
@@ -150,6 +173,7 @@ interface Args {
 interface BenchmarkCase {
   name: string;
   repository: string;
+  skill: string;
   fixCommit: string;
   vulnerableCommit: string;
   expectedFindings: string[];
@@ -158,6 +182,7 @@ interface BenchmarkCase {
 interface PerformanceCase {
   name: string;
   repository: string;
+  skill?: string;
   base: string;
   head: string;
 }
@@ -243,7 +268,6 @@ function parseArgs(argv: string[]): Args {
     else usage();
   }
 
-  if (args.suite === 'historical' && !args.sentryRepo) usage();
   if (args.cases.length === 0) {
     args.cases = args.suite === 'historical'
       ? [...DEFAULT_CASES]
@@ -265,6 +289,9 @@ function fixCommitFromSource(source?: string): string | undefined {
 }
 
 function loadBenchmarkCase(name: string): BenchmarkCase {
+  const recallCase = RECALL_CASES.find((item) => item.name === name);
+  if (recallCase) return { ...recallCase };
+
   const scenarioDir = resolve(import.meta.dirname, '../../packages/evals/code-review');
   const filePath = readdirSync(scenarioDir)
     .map((file) => join(scenarioDir, file))
@@ -285,6 +312,7 @@ function loadBenchmarkCase(name: string): BenchmarkCase {
   return {
     name,
     repository,
+    skill: 'code-review',
     fixCommit,
     vulnerableCommit,
     expectedFindings: scenario.should_find.map((item) => item.finding),
@@ -294,10 +322,6 @@ function loadBenchmarkCase(name: string): BenchmarkCase {
 function createBenchmarkWorktree(sourceRepo: string, benchmarkCase: BenchmarkCase): string {
   const worktree = mkdtempSync(join(tmpdir(), `warden-chunking-${benchmarkCase.name}-`));
   execGit(sourceRepo, ['worktree', 'add', '--detach', worktree, benchmarkCase.fixCommit]);
-  execGit(worktree, ['config', 'commit.gpgsign', 'false']);
-  execGit(worktree, ['config', 'tag.gpgsign', 'false']);
-  execGit(worktree, ['config', 'user.name', 'Warden Benchmark']);
-  execGit(worktree, ['config', 'user.email', 'warden-benchmark@example.com']);
   const reverse = spawnSync('git', ['diff', `${benchmarkCase.vulnerableCommit}..${benchmarkCase.fixCommit}`, '--binary'], {
     cwd: worktree,
     encoding: 'utf8',
@@ -315,12 +339,24 @@ function createBenchmarkWorktree(sourceRepo: string, benchmarkCase: BenchmarkCas
   if (apply.status !== 0) {
     throw new Error(`Failed to apply reverse diff for ${benchmarkCase.name}: ${apply.stderr}`);
   }
-  execGit(worktree, ['commit', '--no-verify', '-m', `benchmark: reintroduce ${benchmarkCase.name}`]);
+  execGit(worktree, [
+    '-c',
+    'commit.gpgsign=false',
+    '-c',
+    'user.name=Warden Benchmark',
+    '-c',
+    'user.email=warden-benchmark@example.com',
+    'commit',
+    '--no-verify',
+    '-m',
+    `benchmark: reintroduce ${benchmarkCase.name}`,
+  ]);
   return worktree;
 }
 
-function writeBenchmarkConfig(path: string, semantic: boolean, model: string, runtime: string): string {
+function writeBenchmarkConfig(path: string, semantic: boolean, model: string, runtime: string, skill: string): string {
   const configPath = join(path, semantic ? 'warden.semantic.toml' : 'warden.nonsemantic.toml');
+  const findingThreshold = skill === 'security-review' ? 'low' : 'medium';
   writeFileSync(configPath, [
     'version = 1',
     '',
@@ -328,8 +364,8 @@ function writeBenchmarkConfig(path: string, semantic: boolean, model: string, ru
     `runtime = "${runtime}"`,
     `model = "${model}"`,
     'failOn = "off"',
-    'reportOn = "medium"',
-    'minConfidence = "medium"',
+    `reportOn = "${findingThreshold}"`,
+    `minConfidence = "${findingThreshold}"`,
     '',
     '[defaults.verification]',
     'enabled = false',
@@ -346,7 +382,7 @@ function writeBenchmarkConfig(path: string, semantic: boolean, model: string, ru
     'preferWholeFileBelowLines = 800',
     '',
     '[[skills]]',
-    'name = "code-review"',
+    `name = "${skill}"`,
     'paths = ["**/*"]',
     '',
   ].join('\n'));
@@ -415,8 +451,13 @@ function summarizeJsonl(path: string, exitCode: number): RunSummary {
   };
 }
 
-function runWarden(args: Args, worktree: string, benchmarkCase: { name: string; base: string }, semantic: boolean): RunSummary {
-  const config = writeBenchmarkConfig(worktree, semantic, args.model, args.runtime);
+function runWarden(
+  args: Args,
+  worktree: string,
+  benchmarkCase: { name: string; base: string; skill: string },
+  semantic: boolean,
+): RunSummary {
+  const config = writeBenchmarkConfig(worktree, semantic, args.model, args.runtime, benchmarkCase.skill);
   const outputPath = join(args.artifactsDir, `${benchmarkCase.name}.${semantic ? 'semantic' : 'nonsemantic'}.jsonl`);
   const cliArgs = [
     'cli',
@@ -426,7 +467,7 @@ function runWarden(args: Args, worktree: string, benchmarkCase: { name: string; 
     '-C',
     worktree,
     '--skill',
-    'code-review',
+    benchmarkCase.skill,
     '-c',
     config,
     '--runtime',
@@ -456,9 +497,17 @@ function selectedModes(args: Args): boolean[] {
 }
 
 function sourceRepoForPerformanceCase(args: Args, benchmarkCase: PerformanceCase): string {
-  if (benchmarkCase.repository === 'getsentry/sentry-mcp') return args.sentryMcpRepo;
-  if (benchmarkCase.repository === 'getsentry/warden') return args.wardenRepo;
-  throw new Error(`No source repo configured for ${benchmarkCase.repository}`);
+  return sourceRepoForRepository(args, benchmarkCase.repository);
+}
+
+function sourceRepoForRepository(args: Args, repository: string): string {
+  if (repository === 'getsentry/sentry') {
+    if (!args.sentryRepo) throw new Error('Missing --sentry-repo for getsentry/sentry benchmark case');
+    return args.sentryRepo;
+  }
+  if (repository === 'getsentry/sentry-mcp') return args.sentryMcpRepo;
+  if (repository === 'getsentry/warden') return args.wardenRepo;
+  throw new Error(`No source repo configured for ${repository}`);
 }
 
 function loadPerformanceCase(name: string): PerformanceCase {
@@ -478,25 +527,25 @@ mkdirSync(args.artifactsDir, { recursive: true });
 
 const results = [];
 if (args.suite === 'historical') {
-  const sentryRepo = args.sentryRepo;
-  if (!sentryRepo) usage();
   const cases = args.cases.map(loadBenchmarkCase);
   for (const benchmarkCase of cases) {
     console.log(`\n=== ${benchmarkCase.name} ===`);
-    const worktree = createBenchmarkWorktree(sentryRepo, benchmarkCase);
+    const sourceRepo = sourceRepoForRepository(args, benchmarkCase.repository);
+    const worktree = createBenchmarkWorktree(sourceRepo, benchmarkCase);
     console.log(`Worktree: ${worktree}`);
     const runs: Record<string, RunSummary> = {};
     for (const semantic of selectedModes(args)) {
       runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
         args,
         worktree,
-        { name: benchmarkCase.name, base: benchmarkCase.fixCommit },
+        { name: benchmarkCase.name, base: benchmarkCase.fixCommit, skill: benchmarkCase.skill },
         semantic,
       );
     }
     results.push({
       case: benchmarkCase.name,
       repository: benchmarkCase.repository,
+      skill: benchmarkCase.skill,
       base: benchmarkCase.fixCommit,
       head: benchmarkCase.vulnerableCommit,
       expectedFindings: benchmarkCase.expectedFindings,
@@ -504,7 +553,7 @@ if (args.suite === 'historical') {
       worktree: args.keepWorktrees ? worktree : undefined,
     });
     if (!args.keepWorktrees) {
-      execGit(sentryRepo, ['worktree', 'remove', '--force', worktree]);
+      execGit(sourceRepo, ['worktree', 'remove', '--force', worktree]);
     }
   }
 } else {
@@ -519,13 +568,14 @@ if (args.suite === 'historical') {
       runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
         args,
         worktree,
-        { name: benchmarkCase.name, base: benchmarkCase.base },
+        { name: benchmarkCase.name, base: benchmarkCase.base, skill: benchmarkCase.skill ?? 'code-review' },
         semantic,
       );
     }
     results.push({
       case: benchmarkCase.name,
       repository: benchmarkCase.repository,
+      skill: benchmarkCase.skill ?? 'code-review',
       base: benchmarkCase.base,
       head: benchmarkCase.head,
       expectedFindings: [],
