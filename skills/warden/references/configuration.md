@@ -84,15 +84,6 @@ pattern = "*.config.*"
 mode = "whole-file"
 ```
 
-**Experiment with semantic grouping:**
-```toml
-[defaults.chunking.semantic]
-enabled = false
-maxChunks = 20
-maxChunkChars = 30000
-maxHunksPerChunk = 50
-```
-
 ## Model Lanes
 
 Warden uses different model lanes for different kinds of work:

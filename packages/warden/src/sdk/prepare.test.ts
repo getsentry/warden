@@ -208,67 +208,6 @@ describe('prepareFiles', () => {
     ]);
   });
 
-  it('leaves distant same-file hunks atomic for semantic planning', () => {
-    const context = makeContext([
-      {
-        filename: 'src/example.ts',
-        status: 'modified',
-        patch: [
-          '@@ -10,1 +10,1 @@',
-          '-old10',
-          '+new10',
-          '@@ -100,1 +100,1 @@',
-          '-old100',
-          '+new100',
-          '@@ -200,1 +200,1 @@',
-          '-old200',
-          '+new200',
-        ].join('\n'),
-      },
-    ]);
-
-    const result = prepareFiles(context, {
-      chunking: {
-        semantic: {
-          enabled: true,
-          maxChunks: 20,
-          maxChunkChars: 30000,
-          maxHunksPerChunk: 50,
-        },
-      },
-    });
-
-    expect(result.files).toHaveLength(1);
-    expect(result.files[0]?.chunks).toHaveLength(3);
-    expect(result.files[0]?.chunks.map((chunk) => chunk.changedLineMap)).toEqual([
-      [{ path: 'src/example.ts', start: 10, end: 10 }],
-      [{ path: 'src/example.ts', start: 100, end: 100 }],
-      [{ path: 'src/example.ts', start: 200, end: 200 }],
-    ]);
-  });
-
-  it('maps only changed added lines, not unchanged hunk context', () => {
-    const context = makeContext([
-      {
-        filename: 'src/example.ts',
-        status: 'modified',
-        patch: [
-          '@@ -10,3 +10,3 @@',
-          ' const before = true;',
-          '-const value = oldValue;',
-          '+const value = newValue;',
-          ' const after = true;',
-        ].join('\n'),
-      },
-    ]);
-
-    const result = prepareFiles(context);
-
-    expect(result.files[0]?.chunks[0]?.changedLineMap).toEqual([
-      { path: 'src/example.ts', start: 11, end: 11 },
-    ]);
-  });
-
   it('does not skip go.mod as a built-in ignored file', () => {
     const context = makeContext([
       { filename: 'go.mod', patch: '@@ -0,0 +1,1 @@\n+module example.com/app' },
@@ -412,10 +351,7 @@ describe('prepareFiles', () => {
     const context = buildLocalEventContext({ base: 'HEAD^', head: 'HEAD', cwd: repoPath });
     const result = prepareFiles(context, { contextLines: 1 });
 
-    expect(result.files[0]?.chunks[0]?.files[0]?.sourceLines).toContainEqual({
-      line: 8,
-      content: 'clean context',
-    });
+    expect(result.files[0]?.hunks[0]?.contextAfter).toEqual(['clean context']);
   }, 30_000);
 
   it('applies git-ref scan limits to the analyzed commit, not the dirty working tree', () => {
@@ -460,9 +396,6 @@ describe('prepareFiles', () => {
     const context = buildLocalEventContext({ cwd: repoPath, staged: true });
     const result = prepareFiles(context, { contextLines: 1 });
 
-    expect(result.files[0]?.chunks[0]?.files[0]?.sourceLines).toContainEqual({
-      line: 8,
-      content: 'index context',
-    });
+    expect(result.files[0]?.hunks[0]?.contextAfter).toEqual(['index context']);
   }, 30_000);
 });

@@ -5,8 +5,7 @@ import {
   classifyFile,
   coalesceHunks,
   splitLargeHunks,
-  reviewChunkFromHunk,
-  type ReviewChunk,
+  type HunkWithContext,
 } from '../diff/index.js';
 import type { PreparedFile, PrepareFilesOptions, PrepareFilesResult } from './types.js';
 import { applyScanPolicy } from './scan-policy.js';
@@ -18,26 +17,26 @@ function matchingChunkingSkipPattern(
   return patterns?.find((pattern) => classifyFile(filename, [pattern]) === 'skip')?.pattern;
 }
 
-/** Adapt atomic review chunks into the per-file shape used before semantic planning. */
-export function groupChunksByFile(chunks: ReviewChunk[]): PreparedFile[] {
-  const fileMap = new Map<string, ReviewChunk[]>();
+/**
+ * Group hunks by filename into PreparedFile entries.
+ */
+export function groupHunksByFile(hunks: HunkWithContext[]): PreparedFile[] {
+  const fileMap = new Map<string, HunkWithContext[]>();
 
-  for (const chunk of chunks) {
-    const filename = chunk.files[0]?.path;
-    if (!filename) continue;
-    const existing = fileMap.get(filename);
+  for (const hunk of hunks) {
+    const existing = fileMap.get(hunk.filename);
     if (existing) {
-      existing.push(chunk);
+      existing.push(hunk);
     } else {
-      fileMap.set(filename, [chunk]);
+      fileMap.set(hunk.filename, [hunk]);
     }
   }
 
-  return Array.from(fileMap, ([filename, chunks]) => ({ filename, chunks }));
+  return Array.from(fileMap, ([filename, fileHunks]) => ({ filename, hunks: fileHunks }));
 }
 
 /**
- * Prepare files for analysis by parsing patches into review chunks with context.
+ * Prepare files for analysis by parsing patches into hunks with context.
  * Returns files that have changes to analyze and files that were skipped.
  */
 export function prepareFiles(
@@ -51,7 +50,7 @@ export function prepareFiles(
   }
 
   const pr = context.pullRequest;
-  const allChunks: ReviewChunk[] = [];
+  const allHunks: HunkWithContext[] = [];
   const skippedFiles: SkippedFile[] = [];
 
   const scanPolicy = applyScanPolicy(pr.files, {
@@ -110,12 +109,11 @@ export function prepareFiles(
       contextLines,
       contentSource: context.diffContextSource,
     });
-    const rawChunks = hunksWithContext.map(reviewChunkFromHunk);
-    allChunks.push(...rawChunks);
+    allHunks.push(...hunksWithContext);
   }
 
   return {
-    files: groupChunksByFile(allChunks),
+    files: groupHunksByFile(allHunks),
     skippedFiles,
   };
 }

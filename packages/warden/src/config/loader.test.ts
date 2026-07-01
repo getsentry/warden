@@ -595,7 +595,6 @@ describe('mergeWardenConfigs', () => {
         chunking: {
           filePatterns: [{ pattern: '**/*.lock', mode: 'skip' }],
           coalesce: { enabled: true, maxGapLines: 20, maxChunkSize: 4000 },
-          semantic: { enabled: true, maxChunks: 20, maxChunkChars: 30000, maxHunksPerChunk: 50 },
           maxContextFiles: 25,
         },
       },
@@ -615,15 +614,6 @@ describe('mergeWardenConfigs', () => {
         chunking: {
           filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }],
           coalesce: { maxGapLines: 5, maxChunkSize: 2000, enabled: true },
-          semantic: {
-            enabled: true,
-            maxChunks: 10,
-            maxChunkChars: 12000,
-            maxHunksPerChunk: 25,
-            maxEmbeddedDiffChars: 4000,
-            maxEmbeddedDiffChunks: 8,
-            maxEmbeddedDiffRanges: 8,
-          },
           maxContextFiles: 10,
         },
       },
@@ -653,56 +643,10 @@ describe('mergeWardenConfigs', () => {
           { pattern: '**/*.snap', mode: 'skip' },
         ],
         coalesce: { enabled: true, maxGapLines: 5, maxChunkSize: 2000 },
-        semantic: {
-          enabled: true,
-          maxChunks: 10,
-          maxChunkChars: 12000,
-          maxHunksPerChunk: 25,
-          maxEmbeddedDiffChars: 4000,
-          maxEmbeddedDiffChunks: 8,
-          maxEmbeddedDiffRanges: 8,
-        },
         maxContextFiles: 10,
       },
     });
     expect(merged.skills.map((skill) => skill.name)).toEqual(['org-skill', 'repo-skill']);
-  });
-
-  it('field-merges semantic chunking defaults across config layers', () => {
-    const baseConfig = WardenConfigSchema.parse({
-      version: 1,
-      defaults: {
-        chunking: {
-          semantic: {
-            enabled: true,
-            maxChunks: 20,
-            maxChunkChars: 50000,
-            maxEmbeddedDiffChars: 8000,
-          },
-        },
-      },
-      skills: [],
-    });
-    const repoConfig = WardenConfigSchema.parse({
-      version: 1,
-      defaults: {
-        chunking: {
-          semantic: {
-            maxChunks: 8,
-            maxEmbeddedDiffRanges: 6,
-          },
-        },
-      },
-      skills: [],
-    });
-
-    expect(mergeWardenConfigs(baseConfig, repoConfig).defaults?.chunking?.semantic).toEqual({
-      enabled: true,
-      maxChunks: 8,
-      maxChunkChars: 50000,
-      maxEmbeddedDiffChars: 8000,
-      maxEmbeddedDiffRanges: 6,
-    });
   });
 
   it('deep-merges nested default model lanes across layers', () => {

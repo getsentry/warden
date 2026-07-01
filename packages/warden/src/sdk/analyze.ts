@@ -1,15 +1,14 @@
 import type { Span } from '@sentry/node';
 import type { SkillDefinition } from '../config/schema.js';
 import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
-import type { ChangedLineRange, ReviewChunk } from '../diff/index.js';
+import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
-import { buildHunkSystemPrompt, buildReviewChunkUserPrompt, type PRPromptContext } from './prompt.js';
+import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
-import type { FindingPathResolver } from './extract.js';
 import { postProcessFindings } from './post-process.js';
 import { buildFileReports } from './report-files.js';
 import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
@@ -22,19 +21,17 @@ import {
   type HunkAnalysisCallbacks,
   type SkillRunnerOptions,
   type PreparedFile,
-  type ReviewChunkGroup,
   type FileAnalysisCallbacks,
   type FileAnalysisResult,
   type ChunkAnalysisResult,
 } from './types.js';
 import { prepareFiles } from './prepare.js';
-import { planSemanticReviewChunks } from '../semantic/index.js';
 import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace } from '../types/index.js';
-import type { SourceSnippet } from '../types/index.js';
+import type { SourceSnippet, SourceSnippetLine } from '../types/index.js';
 import { runPool } from '../utils/index.js';
 import { getSpanContext, startTraceRecorder, withTraceRecorder, type TraceRecorder } from '../sentry-trace.js';
 
-/** Result from parsing review chunk output */
+/** Result from parsing hunk output */
 interface ParseHunkOutputResult {
   findings: Finding[];
   /** Whether extraction failed (both regex and LLM fallback) */
@@ -105,30 +102,6 @@ function allHunksFailedGuidance(runtime: SkillRunnerOptions['runtime'] | undefin
   return "Verify WARDEN_ANTHROPIC_API_KEY is set correctly, or run 'claude login' when using the Claude runtime without an API key.";
 }
 
-function normalizeReviewChunkGroup(input: PreparedFile | ReviewChunkGroup): ReviewChunkGroup {
-  if ('filenames' in input) {
-    return input;
-  }
-
-  return {
-    displayName: input.filename,
-    filenames: [input.filename],
-    chunks: input.chunks,
-  };
-}
-
-function fileReportInputsFromGroup(args: {
-  group: ReviewChunkGroup;
-  durationMs?: number;
-  usage?: UsageStats;
-}) {
-  return args.group.filenames.map((filename, index) => ({
-    filename,
-    durationMs: index === 0 ? args.durationMs : undefined,
-    usage: index === 0 ? args.usage : undefined,
-  }));
-}
-
 function buildHunkTrace(args: {
   enabled: boolean | undefined;
   span: Span;
@@ -164,14 +137,14 @@ function buildHunkTrace(args: {
 }
 
 /**
- * Parse findings from a review chunk analysis result.
+ * Parse findings from a hunk analysis result.
  * Uses a two-tier extraction strategy:
  * 1. Regex-based extraction (fast, handles well-formed output)
  * 2. LLM fallback using haiku (handles malformed output gracefully)
  */
 async function parseHunkOutput(
   result: SkillRunResult,
-  defaultFilename: string | FindingPathResolver | undefined,
+  filename: string,
   skillName: string,
   options: SkillRunnerOptions
 ): Promise<ParseHunkOutputResult> {
@@ -182,10 +155,9 @@ async function parseHunkOutput(
 
   // Tier 1: Try regex-based extraction first (fast)
   const extracted = extractFindingsJson(result.text);
-  const filenameOrResolver = defaultFilename ?? (() => undefined);
 
   if (extracted.success) {
-    return { findings: validateFindings(extracted.findings, filenameOrResolver), extractionFailed: false, extractionMethod: 'regex' };
+    return { findings: validateFindings(extracted.findings, filename), extractionFailed: false, extractionMethod: 'regex' };
   }
 
   // Tier 2: Try LLM fallback for malformed output
@@ -198,7 +170,7 @@ async function parseHunkOutput(
   });
 
   if (fallback.success) {
-    return { findings: validateFindings(fallback.findings, filenameOrResolver), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
+    return { findings: validateFindings(fallback.findings, filename), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
   }
 
   // Both tiers failed - return extraction failure info
@@ -212,71 +184,21 @@ async function parseHunkOutput(
   };
 }
 
-function numberFromRecord(record: Record<string, unknown>, key: string): number | undefined {
-  const value = record[key];
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-function resolveFindingPathFromChangedLines(
-  changedLineMap: ChangedLineRange[],
-  fallbackFilename: string | undefined,
-  finding: Record<string, unknown>
-): string | undefined {
-  const location = finding['location'];
-  if (!location || typeof location !== 'object') {
-    return fallbackFilename;
-  }
-
-  const locationRecord = location as Record<string, unknown>;
-  const explicitPath = locationRecord['path'];
-  if (typeof explicitPath === 'string' && explicitPath.length > 0) {
-    return explicitPath;
-  }
-
-  if (fallbackFilename) {
-    return fallbackFilename;
-  }
-
-  const startLine = numberFromRecord(locationRecord, 'startLine');
-  if (!startLine) {
-    return undefined;
-  }
-
-  const endLine = numberFromRecord(locationRecord, 'endLine') ?? startLine;
-  const matchingPaths = new Set<string>();
-  for (const range of changedLineMap) {
-    if (startLine >= range.start && endLine <= range.end) {
-      matchingPaths.add(range.path);
-    }
-  }
-
-  return matchingPaths.size === 1 ? [...matchingPaths][0] : undefined;
-}
-
 /**
- * Filter findings whose location falls outside the changed line map.
+ * Filter findings whose startLine falls outside the hunk line range.
  * Findings without a location are kept (general findings).
  */
 export function filterOutOfRangeFindings(
   findings: Finding[],
-  changedLineMap: ChangedLineRange[] | { start: number; end: number }
+  hunkRange: { start: number; end: number }
 ): { filtered: Finding[]; dropped: Finding[] } {
-  const ranges: (ChangedLineRange | { path?: undefined; start: number; end: number })[] = Array.isArray(changedLineMap)
-    ? changedLineMap
-    : [{ start: changedLineMap.start, end: changedLineMap.end }];
   const filtered: Finding[] = [];
   const dropped: Finding[] = [];
 
   function isWithinHunk(finding: Finding): boolean {
     if (!finding.location) return true;
-    const { path, startLine } = finding.location;
-    const endLine = finding.location.endLine ?? startLine;
-    const lineInRange = (line: number): boolean => ranges.some((range) =>
-      (range.path === undefined || range.path === path)
-      && line >= range.start
-      && line <= range.end
-    );
-    return lineInRange(startLine) && lineInRange(endLine);
+    const { startLine } = finding.location;
+    return startLine >= hunkRange.start && startLine <= hunkRange.end;
   }
 
   for (const finding of findings) {
@@ -289,21 +211,41 @@ export function filterOutOfRangeFindings(
   return { filtered, dropped };
 }
 
-/** Build a source snippet for a finding from the matching review chunk file. */
+function hunkSourceLines(hunkCtx: HunkWithContext): SourceSnippetLine[] {
+  const lines: SourceSnippetLine[] = [];
+  for (const [index, content] of hunkCtx.contextBefore.entries()) {
+    lines.push({ line: hunkCtx.contextStartLine + index, content });
+  }
+
+  let newLine = hunkCtx.hunk.newStart;
+  for (const diffLine of hunkCtx.hunk.lines) {
+    if (diffLine.startsWith('-')) continue;
+    if (!diffLine.startsWith('+') && !diffLine.startsWith(' ')) continue;
+    const content = diffLine.slice(1);
+    lines.push({ line: newLine, content });
+    newLine += 1;
+  }
+
+  const afterStart = hunkCtx.hunk.newStart + hunkCtx.hunk.newCount;
+  for (const [index, content] of hunkCtx.contextAfter.entries()) {
+    lines.push({ line: afterStart + index, content });
+  }
+
+  return lines;
+}
+
 export function buildSourceSnippet(
   finding: Finding,
-  chunk: ReviewChunk,
+  hunkCtx: HunkWithContext,
   contextLines = 3
 ): SourceSnippet | undefined {
   if (!finding.location) return undefined;
-  const chunkFile = chunk.files.find((file) => file.path === finding.location?.path);
-  if (!chunkFile) return undefined;
 
   const targetStartLine = finding.location.startLine;
   const targetEndLine = finding.location.endLine ?? targetStartLine;
   const startLine = Math.max(1, targetStartLine - contextLines);
   const endLine = targetEndLine + contextLines;
-  const lines = chunkFile.sourceLines
+  const lines = hunkSourceLines(hunkCtx)
     .filter((line) => line.line >= startLine && line.line <= endLine)
     .map((line) => ({
       ...line,
@@ -317,7 +259,7 @@ export function buildSourceSnippet(
 
   return {
     path: finding.location.path,
-    language: chunkFile.language,
+    language: hunkCtx.language,
     startLine: firstLine.line,
     endLine: lastLine.line,
     targetStartLine,
@@ -326,20 +268,20 @@ export function buildSourceSnippet(
   };
 }
 
-function attachSourceSnippets(findings: Finding[], chunk: ReviewChunk): Finding[] {
+function attachSourceSnippets(findings: Finding[], hunkCtx: HunkWithContext): Finding[] {
   return findings.map((finding) => {
     if (!finding.location) return finding;
-    const sourceSnippet = buildSourceSnippet(finding, chunk);
+    const sourceSnippet = buildSourceSnippet(finding, hunkCtx);
     return sourceSnippet ? { ...finding, sourceSnippet } : finding;
   });
 }
 
 /**
- * Analyze a single review chunk with retry logic for transient failures.
+ * Analyze a single hunk with retry logic for transient failures.
  */
-async function analyzeReviewChunk(
+async function analyzeHunk(
   skill: SkillDefinition,
-  chunk: ReviewChunk,
+  hunkCtx: HunkWithContext,
   repoPath: string,
   options: SkillRunnerOptions,
   callbacks?: HunkAnalysisCallbacks,
@@ -349,16 +291,15 @@ async function analyzeReviewChunk(
     ensureLocalTracing();
   }
 
-  const lineRange = callbacks?.lineRange ?? formatChunkLineRange(chunk);
-  const primaryFile = chunk.files[0]?.path ?? 'unknown';
+  const lineRange = callbacks?.lineRange ?? formatHunkLineRange(hunkCtx);
 
   return Sentry.startSpan(
     {
       op: 'skill.analyze_hunk',
-      name: `analyze chunk ${primaryFile}:${lineRange}`,
+      name: `analyze hunk ${hunkCtx.filename}:${lineRange}`,
       attributes: {
         'gen_ai.agent.name': skill.name,
-        'code.file.path': primaryFile,
+        'code.file.path': hunkCtx.filename,
         'warden.hunk.line_range': lineRange,
       },
     },
@@ -368,7 +309,7 @@ async function analyzeReviewChunk(
       const traceRecorder = options.captureTraces ? startTraceRecorder(span) : undefined;
 
       const systemPrompt = buildHunkSystemPrompt(skill);
-      const userPrompt = buildReviewChunkUserPrompt(skill, chunk, prContext);
+      const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
 
       // Report prompt size information
       const systemChars = systemPrompt.length;
@@ -404,7 +345,7 @@ async function analyzeReviewChunk(
             buildHunkTrace({
               enabled: options.captureTraces,
               span,
-              filename: primaryFile,
+              filename: hunkCtx.filename,
               lineRange,
               runtime: runtimeName,
               status: circuitReason.code,
@@ -427,7 +368,7 @@ async function analyzeReviewChunk(
             trace: buildHunkTrace({
               enabled: options.captureTraces,
               span,
-              filename: primaryFile,
+              filename: hunkCtx.filename,
               lineRange,
               runtime: runtimeName,
               status: 'aborted',
@@ -477,7 +418,7 @@ async function analyzeReviewChunk(
               trace: buildHunkTrace({
                 enabled: options.captureTraces,
                 span,
-                filename: primaryFile,
+                filename: hunkCtx.filename,
                 lineRange,
                 runtime: runtimeName,
                 status: 'missing_result',
@@ -525,7 +466,7 @@ async function analyzeReviewChunk(
                 buildHunkTrace({
                   enabled: options.captureTraces,
                   span,
-                  filename: primaryFile,
+                  filename: hunkCtx.filename,
                   lineRange,
                   runtime: runtimeName,
                   status: resultMessage.status,
@@ -545,7 +486,7 @@ async function analyzeReviewChunk(
               trace: buildHunkTrace({
                 enabled: options.captureTraces,
                 span,
-                filename: primaryFile,
+                filename: hunkCtx.filename,
                 lineRange,
                 runtime: runtimeName,
                 status: resultMessage.status,
@@ -558,30 +499,22 @@ async function analyzeReviewChunk(
           options.circuitBreaker?.recordSuccess();
           const parseResult = await withTraceRecorder(
             traceRecorder,
-            () => parseHunkOutput(
-              resultMessage,
-              (finding) => resolveFindingPathFromChangedLines(
-                chunk.changedLineMap,
-                chunk.files.length === 1 ? primaryFile : undefined,
-                finding,
-              ),
-              skill.name,
-              options,
-            ),
+            () => parseHunkOutput(resultMessage, hunkCtx.filename, skill.name, options),
           );
 
-          // Filter findings outside changed line ranges (defense-in-depth)
-          const { filtered, dropped } = filterOutOfRangeFindings(parseResult.findings, chunk.changedLineMap);
-          const filteredFindings = attachSourceSnippets(filtered, chunk);
+          // Filter findings outside hunk line range (defense-in-depth)
+          const hunkRange = getHunkLineRange(hunkCtx.hunk);
+          const { filtered, dropped } = filterOutOfRangeFindings(parseResult.findings, hunkRange);
+          const filteredFindings = attachSourceSnippets(filtered, hunkCtx);
           if (dropped.length > 0) {
             Sentry.addBreadcrumb({
               category: 'finding.out_of_range',
-              message: `Dropped ${dropped.length} finding(s) outside changed line map`,
+              message: `Dropped ${dropped.length} finding(s) outside hunk range ${hunkRange.start}-${hunkRange.end}`,
               level: 'warning',
               data: {
                 skill: skill.name,
-                filename: primaryFile,
-                changedLineMap: chunk.changedLineMap,
+                filename: hunkCtx.filename,
+                hunkRange,
                 droppedLines: dropped.map((f) => f.location?.startLine),
               },
             });
@@ -627,7 +560,7 @@ async function analyzeReviewChunk(
             trace: buildHunkTrace({
               enabled: options.captureTraces,
               span,
-              filename: primaryFile,
+              filename: hunkCtx.filename,
               lineRange,
               runtime: runtimeName,
               status: resultMessage.status,
@@ -651,7 +584,7 @@ async function analyzeReviewChunk(
               trace: buildHunkTrace({
                 enabled: options.captureTraces,
                 span,
-                filename: primaryFile,
+                filename: hunkCtx.filename,
                 lineRange,
                 runtime: runtimeName,
                 status: 'aborted',
@@ -698,7 +631,7 @@ async function analyzeReviewChunk(
 
           Sentry.addBreadcrumb({
             category: 'retry',
-            message: `Retrying review chunk analysis`,
+            message: `Retrying hunk analysis`,
             data: { attempt: attempt + 1, error: errorMessage, delayMs },
             level: 'warning',
           });
@@ -729,7 +662,7 @@ async function analyzeReviewChunk(
               trace: buildHunkTrace({
                 enabled: options.captureTraces,
                 span,
-                filename: primaryFile,
+                filename: hunkCtx.filename,
                 lineRange,
                 runtime: runtimeName,
                 status: 'aborted',
@@ -773,7 +706,7 @@ async function analyzeReviewChunk(
           buildHunkTrace({
             enabled: options.captureTraces,
             span,
-            filename: primaryFile,
+            filename: hunkCtx.filename,
             lineRange,
             runtime: runtimeName,
             status: retryCode,
@@ -792,7 +725,7 @@ async function analyzeReviewChunk(
         trace: buildHunkTrace({
           enabled: options.captureTraces,
           span,
-          filename: primaryFile,
+          filename: hunkCtx.filename,
           lineRange,
           runtime: runtimeName,
           status: retryCode,
@@ -804,15 +737,12 @@ async function analyzeReviewChunk(
 }
 
 /**
- * Format a review chunk's changed ranges as a display string.
+ * Format a hunk's line range as a display string (e.g. "10-20" or "10").
  */
-function formatChunkLineRange(chunk: ReviewChunk): string {
-  return chunk.changedLineMap
-    .map((range) => {
-      const lineRange = range.start === range.end ? `${range.start}` : `${range.start}-${range.end}`;
-      return chunk.files.length === 1 ? lineRange : `${range.path}:${lineRange}`;
-    })
-    .join(', ');
+function formatHunkLineRange(hunk: HunkWithContext): string {
+  const start = hunk.hunk.newStart;
+  const end = start + hunk.hunk.newCount - 1;
+  return start === end ? `${start}` : `${start}-${end}`;
 }
 
 /**
@@ -827,25 +757,24 @@ function attachElapsedTime(findings: Finding[], skillStartTime: number | undefin
 }
 
 /**
- * Analyze a single prepared file's review chunks.
+ * Analyze a single prepared file's hunks.
  */
 export async function analyzeFile(
   skill: SkillDefinition,
-  file: PreparedFile | ReviewChunkGroup,
+  file: PreparedFile,
   repoPath: string,
   options: SkillRunnerOptions = {},
   callbacks?: FileAnalysisCallbacks,
   prContext?: PRPromptContext
 ): Promise<FileAnalysisResult> {
-  const group = normalizeReviewChunkGroup(file);
   return Sentry.startSpan(
     {
       op: 'skill.analyze_file',
-      name: `analyze chunk group ${group.displayName}`,
+      name: `analyze file ${file.filename}`,
       attributes: {
         'gen_ai.agent.name': skill.name,
-        'code.file.path': group.displayName,
-        'warden.hunk.count': group.chunks.length,
+        'code.file.path': file.filename,
+        'warden.hunk.count': file.hunks.length,
       },
     },
     async (span) => {
@@ -858,11 +787,11 @@ export async function analyzeFile(
       let failedHunks = 0;
       let failedExtractions = 0;
 
-      for (const [chunkIndex, chunk] of group.chunks.entries()) {
+      for (const [hunkIndex, hunk] of file.hunks.entries()) {
         if (abortController?.signal.aborted) break;
 
-        const lineRange = formatChunkLineRange(chunk);
-        callbacks?.onHunkStart?.(chunkIndex + 1, group.chunks.length, lineRange);
+        const lineRange = formatHunkLineRange(hunk);
+        callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
 
         const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
           ? {
@@ -877,7 +806,7 @@ export async function analyzeFile(
           : undefined;
 
         const hunkStartTime = Date.now();
-        const result = await analyzeReviewChunk(skill, chunk, repoPath, options, hunkCallbacks, prContext);
+        const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
         const hunkDurationMs = Date.now() - hunkStartTime;
 
         // `failed` and `extractionFailed` are conceptually mutually exclusive:
@@ -889,7 +818,7 @@ export async function analyzeFile(
           failedHunks++;
           hunkFailures.push({
             type: 'analysis',
-            filename: group.displayName,
+            filename: file.filename,
             lineRange,
             code: result.failureCode ?? 'unknown',
             message: result.failureMessage ?? 'unknown error',
@@ -899,7 +828,7 @@ export async function analyzeFile(
           failedExtractions++;
           hunkFailures.push({
             type: 'extraction',
-            filename: group.displayName,
+            filename: file.filename,
             lineRange,
             code: mapExtractionErrorCode(result.extractionError),
             message: result.extractionError ?? 'unknown extraction error',
@@ -908,15 +837,15 @@ export async function analyzeFile(
         }
 
         attachElapsedTime(result.findings, callbacks?.skillStartTime);
-        callbacks?.onHunkComplete?.(chunkIndex + 1, result.findings, result.usage);
+        callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
         if (result.trace) {
           hunkTraces.push(result.trace);
         }
         const chunkResult: ChunkAnalysisResult = {
-          filename: group.displayName,
+          filename: file.filename,
           model: options.model,
-          index: chunkIndex + 1,
-          total: group.chunks.length,
+          index: hunkIndex + 1,
+          total: file.hunks.length,
           lineRange,
           findings: result.findings,
           usage: result.usage,
@@ -944,8 +873,7 @@ export async function analyzeFile(
       span.setAttribute('warden.extraction.failed_count', failedExtractions);
 
       return {
-        filename: group.displayName,
-        filenames: group.filenames,
+        filename: file.filename,
         findings: fileFindings,
         usage: aggregateUsage(fileUsage),
         failedHunks,
@@ -980,7 +908,7 @@ export function generateSummary(skillName: string, findings: Finding[]): string 
 }
 
 /**
- * Run a skill on a PR, analyzing each prepared review chunk separately.
+ * Run a skill on a PR, analyzing each hunk separately.
  */
 export async function runSkill(
   skill: SkillDefinition,
@@ -1023,28 +951,14 @@ async function runSkillAnalysis(
     throw new SkillRunnerError('Pull request context required for skill execution');
   }
 
-  const { files: initialPreparedFiles, skippedFiles } = prepareFiles(context, {
+  const { files: fileHunks, skippedFiles } = prepareFiles(context, {
     contextLines: options.contextLines,
     ignore: options.ignore,
     scan: options.scan,
     chunking: options.chunking,
   });
-  const semanticPlan = await planSemanticReviewChunks(initialPreparedFiles, context, {
-    enabled: options.chunking?.semantic?.enabled,
-    apiKey: options.apiKey,
-    runtime: options.runtime,
-    model: options.model,
-    maxChunks: options.chunking?.semantic?.maxChunks,
-    maxChunkChars: options.chunking?.semantic?.maxChunkChars,
-    maxHunksPerChunk: options.chunking?.semantic?.maxHunksPerChunk,
-    maxChangedRangesPerChunk: options.chunking?.semantic?.maxChangedRangesPerChunk,
-    maxEmbeddedDiffChars: options.chunking?.semantic?.maxEmbeddedDiffChars,
-    maxEmbeddedDiffChunks: options.chunking?.semantic?.maxEmbeddedDiffChunks,
-    maxEmbeddedDiffRanges: options.chunking?.semantic?.maxEmbeddedDiffRanges,
-  });
-  const chunkGroups = semanticPlan.groups;
 
-  if (chunkGroups.length === 0) {
+  if (fileHunks.length === 0) {
     const report: SkillReport = {
       skill: skill.name,
       summary: 'No code changes to analyze',
@@ -1060,21 +974,13 @@ async function runSkillAnalysis(
     return report;
   }
 
-  const totalFiles = chunkGroups.length;
-  const totalHunks = chunkGroups.reduce((sum, group) => sum + group.chunks.length, 0);
+  const totalFiles = fileHunks.length;
+  const totalHunks = fileHunks.reduce((sum, file) => sum + file.hunks.length, 0);
   const allFindings: Finding[] = [];
 
   // Track all usage stats for aggregation
   const allUsage: UsageStats[] = [];
   const allAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
-  if (semanticPlan.usage) {
-    allAuxiliaryUsage.push({
-      agent: 'semantic-chunk-planner',
-      usage: semanticPlan.usage,
-      model: options.model,
-      runtime: options.runtime,
-    });
-  }
   const allTraces: HunkTrace[] = [];
 
   // Track failed hunks across all files
@@ -1083,7 +989,7 @@ async function runSkillAnalysis(
 
   // Build PR context for inclusion in prompts (helps LLM understand the full scope of changes)
   // For non-PR contexts (CLI file/diff mode), skip the "Other Files" list to avoid
-  // bloating every chunk prompt with thousands of filenames.
+  // bloating every hunk prompt with thousands of filenames.
   const isPullRequest = context.pullRequest.number !== 0;
   const prContext: PRPromptContext = {
     repository: context.repository.fullName,
@@ -1094,14 +1000,14 @@ async function runSkillAnalysis(
   };
 
   /**
-   * Process all review chunks for a single file sequentially.
+   * Process all hunks for a single file sequentially.
    * Wraps analyzeFile with progress callbacks.
    */
   async function processFile(
-    group: ReviewChunkGroup,
+    fileHunkEntry: PreparedFile,
     fileIndex: number
   ): Promise<FileAnalysisResult> {
-    const filename = group.displayName;
+    const { filename } = fileHunkEntry;
 
     callbacks?.onFileStart?.(filename, fileIndex, totalFiles);
 
@@ -1145,7 +1051,7 @@ async function runSkillAnalysis(
         : undefined,
     };
 
-    const result = await analyzeFile(skill, group, context.repoPath, options, fileCallbacks, prContext);
+    const result = await analyzeFile(skill, fileHunkEntry, context.repoPath, options, fileCallbacks, prContext);
 
     callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
 
@@ -1153,15 +1059,15 @@ async function runSkillAnalysis(
   }
 
   /** Process a file with timing, returning a self-contained result. */
-  async function processFileWithTiming(group: ReviewChunkGroup, fileIndex: number) {
+  async function processFileWithTiming(fileHunkEntry: PreparedFile, fileIndex: number) {
     const fileStart = Date.now();
-    const result = await processFile(group, fileIndex);
+    const result = await processFile(fileHunkEntry, fileIndex);
     const durationMs = Date.now() - fileStart;
-    return { group, result, durationMs };
+    return { filename: fileHunkEntry.filename, result, durationMs };
   }
 
   // Collect results in input order (Promise.all preserves order)
-  const fileResults: { group: ReviewChunkGroup; result: FileAnalysisResult; durationMs: number }[] = [];
+  const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
 
   // Process files - parallel or sequential based on options
   if (parallel) {
@@ -1169,23 +1075,23 @@ async function runSkillAnalysis(
     const fileConcurrency = options.concurrency ?? DEFAULT_FILE_CONCURRENCY;
     const batchDelayMs = options.batchDelayMs ?? 0;
 
-    fileResults.push(...await runPool(chunkGroups, fileConcurrency,
-      async (group, index) => {
+    fileResults.push(...await runPool(fileHunks, fileConcurrency,
+      async (fileHunkEntry, index) => {
         // Rate-limit: delay items beyond the first concurrent wave
         if (index >= fileConcurrency && batchDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
         }
-        return processFileWithTiming(group, index);
+        return processFileWithTiming(fileHunkEntry, index);
       },
       { shouldAbort: () => abortController?.signal.aborted ?? false }
     ));
   } else {
     // Process files sequentially
-    for (const [fileIndex, group] of chunkGroups.entries()) {
+    for (const [fileIndex, fileHunkEntry] of fileHunks.entries()) {
       // Check for abort before starting new file
       if (abortController?.signal.aborted) break;
 
-      fileResults.push(await processFileWithTiming(group, fileIndex));
+      fileResults.push(await processFileWithTiming(fileHunkEntry, fileIndex));
     }
   }
 
@@ -1207,11 +1113,11 @@ async function runSkillAnalysis(
     }
   }
 
-  // All chunks failed — typically a systemic problem (auth, subprocess, etc).
+  // All hunks failed — typically a systemic problem (auth, subprocess, etc).
   // Throw so direct SDK consumers (evals, scheduled workflows) keep their
   // prior exception-based contract. The CLI path (tasks.ts) has its own
   // all-hunks-fail detection that emits a structured JSONL record instead.
-  // Count both analysis and extraction failures: each chunk contributes to
+  // Count both analysis and extraction failures: each hunk contributes to
   // at most one (analyzeFile makes them mutually exclusive), and an
   // extraction-only failure scenario would otherwise slip through silently.
   const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
@@ -1271,7 +1177,7 @@ async function runSkillAnalysis(
   // Generate summary
   const summary = generateSummary(skill.name, finalFindings);
 
-  // Aggregate usage across all chunks
+  // Aggregate usage across all hunks
   const totalUsage = aggregateUsage(allUsage);
 
   const report: SkillReport = {
@@ -1282,8 +1188,8 @@ async function runSkillAnalysis(
     durationMs: Date.now() - startTime,
     model: options.model,
     files: buildFileReports(
-      fileResults.flatMap((fr) => fileReportInputsFromGroup({
-        group: fr.group,
+      fileResults.map((fr) => ({
+        filename: fr.filename,
         durationMs: fr.durationMs,
         usage: fr.result.usage,
       })),

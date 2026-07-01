@@ -144,7 +144,7 @@ export const SkillConfigSchema = z.object({
   failCheck: z.boolean().optional(),
   /** Model to use for this skill (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model: z.string().optional(),
-  /** Maximum agentic turns (API round-trips) per chunk analysis. Overrides defaults.maxTurns. */
+  /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
   maxTurns: z.number().int().positive().optional(),
   /** Minimum confidence level for findings. Findings below this are filtered from output. */
   minConfidence: ConfidenceThresholdSchema.optional(),
@@ -180,35 +180,13 @@ export const CoalesceConfigSchema = z.object({
 });
 export type CoalesceConfig = z.infer<typeof CoalesceConfigSchema>;
 
-export const SemanticChunkingConfigSchema = z.object({
-  /** Enable semantic review chunk materialization (default: false) */
-  enabled: z.boolean().optional(),
-  /** Maximum number of scanner review chunks to emit after semantic grouping */
-  maxChunks: z.number().int().positive().optional(),
-  /** Target max size per scanner review chunk in characters */
-  maxChunkChars: z.number().int().positive().optional(),
-  /** Maximum atomic hunks to place in one scanner review chunk inside a semantic change */
-  maxHunksPerChunk: z.number().int().positive().optional(),
-  /** Maximum changed line ranges to place in one scanner review chunk inside a semantic change */
-  maxChangedRangesPerChunk: z.number().int().positive().optional(),
-  /** Maximum total hunk content characters to embed in the semantic planner prompt */
-  maxEmbeddedDiffChars: z.number().int().nonnegative().optional(),
-  /** Maximum prepared chunks allowed before the semantic planner stops embedding full hunk content */
-  maxEmbeddedDiffChunks: z.number().int().nonnegative().optional(),
-  /** Maximum changed ranges allowed before the semantic planner stops embedding full hunk content */
-  maxEmbeddedDiffRanges: z.number().int().nonnegative().optional(),
-});
-export type SemanticChunkingConfig = z.infer<typeof SemanticChunkingConfigSchema>;
-
 // Chunking configuration for controlling how files are processed
 export const ChunkingConfigSchema = z.object({
   /** Patterns to control file processing mode */
   filePatterns: z.array(FilePatternSchema).optional(),
   /** Coalescing options for merging nearby hunks */
   coalesce: CoalesceConfigSchema.optional(),
-  /** Semantic review chunk options */
-  semantic: SemanticChunkingConfigSchema.optional(),
-  /** Max number of "other files" to list in chunk prompts for PR context. 0 disables the section entirely. Default: 50 */
+  /** Max number of "other files" to list in hunk prompts for PR context. 0 disables the section entirely. Default: 50 */
   maxContextFiles: z.number().int().nonnegative().default(50),
 });
 export type ChunkingConfig = z.infer<typeof ChunkingConfigSchema>;
@@ -253,7 +231,7 @@ export const DefaultsSchema = z.object({
   failCheck: z.boolean().optional(),
   /** Default model for all skills (e.g., 'openai/gpt-5.5') */
   model: z.string().optional(),
-  /** Maximum agentic turns (API round-trips) per chunk analysis. Default: 50 */
+  /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
   maxTurns: z.number().int().positive().optional(),
   /** Runtime backend for all model-backed execution. Default: pi */
   runtime: RuntimeNameSchema.optional(),

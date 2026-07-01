@@ -39,9 +39,8 @@ import { formatCost, formatTokens, formatDuration } from '../../cli/output/forma
 import { findBotReviewState } from '../review-state.js';
 import type { BotReviewInfo } from '../review-state.js';
 import type { ActionInputs } from '../inputs.js';
-import { createTriggerSkillTaskOptions, executeTrigger } from '../triggers/executor.js';
+import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
-import { prepareSemanticPlansForTasks } from '../../cli/output/tasks.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
@@ -486,32 +485,24 @@ async function executeAllTriggers(
   const semaphore = new Semaphore(concurrency);
   const abortController = new AbortController();
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController });
-  const baseTriggerDeps = {
-    context,
-    anthropicApiKey: inputs.anthropicApiKey,
-    claudePath: runtimeEnv.pathToClaudeCodeExecutable,
-    globalFailOn: inputs.failOn,
-    globalReportOn: inputs.reportOn,
-    globalMaxFindings: inputs.maxFindings,
-    globalRequestChanges: inputs.requestChanges,
-    globalFailCheck: inputs.failCheck,
-    semaphore,
-    abortController,
-    circuitBreaker,
-  };
-  const plannedTaskOptions = await prepareSemanticPlansForTasks(
-    matchedTriggers.map((trigger) => createTriggerSkillTaskOptions(trigger, baseTriggerDeps))
-  );
-  const preparedFilesByTriggerIndex = plannedTaskOptions.map((task) => task.preparedFiles);
 
   // Limit trigger dispatch too; the semaphore only gates work after a trigger starts.
   return runPool(
     matchedTriggers,
     concurrency,
-    (trigger, index) =>
+    (trigger) =>
       executeTrigger(trigger, {
-        ...baseTriggerDeps,
-        preparedFiles: preparedFilesByTriggerIndex[index],
+        context,
+        anthropicApiKey: inputs.anthropicApiKey,
+        claudePath: runtimeEnv.pathToClaudeCodeExecutable,
+        globalFailOn: inputs.failOn,
+        globalReportOn: inputs.reportOn,
+        globalMaxFindings: inputs.maxFindings,
+        globalRequestChanges: inputs.requestChanges,
+        globalFailCheck: inputs.failCheck,
+        semaphore,
+        abortController,
+        circuitBreaker,
         checks: options.checks,
       }),
     { shouldAbort: () => abortController.signal.aborted },

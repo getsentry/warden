@@ -71,8 +71,8 @@ call-site edits. The point of this benchmark is to preserve the real
 fragmentation shape.
 
 The benchmark should run against a real `getsentry/sentry` checkout, not the
-current fixture-only eval repository. The semantic planner has read-only tools,
-and those tools are only meaningful when surrounding repository context exists.
+current fixture-only eval repository. Chunking changes need surrounding
+repository context to expose the same prompt shapes Warden sees in production.
 
 ## Initial Cases
 
@@ -85,7 +85,7 @@ Start with these cases from `packages/evals/code-review/`.
 | `sentry-fixability-missing-issue-summary` | `4199c6aeed84c7c359aa7ad6863534174769d436` | `62125c6514958cd89aa3cf7374be32f984adb683` | 4 files, 20 hunks | Fixability calculation misses the cached issue summary needed by Seer. |
 | `sentry-workflow-status-missing-foreign-key` | `e36f46a85cf4a6c9a6ae0e5e545a7c13b789d478` | `f4cc09c52e73c2ab60a3b14291c60dd0db5458a7` | 2 files, 17 hunks | Workflow status processing fails hard on missing or deleted foreign keys. |
 
-These four cover the core semantic chunking risks:
+These four cover the core chunking risks:
 
 - many tiny hunks that describe one behavior change
 - cross-file implementation and test updates

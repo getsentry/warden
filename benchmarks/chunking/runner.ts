@@ -198,7 +198,6 @@ const HistoricalScenarioSchema = z.object({
 
 interface Args {
   suite: 'historical' | 'performance';
-  mode: 'nonsemantic' | 'semantic' | 'both';
   sentryRepo?: string;
   sentryMcpRepo: string;
   wardenRepo: string;
@@ -231,7 +230,6 @@ interface PerformanceCase {
 }
 
 interface RunSummary {
-  semantic: boolean;
   complete: boolean;
   outputPath: string;
   exitCode: number;
@@ -318,7 +316,6 @@ interface ChunkProfile {
     changedRanges: number;
     contentChars: number;
     lineRanges: string[];
-    contentModes: string[];
   }[];
   skippedFiles: {
     filename: string;
@@ -333,7 +330,6 @@ function usage(exitCode = 2): never {
     '',
     'Options:',
     '  --suite <name>          historical or performance (default: historical)',
-    '  --mode <name>           nonsemantic, semantic, or both (default: nonsemantic)',
     '  --sentry-repo <path>    Existing getsentry/sentry checkout for historical cases',
     '  --sentry-mcp-repo <path> Existing getsentry/sentry-mcp checkout for performance cases',
     '  --warden-repo <path>    Existing getsentry/warden checkout for performance cases',
@@ -356,7 +352,6 @@ function usage(exitCode = 2): never {
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     suite: 'historical',
-    mode: 'nonsemantic',
     cases: [],
     sentryMcpRepo: '/home/dcramer/src/sentry-mcp',
     wardenRepo: resolve(import.meta.dirname, '../..'),
@@ -378,10 +373,6 @@ function parseArgs(argv: string[]): Args {
       const suite = argv[++i];
       if (suite !== 'historical' && suite !== 'performance') usage();
       args.suite = suite;
-    } else if (arg === '--mode') {
-      const mode = argv[++i];
-      if (mode !== 'nonsemantic' && mode !== 'semantic' && mode !== 'both') usage();
-      args.mode = mode;
     } else if (arg === '--sentry-repo') args.sentryRepo = resolve(argv[++i] ?? usage());
     else if (arg === '--sentry-mcp-repo') args.sentryMcpRepo = resolve(argv[++i] ?? usage());
     else if (arg === '--warden-repo') args.wardenRepo = resolve(argv[++i] ?? usage());
@@ -483,8 +474,8 @@ function createBenchmarkWorktree(sourceRepo: string, benchmarkCase: BenchmarkCas
   return worktree;
 }
 
-function writeBenchmarkConfig(path: string, semantic: boolean, model: string, runtime: string, skill: string): string {
-  const configPath = join(path, semantic ? 'warden.semantic.toml' : 'warden.nonsemantic.toml');
+function writeBenchmarkConfig(path: string, model: string, runtime: string, skill: string): string {
+  const configPath = join(path, 'warden.benchmark.toml');
   const findingThreshold = skill === 'security-review' ? 'low' : 'medium';
   writeFileSync(configPath, [
     'version = 1',
@@ -498,16 +489,6 @@ function writeBenchmarkConfig(path: string, semantic: boolean, model: string, ru
     '',
     '[defaults.verification]',
     'enabled = false',
-    '',
-    '[defaults.chunking.semantic]',
-    `enabled = ${semantic ? 'true' : 'false'}`,
-    'maxChunks = 20',
-    'maxChunkChars = 20000',
-    'maxHunksPerChunk = 4',
-    'maxChangedRangesPerChunk = 4',
-    'maxEmbeddedDiffChars = 8000',
-    'maxEmbeddedDiffChunks = 12',
-    'maxEmbeddedDiffRanges = 12',
     '',
     '[[skills]]',
     `name = "${skill}"`,
@@ -530,7 +511,6 @@ function summarizeJsonl(path: string, exitCode: number, expectedFindings: string
   const content = existsSync(path) ? readFileSync(path, 'utf8').trim() : '';
   if (!content) {
     return {
-      semantic: false,
       complete: exitCode === 0,
       outputPath: path,
       exitCode,
@@ -573,7 +553,6 @@ function summarizeJsonl(path: string, exitCode: number, expectedFindings: string
   }
 
   return {
-    semantic: false,
     complete: exitCode === 0 && failedScannerChunks === 0,
     outputPath: path,
     exitCode,
@@ -592,10 +571,9 @@ function runWarden(
   args: Args,
   worktree: string,
   benchmarkCase: { name: string; base: string; skill: string; expectedFindings?: string[] },
-  semantic: boolean,
 ): RunSummary {
-  const config = writeBenchmarkConfig(worktree, semantic, args.model, args.runtime, benchmarkCase.skill);
-  const outputPath = join(args.artifactsDir, `${benchmarkCase.name}.${semantic ? 'semantic' : 'nonsemantic'}.jsonl`);
+  const config = writeBenchmarkConfig(worktree, args.model, args.runtime, benchmarkCase.skill);
+  const outputPath = join(args.artifactsDir, `${benchmarkCase.name}.nonsemantic.jsonl`);
   const cliArgs = [
     'cli',
     '--',
@@ -628,15 +606,7 @@ function runWarden(
     stdio: 'inherit',
   });
 
-  const summary = summarizeJsonl(outputPath, result.status ?? 1, benchmarkCase.expectedFindings);
-  summary.semantic = semantic;
-  return summary;
-}
-
-function selectedModes(args: Args): boolean[] {
-  if (args.mode === 'nonsemantic') return [false];
-  if (args.mode === 'semantic') return [true];
-  return [false, true];
+  return summarizeJsonl(outputPath, result.status ?? 1, benchmarkCase.expectedFindings);
 }
 
 function sourceRepoForPerformanceCase(args: Args, benchmarkCase: PerformanceCase): string {
@@ -746,10 +716,10 @@ function makeProfileContext(
   };
 }
 
-function lineRangeForChunk(chunk: { changedLineMap: { start: number; end: number }[] }): string {
-  return chunk.changedLineMap
-    .map((range) => range.start === range.end ? `${range.start}` : `${range.start}-${range.end}`)
-    .join(',');
+function lineRangeForHunk(hunk: { hunk: { newStart: number; newCount: number } }): string {
+  const start = hunk.hunk.newStart;
+  const end = start + Math.max(hunk.hunk.newCount - 1, 0);
+  return start === end ? `${start}` : `${start}-${end}`;
 }
 
 function profileChunks(worktree: string, repository: string, base: string): ChunkProfile {
@@ -757,17 +727,17 @@ function profileChunks(worktree: string, repository: string, base: string): Chun
   const context = makeProfileContext(worktree, repository, base, files);
   const prepared = prepareFiles(context);
   const profileFiles = prepared.files.map((file) => {
-    const contentChars = file.chunks.reduce(
-      (total, chunk) => total + chunk.files.reduce((sum, chunkFile) => sum + chunkFile.content.length, 0),
+    const contentChars = file.hunks.reduce(
+      (total, hunk) =>
+        total + hunk.hunk.content.length + hunk.contextBefore.join('\n').length + hunk.contextAfter.join('\n').length,
       0,
     );
     return {
       filename: file.filename,
-      chunks: file.chunks.length,
-      changedRanges: file.chunks.reduce((total, chunk) => total + chunk.changedLineMap.length, 0),
+      chunks: file.hunks.length,
+      changedRanges: file.hunks.length,
       contentChars,
-      lineRanges: file.chunks.map(lineRangeForChunk),
-      contentModes: [...new Set(file.chunks.flatMap((chunk) => chunk.files.map((chunkFile) => chunkFile.contentMode)))],
+      lineRanges: file.hunks.map(lineRangeForHunk),
     };
   });
 
@@ -821,19 +791,12 @@ if (args.suite === 'historical') {
       });
     } else {
       const runs: Record<string, RunSummary> = {};
-      for (const semantic of selectedModes(args)) {
-        runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
-          args,
-          worktree,
-          {
-            name: benchmarkCase.name,
-            base: benchmarkCase.fixCommit,
-            skill: benchmarkCase.skill,
-            expectedFindings: benchmarkCase.expectedFindings,
-          },
-          semantic,
-        );
-      }
+      runs['nonsemantic'] = runWarden(args, worktree, {
+        name: benchmarkCase.name,
+        base: benchmarkCase.fixCommit,
+        skill: benchmarkCase.skill,
+        expectedFindings: benchmarkCase.expectedFindings,
+      });
       results.push({
         case: benchmarkCase.name,
         repository: benchmarkCase.repository,
@@ -871,14 +834,11 @@ if (args.suite === 'historical') {
       });
     } else {
       const runs: Record<string, RunSummary> = {};
-      for (const semantic of selectedModes(args)) {
-        runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
-          args,
-          worktree,
-          { name: benchmarkCase.name, base: benchmarkCase.base, skill: benchmarkCase.skill ?? 'code-review' },
-          semantic,
-        );
-      }
+      runs['nonsemantic'] = runWarden(
+        args,
+        worktree,
+        { name: benchmarkCase.name, base: benchmarkCase.base, skill: benchmarkCase.skill ?? 'code-review' },
+      );
       results.push({
         case: benchmarkCase.name,
         repository: benchmarkCase.repository,
@@ -900,7 +860,7 @@ writeFileSync(args.output, JSON.stringify({
   schemaVersion: 1,
   capturedAt: new Date().toISOString(),
   suite: args.suite,
-  mode: args.mode,
+  mode: 'nonsemantic',
   model: args.model,
   runtime: args.runtime,
   cases: results,

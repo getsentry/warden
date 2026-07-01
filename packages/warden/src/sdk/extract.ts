@@ -16,8 +16,6 @@ import {
 
 const ExtractedFindingSchema = FindingSchema.omit({ sourceSnippet: true });
 
-export type FindingPathResolver = (finding: Record<string, unknown>) => string | undefined;
-
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
 
@@ -276,46 +274,28 @@ export function generateShortId(): string {
  * Validate and normalize findings from extracted JSON.
  * Replaces the LLM-provided ID with a short ID for cross-referencing.
  */
-export function validateFindings(
-  findings: unknown[],
-  defaultFilenameOrResolver: string | FindingPathResolver
-): Finding[] {
+export function validateFindings(findings: unknown[], filename: string): Finding[] {
   const validated: Finding[] = [];
 
   for (const f of findings) {
     const candidate = typeof f === 'object' && f !== null
       ? { ...(f as Record<string, unknown>) }
       : f;
-    const defaultFilename = typeof defaultFilenameOrResolver === 'function'
-      && typeof candidate === 'object'
-      && candidate !== null
-      ? defaultFilenameOrResolver(candidate as Record<string, unknown>)
-      : defaultFilenameOrResolver;
 
-    // Normalize missing location paths before validation. Multi-file review
-    // chunks may provide explicit paths, so preserve them when present.
+    // Normalize location path before validation
     if (typeof candidate === 'object' && candidate !== null && 'location' in candidate) {
       const loc = (candidate as Record<string, unknown>)['location'];
       if (loc && typeof loc === 'object') {
-        const location = loc as Record<string, unknown>;
         (candidate as Record<string, unknown>)['location'] = {
-          ...location,
-          path: typeof location['path'] === 'string' && location['path'].length > 0
-            ? location['path']
-            : defaultFilename,
+          ...(loc as Record<string, unknown>),
+          path: filename,
         };
       }
     }
 
     const result = ExtractedFindingSchema.safeParse(candidate);
     if (result.success) {
-      const locationPath = result.data.location?.path || defaultFilename;
-      if (result.data.location && !locationPath) {
-        continue;
-      }
-      const location = result.data.location
-        ? { ...result.data.location, path: locationPath as string }
-        : undefined;
+      const location = result.data.location ? { ...result.data.location, path: filename } : undefined;
       validated.push({
         ...result.data,
         id: generateShortId(),
