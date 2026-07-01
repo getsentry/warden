@@ -11,6 +11,8 @@ import {
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { z } from 'zod';
+import { prepareFiles } from '../../packages/warden/src/sdk/prepare.js';
+import type { EventContext, FileChange } from '../../packages/warden/src/types/index.js';
 
 const DEFAULT_CASES = [
   'sentry-dashboard-axis-range-existing-widget',
@@ -197,7 +199,10 @@ interface Args {
   artifactsDir: string;
   model: string;
   runtime: string;
+  effort?: string;
   keepWorktrees: boolean;
+  profile: boolean;
+  traces: boolean;
 }
 
 interface BenchmarkCase {
@@ -236,6 +241,27 @@ interface RunSummary {
   };
 }
 
+interface ChunkProfile {
+  fileCount: number;
+  skippedFileCount: number;
+  scannerChunks: number;
+  changedRanges: number;
+  contentChars: number;
+  files: {
+    filename: string;
+    chunks: number;
+    changedRanges: number;
+    contentChars: number;
+    lineRanges: string[];
+    contentModes: string[];
+  }[];
+  skippedFiles: {
+    filename: string;
+    reason: string;
+    pattern?: string;
+  }[];
+}
+
 function usage(exitCode = 2): never {
   const text = [
     'usage: pnpm exec tsx benchmarks/chunking/runner.ts [options]',
@@ -251,6 +277,9 @@ function usage(exitCode = 2): never {
     '  --artifacts-dir <path>  Raw JSONL artifact directory (default: /tmp/warden-chunking-benchmark-artifacts)',
     '  --model <model>         Model override',
     '  --runtime <runtime>     Runtime override',
+    '  --effort <level>        Effort override for scanner runs',
+    '  --profile               Only prepare and summarize scanner chunks; do not run Warden',
+    '  --traces                Capture per-chunk runtime traces in JSONL artifacts',
     '  --keep-worktrees        Keep temporary synthetic worktrees',
     '  -h, --help              Show this help',
   ].join('\n');
@@ -271,6 +300,8 @@ function parseArgs(argv: string[]): Args {
     model: process.env['WARDEN_BENCHMARK_MODEL'] ?? DEFAULT_MODEL,
     runtime: process.env['WARDEN_BENCHMARK_RUNTIME'] ?? DEFAULT_RUNTIME,
     keepWorktrees: false,
+    profile: false,
+    traces: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -294,6 +325,9 @@ function parseArgs(argv: string[]): Args {
     else if (arg === '--artifacts-dir') args.artifactsDir = resolve(argv[++i] ?? usage());
     else if (arg === '--model') args.model = argv[++i] ?? usage();
     else if (arg === '--runtime') args.runtime = argv[++i] ?? usage();
+    else if (arg === '--effort') args.effort = argv[++i] ?? usage();
+    else if (arg === '--profile') args.profile = true;
+    else if (arg === '--traces') args.traces = true;
     else if (arg === '--keep-worktrees') args.keepWorktrees = true;
     else usage();
   }
@@ -509,6 +543,12 @@ function runWarden(
     '--log',
     '--no-color',
   ];
+  if (args.traces) {
+    cliArgs.push('--traces');
+  }
+  if (args.effort) {
+    cliArgs.push('--effort', args.effort);
+  }
   const result = spawnSync('pnpm', cliArgs, {
     cwd: resolve(import.meta.dirname, '../..'),
     encoding: 'utf8',
@@ -552,6 +592,136 @@ function createPerformanceWorktree(sourceRepo: string, benchmarkCase: Performanc
   return worktree;
 }
 
+function parseNumstat(repo: string, base: string): Map<string, { additions: number; deletions: number }> {
+  const stats = new Map<string, { additions: number; deletions: number }>();
+  const output = execGit(repo, ['diff', '--numstat', '--find-renames', `${base}..HEAD`]);
+  if (!output) return stats;
+
+  for (const line of output.split('\n')) {
+    const [additionsRaw, deletionsRaw, ...pathParts] = line.split('\t');
+    const filename = pathParts.at(-1);
+    if (!filename) continue;
+    stats.set(filename, {
+      additions: Number.parseInt(additionsRaw ?? '0', 10) || 0,
+      deletions: Number.parseInt(deletionsRaw ?? '0', 10) || 0,
+    });
+  }
+  return stats;
+}
+
+function fileChangeStatus(rawStatus: string): FileChange['status'] {
+  const status = rawStatus[0];
+  if (status === 'A') return 'added';
+  if (status === 'D') return 'removed';
+  if (status === 'R') return 'renamed';
+  if (status === 'C') return 'copied';
+  return 'modified';
+}
+
+function readDiffFiles(repo: string, base: string): FileChange[] {
+  const nameStatus = execGit(repo, ['diff', '--name-status', '--find-renames', `${base}..HEAD`]);
+  if (!nameStatus) return [];
+
+  const stats = parseNumstat(repo, base);
+  return nameStatus.split('\n').flatMap((line): FileChange[] => {
+    const parts = line.split('\t');
+    const statusRaw = parts[0];
+    if (!statusRaw) return [];
+    const filename = statusRaw.startsWith('R') || statusRaw.startsWith('C') ? parts[2] : parts[1];
+    if (!filename) return [];
+    const patch = execGit(repo, ['diff', '--unified=3', `${base}..HEAD`, '--', filename]);
+    const fileStats = stats.get(filename) ?? { additions: 0, deletions: 0 };
+    return [{
+      filename,
+      status: fileChangeStatus(statusRaw),
+      additions: fileStats.additions,
+      deletions: fileStats.deletions,
+      patch,
+    }];
+  });
+}
+
+function makeProfileContext(
+  worktree: string,
+  repository: string,
+  base: string,
+  files: FileChange[],
+): EventContext {
+  const [owner = 'getsentry', name = repository] = repository.split('/');
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: {
+      owner,
+      name,
+      fullName: repository,
+      defaultBranch: 'main',
+    },
+    pullRequest: {
+      number: 1,
+      title: 'Chunking benchmark profile',
+      body: null,
+      author: 'warden-benchmark',
+      baseBranch: 'main',
+      headBranch: 'benchmark',
+      headSha: execGit(worktree, ['rev-parse', 'HEAD']),
+      baseSha: base,
+      files,
+    },
+    repoPath: worktree,
+    diffContextSource: { type: 'working-tree' },
+  };
+}
+
+function lineRangeForChunk(chunk: { changedLineMap: { start: number; end: number }[] }): string {
+  return chunk.changedLineMap
+    .map((range) => range.start === range.end ? `${range.start}` : `${range.start}-${range.end}`)
+    .join(',');
+}
+
+function profileChunks(worktree: string, repository: string, base: string): ChunkProfile {
+  const files = readDiffFiles(worktree, base);
+  const context = makeProfileContext(worktree, repository, base, files);
+  const prepared = prepareFiles(context);
+  const profileFiles = prepared.files.map((file) => {
+    const contentChars = file.chunks.reduce(
+      (total, chunk) => total + chunk.files.reduce((sum, chunkFile) => sum + chunkFile.content.length, 0),
+      0,
+    );
+    return {
+      filename: file.filename,
+      chunks: file.chunks.length,
+      changedRanges: file.chunks.reduce((total, chunk) => total + chunk.changedLineMap.length, 0),
+      contentChars,
+      lineRanges: file.chunks.map(lineRangeForChunk),
+      contentModes: [...new Set(file.chunks.flatMap((chunk) => chunk.files.map((chunkFile) => chunkFile.contentMode)))],
+    };
+  });
+
+  return {
+    fileCount: profileFiles.length,
+    skippedFileCount: prepared.skippedFiles.length,
+    scannerChunks: profileFiles.reduce((total, file) => total + file.chunks, 0),
+    changedRanges: profileFiles.reduce((total, file) => total + file.changedRanges, 0),
+    contentChars: profileFiles.reduce((total, file) => total + file.contentChars, 0),
+    files: profileFiles.sort((a, b) => b.chunks - a.chunks || b.contentChars - a.contentChars),
+    skippedFiles: prepared.skippedFiles,
+  };
+}
+
+function printProfile(profile: ChunkProfile): void {
+  console.log([
+    `Prepared files: ${profile.fileCount}`,
+    `Scanner chunks: ${profile.scannerChunks}`,
+    `Changed ranges: ${profile.changedRanges}`,
+    `Content chars: ${profile.contentChars}`,
+    `Skipped files: ${profile.skippedFileCount}`,
+  ].join('\n'));
+  for (const file of profile.files.slice(0, 10)) {
+    console.log(`- ${file.filename}: ${file.chunks} chunks, ${file.changedRanges} ranges, ${file.contentChars} chars`);
+  }
+}
+
 const args = parseArgs(process.argv.slice(2));
 mkdirSync(args.artifactsDir, { recursive: true });
 
@@ -563,25 +733,40 @@ if (args.suite === 'historical') {
     const sourceRepo = sourceRepoForRepository(args, benchmarkCase.repository);
     const worktree = createBenchmarkWorktree(sourceRepo, benchmarkCase);
     console.log(`Worktree: ${worktree}`);
-    const runs: Record<string, RunSummary> = {};
-    for (const semantic of selectedModes(args)) {
-      runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
-        args,
-        worktree,
-        { name: benchmarkCase.name, base: benchmarkCase.fixCommit, skill: benchmarkCase.skill },
-        semantic,
-      );
+    if (args.profile) {
+      const profile = profileChunks(worktree, benchmarkCase.repository, benchmarkCase.fixCommit);
+      printProfile(profile);
+      results.push({
+        case: benchmarkCase.name,
+        repository: benchmarkCase.repository,
+        skill: benchmarkCase.skill,
+        base: benchmarkCase.fixCommit,
+        head: benchmarkCase.vulnerableCommit,
+        expectedFindings: benchmarkCase.expectedFindings,
+        profile,
+        worktree: args.keepWorktrees ? worktree : undefined,
+      });
+    } else {
+      const runs: Record<string, RunSummary> = {};
+      for (const semantic of selectedModes(args)) {
+        runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
+          args,
+          worktree,
+          { name: benchmarkCase.name, base: benchmarkCase.fixCommit, skill: benchmarkCase.skill },
+          semantic,
+        );
+      }
+      results.push({
+        case: benchmarkCase.name,
+        repository: benchmarkCase.repository,
+        skill: benchmarkCase.skill,
+        base: benchmarkCase.fixCommit,
+        head: benchmarkCase.vulnerableCommit,
+        expectedFindings: benchmarkCase.expectedFindings,
+        runs,
+        worktree: args.keepWorktrees ? worktree : undefined,
+      });
     }
-    results.push({
-      case: benchmarkCase.name,
-      repository: benchmarkCase.repository,
-      skill: benchmarkCase.skill,
-      base: benchmarkCase.fixCommit,
-      head: benchmarkCase.vulnerableCommit,
-      expectedFindings: benchmarkCase.expectedFindings,
-      runs,
-      worktree: args.keepWorktrees ? worktree : undefined,
-    });
     if (!args.keepWorktrees) {
       execGit(sourceRepo, ['worktree', 'remove', '--force', worktree]);
     }
@@ -593,25 +778,40 @@ if (args.suite === 'historical') {
     const sourceRepo = sourceRepoForPerformanceCase(args, benchmarkCase);
     const worktree = createPerformanceWorktree(sourceRepo, benchmarkCase);
     console.log(`Worktree: ${worktree}`);
-    const runs: Record<string, RunSummary> = {};
-    for (const semantic of selectedModes(args)) {
-      runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
-        args,
-        worktree,
-        { name: benchmarkCase.name, base: benchmarkCase.base, skill: benchmarkCase.skill ?? 'code-review' },
-        semantic,
-      );
+    if (args.profile) {
+      const profile = profileChunks(worktree, benchmarkCase.repository, benchmarkCase.base);
+      printProfile(profile);
+      results.push({
+        case: benchmarkCase.name,
+        repository: benchmarkCase.repository,
+        skill: benchmarkCase.skill ?? 'code-review',
+        base: benchmarkCase.base,
+        head: benchmarkCase.head,
+        expectedFindings: [],
+        profile,
+        worktree: args.keepWorktrees ? worktree : undefined,
+      });
+    } else {
+      const runs: Record<string, RunSummary> = {};
+      for (const semantic of selectedModes(args)) {
+        runs[semantic ? 'semantic' : 'nonsemantic'] = runWarden(
+          args,
+          worktree,
+          { name: benchmarkCase.name, base: benchmarkCase.base, skill: benchmarkCase.skill ?? 'code-review' },
+          semantic,
+        );
+      }
+      results.push({
+        case: benchmarkCase.name,
+        repository: benchmarkCase.repository,
+        skill: benchmarkCase.skill ?? 'code-review',
+        base: benchmarkCase.base,
+        head: benchmarkCase.head,
+        expectedFindings: [],
+        runs,
+        worktree: args.keepWorktrees ? worktree : undefined,
+      });
     }
-    results.push({
-      case: benchmarkCase.name,
-      repository: benchmarkCase.repository,
-      skill: benchmarkCase.skill ?? 'code-review',
-      base: benchmarkCase.base,
-      head: benchmarkCase.head,
-      expectedFindings: [],
-      runs,
-      worktree: args.keepWorktrees ? worktree : undefined,
-    });
     if (!args.keepWorktrees) {
       execGit(sourceRepo, ['worktree', 'remove', '--force', worktree]);
     }

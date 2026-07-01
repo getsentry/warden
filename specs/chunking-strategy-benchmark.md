@@ -11,10 +11,11 @@ after the runner and result format are stable.
 
 ## Current Takeaway
 
-The evidence so far does not support semantic grouping as the default
-performance fix. Semantic grouping preserved recall on some historical cases,
-but it did not reduce cost in the paired baseline and did not recover cases that
-non-semantic chunking missed.
+The evidence so far rejects semantic grouping as an efficiency strategy.
+Semantic grouping preserved recall on some historical cases, but it did not
+reduce cost in the paired baseline and did not recover cases that non-semantic
+chunking missed. Do not include semantic grouping in the main efficiency
+comparison unless a new, separate hypothesis justifies it.
 
 The better next bet is a precision-preserving chunk optimizer:
 
@@ -22,27 +23,27 @@ The better next bet is a precision-preserving chunk optimizer:
 - merge sequential same-file hunks under strict size/range caps
 - keep risky production chunks bounded
 - treat generated/schema/test churn carefully because it dominates cost
-- use semantic labels only as neutral metadata, not as authority to make giant
-  scanner prompts
+- avoid semantic regrouping for scanner efficiency until new evidence changes
+  this conclusion
 
 The benchmark suite now has three roles:
 
 - historical recall cases with known expected findings
 - branch-evolution recall cases where later branch commits fix earlier branch
   bugs
-- real performance-shape PRs that measure cost, chunk count, failures, and
-  finding quality
+- real performance-shape PRs that measure wall time and total cost behind a
+  same-or-better findings gate
 
 ## Goal
 
 Answer two questions:
 
-- Does a chunking strategy preserve or improve known-finding recall?
-- Does it reduce scanner calls, runtime, tokens, or cost on fragmented changes?
+- Does a chunking strategy produce at least the same findings as the baseline?
+- If yes, does it reduce wall time or total cost on fragmented changes?
 
-The benchmark should not only prove that a chunking strategy produces fewer
-chunks. It must prove that scanner behavior improves or stays correct when the
-scanner receives optimized chunks instead of atomic git-hunk chunks.
+The benchmark should not treat scanner chunk count as a success metric. Chunk
+count, prompt size, and changed-range density are diagnostics for explaining
+outcomes. The score is quality-gated wall time and total cost.
 
 ## Dataset Shape
 
@@ -150,8 +151,9 @@ reproduces reliably.
 
 Add a separate performance suite made of real pull requests that were slow or
 pathologically fragmented. These cases do not need a known expected finding.
-They measure scanner-call count, runtime, token cost, failed chunks, duplicate
-findings, and whether reported findings are valid.
+They measure wall time and total cost after verifying that reported findings are
+at least equivalent to the baseline. Scanner-call count, failed chunks, prompt
+size, and duplicate findings are diagnostic fields only.
 
 | Case | Repository | Base | Head | Shape | Why it matters |
 | --- | --- | --- | --- | --- | --- |
@@ -178,9 +180,10 @@ iteration, use a smaller smoke subset:
 Performance cases should be judged differently from historical recall cases:
 
 - valid findings per run, adjudicated manually until a judge exists
-- scanner chunks and failed/interrupted chunks
-- wall time and model usage
+- wall time
+- total cost
 - duplicate or near-duplicate findings
+- scanner chunks and failed/interrupted chunks, for diagnosis only
 - whether chunk grouping made findings more vague or less actionable
 - whether mechanical repeated edits were reviewed once instead of many times
 
@@ -300,9 +303,9 @@ For each historical recall case:
 2. Check out the fixing commit.
 3. Create a benchmark branch.
 4. Apply the full inverse fixing diff back to the vulnerable commit.
-5. Run Warden with semantic chunking disabled.
+5. Run the baseline strategy.
 6. Reset to the same benchmark branch.
-7. Run Warden with semantic chunking enabled.
+7. Run the candidate strategy.
 8. Judge both reports against the existing `should_find` assertion.
 
 For each performance shape case:
@@ -311,8 +314,8 @@ For each performance shape case:
 2. Check out the PR base SHA.
 3. Apply or check out the PR head SHA.
 4. Run each chunking strategy against `base..head`.
-5. Record scanner calls, runtime, tokens, cost, failed chunks, findings, and
-   manual finding validity.
+5. Record findings, wall time, total cost, and enough diagnostic data
+   (scanner calls, tokens, failed chunks) to explain regressions.
 
 The runner lives under `benchmarks/chunking/` because this is maintainer
 benchmark infrastructure, not the eval framework. It may read historical eval
@@ -335,14 +338,63 @@ bug-introducing worktrees. Performance cases use explicit base/head SHAs from
 real PR-shaped diffs. Both modes write paired summaries plus raw JSONL
 artifacts.
 
+Use `--profile` before model-backed experiments. It runs the same worktree
+setup and `prepareFiles` path, then writes prepared scanner chunk counts,
+changed ranges, content size, top files, and skipped files without invoking the
+scanner. Use `--traces` when debugging model variance and `--effort high` for
+recall controls that are noisy at default effort.
+
+## Research Signals
+
+Current external evidence matches the local benchmark failures: code-review
+quality is sensitive to context shape, and "more context" is often worse.
+
+- SWE-PRBench evaluates 350 real pull requests against human review comments.
+  Its reported result is especially relevant: all tested frontier models got
+  worse as context expanded from diff-only to richer file/full-context setups,
+  even with structured semantic layers such as AST-extracted function context
+  and import graph resolution. The authors attribute the dominant failure mode
+  to attention dilution, and a smaller structured diff-with-summary prompt beat
+  a richer full-context prompt.
+- Long-context divide-and-conquer research frames failures as a balance between
+  task noise, model noise, and aggregation noise. Chunking helps when context
+  size creates model noise, but it fails when the issue requires cross-chunk
+  dependence or when the aggregator loses signal.
+- Dynamic chunking work suggests fixed-size chunking is brittle, but its
+  successful pattern is not "merge everything semantically." It separates
+  content adaptively and selects question-relevant chunks. For Warden, the
+  "question" is the skill/risk class, so chunk selection should be risk-aware.
+- Repository-level vulnerability benchmarks increasingly use paired
+  introducing/fixing commits and agentic inspection because real findings often
+  require interprocedural or cross-file evidence. This supports keeping
+  security controls as paired commits with stable expected findings, not just
+  no-finding performance PRs.
+- Code long-context recall work distinguishes lexical recall from semantic
+  recall and shows code reasoning can degrade by position and granularity.
+  This is a warning against giant stitched chunks: a model can "see" the lines
+  and still fail to reason about the relevant statement.
+
+Design constraints from this:
+
+- Do not optimize for scanner chunk count alone.
+- Treat prompt size, changed-range density, and per-file long-pole runtime as
+  first-class metrics.
+- Prefer small structured diff prompts with targeted context over whole-file or
+  broad semantic bundles.
+- Add benchmark cases with known human or security findings across different
+  shapes: direct diff issue, same-file contextual issue, cross-file issue, and
+  generated-artifact-heavy no-finding case.
+- Run repeated trials or high-effort controls before declaring recall changes.
+- Compare strategies with frozen context configurations, not ad hoc prompt
+  changes mixed with chunking changes.
+
 ## Strategies To Compare
 
 Use the same cases across each strategy:
 
 - current non-semantic chunking
-- current semantic grouping
 - deterministic precision-preserving optimizer
-- optimizer plus optional neutral semantic labels, if implemented
+- generated/derived artifact policy, if implemented
 
 The optimizer is not a replacement for all chunking. It should activate only
 for pathological patch shapes: high raw chunk count, high hunk count in one
@@ -350,27 +402,25 @@ file, many tiny hunks, or large total diff size.
 
 ## Metrics
 
-Record these for each semantic-off and semantic-on run:
+Primary benchmark metrics:
 
 - pass/fail against expected finding
 - total findings
+- wall time
+- recorded cost
+
+Diagnostic fields:
+
 - duplicate or near-duplicate findings
 - failed chunks
 - failed extractions
-- wall time
 - scanner chunk count
-- semantic planner group count
-- scanner chunks per semantic group
-- semantic planner summaries
 - input tokens
 - output tokens
-- recorded cost
 
-The semantic-on run is successful when it keeps the expected finding and reduces
-operational load. A lower chunk count is not enough if recall regresses.
-Semantic groups are allowed to contain multiple scanner chunks; the target is
-fewer, better bounded scanner calls than raw git chunks, not one giant scanner
-prompt per logical change.
+A strategy is successful only when its findings are at least equivalent to the
+baseline and it reduces wall time or total cost. Lower chunk count, lower input
+tokens, or cleaner grouping are explanatory details, not pass criteria.
 
 ## Output
 
@@ -517,6 +567,474 @@ test-specific rule by materializing repeated tiny hunks in a compact form. It is
 not yet a clear cost win over earlier semantic runs, but it is the first generic
 semantic variant that recovered the expected finding on the full patch.
 
+## Failed Attempts
+
+These approaches are recorded as rejected unless new evidence changes the
+result. Do not reintroduce them without rerunning the recall controls and at
+least one finding-bearing performance case.
+
+### Trimmed Reverse-Patch Semantic Grouping
+
+What we tried:
+
+- Case: `sentry-dashboard-axis-range-existing-widget`
+- Patch shape: trimmed two-file reverse patch
+- Semantic planner grouped both changed ranges into one scanner chunk.
+
+Result:
+
+| Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| semantic off | 2 | 1 | 11m54s | 445,997 | 39,484 | $1.2213 |
+| semantic on | 1 | 1 | 3m03s | 160,096 | 10,079 | $0.4609 |
+
+Why it failed as evidence:
+
+- It used a trimmed patch, not the full PR-shaped diff.
+- It proved the mechanics worked, but it made the problem easier by removing
+  surrounding branch noise.
+- Later full-patch runs did not preserve this apparent win.
+
+Takeaway:
+
+- Do not use trimmed patches to validate chunking quality. They can be useful
+  smoke tests, but they are not recall or performance proof.
+
+### Full-Patch Semantic Grouping
+
+What we tried:
+
+- Case: `sentry-dashboard-axis-range-existing-widget`
+- Patch shape: full reverse fixing diff
+- Variants:
+  - bounded semantic groups
+  - summary anti-bias prompt
+  - changed-range caps
+  - neutral scanner prompt
+  - neutral prompt plus stricter changed-range cap
+
+Result:
+
+| Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| non-semantic, partial | 1/13 completed | 1 | 2m53s | 160,637 | 9,024 | $0.3191 |
+| semantic on, bounded groups | 5 | 0 | 10m45s | 481,391 | 34,884 | $1.2564 |
+| semantic on, bounded groups plus summary anti-bias prompt | 4 | 0 | 8m19s | 472,104 | 26,978 | $1.1046 |
+| semantic on, bounded groups plus changed-range cap | 5 | 0 | 7m24s | 432,183 | 23,708 | $0.9862 |
+| semantic on, neutral scanner prompt | 4 | 0 | 5m14s | 374,416 | 15,714 | $0.7504 |
+| semantic on, neutral prompt plus changed-range cap 2 | 7 | 0 | 13m40s | 807,047 | 45,554 | $2.0509 |
+
+Why it failed:
+
+- All full-patch semantic variants missed the expected axis-range regression.
+- Lower chunk count did not translate into preserved recall.
+- Changed-range caps could reduce prompt size in some cases, but one test-heavy
+  scanner chunk still hit `turn_limit`.
+- Removing semantic summaries from scanner prompts reduced cost but did not
+  recover the finding.
+
+Takeaway:
+
+- Size alone was not the root problem. Grouping implementation and updated test
+  hunks into one coherent semantic change can make a regression look
+  intentional.
+- Semantic summaries are grouping metadata, not correctness evidence.
+
+### Test-Assertion-Specific Isolation
+
+What we tried:
+
+- Isolated changed test assertions into their own scanner chunks.
+- This targeted the axis-range case where removed assertions were the main
+  signal.
+
+Result:
+
+- The axis-range finding came back in the experimental run.
+
+Why it failed:
+
+- It was overfit to one benchmark shape.
+- It encoded domain-specific syntax heuristics into the chunker instead of
+  solving the general "many tiny hunks" problem.
+- It worked against the goal of collapsing small similar hunks safely.
+
+Takeaway:
+
+- Do not add literal test-assertion rules to the chunker.
+- If tests need different treatment, make that a general risk/role signal, not
+  a syntax-specific escape hatch.
+
+### Semantic Compact Similar Tiny Hunks
+
+What we tried:
+
+- Kept semantic grouping, but materialized repeated tiny hunks in compact form.
+- The goal was to avoid giant scanner prompts while still grouping repeated
+  edit shapes.
+
+Result:
+
+| Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| semantic on, compact similar tiny hunks | 6 | 1 | 7m23s | 758,900 | 50,400 | $1.9500 |
+
+Why it failed as a default:
+
+- It recovered the axis-range finding, so it was better than earlier full-patch
+  semantic variants.
+- It was still expensive relative to the earlier semantic variants and did not
+  establish a cost win over non-semantic baselines.
+- Evidence came from one difficult case, not the broader benchmark suite.
+
+Takeaway:
+
+- Compact repeated-hunk materialization is worth remembering, but not enough to
+  make semantic grouping the default performance fix.
+
+### Paired Semantic Benchmark Baseline
+
+What we tried:
+
+- Ran the initial four historical code-review cases through the maintainer
+  runner with semantic mode on and off.
+
+Result:
+
+| Case | Mode | Expected found | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| axis range | semantic off | no | 9 | 0 | 2m06s | 119,788 | 8,589 | $0.3428 |
+| axis range | semantic on | no | 5 | 0 | 2m03s | 207,575 | 7,501 | $0.3904 |
+| cursor service account | semantic off | yes | 7 | 3 | 4m49s | 217,727 | 16,902 | $0.5860 |
+| cursor service account | semantic on | yes | 7 | 2 | 4m23s | 384,304 | 20,268 | $0.7174 |
+| fixability summary | semantic off | no | 5 | 1 | 1m12s | 127,987 | 11,044 | $0.3586 |
+| fixability summary | semantic on | no | 4 | 1 | 3m09s | 602,384 | 23,791 | $1.0903 |
+| workflow FK | semantic off | yes | 5 | 2 | 7m24s | 535,681 | 23,518 | $1.1353 |
+| workflow FK | semantic on | yes | 5 | 2 | 7m46s | 665,740 | 38,759 | $1.4570 |
+
+Why it failed:
+
+- Semantic mode preserved recall only where non-semantic mode already found the
+  issue.
+- Semantic mode did not recover missed cases.
+- Semantic mode reduced scanner chunks on two cases, but cost increased on
+  every completed paired run.
+
+Takeaway:
+
+- Semantic grouping is not currently justified as the default performance
+  strategy. It may still be useful as metadata or as an opt-in planner for
+  specific pathological shapes.
+
+### Branch-Evolution Recall From MCP #1130
+
+What we tried:
+
+- Case: `sentry-mcp-ai-conversation-absolute-range-period-conflict`
+- Ran the buggy branch prefix before the later fix commit.
+- Expected finding: absolute `start`/`end` searches conflict with injected or
+  default `period`.
+
+Result:
+
+| Mode | Scanner chunks | Completed | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| non-semantic | 95 | 94 | 0 | 28m11s | 7,056,116 | 245,823 | $14.9409 |
+
+Why it failed:
+
+- It did not produce the known later-fix finding.
+- It is too expensive to use as the first recall guardrail for iteration.
+
+Takeaway:
+
+- Keep it as a performance stress case.
+- Do not count it as a known-positive recall case unless current Warden can
+  reliably find the later-fixed issue.
+
+### Exact Distant Tiny-Hunk Coalescing
+
+What we tried:
+
+- Deterministic non-semantic optimizer.
+- Merged distant same-file tiny hunks only when their changed diff lines were
+  exactly identical.
+- Capped each merged group at 4 hunks and the existing coalescing chunk size.
+- Exposed only through a temporary benchmark flag; implementation was backed
+  out after the test.
+
+Recall guardrail result:
+
+| Case | Scanner chunks | Findings | Duration | Input tokens | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `sentry-slack-options-load-unscoped-group` | 4 | 1 | 21.9s | 20,445 | $0.0627 |
+| `sentry-preprod-snapshot-project-access` | 4 | 1 | 39.2s | 21,179 | $0.0756 |
+| `sentry-release-threshold-empty-project-filter` | 2 | 1 | 20.2s | 10,627 | $0.0411 |
+| `sentry-replay-delete-read-scope` | 2 | 1 | 14.0s | 10,369 | $0.0492 |
+
+Performance result:
+
+| Case | Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sentry-mcp-search-issues-period-30d` | baseline | 95 | 0 | 7m01s | 2,064,917 | 54,596 | $3.8790 |
+| `sentry-mcp-search-issues-period-30d` | exact tiny merge | 67 | 0 | 5m35s | 1,977,998 | 47,867 | $3.7740 |
+
+Finding-bearing control result:
+
+| Case | Mode | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `sentry-mcp-node-pnpm-baseline` | current baseline rerun | 1 | 1m46s | 229,197 | 5,815 | $0.4580 |
+| `sentry-mcp-node-pnpm-baseline` | exact tiny merge | 0 | 1m20s | 127,549 | 4,330 | $0.2680 |
+| `sentry-mcp-node-pnpm-baseline` | exact tiny merge rerun | 0 | 3m43s | 247,700 | 12,200 | $0.5900 |
+
+Why it failed:
+
+- It improved the slow no-finding MCP case, but missed the only finding-bearing
+  performance control twice.
+- The `pnpm-workspace.yaml:4-23` scanner chunk was still isolated, so the
+  failure was not a visible line-range merge error.
+- The missed run spent much less effort on the important chunk than the
+  successful baseline rerun. The optimization appears to change enough run
+  shape, ordering, cache behavior, or agent context to reduce thoroughness.
+
+Takeaway:
+
+- Fewer scanner calls and faster wall time are not sufficient.
+- Even conservative distant-hunk merging can harm recall indirectly.
+- Do not merge distant hunks as the next default strategy. The next safer
+  experiment should prefer sequential same-file coalescing under strict caps and
+  only activate for pathological hunk counts.
+
+### Broad Sequential Gap Increase
+
+What we tried:
+
+- Used current same-file sequential coalescing, but increased
+  `maxGapLines` from 30 to 120 for every file in the benchmark config.
+- Kept the existing `maxChunkSize` cap.
+
+Result:
+
+| Case | Mode | Scanner chunks | Findings | Duration | Input tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `sentry-slack-options-load-unscoped-group` | baseline | 4 | 1 | 24.8s | 20,437 | $0.0633 |
+| `sentry-slack-options-load-unscoped-group` | `maxGapLines=120` | 2 | 0 | 2.4s | 10,500 | $0.0400 |
+
+Why it failed:
+
+- It merged both production hunks in `options_load.py` into one scanner chunk:
+  `14-19, 99-104`.
+- Warden missed the high-signal Slack IDOR finding that baseline finds.
+- This is a direct recall regression, not merely stochastic benchmark noise,
+  because the chunk shape changed on the failing file.
+
+Takeaway:
+
+- Increasing the sequential gap globally is too aggressive.
+- Small security-sensitive files need the existing conservative gap behavior.
+
+### Adaptive High-Hunk Sequential Gap
+
+What we tried:
+
+- Widened same-file sequential coalescing only when a file started with at least
+  12 hunks.
+- Files below that threshold kept the existing 30-line gap.
+- Kept the existing `maxChunkSize` cap.
+- Implementation was backed out after testing.
+
+Recall-control result:
+
+| Case | Scanner chunks | Findings | Duration | Input tokens | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `sentry-slack-options-load-unscoped-group` | 4 | 0 | 3.7s | 20,437 | $0.0478 |
+| `sentry-preprod-snapshot-project-access` | 4 | 1 | 51.7s | 21,179 | $0.0754 |
+| `sentry-release-threshold-empty-project-filter` | 2 | 1 | 22.5s | 10,631 | $0.0576 |
+| `sentry-replay-delete-read-scope` | 2 | 1 | 13.4s | 10,361 | $0.0481 |
+
+Performance result:
+
+| Case | Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sentry-mcp-search-issues-period-30d` | baseline | 95 | 0 | 7m01s | 2,064,917 | 54,596 | $3.8790 |
+| `sentry-mcp-search-issues-period-30d` | adaptive high-hunk gap | 51 | 0 | 5m00s | 1,659,025 | 41,407 | $2.9629 |
+
+Finding-bearing control result:
+
+| Case | Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sentry-mcp-node-pnpm-baseline` | baseline | 19 | 1 | 3m34s | 559,623 | 10,929 | $1.2962 |
+| `sentry-mcp-node-pnpm-baseline` | current baseline rerun | 19 | 1 | 1m46s | 229,197 | 5,815 | $0.4580 |
+| `sentry-mcp-node-pnpm-baseline` | adaptive high-hunk gap | 19 | 0 | 10m13s | 381,049 | 34,753 | $1.3056 |
+
+Why it failed:
+
+- Operationally, it was the best result so far on the slow MCP no-finding case:
+  scanner chunks dropped from 95 to 51 and cost dropped about 24%.
+- It did not pass the finding-bearing control. The pnpm case kept the same
+  scanner chunk count and same `pnpm-workspace.yaml:4-23` chunk shape, but the
+  run still missed the known finding.
+- The Slack recall miss also kept the old 4-chunk shape, so this run exposed
+  benchmark/model variance in addition to chunking behavior.
+- Because the requirement is no precision or recall loss, a promising
+  performance win is not enough.
+
+Takeaway:
+
+- Adaptive sequential same-file coalescing remains the most promising
+  performance theory, but it needs a stronger and more stable quality gate
+  before productizing.
+- The benchmark should run repeated trials or use a cheaper deterministic
+  scanner-summary check for finding-bearing controls; single LLM runs are too
+  noisy to prove "no precision loss."
+- If this is revisited, restrict activation to files with high hunk counts and
+  consider generated/test/docs files first, but do not ship it until
+  finding-bearing controls pass repeatedly.
+
+### Skip Generated Definition Artifacts
+
+What we tried:
+
+- Skipped generated MCP definition files in the benchmark config:
+  - `**/skillDefinitions.json`
+  - `**/toolDefinitions.json`
+- Left existing hunk coalescing unchanged.
+
+Result:
+
+| Case | Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sentry-mcp-search-issues-period-30d` | baseline | 95 | 0 | 7m01s | 2,064,917 | 54,596 | $3.8790 |
+| `sentry-mcp-search-issues-period-30d` | skip generated definitions | 83 | 0 | 7m26s | 1,552,548 | 46,992 | $2.6260 |
+
+Why it failed as a standalone strategy:
+
+- It reduced cost, but wall time got worse.
+- The generated files were expensive, but the long pole became
+  `search-events.test.ts`, which still ran as 32 scanner chunks.
+- Skipping generated files is a policy decision, not a general chunking
+  strategy. It may be valid for derived artifacts, but it does not solve "many
+  tiny hunks in one source/test file."
+
+Takeaway:
+
+- Generated artifact skipping is useful as a multiplier with better chunking,
+  not sufficient by itself.
+- If productized, it should be framed as generated-file policy with clear
+  defaults and override paths, not hidden in semantic chunking.
+
+### Skip Generated Definitions Plus Adaptive High-Hunk Gap
+
+What we tried:
+
+- Combined the two best operational levers:
+  - skip generated MCP definition JSON files
+  - widen same-file sequential coalescing only for files with at least 12 hunks
+- Implementation was temporary and backed out after the run.
+
+Result:
+
+| Case | Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sentry-mcp-search-issues-period-30d` | baseline | 95 | 0 | 7m01s | 2,064,917 | 54,596 | $3.8790 |
+| `sentry-mcp-search-issues-period-30d` | adaptive high-hunk gap | 51 | 0 | 5m00s | 1,659,025 | 41,407 | $2.9629 |
+| `sentry-mcp-search-issues-period-30d` | skip generated definitions | 83 | 0 | 7m26s | 1,552,548 | 46,992 | $2.6260 |
+| `sentry-mcp-search-issues-period-30d` | combined | 44 | 0 | 4m24s | 805,895 | 30,757 | $1.3774 |
+
+Why it is promising:
+
+- It is the strongest performance result so far on the slow MCP case:
+  - scanner chunks down 54%
+  - wall time down 37%
+  - input tokens down 61%
+  - cost down 64%
+- It avoids cross-file semantic grouping.
+- It keeps small files on the existing conservative coalescing behavior.
+- It removes derived generated artifacts from scanner review instead of asking
+  the scanner to re-review source and generated output for the same change.
+
+Why it is not accepted yet:
+
+- The performance case has no findings, so it proves efficiency only.
+- The current finding-bearing controls are unstable:
+  - Slack missed twice with unchanged chunk shape and very short runs.
+  - The pnpm case missed with unchanged chunk shape after a 10m run.
+- Because the requirement is no precision or recall loss, this cannot ship until
+  quality controls pass repeatedly or the benchmark has a more deterministic
+  recall gate.
+
+Takeaway:
+
+- This is the best next implementation candidate, but the next task is improving
+  the benchmark quality gate, not adding more chunking heuristics.
+- A serious follow-up should run repeated trials for controls or use a judge
+  over saved traces to separate chunking regressions from model/run variance.
+
+### Pressure-Triggered Same-File Coalescing
+
+What we tried:
+
+- Added a temporary `prepareFiles` rule:
+  - run normal same-file coalescing first
+  - if one file still produced at least 12 scanner chunks, rerun coalescing for
+    that file with a 120-line gap
+  - leave small files on the existing conservative 30-line gap
+- Added benchmark runner `--profile` support to measure prepared scanner chunks
+  without invoking the model.
+- Implementation was backed out after the real scanner run.
+
+Deterministic profile result:
+
+| Case | Baseline scanner chunks | Pressure scanner chunks | Delta |
+| --- | ---: | ---: | ---: |
+| `sentry-mcp-search-issues-period-30d` | 94 | 65 | -29 |
+| `sentry-mcp-issue-search-project-period-endpoint` | 91 | 63 | -28 |
+| `sentry-mcp-ai-conversation-period-schema-default` | 92 | 64 | -28 |
+| `sentry-mcp-ai-conversation-absolute-range-period-conflict` | 94 | 66 | -28 |
+| all other profiled performance cases | unchanged | unchanged | 0 |
+
+Security-control profile result:
+
+| Case | Baseline scanner chunks | Pressure scanner chunks |
+| --- | ---: | ---: |
+| `sentry-preprod-snapshot-project-access` | 4 | 4 |
+| `sentry-release-threshold-empty-project-filter` | 2 | 2 |
+| `sentry-replay-delete-read-scope` | 2 | 2 |
+| `sentry-slack-options-load-unscoped-group` | 4 | 4 |
+
+High-effort recall result under the temporary rule:
+
+| Case | Findings | Result |
+| --- | ---: | --- |
+| `sentry-preprod-snapshot-project-access` | 1 high | pass |
+| `sentry-release-threshold-empty-project-filter` | 1 high | pass |
+| `sentry-replay-delete-read-scope` | 1 high | pass |
+| `sentry-slack-options-load-unscoped-group` | 1 high | pass |
+
+Real performance result:
+
+| Case | Mode | Scanner chunks | Findings | Duration | Input tokens | Output tokens | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sentry-mcp-search-issues-period-30d` | baseline | 95 | 0 | 7m01s | 2,064,917 | 54,596 | $3.8790 |
+| `sentry-mcp-search-issues-period-30d` | pressure coalescing | 66 (65 completed, 1 skipped) | 0 | 9m23s | 2,503,750 | 60,629 | $4.6710 |
+
+Why it failed:
+
+- It reduced scanner calls, but larger chunks were more expensive for the model
+  to reason over.
+- The new long pole was `packages/mcp-core/src/toolDefinitions.json`, which
+  remained 8 scanner chunks and took 9m20s / $2.90 by itself.
+- The collapsed `search-events.test.ts` shape was operationally better
+  (32 chunks became 3), but that win was erased by larger prompts elsewhere.
+
+Takeaway:
+
+- Chunk count alone is the wrong optimization target.
+- Any strategy that merges hunks must track prompt size and per-file long poles,
+  not only scanner-call count.
+- The next likely lever is explicit generated/derived artifact policy, because
+  derived definition JSON dominated the failed run.
+
 ## Acceptance
 
 Before using this benchmark to make decisions:
@@ -526,8 +1044,8 @@ Before using this benchmark to make decisions:
 - the runner must preserve enough logs to debug planner grouping decisions
 - expected finding judgments must reuse the existing eval judge or equivalent
   semantic matching
-- semantic-on must expose planner summaries in the artifact
 - interrupted or timed-out runs must be marked incomplete, not compared
-- performance wins must preserve finding quality, not only reduce chunk count
-- optimized chunking must beat semantic mode on runtime or cost before it becomes
-  the default for pathological patches
+- performance wins must preserve or improve findings, then reduce wall time or
+  total cost
+- optimized chunking must beat the current baseline on wall time or total cost
+  before it becomes the default for pathological patches
