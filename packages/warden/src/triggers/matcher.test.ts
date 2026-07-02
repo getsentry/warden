@@ -460,10 +460,18 @@ describe('filterContextByPaths', () => {
   });
 
   it('preserves other context fields', () => {
-    const result = filterContextByPaths(baseContext, { paths: ['src/**/*.ts'] });
-    expect(result.eventType).toBe(baseContext.eventType);
-    expect(result.repository).toBe(baseContext.repository);
-    expect(result.repoPath).toBe(baseContext.repoPath);
+    const context: EventContext = {
+      ...baseContext,
+      diffContextSource: { type: 'working-tree' },
+      explicitFileTargets: true,
+    };
+
+    const result = filterContextByPaths(context, { paths: ['src/**/*.ts'] });
+    expect(result.eventType).toBe(context.eventType);
+    expect(result.repository).toBe(context.repository);
+    expect(result.repoPath).toBe(context.repoPath);
+    expect(result.diffContextSource).toBe(context.diffContextSource);
+    expect(result.explicitFileTargets).toBe(true);
     expect(result.pullRequest!.title).toBe('Test PR');
   });
 });

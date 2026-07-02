@@ -150,6 +150,7 @@ export async function buildFileEventContext(options: FileContextOptions): Promis
       files,
     },
     diffContextSource: { type: 'working-tree' },
+    explicitFileTargets: true,
     repoPath: cwd,
   };
 }

@@ -58,6 +58,7 @@ export function prepareFiles(
     ignore: options.ignore,
     scan: options.scan,
     diffContextSource: context.diffContextSource,
+    enforceChangedLineBudget: context.explicitFileTargets !== true,
   });
   skippedFiles.push(...scanPolicy.skippedFiles);
 

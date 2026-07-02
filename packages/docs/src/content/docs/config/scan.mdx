@@ -41,7 +41,7 @@ maxFileLines = 3000
       <code>maxChangedLines</code>
       <span class="sentry-property-meta">number</span>
     </dt>
-    <dd>Max changed lines to analyze after ignores are applied. Default: <code>10000</code>.</dd>
+    <dd>Max changed lines to analyze for PR and diff-based scans after ignores are applied. Explicit local file-target runs do not enforce this budget. Default: <code>10000</code>.</dd>
   </div>
   <div>
     <dt>
@@ -59,6 +59,7 @@ maxFileLines = 3000
   </div>
 </dl>
 
-When a run exceeds `maxFiles` or `maxChangedLines`, Warden scans files in the
-existing diff order until the budget is exhausted and records the remaining
-files as skipped.
+When a PR or diff-based run exceeds `maxFiles` or `maxChangedLines`, Warden
+scans files in the existing diff order until the budget is exhausted and records
+the remaining files as skipped. Explicit local file-target runs still enforce
+`maxFiles`, but not `maxChangedLines`.

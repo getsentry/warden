@@ -83,6 +83,8 @@ export interface ScanPolicyOptions {
   ignore?: IgnoreConfig;
   scan?: ScanConfig;
   diffContextSource?: DiffContextSource;
+  /** Whether to enforce PR/diff changed-line scan budgets. Defaults to true. */
+  enforceChangedLineBudget?: boolean;
 }
 
 export type ScannableFileChange = FileChange & { patch: string };
@@ -387,6 +389,7 @@ export function applyScanPolicy(
 ): ApplyScanPolicyResult {
   const scan = effectiveScanConfig(options.scan);
   const diffContextSource = options.diffContextSource ?? { type: 'working-tree' };
+  const enforceChangedLineBudget = options.enforceChangedLineBudget ?? true;
   const skippedFiles: SkippedFile[] = [];
   const eligible: ScannableFileChange[] = [];
 
@@ -418,7 +421,7 @@ export function applyScanPolicy(
     }
 
     const fileChangedLines = changedLines(file);
-    if (consumedChangedLines + fileChangedLines > scan.maxChangedLines) {
+    if (enforceChangedLineBudget && consumedChangedLines + fileChangedLines > scan.maxChangedLines) {
       skippedFiles.push({ filename: file.filename, reason: 'limit:changed_lines' });
       continue;
     }

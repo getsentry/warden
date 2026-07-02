@@ -446,6 +446,7 @@ export const EventContextSchema = z.object({
   pullRequest: PullRequestContextSchema.optional(),
   repoPath: z.string(),
   diffContextSource: DiffContextSourceSchema.optional(),
+  explicitFileTargets: z.boolean().optional(),
 });
 export type EventContext = z.infer<typeof EventContextSchema>;
 

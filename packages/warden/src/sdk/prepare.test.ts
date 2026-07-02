@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, it, expect } from 'vitest';
 import { prepareFiles } from './prepare.js';
 import type { EventContext, FileChange } from '../types/index.js';
-import { buildLocalEventContext } from '../cli/context.js';
+import { buildFileEventContext, buildLocalEventContext } from '../cli/context.js';
 
 function makeContext(
   files: {
@@ -281,6 +281,43 @@ describe('prepareFiles', () => {
       filename: 'src/two.ts',
       reason: 'limit:changed_lines',
     });
+  });
+
+  it('does not apply changed-line budget to explicit file targets', async () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'warden-file-targets-'));
+    tempDirs.push(repoPath);
+    mkdirSync(join(repoPath, 'src'), { recursive: true });
+    writeFileSync(join(repoPath, 'src/one.ts'), 'one\ntwo\nthree');
+    writeFileSync(join(repoPath, 'src/two.ts'), 'one\ntwo\nthree');
+
+    const context = await buildFileEventContext({
+      patterns: ['src/*.ts'],
+      cwd: repoPath,
+    });
+
+    const result = prepareFiles(context, {
+      scan: { maxChangedLines: 3 },
+    });
+
+    expect(result.files.map((file) => file.filename)).toEqual(['src/one.ts', 'src/two.ts']);
+    expect(result.skippedFiles).toEqual([]);
+  });
+
+  it('keeps file-count budget for explicit file targets', () => {
+    const context = makeContext([
+      { filename: 'src/one.ts', patch: '@@ -0,0 +1,1 @@\n+one', additions: 1 },
+      { filename: 'src/two.ts', patch: '@@ -0,0 +1,1 @@\n+two', additions: 1 },
+    ]);
+    context.explicitFileTargets = true;
+
+    const result = prepareFiles(context, {
+      scan: { maxFiles: 1, maxChangedLines: 1 },
+    });
+
+    expect(result.files.map((file) => file.filename)).toEqual(['src/one.ts']);
+    expect(result.skippedFiles).toEqual([
+      { filename: 'src/two.ts', reason: 'limit:file_count' },
+    ]);
   });
 
   it('skips patchless files before applying changed-line budget', () => {
