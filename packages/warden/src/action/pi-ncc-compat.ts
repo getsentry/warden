@@ -26,9 +26,9 @@ function isNccPiBuiltinImportFailure(reason: unknown): boolean {
 
 async function preloadPiProviderModulesForActionBundle(): Promise<void> {
   const [{ setBedrockProviderModule }, { bedrockProviderModule }] = await Promise.all([
-    import('@earendil-works/pi-ai'),
+    import('@earendil-works/pi-ai/api/bedrock-converse-stream.lazy'),
     import('@earendil-works/pi-ai/bedrock-provider'),
-    import('@earendil-works/pi-ai/openai-codex-responses'),
+    import('@earendil-works/pi-ai/api/openai-codex-responses.lazy'),
   ]);
 
   setBedrockProviderModule(bedrockProviderModule);

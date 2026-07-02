@@ -36,6 +36,7 @@ type BenchmarkResult = {
     findingsTotal: number;
     inputTokens?: number;
     outputTokens?: number;
+    skippedFileCount?: number;
   };
   supersededBy?: string;
   targetMode: string;
@@ -90,6 +91,9 @@ const modelLabel = (model: string) => {
   }
   if (model === "anthropic/claude-sonnet-4-6") {
     return "Claude Sonnet 4.6";
+  }
+  if (model === "anthropic/claude-sonnet-5") {
+    return "Claude Sonnet 5";
   }
   if (model === "claude-sonnet-4-6") {
     return "Claude Sonnet 4.6";
@@ -191,6 +195,7 @@ const stableResults = Object.values(resultModules)
       result.targetMode === "all-corpus-files-by-sha" &&
       !result.supersededBy &&
       result.summary.chunksFailed === 0 &&
+      (result.summary.skippedFileCount ?? 0) === 0 &&
       result.summary.chunksAnalyzed === result.summary.chunksTotal &&
       result.timing?.analysisChunkMs,
   );

@@ -41,6 +41,13 @@ full OpenRouter selector, such as `openrouter/deepseek/deepseek-v4-pro`.
 For the Claude SDK runtime, use Claude Code model IDs such as
 `claude-sonnet-4-6` instead of Pi provider/model selectors.
 
+Warden uses its workspace Pi dependencies, not a globally installed `pi`
+binary. If a newly released model is missing from the Pi registry, update
+`@earendil-works/pi-ai` and `@earendil-works/pi-coding-agent` in Warden before
+running the benchmark. Claude Sonnet 5 is available in Pi `0.80.3` as
+`anthropic/claude-sonnet-5`; through OpenRouter use
+`openrouter/anthropic/claude-sonnet-5`.
+
 If you load credentials from a local env file, export them before running
 `pnpm`. A plain `source .env.local` sets shell variables, but child processes
 will not see them unless they are exported:
@@ -116,6 +123,10 @@ version = 1
 reportOn = "low"
 maxTurns = 100
 
+[defaults.scan]
+maxFiles = 200
+maxChangedLines = 50000
+
 [defaults.verification]
 enabled = true
 
@@ -130,6 +141,15 @@ EOF
 Set `maxTurns` explicitly for corpus runs. The default is lower and can make
 heavy security chunks fail with `turn_limit`, which turns a model comparison
 into a runner-limit comparison.
+
+Set scan limits explicitly too. Corpus benchmarks pass an explicit target-file
+list and must not silently skip those targets because a normal PR scan budget
+was exceeded.
+
+Action item: explicit local file-target runs should not apply the same
+changed-line budget as PR-wide scans. The benchmark uses higher scan limits
+until the local CLI distinguishes those modes. Track this in
+[getsentry/warden#419](https://github.com/getsentry/warden/issues/419).
 
 ## Run
 
@@ -200,6 +220,9 @@ const summary = records.find((record) => record.type === "summary");
 const sourceChunks = records.filter(
   (record) => record.status === "ok" && record.chunk?.file,
 );
+const skippedFiles = records
+  .filter((record) => record.status === "skipped" && record.chunk?.file)
+  .flatMap((record) => record.skippedFiles?.map((file) => file.filename) ?? [record.chunk.file]);
 const missingTraces = sourceChunks.filter((record) => !record.trace);
 const chunksByFile = new Map();
 for (const record of sourceChunks) {
@@ -213,6 +236,9 @@ if (failed.length > 0) {
 }
 if (!summary) {
   throw new Error(`${output} is missing a summary record`);
+}
+if (skippedFiles.length > 0 || (summary.totalSkippedFiles ?? 0) > 0) {
+  throw new Error(`${output} does not have complete target-file coverage`);
 }
 const expectedFileSet = new Set(expectedFiles);
 const missingFiles = expectedFiles.filter((file) => !chunksByFile.has(file));

@@ -52,14 +52,37 @@ hidden here.
   normalized model pricing or cost per finding. **P50** and **P90** are
   per-analysis-chunk durations. **Total** includes verifier work, provider
   latency, queueing, retries, and runtime overhead.
-- The stable matrix only shows clean comparison runs: 156 analysis chunks, zero
-  failed chunks, and per-chunk timing metadata. Partial and superseded rows stay
-  in the result data for audit history.
+- The stable matrix only shows clean comparison runs: complete target-file
+  coverage, zero failed chunks, and per-chunk timing metadata. Partial and
+  superseded rows stay in the result data for audit history.
 - Trace and auxiliary usage fields depend on what the raw artifacts preserved.
   When verifier usage is available, it appears under
   `auxiliaryUsage.verification`.
 
 ## Analysis
+
+### Sonnet 5 High on Pi
+
+The Sonnet 5 high-effort Pi row uses Warden's workspace Pi dependencies, not a
+globally installed Pi binary. The benchmark ran with
+`@earendil-works/pi-ai`/`@earendil-works/pi-coding-agent` 0.80.3, which exposes
+`anthropic/claude-sonnet-5`. The direct Anthropic key path worked, so the run
+did not use the OpenRouter fallback.
+
+Sonnet 5 high found 22 of 86 known corpus entries and emitted 27 final
+findings. It scans all 79 target files as 156 traced chunks, with zero failed
+chunks. The run cost $23.46 total, including $15.38 of scan work and $8.08 of
+auxiliary verifier and merge work.
+
+The practical read is that Sonnet 5 high is competitive but not better than
+Sonnet 4.6 high on this corpus. It trails the Sonnet 4.6 Pi row by three known
+matches, trails DeepSeek V4 Pro xhigh and Opus 4.6 high by one, and lands one
+known match above Opus 4.8 high. Sonnet 5 also costs more than Sonnet 4.6 on Pi
+($23.46 versus $19.84), while emitting fewer final findings than Sonnet 4.6
+(27 versus 32). It finds several different classes of issues in the `7f41cc50`
+shard, including OAuth redirect prefix matching, Seer RPC HMAC path binding,
+and frontend tooltip XSS, but misses enough other corpus matches that the final
+score is lower than Sonnet 4.6.
 
 ### Sonnet 4.6: Claude SDK vs Pi
 
