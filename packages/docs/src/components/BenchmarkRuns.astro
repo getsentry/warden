@@ -46,6 +46,34 @@ type BenchmarkResult = {
   };
 };
 
+const MODEL_LABELS: Record<string, string> = {
+  "anthropic/claude-opus-4-6": "Claude Opus 4.6",
+  "anthropic/claude-opus-4-7": "Claude Opus 4.7",
+  "anthropic/claude-opus-4-8": "Claude Opus 4.8",
+  "anthropic/claude-sonnet-4-6": "Claude Sonnet 4.6",
+  "anthropic/claude-sonnet-5": "Claude Sonnet 5",
+  "claude-opus-4-6": "Claude Opus 4.6",
+  "claude-opus-4-7": "Claude Opus 4.7",
+  "claude-opus-4-8": "Claude Opus 4.8",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6",
+  "openai/gpt-5.5": "GPT 5.5",
+  "openrouter/deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
+  "openrouter/deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
+};
+
+const REASONING_LABELS: Record<string, string> = {
+  high: "high",
+  low: "low",
+  "pi-default-medium": "medium",
+  "provider-default": "default",
+  xhigh: "xhigh",
+};
+
+const RUNTIME_LABELS: Record<string, string> = {
+  claude: "Claude SDK",
+  pi: "Pi",
+};
+
 const knownFoundRate = (scoring: BenchmarkScoring | undefined) =>
   scoring && scoring.knownFindingCount !== 0
     ? scoring.knownFound / scoring.knownFindingCount
@@ -79,74 +107,12 @@ const formatDuration = (value: number | undefined) => {
 
 const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
 
-const modelLabel = (model: string) => {
-  if (model === "openai/gpt-5.5") {
-    return "GPT 5.5";
-  }
-  if (model === "openrouter/deepseek/deepseek-v4-pro") {
-    return "DeepSeek V4 Pro";
-  }
-  if (model === "openrouter/deepseek/deepseek-v4-flash") {
-    return "DeepSeek V4 Flash";
-  }
-  if (model === "anthropic/claude-sonnet-4-6") {
-    return "Claude Sonnet 4.6";
-  }
-  if (model === "anthropic/claude-sonnet-5") {
-    return "Claude Sonnet 5";
-  }
-  if (model === "claude-sonnet-4-6") {
-    return "Claude Sonnet 4.6";
-  }
-  if (model === "anthropic/claude-opus-4-8") {
-    return "Claude Opus 4.8";
-  }
-  if (model === "claude-opus-4-8") {
-    return "Claude Opus 4.8";
-  }
-  if (model === "anthropic/claude-opus-4-6") {
-    return "Claude Opus 4.6";
-  }
-  if (model === "claude-opus-4-6") {
-    return "Claude Opus 4.6";
-  }
-  if (model === "anthropic/claude-opus-4-7") {
-    return "Claude Opus 4.7";
-  }
-  if (model === "claude-opus-4-7") {
-    return "Claude Opus 4.7";
-  }
-  return model;
-};
+const modelLabel = (model: string) => MODEL_LABELS[model] ?? model;
 
-const runtimeLabel = (runtime: string) => {
-  if (runtime === "claude") {
-    return "Claude SDK";
-  }
-  if (runtime === "pi") {
-    return "Pi";
-  }
-  return runtime;
-};
+const runtimeLabel = (runtime: string) => RUNTIME_LABELS[runtime] ?? runtime;
 
-const reasoningLabel = (reasoningLevel: string | undefined) => {
-  if (reasoningLevel === "pi-default-medium") {
-    return "medium";
-  }
-  if (reasoningLevel === "provider-default") {
-    return "default";
-  }
-  if (reasoningLevel === "low") {
-    return "low";
-  }
-  if (reasoningLevel === "high") {
-    return "high";
-  }
-  if (reasoningLevel === "xhigh") {
-    return "xhigh";
-  }
-  return undefined;
-};
+const reasoningLabel = (reasoningLevel: string | undefined) =>
+  reasoningLevel ? REASONING_LABELS[reasoningLevel] : undefined;
 
 const hidesReasoningLabel = (result: BenchmarkResult) =>
   result.model.includes("claude-sonnet");
@@ -213,12 +179,16 @@ const compareTimingResults = (a: BenchmarkResult, b: BenchmarkResult) => {
   const aTiming = a.timing?.analysisChunkMs;
   const bTiming = b.timing?.analysisChunkMs;
 
-  const p50Diff = (aTiming?.p50 ?? Number.POSITIVE_INFINITY) - (bTiming?.p50 ?? Number.POSITIVE_INFINITY);
+  const p50Diff =
+    (aTiming?.p50 ?? Number.POSITIVE_INFINITY) -
+    (bTiming?.p50 ?? Number.POSITIVE_INFINITY);
   if (p50Diff !== 0) {
     return p50Diff;
   }
 
-  const p90Diff = (aTiming?.p90 ?? Number.POSITIVE_INFINITY) - (bTiming?.p90 ?? Number.POSITIVE_INFINITY);
+  const p90Diff =
+    (aTiming?.p90 ?? Number.POSITIVE_INFINITY) -
+    (bTiming?.p90 ?? Number.POSITIVE_INFINITY);
   if (p90Diff !== 0) {
     return p90Diff;
   }
@@ -247,7 +217,7 @@ const timingResults = [...stableResults].sort(compareTimingResults);
         <span role="columnheader">Run</span>
         <span role="columnheader">Known</span>
         <span role="columnheader">Findings</span>
-        <span role="columnheader">Recorded Cost</span>
+        <span role="columnheader">Cost</span>
       </div>
       {scoreResults.map((result) => {
         const scoring = result.scoring;
@@ -275,7 +245,7 @@ const timingResults = [...stableResults].sort(compareTimingResults);
               <strong class="metric-value">{result.summary.findingsTotal}</strong>
             </div>
             <div class="metric-cell" role="cell">
-              <span class="cell-label">Recorded cost</span>
+              <span class="cell-label">Cost</span>
               <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
             </div>
           </article>
@@ -287,15 +257,15 @@ const timingResults = [...stableResults].sort(compareTimingResults);
   {stableResults.length > 0 && (
     <div class="detail-tables">
       <section class="detail-section" aria-labelledby="benchmark-cost-breakdown">
-        <h3 id="benchmark-cost-breakdown">Cost and Tokens</h3>
-        <p class="sort-note">Sorted by recorded cost, lowest first.</p>
+        <h3 id="benchmark-cost-breakdown">Cost</h3>
+        <p class="sort-note">Lowest cost first.</p>
         <div class="detail-table-wrap">
           <div class="run-table cost-table" role="table" aria-label="Cost breakdown">
             <div class="run-header" role="row">
               <span role="columnheader">Run</span>
-              <span role="columnheader">Recorded Cost</span>
-              <span role="columnheader">Input Tokens</span>
-              <span role="columnheader">Output Tokens</span>
+              <span role="columnheader">Cost</span>
+              <span role="columnheader">Input</span>
+              <span role="columnheader">Output</span>
             </div>
             {costResults.map((result) => (
               <article class="run-row" role="row">
@@ -307,15 +277,15 @@ const timingResults = [...stableResults].sort(compareTimingResults);
                   {runMeta(result) && <p>{runMeta(result)}</p>}
                 </div>
                 <div class="metric-cell" role="cell">
-                  <span class="cell-label">Recorded cost</span>
+                  <span class="cell-label">Cost</span>
                   <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
                 </div>
                 <div class="metric-cell" role="cell">
-                  <span class="cell-label">Input tokens</span>
+                  <span class="cell-label">Input</span>
                   <strong class="metric-value">{formatTokenCount(result.summary.inputTokens)}</strong>
                 </div>
                 <div class="metric-cell" role="cell">
-                  <span class="cell-label">Output tokens</span>
+                  <span class="cell-label">Output</span>
                   <strong class="metric-value">{formatTokenCount(result.summary.outputTokens)}</strong>
                 </div>
               </article>
@@ -326,7 +296,7 @@ const timingResults = [...stableResults].sort(compareTimingResults);
 
       <section class="detail-section" aria-labelledby="benchmark-timing-breakdown">
         <h3 id="benchmark-timing-breakdown">Timing</h3>
-        <p class="sort-note">Sorted by P50 analysis chunk duration, lowest first.</p>
+        <p class="sort-note">Lowest P50 chunk duration first.</p>
         <div class="detail-table-wrap">
           <div class="run-table timing-table" role="table" aria-label="Timing breakdown">
             <div class="run-header" role="row">

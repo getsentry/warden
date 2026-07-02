@@ -27,243 +27,70 @@ Sentry repository.
 ## Comparison Matrix
 
 The score table is the headline and sorts by known-corpus recall. The cost and
-timing tables below it are operational context for understanding why two runs
-with similar scores may look very different to operate. They sort separately:
-cost by recorded cost, timing by P50 analysis-chunk duration. This matrix only
-shows stable comparison runs with per-chunk timing metadata and no failed
-chunks; older incomplete or partial runs remain in the result data but are
-hidden here.
+timing tables show what each run costs to operate. This matrix only includes
+complete runs with no failed chunks and per-chunk timing data.
 
 <BenchmarkRuns />
 
 ## Reading Results
 
-- **Known found** is the headline score. It counts corpus entries where scoring
-  verified that Warden found the same bug in roughly the same location.
-- **Total findings** is review volume before scoring. More findings can mean
-  better recall, but it also means more human review.
+- **Known** is the headline score: corpus entries where scoring confirmed the
+  same bug in roughly the same location.
+- **Findings** is review volume before benchmark scoring. More findings can
+  improve recall, but they also create more review work.
+- **Cost** is the recorded provider cost for the run. It is not normalized
+  pricing or cost per finding.
+- **P50** and **P90** are per-analysis-chunk durations. **Total** includes
+  verifier work, provider latency, queueing, retries, and runtime overhead.
 - Scoring is semantic. Same-file findings about different bugs do not count,
-  duplicate findings do not double-count, and one finding can cover multiple
-  corpus entries when it catches the same root bug.
-- Benchmark runs use Warden's post-analysis finding verifier unless a row opts
-  out. The verifier filters candidate findings during the run; benchmark
-  scoring happens later. Verifier calls add provider cost.
-- Treat cost and duration as operational measurements. **Recorded cost** is not
-  normalized model pricing or cost per finding. **P50** and **P90** are
-  per-analysis-chunk durations. **Total** includes verifier work, provider
-  latency, queueing, retries, and runtime overhead.
-- The stable matrix only shows clean comparison runs: complete target-file
-  coverage, zero failed chunks, and per-chunk timing metadata. Partial and
-  superseded rows stay in the result data for audit history.
-- Trace and auxiliary usage fields depend on what the raw artifacts preserved.
-  When verifier usage is available, it appears under
-  `auxiliaryUsage.verification`.
+  duplicates do not double-count, and one finding can cover multiple corpus
+  entries when it catches the same root bug.
 
 ## Analysis
 
 ### Sonnet 5 High on Pi
 
-The Sonnet 5 high-effort Pi row uses Warden's workspace Pi dependencies, not a
-globally installed Pi binary. The benchmark ran with
-`@earendil-works/pi-ai`/`@earendil-works/pi-coding-agent` 0.80.3, which exposes
-`anthropic/claude-sonnet-5`. The direct Anthropic key path worked, so the run
-did not use the OpenRouter fallback.
-
-Sonnet 5 high found 22 of 86 known corpus entries and emitted 27 final
-findings. It scans all 79 target files as 156 traced chunks, with zero failed
-chunks. The run cost $23.46 total, including $15.38 of scan work and $8.08 of
-auxiliary verifier and merge work.
-
-The practical read is that Sonnet 5 high is competitive but not better than
-Sonnet 4.6 high on this corpus. It trails the Sonnet 4.6 Pi row by three known
-matches, trails DeepSeek V4 Pro xhigh and Opus 4.6 high by one, and lands one
-known match above Opus 4.8 high. Sonnet 5 also costs more than Sonnet 4.6 on Pi
-($23.46 versus $19.84), while emitting fewer final findings than Sonnet 4.6
-(27 versus 32). It finds several different classes of issues in the `7f41cc50`
-shard, including OAuth redirect prefix matching, Seer RPC HMAC path binding,
-and frontend tooltip XSS, but misses enough other corpus matches that the final
-score is lower than Sonnet 4.6.
+Sonnet 5 high found 22 of 86 known entries and emitted 27 findings. That makes
+it competitive, but not better than Sonnet 4.6 high on this corpus. It costs
+more than Sonnet 4.6 on Pi, emits fewer final findings, and trails Sonnet 4.6
+by three known matches.
 
 ### Sonnet 4.6: Claude SDK vs Pi
 
-The Sonnet 4.6 comparison is clean enough to compare directly. Both rows scan
-the same 156 analysis chunks, complete with zero failed chunks, use Warden's
-finding verifier, and have agent-verified scoring. Pi found 25 of 86 known
-corpus entries. The Claude SDK found 24 of 86. Both emitted 32 total findings.
+This is the clearest runtime comparison. Pi found 25 of 86 known entries. The
+Claude SDK found 24 of 86. Both emitted 32 findings.
 
-The difference is cost and runtime behavior, not benchmark quality. The Claude
-SDK row records $103.59 total cost, including $61.61 for scan work. The Pi row
-records $19.84 total cost, including $11.20 for scan work. On scan work alone,
-Claude SDK cost is 5.5x Pi, input tokens are 6.34x Pi, output tokens are 2.44x
-Pi, cache reads are 5.72x Pi, and cache creation is 9.56x Pi.
-
-Total cost does include Warden's auxiliary post-processing work. That matters:
-Sonnet 4.6 verification cost $41.97 through the Claude SDK and $8.54 through
-Pi. But it is not the whole explanation. Removing verifier and merge work still
-leaves $61.61 of Claude SDK scan cost against $11.20 of Pi scan cost. The
-auxiliary gap has the same shape because verifier calls use the configured
-runtime unless a separate auxiliary model is set.
-
-Turns do not explain the whole gap. The stored trace summaries show 939 Claude
-SDK turns versus 628 Pi turns, a 1.5x increase. The larger multiplier is the
-amount of context the Claude SDK runtime carries through those turns. It reads
-and searches more, then repeats a larger conversation and tool-result context
-through later model calls.
-
-Targeted child-span reruns of representative Sonnet 4.6 files show the same
-shape. Those reruns are diagnostic, not the scoring source of truth, and their
-sanitized summary is checked into the benchmark data. On
-`src/sentry/replays/usecases/replay_counts.py`, Claude SDK used 9 turns, 7 tool
-executions, 346.7k scan input tokens, and $0.55 scan cost. Pi used 3 turns, 2
-tool executions, 19.8k scan input tokens, and $0.10 scan cost. On
-`src/sentry/api/endpoints/project_rules.py`, Claude SDK used 47 turns, 41 tool
-executions, 2.23M scan input tokens, and $1.87 scan cost. Pi used 18 turns, 15
-tool executions, 176k scan input tokens, and $0.27 scan cost.
-
-In the targeted rerun, the clearest chunk was `project_rules.py:607-808`.
-Claude SDK spent 28 turns and 27 tool executions there: 10 `Read`, 16 `Grep`,
-and 1 `Glob`. That single chunk cost $0.89 and consumed 1.39M scan input tokens.
-Pi handled the same chunk in one turn with no tools, 6.7k scan input tokens, and
-$0.01 scan cost.
-
-The practical read is that Claude SDK explores more aggressively and carries
-more context through each step. Pi exits many clean chunks earlier. On this
-corpus, the extra Claude SDK exploration did not improve the Sonnet 4.6 score,
-but it did make the run materially more expensive.
-
-Pi runs without an explicit Warden `--effort` use Pi's default thinking level,
-which is currently medium.
+The quality result is close. The operating profile is not. Claude SDK recorded
+$103.59 total cost, compared to $19.84 for Pi. The trace summaries point to
+larger repeated context in Claude SDK runs, not a matching gain in recall.
 
 ### Opus 4.8 High: Claude SDK vs Pi
 
-The Opus 4.8 high-effort comparison now has a fresh traced pair. Both rows scan
-the same 156 analysis chunks, complete with zero failed chunks, use Warden's
-finding verifier, and have agent-verified scoring. Pi found 21 of 86 known
-corpus entries and emitted 24 total findings. The Claude SDK found 17 of 86 and
-emitted 17 total findings.
+Pi found 21 of 86 known entries and emitted 24 findings. Claude SDK found 17
+and emitted 17. Pi was also cheaper: $21.31 total versus $79.56.
 
-The cost gap is still large, but the trace shape is different from Sonnet 4.6.
-Claude SDK records $79.56 total cost, including $61.08 for scan work. Pi
-records $21.31 total cost, including $17.39 for scan work. On scan work alone,
-Claude SDK cost is 3.5x Pi, input tokens are 4.35x Pi, cache reads are 3.82x
-Pi, and cache creation is 6.10x Pi. Output tokens do not explain the gap: Pi
-actually emitted slightly more scan output tokens than Claude SDK.
-
-The traces do not show Claude SDK doing more tool work. Claude SDK used 375
-turns and 219 tool executions. Pi used 426 turns and 371 tool executions. Pi
-also produced more final findings. The difference is that each Claude SDK turn
-carried much more input context: about 60.0k scan input tokens per turn versus
-12.1k for Pi.
-
-No-finding chunks show the same pattern. Claude SDK no-finding chunks averaged
-2.0 turns, 1.0 tool executions, 118.4k scan input tokens, and $0.35 scan cost.
-Pi no-finding chunks averaged 2.3 turns, 1.8 tool executions, 25.8k scan input
-tokens, and $0.09 scan cost. Finding chunks were similar on turns but not on
-context size: Claude SDK averaged 5.6 turns and $0.76 scan cost; Pi averaged
-5.5 turns and $0.22.
-
-Representative chunks make the point. On `project_rules.py:607-808`, both
-runtimes used one turn and no tools. Claude SDK used 48.4k scan input tokens
-and cost $0.18. Pi used 8.7k scan input tokens and cost $0.03. On
-`replay_counts.py:1-202`, both again used one turn and no tools. Claude SDK
-used 48.3k scan input tokens and cost $0.19. Pi used 8.7k scan input tokens
-and cost $0.04.
-
-The heavier files do not reverse the conclusion. Across
-`integrations/perforce/integration.py`, Claude SDK used 18 turns, 14 tool
-executions, 1.43M scan input tokens, and $2.66 scan cost, producing one final
-finding. Pi used 28 turns, 30 tool executions, 460k scan input tokens, and
-$1.11 scan cost, producing two final findings. Across
-`integrations/msteams/webhook.py`, Claude SDK used 15 turns, 11 tool
-executions, 1.40M scan input tokens, and $3.13 scan cost, producing no final
-finding. Pi used 17 turns, 13 tool executions, 260k scan input tokens, and
-$0.85 scan cost, producing one final finding.
-
-The practical read is that Opus 4.8 on Pi is not cheaper because it skips more
-work. In this high-effort pair, Pi does more turns and more tool executions,
-but each turn carries a much smaller input/cache footprint. Claude SDK's extra
-cost is mostly repeated context volume and verifier context volume, not
-additional tool fanout.
+The trace shape differs from Sonnet 4.6. Pi does more turns and more tool
+executions here, but each turn carries much less input context. Claude SDK's
+extra cost is mostly context volume, not more tool fanout.
 
 ### Opus 4.8 High vs Opus 4.6 High
 
-The traced Pi rows are the direct Opus comparison. Both rows scan the same 156
-chunks, complete with zero failed chunks, use Warden's finding verifier, and
-have agent-verified scoring. Opus 4.6 high found 23 of 86 known corpus entries.
-Opus 4.8 high found 21 of 86. Both emitted 24 total findings.
+The direct Pi comparison favors Opus 4.6 high on recall. Opus 4.6 found 23 of
+86 known entries. Opus 4.8 found 21. Both emitted 24 findings.
 
-That means Opus 4.8 high did not score lower because it produced a smaller or
-noisier report. It emitted the same number of final findings and had slightly
-fewer findings without a known-corpus match: 4 versus 5. The issue is recall
-against this specific corpus.
-
-The traces explain the difference. Opus 4.6 high did much more investigation:
-981 turns, 1,101 tool executions, 13.6M scan input tokens, and $30.11 scan
-cost. Opus 4.8 high used 426 turns, 371 tool executions, 5.2M scan input tokens,
-and $17.39 scan cost. Average turns per chunk dropped from 6.29 to 2.73, and
-the maximum chunk dropped from 51 turns to 11.
-
-No-finding chunks show the same shape. Opus 4.6 high averaged 5.4 turns, 6.0
-tool executions, 73.4k scan input tokens, and $0.17 scan cost on chunks that
-ended without a finding. Opus 4.8 high averaged 2.3 turns, 1.8 tool executions,
-25.8k scan input tokens, and $0.09. Finding chunks were also shorter: 11.0
-turns on Opus 4.6 high versus 5.5 on Opus 4.8 high.
-
-The matched corpus IDs shifted, not just shrank. The two rows overlap on 12
-known corpus entries. Opus 4.6 high has 11 unique matches that Opus 4.8 high
-missed, and Opus 4.8 high has 9 unique matches that Opus 4.6 high missed. Opus
-4.6 high is better on aggregate recall here, but it is not a strict superset of
-Opus 4.8 high.
-
-The best supported conclusion is that Opus 4.8 high is more selective under the
-current Warden prompt and corpus. It scans every chunk and does not fail more
-often. It exits more investigations earlier, which lowers cost and tool fanout,
-but misses enough known vulnerabilities to trail Opus 4.6 high on this corpus.
-
-The Opus 4.6 high traced row also shows why benchmark runs now set
-`maxTurns = 100`. One heavy MS Teams chunk hit the default turn cap and was
-rerun cleanly with the higher cap. Without that, the row would measure a runner
-limit instead of model behavior.
+Opus 4.8 is more selective under the current prompt and corpus. It exits more
+investigations earlier, which lowers cost and tool fanout, but it misses enough
+known vulnerabilities to trail Opus 4.6 here.
 
 ### DeepSeek V4 XHigh
 
-The DeepSeek V4 rows use Pi 0.78.0 through OpenRouter with explicit
-`--effort xhigh`. That setting was applied: Warden passes the effort to Pi as
-`thinkingLevel`, and Pi's OpenRouter model entry for
-`deepseek/deepseek-v4-flash` exposes `off`, `high`, and `xhigh` thinking
-levels with `reasoning: true`. Pi keeps `xhigh` after model-capability
-clamping and sends it as `reasoning: {effort: "xhigh"}`. Both rows scan the
-same 156 chunks and use Warden's finding verifier. V4 Pro found 23 of 86 known
-corpus entries and emitted 30 total findings. V4 Flash found 18 of 86 known
-corpus entries and emitted 27 total findings.
+DeepSeek V4 Pro found 23 of 86 known entries and emitted 30 findings. V4 Flash
+found 18 and emitted 27.
 
 Flash is cheaper because the model price is lower, not because it does less
-work. V4 Pro used 3,019 turns and 3,502 tool executions across the corpus. V4
-Flash used 3,138 turns and 4,191 tool executions. V4 Flash also consumed more
-scan input tokens: 72.2M, compared to V4 Pro's 62.2M. Recorded scan cost was
-still lower for Flash at $3.44, versus $9.76 for V4 Pro. Total recorded cost
-was $10.11 for Flash and $18.70 for V4 Pro.
-
-The recall tradeoff is real. V4 Pro ties Opus 4.6 high on known matches and
-beats Opus 4.8 high on Pi by two. V4 Flash lands below Opus 4.8 high on Pi by
-three known matches, but still beats the Claude SDK Opus 4.8 high row by one.
-The DeepSeek rows overlap on 11 known corpus entries. V4 Pro has 12 unique
-matches that Flash missed; Flash has 7 unique matches that Pro missed.
-
-The closest Claude-family row to V4 Flash is Opus 4.8 on Pi at Pi's default
-medium effort: both found 18 of 86 known corpus entries. They got there in very
-different ways. Opus used 330 turns, 3.4M scan input tokens, and 172k scan
-output tokens. Flash used 3,138 turns, 72.2M scan input tokens, and 2.0M scan
-output tokens. Opus had an 11.9-second P50 chunk duration and a 51.7-second
-P90; Flash had a 2.9-minute P50 and an 18.5-minute P90.
-
-The span-complete Opus 4.8 high rows make the tool-call difference explicit.
-Opus 4.8 high on Pi found 21 of 86 with 426 turns and 371 tool executions.
-Opus 4.8 high through the Claude SDK found 17 of 86 with 375 turns and 219
-tool executions. Flash found 18 of 86 with 3,138 turns and 4,191 tool
-executions, mostly `read` and `grep` calls. The result is not just a cheaper
-Opus-shaped run. Flash explores far more context, loops through many more tool
-calls, and lands on a different set of known findings.
+work. It used more turns, more tool executions, and more scan input tokens than
+V4 Pro. The result is not just a cheaper Opus-shaped run; it explores much more
+context and lands on a different set of known findings.
 
 ## Corpus
 
