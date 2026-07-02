@@ -92,6 +92,39 @@ work. It used more turns, more tool executions, and more scan input tokens than
 V4 Pro. The result is not just a cheaper Opus-shaped run; it explores much more
 context and lands on a different set of known findings.
 
+### GLM 5.2 High
+
+GLM 5.2 uses Pi through OpenRouter as `openrouter/z-ai/glm-5.2` with explicit
+`--effort high`. OpenRouter reports `high` as the model's default reasoning
+effort, with `xhigh` also available. The recorded row scans the same 156 chunks
+and leaves Warden's finding verifier enabled. It found 15 of 86 known corpus
+entries and emitted 18 total findings.
+
+The main result is lower recall, not noisy output. Fifteen of the 18 emitted
+findings matched known corpus entries. The three non-matches were same-file or
+nearby security findings that did not match the corpus issue: a LaunchDarkly
+timing-unsafe compare rather than the Statsig timestamp freshness bug, a
+Bitbucket forwarded-IP/signature bypass rather than invalid-signature HMAC
+logging, and a Sentry App issue-link SSRF rather than the event-scope corpus
+issue.
+
+Operationally, GLM 5.2 exposed a Warden compatibility problem. Many clean
+no-finding chunks returned prose instead of the required `{"findings":[]}` JSON.
+Those records had traces, usage, and zero findings, but Warden marked them as
+`extraction_no_findings_json`. Four shards therefore use combined-clean
+artifacts: traced zero-finding extraction failures were normalized to empty
+ok chunks, and targeted repair records were used where reruns produced cleaner
+records. One large `seer_rpc.py` chunk also exceeded OpenRouter's effective
+1M-token context limit in the full shard; rerunning the failed target set with
+`--parallel 1` removed the context failure.
+
+Recorded cost for the validated artifacts is $5.26: $4.94 scan cost plus $0.32
+post-processing and verification overhead. That excludes the abandoned `xhigh`
+attempt and dirty failed rerun artifacts. GLM 5.2 used 8.3M input tokens and
+422k output tokens across the validated row, with a 39.4-second P50 chunk time
+and a 6.6-minute P90. The row is useful, but the parser issue should be fixed
+before treating GLM 5.2 as a routine unattended benchmark target.
+
 ## Corpus
 
 The [Sentry vulnerability corpus](/benchmarking/sentry-vulnerability-corpus/)
