@@ -45,6 +45,7 @@ import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
+import type { ProvidersConfig } from '../../config/schema.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
@@ -119,6 +120,7 @@ interface FixEvaluationCommentGroups {
 
 interface AuxiliaryWorkflowOptions {
   runtime?: RuntimeName;
+  providers?: ProvidersConfig;
   model?: string;
   maxRetries?: number;
 }
@@ -173,7 +175,7 @@ function checkOptionsForPullRequest(context: EventContext): CheckOptions | undef
   };
 }
 
-function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): AuxiliaryWorkflowOptions {
+export function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): AuxiliaryWorkflowOptions {
   const baseDefaults = layered.baseConfig?.defaults;
   const repoDefaults = layered.repoConfig?.defaults ?? layered.config.defaults;
 
@@ -182,9 +184,18 @@ function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): Auxiliar
     // trigger, so the org base config remains the enforced baseline and the
     // repo layer only fills fields the base omits.
     runtime: baseDefaults?.runtime ?? repoDefaults?.runtime ?? 'pi',
+    providers: baseDefaults?.providers ?? repoDefaults?.providers,
+    // Inherit the global default model when no explicit auxiliary model is set,
+    // so workflow-scoped helper calls stay on the configured provider instead of
+    // falling back to a runtime default on another provider. Base-first to match
+    // the enforced-baseline precedence above; explicit auxiliary models win.
     model:
       emptyToUndefined(baseDefaults?.auxiliary?.model) ??
-      emptyToUndefined(repoDefaults?.auxiliary?.model),
+      emptyToUndefined(repoDefaults?.auxiliary?.model) ??
+      emptyToUndefined(baseDefaults?.agent?.model) ??
+      emptyToUndefined(baseDefaults?.model) ??
+      emptyToUndefined(repoDefaults?.agent?.model) ??
+      emptyToUndefined(repoDefaults?.model),
     maxRetries:
       baseDefaults?.auxiliary?.maxRetries ??
       baseDefaults?.auxiliaryMaxRetries ??
@@ -564,6 +575,7 @@ async function postReviewsAndTrackFailures(
           existingComments,
           apiKey: inputs.anthropicApiKey,
           runtime: auxiliaryOptions.runtime,
+          providers: auxiliaryOptions.providers,
           model: auxiliaryOptions.model,
           maxRetries: auxiliaryOptions.maxRetries,
           failOnPostError: options.failOnPostError,

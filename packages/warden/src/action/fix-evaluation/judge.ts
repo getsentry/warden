@@ -7,7 +7,8 @@ import {
   buildTaggedSection,
   joinPromptSections,
 } from '../../sdk/prompt-sections.js';
-import { getRuntime, type AuxiliaryTool, type RuntimeName } from '../../sdk/runtimes/index.js';
+import { getRuntime, getRuntimeProviderOptions, type AuxiliaryTool, type RuntimeName } from '../../sdk/runtimes/index.js';
+import type { ProvidersConfig } from '../../config/schema.js';
 import { emptyUsage } from '../../sdk/usage.js';
 import { FixJudgeVerdictSchema } from './types.js';
 import type { FixJudgeResult } from './types.js';
@@ -33,6 +34,8 @@ export interface FixJudgeContext {
 
 export interface FixJudgeRuntimeOptions {
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers to register for the Pi runtime. */
+  providers?: ProvidersConfig;
   model?: string;
   maxRetries?: number;
 }
@@ -223,7 +226,13 @@ export async function evaluateFix(
   const prompt = buildPrompt(input);
   const executeTool = createToolExecutor(context);
 
-  const result = await getRuntime(runtimeOptions.runtime).runAuxiliary({
+  // Resolve one effective runtime so getRuntime and getRuntimeProviderOptions
+  // never diverge. getRuntime defaults an omitted runtime to 'pi'; previously the
+  // provider-options lookup defaulted to 'claude', so on the omitted-runtime path
+  // the call ran on Pi but built Claude-shaped options and silently dropped any
+  // custom providers.
+  const runtime = runtimeOptions.runtime ?? 'pi';
+  const result = await getRuntime(runtime).runAuxiliary({
     task: 'fix_evaluation',
     agentName: input.skillName,
     apiKey,
@@ -234,6 +243,7 @@ export async function evaluateFix(
     model: runtimeOptions.model,
     maxIterations: 5,
     maxRetries: runtimeOptions.maxRetries,
+    providerOptions: getRuntimeProviderOptions(runtime, { providers: runtimeOptions.providers }),
   });
 
   if (result.success) {

@@ -7,6 +7,25 @@ import {
   piRuntime,
 } from './index.js';
 
+describe('getRuntimeProviderOptions pi providers', () => {
+  it('builds pi provider options from config', () => {
+    const result = getRuntimeProviderOptions('pi', {
+      providers: { litellm: { baseUrl: 'http://localhost:4000/v1', api: 'openai-completions', models: [{ id: 'm' }] } },
+    }) as { providers: { name: string; models: { id: string }[] }[] } | undefined;
+    expect(result?.providers[0]?.name).toBe('litellm');
+    expect(result?.providers[0]?.models[0]?.id).toBe('m');
+  });
+
+  it('returns undefined for pi without providers', () => {
+    expect(getRuntimeProviderOptions('pi', {})).toBeUndefined();
+  });
+
+  it('still returns the claude executable path', () => {
+    expect(getRuntimeProviderOptions('claude', { pathToClaudeCodeExecutable: '/bin/claude' }))
+      .toEqual({ pathToClaudeCodeExecutable: '/bin/claude' });
+  });
+});
+
 describe('runtimes', () => {
   it('exposes Pi as the default runtime provider', () => {
     const runtime = getRuntime();

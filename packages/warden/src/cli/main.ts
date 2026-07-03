@@ -10,6 +10,10 @@ import {
   invalidPiModelSelectorMessage,
   type InvalidPiModelSelector,
 } from '../sdk/runtimes/model-selectors.js';
+import {
+  buildPiProviderOptions,
+  assertCustomProviderAuth,
+} from '../sdk/runtimes/custom-provider.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { aggregateAuxiliaryUsageAttribution, mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
@@ -612,6 +616,7 @@ interface SkillToRun {
   maxTurns?: number;
   effort?: SkillRunnerOptions['effort'];
   runtime?: SkillRunnerOptions['runtime'];
+  providers?: SkillRunnerOptions['providers'];
   auxiliaryModel?: string;
   synthesisModel?: string;
   auxiliaryMaxRetries?: number;
@@ -643,6 +648,7 @@ type SkillRunnerOptionOverrides = Pick<
   | 'maxTurns'
   | 'effort'
   | 'runtime'
+  | 'providers'
   | 'auxiliaryModel'
   | 'synthesisModel'
   | 'auxiliaryMaxRetries'
@@ -709,6 +715,7 @@ export function mergeSkillRunnerOptions(
   if (overrides.maxTurns !== undefined) merged.maxTurns = overrides.maxTurns;
   if (overrides.effort !== undefined) merged.effort = overrides.effort;
   if (overrides.runtime !== undefined) merged.runtime = overrides.runtime;
+  if (overrides.providers !== undefined) merged.providers = overrides.providers;
   if (overrides.auxiliaryModel !== undefined) merged.auxiliaryModel = overrides.auxiliaryModel;
   if (overrides.synthesisModel !== undefined) merged.synthesisModel = overrides.synthesisModel;
   if (overrides.auxiliaryMaxRetries !== undefined) {
@@ -799,6 +806,27 @@ function verifyClaudeAuthForRun(args: {
     });
     return false;
   }
+}
+
+/**
+ * Verify that every pi-runtime item with a remote custom provider has a resolvable
+ * API key before analysis starts. Returns false (and emits an error) on first failure.
+ */
+export function verifyCustomProviderAuthForRun(
+  items: { runtime?: SkillRunnerOptions['runtime']; providers?: SkillRunnerOptions['providers'] }[],
+  reporter: Reporter,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  for (const item of items) {
+    if ((item.runtime ?? 'pi') !== 'pi') continue;
+    try {
+      assertCustomProviderAuth(buildPiProviderOptions(item.providers, env));
+    } catch (error) {
+      reporter.error(error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  }
+  return true;
 }
 
 function renderSkillRunHeader(args: {
@@ -901,20 +929,30 @@ export function resolveCliDefaultModel(
   );
 }
 
-/** Resolve the default auxiliary model used for helper and repair passes. */
+/**
+ * Resolve the default auxiliary model used for helper and repair passes.
+ * Falls back to the resolved agent/top-level model so a single configured
+ * model drives every lane (and self-hosted providers stay self-contained
+ * instead of escaping to a runtime default on another provider).
+ */
 export function resolveCliDefaultAuxiliaryModel(
-  config: Pick<WardenConfig, 'defaults'> | null | undefined
+  config: Pick<WardenConfig, 'defaults'> | null | undefined,
+  cliModel?: string
 ): string | undefined {
-  return emptyToUndefined(config?.defaults?.auxiliary?.model);
+  return (
+    emptyToUndefined(config?.defaults?.auxiliary?.model) ??
+    resolveCliDefaultModel(config, cliModel)
+  );
 }
 
 /** Resolve the default synthesis model, falling back to the auxiliary lane when unset. */
 export function resolveCliDefaultSynthesisModel(
-  config: Pick<WardenConfig, 'defaults'> | null | undefined
+  config: Pick<WardenConfig, 'defaults'> | null | undefined,
+  cliModel?: string
 ): string | undefined {
   return (
     emptyToUndefined(config?.defaults?.synthesis?.model) ??
-    resolveCliDefaultAuxiliaryModel(config)
+    resolveCliDefaultAuxiliaryModel(config, cliModel)
   );
 }
 
@@ -1072,8 +1110,8 @@ export async function runSkills(
   const repoPath = findRepoPath(cwd);
   const config = loadOptionalConfig(options, repoPath);
   const defaultModel = resolveCliDefaultModel(config, options.model);
-  const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
-  const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
+  const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config, options.model);
+  const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config, options.model);
   const defaultEffort = resolveCliEffort(config, options.effort);
   const defaultRuntime = options.runtime ?? config?.defaults?.runtime ?? 'pi';
   const pathToClaudeCodeExecutable = resolveClaudeCodeExecutablePath();
@@ -1098,6 +1136,7 @@ export async function runSkills(
       maxTurns: match?.maxTurns ?? config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
       effort: options.effort ?? match?.effort ?? defaultEffort,
       runtime: options.runtime ?? match?.runtime ?? config?.defaults?.runtime ?? 'pi',
+      providers: match?.providers ?? config?.defaults?.providers,
       auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
       synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
       auxiliaryMaxRetries:
@@ -1125,6 +1164,7 @@ export async function runSkills(
         model: t.model,
         maxTurns: t.maxTurns,
         runtime: options.runtime ?? t.runtime,
+        providers: t.providers,
         effort: options.effort ?? t.effort,
         auxiliaryModel: t.auxiliaryModel,
         synthesisModel: t.synthesisModel,
@@ -1156,6 +1196,10 @@ export async function runSkills(
     repoPath: repoPath ?? cwd,
     options,
   })) {
+    return 1;
+  }
+
+  if (!verifyCustomProviderAuthForRun(skillsToRun, reporter)) {
     return 1;
   }
 
@@ -1500,6 +1544,14 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
+  const customProviderItems = triggersToRun.map((trigger) => ({
+    runtime: options.runtime ?? trigger.runtime,
+    providers: trigger.providers,
+  }));
+  if (!verifyCustomProviderAuthForRun(customProviderItems, reporter)) {
+    return 1;
+  }
+
   // Build trigger tasks
   const effectiveMinConfidence = options.minConfidence ?? config.defaults?.minConfidence ?? 'medium';
   const specs: RunSkillSpec[] = triggersToRun.map((trigger) => ({
@@ -1515,6 +1567,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       apiKey,
       model: trigger.model,
       runtime: options.runtime ?? trigger.runtime,
+      providers: trigger.providers,
       pathToClaudeCodeExecutable,
       effort: options.effort ?? trigger.effort,
       auxiliaryModel: trigger.auxiliaryModel,

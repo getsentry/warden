@@ -18,6 +18,7 @@ import {
   appendReportToRunLog,
   buildFinalChunkRecords,
   renderFinalRunLogContent,
+  verifyCustomProviderAuthForRun,
   type RunLog,
   type RunSkillSpec,
 } from './main.js';
@@ -666,6 +667,38 @@ describe('resolveCliDefaultModel', () => {
     expect(model).toBeUndefined();
   });
 
+  it('inherits the top-level model for the auxiliary lane when unset', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({ defaults: { model: 'litellm/gemma' } }),
+    ).toBe('litellm/gemma');
+  });
+
+  it('inherits the agent model for the auxiliary lane when unset', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({ defaults: { agent: { model: 'litellm/gemma' } } }),
+    ).toBe('litellm/gemma');
+  });
+
+  it('inherits the --model flag for the auxiliary lane when nothing else is set', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({ defaults: {} }, 'litellm/gemma'),
+    ).toBe('litellm/gemma');
+  });
+
+  it('prefers an explicit auxiliary model over the inherited top-level model', () => {
+    expect(
+      resolveCliDefaultAuxiliaryModel({
+        defaults: { model: 'litellm/gemma', auxiliary: { model: 'litellm/cheap' } },
+      }),
+    ).toBe('litellm/cheap');
+  });
+
+  it('inherits the top-level model for synthesis through the auxiliary fallback', () => {
+    expect(
+      resolveCliDefaultSynthesisModel({ defaults: { model: 'litellm/gemma' } }),
+    ).toBe('litellm/gemma');
+  });
+
   it('prefers synthesis defaults and falls back to auxiliary defaults', () => {
     const explicit = resolveCliDefaultSynthesisModel({
       defaults: {
@@ -826,5 +859,53 @@ describe('resolveInvocationCwd', () => {
 
   it('resolves a relative cwd override from the original working directory', () => {
     expect(resolveInvocationCwd('/launcher', '../repo')).toBe('/repo');
+  });
+});
+
+describe('verifyCustomProviderAuthForRun', () => {
+  const remoteProviders = {
+    litellm: {
+      baseUrl: 'https://gw.example.com/v1',
+      api: 'openai-completions' as const,
+      models: [{ id: 'my-model' }],
+    },
+  };
+
+  const loopbackProviders = {
+    local: {
+      baseUrl: 'http://localhost:4000/v1',
+      api: 'openai-completions' as const,
+      models: [{ id: 'my-model' }],
+    },
+  };
+
+  function fakeReporter() {
+    return { error: vi.fn() } as unknown as InstanceType<typeof Reporter>;
+  }
+
+  it('returns false and calls reporter.error when a pi item has a remote provider with no key', () => {
+    const reporter = fakeReporter();
+    const items = [{ runtime: 'pi' as const, providers: remoteProviders }];
+    // Explicit empty env keeps the test hermetic regardless of the runner's environment.
+    const result = verifyCustomProviderAuthForRun(items, reporter, {});
+    expect(result).toBe(false);
+    expect(reporter.error).toHaveBeenCalledOnce();
+    expect((reporter.error as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toContain('litellm');
+  });
+
+  it('returns true when a pi item has a loopback provider with no key', () => {
+    const reporter = fakeReporter();
+    const items = [{ runtime: 'pi' as const, providers: loopbackProviders }];
+    const result = verifyCustomProviderAuthForRun(items, reporter, {});
+    expect(result).toBe(true);
+    expect(reporter.error).not.toHaveBeenCalled();
+  });
+
+  it('returns true and skips auth check for claude runtime items even with remote providers', () => {
+    const reporter = fakeReporter();
+    const items = [{ runtime: 'claude' as const, providers: remoteProviders }];
+    const result = verifyCustomProviderAuthForRun(items, reporter, {});
+    expect(result).toBe(true);
+    expect(reporter.error).not.toHaveBeenCalled();
   });
 });

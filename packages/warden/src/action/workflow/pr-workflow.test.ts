@@ -119,7 +119,9 @@ import { runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings, processDuplicateActions } from '../../output/dedup.js';
 import { evaluateFixAttempts } from '../fix-evaluation/index.js';
 import { setFailed, writeFindingsOutput } from './base.js';
-import { runPRWorkflow } from './pr-workflow.js';
+import { runPRWorkflow, resolveWorkflowAuxiliaryOptions } from './pr-workflow.js';
+import type { WardenConfig } from '../../config/schema.js';
+import type { LoadedLayeredConfig } from '../../config/loader.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { Semaphore } from '../../utils/index.js';
 import { buildFindingsOutput } from '../reporting/output.js';
@@ -2262,6 +2264,47 @@ describe('runPRWorkflow', () => {
       // Comments fetched, but no fix evaluation since no Warden comments
       expect(mockFetchExistingComments).toHaveBeenCalled();
       expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveWorkflowAuxiliaryOptions', () => {
+    const layered = (config: WardenConfig, baseConfig?: WardenConfig, repoConfig?: WardenConfig): LoadedLayeredConfig =>
+      ({ config, baseConfig, repoConfig } as LoadedLayeredConfig);
+
+    it('inherits the global default model when no auxiliary model is set', () => {
+      const options = resolveWorkflowAuxiliaryOptions(
+        layered({ version: 1, skills: [], defaults: { model: 'litellm/gemma' } }),
+      );
+      expect(options.model).toBe('litellm/gemma');
+    });
+
+    it('inherits the agent model when no auxiliary model is set', () => {
+      const options = resolveWorkflowAuxiliaryOptions(
+        layered({ version: 1, skills: [], defaults: { agent: { model: 'litellm/gemma' } } }),
+      );
+      expect(options.model).toBe('litellm/gemma');
+    });
+
+    it('prefers an explicit auxiliary model over the inherited global model', () => {
+      const options = resolveWorkflowAuxiliaryOptions(
+        layered({
+          version: 1,
+          skills: [],
+          defaults: { model: 'litellm/gemma', auxiliary: { model: 'litellm/cheap' } },
+        }),
+      );
+      expect(options.model).toBe('litellm/cheap');
+    });
+
+    it('inherits the base layer global model when the repo layer omits it', () => {
+      const options = resolveWorkflowAuxiliaryOptions(
+        layered(
+          { version: 1, skills: [] },
+          { version: 1, skills: [], defaults: { model: 'litellm/org' } },
+          { version: 1, skills: [], defaults: { runtime: 'pi' } },
+        ),
+      );
+      expect(options.model).toBe('litellm/org');
     });
   });
 });

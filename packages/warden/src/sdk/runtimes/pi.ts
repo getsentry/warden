@@ -51,6 +51,7 @@ import {
   setGenAiUsageAttrs,
 } from '../otel.js';
 import { aggregateUsage, emptyUsage } from '../usage.js';
+import type { PiProviderOptions } from './custom-provider.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
 import type {
   AuxiliaryRunRequest,
@@ -102,6 +103,8 @@ interface PiPromptOptions {
   agentName?: string;
   model?: string;
   legacyAnthropicApiKey?: string;
+  /** Custom providers to register on the model registry before resolving the model. */
+  customProviders?: PiProviderOptions;
   toolNames: string[];
   customTools?: ToolDefinition[];
   maxTurns?: number;
@@ -148,6 +151,26 @@ function createAuthStorage(model: string | undefined, legacyAnthropicApiKey: str
     authStorage.setRuntimeApiKey(provider, legacyAnthropicApiKey);
   }
   return authStorage;
+}
+
+function registerCustomProviders(
+  modelRegistry: ModelRegistry,
+  authStorage: AuthStorage,
+  customProviders: PiProviderOptions,
+): void {
+  if (!customProviders) return;
+  for (const provider of customProviders.providers) {
+    modelRegistry.registerProvider(provider.name, {
+      baseUrl: provider.baseUrl,
+      api: provider.api,
+      ...(provider.headers ? { headers: provider.headers } : {}),
+      ...(provider.apiKey ? { apiKey: provider.apiKey } : {}),
+      models: provider.models,
+    });
+    if (provider.apiKey) {
+      authStorage.setRuntimeApiKey(provider.name, provider.apiKey);
+    }
+  }
 }
 
 function resolvePiModel(
@@ -345,6 +368,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   bridgeWardenProviderApiKeyEnv();
   const authStorage = createAuthStorage(options.model, options.legacyAnthropicApiKey);
   const modelRegistry = ModelRegistry.create(authStorage);
+  registerCustomProviders(modelRegistry, authStorage, options.customProviders);
   const model = resolvePiModel(options.model, modelRegistry);
   const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
   const agentDir = getAgentDir();
@@ -655,6 +679,7 @@ async function runStructured<T>(
     tools?: AuxiliaryTool[];
     executeTool?: (name: string, input: Record<string, unknown>) => Promise<string>;
     maxIterations?: number;
+    providerOptions?: unknown;
   }
 ): Promise<AuxiliaryRunResult<T>> {
   const customTools = toPiCustomTools(request.tools, request.executeTool);
@@ -687,6 +712,7 @@ async function runStructured<T>(
           agentName: request.agentName,
           model: request.model,
           legacyAnthropicApiKey: request.apiKey,
+          customProviders: request.providerOptions as PiProviderOptions,
           toolNames,
           customTools,
           toolDescriptions,
@@ -758,6 +784,7 @@ export const piRuntime: Runtime = {
       skillName,
       tools,
       allowMutatingTools,
+      providerOptions,
     } = request;
     const { maxTurns = 50, model, effort, abortController } = options;
     const skillTools = resolvePiSkillTools(tools, allowMutatingTools);
@@ -787,6 +814,7 @@ export const piRuntime: Runtime = {
             agentName: skillName,
             model,
             legacyAnthropicApiKey: apiKey,
+            customProviders: providerOptions as PiProviderOptions,
             toolNames: skillTools.toolNames,
             maxTurns,
             effort,

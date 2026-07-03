@@ -509,6 +509,35 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.auxiliaryModel).toBe('claude-haiku-4-5');
       expect(resolved?.synthesisModel).toBe('claude-haiku-4-5');
     });
+
+    it('inherits the top-level model for the auxiliary and synthesis lanes when unset', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          model: 'litellm/gemma-4-12b-coder',
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+
+      expect(resolved?.auxiliaryModel).toBe('litellm/gemma-4-12b-coder');
+      expect(resolved?.synthesisModel).toBe('litellm/gemma-4-12b-coder');
+    });
+
+    it('prefers explicit auxiliary and synthesis models over the inherited top-level model', () => {
+      const config: WardenConfig = {
+        ...baseConfig,
+        defaults: {
+          model: 'litellm/gemma-4-12b-coder',
+          auxiliary: { model: 'litellm/cheap' },
+        },
+      };
+
+      const [resolved] = resolveSkillConfigs(config);
+
+      expect(resolved?.auxiliaryModel).toBe('litellm/cheap');
+      expect(resolved?.synthesisModel).toBe('litellm/cheap');
+    });
   });
 
   describe('minConfidence merge', () => {
@@ -580,6 +609,19 @@ describe('resolveSkillConfigs', () => {
       const [resolved] = resolveSkillConfigs(baseConfig);
       expect(resolved?.minConfidence).toBeUndefined();
     });
+  });
+
+  it('propagates defaults.providers onto every resolved trigger', () => {
+    const config = WardenConfigSchema.parse({
+      version: 1,
+      defaults: { providers: { litellm: { baseUrl: 'http://localhost:4000/v1', models: [{ id: 'm' }] } } },
+      skills: [{ name: 'a' }, { name: 'b', triggers: [{ type: 'local' }] }],
+    });
+    const resolved = resolveSkillConfigs(config);
+    expect(resolved).toHaveLength(2);
+    for (const trigger of resolved) {
+      expect(trigger.providers?.['litellm']?.baseUrl).toBe('http://localhost:4000/v1');
+    }
   });
 });
 
@@ -897,6 +939,47 @@ describe('resolveLayeredSkillConfigs', () => {
     expect(resolved).toHaveLength(2);
     expect(resolved[0]?.runtime).toBe('pi');
     expect(resolved[1]?.runtime).toBe('pi');
+  });
+
+  it('lets repo-defined skills inherit base custom providers when repo defaults omit them', () => {
+    const providers = {
+      litellm: {
+        baseUrl: 'http://localhost:4000/v1',
+        api: 'openai-completions' as const,
+        models: [{ id: 'gemma', name: 'gemma' }],
+      },
+    };
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        runtime: 'pi',
+        providers,
+      },
+      skills: [{
+        name: 'org-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      skills: [{
+        name: 'repo-skill',
+        triggers: [{ type: 'pull_request', actions: ['opened'] }],
+      }],
+    };
+
+    const resolved = resolveLayeredSkillConfigs({
+      config: { version: 1, skills: [] },
+      baseConfig,
+      repoConfig,
+    });
+
+    expect(resolved).toHaveLength(2);
+    // Both the base-layer and the repo-layer trigger carry the org custom
+    // providers; previously the repo layer lost them.
+    expect(resolved.find((t) => t.name === 'org-skill')?.providers).toEqual(providers);
+    expect(resolved.find((t) => t.name === 'repo-skill')?.providers).toEqual(providers);
   });
 
   it('lets repo-defined skills inherit base verification defaults when omitted', () => {
@@ -1642,5 +1725,53 @@ describe('logs config', () => {
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     expect(result.data?.logs).toBeUndefined();
+  });
+});
+
+describe('providers config', () => {
+  const base = { version: 1 as const, skills: [] };
+
+  it('accepts a valid custom provider', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: {
+        providers: {
+          litellm: {
+            baseUrl: 'http://localhost:4000/v1',
+            models: [{ id: 'my-model' }],
+          },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const p = result.data.defaults?.providers?.['litellm'];
+      expect(p?.api).toBe('openai-completions'); // default applied
+      expect(p?.models[0]?.id).toBe('my-model');
+    }
+  });
+
+  it('rejects a non-URL baseUrl', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: { providers: { litellm: { baseUrl: 'not a url', models: [{ id: 'm' }] } } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unsupported api value', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: { providers: { x: { baseUrl: 'http://h/v1', api: 'cohere', models: [{ id: 'm' }] } } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty models array', () => {
+    const result = WardenConfigSchema.safeParse({
+      ...base,
+      defaults: { providers: { x: { baseUrl: 'http://h/v1', models: [] } } },
+    });
+    expect(result.success).toBe(false);
   });
 });

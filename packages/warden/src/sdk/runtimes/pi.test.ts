@@ -25,6 +25,7 @@ const piMocks = vi.hoisted(() => {
   const registry = {
     find: vi.fn((_provider: string, _modelId: string) => model),
     getAll: vi.fn(() => [model]),
+    registerProvider: vi.fn(),
   };
   const session = {
     sessionId: 'pi-session-1',
@@ -539,5 +540,34 @@ describe('piRuntime structured calls', () => {
     if (!result.success) {
       expect(result.error).toContain('Validation failed');
     }
+  });
+
+  it('registers custom providers from providerOptions before resolving the model', async () => {
+    await piRuntime.runAuxiliary({
+      task: 'extraction',
+      apiKey: undefined,
+      prompt: 'hi',
+      schema: z.object({ ok: z.boolean() }),
+      model: 'litellm/my-model',
+      providerOptions: {
+        providers: [{
+          name: 'litellm',
+          baseUrl: 'http://localhost:4000/v1',
+          api: 'openai-completions',
+          apiKey: 'k',
+          models: [{
+            id: 'my-model', name: 'my-model', api: 'openai-completions', reasoning: false,
+            input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 128000, maxTokens: 8192,
+          }],
+        }],
+      },
+    });
+
+    expect(piMocks.registry.registerProvider).toHaveBeenCalledWith(
+      'litellm',
+      expect.objectContaining({ baseUrl: 'http://localhost:4000/v1', apiKey: 'k' }),
+    );
+    expect(piMocks.authStorage.setRuntimeApiKey).toHaveBeenCalledWith('litellm', 'k');
   });
 });

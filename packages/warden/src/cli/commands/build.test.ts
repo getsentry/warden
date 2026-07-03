@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CLIOptions } from '../args.js';
 import { Reporter } from '../output/reporter.js';
 import { Verbosity } from '../output/verbosity.js';
-import { runBuild, runImprove } from './build.js';
+import { runBuild, runImprove, resolveSynthesisModel, resolveRepairModel } from './build.js';
+import type { WardenConfig } from '../../config/schema.js';
 import { getRepoRoot } from '../git.js';
 import {
   buildGeneratedSkillDefinition,
@@ -489,5 +490,60 @@ prompt: |-
     expect(createGeneratedSkillDefinitionMock).not.toHaveBeenCalled();
     expect(buildSkillOutlineMock).not.toHaveBeenCalled();
     expect(buildGeneratedSkillMock).not.toHaveBeenCalled();
+  });
+
+  it('fails fast when a remote custom provider has no key', async () => {
+    const reporter = createTestReporter();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // Hermetic: ensure no ambient key resolves for this provider name.
+    delete process.env['WARDEN_SMOKETESTPROVIDER_API_KEY'];
+    delete process.env['SMOKETESTPROVIDER_API_KEY'];
+    writeFileSync(join(tempDir, 'warden.toml'), [
+      'version = 1',
+      '[defaults]',
+      'runtime = "pi"',
+      'model = "smoketestprovider/model"',
+      '[defaults.providers.smoketestprovider]',
+      'baseUrl = "http://remote.example.com/v1"',
+      'api = "openai-completions"',
+      '[[defaults.providers.smoketestprovider.models]]',
+      'id = "model"',
+    ].join('\n'), 'utf-8');
+
+    const exitCode = await runBuild(createOptions(), reporter);
+
+    expect(exitCode).toBe(1);
+    // Preflight fails before any synthesis work touches the provider.
+    expect(buildSkillOutlineMock).not.toHaveBeenCalled();
+    expect(buildGeneratedSkillMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('build model resolution', () => {
+  const cfg = (defaults: NonNullable<WardenConfig['defaults']>): WardenConfig =>
+    ({ version: 1, skills: [], defaults });
+
+  it('synthesis lane inherits the global default model when synthesis and auxiliary are unset', () => {
+    expect(resolveSynthesisModel(cfg({ model: 'litellm/gemma' }), createOptions())).toBe('litellm/gemma');
+  });
+
+  it('synthesis lane inherits the agent model when unset', () => {
+    expect(resolveSynthesisModel(cfg({ agent: { model: 'litellm/gemma' } }), createOptions())).toBe('litellm/gemma');
+  });
+
+  it('synthesis lane prefers an explicit synthesis model over the inherited model', () => {
+    expect(
+      resolveSynthesisModel(cfg({ model: 'litellm/gemma', synthesis: { model: 'litellm/synth' } }), createOptions()),
+    ).toBe('litellm/synth');
+  });
+
+  it('repair lane inherits the global default model when auxiliary is unset', () => {
+    expect(resolveRepairModel(cfg({ model: 'litellm/gemma' }), createOptions())).toBe('litellm/gemma');
+  });
+
+  it('repair lane prefers an explicit auxiliary model over the inherited model', () => {
+    expect(
+      resolveRepairModel(cfg({ model: 'litellm/gemma', auxiliary: { model: 'litellm/aux' } }), createOptions()),
+    ).toBe('litellm/aux');
   });
 });

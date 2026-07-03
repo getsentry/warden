@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { customAlphabet } from 'nanoid';
 import { FindingSchema, compareFindingPriority } from '../types/index.js';
 import type { Finding, Location, UsageStats } from '../types/index.js';
-import { getRuntime } from './runtimes/index.js';
+import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
 import type { RuntimeName } from './runtimes/index.js';
+import type { ProvidersConfig } from '../config/schema.js';
 import type { FindingProcessingEvent } from './types.js';
 import {
   buildJsonOutputSection,
@@ -29,6 +30,8 @@ export type ExtractFindingsResult =
 export interface AuxiliaryCallOptions {
   apiKey?: string;
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers to register for the Pi runtime. */
+  providers?: ProvidersConfig;
   model?: string;
   maxRetries?: number;
   agentName?: string;
@@ -237,6 +240,7 @@ If no findings exist, return: {"findings": []}`),
     maxTokens: LLM_FALLBACK_MAX_TOKENS,
     timeout: LLM_FALLBACK_TIMEOUT_MS,
     maxRetries: options.maxRetries,
+    providerOptions: getRuntimeProviderOptions(runtimeName, { providers: options.providers }),
   });
 
   if (!result.success) {
@@ -556,6 +560,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     model: options?.model,
     maxTokens: 512,
     maxRetries: options?.maxRetries,
+    providerOptions: getRuntimeProviderOptions(options?.runtime ?? 'claude', { providers: options?.providers }),
   });
 
   if (!result.success) {

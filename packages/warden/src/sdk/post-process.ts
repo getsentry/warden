@@ -1,4 +1,4 @@
-import type { Effort, SkillDefinition } from '../config/schema.js';
+import type { Effort, ProvidersConfig, SkillDefinition } from '../config/schema.js';
 import { emitDedupMetrics } from '../sentry.js';
 import type { Finding } from '../types/index.js';
 import { deduplicateFindings, mergeCrossLocationFindings } from './extract.js';
@@ -12,6 +12,8 @@ export interface PostProcessFindingsOptions {
   repoPath: string;
   apiKey?: string;
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers to register for the Pi runtime. */
+  providers?: ProvidersConfig;
   auxiliaryModel?: string;
   synthesisModel?: string;
   auxiliaryMaxRetries?: number;
@@ -48,6 +50,7 @@ export async function postProcessFindings(
       skill: options.skill,
       apiKey: options.apiKey,
       runtime: options.runtime,
+      providers: options.providers,
       model: options.auxiliaryModel,
       maxTurns: options.maxTurns,
       effort: options.effort,
@@ -71,6 +74,7 @@ export async function postProcessFindings(
     apiKey: options.apiKey,
     repoPath: options.repoPath,
     runtime: options.runtime,
+    providers: options.providers,
     model: options.synthesisModel,
     maxRetries: options.auxiliaryMaxRetries,
     agentName: options.skill.name,

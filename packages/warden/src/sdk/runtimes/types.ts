@@ -110,6 +110,8 @@ interface AuxiliaryRunRequestBase<T> {
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;
+  /** Provider-specific settings consumed only by the selected runtime adapter. */
+  providerOptions?: unknown;
 }
 
 interface AuxiliaryRunRequestWithoutTools<T> extends AuxiliaryRunRequestBase<T> {
@@ -137,6 +139,8 @@ export interface SynthesisRunRequest<T> {
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;
+  /** Provider-specific settings consumed only by the selected runtime adapter. */
+  providerOptions?: unknown;
 }
 
 export interface Runtime {

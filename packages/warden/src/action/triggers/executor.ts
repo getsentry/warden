@@ -24,6 +24,10 @@ import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
+import {
+  buildPiProviderOptions,
+  assertCustomProviderAuth,
+} from '../../sdk/runtimes/custom-provider.js';
 import { captureActionTriggerError } from '../error-reporting.js';
 
 /** Log-mode output for CI: no TTY, no color. */
@@ -174,6 +178,10 @@ export async function executeTrigger(
       try {
         assertValidPiModelSelectors([trigger]);
 
+        if ((trigger.runtime ?? 'pi') === 'pi') {
+          assertCustomProviderAuth(buildPiProviderOptions(trigger.providers, process.env));
+        }
+
         const taskOptions: SkillTaskOptions = {
           name: trigger.name,
           displayName: trigger.skill,
@@ -187,6 +195,7 @@ export async function executeTrigger(
             apiKey: anthropicApiKey,
             model: trigger.model,
             runtime: trigger.runtime,
+            providers: trigger.providers,
             effort: trigger.effort,
             auxiliaryModel: trigger.auxiliaryModel,
             synthesisModel: trigger.synthesisModel,

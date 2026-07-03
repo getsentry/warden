@@ -216,6 +216,50 @@ export const DEFAULT_SCAN_LIMITS: Required<ScanConfig> = {
   maxFileLines: 3_000,
 };
 
+// Per-model definition for a custom provider. Only `id` is required; Warden
+// fills the remaining fields Pi requires with sensible defaults.
+export const ProviderModelConfigSchema = z.object({
+  /** Model id as exposed by the endpoint (e.g. the LiteLLM model name). */
+  id: z.string().min(1),
+  /** Display name. Defaults to `id`. */
+  name: z.string().min(1).optional(),
+  /** Whether the model supports reasoning/thinking. Default: false. */
+  reasoning: z.boolean().optional(),
+  /** Accepted input modalities. Default: ["text"]. */
+  input: z.array(z.enum(['text', 'image'])).min(1).optional(),
+  /** Context window in tokens. Default: 128000. */
+  contextWindow: z.number().int().positive().optional(),
+  /** Max output tokens. Default: 8192. */
+  maxTokens: z.number().int().positive().optional(),
+  /** Per-token cost (USD per token). Default: all zeros. */
+  cost: z.object({
+    input: z.number().nonnegative(),
+    output: z.number().nonnegative(),
+    cacheRead: z.number().nonnegative(),
+    cacheWrite: z.number().nonnegative(),
+  }).optional(),
+}).strict();
+export type ProviderModelConfig = z.infer<typeof ProviderModelConfigSchema>;
+
+// A custom, self-hosted or gateway provider (e.g. LiteLLM). OpenAI-compatible only in v1.
+export const ProviderConfigSchema = z.object({
+  /** OpenAI-compatible base URL, typically ending in /v1. */
+  baseUrl: z.string().url(),
+  /** Wire protocol. Only "openai-completions" is supported today. */
+  api: z.enum(['openai-completions']).default('openai-completions'),
+  /** Extra HTTP headers sent on every request. */
+  headers: z.record(z.string(), z.string()).optional(),
+  /** Env var holding the API key. Defaults to WARDEN_<NAME>_API_KEY then <NAME>_API_KEY. */
+  apiKeyEnv: z.string().min(1).optional(),
+  /** Models this provider exposes. At least one is required. */
+  models: z.array(ProviderModelConfigSchema).min(1),
+}).strict();
+export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+
+// Map of provider name -> provider config. The name becomes the model-selector prefix.
+export const ProvidersConfigSchema = z.record(z.string().min(1), ProviderConfigSchema);
+export type ProvidersConfig = z.infer<typeof ProvidersConfigSchema>;
+
 // Default configuration that skills inherit from
 export const DefaultsSchema = z.object({
   /** Fail the build when findings meet this severity */
@@ -255,6 +299,8 @@ export const DefaultsSchema = z.object({
   ignore: IgnoreConfigSchema.optional(),
   /** Global scan limits applied after ignore filtering */
   scan: ScanConfigSchema.optional(),
+  /** Custom OpenAI-compatible providers (e.g. self-hosted LiteLLM). Keyed by provider name. */
+  providers: ProvidersConfigSchema.optional(),
   /** Delay in milliseconds between batch starts when processing files in parallel. Default: 0 */
   batchDelayMs: z.number().int().nonnegative().optional(),
   /** Max retries for auxiliary structured model calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */

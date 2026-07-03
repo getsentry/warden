@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { parse as parseYaml } from 'yaml';
 import { aggregateUsage } from '../sdk/usage.js';
+import type { ProvidersConfig } from '../config/schema.js';
 import type { Runtime } from '../sdk/runtimes/index.js';
 import { runStructuredSkillBuilderAgent, StructuredSkillBuilderAgentError } from './agentic.js';
 import type { UsageStats } from '../types/index.js';
@@ -462,6 +463,7 @@ export async function buildGeneratedSkill(args: {
   repairMaxRetries?: number;
   authoringSkillRoot?: string;
   onStatus?: (message: string) => void;
+  providers?: ProvidersConfig;
 }): Promise<GeneratedSkillArtifact> {
   const startedAt = performance.now();
   const statePath = getBuildStatePath(args.rootDir);
@@ -522,6 +524,7 @@ export async function buildGeneratedSkill(args: {
       maxTurns,
       apiKey: args.apiKey,
       abortController: args.abortController,
+      providers: args.providers,
       repair,
     });
 
@@ -551,6 +554,7 @@ export async function buildGeneratedSkill(args: {
       apiKey: args.apiKey,
       writeAccess: true,
       abortController: args.abortController,
+      providers: args.providers,
       repair,
     });
 
@@ -598,6 +602,7 @@ export async function buildGeneratedSkill(args: {
         maxTurns: Math.min(maxTurns, defaultValidationMaxTurns()),
         apiKey: args.apiKey,
         abortController: args.abortController,
+        providers: args.providers,
         repair,
       });
       reviewResults.push(review);
@@ -637,6 +642,7 @@ export async function buildGeneratedSkill(args: {
         apiKey: args.apiKey,
         writeAccess: true,
         abortController: args.abortController,
+        providers: args.providers,
         repair,
       });
       revisionResults.push(revision);

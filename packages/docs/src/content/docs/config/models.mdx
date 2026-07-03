@@ -56,6 +56,52 @@ Warden mirrors these to the native `{PROVIDER}_API_KEY` expected by each SDK at 
 If you already have a native provider key set (e.g. `OPENAI_API_KEY`), Warden will use it
 directly and the `WARDEN_`-prefixed form is not required.
 
+## Self-hosted / OpenAI-compatible providers (LiteLLM)
+
+When `runtime = "pi"`, you can register a self-hosted, OpenAI-compatible endpoint
+(such as a [LiteLLM](https://docs.litellm.ai/) proxy) as a named provider and
+target its models with the usual `provider/model` selector. The custom provider
+covers every model lane (agent, auxiliary, synthesis).
+
+```toml title="warden.toml"
+[defaults]
+runtime = "pi"
+
+[defaults.providers.litellm]
+baseUrl = "http://localhost:4000/v1"   # required; OpenAI-compatible base URL
+api = "openai-completions"             # optional; default
+# headers = { "X-Tenant" = "team-a" }  # optional custom headers
+# apiKeyEnv = "WARDEN_LITELLM_API_KEY" # optional; overrides the default lookup
+
+[[defaults.providers.litellm.models]]
+id = "my-model"                        # required; the model name your endpoint exposes
+# contextWindow = 128000               # optional; default 128000
+# maxTokens = 8192                     # optional; default 8192
+# reasoning = false                    # optional; default false
+# cost = { input = 0, output = 0, cacheRead = 0, cacheWrite = 0 }
+
+[defaults.agent]
+model = "litellm/my-model"
+```
+
+**Model defaults:** only `id` is required. Warden fills `name` (= `id`),
+`reasoning` (`false`), `input` (`["text"]`), `contextWindow` (`128000`),
+`maxTokens` (`8192`), and `cost` (all zeros). Self-hosted runs therefore report
+`$0` cost unless you set explicit costs.
+
+**Authentication:** the API key is read from the environment, never from
+`warden.toml`. Warden looks up `apiKeyEnv` if set, otherwise
+`WARDEN_<NAME>_API_KEY` then `<NAME>_API_KEY` (e.g. `WARDEN_LITELLM_API_KEY`).
+A loopback base URL (`localhost`, `127.0.0.1`, or `::1`) may run without a key;
+any other host requires one or Warden fails before analysis starts.
+
+### Alternative: Pi `models.json`
+
+Advanced users can instead define a custom provider in Pi's own `models.json`
+(the format Pi loads on startup). Warden's Pi runtime picks up any providers and
+models defined there. Prefer the `warden.toml` block above unless you already
+maintain a shared Pi configuration.
+
 ## Claude Runtime Models
 
 When `runtime = "claude"`, use the model IDs accepted by Claude Code:
@@ -156,8 +202,19 @@ Main agent model precedence, from highest to lowest:
 | `WARDEN_MODEL` | Environment fallback. |
 | SDK/runtime default | Used when no explicit model is set. |
 
-Auxiliary and synthesis models only come from `[defaults.auxiliary]` and
-`[defaults.synthesis]`. They do not inherit skill or trigger `model` overrides.
+The auxiliary lane (structured extraction, dedup, merge, fix evaluation) and the
+synthesis lane prefer `[defaults.auxiliary]` and `[defaults.synthesis]`. When
+unset, they fall back to the global default model
+(`defaults.agent.model` → `defaults.model` → `--model` → `WARDEN_MODEL`), so a
+single configured model drives every lane. Synthesis falls back to the auxiliary
+model before the global default. These lanes do not inherit skill- or
+trigger-level `model` overrides, which apply to the agent lane only.
+
+This matters for self-hosted providers: setting just `defaults.model` to a
+custom-provider model (e.g. `litellm/...`) keeps the auxiliary and synthesis
+lanes on that provider too, rather than escaping to a runtime default on another
+provider. Set `[defaults.auxiliary]` explicitly only when you want those lanes on
+a different (e.g. cheaper) model.
 
 Effort is separate from model selection. For local runs,
 `--effort` overrides `defaults.agent.effort` for that

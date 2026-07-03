@@ -19,6 +19,7 @@ import {
   type LogsConfig,
   type RuntimeName,
   type AgentRuntimeConfig,
+  type ProvidersConfig,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -177,6 +178,14 @@ function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | 
 
   if (base?.runtime !== undefined && inherited.runtime === undefined) {
     inherited.runtime = base.runtime;
+  }
+
+  // Inherit the org base custom providers, like runtime, as an execution-
+  // environment default: a repo layer that only adds skills should still reach
+  // the providers the org defined. Per-skill policy defaults (model, failOn,
+  // ignorePaths, ...) intentionally do not cross layers.
+  if (base?.providers !== undefined && inherited.providers === undefined) {
+    inherited.providers = base.providers;
   }
 
   const verification = mergeNestedConfig(base?.verification, repo?.verification);
@@ -399,6 +408,8 @@ export interface ResolvedTrigger {
   effort?: AgentRuntimeConfig['effort'];
   /** Runtime backend for all model-backed execution. */
   runtime?: RuntimeName;
+  /** Custom OpenAI-compatible providers for the Pi runtime. */
+  providers?: ProvidersConfig;
   /** Model for auxiliary structured model calls. */
   auxiliaryModel?: string;
   /** Model for post-analysis synthesis/consolidation. */
@@ -493,7 +504,19 @@ export function resolveSkillConfigs(
   const envModel = emptyToUndefined(process.env['WARDEN_MODEL']);
   const result: ResolvedTrigger[] = [];
   const runtime = defaults?.runtime ?? 'pi';
-  const auxiliaryModel = emptyToUndefined(defaults?.auxiliary?.model);
+  const providers = defaults?.providers;
+  // Default agent/top-level model, used as the fallback for the auxiliary and
+  // synthesis lanes so one configured model drives every lane (and self-hosted
+  // providers stay self-contained instead of escaping to a runtime default on
+  // another provider). Explicit auxiliary/synthesis models still win.
+  const defaultAgentModel =
+    emptyToUndefined(defaults?.agent?.model) ??
+    emptyToUndefined(defaults?.model) ??
+    emptyToUndefined(cliModel) ??
+    envModel;
+  const auxiliaryModel =
+    emptyToUndefined(defaults?.auxiliary?.model) ??
+    defaultAgentModel;
   const synthesisModel =
     emptyToUndefined(defaults?.synthesis?.model) ??
     auxiliaryModel;
@@ -544,6 +567,7 @@ export function resolveSkillConfigs(
         maxTurns: baseMaxTurns,
         effort,
         runtime,
+        providers,
         auxiliaryModel,
         synthesisModel,
         auxiliaryMaxRetries,
@@ -579,6 +603,7 @@ export function resolveSkillConfigs(
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
           effort,
           runtime,
+          providers,
           auxiliaryModel,
           synthesisModel,
           auxiliaryMaxRetries,

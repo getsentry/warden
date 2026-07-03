@@ -1,6 +1,8 @@
 import { claudeRuntime } from './claude.js';
 import { piRuntime } from './pi.js';
 import type { Runtime, RuntimeName } from './types.js';
+import { buildPiProviderOptions } from './custom-provider.js';
+import type { ProvidersConfig } from '../../config/schema.js';
 
 const RUNTIMES: Partial<Record<RuntimeName, Runtime>> = {
   claude: claudeRuntime,
@@ -36,6 +38,7 @@ export function getRuntime(name: RuntimeName = 'pi'): Runtime {
 
 export interface RuntimeProviderOptionsInput {
   pathToClaudeCodeExecutable?: string;
+  providers?: ProvidersConfig;
 }
 
 /**
@@ -47,6 +50,13 @@ export function getRuntimeProviderOptions(
 ): unknown {
   if (name === 'claude') {
     return { pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable };
+  }
+
+  if (name === 'pi') {
+    // Resolve provider API keys from the live process env at the runtime
+    // boundary. Preflight (verifyCustomProviderAuthForRun) resolves against the
+    // same env, so both phases agree as long as env is not mutated mid-run.
+    return buildPiProviderOptions(options.providers, process.env);
   }
 
   return undefined;

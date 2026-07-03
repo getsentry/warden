@@ -10,18 +10,43 @@ import {
   canUseRuntimeAuth,
 } from './extract.js';
 import type { Finding } from '../types/index.js';
+import { getRuntime } from './runtimes/index.js';
+import type { Runtime } from './runtimes/index.js';
 
-// Mock callHaiku to avoid real API calls
-vi.mock('./haiku.js', async (importOriginal) => {
-  const actual: Record<string, unknown> = await importOriginal();
+// Mock runtimes to avoid real API calls
+vi.mock('./runtimes/index.js', () => ({
+  getRuntime: vi.fn(),
+  getRuntimeProviderOptions: vi.fn((_name: string, opts: { providers?: unknown }) => {
+    if (!opts?.providers) return undefined;
+    // Minimal simulation: return providerOptions shape used by Pi adapter
+    const providers = opts.providers as Record<string, unknown>;
+    return {
+      providers: Object.entries(providers).map(([name]) => ({ name })),
+    };
+  }),
+}));
+
+function makeSynthesisRuntime(data: unknown): Runtime {
   return {
-    ...actual,
-    callHaiku: vi.fn(),
-  };
-});
+    name: 'claude' as const,
+    runSkill: vi.fn(),
+    runAuxiliary: vi.fn(),
+    runSynthesis: vi.fn().mockResolvedValue({
+      success: true,
+      data,
+      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
+    }),
+  } as unknown as Runtime;
+}
 
-import { callHaiku } from './haiku.js';
-const mockCallHaiku = vi.mocked(callHaiku);
+function makeAuxiliaryRuntime(result: unknown): Runtime {
+  return {
+    name: 'pi' as const,
+    runSkill: vi.fn(),
+    runAuxiliary: vi.fn().mockResolvedValue(result),
+    runSynthesis: vi.fn(),
+  } as unknown as Runtime;
+}
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -45,11 +70,12 @@ describe('extractFindingsWithLLM', () => {
   });
 
   it('preserves the LLM extraction failure prefix for stable error classification', async () => {
-    mockCallHaiku.mockResolvedValue({
+    const runtime = makeAuxiliaryRuntime({
       success: false,
       error: 'Request timed out',
       usage: { inputTokens: 10, outputTokens: 0, costUSD: 0.001 },
     });
+    vi.mocked(getRuntime).mockReturnValue(runtime);
 
     const result = await extractFindingsWithLLM('{ "findings": [', { apiKey: 'test-key' });
 
@@ -59,6 +85,38 @@ describe('extractFindingsWithLLM', () => {
       preview: '{ "findings": [',
       usage: { inputTokens: 10, outputTokens: 0, costUSD: 0.001 },
     });
+  });
+
+  it('forwards providerOptions built from providers to the auxiliary runtime', async () => {
+    const runAuxiliaryMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: { findings: [] },
+      usage: { inputTokens: 10, outputTokens: 5, costUSD: 0.001 },
+    });
+    const runtime: Runtime = {
+      name: 'pi',
+      runSkill: vi.fn(),
+      runAuxiliary: runAuxiliaryMock,
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime;
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const rawText = '{ "findings": [] }';
+    await extractFindingsWithLLM(rawText, {
+      runtime: 'pi',
+      providers: {
+        litellm: {
+          baseUrl: 'http://localhost:4000/v1',
+          api: 'openai-completions',
+          models: [{ id: 'm' }],
+        },
+      },
+    });
+
+    const req = runAuxiliaryMock.mock.calls[0]?.[0];
+    expect(req).toBeDefined();
+    expect(req.providerOptions).toBeDefined();
+    expect(req.providerOptions.providers[0].name).toBe('litellm');
   });
 });
 
@@ -134,11 +192,8 @@ describe('mergeCrossLocationFindings', () => {
       makeFinding({ id: 'f2', title: 'Issue B', location: { path: 'src/b.ts', startLine: 1 } }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    const runtime = makeSynthesisRuntime([]);
+    vi.mocked(getRuntime).mockReturnValue(runtime);
 
     const result = await mergeCrossLocationFindings(findings, {
       apiKey: 'test-key',
@@ -147,7 +202,7 @@ describe('mergeCrossLocationFindings', () => {
     });
     expect(result.findings).toHaveLength(2);
     expect(result.mergedCount).toBe(0);
-    expect(mockCallHaiku).toHaveBeenCalledWith(expect.objectContaining({
+    expect(vi.mocked(runtime.runSynthesis)).toHaveBeenCalledWith(expect.objectContaining({
       model: 'claude-test-fast',
     }));
   });
@@ -168,11 +223,7 @@ describe('mergeCrossLocationFindings', () => {
       }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2]]));
 
     const onFindingProcessing = vi.fn();
     const result = await mergeCrossLocationFindings(findings, {
@@ -203,11 +254,7 @@ describe('mergeCrossLocationFindings', () => {
       makeFinding({ id: 'f3', severity: 'medium', location: { path: 'src/a.ts', startLine: 5 } }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2, 3]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2, 3]]));
 
     const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
     expect(result.findings).toHaveLength(1);
@@ -233,11 +280,7 @@ describe('mergeCrossLocationFindings', () => {
       }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2]]));
 
     const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
     // Same severity, same confidence, a.ts < b.ts alphabetically
@@ -259,11 +302,7 @@ describe('mergeCrossLocationFindings', () => {
       }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2]]));
 
     const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
     expect(result.findings[0]!.additionalLocations).toEqual([
@@ -279,11 +318,7 @@ describe('mergeCrossLocationFindings', () => {
       makeFinding({ id: 'f3', location: { path: 'src/b.ts', startLine: 2 } }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2]], // groups the two with-location findings (indices 1,2 from withLocations array)
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2]]));
 
     const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
     // f1 absorbs f3, f2 (no location) passes through
@@ -297,11 +332,16 @@ describe('mergeCrossLocationFindings', () => {
       makeFinding({ id: 'f2', location: { path: 'src/b.ts', startLine: 2 } }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: false,
-      error: 'API error',
-      usage: { inputTokens: 100, outputTokens: 0, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: vi.fn(),
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn().mockResolvedValue({
+        success: false,
+        error: 'API error',
+        usage: { inputTokens: 100, outputTokens: 0, costUSD: 0.001 },
+      }),
+    } as unknown as Runtime);
 
     const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
     expect(result.findings).toHaveLength(2);
@@ -323,11 +363,7 @@ describe('mergeCrossLocationFindings', () => {
       location: { path: 'src/b.ts', startLine: 2 },
     });
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2]]));
 
     await mergeCrossLocationFindings([f1, f2], { apiKey: 'test-key', repoPath: tempDir });
     // Original f1 should NOT have additionalLocations added
@@ -342,11 +378,7 @@ describe('mergeCrossLocationFindings', () => {
     ];
 
     // LLM returns overlapping groups: [1,2] and [2,3]
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2], [2, 3]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2], [2, 3]]));
 
     const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
     // f2 is absorbed by group [1,2]. Group [2,3] should skip f2 (already absorbed),
@@ -372,11 +404,7 @@ describe('mergeCrossLocationFindings', () => {
       }),
     ];
 
-    mockCallHaiku.mockResolvedValue({
-      success: true,
-      data: [[1, 2]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
+    vi.mocked(getRuntime).mockReturnValue(makeSynthesisRuntime([[1, 2]]));
 
     const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir });
     // src/b.ts:2 should only appear once in additionalLocations (deduped)
