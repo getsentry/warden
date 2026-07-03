@@ -134,6 +134,7 @@ const mockSetFailed = vi.mocked(setFailed);
 const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
 
 // Type helper for mocking Octokit responses
+type GetPullResponse = Awaited<ReturnType<Octokit['pulls']['get']>>;
 type ListReviewsResponse = Awaited<ReturnType<Octokit['pulls']['listReviews']>>;
 
 // -----------------------------------------------------------------------------
@@ -148,6 +149,14 @@ interface MockOctokitOptions {
     deletions: number;
     patch?: string;
   }[];
+}
+
+function createGetPullResponse(headSha = PR_HEAD_SHA): GetPullResponse {
+  return {
+    data: {
+      head: { sha: headSha },
+    },
+  } as GetPullResponse;
 }
 
 function createMockOctokit(options: MockOctokitOptions = {}): Octokit {
@@ -167,6 +176,7 @@ function createMockOctokit(options: MockOctokitOptions = {}): Octokit {
   return {
     paginate: vi.fn(() => Promise.resolve(files)),
     pulls: {
+      get: vi.fn(() => Promise.resolve(createGetPullResponse())),
       listFiles: vi.fn(),
       listReviews: vi.fn(() => Promise.resolve({ data: [] })),
       createReview: vi.fn(() => Promise.resolve({ data: {} })),
@@ -1140,6 +1150,99 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('does not publish review feedback when the PR head has advanced', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      vi.mocked(mockOctokit.pulls.get).mockResolvedValueOnce(createGetPullResponse('new-head-sha'));
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+
+      mockFetchExistingComments.mockResolvedValue([createExistingWardenComment()]);
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.get).toHaveBeenCalledWith({
+        owner: 'test-owner',
+        repo: 'test-repo',
+        pull_number: 123,
+      });
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conclusion: 'neutral',
+          output: expect.objectContaining({
+            title: '1 issue',
+          }),
+        })
+      );
+    });
+
+    it('stops review feedback if the PR head advances before posting', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      vi.mocked(mockOctokit.pulls.get)
+        .mockResolvedValueOnce(createGetPullResponse(PR_HEAD_SHA))
+        .mockResolvedValueOnce(createGetPullResponse('new-head-sha'));
+
+      mockFetchExistingComments.mockResolvedValue([createExistingWardenComment()]);
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.get).toHaveBeenCalledTimes(2);
+      expect(mockFetchExistingComments).toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
+    it('stops stale resolution and dismissal if the PR head advances after posting', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      vi.mocked(mockOctokit.pulls.get)
+        .mockResolvedValueOnce(createGetPullResponse(PR_HEAD_SHA))
+        .mockResolvedValueOnce(createGetPullResponse(PR_HEAD_SHA))
+        .mockResolvedValue(createGetPullResponse('new-head-sha'));
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+
+      mockFetchExistingComments.mockResolvedValue([createExistingWardenComment()]);
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
+    it('keeps findings in checks when inline review comments cannot resolve', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(
+        new Error('Validation Failed: pull_request_review_thread.line does not form part of the diff')
+      );
+
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          output: expect.objectContaining({
+            summary: expect.stringContaining('Test Finding'),
+          }),
+        })
+      );
+    });
+
     it('does not post review when no findings', async () => {
       mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ findings: [] }) });
 
@@ -2068,6 +2171,74 @@ describe('runPRWorkflow', () => {
       );
 
       // Should NOT run skill tasks (no triggers matched)
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+    });
+
+    it('skips cleanup when no triggers match and the PR head has advanced', async () => {
+      vi.mocked(mockOctokit.pulls.get).mockResolvedValueOnce(createGetPullResponse('new-head-sha'));
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+      mockFetchExistingComments.mockResolvedValue([createExistingWardenComment()]);
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, NO_MATCH_FIXTURES_DIR
+      );
+
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+    });
+
+    it('stops cleanup writes when the PR head advances after cleanup starts', async () => {
+      vi.mocked(mockOctokit.pulls.get)
+        .mockResolvedValueOnce(createGetPullResponse(PR_HEAD_SHA))
+        .mockResolvedValueOnce(createGetPullResponse('new-head-sha'));
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+      mockFetchExistingComments.mockResolvedValue([
+        createExistingWardenComment({
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Bug',
+          description: 'Fix this',
+          contentHash: 'hash1',
+        }),
+      ]);
+      mockEvaluateFixAttempts.mockResolvedValue({
+        toResolve: [{
+          id: 1,
+          path: 'src/old-file.ts',
+          line: 5,
+          title: 'Bug',
+          description: 'Fix this',
+          contentHash: 'hash1',
+          isWarden: true,
+          isResolved: false,
+          threadId: 'thread-1',
+        }],
+        toReply: [],
+        evaluations: [],
+        skipped: 0,
+        evaluated: 1,
+        failedEvaluations: 0,
+        uniqueFindingsEvaluated: 1,
+        uniqueFindingsCodeChanged: 1,
+        uniqueFindingsResolved: 1,
+        usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      });
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, NO_MATCH_FIXTURES_DIR
+      );
+
+      expect(mockEvaluateFixAttempts).toHaveBeenCalled();
+      expect(mockOctokit.graphql).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
       expect(mockRunSkillTask).not.toHaveBeenCalled();
     });
 

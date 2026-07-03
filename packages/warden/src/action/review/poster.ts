@@ -129,15 +129,13 @@ async function postReviewToGitHub(
   octokit: Octokit,
   context: EventContext,
   result: RenderResult
-): Promise<void> {
+): Promise<boolean> {
   if (!context.pullRequest) {
-    return;
+    return false;
   }
 
-  // Only post PR reviews with inline comments - skip standalone summary comments
-  // as they add noise without providing actionable inline feedback
   if (!result.review) {
-    return;
+    return false;
   }
 
   const { owner, name: repo } = context.repository;
@@ -155,15 +153,23 @@ async function postReviewToGitHub(
       start_side: c.start_line ? c.start_side ?? ('RIGHT' as const) : undefined,
     }));
 
+  // Non-blocking body-only reviews cannot be resolved as review threads.
+  // Keep those findings in Checks instead of leaving stale PR timeline entries.
+  if (reviewComments.length === 0 && result.review.event === 'COMMENT') {
+    return false;
+  }
+
   await octokit.pulls.createReview({
     owner,
     repo,
     pull_number: pullNumber,
     commit_id: commitId,
     event: result.review.event,
-    body: result.review.body,
+    body: result.review.event === 'COMMENT' ? '' : result.review.body,
     comments: reviewComments,
   });
+
+  return true;
 }
 
 /**
@@ -399,15 +405,23 @@ export async function postTriggerReview(
         });
       }
 
+      let posted = false;
       try {
-        await postReviewToGitHub(octokit, context, renderResultToPost);
+        posted = await postReviewToGitHub(octokit, context, renderResultToPost);
       } catch (error) {
         if (!isLineResolutionError(error)) {
           throw error;
         }
-        warnAction(`Inline comments failed for ${result.triggerName}, posting findings in review body`);
-        const fallback = moveCommentsToBody(renderResultToPost, postedFindings, skill);
-        await postReviewToGitHub(octokit, context, fallback);
+        if (renderResultToPost.review?.event === 'REQUEST_CHANGES') {
+          warnAction(`Inline comments failed for ${result.triggerName}, posting findings in review body`);
+          const fallback = moveCommentsToBody(renderResultToPost, postedFindings, skill);
+          posted = await postReviewToGitHub(octokit, context, fallback);
+        } else {
+          warnAction(`Inline comments failed for ${result.triggerName}, falling back to checks only`);
+        }
+      }
+      if (!posted) {
+        return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
       }
       for (const finding of postedFindings) {
         findingObservations.push({ outcome: 'posted', finding, skill });

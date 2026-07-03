@@ -231,9 +231,41 @@ describe('postTriggerReview', () => {
       pull_number: 1,
       commit_id: 'abc123',
       event: 'COMMENT',
-      body: 'Test review',
+      body: '',
       comments: [expect.objectContaining({ path: 'test.ts', line: 10, side: 'RIGHT', body: 'Test comment' })],
     });
+  });
+
+  it('skips body-only non-blocking reviews', async () => {
+    const finding = createFinding({ location: undefined });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Locationless finding',
+          comments: [],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    const postResult = await postTriggerReview({
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    }, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(postResult.findingObservations).toEqual([]);
+    expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
   });
 
   it('deduplicates findings against existing comments', async () => {
@@ -612,7 +644,7 @@ describe('postTriggerReview', () => {
     expect(postResult.shouldFail).toBe(false);
   });
 
-  it('retries with findings in body when GitHub returns line resolution error', async () => {
+  it('does not leave body-only comments when GitHub returns line resolution error', async () => {
     const finding = createFinding();
     const result: TriggerResult = {
       triggerName: 'test-trigger',
@@ -635,10 +667,10 @@ describe('postTriggerReview', () => {
 
     vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
 
-    // First call fails with line resolution error, second succeeds
+    // First call fails with line resolution error. The fallback is body-only,
+    // so Warden should rely on checks instead of leaving an unresolvable review.
     vi.mocked(mockOctokit.pulls.createReview)
-      .mockRejectedValueOnce(new Error('Validation Failed: pull_request_review_thread.line does not form part of the diff'))
-      .mockResolvedValueOnce({} as never);
+      .mockRejectedValueOnce(new Error('Validation Failed: pull_request_review_thread.line does not form part of the diff'));
 
     const ctx: ReviewPostingContext = {
       result,
@@ -648,12 +680,49 @@ describe('postTriggerReview', () => {
 
     const postResult = await postTriggerReview(ctx, mockDeps);
 
+    expect(postResult.posted).toBe(false);
+    expect(postResult.newComments).toHaveLength(0);
+    expect(postResult.findingObservations).toEqual([]);
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
+  });
+
+  it('still posts body-only request changes reviews', async () => {
+    const finding = createFinding({ severity: 'high' });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'REQUEST_CHANGES',
+          body: 'Blocking finding in body',
+          comments: [],
+        },
+      }),
+      reportOn: 'low',
+      requestChanges: true,
+      failOn: 'high',
+    };
+
+    const postResult = await postTriggerReview({
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    }, mockDeps);
+
     expect(postResult.posted).toBe(true);
-    expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(2);
-    // Second call should have no inline comments and findings in body
-    const secondCall = vi.mocked(mockOctokit.pulls.createReview).mock.calls[1]![0]!;
-    expect(secondCall.comments).toEqual([]);
-    expect(secondCall.body).toBe('rendered findings body');
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'REQUEST_CHANGES',
+        body: 'Blocking finding in body',
+        comments: [],
+      })
+    );
   });
 
   it('does not retry on non-line-resolution errors', async () => {

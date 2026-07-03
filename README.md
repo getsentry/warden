@@ -12,7 +12,7 @@ Your code is under new management. Agents that review your code - locally or on 
 
 **Two ways to run.** CLI catches issues before you push. GitHub Action reviews every PR automatically.
 
-**GitHub-native.** Findings appear as inline PR comments with suggested fixes.
+**GitHub-native.** Eligible findings appear as inline PR comments with suggested fixes, and every finding is reported in Checks.
 
 ## Quick Start
 
