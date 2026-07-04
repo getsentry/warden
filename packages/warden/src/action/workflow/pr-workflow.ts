@@ -627,7 +627,10 @@ async function postReviewsAndTrackFailures(
  * Whether posting this trigger's review would produce a blocking
  * REQUEST_CHANGES review. Mirrors the poster's posting predicate: the
  * renderer can emit a REQUEST_CHANGES render result with zero reportable
- * findings (reportOn stricter than failOn), which the poster never posts.
+ * findings (reportOn stricter than failOn), which the poster never posts —
+ * its reportOn early return runs before the needsRequestChanges branch, so
+ * that branch is only reachable when this predicate is already true (the
+ * pre-dedup filtered set was non-empty or reportOnSuccess is set).
  */
 function wouldPostBlockingReview(result: TriggerResult): boolean {
   if (!result.report || result.renderResult?.review?.event !== 'REQUEST_CHANGES') {
