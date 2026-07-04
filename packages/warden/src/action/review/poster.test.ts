@@ -351,6 +351,14 @@ describe('postTriggerReview', () => {
         newFindings: [findings[0]!],
         duplicateActions: [{ finding: findings[1]!, existingComment: createExistingComment(), matchType: 'hash', originalFindingId: findings[1]!.id }],
       } as never);
+      // Dedup shrank the finding set, so the poster re-renders before posting.
+      vi.mocked(renderSkillReport).mockReturnValue(createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: '',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }));
       vi.mocked(processDuplicateActions).mockImplementation(async () => {
         now += 60_000;
         vi.mocked(mockOctokit.pulls.get).mockResolvedValue({ data: { head: { sha: 'new-head-sha' } } } as never);
@@ -366,6 +374,11 @@ describe('postTriggerReview', () => {
       expect(processDuplicateActions).toHaveBeenCalled();
       expect(postResult.posted).toBe(false);
       expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+      // The gate verified twice: before duplicate processing and again before
+      // the review write, where it saw the new head.
+      expect(mockOctokit.pulls.get).toHaveBeenCalledTimes(2);
+      // No swallowed error: the findings were not marked failed.
+      expect(postResult.findingObservations.filter((o) => o.outcome === 'failed')).toEqual([]);
     } finally {
       dateNowSpy.mockRestore();
     }
