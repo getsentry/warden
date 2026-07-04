@@ -43,6 +43,8 @@ import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
+import { ReviewFeedbackGate } from './review-feedback-gate.js';
+import type { ReviewFeedbackWritability } from './review-feedback-gate.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
@@ -107,7 +109,6 @@ interface ReviewPhaseResult {
   existingComments: ExistingComment[];
   activeWardenCommentIds: Set<number>;
   findingObservations: FindingObservation[];
-  reviewFeedbackWritable: boolean;
   shouldFailAction: boolean;
   failureReasons: string[];
 }
@@ -117,8 +118,6 @@ interface FixEvaluationCommentGroups {
   currentHeadCount: number;
   missingOriginalCommitCount: number;
 }
-
-type ReviewFeedbackWriteGuard = () => Promise<boolean>;
 
 interface AuxiliaryWorkflowOptions {
   runtime?: RuntimeName;
@@ -521,16 +520,17 @@ async function postReviewsAndTrackFailures(
   results: TriggerResult[],
   inputs: ActionInputs,
   auxiliaryOptions: AuxiliaryWorkflowOptions,
+  gate: ReviewFeedbackGate,
   options: { failOnPostError?: boolean } = {}
 ): Promise<ReviewPhaseResult> {
-  // Fetch existing comments only when this run can still mutate feedback on the
-  // current PR head.
+  // Skip the comment fetch only when the head has definitively advanced; on an
+  // unverifiable head the fetch is a harmless read and keeps later phases able
+  // to resolve comments once the API recovers.
   // Keep original list separate for stale detection (modified list includes newly posted comments)
   let fetchedComments: ExistingComment[] = [];
   let existingComments: ExistingComment[] = [];
-  const canWriteReviewFeedback = () => canWriteReviewFeedbackForCurrentHead(octokit, context);
-  let reviewFeedbackWritable = await canWriteReviewFeedback();
-  if (reviewFeedbackWritable && context.pullRequest) {
+  let writability = await gate.check();
+  if (writability !== 'blocked' && context.pullRequest) {
     try {
       fetchedComments = await fetchExistingComments(
         octokit,
@@ -563,28 +563,36 @@ async function postReviewsAndTrackFailures(
     if (result.report) {
       reports.push(result.report);
 
-      // Post review
-      if (reviewFeedbackWritable) {
-        reviewFeedbackWritable = await canWriteReviewFeedback();
-        if (reviewFeedbackWritable) {
-          const postResult = await postTriggerReview(
-            {
-              result,
-              existingComments,
-              apiKey: inputs.anthropicApiKey,
-              runtime: auxiliaryOptions.runtime,
-              model: auxiliaryOptions.model,
-              maxRetries: auxiliaryOptions.maxRetries,
-              failOnPostError: options.failOnPostError,
-            },
-            { octokit, context }
-          );
+      // Post review. The gate memoizes briefly, so this stays cheap between
+      // writes but re-verifies after slow phases (LLM dedup, consolidation).
+      if (writability !== 'blocked') {
+        writability = await gate.check();
+      }
+      if (writability === 'writable') {
+        const postResult = await postTriggerReview(
+          {
+            result,
+            existingComments,
+            apiKey: inputs.anthropicApiKey,
+            runtime: auxiliaryOptions.runtime,
+            model: auxiliaryOptions.model,
+            maxRetries: auxiliaryOptions.maxRetries,
+            failOnPostError: options.failOnPostError,
+          },
+          { octokit, context }
+        );
 
-          // Add newly posted comments to existing comments for cross-trigger deduplication
-          existingComments.push(...postResult.newComments);
-          postResult.activeWardenCommentIds.forEach((id) => activeWardenCommentIds.add(id));
-          findingObservations.push(...postResult.findingObservations);
-        }
+        // Add newly posted comments to existing comments for cross-trigger deduplication
+        existingComments.push(...postResult.newComments);
+        postResult.activeWardenCommentIds.forEach((id) => activeWardenCommentIds.add(id));
+        findingObservations.push(...postResult.findingObservations);
+      } else if (writability === 'unknown' && wouldPostBlockingReview(result)) {
+        // A stale head skips silently (the newer run owns feedback), but an
+        // unverifiable head must not silently swallow a blocking review.
+        shouldFailAction = true;
+        failureReasons.push(
+          `${result.triggerName}: Could not verify the PR head; blocking review was not posted`
+        );
       }
 
       // Check if we should fail based on this trigger's config
@@ -605,39 +613,23 @@ async function postReviewsAndTrackFailures(
     existingComments,
     activeWardenCommentIds,
     findingObservations,
-    reviewFeedbackWritable,
     shouldFailAction,
     failureReasons,
   };
 }
 
-async function canWriteReviewFeedbackForCurrentHead(
-  octokit: Octokit,
-  context: EventContext
-): Promise<boolean> {
-  if (!context.pullRequest) {
+/**
+ * Whether posting this trigger's review would produce a blocking
+ * REQUEST_CHANGES review. Mirrors the poster's posting predicate: the
+ * renderer can emit a REQUEST_CHANGES render result with zero reportable
+ * findings (reportOn stricter than failOn), which the poster never posts.
+ */
+function wouldPostBlockingReview(result: TriggerResult): boolean {
+  if (!result.report || result.renderResult?.review?.event !== 'REQUEST_CHANGES') {
     return false;
   }
-
-  try {
-    const { data } = await octokit.pulls.get({
-      owner: context.repository.owner,
-      repo: context.repository.name,
-      pull_number: context.pullRequest.number,
-    });
-    const currentHeadSha = data.head.sha;
-    if (currentHeadSha !== context.pullRequest.headSha) {
-      warnAction(
-        `Skipping PR review feedback because run head ${context.pullRequest.headSha} is no longer the PR head ${currentHeadSha}`
-      );
-      return false;
-    }
-    return true;
-  } catch (error) {
-    Sentry.captureException(error, { tags: { operation: 'fetch_current_pr_head' } });
-    warnAction(`Skipping PR review feedback because the current PR head could not be verified: ${error}`);
-    return false;
-  }
+  const filteredFindings = filterFindings(result.report.findings, result.reportOn, result.minConfidence);
+  return filteredFindings.length > 0 || (result.reportOnSuccess ?? false);
 }
 
 /**
@@ -655,10 +647,8 @@ async function evaluateFixesAndResolveStale(
   canResolveStale: boolean,
   anthropicApiKey: string,
   auxiliaryOptions: AuxiliaryWorkflowOptions,
-  options: {
-    failOnWriteError?: boolean;
-    canWriteReviewFeedback?: ReviewFeedbackWriteGuard;
-  } = {}
+  gate: ReviewFeedbackGate,
+  options: { failOnWriteError?: boolean } = {}
 ): Promise<{
   allResolved: boolean;
   autoResolvedByFixEvaluation: number;
@@ -670,7 +660,6 @@ async function evaluateFixesAndResolveStale(
   const commentsEvaluatedByFixEval = new Set<number>();
   const commentsResolvedByStale = new Set<number>();
   const findingObservations: FindingObservation[] = [];
-  const canWriteReviewFeedback = options.canWriteReviewFeedback ?? (() => Promise.resolve(true));
   const blockedReviewFeedbackWriteResult = () => ({
     allResolved: false,
     autoResolvedByFixEvaluation: commentsResolvedByFixEval.size,
@@ -686,11 +675,28 @@ async function evaluateFixesAndResolveStale(
     runtime: fixEvaluationRuntime,
   });
 
+  // Check head freshness up front so a stale or unverifiable run skips the
+  // LLM fix evaluation entirely, not just the writes it would produce.
+  let writability: ReviewFeedbackWritability = 'blocked';
+  if (wardenComments.length > 0) {
+    if (!canResolveStale) {
+      logAction('Skipping stale comment resolution due to trigger failures');
+    } else if (context.pullRequest) {
+      writability = await gate.check();
+      if (writability === 'blocked') {
+        logAction('Skipping stale comment resolution because this run is no longer analyzing the current PR head');
+      } else if (writability === 'unknown') {
+        logAction('Skipping stale comment resolution because the current PR head could not be verified');
+      }
+    }
+  }
+  const canMutateFeedback = writability === 'writable';
+
   // Evaluate follow-up commit fix attempts
   if (
     context.pullRequest &&
     commentsForFixEvaluation.length > 0 &&
-    canResolveStale &&
+    canMutateFeedback &&
     canUseFixEvaluationRuntime
   ) {
     try {
@@ -746,7 +752,7 @@ async function evaluateFixesAndResolveStale(
 
       // Resolve successful fixes
       if (fixEvaluation.toResolve.length > 0) {
-        if (!await canWriteReviewFeedback()) {
+        if (!await gate.canWrite()) {
           logGroupEnd();
           return blockedReviewFeedbackWriteResult();
         }
@@ -778,14 +784,14 @@ async function evaluateFixesAndResolveStale(
       }
 
       // Post replies for failed fixes and track them so stale pass doesn't override
+      if (fixEvaluation.toReply.length > 0 && !await gate.canWrite()) {
+        logGroupEnd();
+        return blockedReviewFeedbackWriteResult();
+      }
       for (const reply of fixEvaluation.toReply) {
         commentsEvaluatedByFixEval.add(reply.comment.id);
         if (reply.comment.threadId) {
           try {
-            if (!await canWriteReviewFeedback()) {
-              logGroupEnd();
-              return blockedReviewFeedbackWriteResult();
-            }
             await postThreadReply(octokit, reply.comment.threadId, reply.replyBody);
           } catch (error) {
             Sentry.captureException(error, { tags: { operation: 'post_thread_reply' } });
@@ -823,7 +829,7 @@ async function evaluateFixesAndResolveStale(
 
   // Resolve stale Warden comments (comments that no longer have matching findings)
   // Exclude comments already handled by fix evaluation (resolved or flagged as needing attention)
-  if (context.pullRequest && wardenComments.length > 0 && canResolveStale) {
+  if (context.pullRequest && wardenComments.length > 0 && canMutateFeedback) {
     try {
       const scope = buildAnalyzedScope(context.pullRequest.files);
       const commentsForStaleCheck = wardenComments.filter(
@@ -835,7 +841,7 @@ async function evaluateFixesAndResolveStale(
       const staleComments = findStaleComments(commentsForStaleCheck, allFindings, scope);
 
       if (staleComments.length > 0) {
-        if (!await canWriteReviewFeedback()) {
+        if (!await gate.canWrite()) {
           return blockedReviewFeedbackWriteResult();
         }
 
@@ -883,8 +889,6 @@ async function evaluateFixesAndResolveStale(
       }
       warnAction(`Failed to resolve stale comments: ${error}`);
     }
-  } else if (!canResolveStale && wardenComments.length > 0) {
-    logAction('Skipping stale comment resolution due to trigger failures');
   }
 
   // Determine if all unresolved Warden comments were resolved during this run
@@ -911,6 +915,7 @@ async function dismissPreviousReviewIfResolved(
   previousReviewInfo: BotReviewInfo | null,
   results: TriggerResult[],
   canResolveStale: boolean,
+  gate: ReviewFeedbackGate,
   options: { failOnWriteError?: boolean } = {}
 ): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
@@ -929,7 +934,7 @@ async function dismissPreviousReviewIfResolved(
     !wouldRequestChanges &&
     hasActiveFailOn
   ) {
-    if (!await canWriteReviewFeedbackForCurrentHead(octokit, context)) {
+    if (!await gate.canWrite()) {
       return;
     }
 
@@ -966,6 +971,7 @@ async function finalizeWorkflow(
   shouldFailAction: boolean,
   failureReasons: string[],
   canResolveStale: boolean,
+  gate: ReviewFeedbackGate,
   triggerErrors: string[]
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
@@ -973,7 +979,8 @@ async function finalizeWorkflow(
     context,
     previousReviewInfo,
     results,
-    canResolveStale
+    canResolveStale,
+    gate
   );
 
   // Set outputs
@@ -1555,6 +1562,7 @@ async function finalizeReportWorkflow(
   shouldFailAction: boolean,
   failureReasons: string[],
   canResolveStale: boolean,
+  gate: ReviewFeedbackGate,
   triggerErrors: string[],
   options: { failOnWriteError?: boolean } = {}
 ): Promise<void> {
@@ -1564,6 +1572,7 @@ async function finalizeReportWorkflow(
     previousReviewInfo,
     results,
     canResolveStale,
+    gate,
     { failOnWriteError: options.failOnWriteError }
   );
 
@@ -1614,9 +1623,9 @@ async function cleanupOrphanedComments(
     return [];
   }
 
-  const canWriteReviewFeedback = () => canWriteReviewFeedbackForCurrentHead(octokit, context);
+  const gate = new ReviewFeedbackGate(octokit, context);
 
-  if (!await canWriteReviewFeedback()) {
+  if (!await gate.canWrite()) {
     return [];
   }
 
@@ -1646,9 +1655,8 @@ async function cleanupOrphanedComments(
 
   const { allResolved, autoResolvedByFixEvaluation, autoResolvedByStaleCheck, findingObservations } =
     await evaluateFixesAndResolveStale(
-      octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, auxiliaryOptions, {
+      octokit, context, existingComments, [], new Set(), true, inputs.anthropicApiKey, auxiliaryOptions, gate, {
         failOnWriteError: options.failOnWriteError,
-        canWriteReviewFeedback,
       }
     );
   const activeSpan = Sentry.getActiveSpan();
@@ -1659,7 +1667,7 @@ async function cleanupOrphanedComments(
   if (allResolved) {
     const previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
     if (previousReviewInfo?.state === 'CHANGES_REQUESTED') {
-      if (!await canWriteReviewFeedback()) {
+      if (!await gate.canWrite()) {
         return findingObservations;
       }
 
@@ -1840,9 +1848,10 @@ async function runReportMode(
       logAction(`Previous Warden review state: ${previousReviewInfo.state}`);
     }
 
+    const gate = new ReviewFeedbackGate(octokit, context);
     reviewPhase = await Sentry.startSpan(
       { op: 'workflow.review', name: 'post reviews' },
-      () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, {
+      () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, gate, {
         failOnPostError: true,
       }),
     );
@@ -1851,24 +1860,16 @@ async function runReportMode(
     canResolveStale = shouldResolveStaleComments(results);
     const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
     span.setAttribute('warden.finding.count', allFindings.length);
-    const canWriteReviewFeedback = () => canWriteReviewFeedbackForCurrentHead(octokit, context);
 
     await Sentry.startSpan(
       { op: 'workflow.resolve', name: 'resolve stale comments' },
       async (resolveSpan) => {
-        const canMutateReviewFeedback =
-          canResolveStale &&
-          reviewPhase.reviewFeedbackWritable &&
-          await canWriteReviewFeedback();
         const resolutionResult = await evaluateFixesAndResolveStale(
           octokit, context, reviewPhase.fetchedComments,
           allFindings, reviewPhase.activeWardenCommentIds,
-          canMutateReviewFeedback, inputs.anthropicApiKey,
-          auxiliaryOptions,
-          {
-            failOnWriteError: true,
-            canWriteReviewFeedback,
-          },
+          canResolveStale, inputs.anthropicApiKey,
+          auxiliaryOptions, gate,
+          { failOnWriteError: true },
         );
         resolveSpan.setAttribute(
           'warden.feedback.auto_resolve.fix_eval_count',
@@ -1882,17 +1883,13 @@ async function runReportMode(
       },
     );
 
-    const canDismissReview =
-      canResolveStale &&
-      reviewPhase.reviewFeedbackWritable &&
-      await canWriteReviewFeedback();
-
     await finalizeReportWorkflow(
       octokit, context, previousReviewInfo,
       results, reviewPhase.reports,
       reviewPhase.findingObservations,
       reviewPhase.shouldFailAction, reviewPhase.failureReasons,
-      canDismissReview,
+      canResolveStale,
+      gate,
       triggerErrors,
       { failOnWriteError: true },
     );
@@ -2033,13 +2030,14 @@ export async function runPRWorkflow(
         throw error;
       }
 
+      const gate = new ReviewFeedbackGate(octokit, context);
       const reviewPhase = await runOrFailCore(
         octokit,
         context,
         coreCheckId,
         () => Sentry.startSpan(
           { op: 'workflow.review', name: 'post reviews' },
-          () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions),
+          () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, gate),
         ),
       );
 
@@ -2047,7 +2045,6 @@ export async function runPRWorkflow(
       const canResolveStale = shouldResolveStaleComments(results);
       const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
       span.setAttribute('warden.finding.count', allFindings.length);
-      const canWriteReviewFeedback = () => canWriteReviewFeedbackForCurrentHead(octokit, context);
 
       await runOrFailCore(
         octokit,
@@ -2056,16 +2053,11 @@ export async function runPRWorkflow(
         () => Sentry.startSpan(
           { op: 'workflow.resolve', name: 'resolve stale comments' },
           async (resolveSpan) => {
-            const canMutateReviewFeedback =
-              canResolveStale &&
-              reviewPhase.reviewFeedbackWritable &&
-              await canWriteReviewFeedback();
             const resolutionResult = await evaluateFixesAndResolveStale(
               octokit, context, reviewPhase.fetchedComments,
               allFindings, reviewPhase.activeWardenCommentIds,
-              canMutateReviewFeedback, inputs.anthropicApiKey,
-              auxiliaryOptions,
-              { canWriteReviewFeedback },
+              canResolveStale, inputs.anthropicApiKey,
+              auxiliaryOptions, gate,
             );
             resolveSpan.setAttribute(
               'warden.feedback.auto_resolve.fix_eval_count',
@@ -2080,17 +2072,13 @@ export async function runPRWorkflow(
         ),
       );
 
-      const canDismissReview =
-        canResolveStale &&
-        reviewPhase.reviewFeedbackWritable &&
-        await canWriteReviewFeedback();
-
       await finalizeWorkflow(
         octokit, context, previousReviewInfo, coreCheckId,
         results, reviewPhase.reports,
         reviewPhase.findingObservations,
         reviewPhase.shouldFailAction, reviewPhase.failureReasons,
-        canDismissReview,
+        canResolveStale,
+        gate,
         triggerErrors,
       );
 

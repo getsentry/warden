@@ -123,19 +123,27 @@ function recenterReportFindingIds(reportFindings: Finding[], actions: Deduplicat
 // -----------------------------------------------------------------------------
 
 /**
+ * How a review post attempt ended:
+ * - `posted`: the review was created on the PR
+ * - `checks_only`: findings could not be attached inline; they stay in Checks
+ * - `no_review`: nothing to post (no PR context or no rendered review)
+ */
+type PostReviewOutcome = 'posted' | 'checks_only' | 'no_review';
+
+/**
  * Post a PR review to GitHub.
  */
 async function postReviewToGitHub(
   octokit: Octokit,
   context: EventContext,
   result: RenderResult
-): Promise<boolean> {
+): Promise<PostReviewOutcome> {
   if (!context.pullRequest) {
-    return false;
+    return 'no_review';
   }
 
   if (!result.review) {
-    return false;
+    return 'no_review';
   }
 
   const { owner, name: repo } = context.repository;
@@ -156,7 +164,7 @@ async function postReviewToGitHub(
   // Non-blocking body-only reviews cannot be resolved as review threads.
   // Keep those findings in Checks instead of leaving stale PR timeline entries.
   if (reviewComments.length === 0 && result.review.event === 'COMMENT') {
-    return false;
+    return 'checks_only';
   }
 
   await octokit.pulls.createReview({
@@ -169,7 +177,7 @@ async function postReviewToGitHub(
     comments: reviewComments,
   });
 
-  return true;
+  return 'posted';
 }
 
 /**
@@ -405,9 +413,9 @@ export async function postTriggerReview(
         });
       }
 
-      let posted = false;
+      let postOutcome: PostReviewOutcome = 'no_review';
       try {
-        posted = await postReviewToGitHub(octokit, context, renderResultToPost);
+        postOutcome = await postReviewToGitHub(octokit, context, renderResultToPost);
       } catch (error) {
         if (!isLineResolutionError(error)) {
           throw error;
@@ -415,15 +423,30 @@ export async function postTriggerReview(
         if (renderResultToPost.review?.event === 'REQUEST_CHANGES') {
           warnAction(`Inline comments failed for ${result.triggerName}, posting findings in review body`);
           const fallback = moveCommentsToBody(renderResultToPost, postedFindings, skill);
-          posted = await postReviewToGitHub(octokit, context, fallback);
+          postOutcome = await postReviewToGitHub(octokit, context, fallback);
         } else {
           warnAction(`Inline comments failed for ${result.triggerName}, falling back to checks only`);
+          postOutcome = 'checks_only';
         }
       }
-      if (!posted) {
+      if (postOutcome === 'checks_only') {
+        for (const finding of postedFindings) {
+          findingObservations.push({ outcome: 'skipped', finding, skill, skippedReason: 'no_inline_location' });
+        }
         return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
       }
+      if (postOutcome !== 'posted') {
+        return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
+      }
+      // COMMENT reviews post with an empty body, so locationless findings that
+      // the renderer placed in the body never reach the PR. Record them as
+      // checks-only instead of claiming they were posted.
+      const bodyStripped = renderResultToPost.review?.event === 'COMMENT';
       for (const finding of postedFindings) {
+        if (bodyStripped && !finding.location) {
+          findingObservations.push({ outcome: 'skipped', finding, skill, skippedReason: 'no_inline_location' });
+          continue;
+        }
         findingObservations.push({ outcome: 'posted', finding, skill });
         const comment = findingToExistingComment(finding, skill);
         if (comment) {

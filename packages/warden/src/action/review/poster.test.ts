@@ -264,8 +264,50 @@ describe('postTriggerReview', () => {
     }, mockDeps);
 
     expect(postResult.posted).toBe(false);
-    expect(postResult.findingObservations).toEqual([]);
+    expect(postResult.findingObservations).toEqual([
+      { outcome: 'skipped', finding, skill: 'test-skill', skippedReason: 'no_inline_location' },
+    ]);
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+  });
+
+  it('marks locationless findings in a mixed review as checks-only instead of posted', async () => {
+    const inlineFinding = createFinding();
+    const bodyFinding = createFinding({ id: 'test-2', title: 'Locationless finding', location: undefined });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 2 issues',
+        findings: [inlineFinding, bodyFinding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Locationless finding body',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
+
+    const postResult = await postTriggerReview({
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    }, mockDeps);
+
+    expect(postResult.posted).toBe(true);
+    expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'COMMENT', body: '' })
+    );
+    expect(postResult.findingObservations).toEqual([
+      { outcome: 'posted', finding: inlineFinding, skill: 'test-skill' },
+      { outcome: 'skipped', finding: bodyFinding, skill: 'test-skill', skippedReason: 'no_inline_location' },
+    ]);
   });
 
   it('deduplicates findings against existing comments', async () => {
@@ -682,7 +724,9 @@ describe('postTriggerReview', () => {
 
     expect(postResult.posted).toBe(false);
     expect(postResult.newComments).toHaveLength(0);
-    expect(postResult.findingObservations).toEqual([]);
+    expect(postResult.findingObservations).toEqual([
+      { outcome: 'skipped', finding, skill: 'test-skill', skippedReason: 'no_inline_location' },
+    ]);
     expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
   });
 

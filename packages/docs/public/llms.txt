@@ -550,7 +550,7 @@ Creates `warden.toml` and `.github/workflows/warden.yml`.
 5. If `requestChanges` is enabled, the review requests changes when findings exceed `failOn`
 6. If `failCheck` is enabled, the check run fails when findings exceed `failOn`
 
-Warden skips PR review feedback when the workflow run is no longer analyzing the current PR head. Non-blocking findings without an inline diff location stay in Checks instead of creating timeline comments that cannot be resolved later.
+Warden skips PR review feedback when the workflow run is no longer analyzing the current PR head. If the current head cannot be verified, Warden skips the write and fails the run rather than silently dropping a blocking review. Non-blocking findings without an inline diff location stay in Checks instead of creating timeline comments that cannot be resolved later.
 
 ### GitHub Actions Workflow
 
