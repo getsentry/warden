@@ -43,8 +43,8 @@ import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
-import { ReviewFeedbackGate } from './review-feedback-gate.js';
-import type { ReviewFeedbackWritability } from './review-feedback-gate.js';
+import { ReviewFeedbackGate } from '../review/review-feedback-gate.js';
+import type { ReviewFeedbackWritability } from '../review/review-feedback-gate.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
@@ -568,6 +568,7 @@ async function postReviewsAndTrackFailures(
       if (writability !== 'blocked') {
         writability = await gate.check();
       }
+      let reviewPosted = false;
       if (writability === 'writable') {
         const postResult = await postTriggerReview(
           {
@@ -579,16 +580,20 @@ async function postReviewsAndTrackFailures(
             maxRetries: auxiliaryOptions.maxRetries,
             failOnPostError: options.failOnPostError,
           },
-          { octokit, context }
+          { octokit, context, feedbackGate: gate }
         );
 
         // Add newly posted comments to existing comments for cross-trigger deduplication
         existingComments.push(...postResult.newComments);
         postResult.activeWardenCommentIds.forEach((id) => activeWardenCommentIds.add(id));
         findingObservations.push(...postResult.findingObservations);
-      } else if (writability === 'unknown' && wouldPostBlockingReview(result)) {
-        // A stale head skips silently (the newer run owns feedback), but an
-        // unverifiable head must not silently swallow a blocking review.
+        reviewPosted = postResult.posted;
+      }
+      // A stale head skips silently (the newer run owns feedback), but an
+      // unverifiable head must not silently swallow a blocking review.
+      // Evaluated after the post attempt so a head that becomes unverifiable
+      // during the poster's own LLM phases is escalated too.
+      if (!reviewPosted && wouldPostBlockingReview(result) && (await gate.check()) === 'unknown') {
         shouldFailAction = true;
         failureReasons.push(
           `${result.triggerName}: Could not verify the PR head; blocking review was not posted`

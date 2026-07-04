@@ -24,6 +24,7 @@ import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
+import type { ReviewFeedbackGate } from './review-feedback-gate.js';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -67,6 +68,8 @@ export interface ReviewPostResult {
 export interface ReviewPosterDeps {
   octokit: Octokit;
   context: EventContext;
+  /** Head-freshness gate shared with the rest of the workflow run. */
+  feedbackGate: ReviewFeedbackGate;
 }
 
 function emptyReviewPostResult(
@@ -341,6 +344,13 @@ export async function postTriggerReview(
           activeWardenCommentIds.add(action.existingComment.id);
         }
       }
+    }
+
+    // Consolidation and dedup above can spend minutes in LLM calls. Re-verify
+    // head freshness before the first GitHub write (duplicate-action comment
+    // updates below, then the review itself).
+    if (!(await deps.feedbackGate.canWrite())) {
+      return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
     }
 
     // Process duplicate actions (update Warden comments, add reactions)

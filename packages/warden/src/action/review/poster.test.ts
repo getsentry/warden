@@ -21,6 +21,7 @@ vi.mock('../../output/renderer.js', () => ({
 
 import { deduplicateFindings, processDuplicateActions, findingToExistingComment, consolidateBatchFindings } from '../../output/dedup.js';
 import { renderSkillReport } from '../../output/renderer.js';
+import { ReviewFeedbackGate } from './review-feedback-gate.js';
 
 describe('postTriggerReview', () => {
   beforeEach(() => {
@@ -35,11 +36,20 @@ describe('postTriggerReview', () => {
       removedCount: 0,
       removedFindings: [],
     }));
+
+    vi.mocked(mockOctokit.pulls.createReview).mockResolvedValue({} as never);
+    vi.mocked(mockOctokit.pulls.get).mockResolvedValue({ data: { head: { sha: 'abc123' } } } as never);
+    mockDeps = {
+      octokit: mockOctokit,
+      context: mockContext,
+      feedbackGate: new ReviewFeedbackGate(mockOctokit, mockContext),
+    };
   });
 
   const mockOctokit = {
     pulls: {
       createReview: vi.fn().mockResolvedValue({}),
+      get: vi.fn().mockResolvedValue({ data: { head: { sha: 'abc123' } } }),
     },
   } as unknown as Octokit;
 
@@ -61,10 +71,8 @@ describe('postTriggerReview', () => {
     repoPath: '/test/path',
   };
 
-  const mockDeps: ReviewPosterDeps = {
-    octokit: mockOctokit,
-    context: mockContext,
-  };
+  // Rebuilt per test so the gate's head-freshness cache starts empty.
+  let mockDeps: ReviewPosterDeps;
 
   const createFinding = (overrides: Partial<Finding> = {}): Finding => ({
     id: 'test-1',
@@ -268,6 +276,48 @@ describe('postTriggerReview', () => {
       { outcome: 'skipped', finding, skill: 'test-skill', skippedReason: 'no_inline_location' },
     ]);
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+  });
+
+  it('skips all GitHub writes when the PR head advances during consolidation', async () => {
+    const findings = [createFinding(), createFinding({ id: 'test-2', title: 'Second finding' })];
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 2 issues',
+        findings,
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: '',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    // The head moves while the LLM consolidation runs.
+    vi.mocked(consolidateBatchFindings).mockImplementation(async (batch) => {
+      vi.mocked(mockOctokit.pulls.get).mockResolvedValue({ data: { head: { sha: 'new-head-sha' } } } as never);
+      return { findings: batch, removedCount: 0, removedFindings: [] };
+    });
+    vi.mocked(deduplicateFindings).mockResolvedValue({
+      newFindings: findings,
+      duplicateActions: [{ finding: findings[0]!, existingComment: createExistingComment(), matchType: 'hash', originalFindingId: findings[0]!.id }],
+    } as never);
+
+    const postResult = await postTriggerReview({
+      result,
+      existingComments: [createExistingComment()],
+      apiKey: 'test-key',
+    }, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+    expect(processDuplicateActions).not.toHaveBeenCalled();
   });
 
   it('marks locationless findings in a mixed review as checks-only instead of posted', async () => {
