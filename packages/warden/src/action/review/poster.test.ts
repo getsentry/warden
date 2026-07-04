@@ -320,6 +320,57 @@ describe('postTriggerReview', () => {
     expect(processDuplicateActions).not.toHaveBeenCalled();
   });
 
+  it('skips the review write when the PR head advances during duplicate processing', async () => {
+    // The gate verifies before duplicate processing; advance the clock past
+    // its cache window inside that write phase so the pre-review check
+    // re-fetches the head.
+    let now = 1_750_000_000_000;
+    const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const findings = [createFinding(), createFinding({ id: 'test-2', title: 'Second finding' })];
+      const result: TriggerResult = {
+        triggerName: 'test-trigger',
+        skillName: 'test-skill',
+        report: {
+          skill: 'test-skill',
+          summary: 'Found 2 issues',
+          findings,
+          usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+        },
+        renderResult: createRenderResult({
+          review: {
+            event: 'COMMENT',
+            body: '',
+            comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+          },
+        }),
+        reportOn: 'low',
+      };
+
+      vi.mocked(deduplicateFindings).mockResolvedValue({
+        newFindings: [findings[0]!],
+        duplicateActions: [{ finding: findings[1]!, existingComment: createExistingComment(), matchType: 'hash', originalFindingId: findings[1]!.id }],
+      } as never);
+      vi.mocked(processDuplicateActions).mockImplementation(async () => {
+        now += 60_000;
+        vi.mocked(mockOctokit.pulls.get).mockResolvedValue({ data: { head: { sha: 'new-head-sha' } } } as never);
+        return { updated: 1, reacted: 0, skipped: 0, failed: 0 };
+      });
+
+      const postResult = await postTriggerReview({
+        result,
+        existingComments: [createExistingComment()],
+        apiKey: 'test-key',
+      }, mockDeps);
+
+      expect(processDuplicateActions).toHaveBeenCalled();
+      expect(postResult.posted).toBe(false);
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+    } finally {
+      dateNowSpy.mockRestore();
+    }
+  });
+
   it('marks locationless findings in a mixed review as checks-only instead of posted', async () => {
     const inlineFinding = createFinding();
     const bodyFinding = createFinding({ id: 'test-2', title: 'Locationless finding', location: undefined });

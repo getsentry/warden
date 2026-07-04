@@ -130,8 +130,9 @@ function recenterReportFindingIds(reportFindings: Finding[], actions: Deduplicat
  * - `posted`: the review was created on the PR
  * - `checks_only`: findings could not be attached inline; they stay in Checks
  * - `no_review`: nothing to post (no PR context or no rendered review)
+ * - `blocked`: the run may no longer write feedback for the current PR head
  */
-type PostReviewOutcome = 'posted' | 'checks_only' | 'no_review';
+type PostReviewOutcome = 'posted' | 'checks_only' | 'no_review' | 'blocked';
 
 /**
  * Post a PR review to GitHub.
@@ -139,7 +140,8 @@ type PostReviewOutcome = 'posted' | 'checks_only' | 'no_review';
 async function postReviewToGitHub(
   octokit: Octokit,
   context: EventContext,
-  result: RenderResult
+  result: RenderResult,
+  feedbackGate: ReviewFeedbackGate
 ): Promise<PostReviewOutcome> {
   if (!context.pullRequest) {
     return 'no_review';
@@ -168,6 +170,12 @@ async function postReviewToGitHub(
   // Keep those findings in Checks instead of leaving stale PR timeline entries.
   if (reviewComments.length === 0 && result.review.event === 'COMMENT') {
     return 'checks_only';
+  }
+
+  // Duplicate-action comment updates between the poster's gate check and this
+  // write can outlive the gate's cache window; verify once more.
+  if (!(await feedbackGate.canWrite())) {
+    return 'blocked';
   }
 
   await octokit.pulls.createReview({
@@ -425,7 +433,7 @@ export async function postTriggerReview(
 
       let postOutcome: PostReviewOutcome = 'no_review';
       try {
-        postOutcome = await postReviewToGitHub(octokit, context, renderResultToPost);
+        postOutcome = await postReviewToGitHub(octokit, context, renderResultToPost, deps.feedbackGate);
       } catch (error) {
         if (!isLineResolutionError(error)) {
           throw error;
@@ -433,7 +441,7 @@ export async function postTriggerReview(
         if (renderResultToPost.review?.event === 'REQUEST_CHANGES') {
           warnAction(`Inline comments failed for ${result.triggerName}, posting findings in review body`);
           const fallback = moveCommentsToBody(renderResultToPost, postedFindings, skill);
-          postOutcome = await postReviewToGitHub(octokit, context, fallback);
+          postOutcome = await postReviewToGitHub(octokit, context, fallback, deps.feedbackGate);
         } else {
           warnAction(`Inline comments failed for ${result.triggerName}, falling back to checks only`);
           postOutcome = 'checks_only';
