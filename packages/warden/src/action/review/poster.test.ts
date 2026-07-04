@@ -424,6 +424,44 @@ describe('postTriggerReview', () => {
     ]);
   });
 
+  it('does not post a blocking review when reportOn filters out all findings', async () => {
+    // reportOn stricter than failOn: the renderer emits a REQUEST_CHANGES
+    // fallback, but the reportOn early return runs before the
+    // needsRequestChanges branch, so nothing posts. The workflow's
+    // wouldPostBlockingReview escalation predicate relies on this.
+    const finding = createFinding({ severity: 'medium' });
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'REQUEST_CHANGES',
+          body: 'Findings exceed the configured threshold. See the GitHub Check for details.',
+          comments: [],
+        },
+      }),
+      reportOn: 'high',
+      failOn: 'medium',
+      requestChanges: true,
+    };
+
+    const postResult = await postTriggerReview({
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    }, mockDeps);
+
+    expect(postResult.posted).toBe(false);
+    expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
+    expect(postResult.findingObservations).toEqual([]);
+  });
+
   it('deduplicates findings against existing comments', async () => {
     const finding = createFinding();
     const result: TriggerResult = {
