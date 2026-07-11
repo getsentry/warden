@@ -137,7 +137,11 @@ for (const filename of readdirSync(resultsDir).filter((file) => file.endsWith(".
       errors.push(`${label}: stable comparison rows must be scored`);
     }
 
-    if (result.timing.analysisChunkMs.count !== result.summary.chunksTotal) {
+    if (
+      result.timing?.analysisChunkMs &&
+      !result.timing.contaminated &&
+      result.timing.analysisChunkMs.count !== result.summary.chunksTotal
+    ) {
       errors.push(
         `${label}: timing.analysisChunkMs.count=${result.timing.analysisChunkMs.count} but chunksTotal=${result.summary.chunksTotal}`,
       );

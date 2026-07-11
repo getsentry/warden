@@ -1,0 +1,2792 @@
+{
+  "runId": "sentry-security-review-pi-openrouter-grok-4-5-high-traced-corpus-2026-07-10-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.39.0",
+  "skill": "security-review",
+  "model": "openrouter/x-ai/grok-4.5",
+  "runtime": "pi",
+  "reasoningLevel": "high",
+  "runOptions": {
+    "runtime": "pi",
+    "model": "openrouter/x-ai/grok-4.5",
+    "effort": "high",
+    "traces": true,
+    "parallel": 4,
+    "reportOn": "low",
+    "minConfidence": "low",
+    "maxTurns": 100
+  },
+  "findingVerification": {
+    "enabled": true,
+    "source": "benchmark-config",
+    "notes": "The benchmark warden.toml explicitly sets defaults.verification.enabled = true."
+  },
+  "traceCapture": {
+    "enabled": true,
+    "coverage": "complete",
+    "tracedShardCount": 6,
+    "tracedChunkCount": 156,
+    "notes": "Run used --traces on all six clean shards. Raw JSONL artifacts are withheld pending sensitive-data review; committed traceSummaries retain sanitized per-chunk metadata only."
+  },
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "56a1495f-0152-4516-8da3-2f4a774a5078",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 4,
+      "durationMs": 233915,
+      "scanCostUSD": 0.75949,
+      "auxiliaryCostUSD": 0.79254975,
+      "costUSD": 1.55203975,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 646787,
+            "outputTokens": 36970,
+            "costUSD": 0.75949,
+            "cacheReadInputTokens": 503936,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 229296,
+              "outputTokens": 10374,
+              "cacheReadInputTokens": 159287,
+              "cacheCreationInputTokens": 69961,
+              "cacheCreation5mInputTokens": 69961,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.7764897500000001
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 1894,
+              "outputTokens": 169,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 1892,
+              "cacheCreation5mInputTokens": 1892,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.01606
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 877977,
+            "outputTokens": 47513,
+            "costUSD": 1.55203975,
+            "cacheReadInputTokens": 663223,
+            "cacheCreationInputTokens": 71853,
+            "cacheCreation5mInputTokens": 71853,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 6,
+      "traceIds": [
+        "3d4ce8a377322851cfde290bdb540ec7",
+        "fa58fc8c38f03c552b8a77d2b6b46b4b",
+        "8646099c1ed05b97a60f227df8135281",
+        "6b8befd39fafe00b67da3f27ad9f82ab",
+        "3e6dc2194d84b592901d4a8549ca398a",
+        "22d3ae931d5a78613329da1914b21675"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-grok-4-5-high-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "ee686684-68b1-46e3-932c-ecbf2e8fcff6",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 2,
+      "durationMs": 575277,
+      "scanCostUSD": 0.594552,
+      "auxiliaryCostUSD": 0.7641454999999999,
+      "costUSD": 1.3586975,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 489099,
+            "outputTokens": 41211,
+            "costUSD": 0.594552,
+            "cacheReadInputTokens": 420608,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 196257,
+              "outputTokens": 16367,
+              "cacheReadInputTokens": 153141,
+              "cacheCreationInputTokens": 43078,
+              "cacheCreation5mInputTokens": 43078,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.755173
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 1396,
+              "outputTokens": 10,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 1394,
+              "cacheCreation5mInputTokens": 1394,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.0089725
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 686752,
+            "outputTokens": 57588,
+            "costUSD": 1.3586975,
+            "cacheReadInputTokens": 573749,
+            "cacheCreationInputTokens": 44472,
+            "cacheCreation5mInputTokens": 44472,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "a57fde8a7faaf0179ba02a8212c531ed",
+        "3743cb359d145127d65344f8971819b8"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-grok-4-5-high-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "ab2c7644-f303-4d91-88ea-9d6ac99a0e2d",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 619292,
+      "scanCostUSD": 0.6247140000000001,
+      "auxiliaryCostUSD": 0.37188725,
+      "costUSD": 0.9966012500000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 478854,
+            "outputTokens": 49365,
+            "costUSD": 0.6247140000000001,
+            "cacheReadInputTokens": 419456,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 122897,
+              "outputTokens": 6980,
+              "cacheReadInputTokens": 99252,
+              "cacheCreationInputTokens": 23629,
+              "cacheCreation5mInputTokens": 23629,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.37188725
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 601751,
+            "outputTokens": 56345,
+            "costUSD": 0.9966012500000001,
+            "cacheReadInputTokens": 518708,
+            "cacheCreationInputTokens": 23629,
+            "cacheCreation5mInputTokens": 23629,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "116fa0a6b3821eb721096307adff047e",
+        "a1adf00de95f7943453c121bf0e644b9"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-grok-4-5-high-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "667e4c72-7061-4c23-87ff-2815bb08cf4f",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 18,
+      "durationMs": 2251675,
+      "scanCostUSD": 11.013098,
+      "auxiliaryCostUSD": 4.241130500000001,
+      "costUSD": 15.2542285,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 9178888,
+            "outputTokens": 627375,
+            "costUSD": 11.013098,
+            "cacheReadInputTokens": 7405952,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 1391635,
+              "outputTokens": 71747,
+              "cacheReadInputTokens": 1099096,
+              "cacheCreationInputTokens": 292277,
+              "cacheCreation5mInputTokens": 292277,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 4.17126425
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 7759,
+              "outputTokens": 855,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 7757,
+              "cacheCreation5mInputTokens": 7757,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.06986624999999999
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 10578282,
+            "outputTokens": 699977,
+            "costUSD": 15.2542285,
+            "cacheReadInputTokens": 8505048,
+            "cacheCreationInputTokens": 300034,
+            "cacheCreation5mInputTokens": 300034,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 80,
+      "traceIds": [
+        "dad3a42aaabc639442592e649e8804ec",
+        "dad3a42aaabc639442592e649e8804ec",
+        "afdf7fb0c9090c97e065470d37e70e3d",
+        "dad3a42aaabc639442592e649e8804ec",
+        "dad3a42aaabc639442592e649e8804ec",
+        "17106e9f48eeecd5c4c7673638d63b69",
+        "dad3a42aaabc639442592e649e8804ec",
+        "dad3a42aaabc639442592e649e8804ec",
+        "dad3a42aaabc639442592e649e8804ec",
+        "ee076f05cc2e5b25d5302346f0fc29aa",
+        "77980b85cbb772178cd4ea61f7283760",
+        "3aab78b75fd0d2fdf689f527b1150030",
+        "afdf7fb0c9090c97e065470d37e70e3d",
+        "80b9e2009557f534c350103f230e6c8c",
+        "afdf7fb0c9090c97e065470d37e70e3d",
+        "70a5763afd4722c7f1a5ccf82a175c4d",
+        "77192f2bcd20aa276b0eb3a26249ef88",
+        "80b9e2009557f534c350103f230e6c8c",
+        "70a5763afd4722c7f1a5ccf82a175c4d",
+        "70a5763afd4722c7f1a5ccf82a175c4d",
+        "afdf7fb0c9090c97e065470d37e70e3d",
+        "cad6f83d7ea1bf9a85ef7e6377af7119",
+        "80b9e2009557f534c350103f230e6c8c",
+        "77192f2bcd20aa276b0eb3a26249ef88",
+        "afdf7fb0c9090c97e065470d37e70e3d",
+        "e7df7c433105f25e3cc195d4dae5a3ae",
+        "e451b57b55e3964f4a70abf73c04ac47",
+        "9896f6d57efe6e8b5c201b747437e4ad",
+        "9896f6d57efe6e8b5c201b747437e4ad",
+        "c91a872e790cf186a5eaaa2bd4a51810",
+        "fee6e9f1b9364cbbaac427da7b0676d1",
+        "431326038a0cb959d81b522289657bb6",
+        "db70a153b5536585782ee42c43ac111d",
+        "3ed69515d8b44f44c3174c4aba1b2d43",
+        "5a655b15602c9367e184dbb7ed76c636",
+        "c91a872e790cf186a5eaaa2bd4a51810",
+        "80b333971ee244528068aa3cee1c36e1",
+        "4c82ec35338a8ce9841f2bf647f421e0",
+        "6306c4ec8fbd4712a17e289b02fd1658",
+        "80b333971ee244528068aa3cee1c36e1",
+        "6674da03512bb0bfacc059371b8745cc",
+        "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+        "96156c714d03189967eae97992f63d70",
+        "96156c714d03189967eae97992f63d70",
+        "96156c714d03189967eae97992f63d70",
+        "96156c714d03189967eae97992f63d70",
+        "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+        "6306c4ec8fbd4712a17e289b02fd1658",
+        "96156c714d03189967eae97992f63d70",
+        "96156c714d03189967eae97992f63d70",
+        "9a902ba9a23141940295de7403864546",
+        "96156c714d03189967eae97992f63d70",
+        "96156c714d03189967eae97992f63d70",
+        "96156c714d03189967eae97992f63d70",
+        "d566826b26210f83f186a605e49b9266",
+        "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+        "26b28a10f873e9ae5b60e90b79f011b5",
+        "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+        "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+        "735bdf56e76216a4ac6ae4700bfeba81",
+        "1bcab896882856b50087a7260ef1030c",
+        "3be67b97285781e8d76a9189b410ec96",
+        "39291568b4eade8fca737e8f9a5b9bc9",
+        "39291568b4eade8fca737e8f9a5b9bc9",
+        "ac79ba074f8c43cad9dbe07486d51c21",
+        "7e9ef7858a34d456fa5c5c1dd4666348",
+        "7e9ef7858a34d456fa5c5c1dd4666348",
+        "4aae7aa9984797ac88cbd4b4532e0487",
+        "1bcab896882856b50087a7260ef1030c",
+        "7e9ef7858a34d456fa5c5c1dd4666348",
+        "4aae7aa9984797ac88cbd4b4532e0487",
+        "7e9ef7858a34d456fa5c5c1dd4666348",
+        "ba005fdbeebe6a1f96b845840d45eaea",
+        "87dfab5b8541ab54c3d7778221a236ce",
+        "87dfab5b8541ab54c3d7778221a236ce",
+        "87dfab5b8541ab54c3d7778221a236ce",
+        "4edaa6ac2f2c7add636cdc051123f2ba",
+        "4edaa6ac2f2c7add636cdc051123f2ba",
+        "4edaa6ac2f2c7add636cdc051123f2ba",
+        "ba005fdbeebe6a1f96b845840d45eaea"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-grok-4-5-high-corpus-7f41cc50.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "8273afd3-e0d2-4e49-81c0-c355db000d3b",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 15,
+      "durationMs": 4457276,
+      "scanCostUSD": 13.233276000000002,
+      "auxiliaryCostUSD": 5.525152749999998,
+      "costUSD": 18.75842875,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 12865281,
+            "outputTokens": 678783,
+            "costUSD": 13.233276000000002,
+            "cacheReadInputTokens": 11046656,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "extraction": {
+            "usage": {
+              "inputTokens": 2298,
+              "outputTokens": 1341,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "cacheCreation5mInputTokens": 0,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.045015000000000006
+            }
+          },
+          "verification": {
+            "usage": {
+              "inputTokens": 2450732,
+              "outputTokens": 83132,
+              "cacheReadInputTokens": 2086708,
+              "cacheCreationInputTokens": 363618,
+              "cacheCreation5mInputTokens": 363618,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 5.396296499999999
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 7227,
+              "outputTokens": 1547,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 7225,
+              "cacheCreation5mInputTokens": 7225,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.08384125
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 15325538,
+            "outputTokens": 764803,
+            "costUSD": 18.75842875,
+            "cacheReadInputTokens": 13133364,
+            "cacheCreationInputTokens": 370843,
+            "cacheCreation5mInputTokens": 370843,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 64,
+      "traceIds": [
+        "1aa40b31a35be0beb01f1c13cc10c9be",
+        "01d2dd9f5372a940c632a9297abad9df",
+        "ed222891fd5cd17acb8f328927665af6",
+        "870f91d25d4ab7529218d0909ab7d4ab",
+        "d87a11431a17006a2e959bd959de76da",
+        "870f91d25d4ab7529218d0909ab7d4ab",
+        "870f91d25d4ab7529218d0909ab7d4ab",
+        "b5750e7680ed3d2bf7d11b84522ab975",
+        "870f91d25d4ab7529218d0909ab7d4ab",
+        "870f91d25d4ab7529218d0909ab7d4ab",
+        "5e6d3bf642539d7134dd50518f71fbf3",
+        "870f91d25d4ab7529218d0909ab7d4ab",
+        "13b9579cea660377ce6a2e6f568bcae5",
+        "7b0eaf08fd77efc3576a7ba27bc10ba3",
+        "f82846218c6eee2f845b0fe0f5ce89fb",
+        "2b946035368e3896d15a11986f6ddd11",
+        "b8fa8242abcd298d7fbe9cd97aac2f5d",
+        "496d71b5d57ef5a287982e3749fb3a36",
+        "c3e17de6678889527eff53b53ee1024f",
+        "f27698b9a66ba1929db5b993a7bc1f38",
+        "b8fa8242abcd298d7fbe9cd97aac2f5d",
+        "496d71b5d57ef5a287982e3749fb3a36",
+        "c3e17de6678889527eff53b53ee1024f",
+        "f27698b9a66ba1929db5b993a7bc1f38",
+        "496d71b5d57ef5a287982e3749fb3a36",
+        "496d71b5d57ef5a287982e3749fb3a36",
+        "b8fa8242abcd298d7fbe9cd97aac2f5d",
+        "f27698b9a66ba1929db5b993a7bc1f38",
+        "c3e17de6678889527eff53b53ee1024f",
+        "f27698b9a66ba1929db5b993a7bc1f38",
+        "91ce957998cf80f9b603157ebabc0b28",
+        "c3e17de6678889527eff53b53ee1024f",
+        "f27698b9a66ba1929db5b993a7bc1f38",
+        "f27698b9a66ba1929db5b993a7bc1f38",
+        "531141e6820d18053be1dfd52752c93d",
+        "4f84a959e77ecd74243903197cee857f",
+        "b8fa8242abcd298d7fbe9cd97aac2f5d",
+        "560693b13c9f767d77b9883a9dfb4dad",
+        "48de28d540cd88cb8110451205902988",
+        "7309749edf8f5be18164f05bd3d9a11a",
+        "0e37b7acaa438407edaed493e08db34e",
+        "c3b611f918f660d5b9d33cc5f572dca8",
+        "0e37b7acaa438407edaed493e08db34e",
+        "01e0d51e140b41bc3dfad6507b70aea5",
+        "5fb2d91c0cc3151c202f68e626a71014",
+        "c3b611f918f660d5b9d33cc5f572dca8",
+        "c3b611f918f660d5b9d33cc5f572dca8",
+        "5fb2d91c0cc3151c202f68e626a71014",
+        "3745b3bcfca192898d8ac68cfd8c7d19",
+        "3745b3bcfca192898d8ac68cfd8c7d19",
+        "c3b611f918f660d5b9d33cc5f572dca8",
+        "01e0d51e140b41bc3dfad6507b70aea5",
+        "01e0d51e140b41bc3dfad6507b70aea5",
+        "f10a535d33e8e966cce8801cd460fe56",
+        "5fb2d91c0cc3151c202f68e626a71014",
+        "b44c978b7f4cbdb9196ccfa494e47de5",
+        "50a039beb5af8e0a55308b6079030933",
+        "fadd82dbb2eddf6913514eb6ce2fa2df",
+        "675a2d1577f4ff2509bc04321b3620ca",
+        "675a2d1577f4ff2509bc04321b3620ca",
+        "8bbbf7b8ee437f427a1be63f15a52503",
+        "675a2d1577f4ff2509bc04321b3620ca",
+        "675a2d1577f4ff2509bc04321b3620ca",
+        "8bbbf7b8ee437f427a1be63f15a52503"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-grok-4-5-high-corpus-9fc06de5.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "f210dab4-06f3-4541-9ce0-55cfe3407db9",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 4914335,
+      "scanCostUSD": 0.6491819999999999,
+      "auxiliaryCostUSD": 0.07706349999999995,
+      "costUSD": 0.7262454999999999,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 724701,
+            "outputTokens": 31270,
+            "costUSD": 0.6491819999999999,
+            "cacheReadInputTokens": 658560,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 13090,
+              "outputTokens": 1101,
+              "cacheReadInputTokens": 5612,
+              "cacheCreationInputTokens": 7474,
+              "cacheCreation5mInputTokens": 7474,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.07706350000000001
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 737791,
+            "outputTokens": 32371,
+            "costUSD": 0.7262454999999999,
+            "cacheReadInputTokens": 664172,
+            "cacheCreationInputTokens": 7474,
+            "cacheCreation5mInputTokens": 7474,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/x-ai/grok-4.5",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "a0bc3ca56e8638d05300e33aa33fd73d",
+        "a3e4b8b1ad6f3f918f8f25025b67f0f3"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-grok-4-5-high-corpus-fbecd17d.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "timing": {
+    "contaminated": true,
+    "notes": "macOS entered idle sleep at 2026-07-10 16:39:27 -0400 during the 9fc06de5 shard and did not return to full wake before the benchmark completed. The observed full-run timing and final two shards are not comparable provider-latency measurements.",
+    "analysisChunkMs": {
+      "count": 156,
+      "min": 5238,
+      "p50": 97483,
+      "p90": 289858,
+      "max": 4895775
+    },
+    "shardWallMs": {
+      "total": 13051770
+    },
+    "cleanPreSleepAnalysisChunkMs": {
+      "count": 90,
+      "min": 5238,
+      "p50": 62306,
+      "p90": 204224,
+      "max": 324333,
+      "source": "The first four shards completed before sustained host sleep."
+    }
+  },
+  "usageBreakdown": {
+    "scan": {
+      "usage": {
+        "inputTokens": 24383610,
+        "outputTokens": 1464974,
+        "costUSD": 26.874312,
+        "cacheReadInputTokens": 20455168,
+        "cacheCreationInputTokens": 0,
+        "cacheCreation5mInputTokens": 0,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "openrouter/x-ai/grok-4.5",
+      "runtime": "pi"
+    },
+    "auxiliary": {
+      "verification": {
+        "usage": {
+          "inputTokens": 4403907,
+          "outputTokens": 189701,
+          "costUSD": 11.548174249999999,
+          "cacheReadInputTokens": 3603096,
+          "cacheCreationInputTokens": 800037,
+          "cacheCreation5mInputTokens": 800037,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0
+        }
+      },
+      "merge": {
+        "usage": {
+          "inputTokens": 18276,
+          "outputTokens": 2581,
+          "costUSD": 0.17874,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 18268,
+          "cacheCreation5mInputTokens": 18268,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0
+        }
+      }
+    },
+    "total": {
+      "usage": {
+        "inputTokens": 28808091,
+        "outputTokens": 1658597,
+        "costUSD": 38.646241249999996,
+        "cacheReadInputTokens": 24058264,
+        "cacheCreationInputTokens": 818305,
+        "cacheCreation5mInputTokens": 818305,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "openrouter/x-ai/grok-4.5",
+      "runtime": "pi"
+    }
+  },
+  "traceSummaries": [
+    {
+      "filename": "src/sentry/api/endpoints/internal_ea_features.py",
+      "lineRange": "1-41",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3d4ce8a377322851cfde290bdb540ec7",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 26494,
+      "numTurns": 6,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/organization_plugin_deprecation_info.py",
+      "lineRange": "1-87",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "fa58fc8c38f03c552b8a77d2b6b46b4b",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 50703,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/oauth_userinfo.py",
+      "lineRange": "1-110",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "8646099c1ed05b97a60f227df8135281",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 51994,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6b8befd39fafe00b67da3f27ad9f82ab",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 22623,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+      "lineRange": "1-69",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3e6dc2194d84b592901d4a8549ca398a",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 82482,
+      "numTurns": 6,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "22d3ae931d5a78613329da1914b21675",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 148806,
+      "numTurns": 11,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "1-189",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a57fde8a7faaf0179ba02a8212c531ed",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 311109,
+      "numTurns": 13,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "190-362",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3743cb359d145127d65344f8971819b8",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 154109,
+      "numTurns": 9,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "116fa0a6b3821eb721096307adff047e",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 247981,
+      "numTurns": 12,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a1adf00de95f7943453c121bf0e644b9",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 265168,
+      "numTurns": 14,
+      "findingCount": 1
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1-250",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "dad3a42aaabc639442592e649e8804ec",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 22384,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "251-500",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "dad3a42aaabc639442592e649e8804ec",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 18667,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "afdf7fb0c9090c97e065470d37e70e3d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 47407,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "501-750",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "dad3a42aaabc639442592e649e8804ec",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 12326,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "751-1000",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "dad3a42aaabc639442592e649e8804ec",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 31420,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": ".github/workflows/getsentry-dispatch.yml",
+      "lineRange": "1-97",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "17106e9f48eeecd5c4c7673638d63b69",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 94761,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1001-1250",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "dad3a42aaabc639442592e649e8804ec",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 9418,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1251-1500",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "dad3a42aaabc639442592e649e8804ec",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 25516,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1501-1656",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "dad3a42aaabc639442592e649e8804ec",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 12787,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/organization_pipeline.py",
+      "lineRange": "1-151",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ee076f05cc2e5b25d5302346f0fc29aa",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 180492,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/serializers/models/apiapplication.py",
+      "lineRange": "1-28",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "77980b85cbb772178cd4ea61f7283760",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 65255,
+      "numTurns": 10,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/serializers/models/projectcodeowners.py",
+      "lineRange": "1-118",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3aab78b75fd0d2fdf689f527b1150030",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 29531,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "afdf7fb0c9090c97e065470d37e70e3d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 168924,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "1-170",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "80b9e2009557f534c350103f230e6c8c",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 189457,
+      "numTurns": 12,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "afdf7fb0c9090c97e065470d37e70e3d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 101538,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "1-235",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "70a5763afd4722c7f1a5ccf82a175c4d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 126363,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "1-207",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "77192f2bcd20aa276b0eb3a26249ef88",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 123312,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "171-340",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "80b9e2009557f534c350103f230e6c8c",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 108558,
+      "numTurns": 12,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "236-470",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "70a5763afd4722c7f1a5ccf82a175c4d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 77828,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "471-605",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "70a5763afd4722c7f1a5ccf82a175c4d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 37430,
+      "numTurns": 4,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "607-808",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "afdf7fb0c9090c97e065470d37e70e3d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 154078,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/bitbucket_server/urls.py",
+      "lineRange": "1-12",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "cad6f83d7ea1bf9a85ef7e6377af7119",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 78944,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "341-439",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "80b9e2009557f534c350103f230e6c8c",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 146676,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "208-273",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "77192f2bcd20aa276b0eb3a26249ef88",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 229411,
+      "numTurns": 12,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "809-864",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "afdf7fb0c9090c97e065470d37e70e3d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 105330,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/models/data_forwarder.py",
+      "lineRange": "1-39",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e7df7c433105f25e3cc195d4dae5a3ae",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 12703,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/jira_server/webhooks.py",
+      "lineRange": "1-106",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e451b57b55e3964f4a70abf73c04ac47",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 79074,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "1-215",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9896f6d57efe6e8b5c201b747437e4ad",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 145303,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "216-282",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9896f6d57efe6e8b5c201b747437e4ad",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 56840,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "1-199",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c91a872e790cf186a5eaaa2bd4a51810",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 186858,
+      "numTurns": 10,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/utils/atlassian_connect.py",
+      "lineRange": "1-155",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "fee6e9f1b9364cbbaac427da7b0676d1",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 144693,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/size_analysis/project_preprod_size_analysis_compare_download.py",
+      "lineRange": "1-122",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "431326038a0cb959d81b522289657bb6",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 38872,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/pull_request/organization_pullrequest_size_analysis_download.py",
+      "lineRange": "1-76",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "db70a153b5536585782ee42c43ac111d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 63114,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/releases/endpoints/project_releases_token.py",
+      "lineRange": "1-66",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3ed69515d8b44f44c3174c4aba1b2d43",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 89511,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/projects/services/project_key/impl.py",
+      "lineRange": "1-87",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5a655b15602c9367e184dbb7ed76c636",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 153800,
+      "numTurns": 12,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "200-386",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c91a872e790cf186a5eaaa2bd4a51810",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 204224,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "1-209",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "80b333971ee244528068aa3cee1c36e1",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 324333,
+      "numTurns": 13,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/relocation/api/endpoints/retry.py",
+      "lineRange": "1-148",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4c82ec35338a8ce9841f2bf647f421e0",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 113656,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "1-186",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6306c4ec8fbd4712a17e289b02fd1658",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 180812,
+      "numTurns": 10,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "210-299",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "80b333971ee244528068aa3cee1c36e1",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 173106,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6674da03512bb0bfacc059371b8745cc",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 154163,
+      "numTurns": 12,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "1-215",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 219349,
+      "numTurns": 10,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1-205",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 13521,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "206-410",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 32441,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "411-615",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 10333,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "616-820",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 35402,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "216-430",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 97483,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "187-274",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6306c4ec8fbd4712a17e289b02fd1658",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 145887,
+      "numTurns": 11,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "821-1025",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 22992,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1026-1230",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 46267,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/web/frontend/mailgun_inbound_webhook.py",
+      "lineRange": "1-92",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9a902ba9a23141940295de7403864546",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 160384,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1231-1435",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 20398,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1436-1640",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 13398,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1641-1672",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "96156c714d03189967eae97992f63d70",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 8457,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "d566826b26210f83f186a605e49b9266",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 49134,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "431-645",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 122162,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_detector_anomaly_data.py",
+      "lineRange": "1-179",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "26b28a10f873e9ae5b60e90b79f011b5",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 41945,
+      "numTurns": 5,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "646-860",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 36826,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "861-965",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e70fe1adbcdfd9e8ebfc7960f8915f5f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 54458,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/web/frontend/release_webhook.py",
+      "lineRange": "1-124",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "735bdf56e76216a4ac6ae4700bfeba81",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 215511,
+      "numTurns": 12,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "1-275",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "1bcab896882856b50087a7260ef1030c",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 59780,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry_plugins/jira/client.py",
+      "lineRange": "1-98",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3be67b97285781e8d76a9189b410ec96",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 144099,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "1-279",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "39291568b4eade8fca737e8f9a5b9bc9",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 62306,
+      "numTurns": 4,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "280-392",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "39291568b4eade8fca737e8f9a5b9bc9",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 7794,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/components/featureFlags/hooks/useFlagSeries.tsx",
+      "lineRange": "1-84",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ac79ba074f8c43cad9dbe07486d51c21",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 61150,
+      "numTurns": 9,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "1-254",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "7e9ef7858a34d456fa5c5c1dd4666348",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 51672,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "255-508",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "7e9ef7858a34d456fa5c5c1dd4666348",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 15046,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "1-211",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4aae7aa9984797ac88cbd4b4532e0487",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 262775,
+      "numTurns": 15,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "276-447",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "1bcab896882856b50087a7260ef1030c",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 96637,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "509-762",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "7e9ef7858a34d456fa5c5c1dd4666348",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 10821,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "212-213",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4aae7aa9984797ac88cbd4b4532e0487",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 5238,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "763-908",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "7e9ef7858a34d456fa5c5c1dd4666348",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 19666,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "1-243",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ba005fdbeebe6a1f96b845840d45eaea",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 60478,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "1-234",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "87dfab5b8541ab54c3d7778221a236ce",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 58850,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "235-468",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "87dfab5b8541ab54c3d7778221a236ce",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 30192,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "469-554",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "87dfab5b8541ab54c3d7778221a236ce",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 8741,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "1-242",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4edaa6ac2f2c7add636cdc051123f2ba",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 100113,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "243-484",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4edaa6ac2f2c7add636cdc051123f2ba",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 54389,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "485-559",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4edaa6ac2f2c7add636cdc051123f2ba",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 20902,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "244-274",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ba005fdbeebe6a1f96b845840d45eaea",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 289858,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/organization_pinned_searches.py",
+      "lineRange": "1-113",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "1aa40b31a35be0beb01f1c13cc10c9be",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 45480,
+      "numTurns": 6,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/codecov/endpoints/repository_token_regenerate/repository_token_regenerate.py",
+      "lineRange": "1-68",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "01d2dd9f5372a940c632a9297abad9df",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 71557,
+      "numTurns": 9,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/auth/services/access/impl.py",
+      "lineRange": "1-125",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ed222891fd5cd17acb8f328927665af6",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 163335,
+      "numTurns": 9,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "870f91d25d4ab7529218d0909ab7d4ab",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 209950,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/explore/endpoints/explore_saved_query_detail.py",
+      "lineRange": "1-195",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "d87a11431a17006a2e959bd959de76da",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 61023,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "870f91d25d4ab7529218d0909ab7d4ab",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 16026,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "870f91d25d4ab7529218d0909ab7d4ab",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 5621,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/discover/endpoints/discover_saved_query_detail.py",
+      "lineRange": "1-191",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b5750e7680ed3d2bf7d11b84522ab975",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 148941,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "607-808",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "870f91d25d4ab7529218d0909ab7d4ab",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 45733,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "809-1010",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "870f91d25d4ab7529218d0909ab7d4ab",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 58328,
+      "numTurns": 10,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/api/endpoints/external_team_details.py",
+      "lineRange": "1-113",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5e6d3bf642539d7134dd50518f71fbf3",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 93711,
+      "numTurns": 9,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1011-1083",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "870f91d25d4ab7529218d0909ab7d4ab",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 103016,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "13b9579cea660377ce6a2e6f568bcae5",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 455569,
+      "numTurns": 14,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/flags/endpoints/secrets.py",
+      "lineRange": "1-140",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "7b0eaf08fd77efc3576a7ba27bc10ba3",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 251379,
+      "numTurns": 14,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/jira/webhooks/installed.py",
+      "lineRange": "1-110",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f82846218c6eee2f845b0fe0f5ce89fb",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 172660,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "2b946035368e3896d15a11986f6ddd11",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 137334,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "1-197",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b8fa8242abcd298d7fbe9cd97aac2f5d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 139704,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "496d71b5d57ef5a287982e3749fb3a36",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 107882,
+      "numTurns": 10,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "1-198",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3e17de6678889527eff53b53ee1024f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 278176,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f27698b9a66ba1929db5b993a7bc1f38",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 207787,
+      "numTurns": 10,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "198-394",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b8fa8242abcd298d7fbe9cd97aac2f5d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 351637,
+      "numTurns": 20,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "496d71b5d57ef5a287982e3749fb3a36",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 336540,
+      "numTurns": 18,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "199-396",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3e17de6678889527eff53b53ee1024f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 354611,
+      "numTurns": 12,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f27698b9a66ba1929db5b993a7bc1f38",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 296345,
+      "numTurns": 18,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "496d71b5d57ef5a287982e3749fb3a36",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 133087,
+      "numTurns": 13,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "607-681",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "496d71b5d57ef5a287982e3749fb3a36",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 141018,
+      "numTurns": 12,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "395-591",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b8fa8242abcd298d7fbe9cd97aac2f5d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 309039,
+      "numTurns": 17,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f27698b9a66ba1929db5b993a7bc1f38",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 228465,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "397-594",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3e17de6678889527eff53b53ee1024f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 255256,
+      "numTurns": 14,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "607-808",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f27698b9a66ba1929db5b993a7bc1f38",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 97164,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/options_load.py",
+      "lineRange": "1-115",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "91ce957998cf80f9b603157ebabc0b28",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 180717,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "595-677",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3e17de6678889527eff53b53ee1024f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 119881,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "809-1010",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f27698b9a66ba1929db5b993a7bc1f38",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 85588,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1011-1037",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f27698b9a66ba1929db5b993a7bc1f38",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 18828,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/notifications/notification_action/group_type_notification_registry/handlers/metric_alert_registry_handler.py",
+      "lineRange": "1-108",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "531141e6820d18053be1dfd52752c93d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 97322,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py",
+      "lineRange": "1-128",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4f84a959e77ecd74243903197cee857f",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 121451,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "592-747",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b8fa8242abcd298d7fbe9cd97aac2f5d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 358404,
+      "numTurns": 19,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_approve.py",
+      "lineRange": "1-104",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "560693b13c9f767d77b9883a9dfb4dad",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 113287,
+      "numTurns": 11,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/replays/endpoints/data_export_notifications.py",
+      "lineRange": "1-26",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "48de28d540cd88cb8110451205902988",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 21967,
+      "numTurns": 4,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/replays/endpoints/project_replay_details.py",
+      "lineRange": "1-103",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "7309749edf8f5be18164f05bd3d9a11a",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 45425,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "1-199",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0e37b7acaa438407edaed493e08db34e",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 119912,
+      "numTurns": 10,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "1-191",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3b611f918f660d5b9d33cc5f572dca8",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 189307,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "200-291",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0e37b7acaa438407edaed493e08db34e",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 54648,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "1-192",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "01e0d51e140b41bc3dfad6507b70aea5",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 45028,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "1-231",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5fb2d91c0cc3151c202f68e626a71014",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 136529,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "192-382",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3b611f918f660d5b9d33cc5f572dca8",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 130763,
+      "numTurns": 13,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "383-573",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3b611f918f660d5b9d33cc5f572dca8",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 39681,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "232-462",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5fb2d91c0cc3151c202f68e626a71014",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 73773,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3745b3bcfca192898d8ac68cfd8c7d19",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 266460,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "203-229",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3745b3bcfca192898d8ac68cfd8c7d19",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 33905,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "574-754",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3b611f918f660d5b9d33cc5f572dca8",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 77672,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "193-384",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "01e0d51e140b41bc3dfad6507b70aea5",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 179145,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "385-405",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "01e0d51e140b41bc3dfad6507b70aea5",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 6531,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/supergroups/endpoints/organization_supergroups_by_group.py",
+      "lineRange": "1-103",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "f10a535d33e8e966cce8801cd460fe56",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 79376,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "463-671",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5fb2d91c0cc3151c202f68e626a71014",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 171873,
+      "numTurns": 12,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b44c978b7f4cbdb9196ccfa494e47de5",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 109529,
+      "numTurns": 9,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_open_periods.py",
+      "lineRange": "1-173",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "50a039beb5af8e0a55308b6079030933",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 379078,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/users/models/user_merge_verification_code.py",
+      "lineRange": "1-77",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "fadd82dbb2eddf6913514eb6ce2fa2df",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 645200,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "1-207",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "675a2d1577f4ff2509bc04321b3620ca",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 908106,
+      "numTurns": 15,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "208-414",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "675a2d1577f4ff2509bc04321b3620ca",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 489494,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "1-208",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "8bbbf7b8ee437f427a1be63f15a52503",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 1485635,
+      "numTurns": 11,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "415-621",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "675a2d1577f4ff2509bc04321b3620ca",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 230598,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "622",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "675a2d1577f4ff2509bc04321b3620ca",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 12784,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "209-371",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "8bbbf7b8ee437f427a1be63f15a52503",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 302611,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a0bc3ca56e8638d05300e33aa33fd73d",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 131749,
+      "numTurns": 10,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/organization_events_root_cause_analysis.py",
+      "lineRange": "1-218",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a3e4b8b1ad6f3f918f8f25025b67f0f3",
+      "responseModel": "x-ai/grok-4.5-20260708",
+      "durationMs": 4895775,
+      "numTurns": 27,
+      "findingCount": 0
+    }
+  ],
+  "scores": [
+    {
+      "findingId": "G9G-DF4",
+      "matchedCorpusIds": [
+        "sentry-vuln-003"
+      ],
+      "verdict": "known-found",
+      "notes": "Internal EA features endpoint accessible to any authenticated user"
+    },
+    {
+      "findingId": "XRT-D8F",
+      "matchedCorpusIds": [
+        "sentry-vuln-004"
+      ],
+      "verdict": "known-found",
+      "notes": "UserInfo accepts tokens for inactive users and OAuth apps"
+    },
+    {
+      "findingId": "P7M-WEN",
+      "matchedCorpusIds": [
+        "sentry-vuln-007"
+      ],
+      "verdict": "known-found",
+      "notes": "Empty project list drops scope and lists all orgs' release thresholds"
+    },
+    {
+      "findingId": "R55-HV5",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Cleartext option-value logging is real but is not the allowlist tuple corpus bug at this commit."
+    },
+    {
+      "findingId": "XSX-J8J",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Signed-cookie credential persistence is not the SUPERUSER_ORG_ID fail-open corpus bug."
+    },
+    {
+      "findingId": "SXT-8RS",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "SSO reauth skipping the U2F challenge is not the SUPERUSER_ORG_ID fail-open corpus bug."
+    },
+    {
+      "findingId": "M88-55Q",
+      "matchedCorpusIds": [
+        "sentry-vuln-001"
+      ],
+      "verdict": "known-found",
+      "notes": "Existing members can delete arbitrary invites without a valid token"
+    },
+    {
+      "findingId": "LJ6-VVE",
+      "matchedCorpusIds": [
+        "sentry-vuln-056"
+      ],
+      "verdict": "known-found",
+      "notes": "OAuth client_secret exposed to non-owner via nested authorization serializer"
+    },
+    {
+      "findingId": "KZX-UJE",
+      "matchedCorpusIds": [
+        "sentry-vuln-062"
+      ],
+      "verdict": "known-found",
+      "notes": "CLIENT_SECRET_JWT allows replay after 60s and accepts non-expiring tokens"
+    },
+    {
+      "findingId": "NVE-CQL",
+      "matchedCorpusIds": [
+        "sentry-vuln-047"
+      ],
+      "verdict": "known-found",
+      "notes": "Project rule details resolves workflows without project scope"
+    },
+    {
+      "findingId": "BUZ-5KR",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-unsafe comparisons are not the Statsig timestamp freshness corpus bug."
+    },
+    {
+      "findingId": "CZY-H6L",
+      "matchedCorpusIds": [
+        "sentry-vuln-051"
+      ],
+      "verdict": "known-found",
+      "notes": "Bitbucket Server webhook processes forged events without authenticity check"
+    },
+    {
+      "findingId": "HAA-C9J",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Spoofable forwarded-IP fallback is not the invalid-signature HMAC logging corpus bug."
+    },
+    {
+      "findingId": "WTF-8QA",
+      "matchedCorpusIds": [
+        "sentry-vuln-070"
+      ],
+      "verdict": "known-found",
+      "notes": "Valid Jira Server webhook JWT credential written to application logs"
+    },
+    {
+      "findingId": "YDR-RM5",
+      "matchedCorpusIds": [
+        "sentry-vuln-069",
+        "sentry-vuln-071"
+      ],
+      "verdict": "known-found",
+      "notes": "Atlassian Connect asymmetric JWT does not pin algorithm to RS256 or validate CDN key response"
+    },
+    {
+      "findingId": "27U-P4M",
+      "matchedCorpusIds": [
+        "sentry-vuln-046"
+      ],
+      "verdict": "known-found",
+      "notes": "Missing project-level authorization on size analysis download"
+    },
+    {
+      "findingId": "BF4-2V5",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Issue-link request SSRF is not the missing event-scope corpus bug."
+    },
+    {
+      "findingId": "4HF-HNF",
+      "matchedCorpusIds": [
+        "sentry-vuln-055"
+      ],
+      "verdict": "known-found",
+      "notes": "Org-level Seer RPC methods skip project membership checks"
+    },
+    {
+      "findingId": "E9T-HBP",
+      "matchedCorpusIds": [
+        "sentry-vuln-075"
+      ],
+      "verdict": "known-found",
+      "notes": "Mailgun inbound webhook lacks timestamp/token replay protection"
+    },
+    {
+      "findingId": "CWR-WEW",
+      "matchedCorpusIds": [
+        "sentry-vuln-058"
+      ],
+      "verdict": "known-found",
+      "notes": "Anomaly data endpoint skips project-level authorization"
+    },
+    {
+      "findingId": "FJD-W4W",
+      "matchedCorpusIds": [
+        "sentry-vuln-079"
+      ],
+      "verdict": "known-found",
+      "notes": "JQL injection in search_issues via incomplete quote escaping"
+    },
+    {
+      "findingId": "GYT-8J5",
+      "matchedCorpusIds": [
+        "sentry-vuln-081"
+      ],
+      "verdict": "known-found",
+      "notes": "Unescaped method and header names in getCurlCommand allow shell injection when copied"
+    },
+    {
+      "findingId": "MET-828",
+      "matchedCorpusIds": [
+        "sentry-vuln-082"
+      ],
+      "verdict": "known-found",
+      "notes": "Unescaped feature flag name enables XSS in chart tooltip"
+    },
+    {
+      "findingId": "W9H-REX",
+      "matchedCorpusIds": [
+        "sentry-vuln-084"
+      ],
+      "verdict": "known-found",
+      "notes": "Stored XSS via unescaped seriesName in chart tooltip HTML"
+    },
+    {
+      "findingId": "N7M-4LQ",
+      "matchedCorpusIds": [
+        "sentry-vuln-085"
+      ],
+      "verdict": "known-found",
+      "notes": "App size treemap tooltip XSS via unescaped file names/paths"
+    },
+    {
+      "findingId": "GTH-5H3",
+      "matchedCorpusIds": [
+        "sentry-vuln-018"
+      ],
+      "verdict": "known-found",
+      "notes": "Pinning search updates any position-0 starred GroupSearchView without ownership check"
+    },
+    {
+      "findingId": "X59-AFE",
+      "matchedCorpusIds": [
+        "sentry-vuln-021"
+      ],
+      "verdict": "known-found",
+      "notes": "Any org member can regenerate Codecov upload tokens"
+    },
+    {
+      "findingId": "UZM-MKB",
+      "matchedCorpusIds": [
+        "sentry-vuln-019"
+      ],
+      "verdict": "known-found",
+      "notes": "Control SSO owner override excludes wrong column (mapping PK vs organizationmember_id)"
+    },
+    {
+      "findingId": "UEG-X84",
+      "matchedCorpusIds": [
+        "sentry-vuln-025"
+      ],
+      "verdict": "known-found",
+      "notes": "External team update/delete allows cross-team IDOR within org"
+    },
+    {
+      "findingId": "4XG-RM7",
+      "matchedCorpusIds": [
+        "sentry-vuln-013"
+      ],
+      "verdict": "known-found",
+      "notes": "Perforce password/ticket returned unredacted via configData API"
+    },
+    {
+      "findingId": "ED4-RTN",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Perforce install-probe SSRF is not the configData password exposure corpus bug."
+    },
+    {
+      "findingId": "5PK-9DD",
+      "matchedCorpusIds": [
+        "sentry-vuln-012"
+      ],
+      "verdict": "known-found",
+      "notes": "MS Teams issue actions skip org-integration binding check"
+    },
+    {
+      "findingId": "P23-UUG",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Slack response_url logging is not either same-file authorization corpus bug."
+    },
+    {
+      "findingId": "58V-AUR",
+      "matchedCorpusIds": [
+        "sentry-vuln-030"
+      ],
+      "verdict": "known-found",
+      "notes": "Approve endpoint skips project-level authorization"
+    },
+    {
+      "findingId": "4VF-XW5",
+      "matchedCorpusIds": [
+        "sentry-vuln-015"
+      ],
+      "verdict": "known-found",
+      "notes": "Pub/Sub retry webhook lacks push-identity verification, letting any authenticated user re-run transfer jobs"
+    },
+    {
+      "findingId": "KVB-6U2",
+      "matchedCorpusIds": [
+        "sentry-vuln-034"
+      ],
+      "verdict": "known-found",
+      "notes": "continue_run accepts any run_id without group ownership check"
+    },
+    {
+      "findingId": "UGY-GY6",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Issue-link request SSRF is not the GroupEventJsonView project-access corpus bug."
+    },
+    {
+      "findingId": "55U-SP3",
+      "matchedCorpusIds": [
+        "sentry-vuln-020"
+      ],
+      "verdict": "known-found",
+      "notes": "Merge verification code expiry (is_valid) never enforced"
+    },
+    {
+      "findingId": "F5Z-DR2",
+      "matchedCorpusIds": [
+        "sentry-vuln-037"
+      ],
+      "verdict": "known-found",
+      "notes": "create_external_issue allows mutations without project access"
+    },
+    {
+      "findingId": "KQ8-35T",
+      "matchedCorpusIds": [
+        "sentry-vuln-040"
+      ],
+      "verdict": "known-found",
+      "notes": "Workflow update can disconnect detectors without project alerts permission"
+    },
+    {
+      "findingId": "6A7-QKH",
+      "matchedCorpusIds": [
+        "sentry-vuln-010"
+      ],
+      "verdict": "known-found",
+      "notes": "PUT logs full option values including credentials"
+    }
+  ],
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-07-10",
+    "knownFindingCount": 86,
+    "knownFound": 33,
+    "knownMissed": 53,
+    "knownPartial": 0,
+    "knownFoundRate": 0.3837,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count; duplicate findings map to one unique corpus ID."
+  },
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "skippedFileCount": 0,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 41,
+    "findingsBySeverity": {
+      "low": 7,
+      "medium": 29,
+      "high": 5
+    },
+    "findingsByConfidence": {
+      "high": 38,
+      "medium": 2,
+      "low": 1
+    },
+    "analysisCostUSD": 26.874312,
+    "auxiliaryCostUSD": 11.771929249999996,
+    "costUSD": 38.646241249999996,
+    "inputTokens": 28808091,
+    "outputTokens": 1658597,
+    "cacheReadInputTokens": 24058264,
+    "cacheCreationInputTokens": 818305,
+    "durationMs": 13051770
+  },
+  "notes": "Full benchmark result stitched from one clean Warden run per corpus SHA using --runtime pi --model openrouter/x-ai/grok-4.5 --effort high --traces. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. All 156 chunks completed successfully with complete traces and no repair artifacts. macOS sleep logs show that the host entered sustained idle sleep during the fifth shard and remained in sleep or dark wake through the final shard, so the observed 217.5-minute total and final-shard timing are contaminated. The first four pre-sleep shards covered 90 chunks with a 62.3-second P50, 3.4-minute P90, and 5.4-minute maximum. The run emitted 41 verified findings and spent substantial auxiliary verification cost because of that review volume. Raw JSONL artifacts are withheld pending sensitive-data review."
+}

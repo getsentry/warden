@@ -42,11 +42,40 @@ complete runs with no failed chunks and per-chunk timing data.
   pricing or cost per finding.
 - **P50** and **P90** are per-analysis-chunk durations. **Total** includes
   verifier work, provider latency, queueing, retries, and runtime overhead.
+  Runs with known timing contamination are omitted from the timing table.
 - Scoring is semantic. Same-file findings about different bugs do not count,
   duplicates do not double-count, and one finding can cover multiple corpus
   entries when it catches the same root bug.
 
 ## Analysis
+
+### Grok 4.5 High
+
+Grok 4.5 high uses Pi through OpenRouter as `openrouter/x-ai/grok-4.5`.
+It found 33 of 86 known entries and emitted 41 findings, placing it second on
+known-corpus recall behind GPT 5.5 high. Thirty-two emitted findings matched 33
+unique corpus entries because one Atlassian JWT finding covered two entries.
+The other nine findings did not count because they described different bugs in
+the same files.
+
+The matched findings cover a broad range of security boundaries. Grok found
+cross-project and cross-organization authorization gaps, OAuth and JWT
+validation problems, unsigned or replayable webhooks, exposed credentials,
+and four client-side injection issues. It also caught narrower logic errors,
+including the account-merge expiry bypass, pinned-search ownership issue, and
+workflow detector disconnect authorization gap.
+
+Grok cost $38.65, nearly the same as GPT 5.5 low at $39.36, while finding five
+more known entries. Post-processing and verification cost $11.77 because the
+run produced more candidate findings. All 156 chunks completed with traces and
+no repair runs.
+
+The full-run timing is not comparable. macOS entered idle sleep during the
+fifth shard and stayed in sleep or dark wake through the final shard. The first
+four shards completed before sustained sleep and covered 90 chunks with a
+62.3-second P50, 3.4-minute P90, and 5.4-minute maximum. Grok was not fast, but
+the recorded 217.5-minute total and 81.6-minute maximum chunk were inflated by
+the sleeping benchmark host. The timing table omits this run.
 
 ### Sonnet 5 High on Pi
 
