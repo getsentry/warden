@@ -26,9 +26,14 @@ Sentry repository.
 
 ## Comparison Matrix
 
-The score table is the headline and sorts by known-corpus recall. The cost and
-timing tables show what each run costs to operate. This matrix only includes
-complete runs with no failed chunks and per-chunk timing data.
+The score table is the headline and sorts by known-corpus recall. The cost table
+shows what each run costs to operate. This matrix only includes complete runs
+with no failed chunks and per-chunk trace data.
+
+Timing remains in result metadata for diagnostics, but the overview does not
+rank it. Provider load, network conditions, retries, queueing, and the benchmark
+host can materially change wall time. Recall and cost are the stable comparison
+signals.
 
 <BenchmarkRuns />
 
@@ -40,9 +45,6 @@ complete runs with no failed chunks and per-chunk timing data.
   improve recall, but they also create more review work.
 - **Cost** is the recorded provider cost for the run. It is not normalized
   pricing or cost per finding.
-- **P50** and **P90** are per-analysis-chunk durations. **Total** includes
-  verifier work, provider latency, queueing, retries, and runtime overhead.
-  Runs with known timing contamination are omitted from the timing table.
 - Scoring is semantic. Same-file findings about different bugs do not count,
   duplicates do not double-count, and one finding can cover multiple corpus
   entries when it catches the same root bug.
@@ -75,7 +77,7 @@ fifth shard and stayed in sleep or dark wake through the final shard. The first
 four shards completed before sustained sleep and covered 90 chunks with a
 62.3-second P50, 3.4-minute P90, and 5.4-minute maximum. Grok was not fast, but
 the recorded 217.5-minute total and 81.6-minute maximum chunk were inflated by
-the sleeping benchmark host. The timing table omits this run.
+the sleeping benchmark host. The public comparison does not rank timing.
 
 ### Sonnet 5 High on Pi
 

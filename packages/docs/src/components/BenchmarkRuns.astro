@@ -42,7 +42,6 @@ type BenchmarkResult = {
   targetMode: string;
   timing?: {
     analysisChunkMs?: TimingDistribution;
-    contaminated?: boolean;
     shardWallMs?: TimingDistribution;
   };
 };
@@ -97,16 +96,6 @@ const formatTokenCount = (value: number | undefined) =>
         maximumFractionDigits: 2,
         notation: "compact",
       }).format(value).toLowerCase();
-
-const formatDuration = (value: number | undefined) => {
-  if (value === undefined) {
-    return "n/a";
-  }
-  if (value >= 60_000) {
-    return `${(value / 60_000).toFixed(1)}m`;
-  }
-  return `${(value / 1000).toFixed(1)}s`;
-};
 
 const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
 
@@ -178,39 +167,8 @@ const compareCostResults = (a: BenchmarkResult, b: BenchmarkResult) => {
   return compareResults(a, b);
 };
 
-const compareTimingResults = (a: BenchmarkResult, b: BenchmarkResult) => {
-  const aTiming = a.timing?.analysisChunkMs;
-  const bTiming = b.timing?.analysisChunkMs;
-
-  const p50Diff =
-    (aTiming?.p50 ?? Number.POSITIVE_INFINITY) -
-    (bTiming?.p50 ?? Number.POSITIVE_INFINITY);
-  if (p50Diff !== 0) {
-    return p50Diff;
-  }
-
-  const p90Diff =
-    (aTiming?.p90 ?? Number.POSITIVE_INFINITY) -
-    (bTiming?.p90 ?? Number.POSITIVE_INFINITY);
-  if (p90Diff !== 0) {
-    return p90Diff;
-  }
-
-  const totalDiff =
-    (a.timing?.shardWallMs?.total ?? a.summary.durationMs) -
-    (b.timing?.shardWallMs?.total ?? b.summary.durationMs);
-  if (totalDiff !== 0) {
-    return totalDiff;
-  }
-
-  return compareResults(a, b);
-};
-
 const scoreResults = [...stableResults].sort(compareResults);
 const costResults = [...stableResults].sort(compareCostResults);
-const timingResults = stableResults
-  .filter((result) => result.timing?.analysisChunkMs && !result.timing.contaminated)
-  .sort(compareTimingResults);
 ---
 
 <section class="benchmark-runs" aria-label="Stable benchmark comparison matrix">
@@ -299,47 +257,6 @@ const timingResults = stableResults
         </div>
       </section>
 
-      <section class="detail-section" aria-labelledby="benchmark-timing-breakdown">
-        <h3 id="benchmark-timing-breakdown">Timing</h3>
-        <p class="sort-note">Lowest P50 chunk duration first.</p>
-        <div class="detail-table-wrap">
-          <div class="run-table timing-table" role="table" aria-label="Timing breakdown">
-            <div class="run-header" role="row">
-              <span role="columnheader">Run</span>
-              <span role="columnheader">P50</span>
-              <span role="columnheader">P90</span>
-              <span role="columnheader">Total</span>
-            </div>
-            {timingResults.map((result) => {
-              const chunkTiming = result.timing?.analysisChunkMs;
-              const shardTiming = result.timing?.shardWallMs;
-              return (
-                <article class="run-row" role="row">
-                  <div class="run-name" role="cell">
-                    <h3>
-                      {modelLabel(result.model)}{" "}
-                      <span>({runtimeLabel(result.runtime)})</span>
-                    </h3>
-                    {runMeta(result) && <p>{runMeta(result)}</p>}
-                  </div>
-                  <div class="metric-cell" role="cell">
-                    <span class="cell-label">P50</span>
-                    <strong class="metric-value">{formatDuration(chunkTiming?.p50)}</strong>
-                  </div>
-                  <div class="metric-cell" role="cell">
-                    <span class="cell-label">P90</span>
-                    <strong class="metric-value">{formatDuration(chunkTiming?.p90)}</strong>
-                  </div>
-                  <div class="metric-cell" role="cell">
-                    <span class="cell-label">Total</span>
-                    <strong class="metric-value">{formatDuration(shardTiming?.total ?? result.summary.durationMs)}</strong>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </div>
-      </section>
     </div>
   )}
 </section>
@@ -384,11 +301,6 @@ const timingResults = stableResults
   .cost-table .run-header,
   .cost-table .run-row {
     grid-template-columns: minmax(13rem, 1fr) minmax(6.3rem, 0.44fr) repeat(2, minmax(6.8rem, 0.46fr));
-  }
-
-  .timing-table .run-header,
-  .timing-table .run-row {
-    grid-template-columns: minmax(13rem, 1fr) repeat(3, minmax(5.8rem, 0.38fr));
   }
 
   .run-header {
@@ -500,8 +412,7 @@ const timingResults = stableResults
     width: 100%;
   }
 
-  .cost-table,
-  .timing-table {
+  .cost-table {
     min-width: min(100%, 40rem);
   }
 
