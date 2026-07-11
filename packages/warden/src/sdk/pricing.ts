@@ -19,6 +19,12 @@ const ANTHROPIC_MODELS = new Map(
   anthropicProvider().getModels().map((model) => [model.id, model]),
 );
 
+/** Resolve exact Pi IDs or dated API response IDs whose base model Pi owns. */
+function findAnthropicModel(model: string) {
+  return ANTHROPIC_MODELS.get(model)
+    ?? ANTHROPIC_MODELS.get(model.replace(/-\d{8}$/, ''));
+}
+
 function createPiUsage(input: number, output: number, cacheRead: number, cacheWrite: number, cacheWrite1h: number): Usage {
   return {
     input,
@@ -31,7 +37,7 @@ function createPiUsage(input: number, output: number, cacheRead: number, cacheWr
   };
 }
 
-/** Return categorized costs when the exact Anthropic model exists in Pi's catalog. */
+/** Return categorized costs when the Anthropic model resolves to Pi's catalog. */
 export function estimateUsageCostBreakdown(
   model: string | undefined,
   usage: UsageStats,
@@ -54,7 +60,7 @@ export function estimateUsageCostBreakdown(
     usage.inputTokens - cacheReadInputTokens - cacheCreationInputTokens,
   );
   const webSearchRequests = usage.webSearchRequests ?? 0;
-  const piModel = ANTHROPIC_MODELS.get(model);
+  const piModel = findAnthropicModel(model);
   if (!piModel) return undefined;
 
   const piUsage = createPiUsage(

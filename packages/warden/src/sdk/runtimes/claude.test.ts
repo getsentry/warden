@@ -283,7 +283,7 @@ describe('claudeRuntime.runSkill', () => {
           id: 'msg_1',
           type: 'message',
           role: 'assistant',
-          model: 'claude-haiku-4-5-20251001',
+          model: 'claude-sonnet-4-6-20260301',
           content: [{ type: 'text', text: '{"findings":[]}' }],
           stop_reason: 'end_turn',
           stop_sequence: null,
@@ -312,14 +312,14 @@ describe('claudeRuntime.runSkill', () => {
       options: {},
     });
 
-    expect(result.result?.responseModel).toBe('claude-haiku-4-5-20251001');
+    expect(result.result?.responseModel).toBe('claude-sonnet-4-6-20260301');
     expect(result.result?.usage).toMatchObject({
       inputTokens: 1300,
       outputTokens: 500,
       cacheReadInputTokens: 200,
       cacheCreationInputTokens: 100,
     });
-    expect(result.result?.usage.costUSD).toBeCloseTo(0.023645, 6);
+    expect(result.result?.usage.costUSD).toBeCloseTo(0.030935, 6);
   });
 
   it('records Claude runtime spans under the provided hunk trace parent', async () => {

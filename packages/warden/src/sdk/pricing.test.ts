@@ -132,7 +132,7 @@ describe('apiUsageToStats', () => {
   });
 
   it('returns zero cost for a model absent from Pi', () => {
-    const stats = apiUsageToStats('claude-sonnet-4-6-20260301', {
+    const stats = apiUsageToStats('claude-sonnet-4-7-20260501', {
       input_tokens: 1000,
       output_tokens: 500,
     });

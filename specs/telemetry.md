@@ -328,7 +328,7 @@ scheduled workflow execution.
 | `warden.gen_ai.cost.component.usd` | distribution | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name`, `warden.gen_ai.cost.component` |
 | `warden.findings` | count | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name`, `warden.finding.severity` |
 
-`gen_ai.client.token.usage` follows current OTel semantics and emits only total `input` and `output` token histograms. Cache-sensitive dashboards must use Warden component metrics: `warden.gen_ai.token.usage` emits mutually exclusive token categories (`standard_input`, `cache_read_input`, `cache_creation_5m_input`, `cache_creation_1h_input`, `output`), and `warden.gen_ai.cost.component.usd` emits estimated relative-cost components when the exact model ID exists in Pi's Anthropic catalog.
+`gen_ai.client.token.usage` follows current OTel semantics and emits only total `input` and `output` token histograms. Cache-sensitive dashboards must use Warden component metrics: `warden.gen_ai.token.usage` emits mutually exclusive token categories (`standard_input`, `cache_read_input`, `cache_creation_5m_input`, `cache_creation_1h_input`, `output`), and `warden.gen_ai.cost.component.usd` emits estimated relative-cost components when the model ID or its undated base exists in Pi's Anthropic catalog.
 
 `gen_ai.request.model` is included when `report.model` is set (i.e. when the caller specifies a model). `warden.runtime.name` is included when the report runtime is known (`claude` or `pi`).
 
