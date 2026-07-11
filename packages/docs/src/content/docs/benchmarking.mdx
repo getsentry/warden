@@ -27,8 +27,8 @@ Sentry repository.
 ## Comparison Matrix
 
 The score table is the headline and sorts by known-corpus recall. The cost table
-shows what each run costs to operate. This matrix only includes complete runs
-with no failed chunks and per-chunk trace data.
+ranks runs by recorded provider cost per known corpus finding. This matrix only
+includes complete runs with no failed chunks and per-chunk trace data.
 
 Timing remains in result metadata for diagnostics, but the overview does not
 rank it. Provider load, network conditions, retries, queueing, and the benchmark
@@ -43,13 +43,27 @@ signals.
   same bug in roughly the same location.
 - **Findings** is review volume before benchmark scoring. More findings can
   improve recall, but they also create more review work.
-- **Cost** is the recorded provider cost for the run. It is not normalized
-  pricing or cost per finding.
+- **Cost** is the recorded provider cost for the run.
+- **Cost/known** divides total cost by unique known corpus findings. Lower is
+  more cost-efficient on this corpus. It does not include reviewer time.
 - Scoring is semantic. Same-file findings about different bugs do not count,
   duplicates do not double-count, and one finding can cover multiple corpus
   entries when it catches the same root bug.
 
 ## Analysis
+
+### GPT 5.6 Luna High
+
+GPT 5.6 Luna high uses Pi directly as `openai/gpt-5.6-luna`. It found 36 of
+86 known entries and emitted 57 findings. This puts it behind GPT 5.5 high and
+ahead of Grok 4.5 high on known-corpus recall. Thirty-three emitted findings
+matched 36 unique corpus entries. The other 24 findings described different
+bugs and did not count.
+
+The run cost $56.98, or $1.58 per known corpus finding. All 156 final chunks
+completed with traces. One MS Teams chunk lost its terminal OpenAI stream
+event in the main shard. A parallelism-1 repair replaced that exact chunk, and
+the recorded cost includes both the main shard and the full repair run.
 
 ### Grok 4.5 High
 

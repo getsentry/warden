@@ -57,6 +57,7 @@ const MODEL_LABELS: Record<string, string> = {
   "claude-opus-4-8": "Claude Opus 4.8",
   "claude-sonnet-4-6": "Claude Sonnet 4.6",
   "openai/gpt-5.5": "GPT 5.5",
+  "openai/gpt-5.6-luna": "GPT 5.6 Luna",
   "openrouter/deepseek/deepseek-v4-flash": "DeepSeek V4 Flash",
   "openrouter/deepseek/deepseek-v4-pro": "DeepSeek V4 Pro",
   "openrouter/x-ai/grok-4.5": "Grok 4.5",
@@ -79,6 +80,11 @@ const RUNTIME_LABELS: Record<string, string> = {
 const knownFoundRate = (scoring: BenchmarkScoring | undefined) =>
   scoring && scoring.knownFindingCount !== 0
     ? scoring.knownFound / scoring.knownFindingCount
+    : undefined;
+
+const costPerKnownFinding = (result: BenchmarkResult) =>
+  result.scoring && result.scoring.knownFound > 0
+    ? result.summary.costUSD / result.scoring.knownFound
     : undefined;
 
 const resultModules = import.meta.glob<BenchmarkResult>(
@@ -159,6 +165,13 @@ const stableResults = Object.values(resultModules)
   );
 
 const compareCostResults = (a: BenchmarkResult, b: BenchmarkResult) => {
+  const costPerKnownDiff =
+    (costPerKnownFinding(a) ?? Number.POSITIVE_INFINITY) -
+    (costPerKnownFinding(b) ?? Number.POSITIVE_INFINITY);
+  if (costPerKnownDiff !== 0) {
+    return costPerKnownDiff;
+  }
+
   const costDiff = a.summary.costUSD - b.summary.costUSD;
   if (costDiff !== 0) {
     return costDiff;
@@ -181,10 +194,12 @@ const costResults = [...stableResults].sort(compareCostResults);
         <span role="columnheader">Known</span>
         <span role="columnheader">Findings</span>
         <span role="columnheader">Cost</span>
+        <span role="columnheader">Cost/known</span>
       </div>
       {scoreResults.map((result) => {
         const scoring = result.scoring;
         const scoreRate = scoring ? knownFoundRate(scoring) : undefined;
+        const costPerKnown = costPerKnownFinding(result);
         return (
           <article class="run-row" role="row">
             <div class="run-name" role="cell">
@@ -211,6 +226,12 @@ const costResults = [...stableResults].sort(compareCostResults);
               <span class="cell-label">Cost</span>
               <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
             </div>
+            <div class="metric-cell" role="cell">
+              <span class="cell-label">Cost per known find</span>
+              <strong class="metric-value">
+                {costPerKnown === undefined ? "n/a" : formatCost(costPerKnown)}
+              </strong>
+            </div>
           </article>
         );
       })}
@@ -221,38 +242,48 @@ const costResults = [...stableResults].sort(compareCostResults);
     <div class="detail-tables">
       <section class="detail-section" aria-labelledby="benchmark-cost-breakdown">
         <h3 id="benchmark-cost-breakdown">Cost</h3>
-        <p class="sort-note">Lowest cost first.</p>
+        <p class="sort-note">Lowest cost per known corpus finding first.</p>
         <div class="detail-table-wrap">
           <div class="run-table cost-table" role="table" aria-label="Cost breakdown">
             <div class="run-header" role="row">
               <span role="columnheader">Run</span>
-              <span role="columnheader">Cost</span>
+              <span role="columnheader">Cost/known</span>
+              <span role="columnheader">Total cost</span>
               <span role="columnheader">Input</span>
               <span role="columnheader">Output</span>
             </div>
-            {costResults.map((result) => (
-              <article class="run-row" role="row">
-                <div class="run-name" role="cell">
-                  <h3>
-                    {modelLabel(result.model)}{" "}
-                    <span>({runtimeLabel(result.runtime)})</span>
-                  </h3>
-                  {runMeta(result) && <p>{runMeta(result)}</p>}
-                </div>
-                <div class="metric-cell" role="cell">
-                  <span class="cell-label">Cost</span>
-                  <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
-                </div>
-                <div class="metric-cell" role="cell">
-                  <span class="cell-label">Input</span>
-                  <strong class="metric-value">{formatTokenCount(result.summary.inputTokens)}</strong>
-                </div>
-                <div class="metric-cell" role="cell">
-                  <span class="cell-label">Output</span>
-                  <strong class="metric-value">{formatTokenCount(result.summary.outputTokens)}</strong>
-                </div>
-              </article>
-            ))}
+            {costResults.map((result) => {
+              const costPerKnown = costPerKnownFinding(result);
+              return (
+                <article class="run-row" role="row">
+                  <div class="run-name" role="cell">
+                    <h3>
+                      {modelLabel(result.model)}{" "}
+                      <span>({runtimeLabel(result.runtime)})</span>
+                    </h3>
+                    {runMeta(result) && <p>{runMeta(result)}</p>}
+                  </div>
+                  <div class="metric-cell" role="cell">
+                    <span class="cell-label">Cost per known find</span>
+                    <strong class="metric-value">
+                      {costPerKnown === undefined ? "n/a" : formatCost(costPerKnown)}
+                    </strong>
+                  </div>
+                  <div class="metric-cell" role="cell">
+                    <span class="cell-label">Total cost</span>
+                    <strong class="metric-value">{formatCost(result.summary.costUSD)}</strong>
+                  </div>
+                  <div class="metric-cell" role="cell">
+                    <span class="cell-label">Input</span>
+                    <strong class="metric-value">{formatTokenCount(result.summary.inputTokens)}</strong>
+                  </div>
+                  <div class="metric-cell" role="cell">
+                    <span class="cell-label">Output</span>
+                    <strong class="metric-value">{formatTokenCount(result.summary.outputTokens)}</strong>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -295,12 +326,12 @@ const costResults = [...stableResults].sort(compareCostResults);
 
   .score-table .run-header,
   .score-table .run-row {
-    grid-template-columns: minmax(12rem, 1fr) repeat(3, minmax(5.4rem, 0.34fr));
+    grid-template-columns: minmax(12rem, 1fr) repeat(4, minmax(5.4rem, 0.34fr));
   }
 
   .cost-table .run-header,
   .cost-table .run-row {
-    grid-template-columns: minmax(13rem, 1fr) minmax(6.3rem, 0.44fr) repeat(2, minmax(6.8rem, 0.46fr));
+    grid-template-columns: minmax(13rem, 1fr) repeat(2, minmax(6.3rem, 0.44fr)) repeat(2, minmax(6.8rem, 0.46fr));
   }
 
   .run-header {
@@ -413,7 +444,7 @@ const costResults = [...stableResults].sort(compareCostResults);
   }
 
   .cost-table {
-    min-width: min(100%, 40rem);
+    min-width: min(100%, 48rem);
   }
 
   @media (max-width: 38rem) {
