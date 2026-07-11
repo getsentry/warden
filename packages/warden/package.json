@@ -26,8 +26,6 @@
     "test:watch": "vitest --config vitest.config.ts",
     "test:examples": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
-    "update-pricing": "tsx scripts/update-pricing.ts",
-    "update-pricing-pr": "tsx scripts/create-pricing-update-pr.ts",
     "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts",
     "prepublishOnly": "rm -f skills/warden skills/warden-sweep && cp -rL ../../skills/warden skills/warden && cp -rL ../../skills/warden-sweep skills/warden-sweep",
     "postpublish": "rm -rf skills/warden skills/warden-sweep && ln -s ../../../skills/warden skills/warden && ln -s ../../../skills/warden-sweep skills/warden-sweep"

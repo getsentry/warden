@@ -1,47 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { anthropicUsageToStats, apiUsageToStats, estimateUsageCostBreakdown } from './pricing.js';
-import rawPricing from './model-pricing.json' with { type: 'json' };
-
-describe('model-pricing.json', () => {
-  it('has an entry for claude-haiku-4-5', () => {
-    const entry = rawPricing['claude-haiku-4-5'];
-    expect(entry).toBeDefined();
-    expect(entry.inputPerMTok).toBe(1);
-    expect(entry.outputPerMTok).toBe(5);
-    expect(entry.cacheReadPerMTok).toBe(0.1);
-    expect(entry.cacheWritePerMTok).toBe(1.25);
-    expect(entry.cacheWrite1hPerMTok).toBe(2);
-    expect(entry.webSearchPer1K).toBe(10);
-  });
-
-  it('has an entry for claude-opus-4-7', () => {
-    const entry = rawPricing['claude-opus-4-7'];
-    expect(entry).toBeDefined();
-    expect(entry.inputPerMTok).toBe(5);
-    expect(entry.outputPerMTok).toBe(25);
-    expect(entry.cacheReadPerMTok).toBe(0.5);
-    expect(entry.cacheWritePerMTok).toBe(6.25);
-  });
-
-  it('fills current-generation pricing gaps from canonical variants', () => {
-    expect(rawPricing['claude-opus-4-6']).toMatchObject({
-      inputPerMTok: 5,
-      outputPerMTok: 25,
-      cacheReadPerMTok: 0.5,
-      cacheWritePerMTok: 6.25,
-      cacheWrite1hPerMTok: 10,
-      webSearchPer1K: 10,
-    });
-    expect(rawPricing['claude-sonnet-4-6']).toMatchObject({
-      inputPerMTok: 3,
-      outputPerMTok: 15,
-      cacheReadPerMTok: 0.3,
-      cacheWritePerMTok: 3.75,
-      cacheWrite1hPerMTok: 6,
-      webSearchPer1K: 10,
-    });
-  });
-});
 
 describe('apiUsageToStats', () => {
   it('keeps the deprecated name as an alias for the public Anthropic helper', () => {
@@ -96,6 +54,11 @@ describe('apiUsageToStats', () => {
     expect(stats.inputTokens).toBe(1500);
     expect(stats.outputTokens).toBe(500);
     expect(stats.costUSD).toBeCloseTo(0.024045, 6);
+
+    const breakdown = estimateUsageCostBreakdown('claude-haiku-4-5', stats);
+    expect(breakdown?.cacheCreation5mUSD).toBeCloseTo(0.000125, 6);
+    expect(breakdown?.cacheCreation1hUSD).toBeCloseTo(0.0004, 6);
+    expect(breakdown?.webSearchUSD).toBeCloseTo(0.02, 6);
   });
 
   it('counts tiered cache writes even when the aggregate cache field is absent', () => {
@@ -118,64 +81,31 @@ describe('apiUsageToStats', () => {
 
   it('breaks down cost by billed token category', () => {
     const stats = {
-      inputTokens: 1_109_406,
+      inputTokens: 909_406,
       outputTokens: 12_202,
-      cacheReadInputTokens: 822_069,
+      cacheReadInputTokens: 622_069,
       cacheCreationInputTokens: 284_208,
       cacheCreation5mInputTokens: 284_208,
       cacheCreation1hInputTokens: 0,
       webSearchRequests: 0,
-      costUSD: 2.9181204,
+      costUSD: 1.4448177,
     };
 
-    const breakdown = estimateUsageCostBreakdown('claude-sonnet-4-5-20250929', stats);
+    const breakdown = estimateUsageCostBreakdown('claude-sonnet-4-6', stats);
 
     expect(breakdown).toBeDefined();
-    expect(breakdown!.freshInputUSD).toBeCloseTo(0.018774, 6);
-    expect(breakdown!.cacheReadUSD).toBeCloseTo(0.4932414, 6);
-    expect(breakdown!.cacheCreation5mUSD).toBeCloseTo(2.13156, 6);
-    expect(breakdown!.outputUSD).toBeCloseTo(0.274545, 6);
+    expect(breakdown!.freshInputUSD).toBeCloseTo(0.009387, 6);
+    expect(breakdown!.cacheReadUSD).toBeCloseTo(0.1866207, 6);
+    expect(breakdown!.cacheCreation5mUSD).toBeCloseTo(1.06578, 6);
+    expect(breakdown!.outputUSD).toBeCloseTo(0.18303, 6);
     expect(breakdown!.totalUSD).toBeCloseTo(stats.costUSD, 6);
   });
 
-  it('uses Sonnet 4.5 long-context pricing above 200k input tokens', () => {
-    expect(apiUsageToStats('claude-sonnet-4-5-20250929', {
-      input_tokens: 300_000,
-      output_tokens: 1_000,
-    }).costUSD).toBeCloseTo(1.8225, 6);
-  });
-
-  it('keeps Sonnet 4.6 at standard pricing above 200k input tokens', () => {
-    expect(apiUsageToStats('claude-sonnet-4-6-20260301', {
-      input_tokens: 300_000,
-      output_tokens: 1_000,
-    }).costUSD).toBeCloseTo(0.915, 6);
-  });
-
-  it('keeps Sonnet 4.7 aliases at standard pricing above 200k input tokens', () => {
-    expect(apiUsageToStats('claude-sonnet-4-7-20260501', {
-      input_tokens: 300_000,
-      output_tokens: 1_000,
-    }).costUSD).toBeCloseTo(0.915, 6);
-  });
-
-  it('calculates cost for alternate Claude SDK model id shapes', () => {
-    expect(apiUsageToStats('claude-sonnet-4-20250514', {
-      input_tokens: 1000,
-      output_tokens: 500,
-    }).costUSD).toBeCloseTo(0.0105, 6);
-    expect(apiUsageToStats('claude-4-opus-20250514', {
-      input_tokens: 1000,
-      output_tokens: 500,
-    }).costUSD).toBeCloseTo(0.0525, 6);
+  it('uses Pi standard pricing for Sonnet 4.6 above 200k input tokens', () => {
     expect(apiUsageToStats('claude-sonnet-4-6', {
-      input_tokens: 1000,
-      output_tokens: 500,
-    }).costUSD).toBeCloseTo(0.0105, 6);
-    expect(apiUsageToStats('claude-sonnet-4-7', {
-      input_tokens: 1000,
-      output_tokens: 500,
-    }).costUSD).toBeCloseTo(0.0105, 6);
+      input_tokens: 300_000,
+      output_tokens: 1_000,
+    }).costUSD).toBeCloseTo(0.915, 6);
   });
 
   it('handles null cache fields', () => {
@@ -201,8 +131,8 @@ describe('apiUsageToStats', () => {
     expect(stats.cacheCreationInputTokens).toBe(0);
   });
 
-  it('returns zero cost for unknown model', () => {
-    const stats = apiUsageToStats('unknown-model', {
+  it('returns zero cost for a model absent from Pi', () => {
+    const stats = apiUsageToStats('claude-sonnet-4-6-20260301', {
       input_tokens: 1000,
       output_tokens: 500,
     });

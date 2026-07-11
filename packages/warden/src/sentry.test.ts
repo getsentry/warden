@@ -160,18 +160,18 @@ describe('sentry telemetry scope', () => {
       model: 'claude-haiku-4-5',
       durationMs: 1200,
       usage: {
-        inputTokens: 1300,
+        inputTokens: 1500,
         outputTokens: 500,
         cacheReadInputTokens: 200,
-        cacheCreationInputTokens: 100,
+        cacheCreationInputTokens: 300,
         cacheCreation5mInputTokens: 100,
-        cacheCreation1hInputTokens: 0,
-        webSearchRequests: 0,
-        costUSD: 0.003645,
+        cacheCreation1hInputTokens: 200,
+        webSearchRequests: 2,
+        costUSD: 0.024045,
       },
     });
 
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('gen_ai.client.token.usage', 1300, {
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('gen_ai.client.token.usage', 1500, {
       unit: '{token}',
       attributes: expect.objectContaining({
         'gen_ai.token.type': 'input',
@@ -195,6 +195,12 @@ describe('sentry telemetry scope', () => {
         'warden.gen_ai.token.category': 'cache_creation_5m_input',
       }),
     });
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 200, {
+      unit: '{token}',
+      attributes: expect.objectContaining({
+        'warden.gen_ai.token.category': 'cache_creation_1h_input',
+      }),
+    });
     expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.cost.component.usd', 0.00002, {
       attributes: expect.objectContaining({
         'warden.gen_ai.cost.component': 'cache_read_input',
@@ -202,10 +208,28 @@ describe('sentry telemetry scope', () => {
     });
     expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith(
       'warden.gen_ai.cost.component.usd',
-      0.000125,
+      expect.closeTo(0.000125, 10),
       {
         attributes: expect.objectContaining({
           'warden.gen_ai.cost.component': 'cache_creation_5m_input',
+        }),
+      }
+    );
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith(
+      'warden.gen_ai.cost.component.usd',
+      0.0004,
+      {
+        attributes: expect.objectContaining({
+          'warden.gen_ai.cost.component': 'cache_creation_1h_input',
+        }),
+      }
+    );
+    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith(
+      'warden.gen_ai.cost.component.usd',
+      0.02,
+      {
+        attributes: expect.objectContaining({
+          'warden.gen_ai.cost.component': 'web_search',
         }),
       }
     );
