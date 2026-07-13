@@ -7,8 +7,16 @@ import {
 } from './harness.js';
 import { discoverEvals } from './index.js';
 import { formatEvalId, formatEvalTestName } from './names.js';
+import {
+  DEFAULT_EVAL_RUNTIME,
+  defaultEvalModel,
+  getEvalProviderApiKey,
+  getEvalRuntimeApiKey,
+} from './auth.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+const model = defaultEvalModel();
+const apiKey = getEvalRuntimeApiKey(model);
+const providerApiKey = getEvalProviderApiKey(model);
 const evals = discoverEvals();
 
 describeEval(
@@ -16,11 +24,13 @@ describeEval(
   {
     harness: createWardenEvalHarness({
       apiKey,
+      runtime: DEFAULT_EVAL_RUNTIME,
+      model,
       verbose: true,
     }),
     judges: [createWardenEvalJudge(apiKey)],
     judgeThreshold: 1,
-    skipIf: () => !apiKey,
+    skipIf: () => !providerApiKey,
   },
   (it) => {
     for (const meta of evals) {

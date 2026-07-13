@@ -1,0 +1,694 @@
+{
+  "schemaVersion": 2,
+  "capturedAt": "2026-06-30",
+  "repository": "getsentry/sentry",
+  "model": "openrouter/anthropic/claude-sonnet-4.6",
+  "runtime": "pi",
+  "skill": "code-review",
+  "verification": false,
+  "notes": [
+    "Each paired case uses the same synthetic bug-introducing head for semantic and non-semantic runs.",
+    "expectedFindingMatched is manual until the benchmark reuses the eval judge.",
+    "Axis-range was rerun with the maintainer runner after earlier one-off experiments; neither mode found the expected issue in that paired rerun.",
+    "Cursor and workflow-status preserve expected recall in both modes.",
+    "Fixability did not recover the expected issue in either mode.",
+    "Semantic mode reduced scanner chunks on two cases but increased token cost on every completed paired run."
+  ],
+  "cases": [
+    {
+      "case": "sentry-dashboard-axis-range-existing-widget",
+      "base": "01217a6efb90cd26f0f8ac8b33c4f255379fe21d",
+      "head": "1b2028bb7455b62fba59a1eb3b9d00bdcff27d51",
+      "expectedFindingMatched": {
+        "nonsemantic": false,
+        "semantic": false
+      },
+      "runs": {
+        "nonsemantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-dashboard-axis-range-existing-widget.nonsemantic.jsonl",
+            "sha256": "82ed06512dad89ac261b47d49a05634bbd191a131ba136082cad284a01e367d0"
+          },
+          "complete": true,
+          "scannerChunks": 9,
+          "completedScannerChunks": 9,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 126324,
+          "usage": {
+            "inputTokens": 119788,
+            "outputTokens": 8589,
+            "costUSD": 0.3427662
+          }
+        },
+        "semantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-dashboard-axis-range-existing-widget.semantic.jsonl",
+            "sha256": "688d5510b204f11e4d4f0665afc768ccb902d59ecdcac4478edc2992215319b1"
+          },
+          "complete": true,
+          "scannerChunks": 5,
+          "completedScannerChunks": 5,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 122745,
+          "usage": {
+            "inputTokens": 207575,
+            "outputTokens": 7501,
+            "costUSD": 0.3904299
+          }
+        }
+      }
+    },
+    {
+      "case": "sentry-cursor-service-account-api-key",
+      "base": "652324b48217e89f4267bfc1bb6e5e390818c277",
+      "head": "dd2e7671013b38550048c3c427b5152997e91ab9",
+      "expectedFindingMatched": {
+        "nonsemantic": true,
+        "semantic": true
+      },
+      "runs": {
+        "nonsemantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-cursor-service-account-api-key.nonsemantic.jsonl",
+            "sha256": "19d7c300003680761d1f1e26da8eb3237398e840ad42d00cd716b3efe15ffe37"
+          },
+          "complete": true,
+          "scannerChunks": 7,
+          "completedScannerChunks": 7,
+          "failedScannerChunks": 0,
+          "findings": [
+            {
+              "title": "No tests for changed `build_integration` logic in Cursor integration",
+              "severity": "medium",
+              "location": {
+                "path": "src/sentry/integrations/cursor/integration.py",
+                "startLine": 133
+              }
+            },
+            {
+              "title": "Service account API keys broken by removal of /v0/models fallback",
+              "severity": "high",
+              "location": {
+                "path": "src/sentry/integrations/cursor/client.py",
+                "startLine": 92
+              }
+            },
+            {
+              "title": "`validation_error` may be unbound if `parse_obj({})` doesn't raise",
+              "severity": "low",
+              "location": {
+                "path": "tests/sentry/integrations/cursor/test_integration.py",
+                "startLine": 132
+              }
+            }
+          ],
+          "durationMs": 289218,
+          "usage": {
+            "inputTokens": 217727,
+            "outputTokens": 16902,
+            "costUSD": 0.5859831
+          }
+        },
+        "semantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-cursor-service-account-api-key.semantic.jsonl",
+            "sha256": "601f1ec71529d5763fceb00453d1e69bdcaf71f29121c7e853a9698b555cf337"
+          },
+          "complete": true,
+          "scannerChunks": 7,
+          "completedScannerChunks": 7,
+          "failedScannerChunks": 0,
+          "findings": [
+            {
+              "title": "Service account API keys can no longer be configured - /v0/me fallback removed",
+              "severity": "high",
+              "location": {
+                "path": "src/sentry/integrations/cursor/client.py",
+                "startLine": 85
+              }
+            },
+            {
+              "title": "`validation_error` may be unbound if `CursorApiKeyMetadata.parse_obj({})` does not raise",
+              "severity": "low",
+              "location": {
+                "path": "tests/sentry/integrations/cursor/test_integration.py",
+                "startLine": 136
+              }
+            }
+          ],
+          "durationMs": 262986,
+          "usage": {
+            "inputTokens": 384304,
+            "outputTokens": 20268,
+            "costUSD": 0.71739075
+          }
+        }
+      }
+    },
+    {
+      "case": "sentry-fixability-missing-issue-summary",
+      "base": "62125c6514958cd89aa3cf7374be32f984adb683",
+      "head": "4199c6aeed84c7c359aa7ad6863534174769d436",
+      "expectedFindingMatched": {
+        "nonsemantic": false,
+        "semantic": false
+      },
+      "runs": {
+        "nonsemantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-fixability-missing-issue-summary.nonsemantic.jsonl",
+            "sha256": "c8e1c874acab80a463c80c75ec99f26aadaa1eba24e116216c209f4e7e2ce15a"
+          },
+          "complete": true,
+          "scannerChunks": 5,
+          "completedScannerChunks": 5,
+          "failedScannerChunks": 0,
+          "findings": [
+            {
+              "title": "Removed test leaves the `summary=None` -> no payload key path untested",
+              "severity": "low",
+              "location": {
+                "path": "tests/sentry/seer/autofix/test_issue_summary.py",
+                "startLine": 1219
+              }
+            }
+          ],
+          "durationMs": 72248,
+          "usage": {
+            "inputTokens": 127987,
+            "outputTokens": 11044,
+            "costUSD": 0.35859315
+          }
+        },
+        "semantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-fixability-missing-issue-summary.semantic.jsonl",
+            "sha256": "86ebcd8341d3e649231d6be13743c5c1f13a9b7885aedc603d6ec8ab53028bfc"
+          },
+          "complete": true,
+          "scannerChunks": 4,
+          "completedScannerChunks": 4,
+          "failedScannerChunks": 0,
+          "findings": [
+            {
+              "title": "No test coverage for the new summary-passing logic in `generate_issue_summary_only`",
+              "severity": "low",
+              "location": {
+                "path": "src/sentry/tasks/autofix.py",
+                "startLine": 127
+              }
+            }
+          ],
+          "durationMs": 189002,
+          "usage": {
+            "inputTokens": 602384,
+            "outputTokens": 23791,
+            "costUSD": 1.0902606
+          }
+        }
+      }
+    },
+    {
+      "case": "sentry-workflow-status-missing-foreign-key",
+      "base": "f4cc09c52e73c2ab60a3b14291c60dd0db5458a7",
+      "head": "e36f46a85cf4a6c9a6ae0e5e545a7c13b789d478",
+      "expectedFindingMatched": {
+        "nonsemantic": true,
+        "semantic": true
+      },
+      "runs": {
+        "nonsemantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-workflow-status-missing-foreign-key.nonsemantic.jsonl",
+            "sha256": "86079775d10a098d5eefb5aac2a5d51e7cac5e4f2fd1f7e193c27bbad4e4ba5b"
+          },
+          "complete": true,
+          "scannerChunks": 5,
+          "completedScannerChunks": 5,
+          "failedScannerChunks": 0,
+          "findings": [
+            {
+              "title": "`connection.cursor()` bypasses Django's database router for a region-silo model",
+              "severity": "medium",
+              "location": {
+                "path": "src/sentry/workflow_engine/processors/action.py",
+                "startLine": 4
+              }
+            },
+            {
+              "title": "Unhandled IntegrityError when FK targets are deleted between read and INSERT",
+              "severity": "high",
+              "location": {
+                "path": "src/sentry/workflow_engine/processors/action.py",
+                "startLine": 147
+              }
+            }
+          ],
+          "durationMs": 444294,
+          "usage": {
+            "inputTokens": 535681,
+            "outputTokens": 23518,
+            "costUSD": 1.1353497
+          }
+        },
+        "semantic": {
+          "rawArtifact": {
+            "path": "/tmp/warden-semantic-benchmark-artifacts/sentry-workflow-status-missing-foreign-key.semantic.jsonl",
+            "sha256": "6271846aa3cbb5a995ea2c8173a639bc867ebff5499c62ca2b8cbb1434203b45"
+          },
+          "complete": true,
+          "scannerChunks": 5,
+          "completedScannerChunks": 5,
+          "failedScannerChunks": 0,
+          "findings": [
+            {
+              "title": "Raw SQL batch insert bypasses silo router, always targets `default` database",
+              "severity": "medium",
+              "location": {
+                "path": "src/sentry/workflow_engine/processors/action.py",
+                "startLine": 4
+              }
+            },
+            {
+              "title": "Unhandled IntegrityError on FK violation during batch insert",
+              "severity": "high",
+              "location": {
+                "path": "src/sentry/workflow_engine/processors/action.py",
+                "startLine": 146
+              }
+            }
+          ],
+          "durationMs": 466334,
+          "usage": {
+            "inputTokens": 665740,
+            "outputTokens": 38759,
+            "costUSD": 1.45697175
+          }
+        }
+      }
+    }
+  ],
+  "performanceBaselines": [
+    {
+      "name": "nonsemantic-2026-06-30",
+      "suite": "performance",
+      "semantic": false,
+      "model": "openrouter/anthropic/claude-sonnet-4.6",
+      "runtime": "pi",
+      "skill": "code-review",
+      "verification": false,
+      "artifactsDir": "/tmp/warden-performance-baseline-artifacts",
+      "runs": [
+        {
+          "case": "sentry-mcp-search-issues-period-30d",
+          "complete": true,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/sentry-mcp-search-issues-period-30d.nonsemantic.jsonl",
+            "sha256": "6403c1fbd5663c3e94639adc6e72ac93c869e1e2609c6e90676cefcc3690d76c"
+          },
+          "scannerChunks": 95,
+          "completedScannerChunks": 94,
+          "skippedScannerChunks": 1,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 420663,
+          "usage": {
+            "inputTokens": 2064917,
+            "outputTokens": 54596,
+            "costUSD": 3.87904965
+          }
+        },
+        {
+          "case": "sentry-mcp-openrouter-provider",
+          "complete": true,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/sentry-mcp-openrouter-provider.nonsemantic.jsonl",
+            "sha256": "5523bc4b5f586a2cf54f01115a5f0f28a4267386116caf384064c881f04bca69"
+          },
+          "scannerChunks": 56,
+          "completedScannerChunks": 56,
+          "skippedScannerChunks": 0,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 278231,
+          "usage": {
+            "inputTokens": 970997,
+            "outputTokens": 46760,
+            "costUSD": 2.1067284
+          }
+        },
+        {
+          "case": "sentry-mcp-ai-conversation-search",
+          "complete": true,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/sentry-mcp-ai-conversation-search.nonsemantic.jsonl",
+            "sha256": "1722ede696662d240aaf443d2cd01d4710f0e6b16b3e7ca4cb0df29343e774cd"
+          },
+          "scannerChunks": 55,
+          "completedScannerChunks": 54,
+          "skippedScannerChunks": 1,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 1579419,
+          "usage": {
+            "inputTokens": 4902487,
+            "outputTokens": 231254,
+            "costUSD": 11.03394615
+          }
+        },
+        {
+          "case": "sentry-mcp-node-pnpm-baseline",
+          "complete": true,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/sentry-mcp-node-pnpm-baseline.nonsemantic.jsonl",
+            "sha256": "ee51880c389de9a8393ecb44751a481733c8df55b9ef053644bfdc1435bba52e"
+          },
+          "scannerChunks": 19,
+          "completedScannerChunks": 19,
+          "skippedScannerChunks": 0,
+          "failedScannerChunks": 0,
+          "findings": [
+            {
+              "title": "`@sentry/cli: false` in `allowBuilds` blocks binary download, breaking `@sentry/vite-plugin` at build time",
+              "severity": "high",
+              "confidence": "high",
+              "location": {
+                "path": "pnpm-workspace.yaml",
+                "startLine": 7
+              }
+            }
+          ],
+          "durationMs": 214380,
+          "usage": {
+            "inputTokens": 559623,
+            "outputTokens": 10929,
+            "costUSD": 1.2961956
+          }
+        },
+        {
+          "case": "warden-split-pr-workflow",
+          "complete": false,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/warden-split-pr-workflow.nonsemantic.jsonl",
+            "sha256": "c2d24dc390726f92070b96bbccab1d16a270ba1b8b594ce08881cb52093aa229"
+          },
+          "scannerChunks": 67,
+          "completedScannerChunks": 66,
+          "skippedScannerChunks": 0,
+          "failedScannerChunks": 1,
+          "findings": [],
+          "durationMs": 1436460,
+          "usage": {
+            "inputTokens": 3774012,
+            "outputTokens": 143749,
+            "costUSD": 6.92558805
+          }
+        },
+        {
+          "case": "warden-global-scan-policy-limits",
+          "complete": true,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/warden-global-scan-policy-limits.nonsemantic.jsonl",
+            "sha256": "6016b62aff79a2f12bc381b1b2c14a67b596fef58b1e4ac3828979e4ab6aa6ee"
+          },
+          "scannerChunks": 52,
+          "completedScannerChunks": 51,
+          "skippedScannerChunks": 1,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 708162,
+          "usage": {
+            "inputTokens": 2365164,
+            "outputTokens": 119140,
+            "costUSD": 4.787478
+          }
+        },
+        {
+          "case": "warden-remove-suggested-fix",
+          "complete": true,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/warden-remove-suggested-fix.nonsemantic.jsonl",
+            "sha256": "536848cde519a240de05e4cec00231f3bc089fe7088926ff80be431ff78b9a3c"
+          },
+          "scannerChunks": 58,
+          "completedScannerChunks": 57,
+          "skippedScannerChunks": 1,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 80827,
+          "usage": {
+            "inputTokens": 509490,
+            "outputTokens": 8588,
+            "costUSD": 0.7938351
+          }
+        },
+        {
+          "case": "warden-hoist-skills",
+          "complete": true,
+          "rawArtifact": {
+            "path": "/tmp/warden-performance-baseline-artifacts/warden-hoist-skills.nonsemantic.jsonl",
+            "sha256": "595d7b2c06a72e9ab3929930f3e73e7efbc19a7134e07007315c8ebb1827ebaf"
+          },
+          "scannerChunks": 9,
+          "completedScannerChunks": 8,
+          "skippedScannerChunks": 1,
+          "failedScannerChunks": 0,
+          "findings": [],
+          "durationMs": 69413,
+          "usage": {
+            "inputTokens": 108185,
+            "outputTokens": 10179,
+            "costUSD": 0.29617575
+          }
+        }
+      ]
+    }
+  ],
+  "candidateBaselines": [
+    {
+      "case": "sentry-slack-options-load-unscoped-group",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "0f09491755f71a95343285cbe17c93bf272a0d62",
+      "head": "synthetic reverse of c1bc01ad419ac251e153c81f212628221f8c0628..0f09491755f71a95343285cbe17c93bf272a0d62",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-slack-options-low-runner-artifacts/sentry-slack-options-load-unscoped-group.nonsemantic.jsonl",
+        "sha256": "d89d157b158fc854ad092598f77dda0109a280c3a8a4bde15e3725f146b9ddfc"
+      },
+      "scannerChunks": 4,
+      "completedScannerChunks": 4,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "Removed cross-organization authorization check allows IDOR on group assignment data",
+          "severity": "high",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/integrations/slack/webhooks/options_load.py",
+            "startLine": 99,
+            "endLine": 104
+          }
+        }
+      ],
+      "durationMs": 24815,
+      "usage": {
+        "inputTokens": 20437,
+        "outputTokens": 1065,
+        "costUSD": 0.06328665
+      }
+    },
+    {
+      "case": "sentry-preprod-snapshot-project-access",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "8fac324d82c903c8022b99dcd4329f3944e57196",
+      "head": "synthetic reverse of c1bc01ad419ac251e153c81f212628221f8c0628..8fac324d82c903c8022b99dcd4329f3944e57196",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-security-recall-batch-artifacts/sentry-preprod-snapshot-project-access.nonsemantic.jsonl",
+        "sha256": "301d555e94c4876b1b4c2ce8a712447df2ca1b59ee8f35e0f170556cf82744d7"
+      },
+      "scannerChunks": 4,
+      "completedScannerChunks": 4,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "Project-level access check removed from DELETE endpoint, enabling cross-project artifact deletion",
+          "severity": "high",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+            "startLine": 140
+          }
+        }
+      ],
+      "durationMs": 36045,
+      "usage": {
+        "inputTokens": 21179,
+        "outputTokens": 1320,
+        "costUSD": 0.06993555
+      }
+    },
+    {
+      "case": "sentry-release-threshold-empty-project-filter",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "8a93913509441a0c8e7d035f9c4bc24dabed2d86",
+      "head": "synthetic reverse of 8f9fe309854228051dabac985fb813476a2a5b24..8a93913509441a0c8e7d035f9c4bc24dabed2d86",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-security-recall-batch-artifacts/sentry-release-threshold-empty-project-filter.nonsemantic.jsonl",
+        "sha256": "fb53cbf8a7324f7c96d72379bb0d4b7c436abb2c63943cf9ccbefdfab033b1c2"
+      },
+      "scannerChunks": 2,
+      "completedScannerChunks": 2,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "Authorization bypass: empty projects_list removes all project-scoping from ReleaseThreshold query",
+          "severity": "high",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+            "startLine": 50,
+            "endLine": 58
+          }
+        }
+      ],
+      "durationMs": 19481,
+      "usage": {
+        "inputTokens": 10631,
+        "outputTokens": 1042,
+        "costUSD": 0.05549175
+      }
+    },
+    {
+      "case": "sentry-replay-delete-read-scope",
+      "repository": "getsentry/sentry",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "security-review",
+      "base": "9bf0ea738cd7847438d4a2cfb1fbdbb326426e01",
+      "head": "synthetic reverse of c1bc01ad419ac251e153c81f212628221f8c0628..9bf0ea738cd7847438d4a2cfb1fbdbb326426e01",
+      "complete": true,
+      "expectedFindingMatched": true,
+      "rawArtifact": {
+        "path": "/tmp/warden-security-recall-batch-artifacts/sentry-replay-delete-read-scope.nonsemantic.jsonl",
+        "sha256": "4fd4bea3b9d7fc3a34945002cb4f8d8c8d6a2db77e6cf4374d352890652a63ff"
+      },
+      "scannerChunks": 2,
+      "completedScannerChunks": 2,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [
+        {
+          "title": "DELETE permission expanded to allow project:read scope",
+          "severity": "medium",
+          "confidence": "high",
+          "location": {
+            "path": "src/sentry/replays/endpoints/project_replay_details.py",
+            "startLine": 26
+          }
+        }
+      ],
+      "durationMs": 6754,
+      "usage": {
+        "inputTokens": 10365,
+        "outputTokens": 306,
+        "costUSD": 0.04345425
+      }
+    },
+    {
+      "case": "warden-error-cause-chain-regression",
+      "repository": "getsentry/warden",
+      "suite": "historical",
+      "mode": "nonsemantic",
+      "skill": "code-review",
+      "base": "9bf777889e554ac30216ebfbd1f15a68abf92529",
+      "head": "synthetic reverse of 9273d82be6582d78c4809c3b4317dba09bf1b58b..9bf777889e554ac30216ebfbd1f15a68abf92529",
+      "complete": true,
+      "expectedFindingMatched": false,
+      "note": "Manual one-off produced the expected Error cause finding once, but the benchmark runner rerun produced no findings. Keep as an unstable candidate, not an accepted recall baseline.",
+      "rawArtifact": {
+        "path": "/tmp/warden-pr215-runner-artifacts/warden-error-cause-chain-regression.nonsemantic.jsonl",
+        "sha256": "edd93d525bca6e237fe45a912d344de6f7f8f7ca7e7ba73e7fcba5e2563e1a3e"
+      },
+      "scannerChunks": 8,
+      "completedScannerChunks": 8,
+      "skippedScannerChunks": 0,
+      "failedScannerChunks": 0,
+      "findings": [],
+      "durationMs": 203827,
+      "usage": {
+        "inputTokens": 345903,
+        "outputTokens": 26543,
+        "costUSD": 0.83203875
+      }
+    },
+    {
+      "case": "sentry-mcp-ai-conversation-absolute-range-period-conflict",
+      "repository": "getsentry/sentry-mcp",
+      "suite": "performance",
+      "mode": "nonsemantic",
+      "skill": "code-review",
+      "base": "df680f28fa705c447679bb8e0afa3f24e72387e0",
+      "head": "e5df63d64bef3140deb88c8c80701f0583348afc",
+      "complete": true,
+      "expectedFindingMatched": false,
+      "note": "High-fragmentation branch-prefix candidate with a later fix commit, but current code-review produced no findings.",
+      "rawArtifact": {
+        "path": "/tmp/warden-branch-recall-absolute-artifacts/sentry-mcp-ai-conversation-absolute-range-period-conflict.nonsemantic.jsonl",
+        "sha256": "78e59e7e32ec461968f34df18cf0df1967c826e958cd458942936394ec38a7ae"
+      },
+      "scannerChunks": 95,
+      "completedScannerChunks": 94,
+      "skippedScannerChunks": 1,
+      "failedScannerChunks": 0,
+      "findings": [],
+      "durationMs": 1691226,
+      "usage": {
+        "inputTokens": 7056116,
+        "outputTokens": 245823,
+        "costUSD": 14.9409432
+      }
+    }
+  ],
+  "priorOneOffRuns": [
+    {
+      "name": "axis-range-trimmed-semantic-off",
+      "note": "Trimmed two-file smoke test; useful for mechanics but not dataset quality.",
+      "scannerChunks": 2,
+      "findings": 1,
+      "costUSD": 1.22133795
+    },
+    {
+      "name": "axis-range-trimmed-semantic-on",
+      "note": "Trimmed two-file smoke test; useful for mechanics but not dataset quality.",
+      "scannerChunks": 1,
+      "findings": 1,
+      "costUSD": 0.46092255
+    },
+    {
+      "name": "axis-range-full-semantic-compact-similar",
+      "note": "Earlier one-off semantic experiment recovered the expected add-to-dashboard finding, but was not paired with a clean full non-semantic run.",
+      "scannerChunks": 6,
+      "findings": 1,
+      "costUSD": 1.95
+    }
+  ]
+}

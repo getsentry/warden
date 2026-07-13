@@ -7,13 +7,16 @@ import {
 } from './harness.js';
 import { discoverEvalScenarios } from './index.js';
 import { formatEvalId, formatEvalTestName } from './names.js';
+import { DEFAULT_EVAL_RUNTIME, defaultEvalModel, getEvalProviderApiKey, getEvalRuntimeApiKey } from './auth.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+const model = defaultEvalModel();
+const apiKey = getEvalRuntimeApiKey(model);
+const providerApiKey = getEvalProviderApiKey(model);
 const evals = discoverEvalScenarios({
   category: 'security-review',
   skill: '../warden/src/builtin-skills/security-review/SKILL.md',
-  runtime: 'pi',
-  model: 'anthropic/claude-sonnet-4-6',
+  runtime: DEFAULT_EVAL_RUNTIME,
+  model,
 });
 
 describeEval(
@@ -25,7 +28,7 @@ describeEval(
     }),
     judges: [createWardenEvalJudge(apiKey)],
     judgeThreshold: 1,
-    skipIf: () => !apiKey,
+    skipIf: () => !providerApiKey,
   },
   (it) => {
     for (const meta of evals) {

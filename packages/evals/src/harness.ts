@@ -174,7 +174,13 @@ export function createWardenEvalJudge(apiKey: string) {
 
     const meta = input;
     const findings = output.data.findings;
-    const judgeResult = await runJudge(meta, findings, apiKey);
+    const judgeResult = await runJudge(meta, findings, {
+      apiKey,
+      runtime: output.data.runtime === 'claude' || output.data.runtime === 'pi'
+        ? output.data.runtime
+        : meta.runtime,
+      model: output.data.model ?? meta.model,
+    });
     if (judgeResult.error) {
       return {
         score: 0,
