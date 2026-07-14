@@ -4,9 +4,29 @@ import {
   findingsToAnnotations,
   determineConclusion,
   aggregateSeverityCounts,
+  createCoreCheck,
   updateCoreCheck,
 } from './github-checks.js';
 import type { Finding, SkillReport } from '../types/index.js';
+
+describe('check details URL', () => {
+  it('links the View details action to the GitHub check results', async () => {
+    const create = vi.fn().mockResolvedValue({
+      data: { id: 123, html_url: 'https://github.com/getsentry/sentry/runs/123' },
+    });
+
+    await createCoreCheck(
+      { checks: { create } } as never,
+      { owner: 'getsentry', repo: 'sentry', headSha: 'abc123' }
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details_url: 'https://github.com/getsentry/sentry/commit/abc123/checks',
+      })
+    );
+  });
+});
 
 describe('severityToAnnotationLevel', () => {
   it('maps high to failure', () => {

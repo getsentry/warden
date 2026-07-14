@@ -96,6 +96,13 @@ export interface CreateCheckResult {
 const MAX_ANNOTATIONS_PER_REQUEST = 50;
 
 /**
+ * Link check-run actions back to GitHub, where Warden's summary and annotations live.
+ */
+function getCheckDetailsUrl(options: CheckOptions): string {
+  return `https://github.com/${options.owner}/${options.repo}/commit/${options.headSha}/checks`;
+}
+
+/**
  * Map severity levels to GitHub annotation levels.
  * high -> failure, medium -> warning, low -> notice
  */
@@ -211,6 +218,7 @@ export async function createSkillCheck(
     repo: options.repo,
     name: `warden: ${skillName}`,
     head_sha: options.headSha,
+    details_url: getCheckDetailsUrl(options),
     status: 'in_progress',
     started_at: new Date().toISOString(),
   });
@@ -271,6 +279,7 @@ export async function createCompletedSkillCheck(
     repo: options.repo,
     name: `warden: ${options.checkName ?? report.skill}`,
     head_sha: options.headSha,
+    details_url: getCheckDetailsUrl(options),
     status: 'completed',
     conclusion: payload.conclusion,
     completed_at: new Date().toISOString(),
@@ -347,6 +356,7 @@ export async function createFailedSkillCheck(
     repo: options.repo,
     name: `warden: ${skillName}`,
     head_sha: options.headSha,
+    details_url: getCheckDetailsUrl(options),
     status: 'completed',
     conclusion: 'failure',
     completed_at: new Date().toISOString(),
@@ -375,6 +385,7 @@ export async function createCoreCheck(
     repo: options.repo,
     name: 'warden',
     head_sha: options.headSha,
+    details_url: getCheckDetailsUrl(options),
     status: 'in_progress',
     started_at: new Date().toISOString(),
   });
@@ -407,6 +418,7 @@ export async function createCompletedCoreCheck(
     repo: options.repo,
     name: 'warden',
     head_sha: options.headSha,
+    details_url: getCheckDetailsUrl(options),
     status: 'completed',
     conclusion,
     completed_at: new Date().toISOString(),
