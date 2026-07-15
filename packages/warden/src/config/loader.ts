@@ -437,6 +437,7 @@ function triggerIdentity(skill: SkillConfig, trigger: SkillTrigger | undefined):
     failCheck: trigger?.failCheck ?? skill.failCheck,
     model: trigger?.model ?? skill.model,
     maxTurns: trigger?.maxTurns ?? skill.maxTurns,
+    verification: trigger?.verification?.enabled ?? skill.verification?.enabled,
     minConfidence: trigger?.minConfidence ?? skill.minConfidence,
     type: trigger?.type ?? '*',
     actions: trigger?.actions,
@@ -451,11 +452,10 @@ function resolveVerifyFindings(
   skill: SkillConfig,
   trigger?: SkillTrigger
 ): boolean {
-  const merged = mergeNestedConfig(
-    mergeNestedConfig(defaults?.verification, skill.verification),
-    trigger?.verification
-  );
-  return merged?.enabled !== false;
+  return trigger?.verification?.enabled
+    ?? skill.verification?.enabled
+    ?? defaults?.verification?.enabled
+    ?? true;
 }
 
 function resolveSkillSource(

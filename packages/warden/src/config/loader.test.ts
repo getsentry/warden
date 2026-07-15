@@ -500,9 +500,6 @@ describe('resolveSkillConfigs', () => {
       const skill: SkillConfig = {
         name: 'test-skill',
         verification: { enabled: false },
-        triggers: [
-          { type: 'pull_request', actions: ['opened'] },
-        ],
       };
 
       const config: WardenConfig = {
@@ -514,6 +511,7 @@ describe('resolveSkillConfigs', () => {
       };
 
       const [resolved] = resolveSkillConfigs(config);
+      expect(resolved?.type).toBe('*');
       expect(resolved?.verifyFindings).toBe(false);
     });
 
@@ -540,6 +538,30 @@ describe('resolveSkillConfigs', () => {
 
       const [resolved] = resolveSkillConfigs(config);
       expect(resolved?.verifyFindings).toBe(true);
+    });
+
+    it('includes verification overrides in stable trigger identities', () => {
+      const config: WardenConfig = {
+        version: 1,
+        skills: [{
+          name: 'test-skill',
+          triggers: [
+            {
+              type: 'pull_request',
+              actions: ['opened'],
+              verification: { enabled: false },
+            },
+            {
+              type: 'pull_request',
+              actions: ['opened'],
+              verification: { enabled: true },
+            },
+          ],
+        }],
+      };
+
+      const resolved = resolveSkillConfigs(config);
+      expect(new Set(resolved.map((trigger) => trigger.id)).size).toBe(2);
     });
 
     it('falls back to auxiliary model when synthesis model is unset', () => {

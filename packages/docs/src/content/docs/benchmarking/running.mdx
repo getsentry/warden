@@ -344,8 +344,10 @@ Record:
 
 Warden's finding verifier is enabled by default. Benchmark runs should leave it
 enabled unless they are deliberately testing verifier-off behavior. It is
-disabled only when `defaults.verification.enabled = false` is set in
-`warden.toml`. Record this as `findingVerification.enabled` in the result JSON.
+disabled when the effective `verification.enabled` setting is `false` in
+`warden.toml`, with trigger settings overriding skill settings and skill settings
+overriding defaults. Record this as `findingVerification.enabled` in the result
+JSON.
 
 Verifier calls are part of Warden's analysis pipeline, not benchmark scoring.
 They can add provider cost, and runs with more candidate findings generally do

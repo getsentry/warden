@@ -59,6 +59,12 @@ export function generateSkillToml(skill: SkillConfig): string {
     lines.push(`minConfidence = "${skill.minConfidence}"`);
   }
 
+  if (skill.verification?.enabled !== undefined) {
+    lines.push('');
+    lines.push('[skills.verification]');
+    lines.push(`enabled = ${skill.verification.enabled}`);
+  }
+
   // Nested triggers
   if (skill.triggers) {
     for (const trigger of skill.triggers) {
@@ -115,6 +121,12 @@ export function generateSkillToml(skill: SkillConfig): string {
 
       if (trigger.minConfidence !== undefined) {
         lines.push(`minConfidence = "${trigger.minConfidence}"`);
+      }
+
+      if (trigger.verification?.enabled !== undefined) {
+        lines.push('');
+        lines.push('[skills.triggers.verification]');
+        lines.push(`enabled = ${trigger.verification.enabled}`);
       }
 
       if (trigger.schedule) {

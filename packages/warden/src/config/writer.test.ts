@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { parse as parseToml } from 'smol-toml';
 import { generateSkillToml } from './writer.js';
-import type { SkillConfig } from './schema.js';
+import { WardenConfigSchema, type SkillConfig } from './schema.js';
 
 describe('generateSkillToml', () => {
   it('generates basic skill TOML with trigger', () => {
@@ -181,6 +182,22 @@ describe('generateSkillToml', () => {
     expect(triggerSection).toContain('failOn = "high"');
     expect(triggerSection).toContain('reportOn = "high"');
     expect(triggerSection).toContain('maxFindings = 5');
+  });
+
+  it('round-trips skill- and trigger-level verification overrides', () => {
+    const result = generateSkillToml({
+      name: 'security-review',
+      verification: { enabled: false },
+      triggers: [{
+        type: 'pull_request',
+        actions: ['opened'],
+        verification: { enabled: true },
+      }],
+    });
+
+    const config = WardenConfigSchema.parse(parseToml(`version = 1\n\n${result}`));
+    expect(config.skills[0]?.verification?.enabled).toBe(false);
+    expect(config.skills[0]?.triggers?.[0]?.verification?.enabled).toBe(true);
   });
 
   it('includes reportOnSuccess when present', () => {
