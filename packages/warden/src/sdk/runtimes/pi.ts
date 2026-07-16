@@ -132,6 +132,23 @@ function parseModelSelector(model: string): PiModelSelector {
   };
 }
 
+/**
+ * Throw a classified invalid-selector error when Pi's registry cannot resolve
+ * a provider/model pair.
+ *
+ * Converts the generic "Pi model not found" error into an
+ * InvalidPiModelSelectorError so it is classified as `invalid_model_selector`
+ * rather than `unknown`. This (a) opens the circuit breaker immediately and
+ * (b) gives the user an actionable message instead of "This usually indicates
+ * an authentication problem."
+ */
+function throwModelNotFound(model: string): never {
+  // Cloudflare-specific: @cf/ is a provider-native model ID, not a Pi selector.
+  // isPiModelSelector now rejects these at preflight, but guard here too in
+  // case the runtime is invoked directly without the CLI preflight.
+  throw new InvalidPiModelSelectorError({ option: 'model', model });
+}
+
 function legacyApiKeyProvider(model: string | undefined): string | undefined {
   if (!model) {
     return 'anthropic';
@@ -161,9 +178,7 @@ function resolvePiModel(
   const { provider, modelId } = parseModelSelector(model);
   const resolved = registry.find(provider, modelId);
   if (!resolved) {
-    throw new Error(
-      `Pi model not found: ${model}. Use provider/model, for example openai/gpt-5.5.`
-    );
+    throwModelNotFound(model);
   }
   return resolved;
 }

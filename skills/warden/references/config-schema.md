@@ -136,8 +136,15 @@ Skipped by default, with `!` patterns in `[defaults.ignore].paths` available for
 | Variable | Purpose |
 |----------|---------|
 | `WARDEN_MODEL` | Default model (lowest priority) |
-| `WARDEN_OPENAI_API_KEY` | OpenAI API key for OpenAI Pi models |
-| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key for Anthropic Pi models or Claude runtime |
+| `WARDEN_OPENAI_API_KEY` | OpenAI API key (Pi provider `openai`); bridged to `OPENAI_API_KEY` |
+| `WARDEN_ANTHROPIC_API_KEY` | Anthropic API key (Pi provider `anthropic` or Claude runtime); bridged to `ANTHROPIC_API_KEY` |
+| `WARDEN_GEMINI_API_KEY` | Google Gemini API key (Pi provider `google`); bridged to `GEMINI_API_KEY`. **Note:** Pi provider name is `google`, not `gemini`; use `google/<model-id>` selectors. |
+| `WARDEN_OPENROUTER_API_KEY` | OpenRouter API key (Pi provider `openrouter`); bridged to `OPENROUTER_API_KEY` |
+| `WARDEN_AI_GATEWAY_API_KEY` | Vercel AI Gateway API key (Pi provider `vercel-ai-gateway`); bridged to `AI_GATEWAY_API_KEY` |
+| `WARDEN_VERCEL_AI_GATEWAY_API_KEY` | Convenience alias for Vercel AI Gateway; bridged to `AI_GATEWAY_API_KEY`. Accepted in addition to `WARDEN_AI_GATEWAY_API_KEY`. |
+| `WARDEN_CLOUDFLARE_API_KEY` | Cloudflare API key for `cloudflare-workers-ai` or `cloudflare-ai-gateway`; bridged to `CLOUDFLARE_API_KEY` |
+| `WARDEN_CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (required for all Cloudflare providers); bridged to `CLOUDFLARE_ACCOUNT_ID` |
+| `WARDEN_CLOUDFLARE_GATEWAY_ID` | Cloudflare AI Gateway ID (required for `cloudflare-ai-gateway`); bridged to `CLOUDFLARE_GATEWAY_ID` |
 | `WARDEN_STATE_DIR` | Override cache location (default: `~/.local/warden`) |
 | `WARDEN_SKILL_CACHE_TTL` | Cache TTL in seconds for unpinned remotes (default: 86400) |
 

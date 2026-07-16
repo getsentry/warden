@@ -7,8 +7,12 @@ import type { SkillDefinition, WardenConfig, Effort } from '../config/schema.js'
 import { verifyAuth, type WardenAuthenticationError, type SkillRunnerOptions, type ChunkAnalysisResult } from '../sdk/runner.js';
 import {
   findInvalidPiModelSelector as findInvalidPiModelSelectorTarget,
+  findMissingCloudflareEnv,
   invalidPiModelSelectorMessage,
+  missingCloudflareEnvMessage,
+  piModelSelectorTip,
   type InvalidPiModelSelector,
+  type MissingCloudflareEnv,
 } from '../sdk/runtimes/model-selectors.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { aggregateAuxiliaryUsageAttribution, mergeAuxiliaryUsage } from '../sdk/usage.js';
@@ -759,7 +763,25 @@ export function findInvalidPiModelSelector(
 
 function reportInvalidPiModelSelector(reporter: Reporter, invalid: InvalidPiModelSelector): void {
   reporter.error(invalidPiModelSelectorMessage(invalid));
-  reporter.tip('Set a Pi model selector such as anthropic/claude-sonnet-4-6.');
+  reporter.tip(piModelSelectorTip(invalid.model));
+}
+
+function reportMissingCloudflareEnv(reporter: Reporter, missing: MissingCloudflareEnv): void {
+  reporter.error(missingCloudflareEnvMessage(missing));
+  const tip = missing.missing.map((v) => `export WARDEN_${v}=...`).join('  ');
+  reporter.tip(tip);
+}
+
+function emitMissingCloudflareEnvRunLog(
+  repoPath: string,
+  options: CLIOptions,
+  missing: MissingCloudflareEnv,
+): void {
+  emitEmptyRunLog(repoPath, options, {
+    code: 'auth_failed',
+    message: missingCloudflareEnvMessage(missing),
+    timestamp: new Date().toISOString(),
+  });
 }
 
 function emitInvalidPiModelSelectorRunLog(
@@ -1200,6 +1222,12 @@ export async function runSkills(
     emitInvalidPiModelSelectorRunLog(repoPath ?? cwd, options, invalidModelSelector);
     return 1;
   }
+  const missingCloudflare = findMissingCloudflareEnv(specs.map((s) => ({ ...s.runnerOptions })));
+  if (missingCloudflare) {
+    reportMissingCloudflareEnv(reporter, missingCloudflare);
+    emitMissingCloudflareEnvRunLog(repoPath ?? cwd, options, missingCloudflare);
+    return 1;
+  }
   let tasks: SkillTaskOptions[];
   const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
   try {
@@ -1534,6 +1562,12 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   if (invalidModelSelector) {
     reportInvalidPiModelSelector(reporter, invalidModelSelector);
     emitInvalidPiModelSelectorRunLog(repoPath, options, invalidModelSelector);
+    return 1;
+  }
+  const missingCloudflare = findMissingCloudflareEnv(specs.map((s) => ({ ...s.runnerOptions })));
+  if (missingCloudflare) {
+    reportMissingCloudflareEnv(reporter, missingCloudflare);
+    emitMissingCloudflareEnvRunLog(repoPath, options, missingCloudflare);
     return 1;
   }
   let tasks: SkillTaskOptions[];

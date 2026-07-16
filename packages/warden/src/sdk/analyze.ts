@@ -1145,9 +1145,17 @@ async function runSkillAnalysis(
         { code: 'provider_unavailable' },
       );
     }
+    // Include the first failure message so users can diagnose config problems
+    // without inspecting per-hunk logs. Messages are already sanitized by the
+    // time they reach failureMessage.
+    const firstFailureMsg = analysisFailures[0]?.message;
+    const failureDetail = firstFailureMsg
+      ? ` First failure: ${firstFailureMsg.slice(0, 500)}.`
+      : '';
     throw new SkillRunnerError(
-      `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
-      `This usually indicates an authentication problem. ${allHunksFailedGuidance(options.runtime)}`,
+      `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze.${failureDetail} ` +
+      `This usually indicates a runtime, model, or provider configuration problem. ` +
+      `${allHunksFailedGuidance(options.runtime)}`,
       { code: 'all_hunks_failed' },
     );
   }
