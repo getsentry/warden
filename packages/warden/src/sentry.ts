@@ -27,9 +27,11 @@ export function initSentry(context: SentryContext): void {
     environment: context === 'action' ? 'github-action' : 'cli',
     tracesSampleRate: 1.0,
     enableLogs: true,
+    streamGenAiSpans: true,
     integrations: [
       Sentry.consoleLoggingIntegration({ levels: ['warn', 'error'] }),
       Sentry.anthropicAIIntegration({ recordInputs: true, recordOutputs: true }),
+      Sentry.openAIIntegration({ recordInputs: true, recordOutputs: true }),
       Sentry.httpIntegration(),
     ],
   });
