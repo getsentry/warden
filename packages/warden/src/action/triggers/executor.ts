@@ -288,7 +288,19 @@ export async function executeTrigger(
 
         console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
         logGroupEnd();
-        return { triggerId: trigger.id, triggerName: trigger.name, skillName: trigger.skill, error };
+        return {
+          triggerId: trigger.id,
+          triggerName: trigger.name,
+          skillName: trigger.skill,
+          failOn,
+          reportOn,
+          minConfidence,
+          reportOnSuccess: trigger.reportOnSuccess,
+          requestChanges,
+          failCheck,
+          maxFindings: trigger.maxFindings ?? deps.globalMaxFindings,
+          error,
+        };
       }
     },
   );

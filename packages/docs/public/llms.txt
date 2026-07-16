@@ -613,8 +613,10 @@ without creating checks or comments. Then run `mode: report` with
 `findings-file` to create completed checks and post comments. For GitHub App
 runs, create the app token between those steps so reporting uses fresh write
 credentials. Pass the intended `config-path`, `base-config-path`,
-`base-skill-root`, and action-level reporting inputs to the report step; report
-mode reloads config and applies the report step's inputs.
+`base-skill-root`, and action-level reporting inputs to the analyze step.
+Analyze mode writes the resolved trigger and reporting settings into the
+findings file. Report mode validates that file against the workflow event, then
+publishes the stored results without reloading trigger config.
 
 ```yaml
 - name: Analyze

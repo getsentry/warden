@@ -14,7 +14,7 @@ import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import { buildFindingsOutput } from '../reporting/output.js';
-import type { ReplayTriggerResult } from '../reporting/output.js';
+import type { ReplayTriggerResult, WorkflowReplay } from '../reporting/output.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { ActionInputs } from '../inputs.js';
@@ -380,10 +380,11 @@ export function writeFindingsOutput(
   reports: SkillReport[],
   context: EventContext,
   findingObservations: FindingObservation[] = [],
-  options: { triggerResults?: ReplayTriggerResult[] } = {}
+  options: { workflow?: WorkflowReplay; triggerResults?: ReplayTriggerResult[] } = {}
 ): string {
   const filePath = getFindingsOutputPath(context.repoPath);
   const output = buildFindingsOutput(reports, context, findingObservations, {
+    workflow: options.workflow,
     triggerResults: options.triggerResults,
   });
 
