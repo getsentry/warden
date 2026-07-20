@@ -26,6 +26,7 @@ const RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'runtime-claude');
 const EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-auxiliary-model');
 const LAYERED_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-auxiliary-model');
 const NO_MATCH_EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-auxiliary-model');
+const SCHEDULE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'schedule');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 const PR_HEAD_SHA = 'abc123def456';
 const PREVIOUS_HEAD_SHA = 'previous123sha456';
@@ -392,6 +393,30 @@ describe('runPRWorkflow', () => {
             }),
           ],
           skillExecutions: [expect.objectContaining({ report, skillExecutionId: expect.any(String) })],
+          configuredSkills: [{ name: 'test-skill', triggered: true }],
+        })
+      );
+    });
+
+    it('analyze mode lists a schedule-only skill as configured but not triggered on a PR run', async () => {
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        SCHEDULE_ONLY_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
+        }),
+        [],
+        expect.objectContaining({
+          triggerResults: [],
+          configuredSkills: [{ name: 'test-skill', triggered: false }],
         })
       );
     });
@@ -2730,7 +2755,9 @@ describe('runPRWorkflow', () => {
             resolvedReason: 'fix_evaluation',
           }),
         ],
-        expect.any(Object)
+        expect.objectContaining({
+          configuredSkills: [{ name: 'test-skill', triggered: false }],
+        })
       );
     });
 
