@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { EventContext, Finding, SkillReport } from '../types/index.js';
-import { buildFindingsOutput, buildResolvedDefaults, FindingsOutputSchema } from './output.js';
+import {
+  buildConfiguredSkillsList,
+  buildFindingsOutput,
+  buildResolvedDefaults,
+  FindingsOutputSchema,
+} from './output.js';
 
 describe('findings output schema', () => {
   it('builds a schema-valid public findings payload', () => {
@@ -716,6 +721,68 @@ describe('findings output schema', () => {
       { skillExecutionId: 'exec-security', skillName: 'security-skill', role: 'primary' },
       { skillName: 'style-skill', role: 'corroborating', matchType: 'semantic' },
     ]);
+  });
+
+  it('includes the configured skills roster when provided', () => {
+    const output = buildFindingsOutput([createReport()], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+      configuredSkills: [
+        { name: 'test-skill', triggered: true },
+        { name: 'idle-skill', triggered: false },
+      ],
+    });
+
+    expect(FindingsOutputSchema.parse(output)).toEqual(output);
+    expect(output.configuredSkills).toEqual([
+      { name: 'test-skill', triggered: true },
+      { name: 'idle-skill', triggered: false },
+    ]);
+  });
+
+  it('omits the configured skills roster when not provided', () => {
+    const output = buildFindingsOutput([createReport()], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+    });
+
+    expect(output.configuredSkills).toBeUndefined();
+  });
+});
+
+describe('buildConfiguredSkillsList', () => {
+  it('marks matched skills as triggered and unmatched skills as not', () => {
+    const result = buildConfiguredSkillsList({
+      allTriggers: [{ name: 'matched-skill' }, { name: 'skipped-skill' }],
+      matchedTriggers: [{ name: 'matched-skill' }],
+    });
+
+    expect(result).toEqual([
+      { name: 'matched-skill', triggered: true },
+      { name: 'skipped-skill', triggered: false },
+    ]);
+  });
+
+  it('deduplicates multiple trigger blocks for the same skill', () => {
+    const result = buildConfiguredSkillsList({
+      allTriggers: [{ name: 'multi-trigger-skill' }, { name: 'multi-trigger-skill' }],
+      matchedTriggers: [{ name: 'multi-trigger-skill' }],
+    });
+
+    expect(result).toEqual([{ name: 'multi-trigger-skill', triggered: true }]);
+  });
+
+  it('returns an empty list when nothing is configured', () => {
+    expect(buildConfiguredSkillsList({ allTriggers: [], matchedTriggers: [] })).toEqual([]);
+  });
+
+  it('includes a skill whose only trigger is neither matched nor a PR-check skip', () => {
+    const result = buildConfiguredSkillsList({
+      allTriggers: [{ name: 'nightly-sweep' }],
+      matchedTriggers: [],
+    });
+
+    expect(result).toEqual([{ name: 'nightly-sweep', triggered: false }]);
   });
 });
 
