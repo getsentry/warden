@@ -2,7 +2,6 @@ version = 1
 
 [defaults]
 runtime = "pi"
-model = "anthropic/claude-sonnet-4-6"
 # Fail check on high+ severity findings (critical, high)
 failOn = "high"
 # Show annotations for medium+ severity findings
