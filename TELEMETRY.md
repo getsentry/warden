@@ -21,7 +21,7 @@ when telemetry is enabled.
 | -------------- | ------------- | ----- | ------- | --------- |
 | `trace_id` from CLI summary, JSONL, or `Workflow initialized` | Sentry Traces and Logs | `span_id` | full run timeline, slow/error span | inspect skill or workflow span |
 | Sentry `event_id` | Sentry Issues/Event | `trace_id`, `operation`, `warden.trigger.name`, `gen_ai.agent.name` | exception context and owning workflow | query trace logs |
-| GitHub repository or Action run | Sentry Logs and Metrics | `vcs.owner.name`, `vcs.repository.name`, `cicd.pipeline.run.id`, `github.event.name` | recent Warden runs and trigger count | open matching trace |
+| GitHub repository or Action run | Sentry Spans, Logs, and Metrics | `vcs.owner.name`, `vcs.repository.name`, `cicd.pipeline.run.id`, `github.event.name` | startup outcome, failure stage, and recent runs | open matching trace |
 | Skill or trigger name | Sentry Spans, Issues, Metrics | `gen_ai.agent.name`, `warden.trigger.name` | failing skill, model cost, finding count | inspect hunk or agent spans |
 | File path or hunk | Sentry Spans | `code.file.path`, `warden.hunk.line_range` | hunk analysis state and extraction failures | inspect agent span |
 | Model, tool, or token symptom | Sentry Spans | `gen_ai.*`, `gen_ai.tool.name` | Claude turn, tool, cost, and token behavior | inspect child spans |
@@ -34,12 +34,12 @@ when telemetry is enabled.
 | `trace_id` | one Warden run trace | CLI verbose summary, JSONL, logs, issues, spans | open trace |
 | `span_id` | one workflow, skill, hunk, model, or tool span | logs, spans | inspect span |
 | `event_id` | captured Sentry error | Sentry issue/event | open event |
-| `vcs.repository.name` | repository name | global attributes, logs, metrics, spans | repo runs |
-| `vcs.owner.name` | repository owner or org | global attributes, logs, metrics, spans | repo runs |
-| `vcs.repository.url.full` | canonical repository URL | global attributes, logs, metrics, spans | exact repo runs |
-| `github.event.name` | Action event name | `workflow.run` span | action entry |
-| `cicd.pipeline.run.id` | GitHub Actions run ID | global attributes, logs, metrics, spans | action run |
-| `cicd.pipeline.run.url.full` | GitHub Actions run URL | global attributes, logs, metrics, spans | action run |
+| `vcs.repository.name` | repository name | Action root span, logs, metrics | repo runs |
+| `vcs.owner.name` | repository owner or org | Action root span, logs, metrics | repo runs |
+| `vcs.repository.url.full` | canonical repository URL | Action root span, logs, metrics | exact repo runs |
+| `github.event.name` | Action event name | `cicd.workflow` root span, logs, metrics | action entry |
+| `cicd.pipeline.run.id` | GitHub Actions run ID | Action root span, logs, metrics | action run |
+| `cicd.pipeline.run.url.full` | GitHub Actions run URL | Action root span, logs, metrics | action run |
 | `warden.trigger.name` | matched Warden trigger | trigger exceptions | trigger failures |
 | `gen_ai.agent.name` | configured or resolved skill/agent | spans, issues, metrics | skill timeline |
 | `code.file.path` | file being analyzed or judged | hunk/file/fix spans | file analysis |
@@ -57,7 +57,8 @@ fields=timestamp,level,message,trace_id,span_id,vcs.owner.name,vcs.repository.na
 sort=timestamp
 ```
 
-Recent GitHub Action runs for a repository.
+Recent initialized GitHub Action workflows for a repository. Startup failures
+that occur before workflow initialization appear in the root-span recipe below.
 
 ```text
 dataset=logs query='message:"Workflow initialized" vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
@@ -65,11 +66,20 @@ fields=timestamp,trace_id,github.event.name,cicd.pipeline.run.id,cicd.pipeline.r
 sort=-timestamp
 ```
 
-Workflow run spans for a repository.
+GitHub Action root spans, including input and environment startup failures.
 
 ```text
-dataset=spans query='span.op:workflow.run vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
-fields=timestamp,trace,span_id,span.duration,github.event.name,cicd.pipeline.run.id,cicd.pipeline.run.url.full,warden.trigger.count,warden.finding.count,error.type
+dataset=spans query='span.op:cicd.workflow vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
+fields=timestamp,trace,span_id,span.duration,github.event.name,cicd.pipeline.run.id,cicd.pipeline.run.url.full,warden.action.outcome,warden.action.stage,warden.error.code,error.type
+sort=-timestamp
+```
+
+Analysis workflow child span after finding the Action root and copying its
+trace ID.
+
+```text
+dataset=spans query='trace:"<trace_id>" span.op:workflow.run'
+fields=timestamp,trace,span_id,span.duration,warden.trigger.count,warden.finding.count,error.type
 sort=-timestamp
 ```
 
@@ -131,8 +141,8 @@ sort=-timestamp
 Repository-level health and cost.
 
 ```text
-dataset=metrics query='metric:warden.workflow.runs OR metric:warden.skill.duration OR metric:warden.gen_ai.cost.usd vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
-fields=timestamp,metric,vcs.owner.name,vcs.repository.name,cicd.pipeline.run.id,gen_ai.agent.name,gen_ai.request.model,value
+dataset=metrics query='metric:warden.action.runs OR metric:warden.workflow.runs OR metric:warden.skill.duration OR metric:warden.gen_ai.cost.usd vcs.owner.name:"<owner>" vcs.repository.name:"<repo>"'
+fields=timestamp,metric,vcs.owner.name,vcs.repository.name,cicd.pipeline.run.id,warden.action.outcome,warden.action.stage,warden.error.code,gen_ai.agent.name,gen_ai.request.model,value
 sort=-timestamp
 ```
 
@@ -185,13 +195,16 @@ building repository context.
 
 Events: `Workflow initialized`, top-level CLI/action fatal error
 
-Spans: `workflow.run`, `workflow.init`, `config.load`
+Spans: `cicd.workflow`, `workflow.run`, `workflow.init`, `config.load`
+
+Metrics: `warden.action.runs`, `warden.workflow.runs`
 
 Attributes: `trace_id`, `vcs.owner.name`, `vcs.repository.name`,
 `vcs.repository.url.full`, `warden.source`, `github.event.name`,
 `cicd.pipeline.name`, `cicd.pipeline.run.id`,
 `cicd.pipeline.run.url.full`, `warden.trigger.count`,
-`warden.finding.count`
+`warden.finding.count`, `warden.action.outcome`, `warden.action.stage`,
+`warden.error.code`
 
 ### Trigger And GitHub Review
 

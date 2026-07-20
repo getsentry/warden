@@ -1,11 +1,17 @@
 import * as Sentry from '@sentry/node';
-import type { Severity, SkillReport } from './types/index.js';
+import type { NodeOptions } from '@sentry/node';
+import type { ErrorCode, Severity, SkillReport } from './types/index.js';
 import { SEVERITY_ORDER } from './types/index.js';
 import { getVersion } from './utils/index.js';
 import { genAiProviderName } from './sdk/otel.js';
 import { estimateUsageCostBreakdown } from './sdk/pricing.js';
 
 export type SentryContext = 'cli' | 'action';
+
+type SentryInitOptions = Pick<
+  NodeOptions,
+  'beforeSend' | 'beforeSendTransaction' | 'transport'
+>;
 
 let initialized = false;
 
@@ -16,7 +22,26 @@ function getGitHubServerUrl(): string {
   return serverUrl.replace(/\/+$/, '');
 }
 
-export function initSentry(context: SentryContext): void {
+function repositoryAttributes(repository: string): TelemetryAttributes {
+  const [owner, name] = repository.split('/');
+  const attrs: TelemetryAttributes = name
+    ? {
+        'vcs.owner.name': owner ?? '',
+        'vcs.repository.name': name,
+      }
+    : {
+        'vcs.repository.name': repository,
+      };
+
+  if (owner && name && owner !== 'local') {
+    attrs['vcs.provider.name'] = 'github';
+    attrs['vcs.repository.url.full'] = `${getGitHubServerUrl()}/${owner}/${name}`;
+  }
+  return attrs;
+}
+
+/** Initialize production telemetry, with optional SDK hooks for local observation. */
+export function initSentry(context: SentryContext, options: SentryInitOptions = {}): void {
   const dsn = process.env['WARDEN_SENTRY_DSN'];
   if (!dsn || initialized) return;
   initialized = true;
@@ -27,6 +52,7 @@ export function initSentry(context: SentryContext): void {
     environment: context === 'action' ? 'github-action' : 'cli',
     tracesSampleRate: 1.0,
     enableLogs: true,
+    ...options,
     integrations: [
       Sentry.consoleLoggingIntegration({ levels: ['warn', 'error'] }),
       Sentry.anthropicAIIntegration({ recordInputs: true, recordOutputs: true }),
@@ -58,7 +84,7 @@ export const { logger } = Sentry;
 
 /**
  * Set attributes on the global Sentry scope.
- * These automatically apply to ALL metrics and spans.
+ * These apply to logs and metrics. Pass them explicitly when starting spans.
  */
 export function setGlobalAttributes(attrs: TelemetryAttributes): void {
   if (!initialized) return;
@@ -74,35 +100,28 @@ export function setGlobalAttributes(attrs: TelemetryAttributes): void {
  */
 export function setRepositoryScope(repository: string | undefined): void {
   if (!repository || !initialized) return;
-  const [owner, name] = repository.split('/');
-  const attrs: TelemetryAttributes = name
-    ? {
-        'vcs.owner.name': owner ?? '',
-        'vcs.repository.name': name,
-      }
-    : {
-        'vcs.repository.name': repository,
-      };
+  const attrs = repositoryAttributes(repository);
 
-  if (owner && name && owner !== 'local') {
-    const serverUrl = getGitHubServerUrl();
-    attrs['vcs.provider.name'] = 'github';
-    attrs['vcs.repository.url.full'] = `${serverUrl}/${owner}/${name}`;
+  try {
+    Sentry.setTag('repository', repository);
+  } catch {
+    // Never break the workflow
   }
 
   setGlobalAttributes(attrs);
 }
 
 /**
- * Set GitHub Actions metadata on the global Sentry scope.
+ * Set GitHub Actions metadata on the global Sentry scope and return the
+ * attributes that must be passed explicitly to the action's root span.
  */
-export function setGitHubActionScope(eventName: string | undefined): void {
-  if (!initialized) return;
-
+export function setGitHubActionScope(eventName: string | undefined): TelemetryAttributes {
   const repository = process.env['GITHUB_REPOSITORY'];
   const runId = process.env['GITHUB_RUN_ID'];
   const serverUrl = getGitHubServerUrl();
   const attrs: TelemetryAttributes = {};
+
+  if (repository) Object.assign(attrs, repositoryAttributes(repository));
 
   if (eventName) {
     attrs['github.event.name'] = eventName;
@@ -120,9 +139,37 @@ export function setGitHubActionScope(eventName: string | undefined): void {
     attrs['cicd.pipeline.task.name'] = process.env['GITHUB_JOB'];
   }
 
-  if (Object.keys(attrs).length > 0) {
-    setGlobalAttributes(attrs);
+  if (!initialized) return attrs;
+
+  setGlobalAttributes(attrs);
+
+  try {
+    if (repository) Sentry.setTag('repository', repository);
+    if (eventName) Sentry.setTag('github.event.name', eventName);
+    if (process.env['GITHUB_WORKFLOW']) {
+      Sentry.setTag('cicd.pipeline.name', process.env['GITHUB_WORKFLOW']);
+    }
+    if (runId) Sentry.setTag('cicd.pipeline.run.id', runId);
+    if (process.env['GITHUB_JOB']) {
+      Sentry.setTag('cicd.pipeline.task.name', process.env['GITHUB_JOB']);
+    }
+
+    Sentry.setContext('github_actions', {
+      repository,
+      event: eventName,
+      workflow: process.env['GITHUB_WORKFLOW'],
+      job: process.env['GITHUB_JOB'],
+      run_id: runId,
+      run_attempt: process.env['GITHUB_RUN_ATTEMPT'],
+      run_url: repository && runId ? `${serverUrl}/${repository}/actions/runs/${runId}` : undefined,
+      ref: process.env['GITHUB_REF'],
+      sha: process.env['GITHUB_SHA'],
+    });
+  } catch {
+    // Never break the workflow
   }
+
+  return attrs;
 }
 
 /**
@@ -239,6 +286,22 @@ function emitCostComponentMetrics(
 export function emitRunMetric(): void {
   safeEmit(() => {
     Sentry.metrics.count('warden.workflow.runs', 1);
+  });
+}
+
+/** Emit the final outcome of a GitHub Action invocation, including startup failures. */
+export function emitActionRunMetric(
+  outcome: 'success' | 'failure',
+  stage: 'input' | 'environment' | 'dispatch',
+  errorCode?: ErrorCode
+): void {
+  safeEmit(() => {
+    const attrs: TelemetryAttributes = {
+      'warden.action.outcome': outcome,
+      'warden.action.stage': stage,
+    };
+    if (errorCode) attrs['warden.error.code'] = errorCode;
+    Sentry.metrics.count('warden.action.runs', 1, { attributes: attrs });
   });
 }
 

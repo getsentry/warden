@@ -1,40 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-const sentryMocks = vi.hoisted(() => {
-  const setAttributes = vi.fn();
-
-  return {
-    init: vi.fn(),
-    setTag: vi.fn(),
-    getGlobalScope: vi.fn(() => ({ setAttributes })),
-    consoleLoggingIntegration: vi.fn(() => ({ name: 'console' })),
-    anthropicAIIntegration: vi.fn(() => ({ name: 'anthropic' })),
-    httpIntegration: vi.fn(() => ({ name: 'http' })),
-    metrics: {
-      count: vi.fn(),
-      distribution: vi.fn(),
-    },
-    logger: {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      fmt: (strings: TemplateStringsArray, ...values: unknown[]) =>
-        strings.reduce((message, chunk, index) => `${message}${String(values[index - 1] ?? '')}${chunk}`),
-    },
-    getActiveSpan: vi.fn(),
-    flush: vi.fn(async () => true),
-    setAttributes,
-  };
-});
-
-vi.mock('@sentry/node', () => sentryMocks);
-
-async function loadInitializedSentry() {
-  vi.resetModules();
-  const sentry = await import('./sentry.js');
-  sentry.initSentry('action');
-  return sentry;
-}
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  emitActionRunMetric,
+  emitFixEvalVerdictMetric,
+  emitSkillMetrics,
+  initSentry,
+  setGitHubActionScope,
+  setRepositoryScope,
+  Sentry,
+} from './sentry.js';
 
 function clearTelemetryEnv(): void {
   delete process.env['WARDEN_SENTRY_DSN'];
@@ -43,35 +16,86 @@ function clearTelemetryEnv(): void {
   delete process.env['GITHUB_SERVER_URL'];
   delete process.env['GITHUB_WORKFLOW'];
   delete process.env['GITHUB_JOB'];
+  delete process.env['GITHUB_RUN_ATTEMPT'];
+  delete process.env['GITHUB_REF'];
+  delete process.env['GITHUB_SHA'];
+}
+
+function spyOnClientEmit() {
+  const client = Sentry.getClient();
+  if (!client) throw new Error('Sentry test client was not initialized');
+  return vi.spyOn(client, 'emit');
 }
 
 describe('sentry telemetry scope', () => {
+  beforeAll(() => {
+    process.env['WARDEN_SENTRY_DSN'] = 'https://public@example.com/1';
+    initSentry('action', {
+      transport: () => ({
+        send: async () => ({}),
+        flush: async () => true,
+      }),
+    });
+  });
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
     clearTelemetryEnv();
     process.env['WARDEN_SENTRY_DSN'] = 'https://public@example.com/1';
+    Sentry.getGlobalScope().clear();
+    Sentry.getIsolationScope().clear();
   });
 
   afterEach(() => {
     clearTelemetryEnv();
   });
 
+  afterAll(async () => {
+    await Sentry.close(0);
+  });
+
   it('uses the GitHub Actions server URL for repository and run URLs', async () => {
     process.env['GITHUB_SERVER_URL'] = 'https://github.enterprise.example/';
     process.env['GITHUB_REPOSITORY'] = 'acme/widget';
     process.env['GITHUB_RUN_ID'] = '12345';
+    process.env['GITHUB_RUN_ATTEMPT'] = '2';
+    process.env['GITHUB_REF'] = 'refs/pull/42/merge';
+    process.env['GITHUB_SHA'] = 'abc123';
+    process.env['GITHUB_WORKFLOW'] = 'Warden';
+    process.env['GITHUB_JOB'] = 'review';
 
-    const sentry = await loadInitializedSentry();
+    const setAttributes = vi.spyOn(Sentry.getGlobalScope(), 'setAttributes');
+    const isolationScope = Sentry.getIsolationScope();
+    const setTag = vi.spyOn(isolationScope, 'setTag');
+    const setContext = vi.spyOn(isolationScope, 'setContext');
 
-    sentry.setRepositoryScope('acme/widget');
-    sentry.setGitHubActionScope('pull_request');
+    const actionAttributes = setGitHubActionScope('pull_request');
 
-    expect(sentryMocks.setAttributes).toHaveBeenCalledWith(
+    expect(setAttributes).toHaveBeenCalledWith(
       expect.objectContaining({
         'vcs.repository.url.full': 'https://github.enterprise.example/acme/widget',
       })
     );
-    expect(sentryMocks.setAttributes).toHaveBeenCalledWith(
+    expect(actionAttributes).toEqual(expect.objectContaining({
+      'vcs.owner.name': 'acme',
+      'vcs.repository.name': 'widget',
+      'github.event.name': 'pull_request',
+      'cicd.pipeline.run.id': '12345',
+    }));
+    expect(setTag).toHaveBeenCalledWith('repository', 'acme/widget');
+    expect(setTag).toHaveBeenCalledWith('cicd.pipeline.run.id', '12345');
+    expect(setContext).toHaveBeenCalledWith('github_actions', {
+      repository: 'acme/widget',
+      event: 'pull_request',
+      workflow: 'Warden',
+      job: 'review',
+      run_id: '12345',
+      run_attempt: '2',
+      run_url: 'https://github.enterprise.example/acme/widget/actions/runs/12345',
+      ref: 'refs/pull/42/merge',
+      sha: 'abc123',
+    });
+    expect(setAttributes).toHaveBeenCalledWith(
       expect.objectContaining({
         'github.event.name': 'pull_request',
         'cicd.pipeline.run.url.full':
@@ -84,17 +108,17 @@ describe('sentry telemetry scope', () => {
     process.env['GITHUB_REPOSITORY'] = 'getsentry/warden';
     process.env['GITHUB_RUN_ID'] = '67890';
 
-    const sentry = await loadInitializedSentry();
+    const setAttributes = vi.spyOn(Sentry.getGlobalScope(), 'setAttributes');
 
-    sentry.setRepositoryScope('getsentry/warden');
-    sentry.setGitHubActionScope('push');
+    setRepositoryScope('getsentry/warden');
+    setGitHubActionScope('push');
 
-    expect(sentryMocks.setAttributes).toHaveBeenCalledWith(
+    expect(setAttributes).toHaveBeenCalledWith(
       expect.objectContaining({
         'vcs.repository.url.full': 'https://github.com/getsentry/warden',
       })
     );
-    expect(sentryMocks.setAttributes).toHaveBeenCalledWith(
+    expect(setAttributes).toHaveBeenCalledWith(
       expect.objectContaining({
         'cicd.pipeline.run.url.full': 'https://github.com/getsentry/warden/actions/runs/67890',
       })
@@ -102,23 +126,49 @@ describe('sentry telemetry scope', () => {
   });
 
   it('emits fix evaluation verdict metrics with fallback attribution', async () => {
-    const sentry = await loadInitializedSentry();
+    const emit = spyOnClientEmit();
 
-    sentry.emitFixEvalVerdictMetric('eval_error', 'security-review', { usedFallback: true });
+    emitFixEvalVerdictMetric('eval_error', 'security-review', { usedFallback: true });
 
-    expect(sentryMocks.metrics.count).toHaveBeenCalledWith('warden.fix_eval.verdict', 1, {
-      attributes: {
-        'warden.fix_eval.verdict': 'eval_error',
-        'warden.fix_eval.used_fallback': true,
-        'gen_ai.agent.name': 'security-review',
-      },
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.fix_eval.verdict',
+        type: 'counter',
+        value: 1,
+        attributes: expect.objectContaining({
+          'warden.fix_eval.verdict': 'eval_error',
+          'warden.fix_eval.used_fallback': true,
+          'gen_ai.agent.name': 'security-review',
+        }),
+      })
+    );
+  });
+
+  it('emits action failures with startup stage and stable error code', async () => {
+    const emit = spyOnClientEmit();
+
+    emitActionRunMetric('failure', 'input', 'auth_failed');
+
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.action.runs',
+        type: 'counter',
+        value: 1,
+        attributes: expect.objectContaining({
+          'warden.action.outcome': 'failure',
+          'warden.action.stage': 'input',
+          'warden.error.code': 'auth_failed',
+        }),
+      })
+    );
   });
 
   it('emits GenAI token metrics with runtime-derived provider attribution', async () => {
-    const sentry = await loadInitializedSentry();
+    const emit = spyOnClientEmit();
 
-    sentry.emitSkillMetrics({
+    emitSkillMetrics({
       skill: 'security-review',
       summary: 'No findings',
       findings: [],
@@ -137,22 +187,28 @@ describe('sentry telemetry scope', () => {
       },
     });
 
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('gen_ai.client.token.usage', 10, {
-      unit: '{token}',
-      attributes: expect.objectContaining({
-        'gen_ai.operation.name': 'invoke_agent',
-        'gen_ai.provider.name': 'x_ai',
-        'gen_ai.request.model': 'xai/grok-test',
-        'gen_ai.token.type': 'input',
-        'warden.runtime.name': 'pi',
-      }),
-    });
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'gen_ai.client.token.usage',
+        type: 'distribution',
+        value: 10,
+        unit: '{token}',
+        attributes: expect.objectContaining({
+          'gen_ai.operation.name': 'invoke_agent',
+          'gen_ai.provider.name': 'x_ai',
+          'gen_ai.request.model': 'xai/grok-test',
+          'gen_ai.token.type': 'input',
+          'warden.runtime.name': 'pi',
+        }),
+      })
+    );
   });
 
   it('emits Warden token and cost components for cached-token accounting', async () => {
-    const sentry = await loadInitializedSentry();
+    const emit = spyOnClientEmit();
 
-    sentry.emitSkillMetrics({
+    emitSkillMetrics({
       skill: 'security-review',
       summary: 'No findings',
       findings: [],
@@ -171,67 +227,94 @@ describe('sentry telemetry scope', () => {
       },
     });
 
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('gen_ai.client.token.usage', 1500, {
-      unit: '{token}',
-      attributes: expect.objectContaining({
-        'gen_ai.token.type': 'input',
-      }),
-    });
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 1000, {
-      unit: '{token}',
-      attributes: expect.objectContaining({
-        'warden.gen_ai.token.category': 'standard_input',
-      }),
-    });
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 200, {
-      unit: '{token}',
-      attributes: expect.objectContaining({
-        'warden.gen_ai.token.category': 'cache_read_input',
-      }),
-    });
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 100, {
-      unit: '{token}',
-      attributes: expect.objectContaining({
-        'warden.gen_ai.token.category': 'cache_creation_5m_input',
-      }),
-    });
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.token.usage', 200, {
-      unit: '{token}',
-      attributes: expect.objectContaining({
-        'warden.gen_ai.token.category': 'cache_creation_1h_input',
-      }),
-    });
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith('warden.gen_ai.cost.component.usd', 0.00002, {
-      attributes: expect.objectContaining({
-        'warden.gen_ai.cost.component': 'cache_read_input',
-      }),
-    });
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith(
-      'warden.gen_ai.cost.component.usd',
-      expect.closeTo(0.000125, 10),
-      {
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'gen_ai.client.token.usage',
+        value: 1500,
+        unit: '{token}',
+        attributes: expect.objectContaining({ 'gen_ai.token.type': 'input' }),
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.token.usage',
+        value: 1000,
+        attributes: expect.objectContaining({
+          'warden.gen_ai.token.category': 'standard_input',
+        }),
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.token.usage',
+        value: 200,
+        attributes: expect.objectContaining({
+          'warden.gen_ai.token.category': 'cache_read_input',
+        }),
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.token.usage',
+        value: 100,
+        attributes: expect.objectContaining({
+          'warden.gen_ai.token.category': 'cache_creation_5m_input',
+        }),
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.token.usage',
+        value: 200,
+        attributes: expect.objectContaining({
+          'warden.gen_ai.token.category': 'cache_creation_1h_input',
+        }),
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.cost.component.usd',
+        value: 0.00002,
+        attributes: expect.objectContaining({
+          'warden.gen_ai.cost.component': 'cache_read_input',
+        }),
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.cost.component.usd',
+        value: expect.closeTo(0.000125, 10),
         attributes: expect.objectContaining({
           'warden.gen_ai.cost.component': 'cache_creation_5m_input',
         }),
-      }
+      })
     );
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith(
-      'warden.gen_ai.cost.component.usd',
-      0.0004,
-      {
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.cost.component.usd',
+        value: 0.0004,
         attributes: expect.objectContaining({
           'warden.gen_ai.cost.component': 'cache_creation_1h_input',
         }),
-      }
+      })
     );
-    expect(sentryMocks.metrics.distribution).toHaveBeenCalledWith(
-      'warden.gen_ai.cost.component.usd',
-      0.02,
-      {
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.gen_ai.cost.component.usd',
+        value: 0.02,
         attributes: expect.objectContaining({
           'warden.gen_ai.cost.component': 'web_search',
         }),
-      }
+      })
     );
   });
 });

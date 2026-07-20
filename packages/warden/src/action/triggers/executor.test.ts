@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Octokit } from '@octokit/rest';
+import type { ErrorEvent } from '@sentry/core';
 import {
   executeTrigger,
   type TriggerCheckCompleteOptions,
@@ -8,26 +9,7 @@ import {
 import type { ResolvedTrigger } from '../../config/loader.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
-
-const sentryMocks = vi.hoisted(() => ({
-  captureException: vi.fn(),
-  startSpan: vi.fn((_ctx: unknown, callback: (span: { setAttribute: (key: string, value: unknown) => void }) => unknown) =>
-    callback({ setAttribute: vi.fn() })
-  ),
-}));
-
-vi.mock('../../sentry.js', async (importOriginal) => {
-  const actual: Record<string, unknown> = await importOriginal();
-  const actualSentry = actual['Sentry'] as Record<string, unknown>;
-  return {
-    ...actual,
-    Sentry: {
-      ...actualSentry,
-      captureException: sentryMocks.captureException,
-      startSpan: sentryMocks.startSpan,
-    },
-  };
-});
+import { initSentry, Sentry } from '../../sentry.js';
 
 // Mock dependencies
 vi.mock('../../skills/loader.js', () => ({
@@ -58,12 +40,37 @@ import { renderSkillReport } from '../../output/renderer.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { InvalidPiModelSelectorError } from '../../sdk/runtimes/model-selectors.js';
 
+const capturedEvents: ErrorEvent[] = [];
+
 describe('executeTrigger', () => {
+  beforeAll(() => {
+    process.env['WARDEN_SENTRY_DSN'] = 'https://public@example.com/1';
+    initSentry('action', {
+      transport: () => ({
+        send: async () => ({}),
+        flush: async () => true,
+      }),
+      beforeSend: (event) => {
+        capturedEvents.push(event);
+        return event;
+      },
+    });
+  });
+
   // Suppress console output during tests
   beforeEach(() => {
+    vi.restoreAllMocks();
+    capturedEvents.length = 0;
+    Sentry.getGlobalScope().clear();
+    Sentry.getIsolationScope().clear();
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.clearAllMocks();
+  });
+
+  afterAll(async () => {
+    delete process.env['WARDEN_SENTRY_DSN'];
+    await Sentry.close(0);
   });
 
   const mockOctokit = {} as Octokit;
@@ -309,6 +316,7 @@ describe('executeTrigger', () => {
       runtime: 'pi',
       model: 'claude-sonnet-4-5',
     }, mockDeps);
+    await Sentry.flush(1000);
 
     expect(runSkillTask).not.toHaveBeenCalled();
     expect(result.triggerName).toBe('test-trigger');
@@ -322,8 +330,7 @@ describe('executeTrigger', () => {
       }),
       { owner: 'test-owner', repo: 'test-repo', headSha: 'abc123' }
     );
-    expect(sentryMocks.captureException).toHaveBeenCalledWith(
-      expect.any(InvalidPiModelSelectorError),
+    expect(capturedEvents).toContainEqual(
       expect.objectContaining({
         tags: expect.objectContaining({
           'warden.error.code': 'invalid_model_selector',

@@ -5,7 +5,7 @@
  * module. Workflow modules own trigger-level error handling.
  */
 
-import { initSentry, Sentry, flushSentry } from '../sentry.js';
+import { initSentry, flushSentry } from '../sentry.js';
 import { ActionFailedError } from './workflow/base.js';
 import { runAction } from './runner.js';
 
@@ -16,7 +16,6 @@ runAction()
     if (error instanceof ActionFailedError) {
       console.error(`::error::${error.message}`);
     } else {
-      Sentry.captureException(error);
       console.error(`::error::Unexpected error: ${error}`);
     }
     await flushSentry();

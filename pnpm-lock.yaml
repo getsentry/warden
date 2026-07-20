@@ -136,6 +136,9 @@ importers:
       '@octokit/rest':
         specifier: ^22.0.1
         version: 22.0.1
+      '@sentry/core':
+        specifier: ^10.53.1
+        version: 10.53.1
       '@sentry/dotagents-lib':
         specifier: ^1.17.0
         version: 1.17.0

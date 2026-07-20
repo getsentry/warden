@@ -52,6 +52,7 @@
     "@earendil-works/pi-coding-agent": "^0.80.6",
     "@inquirer/select": "^5.1.5",
     "@octokit/rest": "^22.0.1",
+    "@sentry/core": "^10.53.1",
     "@sentry/dotagents-lib": "^1.17.0",
     "@sentry/node": "^10.53.1",
     "chalk": "^5.6.2",

@@ -28,15 +28,17 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 
 ### Global Attributes
 
-Set via `Sentry.getGlobalScope().setAttributes()`. These propagate automatically to all metrics and spans.
+Set via `Sentry.getGlobalScope().setAttributes()`. These propagate to logs and
+metrics. The GitHub Action root span receives the same attributes explicitly
+because current Sentry scope attributes do not decorate spans.
 
 | Attribute | Set when | Value |
 |-----------|----------|-------|
 | `warden.source` | `initSentry()` | `github-action` or `cli` |
-| `vcs.owner.name` | After context built | repository owner/org (e.g. `getsentry`) |
-| `vcs.repository.name` | After context built | repository name (e.g. `sentry`) |
-| `vcs.provider.name` | After context built for GitHub repos | `github` |
-| `vcs.repository.url.full` | After context built for GitHub repos | canonical repository URL |
+| `vcs.owner.name` | Repository context or Action startup | repository owner/org (e.g. `getsentry`) |
+| `vcs.repository.name` | Repository context or Action startup | repository name (e.g. `sentry`) |
+| `vcs.provider.name` | Repository context or Action startup for GitHub repos | `github` |
+| `vcs.repository.url.full` | Repository context or Action startup for GitHub repos | canonical repository URL |
 | `github.event.name` | GitHub Actions only | Action event name (GitHub-specific; no OTel equivalent) |
 | `cicd.pipeline.name` | GitHub Actions only | GitHub workflow name |
 | `cicd.pipeline.run.id` | GitHub Actions only | GitHub workflow run ID |
@@ -73,31 +75,33 @@ The Anthropic integration records inputs and outputs (`recordInputs: true, recor
 Spans follow [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) where applicable, with Sentry-specific extensions for AI agent visibility.
 
 ```
-workflow.run "review pull_request"
-  workflow.init "initialize workflow"
-  workflow.setup "setup github state"
-  workflow.execute "execute triggers"
-    skill.run "run {skill}"                    ← existing
-      skill.analyze_file "analyze file {path}"
-        skill.analyze_hunk "analyze hunk {path}:{range}"
-          gen_ai.invoke_agent "invoke_agent {skill}"   ← Sentry AI dashboard
-            gen_ai.chat "chat {skill} turn 1"          ← per-turn from SDK stream
-              gen_ai.execute_tool "Read"                ← tool use from SDK stream
-              gen_ai.execute_tool "Grep"
-            gen_ai.chat "chat {skill} turn 2"
-            gen_ai.chat "chat {skill} turn 3"
-              gen_ai.execute_tool "Read"
-  workflow.review "post reviews"
-  workflow.resolve "resolve stale comments"
-    fix_eval.run "evaluate fix attempts"
-      fix_eval.evaluate "evaluate fix {path}:{line}"
-        (auto: anthropic chat spans via integration)
+cicd.workflow "run Warden action"              ← GitHub Action only
+  workflow.run "review pull_request"
+    workflow.init "initialize workflow"
+    workflow.setup "setup github state"
+    workflow.execute "execute triggers"
+      skill.run "run {skill}"                    ← existing
+        skill.analyze_file "analyze file {path}"
+          skill.analyze_hunk "analyze hunk {path}:{range}"
+            gen_ai.invoke_agent "invoke_agent {skill}"   ← Sentry AI dashboard
+              gen_ai.chat "chat {skill} turn 1"          ← per-turn from SDK stream
+                gen_ai.execute_tool "Read"                ← tool use from SDK stream
+                gen_ai.execute_tool "Grep"
+              gen_ai.chat "chat {skill} turn 2"
+              gen_ai.chat "chat {skill} turn 3"
+                gen_ai.execute_tool "Read"
+    workflow.review "post reviews"
+    workflow.resolve "resolve stale comments"
+      fix_eval.run "evaluate fix attempts"
+        fix_eval.evaluate "evaluate fix {path}:{line}"
+          (auto: anthropic chat spans via integration)
 ```
 
 ### Span ops
 
 | `op` | Scope | Notes |
 |------|-------|-------|
+| `cicd.workflow` | Entire GitHub Action invocation | Root span includes failures before workflow initialization |
 | `gen_ai.invoke_agent` | Claude Code SDK subprocess | Required prefix for Sentry AI Agents dashboard |
 | `gen_ai.chat` | Per-turn API call within SDK | Created from `SDKAssistantMessage` stream events; child of `invoke_agent` |
 | `gen_ai.execute_tool` | Tool execution within a turn | Created from `SDKAssistantMessage` tool_use blocks + `SDKToolProgressMessage`; child of `gen_ai.chat` |
@@ -203,6 +207,17 @@ The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic
 
 ## Internal Span Attributes
 
+### `cicd.workflow`
+
+The GitHub Action root span receives the `vcs.*`, `github.event.name`, and
+`cicd.*` attributes listed under **Global Attributes** at creation.
+
+| Attribute | Type | When set |
+|-----------|------|----------|
+| `warden.action.outcome` | string | Completion (`success` or `failure`) |
+| `warden.action.stage` | string | Failure (`input`, `environment`, or `dispatch`) |
+| `warden.error.code` | string | Failure, using the stable `ErrorCode` taxonomy |
+
 ### `workflow.run`
 
 | Attribute | Type | When set |
@@ -276,7 +291,12 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 
 Non-fatal errors (the workflow continues despite the failure) are still real errors. A GitHub API call that 500s is an error whether or not we can recover from it.
 
-`setFailed()` throws `ActionFailedError`, which propagates out of `Sentry.startSpan()` callbacks so spans end cleanly before the process exits. The top-level catch handler in `packages/warden/src/action/main.ts` distinguishes `ActionFailedError` (expected failure: threshold exceeded, missing env, CLI not found) from unexpected errors. Only unexpected errors call `captureException`. Both paths call `flushSentry()` then `process.exit(1)`.
+`setFailed()` throws `ActionFailedError`, which propagates out of
+`Sentry.startSpan()` callbacks so spans end cleanly before the process exits.
+The dispatcher records expected failures on the root span and action-run metric
+without creating an Issue. Unexpected errors are captured inside the active
+root span. The top-level catch handler in `packages/warden/src/action/run.ts`
+prints the failure, flushes Sentry, and exits.
 
 ### Operation tags
 
@@ -296,7 +316,10 @@ All `captureException` calls include an `operation` tag for filtering in Sentry 
 | `update_core_check` | `finalizeWorkflow` | Updating check run with summary |
 | `fetch_fix_context` | `evaluateFixAttempts` | Fetching code at finding location |
 
-Untagged `captureException` calls exist at top-level catch handlers in `packages/warden/src/cli/index.ts`, `packages/warden/src/action/main.ts`, and `packages/warden/src/action/triggers/executor.ts` (tagged with `warden.trigger.name` and `gen_ai.agent.name` instead).
+Untagged `captureException` calls exist in `packages/warden/src/cli/index.ts`.
+The Action dispatcher tags unexpected startup errors with `warden.error.code`
+and `warden.action.stage`; the trigger executor tags failures with
+`warden.trigger.name` and `gen_ai.agent.name` instead.
 
 ---
 
@@ -313,6 +336,15 @@ All metrics inherit `warden.source`, repository attributes, and GitHub Actions a
 | `warden.workflow.runs` | count | -- (inherits globals) |
 
 Called once per analysis workflow execution (CLI run or GitHub Action workflow).
+
+### Action run count (`emitActionRunMetric`)
+
+| Metric | Type | Per-metric attributes |
+|--------|------|-----------------------|
+| `warden.action.runs` | count | `warden.action.outcome`, `warden.action.stage`, `warden.error.code` (failures only) |
+
+Called once per GitHub Action invocation, including failures during input
+parsing or environment validation before an analysis workflow exists.
 
 ### Skill-level (`emitSkillMetrics`)
 
@@ -418,6 +450,7 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emi
 | `packages/warden/src/sdk/analyze.ts` | `executeQuery` (gen AI span), `analyzeFile` / `analyzeHunk` (workflow spans), extraction + retry + dedup metrics |
 | `packages/warden/src/action/fix-evaluation/index.ts` | `evaluateFixAttempts` / per-comment spans, fix eval metrics |
 | `packages/warden/src/action/workflow/base.ts` | `ActionFailedError` sentinel, `setFailed()` |
-| `packages/warden/src/action/main.ts` | Top-level catch handler, Sentry flush, `process.exit` |
+| `packages/warden/src/action/runner.ts` | Action root span, startup outcome metric, unexpected error capture |
+| `packages/warden/src/action/run.ts` | Top-level catch handler, Sentry flush, `process.exit` |
 | `packages/warden/src/action/workflow/pr-workflow.ts` | Error context tags, stale resolution metrics |
 | `packages/warden/src/cli/output/tasks.ts` | Dedup metrics (CLI code path) |

@@ -6,19 +6,6 @@ import { cleanupArtifacts } from './log-cleanup.js';
 import { runBuild } from './commands/build.js';
 import { main } from './main.js';
 
-vi.mock('../sentry.js', () => ({
-  Sentry: {
-    startSpan: vi.fn(async (_span, callback: (span: { setAttribute: (key: string, value: string) => void }) => unknown) => {
-      return callback({ setAttribute: () => undefined });
-    }),
-  },
-  flushSentry: vi.fn(async () => undefined),
-  setRepositoryScope: vi.fn(),
-  emitRunMetric: vi.fn(),
-  getTraceId: vi.fn(() => undefined),
-  initSentry: vi.fn(),
-}));
-
 vi.mock('./commands/build.js', () => ({
   runBuild: vi.fn(async () => 0),
 }));
@@ -34,9 +21,11 @@ describe('main --cwd', () => {
   const originalArgv = process.argv.slice();
   const originalCwd = process.cwd();
   const originalExit = process.exit;
+  const originalSentryDsn = process.env['WARDEN_SENTRY_DSN'];
   let tempDir: string;
 
   beforeEach(() => {
+    delete process.env['WARDEN_SENTRY_DSN'];
     tempDir = mkdtempSync(join(tmpdir(), 'warden-main-cwd-'));
     process.exit = vi.fn() as never;
     runBuildMock.mockReset();
@@ -49,6 +38,11 @@ describe('main --cwd', () => {
     process.argv = originalArgv.slice();
     process.chdir(originalCwd);
     process.exit = originalExit;
+    if (originalSentryDsn === undefined) {
+      delete process.env['WARDEN_SENTRY_DSN'];
+    } else {
+      process.env['WARDEN_SENTRY_DSN'] = originalSentryDsn;
+    }
     rmSync(tempDir, { recursive: true, force: true });
   });
 
