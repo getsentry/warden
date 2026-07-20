@@ -240,7 +240,9 @@ describe('sentry telemetry scope', () => {
       'processMetric',
       expect.objectContaining({
         name: 'warden.gen_ai.token.usage',
+        type: 'distribution',
         value: 1000,
+        unit: '{token}',
         attributes: expect.objectContaining({
           'warden.gen_ai.token.category': 'standard_input',
         }),
@@ -250,7 +252,9 @@ describe('sentry telemetry scope', () => {
       'processMetric',
       expect.objectContaining({
         name: 'warden.gen_ai.token.usage',
+        type: 'distribution',
         value: 200,
+        unit: '{token}',
         attributes: expect.objectContaining({
           'warden.gen_ai.token.category': 'cache_read_input',
         }),
@@ -260,7 +264,9 @@ describe('sentry telemetry scope', () => {
       'processMetric',
       expect.objectContaining({
         name: 'warden.gen_ai.token.usage',
+        type: 'distribution',
         value: 100,
+        unit: '{token}',
         attributes: expect.objectContaining({
           'warden.gen_ai.token.category': 'cache_creation_5m_input',
         }),
@@ -270,7 +276,9 @@ describe('sentry telemetry scope', () => {
       'processMetric',
       expect.objectContaining({
         name: 'warden.gen_ai.token.usage',
+        type: 'distribution',
         value: 200,
+        unit: '{token}',
         attributes: expect.objectContaining({
           'warden.gen_ai.token.category': 'cache_creation_1h_input',
         }),
