@@ -1807,8 +1807,8 @@ async function finalizeReportWorkflow(
     service?: ResolvedServiceOptions;
     recalledMemories?: readonly { id: string; version: number }[];
     memoryRecallId?: string;
-    matchedTriggers?: ResolvedTrigger[];
-    resolvedTriggers?: ResolvedTrigger[];
+    matchedTriggers: ResolvedTrigger[];
+    resolvedTriggers: ResolvedTrigger[];
   }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
@@ -1834,8 +1834,8 @@ async function finalizeReportWorkflow(
     recalledMemories: options.recalledMemories,
     memoryRecallId: options.memoryRecallId,
     configuredSkills: buildConfiguredSkillsList({
-      allTriggers: options.resolvedTriggers ?? [],
-      matchedTriggers: options.matchedTriggers ?? [],
+      allTriggers: options.resolvedTriggers,
+      matchedTriggers: options.matchedTriggers,
     }),
   };
   try {
