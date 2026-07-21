@@ -908,6 +908,45 @@ describe('parseJsonlReports', () => {
     expect(report.auxiliaryUsage?.['verification']?.costUSD).toBe(0.0005);
   });
 
+  it('recovers verifierRejections from the post-processing chunk marker', () => {
+    const run = buildRunMetadata({
+      runId: 'chunk-verifier-rejections',
+      durationMs: 100,
+      timestamp: new Date('2026-02-18T14:32:15.123Z'),
+      cwd: '/test',
+    });
+    const chunks: JsonlChunkRecord[] = [
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: 'src/api.ts', index: 1, total: 1, lineRange: '10-20' },
+        status: 'ok',
+        findings: [],
+        usageBreakdown: buildJsonlUsageBreakdown({ inputTokens: 100, outputTokens: 10, costUSD: 0.001 }, undefined),
+        durationMs: 100,
+      },
+      {
+        schemaVersion: 1,
+        run,
+        skill: 'security-review',
+        chunk: { file: '', index: 1, total: 1, lineRange: 'post-processing' },
+        status: 'ok',
+        findings: [],
+        durationMs: 0,
+        verifierRejections: { count: 2, reasons: ['not reproducible', 'guarded upstream'] },
+      },
+    ];
+
+    const result = parseJsonlReports(chunks.map((chunk) => renderJsonlChunkLine(chunk)).join(''));
+
+    expect(result.reports).toHaveLength(1);
+    expect(result.reports[0]!.verifierRejections).toEqual({
+      count: 2,
+      reasons: ['not reproducible', 'guarded upstream'],
+    });
+  });
+
   it('reconstructs trace metadata from chunk records', () => {
     const run = buildRunMetadata({ runId: 'chunk-traces', durationMs: 300 });
     const trace: HunkTrace = {
@@ -1228,6 +1267,7 @@ another bad line
         summary: 'ok',
         findings: [],
         failedExtractions: 1,
+        verifierRejections: { count: 3, reasons: ['a', 'b', 'c'] },
       },
     ];
     const content = renderJsonlString(original, 1000, { runId: 'sum-123' });
@@ -1237,6 +1277,7 @@ another bad line
     expect(summary.failedSkills).toEqual(['skill-a']);
     expect(summary.totalFailedHunks).toBe(2);
     expect(summary.totalFailedExtractions).toBe(1);
+    expect(summary.totalVerifierRejections).toBe(3);
   });
 
   it('omits summary extras when there are no failures', () => {
@@ -1249,6 +1290,7 @@ another bad line
     expect(summary.failedSkills).toBeUndefined();
     expect(summary.totalFailedHunks).toBeUndefined();
     expect(summary.totalFailedExtractions).toBeUndefined();
+    expect(summary.totalVerifierRejections).toBeUndefined();
   });
 
   it('passes through fix-evaluation records without treating them as malformed', () => {

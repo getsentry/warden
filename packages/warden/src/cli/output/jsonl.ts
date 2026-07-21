@@ -13,6 +13,7 @@ import {
   SkillErrorSchema,
   SkippedFileSchema,
   HunkTraceSchema,
+  VerifierRejectionsSchema,
 } from '../../types/index.js';
 import type { SkillReport, UsageStats, AuxiliaryUsageMap, AuxiliaryUsageAttributionMap, SkillError, Finding, FileReport, HunkFailure } from '../../types/index.js';
 import { mergeAuxiliaryUsage, mergeAuxiliaryUsageAttribution } from '../../sdk/usage.js';
@@ -120,6 +121,7 @@ export const JsonlChunkRecordSchema = z.object({
   error: SkillErrorSchema.optional(),
   skippedFiles: z.array(SkippedFileSchema).optional(),
   trace: HunkTraceSchema.optional(),
+  verifierRejections: VerifierRejectionsSchema.optional(),
 });
 export type JsonlChunkRecord = z.infer<typeof JsonlChunkRecordSchema>;
 
@@ -200,6 +202,7 @@ export const JsonlSummaryRecordSchema = z.object({
   failedSkills: z.array(z.string()).optional(),
   totalFailedHunks: z.number().int().nonnegative().optional(),
   totalFailedExtractions: z.number().int().nonnegative().optional(),
+  totalVerifierRejections: z.number().int().nonnegative().optional(),
   /**
    * Top-level run error captured before any skill ran (e.g. auth failure,
    * config load error). Skill-level errors live on the SkillRecord; this
@@ -330,6 +333,7 @@ export function buildSummaryJsonlRecord(
   const failedSkills = reports.filter((r) => r.error).map((r) => r.skill);
   const totalFailedHunks = reports.reduce((n, r) => n + (r.failedHunks ?? 0), 0);
   const totalFailedExtractions = reports.reduce((n, r) => n + (r.failedExtractions ?? 0), 0);
+  const totalVerifierRejections = reports.reduce((n, r) => n + (r.verifierRejections?.count ?? 0), 0);
   return {
     run,
     type: 'summary',
@@ -343,6 +347,7 @@ export function buildSummaryJsonlRecord(
     failedSkills: failedSkills.length > 0 ? failedSkills : undefined,
     totalFailedHunks: totalFailedHunks > 0 ? totalFailedHunks : undefined,
     totalFailedExtractions: totalFailedExtractions > 0 ? totalFailedExtractions : undefined,
+    totalVerifierRejections: totalVerifierRejections > 0 ? totalVerifierRejections : undefined,
     error,
   };
 }
@@ -551,6 +556,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     const failedExtractions = analysisChunkRecords.filter(
       (r) => r.status === 'error' && r.error && isExtractionErrorCode(r.error.code),
     ).length;
+    const verifierRejections = aggregateRecords.find((r) => r.verifierRejections)?.verifierRejections;
     const allChunksFailed =
       analysisChunkRecords.length > 0 &&
       findings.length === 0 &&
@@ -576,6 +582,7 @@ function reportsFromChunks(chunks: JsonlChunkRecord[]): SkillReport[] {
     if (auxiliaryUsageAttribution) report.auxiliaryUsageAttribution = auxiliaryUsageAttribution;
     if (failedHunks > 0) report.failedHunks = failedHunks;
     if (failedExtractions > 0) report.failedExtractions = failedExtractions;
+    if (verifierRejections) report.verifierRejections = verifierRejections;
     if (hunkFailures.length > 0) report.hunkFailures = hunkFailures;
     if (traces.length > 0) report.traces = traces;
     if (skippedFiles.length > 0) report.skippedFiles = skippedFiles;
