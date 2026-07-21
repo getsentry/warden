@@ -63,6 +63,7 @@ interface VerificationTaskResult {
 
 const JSON_OBJECT_START = /\{/g;
 const VERIFICATION_CONCURRENCY = 4;
+const MAX_REJECTION_REASON_LENGTH = 500;
 
 function isAbortRequested(error: unknown, abortController?: AbortController): boolean {
   return (abortController?.signal.aborted ?? false) || classifyError(error).code === 'aborted';
@@ -280,7 +281,7 @@ export async function verifyFindings(
         const next = applyVerdict(finding, verdict);
         notifyVerdict(options, finding, verdict, next);
         const rejectionReason = verdict?.verdict === 'reject'
-          ? verdict.reason ?? 'No reason provided'
+          ? (verdict.reason ?? 'No reason provided').slice(0, MAX_REJECTION_REASON_LENGTH)
           : undefined;
         return { finding: next ?? undefined, usage: result?.usage, rejectionReason };
       } catch (error) {
