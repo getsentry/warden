@@ -191,5 +191,32 @@ describe('Reporter', () => {
       expect(errorOutput).not.toContain('failed to analyze');
       expect(errorOutput).not.toContain('Use -v');
     });
+
+    it('shows verifier rejection count in log mode', () => {
+      const reporter = new Reporter(logMode(), Verbosity.Normal);
+      reporter.renderSummary([makeReport({ verifierRejections: { count: 4, reasons: ['a', 'b', 'c', 'd'] } })], 1000);
+
+      const output = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('\n');
+      expect(output).toContain('WARN: 4 findings rejected by verification');
+    });
+
+    it('shows verifier rejection count in TTY mode', () => {
+      const reporter = new Reporter(ttyMode(), Verbosity.Normal);
+      reporter.renderSummary([makeReport({ verifierRejections: { count: 1, reasons: ['a'] } })], 1000);
+
+      const output = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('\n');
+      expect(output).toContain('1 finding rejected by verification');
+    });
+
+    it('aggregates verifier rejections across multiple reports', () => {
+      const reporter = new Reporter(logMode(), Verbosity.Normal);
+      reporter.renderSummary([
+        makeReport({ verifierRejections: { count: 1, reasons: ['a'] } }),
+        makeReport({ verifierRejections: { count: 2, reasons: ['b', 'c'] } }),
+      ], 1000);
+
+      const output = errorSpy.mock.calls.map((c: unknown[]) => c[0] as string).join('\n');
+      expect(output).toContain('WARN: 3 findings rejected by verification');
+    });
   });
 });
