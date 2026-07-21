@@ -297,6 +297,88 @@ describe('buildFinalChunkRecords', () => {
     expect(summary.usageBreakdown?.auxiliary?.['verification']?.model).toBe('verify-model');
     expect(summary.usageBreakdown?.total.usage.costUSD).toBeCloseTo(6.5);
   });
+
+  it('survives verifierRejections through the finalized chunk stream and reconstruction', () => {
+    const run = buildRunMetadata({
+      runId: 'run-verifier-rejections',
+      durationMs: 100,
+      timestamp: new Date('2026-06-03T00:00:00.000Z'),
+      cwd: '/repo',
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'skill-a',
+      model: 'scan-model',
+      chunk: { file: 'src/app.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [],
+      usageBreakdown: buildJsonlUsageBreakdown(makeUsage(1000, 100, 5), undefined),
+      durationMs: 100,
+    };
+    const log: RunLog = {
+      paths: [],
+      primaryLogPath: '/repo/.warden/logs/run.jsonl',
+      primaryLogWritten: true,
+      outputPath: undefined,
+      startTime: 0,
+      baseRun: run,
+      chunks: [chunk],
+    };
+    const report = makeReport({
+      model: 'scan-model',
+      usage: makeUsage(1000, 100, 5),
+      verifierRejections: { count: 2, reasons: ['not reproducible', 'guarded upstream'] },
+    });
+
+    const records = buildFinalChunkRecords(log, [report], 1000);
+    const postProcessing = records.find((record) => record.chunk.lineRange === 'post-processing');
+    expect(postProcessing?.verifierRejections).toEqual({
+      count: 2,
+      reasons: ['not reproducible', 'guarded upstream'],
+    });
+
+    const parsed = parseJsonlReports(renderJsonlChunkRecords(records));
+    expect(parsed.reports).toHaveLength(1);
+    expect(parsed.reports[0]!.verifierRejections).toEqual({
+      count: 2,
+      reasons: ['not reproducible', 'guarded upstream'],
+    });
+  });
+
+  it('omits a post-processing record when there is no missing usage or verifier rejections', () => {
+    const run = buildRunMetadata({
+      runId: 'run-no-post-processing',
+      durationMs: 100,
+      timestamp: new Date('2026-06-03T00:00:00.000Z'),
+      cwd: '/repo',
+    });
+    const chunk: JsonlChunkRecord = {
+      schemaVersion: 1,
+      run,
+      skill: 'skill-a',
+      model: 'scan-model',
+      chunk: { file: 'src/app.ts', index: 1, total: 1, lineRange: '10-20' },
+      status: 'ok',
+      findings: [],
+      usageBreakdown: buildJsonlUsageBreakdown(makeUsage(1000, 100, 5), undefined),
+      durationMs: 100,
+    };
+    const log: RunLog = {
+      paths: [],
+      primaryLogPath: '/repo/.warden/logs/run.jsonl',
+      primaryLogWritten: true,
+      outputPath: undefined,
+      startTime: 0,
+      baseRun: run,
+      chunks: [chunk],
+    };
+    const report = makeReport({ model: 'scan-model', usage: makeUsage(1000, 100, 5) });
+
+    const records = buildFinalChunkRecords(log, [report], 1000);
+
+    expect(records).toHaveLength(1);
+  });
 });
 
 describe('appendReportToRunLog', () => {
