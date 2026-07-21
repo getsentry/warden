@@ -22,7 +22,7 @@ export { verifyAuth } from './auth.js';
 export { calculateRetryDelay } from './retry.js';
 
 // Re-export usage utilities
-export { aggregateUsage, aggregateAuxiliaryUsage, mergeAuxiliaryUsage, estimateTokens } from './usage.js';
+export { aggregateUsage, aggregateAuxiliaryUsage, mergeAuxiliaryUsage, estimateTokens, resolveResponseModel } from './usage.js';
 
 // Re-export pricing utilities
 export { anthropicUsageToStats, apiUsageToStats } from './pricing.js';
