@@ -347,6 +347,18 @@ describe('renderTerminalReport', () => {
       expect(output).toContain('WARN: 1 finding extraction failed');
     });
 
+    it('renders per-skill verifierRejections warning', () => {
+      const report = createReport({
+        durationMs: 5000,
+        findings: [createFinding({ severity: 'high', title: 'Bug found' })],
+        verifierRejections: { count: 2, reasons: ['not reproducible', 'guarded upstream'] },
+      });
+
+      const output = renderTerminalReport([report], ciMode);
+
+      expect(output).toContain('WARN: 2 findings rejected by verification');
+    });
+
     it('does not render warnings when counts are zero', () => {
       const report = createReport({
         durationMs: 5000,
