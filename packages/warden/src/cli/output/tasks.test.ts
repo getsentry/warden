@@ -682,6 +682,7 @@ describe('runSkillTasks', () => {
     const postProcessFindings = vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
       findings: [],
       auxiliaryUsage: [],
+      verifierRejections: { count: 1, reasons: ['not reproducible'] },
     });
 
     const results = await runSkillTasks([{
@@ -705,6 +706,55 @@ describe('runSkillTasks', () => {
     expect(results[0]?.report?.files?.[0]?.findings).toBe(0);
     expect(controller.signal.aborted).toBe(false);
     expect(postProcessFindings).toHaveBeenCalled();
+    expect(results[0]?.report?.verifierRejections).toEqual({ count: 1, reasons: ['not reproducible'] });
+
+    prepareFiles.mockRestore();
+    analyzeFile.mockRestore();
+    postProcessFindings.mockRestore();
+  });
+
+  it('omits verifierRejections on the report when nothing is rejected', async () => {
+    const finalFinding = makeFinding();
+    const controller = new AbortController();
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finalFinding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    } satisfies FileAnalysisResult);
+    const postProcessFindings = vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
+      findings: [finalFinding],
+      auxiliaryUsage: [],
+    });
+
+    const results = await runSkillTasks([{
+      name: 'verify-skill',
+      resolveSkill: async () =>
+        ({ name: 'verify-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    }], {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 1,
+      failFastController: controller,
+    });
+
+    expect(results[0]?.report?.verifierRejections).toBeUndefined();
 
     prepareFiles.mockRestore();
     analyzeFile.mockRestore();
