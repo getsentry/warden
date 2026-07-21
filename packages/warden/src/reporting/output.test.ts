@@ -281,6 +281,30 @@ describe('findings output schema', () => {
     ).toThrow();
   });
 
+  it('includes verifierRejections when present', () => {
+    const report = createReport({
+      verifierRejections: { count: 1, reasons: ['not reproducible'] },
+    });
+    const output = buildFindingsOutput([report], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+    });
+
+    expect(FindingsOutputSchema.parse(output)).toEqual(output);
+    expect(output.skills[0]).toMatchObject({
+      verifierRejections: { count: 1, reasons: ['not reproducible'] },
+    });
+  });
+
+  it('omits verifierRejections when absent', () => {
+    const output = buildFindingsOutput([createReport()], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+    });
+
+    expect(output.skills[0]?.verifierRejections).toBeUndefined();
+  });
+
   it('rejects sentinel dedupe comment IDs', () => {
     const output = buildFindingsOutput([createReport()], createContext(), [], {
       timestamp: '2026-01-01T00:00:00.000Z',
