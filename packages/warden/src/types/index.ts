@@ -284,6 +284,12 @@ export const SkillErrorSchema = z.object({
 });
 export type SkillError = z.infer<typeof SkillErrorSchema>;
 
+export const VerifierRejectionsSchema = z.object({
+  count: z.number().int().nonnegative(),
+  reasons: z.array(z.string()),
+});
+export type VerifierRejections = z.infer<typeof VerifierRejectionsSchema>;
+
 // 'analysis' = SDK/auth/abort failure, 'extraction' = parse-tier failure.
 export const HunkFailureSchema = z.object({
   type: z.enum(['analysis', 'extraction']),
@@ -357,6 +363,7 @@ export const SkillReportSchema = z.object({
   traces: z.array(HunkTraceSchema).optional(),
   /** Set when the run cannot complete normally. */
   error: SkillErrorSchema.optional(),
+  verifierRejections: VerifierRejectionsSchema.optional(),
   /** Usage from auxiliary LLM calls (extraction repair, semantic dedup, etc.) */
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
   /** Model/runtime attribution for auxiliary LLM usage, keyed like auxiliaryUsage */
