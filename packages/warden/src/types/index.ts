@@ -363,6 +363,7 @@ export const SkillReportSchema = z.object({
   traces: z.array(HunkTraceSchema).optional(),
   /** Set when the run cannot complete normally. */
   error: SkillErrorSchema.optional(),
+  /** Findings the verification pass rejected, if any ran. */
   verifierRejections: VerifierRejectionsSchema.optional(),
   /** Usage from auxiliary LLM calls (extraction repair, semantic dedup, etc.) */
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
