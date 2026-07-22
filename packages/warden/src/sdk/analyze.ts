@@ -96,7 +96,7 @@ function recordCircuitFailure(
     code,
     message,
     providerContext,
-    providerContext ? options.circuitBreakerScope : undefined,
+    providerContext ? options : undefined,
   );
   return options.circuitBreaker?.reason;
 }
@@ -960,9 +960,9 @@ export async function runSkill(
   context: EventContext,
   options: SkillRunnerOptions = {}
 ): Promise<SkillReport> {
+  // This clone's identity scopes circuit-breaker provider diagnostics to this skill run.
   const scopedOptions: SkillRunnerOptions = {
     ...options,
-    circuitBreakerScope: options.circuitBreakerScope ?? {},
   };
   return Sentry.startSpan(
     {
@@ -1174,7 +1174,7 @@ async function runSkillAnalysis(
   if (circuitReason && totalAttemptFailures > 0 && allFindings.length === 0) {
     throw new SkillRunnerError(circuitReason.message, {
       code: circuitReason.code,
-      providerContext: providerContextForScope(circuitReason, options.circuitBreakerScope),
+      providerContext: providerContextForScope(circuitReason, options),
     });
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {

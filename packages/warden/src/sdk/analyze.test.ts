@@ -878,6 +878,64 @@ describe('runSkill', () => {
     expect(report.error).toBeUndefined();
   });
 
+  it('attaches provider context recorded by this skill run', async () => {
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 1,
+    });
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'provider_error',
+        text: '',
+        errors: ['provider outage'],
+        usage: makeUsage(),
+        responseId: 'req_123',
+        responseModel: 'openrouter/anthropic/claude-sonnet-4',
+      },
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    let thrown: unknown;
+    try {
+      await runSkill(
+        {
+          name: 'security-review',
+          description: 'Security review.',
+          prompt: 'Return findings as JSON.',
+        },
+        makeContextWithOneHunk(),
+        {
+          circuitBreaker,
+          retry: {
+            maxRetries: 0,
+            initialDelayMs: 1,
+            backoffMultiplier: 1,
+            maxDelayMs: 1,
+          },
+          verifyFindings: false,
+        },
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(SkillRunnerError);
+    expect(thrown).toMatchObject({ code: 'provider_unavailable' });
+    expect((thrown as SkillRunnerError).providerContext).toEqual({
+      runtime: 'pi',
+      provider: 'openrouter',
+      model: 'openrouter/anthropic/claude-sonnet-4',
+      status: 'provider_error',
+      responseId: 'req_123',
+      attempts: 1,
+      message: 'provider outage',
+    });
+  });
+
   it('does not attach provider context from another skill run sharing the circuit breaker', async () => {
     const circuitBreaker = new ProviderFailureCircuitBreaker({
       maxConsecutiveProviderFailures: 1,

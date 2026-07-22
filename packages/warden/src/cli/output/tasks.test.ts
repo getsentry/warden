@@ -943,15 +943,6 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
-    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
-      filename: 'a.ts',
-      findings: [],
-      usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
-      failedHunks: 1,
-      failedExtractions: 0,
-      hunkFailures,
-    });
-
     const options: SkillTaskOptions = {
       name: 'provider-fail-skill',
       triggerName: 'provider-fail-trigger',
@@ -973,10 +964,19 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       attempts: 5,
       message: '400',
     };
-    const circuitBreakerScope = {};
     const circuitBreaker = new ProviderFailureCircuitBreaker({ maxConsecutiveProviderFailures: 1 });
-    circuitBreaker.recordFailure('provider_unavailable', '400', providerContext, circuitBreakerScope);
-    options.runnerOptions = { circuitBreaker, circuitBreakerScope };
+    vi.spyOn(sdkRunner, 'analyzeFile').mockImplementation(async (_skill, _file, _repoPath, runnerOptions) => {
+      circuitBreaker.recordFailure('provider_unavailable', '400', providerContext, runnerOptions);
+      return {
+        filename: 'a.ts',
+        findings: [],
+        usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+        failedHunks: 1,
+        failedExtractions: 0,
+        hunkFailures,
+      };
+    });
+    options.runnerOptions = { circuitBreaker };
 
     const result = await runSkillTask(options, 1, noopCallbacks());
 

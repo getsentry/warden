@@ -69,11 +69,11 @@ function summarizeRunFailure(args: {
   hunkFailures: HunkFailure[];
   circuitReason?: CircuitBreakerReason;
   runtime?: SkillRunnerOptions['runtime'];
-  circuitBreakerScope?: object;
+  scope?: object;
 }): { code: ErrorCode; message: string; providerContext?: ProviderErrorContext } {
   const { totalHunks, hunkFailures, circuitReason, runtime } = args;
   if (circuitReason) {
-    const providerContext = providerContextForScope(circuitReason, args.circuitBreakerScope);
+    const providerContext = providerContextForScope(circuitReason, args.scope);
     return { code: circuitReason.code, message: circuitReason.message, providerContext };
   }
   if (allAnalysisFailuresHaveCode(hunkFailures, 'auth_failed')) {
@@ -263,10 +263,10 @@ export async function runSkillTask(
     context,
     runnerOptions: configuredRunnerOptions = {},
   } = options;
+  // This clone's identity scopes circuit-breaker provider diagnostics to this skill run.
   const runnerOptions: SkillRunnerOptions = {
     ...configuredRunnerOptions,
     telemetryTriggerName: configuredRunnerOptions.telemetryTriggerName ?? triggerName,
-    circuitBreakerScope: configuredRunnerOptions.circuitBreakerScope ?? {},
   };
 
   return Sentry.startSpan(
@@ -563,7 +563,7 @@ export async function runSkillTask(
             hunkFailures: allHunkFailures,
             circuitReason,
             runtime: runnerOptions.runtime,
-            circuitBreakerScope: runnerOptions.circuitBreakerScope,
+            scope: runnerOptions,
           });
           const errorReport: SkillReport = {
             skill: skill.name,
