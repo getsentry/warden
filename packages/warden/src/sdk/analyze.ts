@@ -101,14 +101,15 @@ function providerErrorContext(
   result: SkillRunResult,
   message: string,
 ): ProviderErrorContext {
-  const configuredModel = options.model;
+  const model = result.responseModel ?? options.model;
   const runtime = options.runtime ?? 'pi';
   return {
     runtime,
-    provider: genAiProviderName(runtime, configuredModel),
-    model: result.responseModel ?? configuredModel,
+    provider: genAiProviderName(runtime, model),
+    model,
     status: result.status,
     responseId: result.responseId,
+    triggerName: options.telemetryTriggerName,
     message: sanitizeErrorMessage(message),
   };
 }
@@ -723,7 +724,22 @@ async function analyzeHunk(
 
       const { code: retryCode, message } = classifyError(lastError);
       const retryMsg = sanitizeErrorMessage(message);
-      const openReason = recordCircuitFailure(options, retryCode, retryMsg);
+      const openReason = recordCircuitFailure(
+        options,
+        retryCode,
+        retryMsg,
+        retryCode === 'provider_unavailable'
+          ? {
+              runtime: runtimeName,
+              provider: genAiProviderName(runtimeName, options.model),
+              model: options.model,
+              status: retryCode,
+              attempts: retryConfig.maxRetries + 1,
+              triggerName: options.telemetryTriggerName,
+              message: retryMsg,
+            }
+          : undefined,
+      );
       if (openReason) {
         return hunkFailureFromCircuit(
           openReason,

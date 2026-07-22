@@ -15,6 +15,7 @@ export interface ProviderErrorContext {
   status?: string;
   responseId?: string;
   attempts?: number;
+  triggerName?: string;
   message?: string;
 }
 

@@ -69,10 +69,14 @@ function summarizeRunFailure(args: {
   hunkFailures: HunkFailure[];
   circuitReason?: { code: ErrorCode; message: string; providerContext?: ProviderErrorContext };
   runtime?: SkillRunnerOptions['runtime'];
+  triggerName?: string;
 }): { code: ErrorCode; message: string; providerContext?: ProviderErrorContext } {
   const { totalHunks, hunkFailures, circuitReason, runtime } = args;
   if (circuitReason) {
-    return circuitReason;
+    const providerContext = circuitReason.providerContext?.triggerName === args.triggerName
+      ? circuitReason.providerContext
+      : undefined;
+    return { ...circuitReason, providerContext };
   }
   if (allAnalysisFailuresHaveCode(hunkFailures, 'auth_failed')) {
     return {
@@ -547,6 +551,7 @@ export async function runSkillTask(
             hunkFailures: allHunkFailures,
             circuitReason,
             runtime: runnerOptions.runtime,
+            triggerName,
           });
           const errorReport: SkillReport = {
             skill: skill.name,
