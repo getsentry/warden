@@ -3,7 +3,7 @@ import type { SkillDefinition } from '../config/schema.js';
 import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
-import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
+import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage, type ProviderErrorContext } from './errors.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
@@ -88,10 +88,28 @@ function recordCircuitFailure(
   options: SkillRunnerOptions,
   code: ErrorCode,
   message: string,
+  providerContext?: ProviderErrorContext,
 ): CircuitBreakerReason | undefined {
   if (!isCircuitBreakerCode(code)) return undefined;
-  options.circuitBreaker?.recordFailure(code, message);
+  options.circuitBreaker?.recordFailure(code, message, providerContext);
   return options.circuitBreaker?.reason;
+}
+
+function providerErrorContext(
+  options: SkillRunnerOptions,
+  result: SkillRunResult,
+  message: string,
+): ProviderErrorContext {
+  const configuredModel = options.model;
+  const slashIndex = configuredModel?.indexOf('/') ?? -1;
+  return {
+    runtime: options.runtime ?? 'pi',
+    provider: slashIndex > 0 ? configuredModel?.slice(0, slashIndex) : undefined,
+    model: result.responseModel ?? configuredModel,
+    status: result.status,
+    responseId: result.responseId,
+    message: sanitizeErrorMessage(message),
+  };
 }
 
 function allHunksFailedGuidance(runtime: SkillRunnerOptions['runtime'] | undefined): string {
@@ -456,7 +474,14 @@ async function analyzeHunk(
                   ? 'provider_unavailable'
                   : 'sdk_error';
             const failureMessage = `Runtime execution failed: ${errorSummary}`;
-            const openReason = recordCircuitFailure(options, failureCode, failureMessage);
+            const openReason = recordCircuitFailure(
+              options,
+              failureCode,
+              failureMessage,
+              failureCode === 'provider_unavailable'
+                ? providerErrorContext(options, resultMessage, errorSummary)
+                : undefined,
+            );
             notifyHunkFailed(callbacks, callbacks?.lineRange ?? lineRange, failureMessage);
             if (openReason) {
               return hunkFailureFromCircuit(
@@ -1123,7 +1148,10 @@ async function runSkillAnalysis(
   const totalAttemptFailures = totalFailedHunks + totalFailedExtractions;
   const circuitReason = options.circuitBreaker?.reason;
   if (circuitReason && totalAttemptFailures > 0 && allFindings.length === 0) {
-    throw new SkillRunnerError(circuitReason.message, { code: circuitReason.code });
+    throw new SkillRunnerError(circuitReason.message, {
+      code: circuitReason.code,
+      providerContext: circuitReason.providerContext,
+    });
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
     const analysisFailures = allHunkFailures.filter((failure) => failure.type === 'analysis');

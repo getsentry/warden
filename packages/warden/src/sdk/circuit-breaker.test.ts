@@ -36,11 +36,27 @@ describe('ProviderFailureCircuitBreaker', () => {
     expect(breaker.reason).toBeUndefined();
     expect(controller.signal.aborted).toBe(false);
 
-    breaker.recordFailure('provider_unavailable', 'third outage');
+    breaker.recordFailure('provider_unavailable', 'third outage', {
+      runtime: 'pi',
+      provider: 'openrouter',
+      model: 'openrouter/anthropic/claude-sonnet-4',
+      status: 'provider_error',
+      responseId: 'req_123',
+      message: 'third outage',
+    });
 
     expect(breaker.reason?.code).toBe('provider_unavailable');
     expect(breaker.reason?.message).toContain('Provider unavailable after 2 consecutive failures');
     expect(breaker.reason?.message).toContain('third outage');
+    expect(breaker.reason?.providerContext).toEqual({
+      runtime: 'pi',
+      provider: 'openrouter',
+      model: 'openrouter/anthropic/claude-sonnet-4',
+      status: 'provider_error',
+      responseId: 'req_123',
+      attempts: 2,
+      message: 'third outage',
+    });
     expect(controller.signal.aborted).toBe(true);
   });
 
