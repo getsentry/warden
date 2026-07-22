@@ -24,7 +24,7 @@ import {
   type ChunkAnalysisResult,
   type FindingProcessingEvent,
 } from '../../sdk/runner.js';
-import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
+import { ProviderFailureCircuitBreaker, providerContextForScope, type CircuitBreakerReason } from '../../sdk/circuit-breaker.js';
 import { buildFileReports } from '../../sdk/report-files.js';
 import chalk from 'chalk';
 import figures from 'figures';
@@ -67,16 +67,14 @@ function firstAnalysisFailureMessage(hunkFailures: HunkFailure[], code: ErrorCod
 function summarizeRunFailure(args: {
   totalHunks: number;
   hunkFailures: HunkFailure[];
-  circuitReason?: { code: ErrorCode; message: string; providerContext?: ProviderErrorContext };
+  circuitReason?: CircuitBreakerReason;
   runtime?: SkillRunnerOptions['runtime'];
-  triggerName?: string;
+  circuitBreakerScope?: object;
 }): { code: ErrorCode; message: string; providerContext?: ProviderErrorContext } {
   const { totalHunks, hunkFailures, circuitReason, runtime } = args;
   if (circuitReason) {
-    const providerContext = circuitReason.providerContext?.triggerName === args.triggerName
-      ? circuitReason.providerContext
-      : undefined;
-    return { ...circuitReason, providerContext };
+    const providerContext = providerContextForScope(circuitReason, args.circuitBreakerScope);
+    return { code: circuitReason.code, message: circuitReason.message, providerContext };
   }
   if (allAnalysisFailuresHaveCode(hunkFailures, 'auth_failed')) {
     return {
@@ -268,6 +266,7 @@ export async function runSkillTask(
   const runnerOptions: SkillRunnerOptions = {
     ...configuredRunnerOptions,
     telemetryTriggerName: configuredRunnerOptions.telemetryTriggerName ?? triggerName,
+    circuitBreakerScope: configuredRunnerOptions.circuitBreakerScope ?? {},
   };
 
   return Sentry.startSpan(
@@ -564,7 +563,7 @@ export async function runSkillTask(
             hunkFailures: allHunkFailures,
             circuitReason,
             runtime: runnerOptions.runtime,
-            triggerName,
+            circuitBreakerScope: runnerOptions.circuitBreakerScope,
           });
           const errorReport: SkillReport = {
             skill: skill.name,

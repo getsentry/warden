@@ -7,6 +7,7 @@ import { analyzeFile, buildSourceSnippet, filterOutOfRangeFindings, runSkill } f
 import type { PreparedFile } from './types.js';
 import { getRuntime, type Runtime } from './runtimes/index.js';
 import { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
+import { SkillRunnerError } from './errors.js';
 import { Sentry } from '../sentry.js';
 import { startTracedSpan } from '../sentry-trace.js';
 
@@ -875,6 +876,67 @@ describe('runSkill', () => {
     expect(report.failedHunks).toBeUndefined();
     expect(report.failedExtractions).toBeUndefined();
     expect(report.error).toBeUndefined();
+  });
+
+  it('does not attach provider context from another skill run sharing the circuit breaker', async () => {
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 1,
+    });
+    circuitBreaker.recordFailure(
+      'provider_unavailable',
+      'provider outage',
+      {
+        runtime: 'pi',
+        provider: 'openrouter',
+        model: 'openrouter/anthropic/claude-sonnet-4',
+        status: 'provider_error',
+        message: 'provider outage',
+      },
+      {},
+    );
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'provider_error',
+        text: '',
+        errors: ['provider outage'],
+        usage: makeUsage(),
+      },
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    let thrown: unknown;
+    try {
+      await runSkill(
+        {
+          name: 'later-skill',
+          description: 'Later skill.',
+          prompt: 'Return findings as JSON.',
+        },
+        makeContextWithOneHunk(),
+        {
+          circuitBreaker,
+          retry: {
+            maxRetries: 0,
+            initialDelayMs: 1,
+            backoffMultiplier: 1,
+            maxDelayMs: 1,
+          },
+          verifyFindings: false,
+        },
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(SkillRunnerError);
+    expect(thrown).toMatchObject({ code: 'provider_unavailable' });
+    expect((thrown as SkillRunnerError).providerContext).toBeUndefined();
+    expect(runSkillMock).not.toHaveBeenCalled();
   });
 
   it('includes Warden-created Sentry spans on SkillReport when trace capture is enabled', async () => {

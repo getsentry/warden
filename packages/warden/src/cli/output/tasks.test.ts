@@ -971,12 +971,12 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       model: 'openrouter/anthropic/claude-sonnet-4',
       status: 'provider_error',
       attempts: 5,
-      triggerName: 'provider-fail-trigger',
       message: '400',
     };
+    const circuitBreakerScope = {};
     const circuitBreaker = new ProviderFailureCircuitBreaker({ maxConsecutiveProviderFailures: 1 });
-    circuitBreaker.recordFailure('provider_unavailable', '400', providerContext);
-    options.runnerOptions = { circuitBreaker };
+    circuitBreaker.recordFailure('provider_unavailable', '400', providerContext, circuitBreakerScope);
+    options.runnerOptions = { circuitBreaker, circuitBreakerScope };
 
     const result = await runSkillTask(options, 1, noopCallbacks());
 
@@ -990,6 +990,64 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(vi.mocked(sdkRunner.analyzeFile).mock.calls[0]?.[3]).toMatchObject({
       telemetryTriggerName: 'provider-fail-trigger',
     });
+  });
+
+  it('does not copy provider context from another direct skill sharing the circuit breaker', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const hunkFailures: HunkFailure[] = [
+      {
+        type: 'analysis',
+        filename: 'a.ts',
+        lineRange: '1-10',
+        code: 'provider_unavailable',
+        message: 'Provider unavailable',
+      },
+    ];
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [],
+      usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      failedHunks: 1,
+      failedExtractions: 0,
+      hunkFailures,
+    });
+
+    const circuitBreaker = new ProviderFailureCircuitBreaker({ maxConsecutiveProviderFailures: 1 });
+    circuitBreaker.recordFailure(
+      'provider_unavailable',
+      'Provider unavailable',
+      {
+        runtime: 'pi',
+        provider: 'openrouter',
+        model: 'openrouter/anthropic/claude-sonnet-4',
+        status: 'provider_error',
+        message: 'Provider unavailable',
+      },
+      {},
+    );
+
+    const result = await runSkillTask({
+      name: 'later-direct-skill',
+      resolveSkill: async () =>
+        ({ name: 'later-direct-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: { circuitBreaker },
+    }, 1, noopCallbacks());
+
+    expect((result.error as SkillRunnerError).code).toBe('provider_unavailable');
+    expect((result.error as SkillRunnerError).providerContext).toBeUndefined();
   });
 
   it('preserves invalid_model_selector when every hunk fails from Pi model validation', async () => {

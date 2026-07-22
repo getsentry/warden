@@ -9,6 +9,7 @@ export interface CircuitBreakerReason {
   code: CircuitBreakerCode;
   message: string;
   providerContext?: ProviderErrorContext;
+  providerContextScope?: object;
 }
 
 interface ProviderFailureCircuitBreakerOptions {
@@ -46,7 +47,12 @@ export class ProviderFailureCircuitBreaker {
     this.consecutiveProviderFailures = 0;
   }
 
-  recordFailure(code: ErrorCode, message: string, providerContext?: ProviderErrorContext): void {
+  recordFailure(
+    code: ErrorCode,
+    message: string,
+    providerContext?: ProviderErrorContext,
+    providerContextScope?: object,
+  ): void {
     if (this.openReason) return;
 
     if (code === 'auth_failed' || code === 'invalid_model_selector') {
@@ -64,6 +70,7 @@ export class ProviderFailureCircuitBreaker {
         providerContext: providerContext
           ? { ...providerContext, attempts: this.consecutiveProviderFailures }
           : undefined,
+        ...(providerContext && providerContextScope ? { providerContextScope } : {}),
       });
     }
   }
@@ -74,4 +81,13 @@ export class ProviderFailureCircuitBreaker {
       this.abortController?.abort();
     }
   }
+}
+
+/** Return provider diagnostics only to the skill run that recorded them. */
+export function providerContextForScope(
+  reason: CircuitBreakerReason | undefined,
+  scope: object | undefined,
+): ProviderErrorContext | undefined {
+  if (!scope || reason?.providerContextScope !== scope) return undefined;
+  return reason.providerContext;
 }

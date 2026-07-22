@@ -124,6 +124,8 @@ export interface SkillRunnerOptions {
   abortController?: AbortController;
   /** Shared circuit breaker for run-scoped auth/provider failures */
   circuitBreaker?: ProviderFailureCircuitBreaker;
+  /** Identity token used to keep circuit-breaker diagnostics scoped to one skill run. */
+  circuitBreakerScope?: object;
   /** Path to Claude Code CLI executable. Required in CI environments when using the Claude runtime. */
   pathToClaudeCodeExecutable?: string;
   /** Retry configuration for transient API failures */

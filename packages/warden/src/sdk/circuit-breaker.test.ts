@@ -36,6 +36,7 @@ describe('ProviderFailureCircuitBreaker', () => {
     expect(breaker.reason).toBeUndefined();
     expect(controller.signal.aborted).toBe(false);
 
+    const providerContextScope = {};
     breaker.recordFailure('provider_unavailable', 'third outage', {
       runtime: 'pi',
       provider: 'openrouter',
@@ -43,7 +44,7 @@ describe('ProviderFailureCircuitBreaker', () => {
       status: 'provider_error',
       responseId: 'req_123',
       message: 'third outage',
-    });
+    }, providerContextScope);
 
     expect(breaker.reason?.code).toBe('provider_unavailable');
     expect(breaker.reason?.message).toContain('Provider unavailable after 2 consecutive failures');
@@ -57,6 +58,7 @@ describe('ProviderFailureCircuitBreaker', () => {
       attempts: 2,
       message: 'third outage',
     });
+    expect(breaker.reason?.providerContextScope).toBe(providerContextScope);
     expect(controller.signal.aborted).toBe(true);
   });
 

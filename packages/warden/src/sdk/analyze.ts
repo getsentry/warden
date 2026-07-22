@@ -5,7 +5,7 @@ import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage, type ProviderErrorContext } from './errors.js';
 import { genAiProviderName } from './otel.js';
-import type { CircuitBreakerReason } from './circuit-breaker.js';
+import { providerContextForScope, type CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
@@ -92,7 +92,12 @@ function recordCircuitFailure(
   providerContext?: ProviderErrorContext,
 ): CircuitBreakerReason | undefined {
   if (!isCircuitBreakerCode(code)) return undefined;
-  options.circuitBreaker?.recordFailure(code, message, providerContext);
+  options.circuitBreaker?.recordFailure(
+    code,
+    message,
+    providerContext,
+    providerContext ? options.circuitBreakerScope : undefined,
+  );
   return options.circuitBreaker?.reason;
 }
 
@@ -109,7 +114,6 @@ function providerErrorContext(
     model,
     status: result.status,
     responseId: result.responseId,
-    triggerName: options.telemetryTriggerName,
     message: sanitizeErrorMessage(message),
   };
 }
@@ -735,7 +739,6 @@ async function analyzeHunk(
               model: options.model,
               status: 'provider_error',
               attempts: retryConfig.maxRetries + 1,
-              triggerName: options.telemetryTriggerName,
               message: retryMsg,
             }
           : undefined,
@@ -957,6 +960,10 @@ export async function runSkill(
   context: EventContext,
   options: SkillRunnerOptions = {}
 ): Promise<SkillReport> {
+  const scopedOptions: SkillRunnerOptions = {
+    ...options,
+    circuitBreakerScope: options.circuitBreakerScope ?? {},
+  };
   return Sentry.startSpan(
     {
       op: 'skill.run',
@@ -969,7 +976,7 @@ export async function runSkill(
     },
     async (span) => {
       try {
-        const report = await runSkillAnalysis(skill, context, options);
+        const report = await runSkillAnalysis(skill, context, scopedOptions);
         span.setAttribute('warden.finding.count', report.findings.length);
         emitSkillMetrics(report);
         return report;
@@ -1167,7 +1174,7 @@ async function runSkillAnalysis(
   if (circuitReason && totalAttemptFailures > 0 && allFindings.length === 0) {
     throw new SkillRunnerError(circuitReason.message, {
       code: circuitReason.code,
-      providerContext: circuitReason.providerContext,
+      providerContext: providerContextForScope(circuitReason, options.circuitBreakerScope),
     });
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
