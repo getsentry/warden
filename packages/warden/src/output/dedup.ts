@@ -102,8 +102,11 @@ export function generateMarker(path: string, line: number, contentHash: string):
   return `<!-- warden:v1:${path}:${line}:${contentHash} -->`;
 }
 
-export function generateFindingMetadata(finding: Pick<Finding, 'severity' | 'confidence'>): string {
+export function generateFindingMetadata(
+  finding: Pick<Finding, 'severity' | 'confidence'> & { id?: string }
+): string {
   const metadata = {
+    id: finding.id,
     severity: finding.severity,
     confidence: finding.confidence,
   };
@@ -136,13 +139,18 @@ export function parseMarker(body: string): WardenMarker | null {
   };
 }
 
-export function parseWardenFindingMetadata(body: string): Pick<Finding, 'severity' | 'confidence'> | null {
+export function parseWardenFindingMetadata(
+  body: string
+): (Pick<Finding, 'severity' | 'confidence'> & { id?: string }) | null {
   const match = body.match(/<!-- warden:finding:v1:([A-Za-z0-9_-]+) -->/);
   const encoded = match?.[1];
   if (!encoded) return null;
 
   try {
     const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Partial<Finding>;
+    const id = parsed.id;
+    if (id !== undefined && typeof id !== 'string') return null;
+
     const severity = parsed.severity;
     if (severity !== 'high' && severity !== 'medium' && severity !== 'low') return null;
 
@@ -156,7 +164,7 @@ export function parseWardenFindingMetadata(body: string): Pick<Finding, 'severit
       return null;
     }
 
-    return { severity, confidence };
+    return { id, severity, confidence };
   } catch {
     return null;
   }
@@ -225,6 +233,9 @@ function fallbackCommentTitle(body: string, commentId: number): string {
  * Parse the finding ID from a Warden comment's attribution or legacy title.
  */
 export function parseWardenFindingId(body: string): string | undefined {
+  const metadataId = parseWardenFindingMetadata(body)?.id;
+  if (metadataId) return metadataId;
+
   const currentAttributionMatch = body.match(
     /(?:<sub>)?Identified by Warden · ([^<\n\r]*)(?:<\/sub>|$)/m
   );

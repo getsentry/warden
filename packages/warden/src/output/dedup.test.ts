@@ -146,12 +146,18 @@ The function checks the wrong signal.
 });
 
 describe('parseWardenFindingId', () => {
-  it('parses finding ID from current muted attribution', () => {
+  it('parses finding ID from hidden metadata', () => {
+    const metadata = generateFindingMetadata({
+      id: 'WRZ-XPL',
+      severity: 'high',
+      confidence: 'medium',
+    });
     const body = `**Issue**
 
 Description
 
-<sub>Identified by Warden · security-review · WRZ-XPL</sub>`;
+<sub>Identified by Warden · security-review · display-only</sub>
+${metadata}`;
 
     expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
   });
@@ -824,11 +830,26 @@ ${marker}`;
 });
 
 describe('finding metadata', () => {
-  it('round-trips severity and confidence from hidden metadata', () => {
-    const metadata = generateFindingMetadata({ severity: 'high', confidence: 'medium' });
+  it('round-trips finding data from hidden metadata', () => {
+    const metadata = generateFindingMetadata({
+      id: 'WRZ-XPL',
+      severity: 'high',
+      confidence: 'medium',
+    });
     const body = `**Issue**\n\nDetails\n${metadata}`;
 
     expect(parseWardenFindingMetadata(body)).toEqual({
+      id: 'WRZ-XPL',
+      severity: 'high',
+      confidence: 'medium',
+    });
+  });
+
+  it('parses legacy metadata without an ID', () => {
+    const metadata = generateFindingMetadata({ severity: 'high', confidence: 'medium' });
+
+    expect(parseWardenFindingMetadata(metadata)).toEqual({
+      id: undefined,
       severity: 'high',
       confidence: 'medium',
     });
