@@ -6,6 +6,8 @@ describe('OpenTelemetry GenAI provider attribution', () => {
     expect(genAiProviderName('pi', 'openai/gpt-test')).toBe('openai');
     expect(genAiProviderName('pi', 'anthropic/claude-test')).toBe('anthropic');
     expect(genAiProviderName('pi', 'xai/grok-test')).toBe('x_ai');
+    expect(genAiProviderName('pi', 'gpt-test-2026', 'openai')).toBe('openai');
+    expect(genAiProviderName('pi', 'grok-test', 'xai')).toBe('x_ai');
   });
 });
 

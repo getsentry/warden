@@ -210,6 +210,7 @@ describe('piRuntime.runSkill', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       text: '{"findings":[]}',
+      responseProvider: 'openai',
       responseId: 'resp-1',
       responseModel: 'gpt-test-2026',
       sessionId: 'pi-session-1',

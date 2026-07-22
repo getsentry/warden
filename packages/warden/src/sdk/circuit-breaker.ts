@@ -9,7 +9,6 @@ export interface CircuitBreakerReason {
   code: CircuitBreakerCode;
   message: string;
   providerContext?: ProviderErrorContext;
-  providerContextScope?: object;
 }
 
 interface ProviderFailureCircuitBreakerOptions {
@@ -29,6 +28,8 @@ function providerUnavailableMessage(count: number, lastMessage: string): string 
 export class ProviderFailureCircuitBreaker {
   private consecutiveProviderFailures = 0;
   private openReason?: CircuitBreakerReason;
+  /** Avoid retaining sensitive runner options or adding them to the serializable reason. */
+  private providerContextScope?: WeakRef<object>;
   private readonly maxConsecutiveProviderFailures: number;
   private readonly abortController?: AbortController;
 
@@ -64,15 +65,23 @@ export class ProviderFailureCircuitBreaker {
 
     this.consecutiveProviderFailures++;
     if (this.consecutiveProviderFailures >= this.maxConsecutiveProviderFailures) {
+      this.providerContextScope = providerContext && providerContextScope
+        ? new WeakRef(providerContextScope)
+        : undefined;
       this.open({
         code,
         message: providerUnavailableMessage(this.consecutiveProviderFailures, message),
         providerContext: providerContext
           ? { ...providerContext, attempts: this.consecutiveProviderFailures }
           : undefined,
-        ...(providerContext && providerContextScope ? { providerContextScope } : {}),
       });
     }
+  }
+
+  /** Return provider diagnostics only to the skill run that recorded them. */
+  providerContextFor(scope: object | undefined): ProviderErrorContext | undefined {
+    if (!scope || this.providerContextScope?.deref() !== scope) return undefined;
+    return this.openReason?.providerContext;
   }
 
   private open(reason: CircuitBreakerReason): void {
@@ -81,13 +90,4 @@ export class ProviderFailureCircuitBreaker {
       this.abortController?.abort();
     }
   }
-}
-
-/** Return provider diagnostics only to the skill run that recorded them. */
-export function providerContextForScope(
-  reason: CircuitBreakerReason | undefined,
-  scope: object | undefined,
-): ProviderErrorContext | undefined {
-  if (!scope || reason?.providerContextScope !== scope) return undefined;
-  return reason.providerContext;
 }

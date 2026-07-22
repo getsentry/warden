@@ -9,7 +9,7 @@ import type { FileAnalysisResult } from '../../sdk/types.js';
 import type { HunkWithContext } from '../../diff/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Semaphore, runPool } from '../../utils/index.js';
-import { SkillRunnerError, WardenAuthenticationError } from '../../sdk/errors.js';
+import { SkillRunnerError, WardenAuthenticationError, type ProviderErrorContext } from '../../sdk/errors.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import * as sdkRunner from '../../sdk/runner.js';
 
@@ -956,7 +956,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       } as unknown as SkillTaskOptions['context'],
     };
 
-    const providerContext = {
+    const providerContext: ProviderErrorContext = {
       runtime: 'pi',
       provider: 'openrouter',
       model: 'openrouter/anthropic/claude-sonnet-4',

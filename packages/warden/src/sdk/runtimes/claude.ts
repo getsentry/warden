@@ -322,6 +322,7 @@ function normalizeResult(
     text: result.subtype === 'success' ? result.result : '',
     errors,
     usage: usage ?? extractUsage(result),
+    responseProvider: 'anthropic',
     responseId: result.uuid,
     responseModel: responseModel ?? singleResponseModel(result.modelUsage),
     sessionId: result.session_id,

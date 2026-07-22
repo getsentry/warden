@@ -5,7 +5,7 @@ import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage, type ProviderErrorContext } from './errors.js';
 import { genAiProviderName } from './otel.js';
-import { providerContextForScope, type CircuitBreakerReason } from './circuit-breaker.js';
+import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
@@ -110,7 +110,7 @@ function providerErrorContext(
   const runtime = options.runtime ?? 'pi';
   return {
     runtime,
-    provider: genAiProviderName(runtime, model),
+    provider: genAiProviderName(runtime, model, result.responseProvider),
     model,
     status: result.status,
     responseId: result.responseId,
@@ -1174,7 +1174,7 @@ async function runSkillAnalysis(
   if (circuitReason && totalAttemptFailures > 0 && allFindings.length === 0) {
     throw new SkillRunnerError(circuitReason.message, {
       code: circuitReason.code,
-      providerContext: providerContextForScope(circuitReason, options),
+      providerContext: options.circuitBreaker?.providerContextFor(options),
     });
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {

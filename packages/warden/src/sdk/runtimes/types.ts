@@ -64,6 +64,8 @@ export interface SkillRunResult {
   text: string;
   errors: string[];
   usage: UsageStats;
+  /** Provider reported by the runtime for this response, when available. */
+  responseProvider?: string;
   responseId?: string;
   responseModel?: string;
   sessionId?: string;

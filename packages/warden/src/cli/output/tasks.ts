@@ -24,7 +24,7 @@ import {
   type ChunkAnalysisResult,
   type FindingProcessingEvent,
 } from '../../sdk/runner.js';
-import { ProviderFailureCircuitBreaker, providerContextForScope, type CircuitBreakerReason } from '../../sdk/circuit-breaker.js';
+import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import { buildFileReports } from '../../sdk/report-files.js';
 import chalk from 'chalk';
 import figures from 'figures';
@@ -67,13 +67,14 @@ function firstAnalysisFailureMessage(hunkFailures: HunkFailure[], code: ErrorCod
 function summarizeRunFailure(args: {
   totalHunks: number;
   hunkFailures: HunkFailure[];
-  circuitReason?: CircuitBreakerReason;
+  circuitBreaker?: ProviderFailureCircuitBreaker;
   runtime?: SkillRunnerOptions['runtime'];
   scope?: object;
 }): { code: ErrorCode; message: string; providerContext?: ProviderErrorContext } {
-  const { totalHunks, hunkFailures, circuitReason, runtime } = args;
+  const { totalHunks, hunkFailures, circuitBreaker, runtime } = args;
+  const circuitReason = circuitBreaker?.reason;
   if (circuitReason) {
-    const providerContext = providerContextForScope(circuitReason, args.scope);
+    const providerContext = circuitBreaker.providerContextFor(args.scope);
     return { code: circuitReason.code, message: circuitReason.message, providerContext };
   }
   if (allAnalysisFailuresHaveCode(hunkFailures, 'auth_failed')) {
@@ -561,7 +562,7 @@ export async function runSkillTask(
           const error = summarizeRunFailure({
             totalHunks,
             hunkFailures: allHunkFailures,
-            circuitReason,
+            circuitBreaker: runnerOptions.circuitBreaker,
             runtime: runnerOptions.runtime,
             scope: runnerOptions,
           });

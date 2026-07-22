@@ -39,6 +39,7 @@ import { createSkillCheck, updateSkillCheck, failSkillCheck } from '../../output
 import { renderSkillReport } from '../../output/renderer.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { InvalidPiModelSelectorError } from '../../sdk/runtimes/model-selectors.js';
+import { SkillRunnerError } from '../../sdk/errors.js';
 
 const capturedEvents: ErrorEvent[] = [];
 
@@ -363,6 +364,60 @@ describe('executeTrigger', () => {
     expect(result.error).toBeDefined();
     expect(result.report).toBeUndefined();
     expect(failSkillCheck).toHaveBeenCalled();
+  });
+
+  it('reports sanitized provider diagnostics to Sentry', async () => {
+    const failedReport = {
+      skill: 'test-skill',
+      summary: 'test-skill: failed (provider_unavailable)',
+      findings: [],
+      error: { code: 'provider_unavailable' as const, message: 'Provider unavailable.' },
+    };
+    const error = new SkillRunnerError('Provider unavailable.', {
+      code: 'provider_unavailable',
+      providerContext: {
+        runtime: 'pi',
+        provider: 'openai',
+        model: 'gpt-test-2026',
+        status: 'provider_error',
+        responseId: 'resp_123',
+        attempts: 2,
+        message: 'Authorization: Bearer [redacted]',
+      },
+    });
+    vi.mocked(runSkillTask).mockResolvedValue({
+      name: 'test-trigger',
+      report: failedReport,
+      error,
+    });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(failSkillCheck).mockResolvedValue(undefined);
+
+    const result = await executeTrigger(mockTrigger, mockDeps);
+    await Sentry.flush(1000);
+
+    expect(result.error).toBe(error);
+    expect(capturedEvents).toContainEqual(
+      expect.objectContaining({
+        tags: expect.objectContaining({
+          'gen_ai.provider.name': 'openai',
+          'gen_ai.request.model': 'gpt-test-2026',
+          'warden.error.code': 'provider_unavailable',
+        }),
+        contexts: expect.objectContaining({
+          provider_error: expect.objectContaining({
+            runtime: 'pi',
+            provider: 'openai',
+            model: 'gpt-test-2026',
+            status: 'provider_error',
+            responseId: 'resp_123',
+            attempts: 2,
+            message: 'Authorization: Bearer [redacted]',
+          }),
+        }),
+      }),
+    );
+    expect(JSON.stringify(capturedEvents)).not.toContain(mockDeps.anthropicApiKey);
   });
 
   it('continues if check creation fails', async () => {

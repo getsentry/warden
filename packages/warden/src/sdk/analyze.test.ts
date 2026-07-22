@@ -888,8 +888,9 @@ describe('runSkill', () => {
         text: '',
         errors: ['provider outage'],
         usage: makeUsage(),
+        responseProvider: 'openai',
         responseId: 'req_123',
-        responseModel: 'openrouter/anthropic/claude-sonnet-4',
+        responseModel: 'gpt-test-2026',
       },
     });
     vi.mocked(getRuntime).mockReturnValue({
@@ -927,8 +928,8 @@ describe('runSkill', () => {
     expect(thrown).toMatchObject({ code: 'provider_unavailable' });
     expect((thrown as SkillRunnerError).providerContext).toEqual({
       runtime: 'pi',
-      provider: 'openrouter',
-      model: 'openrouter/anthropic/claude-sonnet-4',
+      provider: 'openai',
+      model: 'gpt-test-2026',
       status: 'provider_error',
       responseId: 'req_123',
       attempts: 1,

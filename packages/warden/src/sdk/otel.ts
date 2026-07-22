@@ -45,9 +45,16 @@ function providerFromModel(model: string | undefined): string | undefined {
   return undefined;
 }
 
-/** Resolve the OpenTelemetry GenAI provider name from runtime and model selectors. */
-export function genAiProviderName(runtime: string | undefined, model: string | undefined): string {
-  return providerFromModel(model) ?? (runtime === 'pi' ? 'pi' : 'anthropic');
+/** Resolve the OpenTelemetry GenAI provider name, preferring the observed provider over selector fallbacks. */
+export function genAiProviderName(
+  runtime: string | undefined,
+  model: string | undefined,
+  provider?: string,
+): string {
+  const resolvedProvider = provider ?? providerFromModel(model);
+  return resolvedProvider
+    ? (PROVIDER_NAME_ALIASES[resolvedProvider] ?? resolvedProvider)
+    : (runtime === 'pi' ? 'pi' : 'anthropic');
 }
 
 /** Build OTel GenAI span names as `<operation> <semantic target>`, when known. */

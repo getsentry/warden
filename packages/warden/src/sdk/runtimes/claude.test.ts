@@ -313,6 +313,7 @@ describe('claudeRuntime.runSkill', () => {
     });
 
     expect(result.result?.responseModel).toBe('claude-sonnet-4-6-20260301');
+    expect(result.result?.responseProvider).toBe('anthropic');
     expect(result.result?.usage).toMatchObject({
       inputTokens: 1300,
       outputTokens: 500,

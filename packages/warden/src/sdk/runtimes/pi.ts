@@ -274,6 +274,7 @@ function normalizePiResult(run: PiPromptResult): SkillRunResult | undefined {
     text: textFromAssistant(message),
     errors,
     usage: run.usage,
+    responseProvider: message.provider,
     responseId: message.responseId,
     responseModel: message.responseModel ?? message.model,
     sessionId: run.sessionId,

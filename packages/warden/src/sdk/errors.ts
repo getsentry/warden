@@ -7,15 +7,16 @@ import {
 } from '@anthropic-ai/sdk';
 import type { ErrorCode } from '../types/index.js';
 import { InvalidPiModelSelectorError } from './runtimes/model-selectors.js';
+import type { RuntimeName, SkillRunStatus } from './runtimes/types.js';
 
 export interface ProviderErrorContext {
-  runtime?: string;
+  runtime: RuntimeName;
   provider?: string;
   model?: string;
-  status?: string;
+  status: SkillRunStatus;
   responseId?: string;
   attempts?: number;
-  message?: string;
+  message: string;
 }
 
 export class SkillRunnerError extends Error {
