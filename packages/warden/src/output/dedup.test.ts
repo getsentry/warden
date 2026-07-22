@@ -168,57 +168,19 @@ ${metadata}`;
     expect(parseWardenFindingId(body)).toBeUndefined();
   });
 
-  it('parses finding ID from legacy title prefix', () => {
-    const body = `**:warning: [2K5-29B] Legacy issue title**
-
-Description
-
----
-<sub>warden: security-review</sub>`;
-
-    expect(parseWardenFindingId(body)).toBe('2K5-29B');
-  });
-
-  it('does not treat legacy severity attribution as a finding ID', () => {
-    const body = `<sub>Identified by Warden via \`security-review\` · high</sub>`;
-    expect(parseWardenFindingId(body)).toBeUndefined();
-  });
 });
 
 describe('isWardenComment', () => {
-  it('returns true for comment with attribution', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: skill</sub>`;
-    expect(isWardenComment(body)).toBe(true);
+  it('recognizes the current attribution format', () => {
+    expect(isWardenComment('<sub>Identified by Warden · skill · ABC-123</sub>')).toBe(true);
   });
 
-  it('returns true for comment with marker', () => {
-    const body = `**Issue**\n\n<!-- warden:v1:file.ts:10:abc12345 -->`;
-    expect(isWardenComment(body)).toBe(true);
+  it('recognizes a Warden marker', () => {
+    expect(isWardenComment('<!-- warden:v1:file.ts:10:abc12345 -->')).toBe(true);
   });
 
-  it('returns true for via format attribution', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill\` · high</sub>`;
-    expect(isWardenComment(body)).toBe(true);
-  });
-
-  it('returns true for bracket format attribution', () => {
-    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [skill] · ABC-123</sub>`;
-    expect(isWardenComment(body)).toBe(true);
-  });
-
-  it('returns true for current muted attribution', () => {
-    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden skill · ABC-123</sub>`;
-    expect(isWardenComment(body)).toBe(true);
-  });
-
-  it('returns true for current backtick format attribution', () => {
-    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`skill\` · ABC-123`;
-    expect(isWardenComment(body)).toBe(true);
-  });
-
-  it('returns false for regular comment', () => {
-    const body = 'This is a regular comment.';
-    expect(isWardenComment(body)).toBe(false);
+  it('returns false for regular comments', () => {
+    expect(isWardenComment('This is a regular comment.')).toBe(false);
   });
 });
 
@@ -242,7 +204,7 @@ describe('fetchExistingComments', () => {
 
 User input reaches a query.
 
-<sub>Identified by Warden security-review · WRZ-XPL</sub>
+<sub>Identified by Warden · security-review · WRZ-XPL</sub>
 <!-- warden:v1:src/db.ts:42:abc12345 -->`,
                       path: 'src/db.ts',
                       line: 42,
@@ -540,195 +502,37 @@ describe('deduplicateFindings', () => {
 });
 
 describe('parseWardenSkills', () => {
-  it('parses single skill', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: security-review</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['security-review']);
+  it('parses one skill from the current format', () => {
+    expect(parseWardenSkills('<sub>Identified by Warden · notseer · ABC-123</sub>')).toEqual(['notseer']);
   });
 
-  it('parses multiple skills', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: security-review, code-quality, performance</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['security-review', 'code-quality', 'performance']);
+  it('parses multiple skills from the current format', () => {
+    expect(parseWardenSkills('<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>')).toEqual([
+      'skill1',
+      'skill2',
+    ]);
   });
 
-  it('handles extra whitespace', () => {
-    const body = `<sub>warden:  skill1 ,  skill2 </sub>`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
-  });
-
-  it('returns empty array for non-Warden comment', () => {
-    const body = 'Regular comment without attribution';
-    expect(parseWardenSkills(body)).toEqual([]);
-  });
-
-  it('parses single skill from current muted format', () => {
-    const body = `<sub>Identified by Warden · notseer · ABC-123</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['notseer']);
-  });
-
-  it('parses multiple skills from current muted format', () => {
-    const body = `<sub>Identified by Warden · skill1, skill2, skill3 · XYZ-789</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
-  });
-
-  it('parses new format with severity', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`security-review\` · high</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['security-review']);
-  });
-
-  it('parses new format with severity and confidence', () => {
-    const body = `<sub>Identified by Warden via \`notseer\` · critical, high confidence</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['notseer']);
-  });
-
-  it('parses multiple skills from new format', () => {
-    const body = `<sub>Identified by Warden via \`skill1\`, \`skill2\` · high</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
-  });
-
-  it('parses multiple skills with extra whitespace in new format', () => {
-    const body = `<sub>Identified by Warden via \`skill1\`,  \`skill2\`,\`skill3\` · medium</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
-  });
-
-  it('parses single skill from bracket format', () => {
-    const body = `<sub>Identified by Warden [notseer] · ABC-123</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['notseer']);
-  });
-
-  it('parses multiple skills from bracket format', () => {
-    const body = `<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
-  });
-
-  it('parses bracket format with three skills', () => {
-    const body = `<sub>Identified by Warden [skill1], [skill2], [skill3] · XYZ-789</sub>`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
-  });
-
-  it('parses single skill from current backtick format', () => {
-    const body = `Identified by Warden \`notseer\` · ABC-123`;
-    expect(parseWardenSkills(body)).toEqual(['notseer']);
-  });
-
-  it('parses multiple skills from current backtick format', () => {
-    const body = `Identified by Warden \`skill1\`, \`skill2\` · ABC-123`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2']);
-  });
-
-  it('parses current backtick format with three skills', () => {
-    const body = `Identified by Warden \`skill1\`, \`skill2\`, \`skill3\` · XYZ-789`;
-    expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
+  it('returns an empty array without current attribution', () => {
+    expect(parseWardenSkills('Regular comment')).toEqual([]);
   });
 });
 
 describe('updateWardenCommentBody', () => {
-  it('adds new skill to attribution', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n---\n<sub>warden: skill1</sub>`;
-    const result = updateWardenCommentBody(body, 'skill2');
-    expect(result).toContain('<sub>warden: skill1, skill2</sub>');
-  });
-
-  it('returns null if skill already listed', () => {
-    const body = `<sub>warden: skill1, skill2</sub>`;
-    const result = updateWardenCommentBody(body, 'skill1');
-    expect(result).toBeNull();
-  });
-
-  it('adds new skill to current muted attribution', () => {
+  it('adds a skill to the current attribution', () => {
     const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden · skill1 · ABC-123</sub>`;
-    const result = updateWardenCommentBody(body, 'skill2');
-    expect(result).toContain('<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>');
-    expect(result).not.toContain('`skill1`');
-    expect(result).not.toContain('[skill1]');
+    expect(updateWardenCommentBody(body, 'skill2')).toContain(
+      '<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>'
+    );
   });
 
-  it('returns null if skill already listed in current muted attribution', () => {
-    const body = `<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>`;
-    const result = updateWardenCommentBody(body, 'skill1');
-    expect(result).toBeNull();
+  it('returns null when the skill is already present', () => {
+    const body = '<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>';
+    expect(updateWardenCommentBody(body, 'skill1')).toBeNull();
   });
 
-  it('preserves rest of comment body', () => {
-    const body = `**:warning: SQL Injection**\n\nUser input passed to query\n\n---\n<sub>warden: security-review</sub>\n<!-- warden:v1:file.ts:10:abc123 -->`;
-    const result = updateWardenCommentBody(body, 'code-quality');
-    expect(result).toContain('**:warning: SQL Injection**');
-    expect(result).toContain('User input passed to query');
-    expect(result).toContain('<sub>warden: security-review, code-quality</sub>');
-    expect(result).toContain('<!-- warden:v1:file.ts:10:abc123 -->');
-  });
-
-  it('adds new skill to new format attribution', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill1\` · high</sub>`;
-    const result = updateWardenCommentBody(body, 'skill2');
-    expect(result).toContain('<sub>Identified by Warden via `skill1`, `skill2` · high</sub>');
-  });
-
-  it('preserves severity and confidence in new format', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`notseer\` · critical, high confidence</sub>`;
-    const result = updateWardenCommentBody(body, 'security-review');
-    expect(result).toContain('<sub>Identified by Warden via `notseer`, `security-review` · critical, high confidence</sub>');
-  });
-
-  it('returns null if skill already listed in new format', () => {
-    const body = `<sub>Identified by Warden via \`skill1\` · medium</sub>`;
-    const result = updateWardenCommentBody(body, 'skill1');
-    expect(result).toBeNull();
-  });
-
-  it('adds skill to new format with multiple existing skills without duplication', () => {
-    const body = `**:warning: Issue**\n\nDescription\n\n<sub>Identified by Warden via \`skill1\`, \`skill2\` · high</sub>`;
-    const result = updateWardenCommentBody(body, 'skill3');
-    expect(result).toContain('<sub>Identified by Warden via `skill1`, `skill2`, `skill3` · high</sub>');
-    // Ensure no duplication - skill2 should appear exactly once
-    expect(result!.match(/`skill2`/g)).toHaveLength(1);
-  });
-
-  it('adds new skill to bracket format attribution', () => {
-    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [skill1] · ABC-123</sub>`;
-    const result = updateWardenCommentBody(body, 'skill2');
-    expect(result).toContain('<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>');
-  });
-
-  it('returns null if skill already listed in bracket format', () => {
-    const body = `<sub>Identified by Warden [skill1] · ABC-123</sub>`;
-    const result = updateWardenCommentBody(body, 'skill1');
-    expect(result).toBeNull();
-  });
-
-  it('preserves finding ID in bracket format', () => {
-    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden [notseer] · 2K5-29B</sub>`;
-    const result = updateWardenCommentBody(body, 'security-review');
-    expect(result).toContain('<sub>Identified by Warden [notseer], [security-review] · 2K5-29B</sub>');
-  });
-
-  it('adds skill to bracket format with multiple existing skills', () => {
-    const body = `<sub>Identified by Warden [skill1], [skill2] · ABC-123</sub>`;
-    const result = updateWardenCommentBody(body, 'skill3');
-    expect(result).toContain('<sub>Identified by Warden [skill1], [skill2], [skill3] · ABC-123</sub>');
-  });
-
-  it('adds new skill to current backtick format attribution', () => {
-    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`skill1\` · ABC-123`;
-    const result = updateWardenCommentBody(body, 'skill2');
-    expect(result).toContain('Identified by Warden `skill1`, `skill2` · ABC-123');
-  });
-
-  it('returns null if skill already listed in current backtick format', () => {
-    const body = `Identified by Warden \`skill1\` · ABC-123`;
-    const result = updateWardenCommentBody(body, 'skill1');
-    expect(result).toBeNull();
-  });
-
-  it('preserves finding ID in current backtick format', () => {
-    const body = `**Issue**\n\nDescription\n\nIdentified by Warden \`notseer\` · 2K5-29B`;
-    const result = updateWardenCommentBody(body, 'security-review');
-    expect(result).toContain('Identified by Warden `notseer`, `security-review` · 2K5-29B');
-  });
-
-  it('adds skill to current backtick format with multiple existing skills', () => {
-    const body = `Identified by Warden \`skill1\`, \`skill2\` · ABC-123`;
-    const result = updateWardenCommentBody(body, 'skill3');
-    expect(result).toContain('Identified by Warden `skill1`, `skill2`, `skill3` · ABC-123');
+  it('returns null without current attribution', () => {
+    expect(updateWardenCommentBody('Regular comment', 'skill1')).toBeNull();
   });
 });
 
