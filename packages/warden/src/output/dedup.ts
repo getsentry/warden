@@ -237,8 +237,9 @@ export function parseWardenFindingId(body: string): string | undefined {
   if (metadataId) return metadataId;
 
   // TODO(2026-08-01): Remove footer parsing after comments without metadata have aged out.
+  // Supports the current `Warden · skill · id` and immediately prior `Warden skill · id` forms.
   const attributionMatch = body.match(
-    /(?:<sub>)?Identified by Warden · ([^<\n\r]*)(?:<\/sub>|$)/m
+    /(?:<sub>)?Identified by Warden (?:·\s*)?([^<\n\r]*)(?:<\/sub>|$)/m
   );
   if (!attributionMatch?.[1]) return undefined;
 

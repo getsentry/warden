@@ -162,12 +162,17 @@ ${metadata}`;
     expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
   });
 
+  it('parses finding ID from the immediately prior footer format', () => {
+    const body = `<sub>Identified by Warden security-review · WRZ-XPL</sub>`;
+
+    expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
+  });
+
   it('does not treat the skill as an ID when current attribution has no finding ID', () => {
     const body = `<sub>Identified by Warden · security-review</sub>`;
 
     expect(parseWardenFindingId(body)).toBeUndefined();
   });
-
 });
 
 describe('isWardenComment', () => {
@@ -522,6 +527,14 @@ describe('updateWardenCommentBody', () => {
   it('adds a skill to the current attribution', () => {
     const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden · skill1 · ABC-123</sub>`;
     expect(updateWardenCommentBody(body, 'skill2')).toContain(
+      '<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>'
+    );
+  });
+
+  it('upgrades the immediately prior footer without dropping its ID', () => {
+    const body = `<sub>Identified by Warden skill1 · ABC-123</sub>`;
+
+    expect(updateWardenCommentBody(body, 'skill2')).toBe(
       '<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>'
     );
   });
