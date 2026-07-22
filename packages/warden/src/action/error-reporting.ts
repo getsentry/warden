@@ -26,7 +26,7 @@ export function captureActionTriggerError(error: unknown, context: TriggerErrorC
       'warden.trigger.name': context.triggerName,
       'gen_ai.agent.name': context.skillName,
       'warden.error.code': code,
-      ...(providerContext?.provider ? { 'gen_ai.system': providerContext.provider } : {}),
+      ...(providerContext?.provider ? { 'gen_ai.provider.name': providerContext.provider } : {}),
       ...(providerContext?.model ? { 'gen_ai.request.model': providerContext.model } : {}),
     },
     ...(providerContext ? { contexts: { provider_error: { ...providerContext } } } : {}),

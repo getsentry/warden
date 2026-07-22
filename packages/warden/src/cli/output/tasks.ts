@@ -8,7 +8,7 @@
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode, HunkTrace } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
-import { SkillRunnerError, WardenAuthenticationError, classifyError } from '../../sdk/errors.js';
+import { SkillRunnerError, WardenAuthenticationError, classifyError, type ProviderErrorContext } from '../../sdk/errors.js';
 import {
   prepareFiles,
   analyzeFile,
@@ -67,9 +67,9 @@ function firstAnalysisFailureMessage(hunkFailures: HunkFailure[], code: ErrorCod
 function summarizeRunFailure(args: {
   totalHunks: number;
   hunkFailures: HunkFailure[];
-  circuitReason?: { code: ErrorCode; message: string };
+  circuitReason?: { code: ErrorCode; message: string; providerContext?: ProviderErrorContext };
   runtime?: SkillRunnerOptions['runtime'];
-}): { code: ErrorCode; message: string } {
+}): { code: ErrorCode; message: string; providerContext?: ProviderErrorContext } {
   const { totalHunks, hunkFailures, circuitReason, runtime } = args;
   if (circuitReason) {
     return circuitReason;
@@ -597,7 +597,10 @@ export async function runSkillTask(
           callbacks.onSkillComplete(name, errorReport);
           // Carry a typed error alongside the report so consumers that re-throw
           // (action executor, Sentry.captureException) preserve the ErrorCode.
-          const runnerError = new SkillRunnerError(error.message, { code: error.code });
+          const runnerError = new SkillRunnerError(error.message, {
+            code: error.code,
+            providerContext: error.providerContext,
+          });
           return { name, report: errorReport, error: runnerError, failOn, minConfidence };
         }
 

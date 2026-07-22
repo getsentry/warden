@@ -964,11 +964,27 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       } as unknown as SkillTaskOptions['context'],
     };
 
+    const providerContext = {
+      runtime: 'pi',
+      provider: 'openrouter',
+      model: 'openrouter/anthropic/claude-sonnet-4',
+      status: 'provider_error',
+      attempts: 5,
+      message: '400',
+    };
+    const circuitBreaker = new ProviderFailureCircuitBreaker({ maxConsecutiveProviderFailures: 1 });
+    circuitBreaker.recordFailure('provider_unavailable', '400', providerContext);
+    options.runnerOptions = { circuitBreaker };
+
     const result = await runSkillTask(options, 1, noopCallbacks());
 
     expect(result.report!.error?.code).toBe('provider_unavailable');
     expect(result.report!.error?.message).toContain('Provider unavailable');
     expect((result.error as SkillRunnerError).code).toBe('provider_unavailable');
+    expect((result.error as SkillRunnerError).providerContext).toEqual({
+      ...providerContext,
+      attempts: 1,
+    });
   });
 
   it('preserves invalid_model_selector when every hunk fails from Pi model validation', async () => {

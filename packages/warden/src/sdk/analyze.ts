@@ -4,6 +4,7 @@ import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage, type ProviderErrorContext } from './errors.js';
+import { genAiProviderName } from './otel.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
@@ -101,10 +102,10 @@ function providerErrorContext(
   message: string,
 ): ProviderErrorContext {
   const configuredModel = options.model;
-  const slashIndex = configuredModel?.indexOf('/') ?? -1;
+  const runtime = options.runtime ?? 'pi';
   return {
-    runtime: options.runtime ?? 'pi',
-    provider: slashIndex > 0 ? configuredModel?.slice(0, slashIndex) : undefined,
+    runtime,
+    provider: genAiProviderName(runtime, configuredModel),
     model: result.responseModel ?? configuredModel,
     status: result.status,
     responseId: result.responseId,
