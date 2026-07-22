@@ -159,7 +159,7 @@ function renderHiddenFindingsLink(hiddenCount: number, checkRunUrl: string): str
 
 function renderAttributionFooter(skill: string, findingId?: string): string {
   const idSuffix = findingId ? ` · ${escapeHtml(findingId)}` : '';
-  return `<sub>Identified by Warden ${escapeHtml(skill)}${idSuffix}</sub>`;
+  return `<sub>Identified by Warden · ${escapeHtml(skill)}${idSuffix}</sub>`;
 }
 
 function renderSummaryComment(

@@ -225,6 +225,12 @@ function fallbackCommentTitle(body: string, commentId: number): string {
  * Parse the finding ID from a Warden comment's attribution or legacy title.
  */
 export function parseWardenFindingId(body: string): string | undefined {
+  const currentAttributionMatch = body.match(
+    /(?:<sub>)?Identified by Warden · [^<\n\r]*? ·\s*(?:`([^`]+)`|([^`<\n\r]+))(?:<\/sub>|$)/m
+  );
+  const currentId = (currentAttributionMatch?.[1] ?? currentAttributionMatch?.[2])?.trim();
+  if (currentId) return currentId;
+
   const attributionMatch = body.match(/(?:<sub>)?Identified by Warden (?!via\s)([^<\n\r]*)(?:<\/sub>|$)/m);
   if (attributionMatch?.[1]) {
     const idMatch = attributionMatch[1].match(/·\s*(?:`([^`]+)`|([^`\n\r]+))/);
@@ -263,15 +269,17 @@ function parsePlainSkillList(value: string): string[] {
 /**
  * Parse skill names from a Warden comment's attribution line.
  * Supports five formats:
- * - Current: "<sub>Identified by Warden skill1, skill2 · id</sub>"
+ * - Current: "<sub>Identified by Warden · skill1, skill2 · id</sub>"
  * - Legacy backtick: "Identified by Warden `skill1`, `skill2` · id"
  * - Legacy bracket: "<sub>Identified by Warden [skill1], [skill2] · id</sub>"
  * - Legacy via: "<sub>Identified by Warden via `skill1`, `skill2` · severity</sub>"
  * - Legacy old: "<sub>warden: skill1, skill2</sub>"
  */
 export function parseWardenSkills(body: string): string[] {
-  // Try current muted format: <sub>Identified by Warden skill1, skill2 · id</sub>
-  const plainSubMatch = body.match(/<sub>Identified by Warden (?!via\s)([^`[\]<]+?)(?:\s*·|<\/sub>)/);
+  // Try current muted format: <sub>Identified by Warden · skill1, skill2 · id</sub>
+  const plainSubMatch = body.match(
+    /<sub>Identified by Warden (?!via\s)(?:·\s*)?([^`[\]<]+?)(?:\s*·|<\/sub>)/
+  );
   if (plainSubMatch?.[1]) {
     const skills = parsePlainSkillList(plainSubMatch[1]);
     if (skills.length > 0) return skills;
@@ -317,8 +325,8 @@ export function parseWardenSkills(body: string): string[] {
 
 /**
  * Update a Warden comment body to add a new skill to the attribution.
- * Current format: Changes "<sub>Identified by Warden skill1 · id</sub>"
- *                 to "<sub>Identified by Warden skill1, skill2 · id</sub>"
+ * Current format: Changes "<sub>Identified by Warden · skill1 · id</sub>"
+ *                 to "<sub>Identified by Warden · skill1, skill2 · id</sub>"
  * Legacy backtick: Changes "Identified by Warden `skill1` · id"
  *                  to "Identified by Warden `skill1`, `skill2` · id"
  * Legacy bracket: Changes "<sub>Identified by Warden [skill1] · id</sub>"
@@ -341,15 +349,17 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
     return null;
   }
 
-  // Check if it's the current muted format: <sub>Identified by Warden skill · id</sub>
+  // Check if it's the current muted format: <sub>Identified by Warden · skill · id</sub>
   const plainSubFormatMatch = body.match(/<sub>Identified by Warden (?!via\s)[^`[\]<]+<\/sub>/);
   if (plainSubFormatMatch) {
     const allSkills = [...existingSkills, newSkill].join(', ');
-    const subTagMatch = body.match(/<sub>Identified by Warden (?!via\s)([^<]*?)(\s*·[^<]*)?<\/sub>/);
-    const suffix = subTagMatch?.[2] || '';
+    const subTagMatch = body.match(
+      /<sub>Identified by Warden (?!via\s)(?:·\s*)?[^<]*?(\s*·[^<]*)?<\/sub>/
+    );
+    const suffix = subTagMatch?.[1] || '';
     return body.replace(
       /<sub>Identified by Warden (?!via\s)[^<]+<\/sub>/,
-      () => `<sub>Identified by Warden ${allSkills}${suffix}</sub>`
+      () => `<sub>Identified by Warden · ${allSkills}${suffix}</sub>`
     );
   }
 

@@ -151,7 +151,7 @@ describe('parseWardenFindingId', () => {
 
 Description
 
-<sub>Identified by Warden security-review · WRZ-XPL</sub>`;
+<sub>Identified by Warden · security-review · WRZ-XPL</sub>`;
 
     expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
   });
@@ -549,12 +549,12 @@ describe('parseWardenSkills', () => {
   });
 
   it('parses single skill from current muted format', () => {
-    const body = `<sub>Identified by Warden notseer · ABC-123</sub>`;
+    const body = `<sub>Identified by Warden · notseer · ABC-123</sub>`;
     expect(parseWardenSkills(body)).toEqual(['notseer']);
   });
 
   it('parses multiple skills from current muted format', () => {
-    const body = `<sub>Identified by Warden skill1, skill2, skill3 · XYZ-789</sub>`;
+    const body = `<sub>Identified by Warden · skill1, skill2, skill3 · XYZ-789</sub>`;
     expect(parseWardenSkills(body)).toEqual(['skill1', 'skill2', 'skill3']);
   });
 
@@ -623,15 +623,15 @@ describe('updateWardenCommentBody', () => {
   });
 
   it('adds new skill to current muted attribution', () => {
-    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden skill1 · ABC-123</sub>`;
+    const body = `**Issue**\n\nDescription\n\n<sub>Identified by Warden · skill1 · ABC-123</sub>`;
     const result = updateWardenCommentBody(body, 'skill2');
-    expect(result).toContain('<sub>Identified by Warden skill1, skill2 · ABC-123</sub>');
+    expect(result).toContain('<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>');
     expect(result).not.toContain('`skill1`');
     expect(result).not.toContain('[skill1]');
   });
 
   it('returns null if skill already listed in current muted attribution', () => {
-    const body = `<sub>Identified by Warden skill1, skill2 · ABC-123</sub>`;
+    const body = `<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>`;
     const result = updateWardenCommentBody(body, 'skill1');
     expect(result).toBeNull();
   });
