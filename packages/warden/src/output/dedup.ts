@@ -237,7 +237,7 @@ interface WardenFooter {
   findingId?: string;
 }
 
-const FINDING_ID_PATTERN = '[A-Z0-9]{3}-[A-Z0-9]{3}';
+const FINDING_ID_PATTERN = '[^<\\r\\n]+';
 const SKILL_LIST_PATTERN = '[A-Za-z0-9_$-]+(?:,\\s*[A-Za-z0-9_$-]+)*';
 const CURRENT_FOOTER_PATTERN = new RegExp(
   `<sub>Identified by Warden · (${SKILL_LIST_PATTERN})(?: · (${FINDING_ID_PATTERN}))?</sub>`

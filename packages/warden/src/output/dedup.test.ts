@@ -163,8 +163,8 @@ ${metadata}`;
   });
 
   it('parses finding IDs from the current and immediately prior footer formats', () => {
-    expect(parseWardenFindingId('<sub>Identified by Warden · security-review · WRZ-XPL</sub>')).toBe(
-      'WRZ-XPL'
+    expect(parseWardenFindingId('<sub>Identified by Warden · security-review · finding-42</sub>')).toBe(
+      'finding-42'
     );
     expect(parseWardenFindingId('<sub>Identified by Warden security-review · WRZ-XPL</sub>')).toBe(
       'WRZ-XPL'
@@ -522,7 +522,10 @@ describe('parseWardenSkills', () => {
     ]);
   });
 
-  it('parses skills from the immediately prior format', () => {
+  it('parses skills with arbitrary finding IDs from both supported formats', () => {
+    expect(parseWardenSkills('<sub>Identified by Warden · skill1 · finding-42</sub>')).toEqual([
+      'skill1',
+    ]);
     expect(parseWardenSkills('<sub>Identified by Warden skill1, skill2 · ABC-123</sub>')).toEqual([
       'skill1',
       'skill2',
@@ -545,10 +548,10 @@ describe('updateWardenCommentBody', () => {
   });
 
   it('upgrades the immediately prior footer without dropping its ID', () => {
-    const body = `<sub>Identified by Warden skill1 · ABC-123</sub>`;
+    const body = `<sub>Identified by Warden skill1 · finding-42</sub>`;
 
     expect(updateWardenCommentBody(body, 'skill2')).toBe(
-      '<sub>Identified by Warden · skill1, skill2 · ABC-123</sub>'
+      '<sub>Identified by Warden · skill1, skill2 · finding-42</sub>'
     );
   });
 
