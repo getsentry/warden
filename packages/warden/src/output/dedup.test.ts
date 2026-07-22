@@ -156,6 +156,12 @@ Description
     expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
   });
 
+  it('does not treat the skill as an ID when current attribution has no finding ID', () => {
+    const body = `<sub>Identified by Warden · security-review</sub>`;
+
+    expect(parseWardenFindingId(body)).toBeUndefined();
+  });
+
   it('parses finding ID from legacy title prefix', () => {
     const body = `**:warning: [2K5-29B] Legacy issue title**
 

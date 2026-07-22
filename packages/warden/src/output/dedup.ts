@@ -226,10 +226,15 @@ function fallbackCommentTitle(body: string, commentId: number): string {
  */
 export function parseWardenFindingId(body: string): string | undefined {
   const currentAttributionMatch = body.match(
-    /(?:<sub>)?Identified by Warden · [^<\n\r]*? ·\s*(?:`([^`]+)`|([^`<\n\r]+))(?:<\/sub>|$)/m
+    /(?:<sub>)?Identified by Warden · ([^<\n\r]*)(?:<\/sub>|$)/m
   );
-  const currentId = (currentAttributionMatch?.[1] ?? currentAttributionMatch?.[2])?.trim();
-  if (currentId) return currentId;
+  if (currentAttributionMatch?.[1]) {
+    const separatorIndex = currentAttributionMatch[1].lastIndexOf(' · ');
+    if (separatorIndex < 0) return undefined;
+
+    const id = currentAttributionMatch[1].slice(separatorIndex + 3).replace(/^`|`$/g, '').trim();
+    return id || undefined;
+  }
 
   const attributionMatch = body.match(/(?:<sub>)?Identified by Warden (?!via\s)([^<\n\r]*)(?:<\/sub>|$)/m);
   if (attributionMatch?.[1]) {
