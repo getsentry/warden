@@ -814,6 +814,9 @@ describe('runSkill', () => {
 
     expect(runSkillMock).toHaveBeenCalledTimes(3);
     expect(circuitBreaker.reason?.code).toBe('provider_unavailable');
+    expect(circuitBreaker.reason?.providerContext).toMatchObject({
+      status: 'provider_error',
+    });
     expect(report.findings).toEqual([
       expect.objectContaining({
         title: 'Finding at line 10',

@@ -733,7 +733,7 @@ async function analyzeHunk(
               runtime: runtimeName,
               provider: genAiProviderName(runtimeName, options.model),
               model: options.model,
-              status: retryCode,
+              status: 'provider_error',
               attempts: retryConfig.maxRetries + 1,
               triggerName: options.telemetryTriggerName,
               message: retryMsg,

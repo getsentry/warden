@@ -954,6 +954,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
 
     const options: SkillTaskOptions = {
       name: 'provider-fail-skill',
+      triggerName: 'provider-fail-trigger',
       resolveSkill: async () =>
         ({ name: 'provider-fail-skill', definition: '', files: [] } as unknown as SkillDefinition),
       context: {
@@ -970,6 +971,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       model: 'openrouter/anthropic/claude-sonnet-4',
       status: 'provider_error',
       attempts: 5,
+      triggerName: 'provider-fail-trigger',
       message: '400',
     };
     const circuitBreaker = new ProviderFailureCircuitBreaker({ maxConsecutiveProviderFailures: 1 });
@@ -984,6 +986,9 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect((result.error as SkillRunnerError).providerContext).toEqual({
       ...providerContext,
       attempts: 1,
+    });
+    expect(vi.mocked(sdkRunner.analyzeFile).mock.calls[0]?.[3]).toMatchObject({
+      telemetryTriggerName: 'provider-fail-trigger',
     });
   });
 

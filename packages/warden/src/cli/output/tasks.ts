@@ -255,7 +255,20 @@ export async function runSkillTask(
   callbacks: SkillProgressCallbacks,
   semaphore?: Semaphore
 ): Promise<SkillTaskResult> {
-  const { name, displayName = name, triggerName, failOn, minConfidence, resolveSkill, context, runnerOptions = {} } = options;
+  const {
+    name,
+    displayName = name,
+    triggerName,
+    failOn,
+    minConfidence,
+    resolveSkill,
+    context,
+    runnerOptions: configuredRunnerOptions = {},
+  } = options;
+  const runnerOptions: SkillRunnerOptions = {
+    ...configuredRunnerOptions,
+    telemetryTriggerName: configuredRunnerOptions.telemetryTriggerName ?? triggerName,
+  };
 
   return Sentry.startSpan(
     { op: 'skill.run', name: `run ${displayName}` },
