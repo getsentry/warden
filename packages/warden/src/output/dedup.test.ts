@@ -162,16 +162,20 @@ ${metadata}`;
     expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
   });
 
-  it('parses finding ID from the immediately prior footer format', () => {
-    const body = `<sub>Identified by Warden security-review · WRZ-XPL</sub>`;
-
-    expect(parseWardenFindingId(body)).toBe('WRZ-XPL');
+  it('parses finding IDs from the current and immediately prior footer formats', () => {
+    expect(parseWardenFindingId('<sub>Identified by Warden · security-review · WRZ-XPL</sub>')).toBe(
+      'WRZ-XPL'
+    );
+    expect(parseWardenFindingId('<sub>Identified by Warden security-review · WRZ-XPL</sub>')).toBe(
+      'WRZ-XPL'
+    );
   });
 
-  it('does not treat the skill as an ID when current attribution has no finding ID', () => {
-    const body = `<sub>Identified by Warden · security-review</sub>`;
-
-    expect(parseWardenFindingId(body)).toBeUndefined();
+  it('does not treat a skill or historical footer metadata as a finding ID', () => {
+    expect(parseWardenFindingId('<sub>Identified by Warden · security-review</sub>')).toBeUndefined();
+    expect(
+      parseWardenFindingId('<sub>Identified by Warden via `security-review` · high</sub>')
+    ).toBeUndefined();
   });
 });
 
@@ -518,8 +522,17 @@ describe('parseWardenSkills', () => {
     ]);
   });
 
-  it('returns an empty array without current attribution', () => {
+  it('parses skills from the immediately prior format', () => {
+    expect(parseWardenSkills('<sub>Identified by Warden skill1, skill2 · ABC-123</sub>')).toEqual([
+      'skill1',
+      'skill2',
+    ]);
+  });
+
+  it('returns an empty array for regular comments and unsupported historical footers', () => {
     expect(parseWardenSkills('Regular comment')).toEqual([]);
+    expect(parseWardenSkills('<sub>Identified by Warden via `skill1` · high</sub>')).toEqual([]);
+    expect(parseWardenSkills('<sub>Identified by Warden [skill1] · ABC-123</sub>')).toEqual([]);
   });
 });
 
@@ -544,8 +557,22 @@ describe('updateWardenCommentBody', () => {
     expect(updateWardenCommentBody(body, 'skill1')).toBeNull();
   });
 
-  it('returns null without current attribution', () => {
+  it('preserves dollar sequences in a newly added skill', () => {
+    const body = '<sub>Identified by Warden · skill1 · ABC-123</sub>';
+
+    expect(updateWardenCommentBody(body, 'skill$&$1')).toBe(
+      '<sub>Identified by Warden · skill1, skill$&$1 · ABC-123</sub>'
+    );
+  });
+
+  it('leaves regular comments and unsupported historical footers unchanged', () => {
     expect(updateWardenCommentBody('Regular comment', 'skill1')).toBeNull();
+    expect(
+      updateWardenCommentBody('<sub>Identified by Warden via `skill1` · high</sub>', 'skill2')
+    ).toBeNull();
+    expect(
+      updateWardenCommentBody('<sub>Identified by Warden [skill1] · ABC-123</sub>', 'skill2')
+    ).toBeNull();
   });
 });
 

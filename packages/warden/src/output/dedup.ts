@@ -102,6 +102,7 @@ export function generateMarker(path: string, line: number, contentHash: string):
   return `<!-- warden:v1:${path}:${line}:${contentHash} -->`;
 }
 
+/** Generate the hidden metadata marker embedded in Warden comments. */
 export function generateFindingMetadata(
   finding: Pick<Finding, 'severity' | 'confidence'> & { id?: string }
 ): string {
@@ -139,6 +140,7 @@ export function parseMarker(body: string): WardenMarker | null {
   };
 }
 
+/** Parse and validate a Warden finding metadata marker. */
 export function parseWardenFindingMetadata(
   body: string
 ): (Pick<Finding, 'severity' | 'confidence'> & { id?: string }) | null {
@@ -229,59 +231,66 @@ function fallbackCommentTitle(body: string, commentId: number): string {
   return truncateText(description, 80);
 }
 
-/**
- * Parse the finding ID from Warden's hidden metadata marker.
- */
+interface WardenFooter {
+  fullMatch: string;
+  skills: string[];
+  findingId?: string;
+}
+
+const FINDING_ID_PATTERN = '[A-Z0-9]{3}-[A-Z0-9]{3}';
+const SKILL_LIST_PATTERN = '[A-Za-z0-9_$-]+(?:,\\s*[A-Za-z0-9_$-]+)*';
+const CURRENT_FOOTER_PATTERN = new RegExp(
+  `<sub>Identified by Warden · (${SKILL_LIST_PATTERN})(?: · (${FINDING_ID_PATTERN}))?</sub>`
+);
+const PRIOR_FOOTER_PATTERN = new RegExp(
+  `<sub>Identified by Warden (${SKILL_LIST_PATTERN})(?: · (${FINDING_ID_PATTERN}))?</sub>`
+);
+
+function parseSkillList(value: string): string[] {
+  return value.split(',').map((skill) => skill.trim());
+}
+
+function parseWardenFooter(body: string): WardenFooter | null {
+  // TODO(2026-08-01): Remove PRIOR_FOOTER_PATTERN after comments using it have aged out.
+  const match = body.match(CURRENT_FOOTER_PATTERN) ?? body.match(PRIOR_FOOTER_PATTERN);
+  const fullMatch = match?.[0];
+  const skillList = match?.[1];
+  if (!fullMatch || !skillList) return null;
+
+  return {
+    fullMatch,
+    skills: parseSkillList(skillList),
+    findingId: match[2],
+  };
+}
+
+/** Parse the finding ID from hidden metadata or a supported transitional footer. */
 export function parseWardenFindingId(body: string): string | undefined {
-  const metadataId = parseWardenFindingMetadata(body)?.id;
-  if (metadataId) return metadataId;
-
-  // TODO(2026-08-01): Remove footer parsing after comments without metadata have aged out.
-  // Supports the current `Warden · skill · id` and immediately prior `Warden skill · id` forms.
-  const attributionMatch = body.match(
-    /(?:<sub>)?Identified by Warden (?:·\s*)?([^<\n\r]*)(?:<\/sub>|$)/m
-  );
-  if (!attributionMatch?.[1]) return undefined;
-
-  const separatorIndex = attributionMatch[1].lastIndexOf(' · ');
-  if (separatorIndex < 0) return undefined;
-
-  const id = attributionMatch[1].slice(separatorIndex + 3).replace(/^`|`$/g, '').trim();
-  return id || undefined;
+  return parseWardenFindingMetadata(body)?.id ?? parseWardenFooter(body)?.findingId;
 }
 
-/** Check if a comment body is a Warden-generated comment. */
+/** Check if a comment body is a supported Warden comment. */
 export function isWardenComment(body: string): boolean {
-  return body.includes('<sub>Identified by Warden ') || body.includes('<!-- warden:v1:');
+  return body.includes('<!-- warden:v1:') || parseWardenFooter(body) !== null;
 }
 
-function parsePlainSkillList(value: string): string[] {
-  return value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/** Parse skill names from a Warden comment's attribution line. */
+/** Parse skill names from a supported Warden attribution footer. */
 export function parseWardenSkills(body: string): string[] {
-  const match = body.match(
-    /<sub>Identified by Warden (?:·\s*)?([^<]+?)(?:\s*·\s*[^<]+)?<\/sub>/
-  );
-  return match?.[1] ? parsePlainSkillList(match[1]) : [];
+  return parseWardenFooter(body)?.skills ?? [];
 }
 
-/** Add a skill to a Warden comment's current attribution footer. */
+/** Add a skill to a supported Warden attribution footer. */
 export function updateWardenCommentBody(body: string, newSkill: string): string | null {
-  const existingSkills = parseWardenSkills(body);
-  if (existingSkills.length === 0 || existingSkills.includes(newSkill)) return null;
+  const footer = parseWardenFooter(body);
+  if (!footer || footer.skills.includes(newSkill)) return null;
 
-  const match = body.match(/<sub>Identified by Warden (?:·\s*)?[^<]+<\/sub>/);
-  if (!match) return null;
-
-  const allSkills = [...existingSkills, newSkill].join(', ');
-  const id = parseWardenFindingId(body);
-  const idSuffix = id ? ` · ${id}` : '';
-  return body.replace(match[0], `<sub>Identified by Warden · ${allSkills}${idSuffix}</sub>`);
+  const skills = [...footer.skills, newSkill].join(', ');
+  const findingId = parseWardenFindingMetadata(body)?.id ?? footer.findingId;
+  const idSuffix = findingId ? ` · ${findingId}` : '';
+  return body.replace(
+    footer.fullMatch,
+    () => `<sub>Identified by Warden · ${skills}${idSuffix}</sub>`
+  );
 }
 
 /** GraphQL response structure for review threads */
