@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Octokit } from '@octokit/rest';
+import { generateFindingMetadata } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import type { Finding } from '../../types/index.js';
 
@@ -412,13 +413,15 @@ describe('evaluateFixAttempts', () => {
   });
 
   it('uses Warden comment attribution for fix-eval skill and finding ID', async () => {
+    const metadata = generateFindingMetadata({ id: 'WRZ-XPL', severity: 'high' });
     const comment = createComment({
       title: 'baseSha is set to branch name',
       body: `**baseSha is set to branch name**
 
 The base SHA points at the branch.
 
-<sub>Identified by Warden security-review · WRZ-XPL</sub>`,
+<sub>Identified by Warden · security-review · WRZ-XPL</sub>
+${metadata}`,
     });
     mockEvaluateFix.mockResolvedValue({
       verdict: { status: 'resolved', reasoning: 'Fixed' },
