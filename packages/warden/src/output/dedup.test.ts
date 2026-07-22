@@ -522,13 +522,13 @@ describe('parseWardenSkills', () => {
     ]);
   });
 
-  it('parses skills with arbitrary finding IDs from both supported formats', () => {
-    expect(parseWardenSkills('<sub>Identified by Warden · skill1 · finding-42</sub>')).toEqual([
-      'skill1',
-    ]);
-    expect(parseWardenSkills('<sub>Identified by Warden skill1, skill2 · ABC-123</sub>')).toEqual([
-      'skill1',
-      'skill2',
+  it('round-trips rendered skill names in both supported formats', () => {
+    expect(
+      parseWardenSkills('<sub>Identified by Warden · my skill &amp; checks · finding-42</sub>')
+    ).toEqual(['my skill & checks']);
+    expect(parseWardenSkills('<sub>Identified by Warden skill one, skill two · ABC-123</sub>')).toEqual([
+      'skill one',
+      'skill two',
     ]);
   });
 
@@ -560,11 +560,11 @@ describe('updateWardenCommentBody', () => {
     expect(updateWardenCommentBody(body, 'skill1')).toBeNull();
   });
 
-  it('preserves dollar sequences in a newly added skill', () => {
-    const body = '<sub>Identified by Warden · skill1 · ABC-123</sub>';
+  it('preserves special characters while safely rewriting the footer', () => {
+    const body = '<sub>Identified by Warden · my skill &amp; checks · ABC-123</sub>';
 
-    expect(updateWardenCommentBody(body, 'skill$&$1')).toBe(
-      '<sub>Identified by Warden · skill1, skill$&$1 · ABC-123</sub>'
+    expect(updateWardenCommentBody(body, 'skill$&$1 <extra>')).toBe(
+      '<sub>Identified by Warden · my skill &amp; checks, skill$&amp;$1 &lt;extra&gt; · ABC-123</sub>'
     );
   });
 

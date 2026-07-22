@@ -3,6 +3,7 @@ import type { Octokit } from '@octokit/rest';
 import { z } from 'zod';
 import type { Confidence, Finding, Severity, UsageStats } from '../types/index.js';
 import { findingLine } from '../types/index.js';
+import { escapeHtml } from '../utils/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
 import { applyMergeGroups, canUseRuntimeAuth } from '../sdk/extract.js';
 import type { AuxiliaryCallOptions } from '../sdk/extract.js';
@@ -238,7 +239,7 @@ interface WardenFooter {
 }
 
 const FINDING_ID_PATTERN = '[^<\\r\\n]+';
-const SKILL_LIST_PATTERN = '[A-Za-z0-9_$-]+(?:,\\s*[A-Za-z0-9_$-]+)*';
+const SKILL_LIST_PATTERN = '[^<\\r\\n]+?';
 const CURRENT_FOOTER_PATTERN = new RegExp(
   `<sub>Identified by Warden · (${SKILL_LIST_PATTERN})(?: · (${FINDING_ID_PATTERN}))?</sub>`
 );
@@ -246,21 +247,31 @@ const PRIOR_FOOTER_PATTERN = new RegExp(
   `<sub>Identified by Warden (${SKILL_LIST_PATTERN})(?: · (${FINDING_ID_PATTERN}))?</sub>`
 );
 
+function decodeFooterValue(value: string): string {
+  return value.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
+}
+
 function parseSkillList(value: string): string[] {
-  return value.split(',').map((skill) => skill.trim());
+  return value.split(',').map((skill) => decodeFooterValue(skill.trim()));
 }
 
 function parseWardenFooter(body: string): WardenFooter | null {
+  const currentMatch = body.match(CURRENT_FOOTER_PATTERN);
   // TODO(2026-08-01): Remove PRIOR_FOOTER_PATTERN after comments using it have aged out.
-  const match = body.match(CURRENT_FOOTER_PATTERN) ?? body.match(PRIOR_FOOTER_PATTERN);
+  const match = currentMatch ?? body.match(PRIOR_FOOTER_PATTERN);
   const fullMatch = match?.[0];
   const skillList = match?.[1];
   if (!fullMatch || !skillList) return null;
 
+  // Do not reinterpret historical bracket, backtick, or `via` footers as the prior plain format.
+  if (!currentMatch && (/^via\s+`/.test(skillList) || /^\[[^\]]+\](?:,\s*\[[^\]]+\])*$/.test(skillList))) {
+    return null;
+  }
+
   return {
     fullMatch,
     skills: parseSkillList(skillList),
-    findingId: match[2],
+    findingId: match[2] ? decodeFooterValue(match[2]) : undefined,
   };
 }
 
@@ -284,9 +295,9 @@ export function updateWardenCommentBody(body: string, newSkill: string): string 
   const footer = parseWardenFooter(body);
   if (!footer || footer.skills.includes(newSkill)) return null;
 
-  const skills = [...footer.skills, newSkill].join(', ');
+  const skills = [...footer.skills, newSkill].map(escapeHtml).join(', ');
   const findingId = parseWardenFindingMetadata(body)?.id ?? footer.findingId;
-  const idSuffix = findingId ? ` · ${findingId}` : '';
+  const idSuffix = findingId ? ` · ${escapeHtml(findingId)}` : '';
   return body.replace(
     footer.fullMatch,
     () => `<sub>Identified by Warden · ${skills}${idSuffix}</sub>`
