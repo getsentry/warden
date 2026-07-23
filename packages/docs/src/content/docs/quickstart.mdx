@@ -4,6 +4,26 @@ description: Install Warden, configure model credentials, and initialize a repos
 editUrl: false
 ---
 
+import CopyPrompt from "@sentry/starlight-theme/components/CopyPrompt.astro";
+
+export const setupPrompt = `Set up Warden in this repository.
+
+1. Read the repository instructions and inspect the current project before making changes. Preserve existing Warden configuration.
+2. Confirm Node.js 22.12 or newer is installed, then install the latest @sentry/warden CLI with pnpm.
+3. Run \`warden init\`. Add the built-in security and code reviews with \`warden add security-review\` and \`warden add code-review\` if they are not already configured.
+4. Configure \`WARDEN_MODEL\` and its matching \`WARDEN_<PROVIDER>_API_KEY\` for local use. Reuse credentials already available in the environment, but never print, commit, or copy secret values into files. If credentials are missing, tell me exactly which environment variables to set.
+5. Review the generated \`warden.toml\`, \`.github/workflows/warden.yml\`, and \`.gitignore\`. Keep the generated GitHub workflow and identify the matching repository or organization secrets it requires.
+6. Run Warden against the current branch. Fix setup errors, but do not change product code based on review findings unless I ask.
+7. Summarize the files changed, validation results, and any secrets or manual GitHub steps still required.`;
+
+## Set Up With Your Agent
+
+Copy these instructions into your local coding agent to install and configure Warden in the current project.
+
+<CopyPrompt content={setupPrompt} title="Set up Warden in this project" />
+
+## Install
+
 Install the CLI globally:
 
 ```bash
