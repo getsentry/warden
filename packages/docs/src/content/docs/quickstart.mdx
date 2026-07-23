@@ -22,11 +22,13 @@ Read any linked Warden documentation you need while completing the setup.
 ## Setup
 
 1. Inspect the repository and any existing Warden configuration. Preserve working configuration rather than replacing it.
-2. Use the repository's package manager to run the latest \`@sentry/warden\` CLI, then initialize Warden as documented.
-3. Add the built-in \`security-review\` and \`code-review\` skills. Configure them for pull request reviews using the documented defaults, adjusting paths only when the repository structure requires it.
-4. Configure a supported model and its matching credential. Reuse an existing provider choice when the repository already has one. If no provider is established or credentials are unavailable, stop and tell me what choice or environment variable is needed. Never write a secret into a tracked file.
-5. Keep the generated GitHub Actions workflow and identify the repository or organization secrets it requires.
-6. Run Warden locally against the current branch to verify the setup. Fix configuration errors, but do not fix review findings unless I ask.
+2. Run \`npx @sentry/warden init\` from the repository root. Review the generated \`warden.toml\`, \`.github/workflows/warden.yml\`, and \`.gitignore\` changes.
+3. Add the built-in reviews:
+   - \`npx @sentry/warden add security-review\`
+   - \`npx @sentry/warden add code-review\`
+4. Configure the skills for pull request reviews using the documented defaults. Adjust paths only when the repository structure requires it.
+5. Configure \`WARDEN_MODEL\` and its matching \`WARDEN_<PROVIDER>_API_KEY\` for local use. Identify the same values as GitHub Actions secrets for the generated workflow. Reuse an existing provider choice when one exists; otherwise tell me which model and credential are needed. Never write a secret into a tracked file.
+6. Run \`npx @sentry/warden\` to review the current branch and verify the setup. Fix configuration errors, but do not fix review findings unless I ask.
 
 ## Done when
 
