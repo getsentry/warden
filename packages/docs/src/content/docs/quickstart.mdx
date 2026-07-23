@@ -6,33 +6,31 @@ editUrl: false
 
 import CopyPrompt from "@sentry/starlight-theme/components/CopyPrompt.astro";
 
-export const setupPrompt = `Set up Warden completely for this repository. Do not stop after installing the CLI or generating starter files.
+export const setupPrompt = `Set up Warden in this repository for local and pull request reviews.
 
-Use the current Warden documentation as the source of truth. Read these pages before editing anything:
+## Source of truth
 
-- Quickstart: https://warden.sentry.dev/quickstart/
-- Repository setup and secrets: https://warden.sentry.dev/github/repository/
-- Models and runtimes: https://warden.sentry.dev/config/models/
-- Adding skills: https://warden.sentry.dev/skills/adding/
-- Skill configuration and path filters: https://warden.sentry.dev/config/skills/
-- Pull request triggers: https://warden.sentry.dev/config/triggers/
-- Reporting and failure thresholds: https://warden.sentry.dev/config/output/
-- GitHub Actions workflow: https://warden.sentry.dev/github/workflow/
-- Local review and validation: https://warden.sentry.dev/local-review/
+Follow the current Warden documentation instead of guessing configuration:
 
-Then do the following:
+- Quickstart: https://warden.sentry.dev/quickstart.md
+- Repository setup: https://warden.sentry.dev/github/repository.md
+- Models and runtimes: https://warden.sentry.dev/config/models.md
+- Adding skills: https://warden.sentry.dev/skills/adding.md
 
-1. Read this repository's agent instructions, package-manager files, languages, source layout, generated or vendored directories, test layout, and existing GitHub workflows. Check for an existing \`warden.toml\`, \`.warden/\`, Warden workflow, or Warden secrets documentation. Preserve and improve an existing setup instead of replacing it blindly.
-2. Confirm Node.js 22.12 or newer is available. Use the repository's package manager to run the latest \`@sentry/warden\` CLI. Initialize Warden when needed with the documented \`init\` command.
-3. Configure \`warden.toml\`, not just the workflow. Add the built-in \`security-review\` and \`code-review\` skills unless equivalent reviews already exist. Use \`warden add\` where appropriate. Tailor each skill's \`paths\` and \`ignorePaths\` to this repository so Warden reviews real source and configuration while excluding dependencies, generated artifacts, build output, fixtures, snapshots, and other low-value files. Keep any existing custom or remote skills.
-4. Configure pull request triggers for \`opened\`, \`synchronize\`, \`reopened\`, and \`labeled\`. Do not run on drafts by default, but allow the \`Warden\` label to opt a draft PR in. Make sure the workflow event types and every skill's trigger agree.
-5. Choose explicit, sensible defaults for this repository. Configure the current preferred model field under \`[defaults.agent]\`, plus appropriate \`failOn\`, \`reportOn\`, \`maxFindings\`, \`requestChanges\`, and \`failCheck\` behavior. Explain any choices that are not directly implied by the docs or repository. Do not use legacy config fields for a new setup.
-6. Configure the model and runtime according to the Models and Runtimes docs. If the provider/model cannot be inferred from existing repository or organization conventions, ask me which provider and model to use before finalizing. Put the non-secret model selector in \`warden.toml\`; never put API keys in tracked files. Identify the exact local environment variable and GitHub Actions secret required for the selected provider, such as \`WARDEN_OPENAI_API_KEY\`, \`WARDEN_ANTHROPIC_API_KEY\`, or \`WARDEN_OPENROUTER_API_KEY\`.
-7. Review the generated \`.github/workflows/warden.yml\` against the current workflow docs. Keep the recommended split \`mode: analyze\` then \`mode: report\` flow, the required checkout ref and permissions, and the matching provider secret. Use the standard GitHub token unless this repository already uses a Warden GitHub App or I request branded comments; if an app is used, create its installation token only after analysis as documented.
-8. Account for GitHub secret restrictions. Do not expose secrets to fork pull requests. Note that Dependabot secrets are managed separately from Actions secrets, and tell me any safe manual configuration needed for the PR sources this repository accepts.
-9. Ensure \`.warden/\` runtime output is ignored without removing unrelated ignore rules. Review every generated change and remove placeholders or unused provider secret references.
-10. Validate the finished setup. Run the repository's formatting or documentation checks that cover changed files, then run Warden locally against the current branch or an explicit useful target with each configured built-in skill. If credentials are unavailable, still validate all static setup you can and report the exact environment variable needed to complete a live run. Fix setup and configuration errors, but do not change product code merely to satisfy review findings.
-11. Summarize the final \`warden.toml\` behavior, files changed, commands run, validation results, required local environment variables, required GitHub secrets, and any remaining manual GitHub settings. The repository should be ready for both local reviews and pull request reviews when you finish.`;
+Read any linked Warden documentation you need while completing the setup.
+
+## Setup
+
+1. Inspect the repository and any existing Warden configuration. Preserve working configuration rather than replacing it.
+2. Use the repository's package manager to run the latest \`@sentry/warden\` CLI, then initialize Warden as documented.
+3. Add the built-in \`security-review\` and \`code-review\` skills. Configure them for pull request reviews using the documented defaults, adjusting paths only when the repository structure requires it.
+4. Configure a supported model and its matching credential. Reuse an existing provider choice when the repository already has one. If no provider is established or credentials are unavailable, stop and tell me what choice or environment variable is needed. Never write a secret into a tracked file.
+5. Keep the generated GitHub Actions workflow and identify the repository or organization secrets it requires.
+6. Run Warden locally against the current branch to verify the setup. Fix configuration errors, but do not fix review findings unless I ask.
+
+## Done when
+
+The repository has a reviewed \`warden.toml\`, a Warden GitHub Actions workflow, and a successful local Warden run. Summarize the files changed, validation performed, and any remaining secret or GitHub configuration I must provide.`;
 
 ## Set Up With Your Agent
 
