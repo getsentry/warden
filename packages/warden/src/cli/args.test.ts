@@ -195,8 +195,8 @@ describe('parseCliArgs', () => {
   });
 
   it('parses --effort option', () => {
-    const result = parseCliArgs(['--effort', 'high']);
-    expect(result.options.effort).toBe('high');
+    const result = parseCliArgs(['--effort', 'max']);
+    expect(result.options.effort).toBe('max');
   });
 
   it('does not set parallel when not provided', () => {
@@ -614,7 +614,7 @@ describe('CLIOptionsSchema', () => {
   });
 
   it('validates valid effort levels', () => {
-    for (const effort of ['off', 'low', 'medium', 'high', 'xhigh']) {
+    for (const effort of ['off', 'low', 'medium', 'high', 'xhigh', 'max']) {
       const result = CLIOptionsSchema.safeParse({ effort });
       expect(result.success).toBe(true);
     }

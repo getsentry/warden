@@ -47,7 +47,7 @@ export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 export { RuntimeNameSchema };
 export type { RuntimeName };
 
-export const EffortSchema = z.enum(['off', 'low', 'medium', 'high', 'xhigh']);
+export const EffortSchema = z.enum(['off', 'low', 'medium', 'high', 'xhigh', 'max']);
 export type Effort = z.infer<typeof EffortSchema>;
 
 export const AgentRuntimeConfigSchema = z.object({

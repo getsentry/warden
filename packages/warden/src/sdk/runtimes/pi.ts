@@ -7,9 +7,8 @@
  * verification, deduplication, and reporting.
  */
 import {
-  AuthStorage,
   DefaultResourceLoader,
-  ModelRegistry,
+  ModelRuntime,
   SessionManager,
   SettingsManager,
   createAgentSession,
@@ -141,25 +140,28 @@ function legacyApiKeyProvider(model: string | undefined): string | undefined {
   return selector.provider === 'anthropic' ? 'anthropic' : undefined;
 }
 
-function createAuthStorage(model: string | undefined, legacyAnthropicApiKey: string | undefined): AuthStorage {
-  const authStorage = AuthStorage.create();
+async function createModelRuntime(
+  model: string | undefined,
+  legacyAnthropicApiKey: string | undefined,
+): Promise<ModelRuntime> {
+  const modelRuntime = await ModelRuntime.create();
   const provider = legacyApiKeyProvider(model);
   if (legacyAnthropicApiKey && provider) {
-    authStorage.setRuntimeApiKey(provider, legacyAnthropicApiKey);
+    await modelRuntime.setRuntimeApiKey(provider, legacyAnthropicApiKey, { allowNetwork: false });
   }
-  return authStorage;
+  return modelRuntime;
 }
 
 function resolvePiModel(
   model: string | undefined,
-  registry: ModelRegistry,
+  modelRuntime: ModelRuntime,
 ): Model<Api> | undefined {
   if (!model) {
     return undefined;
   }
 
   const { provider, modelId } = parseModelSelector(model);
-  const resolved = registry.find(provider, modelId);
+  const resolved = modelRuntime.getModel(provider, modelId);
   if (!resolved) {
     throw new Error(
       `Pi model not found: ${model}. Use provider/model, for example openai/gpt-5.5.`
@@ -344,9 +346,8 @@ async function promptWithTimeout(
 async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const warnings: string[] = [];
   bridgeWardenProviderApiKeyEnv();
-  const authStorage = createAuthStorage(options.model, options.legacyAnthropicApiKey);
-  const modelRegistry = ModelRegistry.create(authStorage);
-  const model = resolvePiModel(options.model, modelRegistry);
+  const modelRuntime = await createModelRuntime(options.model, options.legacyAnthropicApiKey);
+  const model = resolvePiModel(options.model, modelRuntime);
   const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
   const agentDir = getAgentDir();
   const resourceLoader = new DefaultResourceLoader({
@@ -497,8 +498,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     const result = await createAgentSession({
       cwd: options.cwd,
       agentDir,
-      authStorage,
-      modelRegistry,
+      modelRuntime,
       model,
       thinkingLevel: options.effort,
       tools: options.toolNames,

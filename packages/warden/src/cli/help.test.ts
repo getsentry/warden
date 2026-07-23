@@ -25,7 +25,7 @@ describe('renderHelp', () => {
     const output = renderHelp('run');
 
     expect(output).toContain('--effort <level>');
-    expect(output).toContain('Values: off, low, medium, high, xhigh');
+    expect(output).toContain('Values: off, low, medium, high, xhigh, max');
   });
 
   it('renders improve help', () => {

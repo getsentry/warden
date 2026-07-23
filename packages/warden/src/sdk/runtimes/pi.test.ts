@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { z } from 'zod';
 import {
-  AuthStorage,
   DefaultResourceLoader,
-  ModelRegistry,
+  ModelRuntime,
   SessionManager,
   SettingsManager,
   createAgentSession,
@@ -19,12 +18,10 @@ const piMocks = vi.hoisted(() => {
     provider: 'openai',
     model: 'gpt-test',
   };
-  const authStorage = {
+  const modelRuntime = {
     setRuntimeApiKey: vi.fn(),
-  };
-  const registry = {
-    find: vi.fn((_provider: string, _modelId: string) => model),
-    getAll: vi.fn(() => [model]),
+    getModel: vi.fn((_provider: string, _modelId: string) => model),
+    getModels: vi.fn(() => [model]),
   };
   const session = {
     sessionId: 'pi-session-1',
@@ -44,8 +41,7 @@ const piMocks = vi.hoisted(() => {
 
   return {
     model,
-    authStorage,
-    registry,
+    modelRuntime,
     session,
     resourceLoader,
     sessionManager,
@@ -63,15 +59,12 @@ vi.mock('@earendil-works/pi-ai', () => ({
 }));
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
-  AuthStorage: {
-    create: vi.fn(() => piMocks.authStorage),
-  },
   DefaultResourceLoader: vi.fn(function (options: unknown) {
     piMocks.resourceLoaderOptions.push(options);
     return piMocks.resourceLoader;
   }),
-  ModelRegistry: {
-    create: vi.fn(() => piMocks.registry),
+  ModelRuntime: {
+    create: vi.fn(async () => piMocks.modelRuntime),
   },
   SessionManager: {
     inMemory: vi.fn(() => piMocks.sessionManager),
@@ -164,16 +157,15 @@ describe('piRuntime.runSkill', () => {
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
     piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun());
-    piMocks.registry.find.mockReturnValue(piMocks.model);
-    piMocks.registry.getAll.mockReturnValue([piMocks.model]);
+    piMocks.modelRuntime.getModel.mockReturnValue(piMocks.model);
+    piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
   });
 
   it('passes read-only Pi tools and normalizes the result', async () => {
     const result = await piRuntime.runSkill(baseSkillRequest());
 
-    expect(AuthStorage.create).toHaveBeenCalled();
-    expect(ModelRegistry.create).toHaveBeenCalledWith(piMocks.authStorage);
-    expect(piMocks.registry.find).toHaveBeenCalledWith('openai', 'gpt-test');
+    expect(ModelRuntime.create).toHaveBeenCalled();
+    expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith('openai', 'gpt-test');
     expect(DefaultResourceLoader).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
       agentDir: '/pi-agent',
@@ -196,8 +188,7 @@ describe('piRuntime.runSkill', () => {
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
       agentDir: '/pi-agent',
-      authStorage: piMocks.authStorage,
-      modelRegistry: piMocks.registry,
+      modelRuntime: piMocks.modelRuntime,
       model: piMocks.model,
       tools: ['read', 'grep', 'find', 'ls'],
       customTools: undefined,
@@ -338,12 +329,12 @@ describe('piRuntime.runSkill', () => {
       ...baseSkillRequest(),
       options: {
         ...baseSkillRequest().options,
-        effort: 'medium',
+        effort: 'max',
       },
     });
 
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
-      thinkingLevel: 'medium',
+      thinkingLevel: 'max',
     }));
   });
 
@@ -381,7 +372,11 @@ describe('piRuntime.runSkill', () => {
       },
     });
 
-    expect(piMocks.authStorage.setRuntimeApiKey).toHaveBeenCalledWith('anthropic', 'sk-ant-test');
+    expect(piMocks.modelRuntime.setRuntimeApiKey).toHaveBeenCalledWith(
+      'anthropic',
+      'sk-ant-test',
+      { allowNetwork: false },
+    );
   });
 
   it('does not pass the legacy Anthropic API key to non-Anthropic Pi models', async () => {
@@ -394,7 +389,7 @@ describe('piRuntime.runSkill', () => {
       model: 'openai/gpt-test',
     });
 
-    expect(piMocks.authStorage.setRuntimeApiKey).not.toHaveBeenCalled();
+    expect(piMocks.modelRuntime.setRuntimeApiKey).not.toHaveBeenCalled();
   });
 
   it('resolves provider-specific Pi model IDs that contain slashes', async () => {
@@ -405,7 +400,7 @@ describe('piRuntime.runSkill', () => {
       },
     });
 
-    expect(piMocks.registry.find).toHaveBeenCalledWith(
+    expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith(
       'fireworks',
       'accounts/fireworks/models/kimi-k2p6'
     );
@@ -419,7 +414,7 @@ describe('piRuntime.runSkill', () => {
       },
     })).rejects.toThrow('Pi runtime model must use provider/model format');
 
-    expect(piMocks.registry.find).not.toHaveBeenCalled();
+    expect(piMocks.modelRuntime.getModel).not.toHaveBeenCalled();
   });
 });
 
@@ -432,8 +427,8 @@ describe('piRuntime structured calls', () => {
     piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun(
       assistantMessage({ content: [{ type: 'text', text: '{"ok":true}' }] })
     ));
-    piMocks.registry.find.mockReturnValue(piMocks.model);
-    piMocks.registry.getAll.mockReturnValue([piMocks.model]);
+    piMocks.modelRuntime.getModel.mockReturnValue(piMocks.model);
+    piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
   });
 
   it('parses and validates auxiliary JSON output', async () => {
@@ -446,7 +441,11 @@ describe('piRuntime structured calls', () => {
       model: 'anthropic/claude-sonnet-test',
     });
 
-    expect(piMocks.authStorage.setRuntimeApiKey).toHaveBeenCalledWith('anthropic', 'sk-ant-test');
+    expect(piMocks.modelRuntime.setRuntimeApiKey).toHaveBeenCalledWith(
+      'anthropic',
+      'sk-ant-test',
+      { allowNetwork: false },
+    );
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
       cwd: process.cwd(),
       tools: [],

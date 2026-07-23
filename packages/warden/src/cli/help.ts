@@ -101,7 +101,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   effort: {
     label: '--effort <level>',
     description: 'Override effort level for this run',
-    continuation: 'Values: off, low, medium, high, xhigh',
+    continuation: 'Values: off, low, medium, high, xhigh, max',
   },
   runtime: {
     label: '--runtime <claude|pi>',

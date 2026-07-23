@@ -40,6 +40,8 @@ Examples:
 | --- | --- |
 | `openai/gpt-5.5` | `WARDEN_OPENAI_API_KEY` |
 | `anthropic/claude-sonnet-4-6` | `WARDEN_ANTHROPIC_API_KEY` |
+| `moonshotai/kimi-k3` | `WARDEN_MOONSHOT_API_KEY` |
+| `openrouter/moonshotai/kimi-k3` | `WARDEN_OPENROUTER_API_KEY` |
 | `fireworks/accounts/fireworks/models/kimi-k2p6` | `WARDEN_FIREWORKS_API_KEY` |
 | `groq/llama-3.3-70b-versatile` | `WARDEN_GROQ_API_KEY` |
 | `openrouter/deepseek/deepseek-v4-pro` | `WARDEN_OPENROUTER_API_KEY` |
@@ -120,8 +122,8 @@ model = "anthropic/claude-opus-4-5"
 lane. Prefer `defaults.agent.model` and `defaults.agent.maxTurns` in new config.
 
 `defaults.agent.effort` optionally controls repo-aware skill effort
-across runtimes. Supported values are `off`, `low`, `medium`, `high`, and
-`xhigh`. When omitted, Warden sends explicit `high` adaptive thinking to the
+across runtimes. Supported values are `off`, `low`, `medium`, `high`, `xhigh`,
+and `max`. When omitted, Warden sends explicit `high` adaptive thinking to the
 Claude runtime; Pi uses its own default thinking level.
 
 ## Overrides

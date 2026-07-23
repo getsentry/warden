@@ -38,8 +38,21 @@ Set the provider API key required by the model. For GPT 5.5 through Pi, set
 `WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
 For OpenRouter models through Pi, set `WARDEN_OPENROUTER_API_KEY` and use the
 full OpenRouter selector, such as `openrouter/deepseek/deepseek-v4-pro`.
+For Kimi K3 through OpenRouter, set `WARDEN_OPENROUTER_API_KEY`, use
+`openrouter/moonshotai/kimi-k3`, and pass `--effort max` for the launch-default
+benchmark configuration. Kimi K3 also supports `low` and `high` effort. The
+direct Moonshot selector is `moonshotai/kimi-k3` with `WARDEN_MOONSHOT_API_KEY`.
 For the Claude SDK runtime, use Claude Code model IDs such as
 `claude-sonnet-4-6` instead of Pi provider/model selectors.
+
+For a Kimi K3 benchmark run, replace the setup block's model variables with:
+
+```bash
+export BENCH_MODEL="openrouter/moonshotai/kimi-k3"
+export BENCH_MODEL_SLUG="kimi-k3"
+export BENCH_EFFORT="max"
+export BENCH_RUN_SLUG="pi-kimi-k3-max"
+```
 
 Warden uses its workspace Pi dependencies, not a globally installed `pi`
 binary. If a newly released model is missing from the Pi registry, update
