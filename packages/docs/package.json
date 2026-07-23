@@ -14,7 +14,7 @@
     "@fontsource-variable/rubik": "^5.2.8",
     "@fontsource/geist-mono": "^5.2.8",
     "@fontsource/ibm-plex-mono": "^5.2.7",
-    "@sentry/starlight-theme": "^0.7.0",
+    "@sentry/starlight-theme": "^0.8.0",
     "@sentry/warden": "workspace:*",
     "astro": "^6.3.7",
     "astro-expressive-code": "^0.42.0",
