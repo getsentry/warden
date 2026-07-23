@@ -987,9 +987,6 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       ...providerContext,
       attempts: 1,
     });
-    expect(vi.mocked(sdkRunner.analyzeFile).mock.calls[0]?.[3]).toMatchObject({
-      telemetryTriggerName: 'provider-fail-trigger',
-    });
   });
 
   it('does not copy provider context from another direct skill sharing the circuit breaker', async () => {

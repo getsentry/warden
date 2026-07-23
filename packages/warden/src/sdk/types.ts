@@ -144,8 +144,8 @@ export interface SkillRunnerOptions {
   verifyFindings?: boolean;
   /** Run post-analysis verification, merge, and suggested-fix quality gates. Defaults to true. */
   postProcessFindings?: boolean;
-  /** Trigger name to attach to skill-level telemetry when the caller has one. */
-  telemetryTriggerName?: string;
+  /** Name of the trigger that initiated this run, when applicable. */
+  triggerName?: string;
   /** Capture per-hunk runtime traces in structured run output. Defaults to false. */
   captureTraces?: boolean;
 }

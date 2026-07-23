@@ -199,7 +199,6 @@ export async function executeTrigger(
             pathToClaudeCodeExecutable: claudePath,
             auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
             verifyFindings: trigger.verifyFindings,
-            telemetryTriggerName: trigger.name,
             abortController: deps.abortController,
             circuitBreaker: deps.circuitBreaker,
           },

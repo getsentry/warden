@@ -265,10 +265,7 @@ export async function runSkillTask(
     runnerOptions: configuredRunnerOptions = {},
   } = options;
   // This clone's identity scopes circuit-breaker provider diagnostics to this skill run.
-  const runnerOptions: SkillRunnerOptions = {
-    ...configuredRunnerOptions,
-    telemetryTriggerName: configuredRunnerOptions.telemetryTriggerName ?? triggerName,
-  };
+  const runnerOptions: SkillRunnerOptions = { ...configuredRunnerOptions };
 
   return Sentry.startSpan(
     { op: 'skill.run', name: `run ${displayName}` },

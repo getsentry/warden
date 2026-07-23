@@ -970,7 +970,7 @@ export async function runSkill(
       name: `run ${skill.name}`,
       attributes: {
         'gen_ai.agent.name': skill.name,
-        ...(options.telemetryTriggerName ? { 'warden.trigger.name': options.telemetryTriggerName } : {}),
+        ...(options.triggerName ? { 'warden.trigger.name': options.triggerName } : {}),
         'warden.file.count': context.pullRequest?.files.length ?? 0,
       },
     },

@@ -225,7 +225,7 @@ async function runScheduleWorkflowInner(
         chunking: resolved.chunking,
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         verifyFindings: resolved.verifyFindings,
-        telemetryTriggerName: resolved.name,
+        triggerName: resolved.name,
         pathToClaudeCodeExecutable: runtimeEnv.pathToClaudeCodeExecutable,
       });
       console.log(`Found ${report.findings.length} findings`);
