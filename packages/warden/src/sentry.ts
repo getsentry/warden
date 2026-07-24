@@ -423,11 +423,12 @@ export function emitStaleResolutionMetric(count: number, skill?: string): void {
 /**
  * Flush pending Sentry events. Safe to call even if Sentry is not initialized.
  */
-export async function flushSentry(timeoutMs = 2000): Promise<void> {
-  if (!initialized) return;
+export async function flushSentry(timeoutMs = 30_000): Promise<boolean> {
+  if (!initialized) return true;
   try {
-    await Sentry.flush(timeoutMs);
+    return await Sentry.flush(timeoutMs);
   } catch {
     // Sentry flush failure should not prevent normal operation
+    return false;
   }
 }

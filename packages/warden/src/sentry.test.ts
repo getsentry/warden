@@ -3,6 +3,7 @@ import {
   emitActionRunMetric,
   emitFixEvalVerdictMetric,
   emitSkillMetrics,
+  flushSentry,
   initSentry,
   setGitHubActionScope,
   setRepositoryScope,
@@ -21,6 +22,8 @@ function clearTelemetryEnv(): void {
   delete process.env['GITHUB_SHA'];
 }
 
+const transportFlush = vi.fn(async () => true);
+
 function spyOnClientEmit() {
   const client = Sentry.getClient();
   if (!client) throw new Error('Sentry test client was not initialized');
@@ -33,7 +36,7 @@ describe('sentry telemetry scope', () => {
     initSentry('action', {
       transport: () => ({
         send: async () => ({}),
-        flush: async () => true,
+        flush: transportFlush,
       }),
     });
   });
@@ -52,6 +55,13 @@ describe('sentry telemetry scope', () => {
 
   afterAll(async () => {
     await Sentry.close(0);
+  });
+
+  it('allows 30 seconds to flush pending telemetry and returns the result', async () => {
+    transportFlush.mockResolvedValueOnce(false);
+
+    await expect(flushSentry()).resolves.toBe(false);
+    expect(transportFlush).toHaveBeenCalledWith(30_000);
   });
 
   it('uses the GitHub Actions server URL for repository and run URLs', async () => {

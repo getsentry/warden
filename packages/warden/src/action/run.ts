@@ -9,15 +9,21 @@ import { initSentry, flushSentry } from '../sentry.js';
 import { ActionFailedError } from './workflow/base.js';
 import { runAction } from './runner.js';
 
+async function flushActionTelemetry(): Promise<void> {
+  if (!(await flushSentry())) {
+    console.warn('::warning::Timed out while flushing Sentry telemetry');
+  }
+}
+
 initSentry('action');
 runAction()
-  .then(() => flushSentry())
+  .then(() => flushActionTelemetry())
   .catch(async (error) => {
     if (error instanceof ActionFailedError) {
       console.error(`::error::${error.message}`);
     } else {
       console.error(`::error::Unexpected error: ${error}`);
     }
-    await flushSentry();
+    await flushActionTelemetry();
     process.exit(1);
   });
