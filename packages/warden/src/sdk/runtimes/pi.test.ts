@@ -219,6 +219,27 @@ describe('piRuntime.runSkill', () => {
     });
   });
 
+  it('loads no Pi extensions by default', async () => {
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(piMocks.resourceLoaderOptions[0]).toEqual(expect.objectContaining({ noExtensions: true }));
+    expect(piMocks.resourceLoaderOptions[0]).not.toHaveProperty('additionalExtensionPaths');
+  });
+
+  it('threads WARDEN_PI_EXTENSION_PATHS into the resource loader', async () => {
+    vi.stubEnv('WARDEN_PI_EXTENSION_PATHS', '/ext/tracing.ts, /ext/routing.ts,');
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(piMocks.resourceLoaderOptions[0]).toEqual(expect.objectContaining({
+      noExtensions: true,
+      additionalExtensionPaths: ['/ext/tracing.ts', '/ext/routing.ts'],
+    }));
+  });
+
   it('records Pi tool execution spans when trace capture is active', async () => {
     const toolResult = {
       role: 'toolResult',

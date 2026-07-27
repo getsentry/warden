@@ -58,6 +58,20 @@ Warden mirrors these to the native `{PROVIDER}_API_KEY` expected by each SDK at 
 If you already have a native provider key set (e.g. `OPENAI_API_KEY`), Warden will use it
 directly and the `WARDEN_`-prefixed form is not required.
 
+### Pi Extensions
+
+By default the Pi runtime loads **no** [Pi extensions](https://pi.dev/docs/extensions),
+neither project-local nor global ones, so runs are hermetic. To load specific extension
+files (for example an LLM proxy router or a tracing hook), set
+`WARDEN_PI_EXTENSION_PATHS` to a comma-separated list of extension file paths:
+
+```yaml title="GitHub Actions"
+env:
+  WARDEN_PI_EXTENSION_PATHS: /home/runner/warden-extensions/tracing.ts
+```
+
+Only the listed files are loaded; extension auto-discovery stays disabled.
+
 ## Claude Runtime Models
 
 When `runtime = "claude"`, use the model IDs accepted by Claude Code:
