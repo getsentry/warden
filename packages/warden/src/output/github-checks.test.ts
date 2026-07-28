@@ -34,7 +34,7 @@ describe('check details URL', () => {
       data: { id: 123, html_url: 'https://github.com/getsentry/sentry/runs/123' },
     });
     const update = vi.fn().mockRejectedValue(new Error('Bad credentials'));
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const result = await createCoreCheck(
       { checks: { create, update } } as never,
