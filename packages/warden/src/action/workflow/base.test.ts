@@ -174,6 +174,7 @@ function createInputs(overrides: Partial<ActionInputs> = {}): ActionInputs {
     mode: 'run',
     configPath: 'warden.toml',
     maxFindings: 50,
+    postChecks: true,
     parallel: 4,
     ...overrides,
   };

@@ -82,6 +82,23 @@ describe('parseActionInputs', () => {
       const inputs = parseActionInputs();
       expect(inputs.failCheck).toBeUndefined();
     });
+
+    it('parses post-checks as true', () => {
+      process.env['INPUT_POST_CHECKS'] = 'true';
+      const inputs = parseActionInputs();
+      expect(inputs.postChecks).toBe(true);
+    });
+
+    it('parses post-checks as false', () => {
+      process.env['INPUT_POST_CHECKS'] = 'false';
+      const inputs = parseActionInputs();
+      expect(inputs.postChecks).toBe(false);
+    });
+
+    it('defaults postChecks to true when not set', () => {
+      const inputs = parseActionInputs();
+      expect(inputs.postChecks).toBe(true);
+    });
   });
 
   describe('numeric input handling', () => {
@@ -172,6 +189,7 @@ describe('setupAuthEnv', () => {
       mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
+      postChecks: true,
       parallel: 4,
     });
     expect(process.env['ANTHROPIC_API_KEY']).toBe('sk-ant-api-key');
@@ -187,6 +205,7 @@ describe('setupAuthEnv', () => {
       mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
+      postChecks: true,
       parallel: 4,
     });
     expect(process.env['CLAUDE_CODE_OAUTH_TOKEN']).toBe('sk-ant-oat-oauth-token');
@@ -205,6 +224,7 @@ describe('setupAuthEnv', () => {
       mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
+      postChecks: true,
       parallel: 4,
     });
 
@@ -225,6 +245,7 @@ describe('setupAuthEnv', () => {
       mode: 'run',
       configPath: 'warden.toml',
       maxFindings: 50,
+      postChecks: true,
       parallel: 4,
     });
 
@@ -244,6 +265,7 @@ describe('validateInputs', () => {
       baseSkillRoot: '.warden-org',
       configPath: 'warden.toml',
       maxFindings: 50,
+      postChecks: true,
       parallel: 4,
     })).toThrow('base-skill-root requires base-config-path');
   });
@@ -256,6 +278,7 @@ describe('validateInputs', () => {
       mode: 'report',
       configPath: 'warden.toml',
       maxFindings: 50,
+      postChecks: true,
       parallel: 4,
     })).toThrow('findings-file is required when mode is report');
   });

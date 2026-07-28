@@ -37,6 +37,8 @@ export interface ActionInputs {
   requestChanges?: boolean;
   /** Whether to fail the check run when findings exceed failOn */
   failCheck?: boolean;
+  /** Whether to create/update GitHub Check runs. Default true; explicit false disables the core check and all per-skill checks. */
+  postChecks: boolean;
   /** Max concurrent trigger executions */
   parallel: number;
 }
@@ -111,6 +113,7 @@ export function parseActionInputs(): ActionInputs {
 
   const requestChanges = parseBooleanInput(getInput('request-changes'));
   const failCheck = parseBooleanInput(getInput('fail-check'));
+  const postChecks = parseBooleanInput(getInput('post-checks')) ?? true;
 
   return {
     anthropicApiKey,
@@ -126,6 +129,7 @@ export function parseActionInputs(): ActionInputs {
     maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
     requestChanges,
     failCheck,
+    postChecks,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
   };
 }
