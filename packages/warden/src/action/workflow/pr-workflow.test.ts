@@ -237,6 +237,7 @@ function createDefaultInputs(overrides: Partial<ActionInputs> = {}): ActionInput
     mode: 'run',
     configPath: 'warden.toml',
     maxFindings: 50,
+    postChecks: true,
     parallel: 2,
     ...overrides,
   };
@@ -2204,6 +2205,108 @@ describe('runPRWorkflow', () => {
       expect(finalOptions?.skippedTriggers).toEqual([
         expect.objectContaining({ skillName: 'labeled-skill', reason: 'no_event_match' }),
       ]);
+    });
+
+    it('does not create or update any checks when postChecks is false, but still posts the review', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ postChecks: false }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+          pull_number: 123,
+          commit_id: PR_HEAD_SHA,
+        })
+      );
+    });
+
+    it('warden.toml defaults.postChecks overrides the post-checks action input', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      const tempDir = mkdtempSync(join(tmpdir(), 'warden-post-checks-config-'));
+      writeFileSync(
+        join(tempDir, 'warden.toml'),
+        [
+          'version = 1',
+          '',
+          '[defaults]',
+          'postChecks = false',
+          '',
+          '[[skills]]',
+          'name = "test-skill"',
+          '',
+          '[[skills.triggers]]',
+          'type = "pull_request"',
+          'actions = ["opened", "synchronize"]',
+          '',
+        ].join('\n')
+      );
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ postChecks: true }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          tempDir
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
+    });
+
+    it('report mode does not create or update any checks when postChecks is false, but still posts the review', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile, postChecks: false }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'test-owner',
+          repo: 'test-repo',
+          pull_number: 123,
+          commit_id: PR_HEAD_SHA,
+        })
+      );
     });
   });
 

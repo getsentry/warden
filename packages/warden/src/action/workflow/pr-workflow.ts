@@ -118,6 +118,7 @@ interface InitResult {
   skippedTriggers: ResolvedTrigger[];
   memoryRecall?: ActionMemoryRecall;
   skipCoreCheck?: SkippedCoreCheck;
+  postChecks: boolean;
 }
 
 interface GitHubSetupResult {
@@ -186,8 +187,8 @@ function reportsPullRequestCheck(trigger: ResolvedTrigger, context: EventContext
   );
 }
 
-function checkOptionsForPullRequest(context: EventContext): CheckOptions | undefined {
-  if (!context.pullRequest) {
+function checkOptionsForPullRequest(context: EventContext, postChecks: boolean): CheckOptions | undefined {
+  if (!context.pullRequest || !postChecks) {
     return undefined;
   }
 
@@ -444,6 +445,7 @@ async function initializeWorkflow(
       layered.config.runner?.concurrency;
     auxiliaryOptions = resolveWorkflowAuxiliaryOptions(layered);
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
+    const postChecks = layered.config.defaults?.postChecks ?? inputs.postChecks;
     const resolvedTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName);
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
     const skippedTriggers = resolvedTriggers.filter(
@@ -472,6 +474,7 @@ async function initializeWorkflow(
       matchedTriggers,
       skippedTriggers,
       memoryRecall,
+      postChecks,
     };
   } catch (error) {
     if (
@@ -492,6 +495,7 @@ async function initializeWorkflow(
           title: 'No warden.toml found',
           message,
         },
+        postChecks: inputs.postChecks,
       };
     }
     throw error;
@@ -541,7 +545,8 @@ async function fetchPreviousReviewInfo(
  */
 async function setupGitHubState(
   octokit: Octokit,
-  context: EventContext
+  context: EventContext,
+  postChecks: boolean
 ): Promise<GitHubSetupResult> {
   if (!context.pullRequest) {
     return { previousReviewInfo: null };
@@ -551,17 +556,16 @@ async function setupGitHubState(
   let previousReviewInfo: BotReviewInfo | null = null;
 
   // Create core warden check
-  try {
-    const coreCheck = await createCoreCheck(octokit, {
-      owner: context.repository.owner,
-      repo: context.repository.name,
-      headSha: context.pullRequest.headSha,
-    });
-    coreCheckId = coreCheck.checkRunId;
-    logAction(`Created core check: ${coreCheck.url}`);
-  } catch (error) {
-    Sentry.captureException(error, { tags: { operation: 'create_core_check' } });
-    warnAction(`Failed to create core check: ${error}`);
+  const checkOptions = checkOptionsForPullRequest(context, postChecks);
+  if (checkOptions) {
+    try {
+      const coreCheck = await createCoreCheck(octokit, checkOptions);
+      coreCheckId = coreCheck.checkRunId;
+      logAction(`Created core check: ${coreCheck.url}`);
+    } catch (error) {
+      Sentry.captureException(error, { tags: { operation: 'create_core_check' } });
+      warnAction(`Failed to create core check: ${error}`);
+    }
   }
 
   previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
@@ -579,9 +583,10 @@ async function setupGitHubState(
  */
 function createTriggerCheckReporter(
   octokit: Octokit,
-  context: EventContext
+  context: EventContext,
+  postChecks: boolean
 ): TriggerCheckReporter | undefined {
-  const checkOptions = checkOptionsForPullRequest(context);
+  const checkOptions = checkOptionsForPullRequest(context, postChecks);
   if (!checkOptions) {
     return undefined;
   }
@@ -1165,6 +1170,7 @@ async function finalizeWorkflow(
   inputs: ActionInputs,
   service: ResolvedServiceOptions | undefined,
   memoryRecall: ActionMemoryRecall | undefined,
+  postChecks: boolean
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -1198,21 +1204,21 @@ async function finalizeWorkflow(
   }
 
   // Update core check with overall summary
-  if (coreCheckId && context.pullRequest) {
-    try {
-      const summaryData = buildCoreSummaryData(results, reports);
-      const coreConclusion = determineCoreConclusion(
-        shouldFailAction || triggerErrors.length > 0,
-        outputs.findingsCount
-      );
+  if (coreCheckId) {
+    const checkOptions = checkOptionsForPullRequest(context, postChecks);
+    if (checkOptions) {
+      try {
+        const summaryData = buildCoreSummaryData(results, reports);
+        const coreConclusion = determineCoreConclusion(
+          shouldFailAction || triggerErrors.length > 0,
+          outputs.findingsCount
+        );
 
-      await updateCoreCheck(octokit, coreCheckId, summaryData, coreConclusion, {
-        owner: context.repository.owner,
-        repo: context.repository.name,
-      });
-    } catch (error) {
-      Sentry.captureException(error, { tags: { operation: 'update_core_check' } });
-      warnAction(`Failed to update core check: ${error}`);
+        await updateCoreCheck(octokit, coreCheckId, summaryData, coreConclusion, checkOptions);
+      } catch (error) {
+        Sentry.captureException(error, { tags: { operation: 'update_core_check' } });
+        warnAction(`Failed to update core check: ${error}`);
+      }
     }
   }
 
@@ -1233,9 +1239,10 @@ async function completeSkippedCoreCheck(
   octokit: Octokit,
   context: EventContext,
   coreCheckId: number | undefined,
-  skipped: SkippedCoreCheck
+  skipped: SkippedCoreCheck,
+  postChecks: boolean
 ): Promise<void> {
-  const options = checkOptionsForPullRequest(context);
+  const options = checkOptionsForPullRequest(context, postChecks);
   if (!coreCheckId || !options) {
     return;
   }
@@ -1262,9 +1269,10 @@ async function completeSkippedCoreCheck(
 async function completeSkippedSkillChecks(
   octokit: Octokit,
   context: EventContext,
-  skippedTriggers: ResolvedTrigger[]
+  skippedTriggers: ResolvedTrigger[],
+  postChecks: boolean
 ): Promise<void> {
-  const options = checkOptionsForPullRequest(context);
+  const options = checkOptionsForPullRequest(context, postChecks);
   if (!options || skippedTriggers.length === 0) {
     return;
   }
@@ -1311,9 +1319,10 @@ async function failUndispatchedSkillChecks(
   octokit: Octokit,
   context: EventContext,
   triggers: ResolvedTrigger[],
-  error: unknown
+  error: unknown,
+  postChecks: boolean
 ): Promise<void> {
-  const options = checkOptionsForPullRequest(context);
+  const options = checkOptionsForPullRequest(context, postChecks);
   if (!options || triggers.length === 0) {
     return;
   }
@@ -1343,9 +1352,10 @@ async function failCoreCheck(
   octokit: Octokit,
   context: EventContext,
   coreCheckId: number | undefined,
-  error: unknown
+  error: unknown,
+  postChecks: boolean
 ): Promise<void> {
-  const options = checkOptionsForPullRequest(context);
+  const options = checkOptionsForPullRequest(context, postChecks);
   if (!coreCheckId || !options) {
     return;
   }
@@ -1374,12 +1384,13 @@ async function runOrFailCore<T>(
   octokit: Octokit,
   context: EventContext,
   coreCheckId: number | undefined,
+  postChecks: boolean,
   operation: () => Promise<T>
 ): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    await failCoreCheck(octokit, context, coreCheckId, error);
+    await failCoreCheck(octokit, context, coreCheckId, error, postChecks);
     throw error;
   }
 }
@@ -1648,9 +1659,10 @@ function withRenderedReviewResult(result: TriggerResult): TriggerResult {
 async function createCompletedSkillChecksForReport(
   octokit: Octokit,
   context: EventContext,
-  results: TriggerResult[]
+  results: TriggerResult[],
+  postChecks: boolean
 ): Promise<TriggerResult[]> {
-  const options = checkOptionsForPullRequest(context);
+  const options = checkOptionsForPullRequest(context, postChecks);
   if (!options) {
     return results.map(withRenderedReviewResult);
   }
@@ -1690,9 +1702,10 @@ async function createCompletedSkillChecksForReport(
 async function createCompletedSkippedSkillChecks(
   octokit: Octokit,
   context: EventContext,
-  skippedTriggers: ResolvedTrigger[]
+  skippedTriggers: ResolvedTrigger[],
+  postChecks: boolean
 ): Promise<void> {
-  const options = checkOptionsForPullRequest(context);
+  const options = checkOptionsForPullRequest(context, postChecks);
   if (!options || skippedTriggers.length === 0) {
     return;
   }
@@ -1728,10 +1741,11 @@ async function createCompletedCoreCheckForReport(
   reports: SkillReport[],
   shouldFailAction: boolean,
   outputs: { findingsCount: number },
+  postChecks: boolean,
   overrides: Partial<CoreCheckSummaryData> = {},
   conclusion?: 'success' | 'failure' | 'neutral'
 ): Promise<void> {
-  const options = checkOptionsForPullRequest(context);
+  const options = checkOptionsForPullRequest(context, postChecks);
   if (!options) {
     return;
   }
@@ -1753,7 +1767,8 @@ async function createCompletedCoreCheckForReport(
 async function createFailedCoreCheckForReport(
   octokit: Octokit,
   context: EventContext,
-  error: unknown
+  error: unknown,
+  postChecks: boolean
 ): Promise<void> {
   const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -1765,6 +1780,7 @@ async function createFailedCoreCheckForReport(
       [],
       true,
       { findingsCount: 0 },
+      postChecks,
       {
         title: 'Warden failed',
         message: `Error: ${errorMessage}`,
@@ -1800,6 +1816,7 @@ async function finalizeReportWorkflow(
     service?: ResolvedServiceOptions;
     recalledMemories?: readonly { id: string; version: number }[];
     memoryRecallId?: string;
+    postChecks?: boolean;
   }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
@@ -1838,7 +1855,8 @@ async function finalizeReportWorkflow(
     results,
     reports,
     shouldFailAction || triggerErrors.length > 0,
-    outputs
+    outputs,
+    options.postChecks ?? true
   );
 
   await publishActionRunFailOpen(
@@ -2040,6 +2058,7 @@ async function runReportMode(
     matchedTriggers,
     skippedTriggers,
     skipCoreCheck,
+    postChecks,
   } = initResult;
   const findingsOutput = readFindingsFile(inputs.findingsFile, repoPath);
   validateFindingsMatchContext(findingsOutput, context);
@@ -2056,7 +2075,7 @@ async function runReportMode(
 
   try {
     results = buildReportModeResults(findingsOutput, matchedTriggers, inputs);
-    await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers);
+    await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers, postChecks);
 
     if (skipCoreCheck) {
       const outputs = { findingsCount: 0, highCount: 0, summary: skipCoreCheck.title };
@@ -2079,6 +2098,7 @@ async function runReportMode(
         [],
         false,
         outputs,
+        postChecks,
         {
           title: skipCoreCheck.title,
           message: skipCoreCheck.message,
@@ -2118,6 +2138,7 @@ async function runReportMode(
         [],
         false,
         outputs,
+        postChecks,
         {
           title: 'No triggers matched',
           message: 'No triggers matched for this event.',
@@ -2132,7 +2153,7 @@ async function runReportMode(
       return;
     }
 
-    results = await createCompletedSkillChecksForReport(octokit, context, results);
+    results = await createCompletedSkillChecksForReport(octokit, context, results, postChecks);
 
     previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
     if (previousReviewInfo) {
@@ -2182,13 +2203,13 @@ async function runReportMode(
       canResolveStale,
       gate,
       triggerErrors,
-      { failOnWriteError: true, skippedTriggers, inputs, service, ...replayMemoryOptions },
+      { failOnWriteError: true, skippedTriggers, inputs, service, ...replayMemoryOptions, postChecks },
     );
   } catch (error) {
     if (error instanceof ActionFailedError) {
       throw error;
     }
-    await createFailedCoreCheckForReport(octokit, context, error);
+    await createFailedCoreCheckForReport(octokit, context, error, postChecks);
     throw error;
   }
 
@@ -2233,6 +2254,7 @@ export async function runPRWorkflow(
         skippedTriggers,
         skipCoreCheck,
         memoryRecall,
+        postChecks,
       } = initResult;
       span.setAttribute('warden.trigger.count', matchedTriggers.length);
 
@@ -2270,10 +2292,10 @@ export async function runPRWorkflow(
 
       const { coreCheckId, previousReviewInfo } = await Sentry.startSpan(
         { op: 'workflow.setup', name: 'setup github state' },
-        () => setupGitHubState(octokit, context),
+        () => setupGitHubState(octokit, context, postChecks),
       );
 
-      await completeSkippedSkillChecks(octokit, context, skippedTriggers);
+      await completeSkippedSkillChecks(octokit, context, skippedTriggers, postChecks);
 
       if (skipCoreCheck) {
         setOutput('findings-count', 0);
@@ -2285,13 +2307,13 @@ export async function runPRWorkflow(
         } catch (error) {
           warnAction(`Failed to write findings output: ${error}`);
         }
-        await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck);
+        await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck, postChecks);
         await publishActionRunFailOpen(service, () => buildFindingsOutput([], context, [], findingsOptions));
         return;
       }
 
       if (matchedTriggers.length === 0) {
-        await runOrFailCore(octokit, context, coreCheckId, async () => {
+        await runOrFailCore(octokit, context, coreCheckId, postChecks, async () => {
           const cleanupFindingObservations = await cleanupOrphanedComments(
             octokit,
             context,
@@ -2310,7 +2332,7 @@ export async function runPRWorkflow(
           await completeSkippedCoreCheck(octokit, context, coreCheckId, {
             title: 'No triggers matched',
             message: 'No triggers matched for this event.',
-          });
+          }, postChecks);
           await publishActionRunFailOpen(
             service,
             () => buildFindingsOutput([], context, cleanupFindingObservations, findingsOptions),
@@ -2328,7 +2350,7 @@ export async function runPRWorkflow(
             attributes: { 'warden.trigger.count': matchedTriggers.length },
           },
           () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
-            checks: createTriggerCheckReporter(octokit, context),
+            checks: createTriggerCheckReporter(octokit, context, postChecks),
             memoryRecall,
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
@@ -2343,8 +2365,8 @@ export async function runPRWorkflow(
           }),
         );
       } catch (error) {
-        await failUndispatchedSkillChecks(octokit, context, matchedTriggers, error);
-        await failCoreCheck(octokit, context, coreCheckId, error);
+        await failUndispatchedSkillChecks(octokit, context, matchedTriggers, error, postChecks);
+        await failCoreCheck(octokit, context, coreCheckId, error, postChecks);
         const triggerResults: ReplayTriggerResult[] = matchedTriggers.map((trigger) => ({
           triggerId: trigger.id,
           triggerName: trigger.name,
@@ -2380,6 +2402,7 @@ export async function runPRWorkflow(
         octokit,
         context,
         coreCheckId,
+        postChecks,
         () => Sentry.startSpan(
           { op: 'workflow.review', name: 'post reviews' },
           () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, gate),
@@ -2395,6 +2418,7 @@ export async function runPRWorkflow(
         octokit,
         context,
         coreCheckId,
+        postChecks,
         () => Sentry.startSpan(
           { op: 'workflow.resolve', name: 'resolve stale comments' },
           async (resolveSpan) => {
@@ -2429,6 +2453,7 @@ export async function runPRWorkflow(
         inputs,
         service,
         memoryRecall,
+        postChecks,
       );
 
       handleTriggerErrors(triggerErrors, matchedTriggers.length);
