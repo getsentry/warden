@@ -606,6 +606,7 @@ jobs:
 | `max-findings` | `50` | Maximum findings to report |
 | `request-changes` | `false` | Whether to request changes on PR reviews |
 | `fail-check` | `false` | Whether to fail the check run |
+| `post-checks` | `true` | Whether to create/update the core `warden` check and per-skill checks. Set `false` to post only PR review comments — do not combine with a required Warden status check. |
 | `parallel` | `5` | Maximum concurrent trigger executions |
 
 ### Split Analyze and Report

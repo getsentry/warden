@@ -172,6 +172,10 @@ workflows. Let Warden start, then let `warden.toml` decide which triggers match.
 For each configured pull request trigger, Warden creates a check run. Triggers
 that do not actually run for the current event complete as neutral.
 
+Do not set `post-checks: false` on a repo where `warden` or a per-skill check
+is a required status check — Warden stops creating that check entirely, so it
+never reports and the required check blocks every PR indefinitely.
+
 ## Action Inputs
 
 <dl class="sentry-key-value-list">
@@ -258,6 +262,13 @@ that do not actually run for the current event complete as neutral.
       <span class="sentry-property-meta">boolean</span>
     </dt>
     <dd>Whether to fail the check run. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>post-checks</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Whether to create/update the core <code>warden</code> check and per-skill checks. Set to <code>false</code> to post only PR review comments. Default: <code>true</code>. See <a href="#required-status-checks">Required Status Checks</a> before disabling this on a repo with a required Warden check.</dd>
   </div>
   <div>
     <dt>
