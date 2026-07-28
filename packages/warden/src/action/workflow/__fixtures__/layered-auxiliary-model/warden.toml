@@ -1,5 +1,8 @@
 version = 1
 
+[defaults]
+postChecks = true
+
 [defaults.auxiliary]
 model = "anthropic/repo-aux-model"
 maxRetries = 2
