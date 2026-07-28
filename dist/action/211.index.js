@@ -1239,6 +1239,7 @@ function parseActionInputs() {
     const parallelParsed = parseInt(getInput('parallel') || String(_utils_index_js__WEBPACK_IMPORTED_MODULE_1__/* .DEFAULT_CONCURRENCY */ .WH), 10);
     const requestChanges = parseBooleanInput(getInput('request-changes'));
     const failCheck = parseBooleanInput(getInput('fail-check'));
+    const postChecks = parseBooleanInput(getInput('post-checks')) ?? true;
     return {
         anthropicApiKey,
         oauthToken,
@@ -1253,6 +1254,7 @@ function parseActionInputs() {
         maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
         requestChanges,
         failCheck,
+        postChecks,
         parallel: Number.isNaN(parallelParsed) ? _utils_index_js__WEBPACK_IMPORTED_MODULE_1__/* .DEFAULT_CONCURRENCY */ .WH : parallelParsed,
     };
 }
@@ -2883,8 +2885,8 @@ function reportsPullRequestCheck(trigger, context) {
     return (Boolean(context.pullRequest) &&
         (trigger.type === 'pull_request' || trigger.type === '*'));
 }
-function checkOptionsForPullRequest(context) {
-    if (!context.pullRequest) {
+function checkOptionsForPullRequest(context, postChecks) {
+    if (!context.pullRequest || !postChecks) {
         return undefined;
     }
     return {
@@ -3021,6 +3023,13 @@ async function initializeWorkflow(octokit, inputs, eventName, eventPath, repoPat
                 layered.config.runner?.concurrency;
         auxiliaryOptions = resolveWorkflowAuxiliaryOptions(layered);
         skillRootsByName = (0,_config_loader_js__WEBPACK_IMPORTED_MODULE_3__/* .buildSkillRootsByName */ .hd)(repoPath, layered, inputs.baseSkillRoot);
+        // Same enforced-baseline precedence as runnerConcurrency/auxiliaryOptions above:
+        // this is a workflow-level setting, not a per-trigger one, so the org base
+        // config wins over the repo config.
+        const postChecks = layered.baseConfig?.defaults?.postChecks ??
+            layered.repoConfig?.defaults?.postChecks ??
+            layered.config.defaults?.postChecks ??
+            inputs.postChecks;
         const resolvedTriggers = (0,_config_loader_js__WEBPACK_IMPORTED_MODULE_3__/* .resolveLayeredSkillConfigs */ .Ln)(layered, undefined, skillRootsByName);
         const matchedTriggers = resolvedTriggers.filter((t) => (0,_triggers_matcher_js__WEBPACK_IMPORTED_MODULE_5__/* .matchTrigger */ .QW)(t, context, 'github'));
         const skippedTriggers = resolvedTriggers.filter((t) => reportsPullRequestCheck(t, context) && !matchedTriggers.includes(t));
@@ -3041,6 +3050,7 @@ async function initializeWorkflow(octokit, inputs, eventName, eventPath, repoPat
             resolvedTriggers,
             matchedTriggers,
             skippedTriggers,
+            postChecks,
         };
     }
     catch (error) {
@@ -3060,6 +3070,7 @@ async function initializeWorkflow(octokit, inputs, eventName, eventPath, repoPat
                     title: 'No warden.toml found',
                     message,
                 },
+                postChecks: inputs.postChecks,
             };
         }
         throw error;
@@ -3097,25 +3108,24 @@ async function fetchPreviousReviewInfo(octokit, context) {
 /**
  * Create core check and fetch previous review info. PR-only.
  */
-async function setupGitHubState(octokit, context) {
+async function setupGitHubState(octokit, context, postChecks) {
     if (!context.pullRequest) {
         return { previousReviewInfo: null };
     }
     let coreCheckId;
     let previousReviewInfo = null;
     // Create core warden check
-    try {
-        const coreCheck = await (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .createCoreCheck */ .c)(octokit, {
-            owner: context.repository.owner,
-            repo: context.repository.name,
-            headSha: context.pullRequest.headSha,
-        });
-        coreCheckId = coreCheck.checkRunId;
-        (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .logAction */ .d5)(`Created core check: ${coreCheck.url}`);
-    }
-    catch (error) {
-        _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.captureException */ .sQ.captureException(error, { tags: { operation: 'create_core_check' } });
-        (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to create core check: ${error}`);
+    const checkOptions = checkOptionsForPullRequest(context, postChecks);
+    if (checkOptions) {
+        try {
+            const coreCheck = await (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .createCoreCheck */ .c)(octokit, checkOptions);
+            coreCheckId = coreCheck.checkRunId;
+            (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .logAction */ .d5)(`Created core check: ${coreCheck.url}`);
+        }
+        catch (error) {
+            _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.captureException */ .sQ.captureException(error, { tags: { operation: 'create_core_check' } });
+            (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to create core check: ${error}`);
+        }
     }
     previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
     if (previousReviewInfo) {
@@ -3127,8 +3137,8 @@ async function setupGitHubState(octokit, context) {
  * Build the context-bound check lifecycle used by legacy run mode.
  * Analyze mode omits this capability so trigger execution cannot write checks.
  */
-function createTriggerCheckReporter(octokit, context) {
-    const checkOptions = checkOptionsForPullRequest(context);
+function createTriggerCheckReporter(octokit, context, postChecks) {
+    const checkOptions = checkOptionsForPullRequest(context, postChecks);
     if (!checkOptions) {
         return undefined;
     }
@@ -3529,7 +3539,7 @@ async function dismissPreviousReviewIfResolved(octokit, context, previousReviewI
 /**
  * Dismiss review, set outputs, update core check, fail action.
  */
-async function finalizeWorkflow(octokit, context, previousReviewInfo, coreCheckId, results, reports, findingObservations, shouldFailAction, failureReasons, canResolveStale, gate, triggerErrors, matchedTriggers, resolvedTriggers) {
+async function finalizeWorkflow(octokit, context, previousReviewInfo, coreCheckId, results, reports, findingObservations, shouldFailAction, failureReasons, canResolveStale, gate, triggerErrors, matchedTriggers, resolvedTriggers, postChecks) {
     await dismissPreviousReviewIfResolved(octokit, context, previousReviewInfo, results, canResolveStale, gate);
     // Set outputs
     const outputs = (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .computeWorkflowOutputs */ .dV)(reports);
@@ -3546,18 +3556,18 @@ async function finalizeWorkflow(octokit, context, previousReviewInfo, coreCheckI
         (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to write findings output: ${error}`);
     }
     // Update core check with overall summary
-    if (coreCheckId && context.pullRequest) {
-        try {
-            const summaryData = (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .buildCoreSummaryData */ .YX)(results, reports);
-            const coreConclusion = (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .determineCoreConclusion */ .ar)(shouldFailAction || triggerErrors.length > 0, outputs.findingsCount);
-            await (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .updateCoreCheck */ .R2)(octokit, coreCheckId, summaryData, coreConclusion, {
-                owner: context.repository.owner,
-                repo: context.repository.name,
-            });
-        }
-        catch (error) {
-            _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.captureException */ .sQ.captureException(error, { tags: { operation: 'update_core_check' } });
-            (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to update core check: ${error}`);
+    if (coreCheckId) {
+        const checkOptions = checkOptionsForPullRequest(context, postChecks);
+        if (checkOptions) {
+            try {
+                const summaryData = (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .buildCoreSummaryData */ .YX)(results, reports);
+                const coreConclusion = (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .determineCoreConclusion */ .ar)(shouldFailAction || triggerErrors.length > 0, outputs.findingsCount);
+                await (0,_checks_manager_js__WEBPACK_IMPORTED_MODULE_18__/* .updateCoreCheck */ .R2)(octokit, coreCheckId, summaryData, coreConclusion, checkOptions);
+            }
+            catch (error) {
+                _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.captureException */ .sQ.captureException(error, { tags: { operation: 'update_core_check' } });
+                (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to update core check: ${error}`);
+            }
         }
     }
     if (shouldFailAction) {
@@ -3566,8 +3576,8 @@ async function finalizeWorkflow(octokit, context, previousReviewInfo, coreCheckI
     (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .logAction */ .d5)(`Analysis complete: ${outputs.findingsCount} total findings`);
 }
 /** Complete the core check for a PR run that intentionally skipped analysis. */
-async function completeSkippedCoreCheck(octokit, context, coreCheckId, skipped) {
-    const options = checkOptionsForPullRequest(context);
+async function completeSkippedCoreCheck(octokit, context, coreCheckId, skipped, postChecks) {
+    const options = checkOptionsForPullRequest(context, postChecks);
     if (!coreCheckId || !options) {
         return;
     }
@@ -3584,8 +3594,8 @@ async function completeSkippedCoreCheck(octokit, context, coreCheckId, skipped) 
     }
 }
 /** Complete per-skill checks for configured PR triggers that did not run. */
-async function completeSkippedSkillChecks(octokit, context, skippedTriggers) {
-    const options = checkOptionsForPullRequest(context);
+async function completeSkippedSkillChecks(octokit, context, skippedTriggers, postChecks) {
+    const options = checkOptionsForPullRequest(context, postChecks);
     if (!options || skippedTriggers.length === 0) {
         return;
     }
@@ -3621,8 +3631,8 @@ async function completeSkippedSkillChecks(octokit, context, skippedTriggers) {
 /**
  * Fail per-skill checks when workflow setup fails before triggers are dispatched.
  */
-async function failUndispatchedSkillChecks(octokit, context, triggers, error) {
-    const options = checkOptionsForPullRequest(context);
+async function failUndispatchedSkillChecks(octokit, context, triggers, error, postChecks) {
+    const options = checkOptionsForPullRequest(context, postChecks);
     if (!options || triggers.length === 0) {
         return;
     }
@@ -3646,8 +3656,8 @@ async function failUndispatchedSkillChecks(octokit, context, triggers, error) {
 /**
  * Mark the core check failed when an early PR workflow phase fails after check creation.
  */
-async function failCoreCheck(octokit, context, coreCheckId, error) {
-    const options = checkOptionsForPullRequest(context);
+async function failCoreCheck(octokit, context, coreCheckId, error, postChecks) {
+    const options = checkOptionsForPullRequest(context, postChecks);
     if (!coreCheckId || !options) {
         return;
     }
@@ -3664,12 +3674,12 @@ async function failCoreCheck(octokit, context, coreCheckId, error) {
         (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to mark core check as failed: ${checkError}`);
     }
 }
-async function runOrFailCore(octokit, context, coreCheckId, operation) {
+async function runOrFailCore(octokit, context, coreCheckId, postChecks, operation) {
     try {
         return await operation();
     }
     catch (error) {
-        await failCoreCheck(octokit, context, coreCheckId, error);
+        await failCoreCheck(octokit, context, coreCheckId, error, postChecks);
         throw error;
     }
 }
@@ -3864,8 +3874,8 @@ function withRenderedReviewResult(result) {
 /**
  * Create report-mode skill checks directly as completed check runs.
  */
-async function createCompletedSkillChecksForReport(octokit, context, results) {
-    const options = checkOptionsForPullRequest(context);
+async function createCompletedSkillChecksForReport(octokit, context, results, postChecks) {
+    const options = checkOptionsForPullRequest(context, postChecks);
     if (!options) {
         return results.map(withRenderedReviewResult);
     }
@@ -3891,8 +3901,8 @@ async function createCompletedSkillChecksForReport(octokit, context, results) {
 /**
  * Create neutral completed checks for triggers report mode intentionally skipped.
  */
-async function createCompletedSkippedSkillChecks(octokit, context, skippedTriggers) {
-    const options = checkOptionsForPullRequest(context);
+async function createCompletedSkippedSkillChecks(octokit, context, skippedTriggers, postChecks) {
+    const options = checkOptionsForPullRequest(context, postChecks);
     if (!options || skippedTriggers.length === 0) {
         return;
     }
@@ -3915,8 +3925,8 @@ async function createCompletedSkippedSkillChecks(octokit, context, skippedTrigge
 /**
  * Create the report-mode core check directly as a completed check run.
  */
-async function createCompletedCoreCheckForReport(octokit, context, results, reports, shouldFailAction, outputs, overrides = {}, conclusion) {
-    const options = checkOptionsForPullRequest(context);
+async function createCompletedCoreCheckForReport(octokit, context, results, reports, shouldFailAction, outputs, postChecks, overrides = {}, conclusion) {
+    const options = checkOptionsForPullRequest(context, postChecks);
     if (!options) {
         return;
     }
@@ -3928,10 +3938,10 @@ async function createCompletedCoreCheckForReport(octokit, context, results, repo
 /**
  * Create the report-mode core failure check directly as a completed check run.
  */
-async function createFailedCoreCheckForReport(octokit, context, error) {
+async function createFailedCoreCheckForReport(octokit, context, error, postChecks) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     try {
-        await createCompletedCoreCheckForReport(octokit, context, [], [], true, { findingsCount: 0 }, {
+        await createCompletedCoreCheckForReport(octokit, context, [], [], true, { findingsCount: 0 }, postChecks, {
             title: 'Warden failed',
             message: `Error: ${errorMessage}`,
         }, 'failure');
@@ -3945,7 +3955,7 @@ async function createFailedCoreCheckForReport(octokit, context, error) {
  * Finalize report mode after replay: write outputs, handle review dismissal,
  * create direct completed checks, and fail the action when policy requires it.
  */
-async function finalizeReportWorkflow(octokit, context, previousReviewInfo, results, reports, findingObservations, shouldFailAction, failureReasons, canResolveStale, gate, triggerErrors, options = {}) {
+async function finalizeReportWorkflow(octokit, context, previousReviewInfo, results, reports, findingObservations, shouldFailAction, failureReasons, canResolveStale, gate, triggerErrors, options) {
     await dismissPreviousReviewIfResolved(octokit, context, previousReviewInfo, results, canResolveStale, gate, { failOnWriteError: options.failOnWriteError });
     const outputs = (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .computeWorkflowOutputs */ .dV)(reports);
     (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .setWorkflowOutputs */ .wZ)(outputs);
@@ -3962,7 +3972,7 @@ async function finalizeReportWorkflow(octokit, context, previousReviewInfo, resu
     catch (error) {
         (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to write findings output: ${error}`);
     }
-    await createCompletedCoreCheckForReport(octokit, context, results, reports, shouldFailAction || triggerErrors.length > 0, outputs);
+    await createCompletedCoreCheckForReport(octokit, context, results, reports, shouldFailAction || triggerErrors.length > 0, outputs, options.postChecks);
     if (shouldFailAction) {
         (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .setFailed */ .C1)(failureReasons.join('; '));
     }
@@ -4083,7 +4093,7 @@ async function runAnalyzeMode(inputs, initResult, span) {
  * It replays analyze output against the current PR config and owns GitHub writes.
  */
 async function runReportMode(octokit, inputs, initResult, repoPath, span) {
-    const { context, auxiliaryOptions, resolvedTriggers, matchedTriggers, skippedTriggers, skipCoreCheck, } = initResult;
+    const { context, auxiliaryOptions, resolvedTriggers, matchedTriggers, skippedTriggers, skipCoreCheck, postChecks, } = initResult;
     const findingsOutput = readFindingsFile(inputs.findingsFile, repoPath);
     validateFindingsMatchContext(findingsOutput, context);
     let results = [];
@@ -4093,7 +4103,7 @@ async function runReportMode(octokit, inputs, initResult, repoPath, span) {
     let canResolveStale;
     try {
         results = buildReportModeResults(findingsOutput, matchedTriggers, inputs);
-        await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers);
+        await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers, postChecks);
         if (skipCoreCheck) {
             const outputs = { findingsCount: 0, highCount: 0, summary: skipCoreCheck.title };
             (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .setWorkflowOutputs */ .wZ)(outputs);
@@ -4107,7 +4117,7 @@ async function runReportMode(octokit, inputs, initResult, repoPath, span) {
             catch (error) {
                 (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to write findings output: ${error}`);
             }
-            await createCompletedCoreCheckForReport(octokit, context, [], [], false, outputs, {
+            await createCompletedCoreCheckForReport(octokit, context, [], [], false, outputs, postChecks, {
                 title: skipCoreCheck.title,
                 message: skipCoreCheck.message,
             }, 'neutral');
@@ -4128,14 +4138,14 @@ async function runReportMode(octokit, inputs, initResult, repoPath, span) {
             catch (error) {
                 (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to write findings output: ${error}`);
             }
-            await createCompletedCoreCheckForReport(octokit, context, [], [], false, outputs, {
+            await createCompletedCoreCheckForReport(octokit, context, [], [], false, outputs, postChecks, {
                 title: 'No triggers matched',
                 message: 'No triggers matched for this event.',
             }, 'neutral');
             (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .logAction */ .d5)('Analysis complete: 0 total findings');
             return;
         }
-        results = await createCompletedSkillChecksForReport(octokit, context, results);
+        results = await createCompletedSkillChecksForReport(octokit, context, results, postChecks);
         previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
         if (previousReviewInfo) {
             (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .logAction */ .d5)(`Previous Warden review state: ${previousReviewInfo.state}`);
@@ -4154,13 +4164,13 @@ async function runReportMode(octokit, inputs, initResult, repoPath, span) {
             resolveSpan.setAttribute('warden.feedback.auto_resolve.stale_count', resolutionResult.autoResolvedByStaleCheck);
             reviewPhase.findingObservations.push(...resolutionResult.findingObservations);
         });
-        await finalizeReportWorkflow(octokit, context, previousReviewInfo, results, reviewPhase.reports, reviewPhase.findingObservations, reviewPhase.shouldFailAction, reviewPhase.failureReasons, canResolveStale, gate, triggerErrors, { failOnWriteError: true, matchedTriggers, resolvedTriggers });
+        await finalizeReportWorkflow(octokit, context, previousReviewInfo, results, reviewPhase.reports, reviewPhase.findingObservations, reviewPhase.shouldFailAction, reviewPhase.failureReasons, canResolveStale, gate, triggerErrors, { failOnWriteError: true, matchedTriggers, resolvedTriggers, postChecks });
     }
     catch (error) {
         if (error instanceof _base_js__WEBPACK_IMPORTED_MODULE_19__/* .ActionFailedError */ .Ah) {
             throw error;
         }
-        await createFailedCoreCheckForReport(octokit, context, error);
+        await createFailedCoreCheckForReport(octokit, context, error, postChecks);
         throw error;
     }
     (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .handleTriggerErrors */ .a3)(triggerErrors, matchedTriggers.length);
@@ -4174,7 +4184,7 @@ async function runReportMode(octokit, inputs, initResult, repoPath, span) {
 async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath) {
     return _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.run', name: 'review pull_request' }, async (span) => {
         const initResult = await _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.init', name: 'initialize workflow' }, () => initializeWorkflow(octokit, inputs, eventName, eventPath, repoPath));
-        const { context, runnerConcurrency, auxiliaryOptions, resolvedTriggers, matchedTriggers, skippedTriggers, skipCoreCheck, } = initResult;
+        const { context, runnerConcurrency, auxiliaryOptions, resolvedTriggers, matchedTriggers, skippedTriggers, skipCoreCheck, postChecks, } = initResult;
         span.setAttribute('warden.trigger.count', matchedTriggers.length);
         // Set Sentry context after building event context
         if (context.pullRequest) {
@@ -4203,8 +4213,8 @@ async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath) {
         if (inputs.mode === 'report') {
             return runReportMode(octokit, inputs, initResult, repoPath, span);
         }
-        const { coreCheckId, previousReviewInfo } = await _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.setup', name: 'setup github state' }, () => setupGitHubState(octokit, context));
-        await completeSkippedSkillChecks(octokit, context, skippedTriggers);
+        const { coreCheckId, previousReviewInfo } = await _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.setup', name: 'setup github state' }, () => setupGitHubState(octokit, context, postChecks));
+        await completeSkippedSkillChecks(octokit, context, skippedTriggers, postChecks);
         if (skipCoreCheck) {
             (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .setOutput */ .uH)('findings-count', 0);
             (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .setOutput */ .uH)('high-count', 0);
@@ -4217,11 +4227,11 @@ async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath) {
             catch (error) {
                 (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_22__/* .warnAction */ .T6)(`Failed to write findings output: ${error}`);
             }
-            await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck);
+            await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck, postChecks);
             return;
         }
         if (matchedTriggers.length === 0) {
-            await runOrFailCore(octokit, context, coreCheckId, async () => {
+            await runOrFailCore(octokit, context, coreCheckId, postChecks, async () => {
                 const cleanupFindingObservations = await cleanupOrphanedComments(octokit, context, inputs, auxiliaryOptions);
                 (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .setOutput */ .uH)('findings-count', 0);
                 (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .setOutput */ .uH)('high-count', 0);
@@ -4237,7 +4247,7 @@ async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath) {
                 await completeSkippedCoreCheck(octokit, context, coreCheckId, {
                     title: 'No triggers matched',
                     message: 'No triggers matched for this event.',
-                });
+                }, postChecks);
             });
             return;
         }
@@ -4248,27 +4258,27 @@ async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath) {
                 name: 'execute triggers',
                 attributes: { 'warden.trigger.count': matchedTriggers.length },
             }, () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
-                checks: createTriggerCheckReporter(octokit, context),
+                checks: createTriggerCheckReporter(octokit, context, postChecks),
             }));
         }
         catch (error) {
-            await failUndispatchedSkillChecks(octokit, context, matchedTriggers, error);
-            await failCoreCheck(octokit, context, coreCheckId, error);
+            await failUndispatchedSkillChecks(octokit, context, matchedTriggers, error, postChecks);
+            await failCoreCheck(octokit, context, coreCheckId, error, postChecks);
             throw error;
         }
         const gate = new _review_review_feedback_gate_js__WEBPACK_IMPORTED_MODULE_15__/* .ReviewFeedbackGate */ .d(octokit, context);
-        const reviewPhase = await runOrFailCore(octokit, context, coreCheckId, () => _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.review', name: 'post reviews' }, () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, gate)));
+        const reviewPhase = await runOrFailCore(octokit, context, coreCheckId, postChecks, () => _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.review', name: 'post reviews' }, () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, gate)));
         const triggerErrors = (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .collectTriggerErrors */ .sl)(results);
         const canResolveStale = (0,_review_coordination_js__WEBPACK_IMPORTED_MODULE_24__/* .shouldResolveStaleComments */ .t)(results);
         const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
         span.setAttribute('warden.finding.count', allFindings.length);
-        await runOrFailCore(octokit, context, coreCheckId, () => _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.resolve', name: 'resolve stale comments' }, async (resolveSpan) => {
+        await runOrFailCore(octokit, context, coreCheckId, postChecks, () => _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.startSpan */ .sQ.startSpan({ op: 'workflow.resolve', name: 'resolve stale comments' }, async (resolveSpan) => {
             const resolutionResult = await evaluateFixesAndResolveStale(octokit, context, reviewPhase.fetchedComments, allFindings, reviewPhase.activeWardenCommentIds, canResolveStale, inputs.anthropicApiKey, auxiliaryOptions, gate);
             resolveSpan.setAttribute('warden.feedback.auto_resolve.fix_eval_count', resolutionResult.autoResolvedByFixEvaluation);
             resolveSpan.setAttribute('warden.feedback.auto_resolve.stale_count', resolutionResult.autoResolvedByStaleCheck);
             reviewPhase.findingObservations.push(...resolutionResult.findingObservations);
         }));
-        await finalizeWorkflow(octokit, context, previousReviewInfo, coreCheckId, results, reviewPhase.reports, reviewPhase.findingObservations, reviewPhase.shouldFailAction, reviewPhase.failureReasons, canResolveStale, gate, triggerErrors, matchedTriggers, resolvedTriggers);
+        await finalizeWorkflow(octokit, context, previousReviewInfo, coreCheckId, results, reviewPhase.reports, reviewPhase.findingObservations, reviewPhase.shouldFailAction, reviewPhase.failureReasons, canResolveStale, gate, triggerErrors, matchedTriggers, resolvedTriggers, postChecks);
         (0,_base_js__WEBPACK_IMPORTED_MODULE_19__/* .handleTriggerErrors */ .a3)(triggerErrors, matchedTriggers.length);
     });
 }
@@ -9290,6 +9300,8 @@ const DefaultsSchema = schemas/* object */.Ik({
     requestChanges: schemas/* boolean */.zM().optional(),
     /** Fail the check run when findings exceed failOn. Default: false */
     failCheck: schemas/* boolean */.zM().optional(),
+    /** Create/update GitHub Check runs (core + per-skill). Default: true */
+    postChecks: schemas/* boolean */.zM().optional(),
     /** Default model for all skills (e.g., 'openai/gpt-5.5') */
     model: schemas/* string */.Yj().optional(),
     /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */
