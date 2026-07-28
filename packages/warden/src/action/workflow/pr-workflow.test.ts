@@ -433,7 +433,19 @@ describe('runPRWorkflow', () => {
       }
 
       expect(mockRunSkillTask).not.toHaveBeenCalled();
-      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).toHaveBeenCalledTimes(2);
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 1,
+          details_url: 'https://example.com/check/1',
+        })
+      );
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 2,
+          details_url: 'https://example.com/check/2',
+        })
+      );
       expect(mockOctokit.checks.create).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'warden: test-skill',
@@ -752,7 +764,13 @@ describe('runPRWorkflow', () => {
           }),
         })
       );
-      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).toHaveBeenCalledOnce();
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          check_run_id: 1,
+          details_url: 'https://example.com/check/1',
+        })
+      );
     });
 
     it('report mode creates a failed core check when a skipped check write fails', async () => {
