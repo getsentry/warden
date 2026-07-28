@@ -10,21 +10,23 @@ import {
 import type { Finding, SkillReport } from '../types/index.js';
 
 describe('check details URL', () => {
-  it('links the View details action to the GitHub check results', async () => {
+  it('links the View details action to the specific GitHub check run', async () => {
     const create = vi.fn().mockResolvedValue({
       data: { id: 123, html_url: 'https://github.com/getsentry/sentry/runs/123' },
     });
+    const update = vi.fn().mockResolvedValue({ data: {} });
 
     await createCoreCheck(
-      { checks: { create } } as never,
+      { checks: { create, update } } as never,
       { owner: 'getsentry', repo: 'sentry', headSha: 'abc123' }
     );
 
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        details_url: 'https://github.com/getsentry/sentry/commit/abc123/checks',
-      })
-    );
+    expect(update).toHaveBeenCalledWith({
+      owner: 'getsentry',
+      repo: 'sentry',
+      check_run_id: 123,
+      details_url: 'https://github.com/getsentry/sentry/runs/123',
+    });
   });
 });
 

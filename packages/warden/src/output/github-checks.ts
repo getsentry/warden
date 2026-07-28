@@ -96,10 +96,21 @@ export interface CreateCheckResult {
 const MAX_ANNOTATIONS_PER_REQUEST = 50;
 
 /**
- * Link check-run actions back to GitHub, where Warden's summary and annotations live.
+ * Point the check-run action at the exact GitHub page created for this check.
  */
-function getCheckDetailsUrl(options: CheckOptions): string {
-  return `https://github.com/${options.owner}/${options.repo}/commit/${options.headSha}/checks`;
+async function setCheckDetailsUrl(
+  octokit: Octokit,
+  options: Pick<CheckOptions, 'owner' | 'repo'>,
+  checkRun: { id: number; html_url: string | null }
+): Promise<void> {
+  if (!checkRun.html_url) return;
+
+  await octokit.checks.update({
+    owner: options.owner,
+    repo: options.repo,
+    check_run_id: checkRun.id,
+    details_url: checkRun.html_url,
+  });
 }
 
 /**
@@ -218,10 +229,10 @@ export async function createSkillCheck(
     repo: options.repo,
     name: `warden: ${skillName}`,
     head_sha: options.headSha,
-    details_url: getCheckDetailsUrl(options),
     status: 'in_progress',
     started_at: new Date().toISOString(),
   });
+  await setCheckDetailsUrl(octokit, options, data);
 
   return {
     checkRunId: data.id,
@@ -279,12 +290,12 @@ export async function createCompletedSkillCheck(
     repo: options.repo,
     name: `warden: ${options.checkName ?? report.skill}`,
     head_sha: options.headSha,
-    details_url: getCheckDetailsUrl(options),
     status: 'completed',
     conclusion: payload.conclusion,
     completed_at: new Date().toISOString(),
     output: payload.output,
   });
+  await setCheckDetailsUrl(octokit, options, data);
 
   return {
     checkRunId: data.id,
@@ -356,7 +367,6 @@ export async function createFailedSkillCheck(
     repo: options.repo,
     name: `warden: ${skillName}`,
     head_sha: options.headSha,
-    details_url: getCheckDetailsUrl(options),
     status: 'completed',
     conclusion: 'failure',
     completed_at: new Date().toISOString(),
@@ -365,6 +375,7 @@ export async function createFailedSkillCheck(
       summary: `Error: ${errorMessage}`,
     },
   });
+  await setCheckDetailsUrl(octokit, options, data);
 
   return {
     checkRunId: data.id,
@@ -385,10 +396,10 @@ export async function createCoreCheck(
     repo: options.repo,
     name: 'warden',
     head_sha: options.headSha,
-    details_url: getCheckDetailsUrl(options),
     status: 'in_progress',
     started_at: new Date().toISOString(),
   });
+  await setCheckDetailsUrl(octokit, options, data);
 
   return {
     checkRunId: data.id,
@@ -418,7 +429,6 @@ export async function createCompletedCoreCheck(
     repo: options.repo,
     name: 'warden',
     head_sha: options.headSha,
-    details_url: getCheckDetailsUrl(options),
     status: 'completed',
     conclusion,
     completed_at: new Date().toISOString(),
@@ -427,6 +437,7 @@ export async function createCompletedCoreCheck(
       summary,
     },
   });
+  await setCheckDetailsUrl(octokit, options, data);
 
   return {
     checkRunId: data.id,
