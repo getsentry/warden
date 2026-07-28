@@ -28,6 +28,8 @@ export interface ActionInputs {
     requestChanges?: boolean;
     /** Whether to fail the check run when findings exceed failOn */
     failCheck?: boolean;
+    /** Whether to create/update GitHub Check runs. Default true; explicit false disables the core check and all per-skill checks. */
+    postChecks: boolean;
     /** Max concurrent trigger executions */
     parallel: number;
 }

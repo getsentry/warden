@@ -288,6 +288,7 @@ export declare const DefaultsSchema: z.ZodObject<{
     reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
     requestChanges: z.ZodOptional<z.ZodBoolean>;
     failCheck: z.ZodOptional<z.ZodBoolean>;
+    postChecks: z.ZodOptional<z.ZodBoolean>;
     model: z.ZodOptional<z.ZodString>;
     maxTurns: z.ZodOptional<z.ZodNumber>;
     runtime: z.ZodOptional<z.ZodEnum<{
@@ -386,6 +387,7 @@ export declare const WardenConfigSchema: z.ZodObject<{
         reportOnSuccess: z.ZodOptional<z.ZodBoolean>;
         requestChanges: z.ZodOptional<z.ZodBoolean>;
         failCheck: z.ZodOptional<z.ZodBoolean>;
+        postChecks: z.ZodOptional<z.ZodBoolean>;
         model: z.ZodOptional<z.ZodString>;
         maxTurns: z.ZodOptional<z.ZodNumber>;
         runtime: z.ZodOptional<z.ZodEnum<{
