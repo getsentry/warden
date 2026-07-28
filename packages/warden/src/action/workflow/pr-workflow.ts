@@ -445,7 +445,14 @@ async function initializeWorkflow(
       layered.config.runner?.concurrency;
     auxiliaryOptions = resolveWorkflowAuxiliaryOptions(layered);
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
-    const postChecks = layered.config.defaults?.postChecks ?? inputs.postChecks;
+    // Same enforced-baseline precedence as runnerConcurrency/auxiliaryOptions above:
+    // this is a workflow-level setting, not a per-trigger one, so the org base
+    // config wins over the repo config.
+    const postChecks =
+      layered.baseConfig?.defaults?.postChecks ??
+      layered.repoConfig?.defaults?.postChecks ??
+      layered.config.defaults?.postChecks ??
+      inputs.postChecks;
     const resolvedTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName);
     const matchedTriggers = resolvedTriggers.filter((t) => matchTrigger(t, context, 'github'));
     const skippedTriggers = resolvedTriggers.filter(
@@ -1816,7 +1823,7 @@ async function finalizeReportWorkflow(
     service?: ResolvedServiceOptions;
     recalledMemories?: readonly { id: string; version: number }[];
     memoryRecallId?: string;
-    postChecks?: boolean;
+    postChecks: boolean;
   }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
@@ -1856,7 +1863,7 @@ async function finalizeReportWorkflow(
     reports,
     shouldFailAction || triggerErrors.length > 0,
     outputs,
-    options.postChecks ?? true
+    options.postChecks
   );
 
   await publishActionRunFailOpen(

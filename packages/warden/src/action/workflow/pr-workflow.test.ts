@@ -2308,6 +2308,24 @@ describe('runPRWorkflow', () => {
         })
       );
     });
+
+    it('org base config postChecks=false wins over a repo config postChecks=true', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport() });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        LAYERED_AUXILIARY_MODEL_FIXTURES_DIR
+      );
+
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('event context building', () => {
