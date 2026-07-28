@@ -28,6 +28,28 @@ describe('check details URL', () => {
       details_url: 'https://github.com/getsentry/sentry/runs/123',
     });
   });
+
+  it('returns the created check when setting its details URL fails', async () => {
+    const create = vi.fn().mockResolvedValue({
+      data: { id: 123, html_url: 'https://github.com/getsentry/sentry/runs/123' },
+    });
+    const update = vi.fn().mockRejectedValue(new Error('Bad credentials'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await createCoreCheck(
+      { checks: { create, update } } as never,
+      { owner: 'getsentry', repo: 'sentry', headSha: 'abc123' }
+    );
+
+    expect(result).toEqual({
+      checkRunId: 123,
+      url: 'https://github.com/getsentry/sentry/runs/123',
+    });
+    expect(warn).toHaveBeenCalledWith(
+      'Failed to set details URL for check 123: Error: Bad credentials'
+    );
+    warn.mockRestore();
+  });
 });
 
 describe('severityToAnnotationLevel', () => {

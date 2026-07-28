@@ -105,12 +105,16 @@ async function setCheckDetailsUrl(
 ): Promise<void> {
   if (!checkRun.html_url) return;
 
-  await octokit.checks.update({
-    owner: options.owner,
-    repo: options.repo,
-    check_run_id: checkRun.id,
-    details_url: checkRun.html_url,
-  });
+  try {
+    await octokit.checks.update({
+      owner: options.owner,
+      repo: options.repo,
+      check_run_id: checkRun.id,
+      details_url: checkRun.html_url,
+    });
+  } catch (error) {
+    console.warn(`Failed to set details URL for check ${checkRun.id}: ${error}`);
+  }
 }
 
 /**
