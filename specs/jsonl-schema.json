@@ -152,6 +152,9 @@
         "id": {
           "type": "string"
         },
+        "reportedId": {
+          "type": "string"
+        },
         "severity": {
           "type": "string",
           "enum": [
@@ -751,6 +754,12 @@
         },
         "model": {
           "type": "string"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "runtime": {
           "type": "string"

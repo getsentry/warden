@@ -244,6 +244,93 @@ describe('postTriggerReview', () => {
     });
   });
 
+  it('carries skillExecutionId from the trigger result onto posted observations', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      skillExecutionId: 'exec-abc123',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.findingObservations).toEqual([
+      expect.objectContaining({ outcome: 'posted', finding, skillExecutionId: 'exec-abc123' }),
+    ]);
+  });
+
+  it('carries existingSkills from the matched comment onto dedupe observations', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      skillExecutionId: 'exec-abc123',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    const existingComment = createExistingComment({
+      isWarden: true,
+      skills: ['other-skill'],
+    });
+
+    vi.mocked(deduplicateFindings).mockResolvedValue({
+      newFindings: [],
+      duplicateActions: [{ type: 'react_external', originalFindingId: finding.id, finding, existingComment, matchType: 'hash' }],
+    });
+    vi.mocked(processDuplicateActions).mockResolvedValue({ updated: 0, reacted: 1, skipped: 0, failed: 0 });
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [existingComment],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.findingObservations).toEqual([
+      expect.objectContaining({
+        outcome: 'deduped',
+        skillExecutionId: 'exec-abc123',
+        dedupe: expect.objectContaining({ existingSkills: ['other-skill'] }),
+      }),
+    ]);
+  });
+
   it('skips body-only non-blocking reviews', async () => {
     const finding = createFinding({ location: undefined });
     const result: TriggerResult = {
@@ -783,6 +870,7 @@ describe('postTriggerReview', () => {
     expect(postResult.posted).toBe(true);
     expect([...postResult.activeWardenCommentIds]).toEqual([1]);
     expect(result.report?.findings[0]?.id).toBe('WRZ-XPL');
+    expect(result.report?.findings[0]?.reportedId).toBe('WRZ-XPL');
     expect(postResult.findingObservations).toEqual([
       expect.objectContaining({
         outcome: 'deduped',

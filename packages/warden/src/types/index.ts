@@ -115,6 +115,8 @@ export type SourceSnippet = z.infer<typeof SourceSnippetSchema>;
 // Individual finding from a skill
 export const FindingSchema = z.object({
   id: z.string(),
+  /** Set to the same value as `id` once dedupe/recenter matches this finding to an already-posted comment. */
+  reportedId: z.string().optional(),
   severity: SeveritySchema,
   confidence: ConfidenceSchema.optional(),
   title: z.string(),
@@ -364,6 +366,8 @@ export const SkillReportSchema = z.object({
   files: z.array(FileReportSchema).optional(),
   /** Model used for this skill's analysis */
   model: z.string().optional(),
+  /** Distinct models observed across hunks, populated only when they disagree */
+  models: z.array(z.string()).optional(),
   /** Runtime backend used for this skill's analysis. */
   runtime: z.string().optional(),
 });

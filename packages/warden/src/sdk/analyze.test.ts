@@ -837,6 +837,37 @@ describe('runSkill', () => {
     );
 
     expect(report.model).toBe('configured-alias');
+    expect(report.models).toEqual(['claude-sonnet-4-5-20260929', 'claude-opus-4-8-20260601']);
+  });
+
+  it('omits models when all hunks agree on the response model', async () => {
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'success',
+        text: JSON.stringify({ findings: [] }),
+        errors: [],
+        usage: makeUsage(),
+        responseModel: 'claude-sonnet-4-5-20260929',
+      },
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithOneHunk(),
+      {},
+    );
+
+    expect(report.models).toBeUndefined();
   });
 
   it('attributes each skill its own response model when multiple skills run concurrently', async () => {

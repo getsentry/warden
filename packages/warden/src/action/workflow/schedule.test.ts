@@ -56,6 +56,8 @@ vi.mock('./base.js', async () => {
       return Promise.resolve({ pathToClaudeCodeExecutable: '/usr/local/bin/claude' });
     }),
     getDefaultBranchFromAPI: vi.fn(() => Promise.resolve('main')),
+    writeFindingsOutputLive: vi.fn(actual['writeFindingsOutputLive'] as (...args: unknown[]) => void),
+    writeFindingsOutput: vi.fn(actual['writeFindingsOutput'] as (...args: unknown[]) => string),
     // Override handleTriggerErrors to use the mocked setFailed
     handleTriggerErrors: (triggerErrors: string[], totalTriggers: number) => {
       if (triggerErrors.length === 0) return;
@@ -101,7 +103,7 @@ import { runSkill } from '../../sdk/runner.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { createOrUpdateIssue } from '../../output/github-issues.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
-import { setFailed } from './base.js';
+import { setFailed, writeFindingsOutput, writeFindingsOutputLive } from './base.js';
 import { runScheduleWorkflow } from './schedule.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 
@@ -111,6 +113,8 @@ const mockBuildContext = vi.mocked(buildScheduleEventContext);
 const mockCreateOrUpdateIssue = vi.mocked(createOrUpdateIssue);
 const mockResolveSkillAsync = vi.mocked(resolveSkillAsync);
 const mockSetFailed = vi.mocked(setFailed);
+const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
+const mockWriteFindingsOutputLive = vi.mocked(writeFindingsOutputLive);
 
 // -----------------------------------------------------------------------------
 // Mock Octokit Factory
@@ -647,6 +651,85 @@ describe('runScheduleWorkflow', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining('2 total findings')
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Live findings output
+  // ---------------------------------------------------------------------------
+
+  describe('live findings output', () => {
+    it('writes a live snapshot after each trigger, marking not-yet-reached triggers as pending', async () => {
+      mockResolveSkillAsync
+        .mockResolvedValueOnce({ name: 'test-skill-a', description: 'Test skill A', prompt: 'Review code' })
+        .mockResolvedValueOnce({ name: 'test-skill-b', description: 'Test skill B', prompt: 'Review code' });
+      mockRunSkill
+        .mockResolvedValueOnce(createSkillReport({ skill: 'test-skill-a' }))
+        .mockResolvedValueOnce(createSkillReport({ skill: 'test-skill-b' }));
+
+      await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_MULTI_FIXTURES);
+
+      expect(mockWriteFindingsOutputLive).toHaveBeenCalledTimes(2);
+      expect(mockWriteFindingsOutput).toHaveBeenCalledTimes(1);
+
+      const firstCallOptions = mockWriteFindingsOutputLive.mock.calls[0]?.[3];
+      expect(firstCallOptions?.skippedTriggers).toEqual([
+        expect.objectContaining({ skillName: 'test-skill-b', reason: 'pending' }),
+      ]);
+      expect(firstCallOptions?.skillExecutions).toHaveLength(1);
+
+      const secondCallOptions = mockWriteFindingsOutputLive.mock.calls[1]?.[3];
+      expect(secondCallOptions?.skippedTriggers).toEqual([]);
+      expect(secondCallOptions?.skillExecutions).toHaveLength(2);
+
+      // The final write never has a 'pending' skip reason.
+      const finalOptions = mockWriteFindingsOutput.mock.calls[0]?.[3];
+      expect(finalOptions?.skippedTriggers?.some((t) => t.reason === 'pending')).toBe(false);
+    });
+
+    it('marks a trigger with no matching files as skipped for no_changes', async () => {
+      mockResolveSkillAsync
+        .mockResolvedValueOnce({ name: 'test-skill-a', description: 'Test skill A', prompt: 'Review code' })
+        .mockResolvedValueOnce({ name: 'test-skill-b', description: 'Test skill B', prompt: 'Review code' });
+
+      const contextWithFiles = createScheduleContext();
+      const contextWithNoFiles = createScheduleContext();
+      contextWithNoFiles.pullRequest = { ...contextWithNoFiles.pullRequest!, files: [] };
+      mockBuildContext
+        .mockResolvedValueOnce(contextWithNoFiles)
+        .mockResolvedValueOnce(contextWithFiles);
+      mockRunSkill.mockResolvedValue(createSkillReport({ skill: 'test-skill-b' }));
+
+      await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_MULTI_FIXTURES);
+
+      const finalOptions = mockWriteFindingsOutput.mock.calls[0]?.[3];
+      expect(finalOptions?.skippedTriggers).toEqual([
+        expect.objectContaining({ skillName: 'test-skill-a', reason: 'no_changes' }),
+      ]);
+    });
+
+    it('carries skillExecutionId, triggerId, and issue metadata on skillExecutions in the final write', async () => {
+      mockResolveSkillAsync.mockResolvedValue({ name: 'test-skill', description: 'Test skill', prompt: 'Review code' });
+      mockRunSkill.mockResolvedValue(createSkillReport());
+      mockCreateOrUpdateIssue.mockResolvedValue({
+        issueNumber: 42,
+        issueUrl: 'https://github.com/test-owner/test-repo/issues/42',
+        created: true,
+      });
+
+      await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_FIXTURES);
+
+      const finalOptions = mockWriteFindingsOutput.mock.calls[0]?.[3];
+      expect(finalOptions?.skillExecutions).toEqual([
+        expect.objectContaining({
+          skillExecutionId: expect.any(String),
+          triggerId: expect.any(String),
+          triggerName: expect.any(String),
+          issueNumber: 42,
+          issueUrl: 'https://github.com/test-owner/test-repo/issues/42',
+          findingProcessingEvents: [],
+        }),
+      ]);
     });
   });
 });

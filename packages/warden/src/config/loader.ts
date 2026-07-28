@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, normalize } from 'node:path';
+import { createHash } from 'node:crypto';
 import { parse as parseToml } from 'smol-toml';
 import { Sentry } from '../sentry.js';
 import { isBuiltinSkillName } from '../skills/loader.js';
@@ -362,6 +363,8 @@ export function loadLayeredWardenConfig(
 export interface ResolvedTrigger {
   /** Stable replay identity derived from the skill and trigger configuration */
   id: string;
+  /** Short, stable join key derived from `id`, safe to embed repeatedly across output artifacts */
+  skillExecutionId: string;
   /** Skill name (used for display and deduplication) */
   name: string;
   /** Skill reference (same as name, for downstream compatibility) */
@@ -445,6 +448,11 @@ function triggerIdentity(skill: SkillConfig, trigger: SkillTrigger | undefined):
     labels: trigger?.labels,
     schedule: trigger?.schedule,
   });
+}
+
+/** Short, collision-resistant join key derived from a `triggerIdentity` blob. */
+function deriveSkillExecutionId(identity: string): string {
+  return createHash('sha256').update(identity).digest('hex').slice(0, 12);
 }
 
 function resolveVerifyFindings(
@@ -538,8 +546,10 @@ export function resolveSkillConfigs(
 
     if (!skill.triggers || skill.triggers.length === 0) {
       // Wildcard: no triggers means run everywhere
+      const identity = triggerIdentity(skill, undefined);
       result.push({
-        id: triggerIdentity(skill, undefined),
+        id: identity,
+        skillExecutionId: deriveSkillExecutionId(identity),
         name: skill.name,
         skill: skill.name,
         type: '*',
@@ -569,8 +579,10 @@ export function resolveSkillConfigs(
       });
     } else {
       for (const trigger of skill.triggers) {
+        const identity = triggerIdentity(skill, trigger);
         result.push({
-          id: triggerIdentity(skill, trigger),
+          id: identity,
+          skillExecutionId: deriveSkillExecutionId(identity),
           name: skill.name,
           skill: skill.name,
           type: trigger.type,

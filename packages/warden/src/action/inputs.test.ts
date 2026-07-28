@@ -172,6 +172,19 @@ describe('parseActionInputs', () => {
       expect(() => parseActionInputs()).toThrow('Invalid mode "later"');
     });
   });
+
+  describe('actionRef', () => {
+    it('parses action-ref when provided', () => {
+      process.env['INPUT_ACTION_REF'] = 'babylist/warden@v1';
+      const inputs = parseActionInputs();
+      expect(inputs.actionRef).toBe('babylist/warden@v1');
+    });
+
+    it('is undefined when not provided', () => {
+      const inputs = parseActionInputs();
+      expect(inputs.actionRef).toBeUndefined();
+    });
+  });
 });
 
 describe('setupAuthEnv', () => {

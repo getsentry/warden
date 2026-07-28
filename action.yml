@@ -59,6 +59,10 @@ inputs:
     description: 'Maximum number of concurrent trigger executions'
     required: false
     default: '5'
+  action-ref:
+    description: 'The action ref that produced this run, surfaced in the findings output harness field'
+    required: false
+    default: ${{ github.action_ref }}
 
 outputs:
   findings-count:
@@ -95,4 +99,5 @@ runs:
         INPUT_FAIL_CHECK: ${{ inputs.fail-check }}
         INPUT_POST_CHECKS: ${{ inputs.post-checks }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
+        INPUT_ACTION_REF: ${{ inputs.action-ref }}
       run: node ${{ github.action_path }}/dist/action/index.js

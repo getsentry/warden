@@ -564,6 +564,27 @@ describe('resolveSkillConfigs', () => {
       expect(new Set(resolved.map((trigger) => trigger.id)).size).toBe(2);
     });
 
+    it('derives a distinct, stable skillExecutionId per trigger identity', () => {
+      const config: WardenConfig = {
+        version: 1,
+        skills: [{
+          name: 'test-skill',
+          triggers: [
+            { type: 'pull_request', actions: ['opened'] },
+            { type: 'pull_request', actions: ['synchronize'] },
+          ],
+        }],
+      };
+
+      const first = resolveSkillConfigs(config);
+      const second = resolveSkillConfigs(config);
+
+      expect(new Set(first.map((trigger) => trigger.skillExecutionId)).size).toBe(2);
+      expect(first.map((trigger) => trigger.skillExecutionId)).toEqual(
+        second.map((trigger) => trigger.skillExecutionId)
+      );
+    });
+
     it('falls back to auxiliary model when synthesis model is unset', () => {
       const config: WardenConfig = {
         ...baseConfig,

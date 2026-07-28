@@ -1009,7 +1009,7 @@ export async function deduplicateFindings(
 
     if (matchingComment) {
       const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
-        ? { ...finding, id: matchingComment.findingId }
+        ? { ...finding, id: matchingComment.findingId, reportedId: matchingComment.findingId }
         : finding;
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',
@@ -1044,7 +1044,7 @@ export async function deduplicateFindings(
     const matchingComment = semanticResult.matches.get(finding.id);
     if (matchingComment) {
       const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
-        ? { ...finding, id: matchingComment.findingId }
+        ? { ...finding, id: matchingComment.findingId, reportedId: matchingComment.findingId }
         : finding;
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',

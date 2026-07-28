@@ -11,16 +11,20 @@ export type FindingOutcome =
 
 export type DedupeSource = 'warden' | 'external';
 export type DedupeMatchType = 'hash' | 'semantic';
-export type SkippedReason = 'max_findings' | 'duplicate_in_batch' | 'no_inline_location';
+export type SkippedReason = 'max_findings' | 'duplicate_in_batch' | 'no_inline_location' | 'review_not_posted';
 export type ResolvedReason = 'fix_evaluation' | 'stale_check';
 
 export const DedupeDetailSchema = z.object({
   source: z.enum(['warden', 'external']),
   matchType: z.enum(['hash', 'semantic']),
   existingFindingId: z.string().optional(),
+  /** skillExecutionId that produced the matched comment, when known (unavailable for comments fetched from GitHub). */
+  existingSkillExecutionId: z.string().optional(),
   existingCommentId: z.number().int().positive().optional(),
   existingThreadId: z.string().optional(),
   existingResolved: z.boolean().optional(),
+  /** Skills already attributed to the matched comment, parsed from its attribution footer. */
+  existingSkills: z.array(z.string()).optional(),
   actor: z.string().optional(),
 });
 
@@ -29,10 +33,14 @@ export type DedupeDetail = z.infer<typeof DedupeDetailSchema>;
 interface BaseFindingObservation {
   finding: Finding;
   skill?: string;
+  /** skillExecutionId of the trigger execution that produced this observation. */
+  skillExecutionId?: string;
 }
 
 export interface PostedFindingObservation extends BaseFindingObservation {
   outcome: 'posted';
+  githubCommentId?: number;
+  githubCommentUrl?: string;
 }
 
 export interface DedupedFindingObservation extends BaseFindingObservation {
@@ -66,29 +74,36 @@ export const FindingObservationSchema = z.discriminatedUnion('outcome', [
     outcome: z.literal('posted'),
     finding: FindingSchema,
     skill: z.string().optional(),
+    skillExecutionId: z.string().optional(),
+    githubCommentId: z.number().int().positive().optional(),
+    githubCommentUrl: z.string().optional(),
   }),
   z.object({
     outcome: z.literal('deduped'),
     finding: FindingSchema,
     skill: z.string().optional(),
+    skillExecutionId: z.string().optional(),
     dedupe: DedupeDetailSchema,
   }),
   z.object({
     outcome: z.literal('skipped'),
     finding: FindingSchema,
     skill: z.string().optional(),
-    skippedReason: z.enum(['max_findings', 'duplicate_in_batch', 'no_inline_location']),
+    skillExecutionId: z.string().optional(),
+    skippedReason: z.enum(['max_findings', 'duplicate_in_batch', 'no_inline_location', 'review_not_posted']),
   }),
   z.object({
     outcome: z.literal('resolved'),
     finding: FindingSchema,
     skill: z.string().optional(),
+    skillExecutionId: z.string().optional(),
     resolvedReason: z.enum(['fix_evaluation', 'stale_check']),
   }),
   z.object({
     outcome: z.literal('failed'),
     finding: FindingSchema,
     skill: z.string().optional(),
+    skillExecutionId: z.string().optional(),
   }),
 ]);
 

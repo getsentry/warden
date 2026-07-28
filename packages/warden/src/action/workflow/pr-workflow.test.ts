@@ -112,6 +112,7 @@ vi.mock('./base.js', async () => {
     }),
     getAuthenticatedBotLogin: vi.fn(() => Promise.resolve('warden[bot]')),
     writeFindingsOutput: vi.fn(actual.writeFindingsOutput),
+    writeFindingsOutputLive: vi.fn(actual.writeFindingsOutputLive),
   };
 });
 
@@ -119,7 +120,7 @@ vi.mock('./base.js', async () => {
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings, processDuplicateActions } from '../../output/dedup.js';
 import { evaluateFixAttempts } from '../fix-evaluation/index.js';
-import { setFailed, writeFindingsOutput } from './base.js';
+import { setFailed, writeFindingsOutput, writeFindingsOutputLive } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { Semaphore } from '../../utils/index.js';
@@ -133,6 +134,7 @@ const mockProcessDuplicateActions = vi.mocked(processDuplicateActions);
 const mockEvaluateFixAttempts = vi.mocked(evaluateFixAttempts);
 const mockSetFailed = vi.mocked(setFailed);
 const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
+const mockWriteFindingsOutputLive = vi.mocked(writeFindingsOutputLive);
 
 // Type helper for mocking Octokit responses
 type GetPullResponse = Awaited<ReturnType<Octokit['pulls']['get']>>;
@@ -375,7 +377,7 @@ describe('runPRWorkflow', () => {
           repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
         }),
         [],
-        {
+        expect.objectContaining({
           triggerResults: [
             expect.objectContaining({
               triggerName: 'test-skill',
@@ -384,7 +386,8 @@ describe('runPRWorkflow', () => {
             }),
           ],
           configuredSkills: [{ name: 'test-skill', triggered: true }],
-        }
+          skillExecutions: [expect.objectContaining({ report, skillExecutionId: expect.any(String) })],
+        })
       );
     });
 
@@ -480,6 +483,36 @@ describe('runPRWorkflow', () => {
           commit_id: PR_HEAD_SHA,
         })
       );
+    });
+
+    it('report mode carries skillExecutionId and resolvedDefaults into the final findings output', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skillExecutions).toEqual([
+        expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
+      ]);
+      expect(finalOptions?.resolvedDefaults).toBeDefined();
     });
 
     it('report mode renders checks and reviews from report-step inputs', async () => {
@@ -1443,6 +1476,26 @@ describe('runPRWorkflow', () => {
       // When a semaphore is provided, fileConcurrency is unlimited (semaphore is the gate)
       expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
       expect(semaphore).toBeInstanceOf(Semaphore);
+    });
+
+    it('writes a live snapshot after the trigger completes, carrying skillExecutionId and skippedTriggers', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockWriteFindingsOutputLive).toHaveBeenCalledTimes(1);
+      const [reportsSoFar, , , liveOptions] = mockWriteFindingsOutputLive.mock.calls[0]!;
+      expect(reportsSoFar).toHaveLength(1);
+      expect(liveOptions?.skillExecutions).toEqual([
+        expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
+      ]);
+      expect(liveOptions?.skippedTriggers).toEqual([]);
+
+      // The final write happens after the live write and includes the same enrichment.
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skillExecutions).toEqual([
+        expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
+      ]);
     });
 
     it('honors the parallel input when dispatching matched triggers', async () => {

@@ -6,7 +6,7 @@ import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensur
 import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthenticationError, isAuthenticationErrorMessage, isSubprocessError, classifyError, mapExtractionErrorCode, sanitizeErrorMessage } from './errors.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
-import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution, resolveResponseModel } from './usage.js';
+import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution, resolveResponseModel, uniqueResponseModels } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
 import { postProcessFindings } from './post-process.js';
@@ -1203,6 +1203,7 @@ async function runSkillAnalysis(
     usage: totalUsage,
     durationMs: Date.now() - startTime,
     model: resolveResponseModel(allResponseModels, options.model),
+    models: uniqueResponseModels(allResponseModels),
     files: buildFileReports(
       fileResults.map((fr) => ({
         filename: fr.filename,

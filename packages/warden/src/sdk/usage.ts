@@ -118,6 +118,12 @@ export function resolveResponseModel(models: string[], fallback?: string): strin
   return unique.length === 1 ? unique[0] : fallback;
 }
 
+/** Distinct models observed across hunks, or undefined when they all agree (or there are none). */
+export function uniqueResponseModels(models: string[]): string[] | undefined {
+  const unique = [...new Set(models)];
+  return unique.length > 1 ? unique : undefined;
+}
+
 function attributionFromEntries(entries: AuxiliaryUsageEntry[]): UsageAttribution | undefined {
   const models = uniqueSorted(entries.map((entry) => entry.model));
   const runtimes = uniqueSorted(entries.map((entry) => entry.runtime));

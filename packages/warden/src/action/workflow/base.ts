@@ -4,17 +4,18 @@
  * Shared infrastructure for PR and schedule workflows.
  */
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
+import { writeFileAtomic } from '../../utils/fs.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import { buildFindingsOutput } from '../reporting/output.js';
-import type { ReplayTriggerResult } from '../reporting/output.js';
+import type { BuildFindingsOutputOptions } from '../reporting/output.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { ActionInputs } from '../inputs.js';
@@ -374,25 +375,56 @@ export function getFindingsOutputPath(repoPath?: string): string {
  *
  * Sets `findings-file` to a repo-relative path when possible so downstream
  * steps can reference the path without tripping ignore processors on absolute
- * runner temp paths.
+ * runner temp paths. This is always a run's true final write — a `.done`
+ * sidecar is written alongside it so a local follower (see
+ * `writeFindingsOutputLive`) can tell a finished run from one still in
+ * progress.
  */
 export function writeFindingsOutput(
   reports: SkillReport[],
   context: EventContext,
   findingObservations: FindingObservation[] = [],
-  options: {
-    triggerResults?: ReplayTriggerResult[];
-    configuredSkills?: { name: string; triggered: boolean }[];
-  } = {}
+  options: BuildFindingsOutputOptions = {}
 ): string {
   const filePath = getFindingsOutputPath(context.repoPath);
-  const output = buildFindingsOutput(reports, context, findingObservations, {
-    triggerResults: options.triggerResults,
-    configuredSkills: options.configuredSkills,
-  });
+  const output = buildFindingsOutput(reports, context, findingObservations, options);
 
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, JSON.stringify(output, null, 2));
+  writeFileAtomic(filePath, JSON.stringify(output, null, 2));
+  writeFileAtomic(`${filePath}.done`, '');
   setOutput('findings-file', getFindingsOutputValue(filePath, context.repoPath));
   return filePath;
+}
+
+/**
+ * Write the findings file as an in-progress snapshot: no `.done` sidecar, no
+ * `findings-file` action output (that must only ever reflect the run's one
+ * true final write, never race a downstream step reading it mid-run). Never
+ * throws — a transient write hiccup here must not abort a run the way a
+ * final-write failure legitimately can.
+ *
+ * Removes any `.done` sidecar left over from a previous run at this same
+ * path before writing, so a persistent/self-hosted runner (or a repeated
+ * local `warden runs follow` invocation reusing the same paths) never sees a
+ * stale `.done` and reports a brand-new, still in-progress run as finished.
+ */
+export function writeFindingsOutputLive(
+  reports: SkillReport[],
+  context: EventContext,
+  findingObservations: FindingObservation[] = [],
+  options: BuildFindingsOutputOptions = {}
+): void {
+  try {
+    const filePath = getFindingsOutputPath(context.repoPath);
+    if (existsSync(`${filePath}.done`)) {
+      try {
+        unlinkSync(`${filePath}.done`);
+      } catch {
+        // Best-effort cleanup; a stale marker left behind is not fatal.
+      }
+    }
+    const output = buildFindingsOutput(reports, context, findingObservations, options);
+    writeFileAtomic(filePath, JSON.stringify(output, null, 2));
+  } catch (error) {
+    console.error(`::warning::Failed to write live findings output: ${error}`);
+  }
 }
