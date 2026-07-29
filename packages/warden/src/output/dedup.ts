@@ -96,6 +96,16 @@ export function generateContentHash(title: string, description: string): string 
 }
 
 /**
+ * Location+content key that disambiguates findings sharing the same content
+ * hash (e.g. identical generic wording from two different skills at two
+ * different locations). Mirrors the key this file already builds inline for
+ * existing-comment matching — reuse this instead of hashing content alone.
+ */
+export function generateLocationHashKey(path: string | undefined, line: number, hash: string): string {
+  return `${path ?? ''}:${line}:${hash}`;
+}
+
+/**
  * Generate the marker HTML comment to embed in comment body.
  * Format: <!-- warden:v1:{path}:{line}:{contentHash} -->
  */
@@ -915,7 +925,7 @@ export async function deduplicateFindings(
 
     if (matchingComment) {
       const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
-        ? { ...finding, id: matchingComment.findingId }
+        ? { ...finding, id: matchingComment.findingId, reportedId: matchingComment.findingId }
         : finding;
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',
@@ -950,7 +960,7 @@ export async function deduplicateFindings(
     const matchingComment = semanticResult.matches.get(finding.id);
     if (matchingComment) {
       const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
-        ? { ...finding, id: matchingComment.findingId }
+        ? { ...finding, id: matchingComment.findingId, reportedId: matchingComment.findingId }
         : finding;
       duplicateActions.push({
         type: matchingComment.isWarden ? 'update_warden' : 'react_external',

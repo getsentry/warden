@@ -7,8 +7,9 @@ import {
   type TriggerExecutorDeps,
 } from './executor.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
-import type { EventContext, SkillReport } from '../../types/index.js';
+import type { EventContext, Finding, SkillReport } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
+import type { FindingProcessingEvent } from '../../sdk/types.js';
 import { initSentry, Sentry } from '../../sentry.js';
 
 // Mock dependencies
@@ -118,6 +119,7 @@ describe('executeTrigger', () => {
 
   const mockTrigger: ResolvedTrigger = {
     id: 'test-trigger-id',
+    skillExecutionId: 'test-skill-execution-id',
     name: 'test-trigger',
     skill: 'test-skill',
     type: 'pull_request',
@@ -547,5 +549,37 @@ describe('executeTrigger', () => {
     expect(createSkillCheck).not.toHaveBeenCalled();
     expect(result.triggerName).toBe('test-trigger');
     expect(result.report).toBe(mockReport);
+  });
+
+  it('carries skillExecutionId and captures onFindingProcessing events regardless of verbosity', async () => {
+    const rejectedFinding: Finding = {
+      id: 'test-1',
+      severity: 'medium',
+      confidence: 'high',
+      title: 'Test finding',
+      description: 'Test',
+    };
+    const mockReport = createReport();
+    const event: FindingProcessingEvent = {
+      stage: 'verification',
+      action: 'rejected',
+      finding: rejectedFinding,
+      reason: 'not real',
+    };
+
+    vi.mocked(runSkillTask).mockImplementation(async (_taskOptions, _fileConcurrency, callbacks) => {
+      callbacks.onFindingProcessing?.('test-trigger', event);
+      return { name: 'test-trigger', report: mockReport };
+    });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    const result = await executeTrigger(
+      { ...mockTrigger, skillExecutionId: 'exec-abc123' },
+      mockDeps
+    );
+
+    expect(result.skillExecutionId).toBe('exec-abc123');
+    expect(result.findingProcessingEvents).toEqual([event]);
   });
 });

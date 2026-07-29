@@ -4,17 +4,18 @@
  * Shared infrastructure for PR and schedule workflows.
  */
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
+import { writeFileAtomic } from '../../utils/fs.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import { buildFindingsOutput } from '../reporting/output.js';
-import type { ReplayTriggerResult } from '../reporting/output.js';
+import type { BuildFindingsOutputOptions } from '../reporting/output.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { ActionInputs } from '../inputs.js';
@@ -370,25 +371,74 @@ export function getFindingsOutputPath(repoPath?: string): string {
 }
 
 /**
+ * Remove a `.done` marker left over from a previous run at this same path.
+ * Call once, at the very start of the workflow, before any fallible setup
+ * (config load, API calls) — a live write only happens after the first
+ * trigger settles, so without this a stale `.done` from a prior run would
+ * make a brand-new, still in-progress run look finished to a follower for
+ * however long setup plus that first trigger takes. Takes `repoPath`
+ * directly (not `EventContext`) so it's callable before the context exists.
+ */
+export function clearStaleDoneMarker(repoPath: string | undefined): void {
+  const filePath = getFindingsOutputPath(repoPath);
+  if (!existsSync(`${filePath}.done`)) {
+    return;
+  }
+  try {
+    unlinkSync(`${filePath}.done`);
+  } catch {
+    // Best-effort cleanup; a stale marker left behind is not fatal.
+  }
+}
+
+/**
  * Write structured findings data to a JSON file for external export (GCS, S3, etc.).
  *
  * Sets `findings-file` to a repo-relative path when possible so downstream
  * steps can reference the path without tripping ignore processors on absolute
- * runner temp paths.
+ * runner temp paths. This is always a run's true final write — a `.done`
+ * sidecar is written alongside it so a local follower (see
+ * `writeFindingsOutputLive`) can tell a finished run from one still in
+ * progress.
  */
 export function writeFindingsOutput(
   reports: SkillReport[],
   context: EventContext,
   findingObservations: FindingObservation[] = [],
-  options: { triggerResults?: ReplayTriggerResult[] } = {}
+  options: BuildFindingsOutputOptions = {}
 ): string {
   const filePath = getFindingsOutputPath(context.repoPath);
-  const output = buildFindingsOutput(reports, context, findingObservations, {
-    triggerResults: options.triggerResults,
-  });
+  const output = buildFindingsOutput(reports, context, findingObservations, options);
 
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, JSON.stringify(output, null, 2));
+  writeFileAtomic(filePath, JSON.stringify(output, null, 2));
+  writeFileAtomic(`${filePath}.done`, '');
   setOutput('findings-file', getFindingsOutputValue(filePath, context.repoPath));
   return filePath;
+}
+
+/**
+ * Write the findings file as an in-progress snapshot: no `.done` sidecar, no
+ * `findings-file` action output (that must only ever reflect the run's one
+ * true final write, never race a downstream step reading it mid-run). Never
+ * throws — a transient write hiccup here must not abort a run the way a
+ * final-write failure legitimately can.
+ *
+ * Also clears a stale `.done` sidecar left over from a previous run as a
+ * defensive backstop — the primary guarantee is `clearStaleDoneMarker`
+ * called once up front by the caller, before this run's first write.
+ */
+export function writeFindingsOutputLive(
+  reports: SkillReport[],
+  context: EventContext,
+  findingObservations: FindingObservation[] = [],
+  options: BuildFindingsOutputOptions = {}
+): void {
+  try {
+    clearStaleDoneMarker(context.repoPath);
+    const filePath = getFindingsOutputPath(context.repoPath);
+    const output = buildFindingsOutput(reports, context, findingObservations, options);
+    writeFileAtomic(filePath, JSON.stringify(output, null, 2));
+  } catch (error) {
+    console.error(`::warning::Failed to write live findings output: ${error}`);
+  }
 }

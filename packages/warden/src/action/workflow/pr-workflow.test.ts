@@ -111,6 +111,8 @@ vi.mock('./base.js', async () => {
     }),
     getAuthenticatedBotLogin: vi.fn(() => Promise.resolve('warden[bot]')),
     writeFindingsOutput: vi.fn(actual.writeFindingsOutput),
+    writeFindingsOutputLive: vi.fn(actual.writeFindingsOutputLive),
+    clearStaleDoneMarker: vi.fn(actual.clearStaleDoneMarker),
   };
 });
 
@@ -118,7 +120,7 @@ vi.mock('./base.js', async () => {
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings, processDuplicateActions } from '../../output/dedup.js';
 import { evaluateFixAttempts } from '../fix-evaluation/index.js';
-import { setFailed, writeFindingsOutput } from './base.js';
+import { setFailed, writeFindingsOutput, writeFindingsOutputLive, clearStaleDoneMarker } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { Semaphore } from '../../utils/index.js';
@@ -132,6 +134,8 @@ const mockProcessDuplicateActions = vi.mocked(processDuplicateActions);
 const mockEvaluateFixAttempts = vi.mocked(evaluateFixAttempts);
 const mockSetFailed = vi.mocked(setFailed);
 const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
+const mockWriteFindingsOutputLive = vi.mocked(writeFindingsOutputLive);
+const mockClearStaleDoneMarker = vi.mocked(clearStaleDoneMarker);
 
 // Type helper for mocking Octokit responses
 type GetPullResponse = Awaited<ReturnType<Octokit['pulls']['get']>>;
@@ -373,7 +377,7 @@ describe('runPRWorkflow', () => {
           repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
         }),
         [],
-        {
+        expect.objectContaining({
           triggerResults: [
             expect.objectContaining({
               triggerName: 'test-skill',
@@ -381,8 +385,39 @@ describe('runPRWorkflow', () => {
               report,
             }),
           ],
-        }
+          skillExecutions: [expect.objectContaining({ report, skillExecutionId: expect.any(String) })],
+        })
       );
+    });
+
+    it('report mode carries skillExecutionId and resolvedDefaults into the final findings output', async () => {
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skillExecutions).toEqual([
+        expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
+      ]);
+      expect(finalOptions?.resolvedDefaults).toBeDefined();
     });
 
     it('analyze mode fails when the findings artifact cannot be written', async () => {
@@ -715,6 +750,47 @@ describe('runPRWorkflow', () => {
           }),
         })
       );
+    });
+
+    it('report mode rejects a legacy fallback join when 2+ current triggers share a name and skill', async () => {
+      // Regression: only ONE artifact row lacks triggerId here, so the old
+      // ambiguity check (which only looked for 2+ artifact rows or 2+
+      // triggers sharing a triggerId) saw nothing ambiguous and would have
+      // silently bound this row to whichever trigger asked for it first —
+      // even though two current triggers share this row's fallback
+      // name+skill key and either could legitimately claim it.
+      const highFinding = createFinding({ id: 'high-finding', severity: 'high' });
+      const lowFinding = createFinding({ id: 'low-finding', severity: 'low' });
+      const highReport = createSkillReport({ summary: 'High report', findings: [highFinding] });
+      const lowReport = createSkillReport({ summary: 'Low report', findings: [lowFinding] });
+      const findingsFile = writeFindingsArtifact([highReport, lowReport], [
+        {
+          triggerId: duplicateTriggerId('high'),
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report: highReport,
+        },
+        {
+          // No triggerId: only this row needs the legacy name+skill fallback.
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report: lowReport,
+        },
+      ]);
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            DUPLICATE_TRIGGER_FIXTURES_DIR
+          )
+        ).rejects.toThrow('legacy name/skill fallback is ambiguous');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
     });
 
     it('report mode fails GitHub check write errors without creating in-progress checks', async () => {
@@ -1437,6 +1513,61 @@ describe('runPRWorkflow', () => {
       expect(semaphore).toBeInstanceOf(Semaphore);
     });
 
+    it('writes a live snapshot after the trigger completes, carrying skillExecutionId and skippedTriggers', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockWriteFindingsOutputLive).toHaveBeenCalledTimes(1);
+      const [reportsSoFar, , , liveOptions] = mockWriteFindingsOutputLive.mock.calls[0]!;
+      expect(reportsSoFar).toHaveLength(1);
+      expect(liveOptions?.skillExecutions).toEqual([
+        expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
+      ]);
+      expect(liveOptions?.skippedTriggers).toEqual([]);
+
+      // The final write happens after the live write and includes the same enrichment.
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skillExecutions).toEqual([
+        expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
+      ]);
+    });
+
+    it('clears a stale .done marker before the first trigger settles, not lazily on the first live write', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockClearStaleDoneMarker).toHaveBeenCalledTimes(1);
+      expect(mockClearStaleDoneMarker.mock.invocationCallOrder[0]!)
+        .toBeLessThan(mockRunSkillTask.mock.invocationCallOrder[0]!);
+    });
+
+    it('computes checkConclusion from confidence-filtered findings, matching what actually posts to the check run', async () => {
+      // High severity but low confidence, with minConfidence defaulting to
+      // 'medium': the finding is filtered out of the posted check's
+      // conclusion, so the real check run succeeds even though failOn:
+      // 'high' + failCheck: true would fail on the raw findings.
+      const lowConfidenceFinding = createFinding({ severity: 'high', confidence: 'low' });
+      mockRunSkillTask.mockResolvedValue({
+        name: 'test-trigger',
+        report: createSkillReport({ skill: 'test-skill', findings: [lowConfidenceFinding] }),
+      });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ failOn: 'high', failCheck: true }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skillExecutions).toEqual([
+        expect.objectContaining({ checkConclusion: 'success' }),
+      ]);
+    });
+
     it('honors the parallel input when dispatching matched triggers', async () => {
       let activeRuns = 0;
       let maxActiveRuns = 0;
@@ -1878,6 +2009,13 @@ describe('runPRWorkflow', () => {
           }),
         })
       );
+
+      // skipped-skill's paths filter (docs/**) doesn't match this event's
+      // changed files — deriveSkippedReason's path_filter fallthrough.
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skippedTriggers).toEqual([
+        expect.objectContaining({ skillName: 'skipped-skill', reason: 'path_filter' }),
+      ]);
     });
 
     it('creates neutral checks for triggers skipped by pull request action', async () => {
@@ -1904,6 +2042,13 @@ describe('runPRWorkflow', () => {
           }),
         })
       );
+
+      // The trigger only fires on 'labeled'; this fixture replays an 'opened'
+      // event — deriveSkippedReason's no_event_match branch.
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skippedTriggers).toEqual([
+        expect.objectContaining({ skillName: 'labeled-skill', reason: 'no_event_match' }),
+      ]);
     });
   });
 
@@ -2428,7 +2573,8 @@ describe('runPRWorkflow', () => {
             skill: undefined,
             resolvedReason: 'fix_evaluation',
           }),
-        ]
+        ],
+        expect.any(Object)
       );
     });
 

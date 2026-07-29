@@ -396,6 +396,8 @@ interface ApplyGroupsResult {
   absorbed: Set<Finding>;
   /** Map from original winner finding to its merged replacement (with additionalLocations) */
   replacements: Map<Finding, Finding>;
+  /** Map from each absorbed finding to the (pre-merge) winner that absorbed it. */
+  absorbedToWinner: Map<Finding, Finding>;
 }
 
 /**
@@ -415,6 +417,7 @@ export function applyMergeGroups(
 ): ApplyGroupsResult {
   const absorbed = new Set<Finding>();
   const replacements = new Map<Finding, Finding>();
+  const absorbedToWinner = new Map<Finding, Finding>();
 
   for (const group of groups) {
     const uniqueIndices = [...new Set(group)];
@@ -447,28 +450,38 @@ export function applyMergeGroups(
     for (const f of groupFindings) {
       if (f !== winner) {
         absorbed.add(f);
+        absorbedToWinner.set(f, winner);
       }
     }
   }
 
-  return { absorbed, replacements };
+  return { absorbed, replacements, absorbedToWinner };
 }
 
-function sameLocation(a: Location | undefined, b: Location | undefined): boolean {
-  return Boolean(a && b && locationKey(a) === locationKey(b));
-}
-
+/**
+ * The winner an absorbed finding was recorded against may itself have gone on
+ * to be absorbed into a later, overlapping group's winner (e.g. groups
+ * `[[1,2],[1,3]]`: finding 2 absorbed into 1, then 1 itself absorbed into 3).
+ * `absorbedToWinner` only records the immediate winner at absorption time, so
+ * walk it forward to the final survivor — a finding, once absorbed, is
+ * excluded from every later group (see the `!absorbed.has(f)` filter above),
+ * so it can never become a winner again, and this chain can't cycle.
+ * Looking this up by winner identity (rather than re-deriving it from
+ * location) also avoids silently losing the link when the absorbed finding's
+ * location coincides with the winner's own primary location, which isn't
+ * present in the winner's `additionalLocations`.
+ */
 function findReplacementForAbsorbed(
   finding: Finding,
-  replacements: Map<Finding, Finding>
+  replacements: Map<Finding, Finding>,
+  absorbedToWinner: Map<Finding, Finding>
 ): Finding | undefined {
-  for (const replacement of replacements.values()) {
-    if (replacement.additionalLocations?.some((loc) => sameLocation(loc, finding.location))) {
-      return replacement;
-    }
+  let winner = absorbedToWinner.get(finding);
+  if (!winner) return undefined;
+  for (let next = absorbedToWinner.get(winner); next; next = absorbedToWinner.get(winner)) {
+    winner = next;
   }
-
-  return undefined;
+  return replacements.get(winner) ?? winner;
 }
 
 /** Schema for LLM merge response: groups of finding indices sharing a root cause. */
@@ -562,7 +575,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     return { findings, mergedCount: 0, usage: result.usage };
   }
 
-  const { absorbed, replacements } = applyMergeGroups(withLocations, result.data);
+  const { absorbed, replacements, absorbedToWinner } = applyMergeGroups(withLocations, result.data);
 
   if (absorbed.size === 0) {
     return { findings, mergedCount: 0, usage: result.usage };
@@ -573,7 +586,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
       stage: 'merge',
       action: 'merged',
       finding,
-      replacement: findReplacementForAbsorbed(finding, replacements),
+      replacement: findReplacementForAbsorbed(finding, replacements, absorbedToWinner),
       reason: 'same root cause at another location',
     });
   }

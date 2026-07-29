@@ -242,6 +242,96 @@ describe('postTriggerReview', () => {
       body: '',
       comments: [expect.objectContaining({ path: 'test.ts', line: 10, side: 'RIGHT', body: 'Test comment' })],
     });
+    // Regression: the export's reviewEvent must reflect what actually
+    // posted, not renderResult's pre-posting intent.
+    expect(result.reviewEventPosted).toBe('COMMENT');
+  });
+
+  it('carries skillExecutionId from the trigger result onto posted observations', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      skillExecutionId: 'exec-abc123',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    vi.mocked(findingToExistingComment).mockReturnValue(createExistingComment());
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.findingObservations).toEqual([
+      expect.objectContaining({ outcome: 'posted', finding, skillExecutionId: 'exec-abc123' }),
+    ]);
+  });
+
+  it('carries existingSkills from the matched comment onto dedupe observations', async () => {
+    const finding = createFinding();
+    const result: TriggerResult = {
+      triggerName: 'test-trigger',
+      skillName: 'test-skill',
+      skillExecutionId: 'exec-abc123',
+      report: {
+        skill: 'test-skill',
+        summary: 'Found 1 issue',
+        findings: [finding],
+        usage: { inputTokens: 100, outputTokens: 50, costUSD: 0.01 },
+      },
+      renderResult: createRenderResult({
+        review: {
+          event: 'COMMENT',
+          body: 'Test review',
+          comments: [{ path: 'test.ts', line: 10, body: 'Test comment' }],
+        },
+      }),
+      reportOn: 'low',
+    };
+
+    const existingComment = createExistingComment({
+      isWarden: true,
+      skills: ['other-skill'],
+    });
+
+    vi.mocked(deduplicateFindings).mockResolvedValue({
+      newFindings: [],
+      duplicateActions: [{ type: 'react_external', originalFindingId: finding.id, finding, existingComment, matchType: 'hash' }],
+    });
+    vi.mocked(processDuplicateActions).mockResolvedValue({ updated: 0, reacted: 1, skipped: 0, failed: 0 });
+
+    const ctx: ReviewPostingContext = {
+      result,
+      existingComments: [existingComment],
+      apiKey: 'test-key',
+    };
+
+    const postResult = await postTriggerReview(ctx, mockDeps);
+
+    expect(postResult.findingObservations).toEqual([
+      expect.objectContaining({
+        outcome: 'deduped',
+        skillExecutionId: 'exec-abc123',
+        dedupe: expect.objectContaining({ existingSkills: ['other-skill'] }),
+      }),
+    ]);
   });
 
   it('skips body-only non-blocking reviews', async () => {
@@ -318,6 +408,11 @@ describe('postTriggerReview', () => {
     expect(postResult.posted).toBe(false);
     expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
     expect(processDuplicateActions).not.toHaveBeenCalled();
+    // Regression: these findings were about to post — the export must record
+    // why they didn't, not silently drop them from findingObservations.
+    expect(
+      postResult.findingObservations.filter((o) => o.outcome === 'skipped' && o.skippedReason === 'review_not_posted')
+    ).toHaveLength(2);
   });
 
   it('skips the review write when the PR head advances during duplicate processing', async () => {
@@ -379,6 +474,11 @@ describe('postTriggerReview', () => {
       expect(mockOctokit.pulls.get).toHaveBeenCalledTimes(2);
       // No swallowed error: the findings were not marked failed.
       expect(postResult.findingObservations.filter((o) => o.outcome === 'failed')).toEqual([]);
+      // Regression: the finding that would have posted must be recorded as
+      // blocked, not vanish from the export.
+      expect(
+        postResult.findingObservations.filter((o) => o.outcome === 'skipped' && o.skippedReason === 'review_not_posted')
+      ).toEqual([expect.objectContaining({ finding: findings[0] })]);
     } finally {
       dateNowSpy.mockRestore();
     }
@@ -390,6 +490,7 @@ describe('postTriggerReview', () => {
     const result: TriggerResult = {
       triggerName: 'test-trigger',
       skillName: 'test-skill',
+      skillExecutionId: 'exec-mixed',
       report: {
         skill: 'test-skill',
         summary: 'Found 2 issues',
@@ -419,8 +520,8 @@ describe('postTriggerReview', () => {
       expect.objectContaining({ event: 'COMMENT', body: '' })
     );
     expect(postResult.findingObservations).toEqual([
-      { outcome: 'posted', finding: inlineFinding, skill: 'test-skill' },
-      { outcome: 'skipped', finding: bodyFinding, skill: 'test-skill', skippedReason: 'no_inline_location' },
+      { outcome: 'posted', finding: inlineFinding, skill: 'test-skill', skillExecutionId: 'exec-mixed' },
+      { outcome: 'skipped', finding: bodyFinding, skill: 'test-skill', skillExecutionId: 'exec-mixed', skippedReason: 'no_inline_location' },
     ]);
   });
 
@@ -739,6 +840,17 @@ describe('postTriggerReview', () => {
       reportOn: 'low',
       failOn: 'high',
       requestChanges: true,
+      // Captured during skill execution, before this recenter — its finding
+      // id must move in lockstep with the report's own recentered id so
+      // provenance.ts's id-keyed lookup doesn't miss.
+      findingProcessingEvents: [
+        {
+          stage: 'verification',
+          action: 'revised',
+          finding: { ...finding, title: 'Original wording' },
+          replacement: finding,
+        },
+      ],
     };
 
     const existingComment = createExistingComment({ isWarden: true, findingId: 'WRZ-XPL' });
@@ -783,6 +895,10 @@ describe('postTriggerReview', () => {
     expect(postResult.posted).toBe(true);
     expect([...postResult.activeWardenCommentIds]).toEqual([1]);
     expect(result.report?.findings[0]?.id).toBe('WRZ-XPL');
+    expect(result.report?.findings[0]?.reportedId).toBe('WRZ-XPL');
+    // Regression: the captured processing event's replacement id must move
+    // with the recenter, or provenance.ts's id-keyed lookup silently misses.
+    expect(result.findingProcessingEvents?.[0]?.replacement?.id).toBe('WRZ-XPL');
     expect(postResult.findingObservations).toEqual([
       expect.objectContaining({
         outcome: 'deduped',
@@ -843,6 +959,7 @@ describe('postTriggerReview', () => {
     const result: TriggerResult = {
       triggerName: 'test-trigger',
       skillName: 'test-skill',
+      skillExecutionId: 'exec-checks-only',
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
@@ -877,7 +994,7 @@ describe('postTriggerReview', () => {
     expect(postResult.posted).toBe(false);
     expect(postResult.newComments).toHaveLength(0);
     expect(postResult.findingObservations).toEqual([
-      { outcome: 'skipped', finding, skill: 'test-skill', skippedReason: 'no_inline_location' },
+      { outcome: 'skipped', finding, skill: 'test-skill', skillExecutionId: 'exec-checks-only', skippedReason: 'no_inline_location' },
     ]);
     expect(mockOctokit.pulls.createReview).toHaveBeenCalledTimes(1);
   });
@@ -962,6 +1079,7 @@ describe('postTriggerReview', () => {
     const result: TriggerResult = {
       triggerName: 'test-trigger',
       skillName: 'test-skill',
+      skillExecutionId: 'exec-max-findings',
       report: {
         skill: 'test-skill',
         summary: 'Found 2 issues',
@@ -996,12 +1114,14 @@ describe('postTriggerReview', () => {
         outcome: 'skipped',
         finding: finding2,
         skill: 'test-skill',
+        skillExecutionId: 'exec-max-findings',
         skippedReason: 'max_findings',
       },
       {
         outcome: 'failed',
         finding: finding1,
         skill: 'test-skill',
+        skillExecutionId: 'exec-max-findings',
       },
     ]);
   });
@@ -1013,6 +1133,7 @@ describe('postTriggerReview', () => {
     const result: TriggerResult = {
       triggerName: 'test-trigger',
       skillName: 'test-skill',
+      skillExecutionId: 'exec-batch',
       report: {
         skill: 'test-skill',
         summary: 'Found 2 issues',
@@ -1072,12 +1193,14 @@ describe('postTriggerReview', () => {
         outcome: 'skipped',
         finding: finding2,
         skill: 'test-skill',
+        skillExecutionId: 'exec-batch',
         skippedReason: 'duplicate_in_batch',
       },
       {
         outcome: 'posted',
         finding: finding1,
         skill: 'test-skill',
+        skillExecutionId: 'exec-batch',
       },
     ]);
   });
