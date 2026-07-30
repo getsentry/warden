@@ -383,7 +383,7 @@ export function buildFindingsOutput(
   const output = {
     version: '1',
     timestamp: options.timestamp ?? new Date().toISOString(),
-    runAttempt: options.runAttempt,
+    runAttempt: options.runAttempt ?? process.env['GITHUB_RUN_ATTEMPT'],
     harness: { name: 'warden' as const, version: getVersion(), actionRef: options.actionRef },
     repository: {
       owner: context.repository.owner,

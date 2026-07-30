@@ -264,6 +264,23 @@ describe('executeTrigger', () => {
     });
   });
 
+  it('carries auxiliaryModel and synthesisModel from the trigger onto the result', async () => {
+    const mockReport = createReport();
+
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    const result = await executeTrigger({
+      ...mockTrigger,
+      auxiliaryModel: 'anthropic/aux-model',
+      synthesisModel: 'anthropic/synth-model',
+    }, mockDeps);
+
+    expect(result.auxiliaryModel).toBe('anthropic/aux-model');
+    expect(result.synthesisModel).toBe('anthropic/synth-model');
+  });
+
   it('executes a trigger successfully with no findings', async () => {
     const mockReport = createReport();
 

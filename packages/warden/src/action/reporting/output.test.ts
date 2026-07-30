@@ -336,6 +336,26 @@ describe('findings output schema', () => {
     ]);
   });
 
+  it('falls back to GITHUB_RUN_ATTEMPT when no runAttempt option is passed', () => {
+    const original = process.env['GITHUB_RUN_ATTEMPT'];
+    process.env['GITHUB_RUN_ATTEMPT'] = '3';
+
+    try {
+      const output = buildFindingsOutput([createReport()], createContext(), [], {
+        timestamp: '2026-01-01T00:00:00.000Z',
+        runId: '123',
+      });
+
+      expect(output.runAttempt).toBe('3');
+    } finally {
+      if (original === undefined) {
+        delete process.env['GITHUB_RUN_ATTEMPT'];
+      } else {
+        process.env['GITHUB_RUN_ATTEMPT'] = original;
+      }
+    }
+  });
+
   it('passes through the verification field already carried on Finding', () => {
     const finding = createFinding();
     finding.verification = '- traced the guard clause at line 42';

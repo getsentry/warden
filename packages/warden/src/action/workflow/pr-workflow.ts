@@ -251,6 +251,8 @@ function toSkillExecutions(results: TriggerResult[]): SkillExecutionMeta[] {
       triggerName: r.triggerName,
       checkRunUrl: r.checkRunUrl,
       checkRunId: r.checkRunId,
+      auxiliaryModel: r.auxiliaryModel,
+      synthesisModel: r.synthesisModel,
       reviewEvent: r.reviewEventPosted,
       // Matches buildSkillCheckPayload's own conclusion computation
       // (confidence-filtered first) so this mirrors what actually posted to

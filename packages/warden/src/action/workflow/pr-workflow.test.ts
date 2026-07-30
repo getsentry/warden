@@ -390,6 +390,32 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('analyze mode carries auxiliaryModel and synthesisModel from the resolved trigger into skillExecutions', async () => {
+      const report = createSkillReport();
+      mockRunSkillTask.mockResolvedValue({ name: 'org-skill', report });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          mode: 'analyze',
+          baseConfigPath: '.warden-org/warden.toml',
+          baseSkillRoot: '.warden-org',
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        LAYERED_AUXILIARY_MODEL_FIXTURES_DIR
+      );
+
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skillExecutions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            auxiliaryModel: 'anthropic/org-aux-model',
+          }),
+        ])
+      );
+    });
+
     it('report mode carries skillExecutionId and resolvedDefaults into the final findings output', async () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });

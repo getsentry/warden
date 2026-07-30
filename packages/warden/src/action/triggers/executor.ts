@@ -128,6 +128,8 @@ export interface TriggerResult {
   checkRunUrl?: string;
   checkRunId?: number;
   maxFindings?: number;
+  auxiliaryModel?: string;
+  synthesisModel?: string;
   error?: unknown;
   /** Verification/merge events captured during post-processing, for provenance export. */
   findingProcessingEvents?: FindingProcessingEvent[];
@@ -295,6 +297,8 @@ export async function executeTrigger(
           checkRunUrl: skillCheckUrl,
           checkRunId: skillCheckRunId,
           maxFindings,
+          auxiliaryModel: trigger.auxiliaryModel,
+          synthesisModel: trigger.synthesisModel,
           findingProcessingEvents,
         };
       } catch (error) {
