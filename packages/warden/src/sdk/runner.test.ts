@@ -391,8 +391,8 @@ describe('extractFindingsWithLLM', () => {
     }
   });
 
-  it('returns error when no findings pattern exists', async () => {
-    const result = await extractFindingsWithLLM('some output without findings', 'fake-key');
+  it('returns error when the response is empty', async () => {
+    const result = await extractFindingsWithLLM('   ', 'fake-key');
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toBe('no_findings_to_extract');

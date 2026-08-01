@@ -1140,7 +1140,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(onSkillError).not.toHaveBeenCalled();
   });
 
-  it('triggers all_hunks_failed when every hunk succeeded at SDK level but extraction failed for all', async () => {
+  it('reports the specific extraction code when every hunk extraction fails', async () => {
     // Regression test for the if/else mutual-exclusion change: each hunk
     // contributes to either failedHunks OR failedExtractions, not both.
     // If every hunk fails extraction (SDK call succeeds, parsing fails)
@@ -1189,7 +1189,8 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     const result = await runSkillTask(options, 1, noopCallbacks());
 
     expect(result.report).toBeDefined();
-    expect(result.report!.error?.code).toBe('all_hunks_failed');
+    expect(result.report!.error?.code).toBe('extraction_invalid_json');
+    expect(result.report!.error?.message).not.toContain('authentication');
     expect(result.report!.failedExtractions).toBe(1);
     expect(result.report!.findings).toEqual([]);
   });

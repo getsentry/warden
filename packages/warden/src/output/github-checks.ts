@@ -1,8 +1,9 @@
 import type { Octokit } from '@octokit/rest';
-import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
-import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
+import { HunkFailureSchema, SEVERITY_ORDER, filterFindings } from '../types/index.js';
+import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap, HunkFailure } from '../types/index.js';
 import { formatDuration, formatCost, formatTokens, totalUsageCost, totalUsageStats } from '../cli/output/formatters.js';
 import { escapeHtml } from '../utils/index.js';
+import { sanitizeErrorMessage } from '../sdk/errors.js';
 
 /**
  * GitHub Check annotation for inline code comments.
@@ -330,6 +331,29 @@ export async function updateSkillCheck(
   });
 }
 
+function failureSummary(error: unknown): string {
+  const errorMessage = sanitizeErrorMessage(error instanceof Error ? error.message : String(error));
+  const rawFailures = error && typeof error === 'object' && 'hunkFailures' in error
+    ? (error as { hunkFailures?: unknown }).hunkFailures
+    : undefined;
+  const parsedFailures = Array.isArray(rawFailures)
+    ? rawFailures.flatMap((failure) => {
+        const parsed = HunkFailureSchema.safeParse(failure);
+        return parsed.success ? [parsed.data] : [];
+      })
+    : [];
+  if (parsedFailures.length === 0) return `Error: ${errorMessage}`;
+
+  const sanitizedFailures: HunkFailure[] = parsedFailures.map((failure) => ({
+    ...failure,
+    filename: sanitizeErrorMessage(failure.filename),
+    lineRange: sanitizeErrorMessage(failure.lineRange),
+    message: sanitizeErrorMessage(failure.message),
+    preview: failure.preview ? sanitizeErrorMessage(failure.preview).slice(0, 500) : undefined,
+  }));
+  return `Error: ${errorMessage}\n\nHunk failures:\n\`\`\`json\n${JSON.stringify(sanitizedFailures, null, 2)}\n\`\`\``;
+}
+
 /**
  * Mark a skill check as failed due to execution error.
  */
@@ -339,7 +363,7 @@ export async function failSkillCheck(
   error: unknown,
   options: CheckOptions
 ): Promise<void> {
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const summary = failureSummary(error);
 
   await octokit.checks.update({
     owner: options.owner,
@@ -350,7 +374,7 @@ export async function failSkillCheck(
     completed_at: new Date().toISOString(),
     output: {
       title: 'Skill execution failed',
-      summary: `Error: ${errorMessage}`,
+      summary,
     },
   });
 }

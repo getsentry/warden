@@ -5,6 +5,7 @@
  * Reporter spec: specs/reporters.md
  */
 
+import { isExtractionErrorCode } from '../../types/index.js';
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, Finding, UsageStats, EventContext, HunkFailure, AuxiliaryUsageMap, ErrorCode, HunkTrace } from '../../types/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
@@ -64,6 +65,15 @@ function firstAnalysisFailureMessage(hunkFailures: HunkFailure[], code: ErrorCod
   return hunkFailures.find((failure) => failure.type === 'analysis' && failure.code === code)?.message;
 }
 
+function allFailuresHaveExtractionCode(hunkFailures: HunkFailure[]): ErrorCode | undefined {
+  const first = hunkFailures[0]?.code;
+  return first
+    && hunkFailures.every((failure) => failure.type === 'extraction' && failure.code === first)
+    && isExtractionErrorCode(first)
+    ? first
+    : undefined;
+}
+
 function summarizeRunFailure(args: {
   totalHunks: number;
   hunkFailures: HunkFailure[];
@@ -93,6 +103,13 @@ function summarizeRunFailure(args: {
     return {
       code: 'provider_unavailable',
       message: `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
+    };
+  }
+  const extractionCode = allFailuresHaveExtractionCode(hunkFailures);
+  if (extractionCode) {
+    return {
+      code: extractionCode,
+      message: `Findings extraction failed for all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} (${extractionCode}).`,
     };
   }
   return {
@@ -615,6 +632,7 @@ export async function runSkillTask(
           const runnerError = new SkillRunnerError(error.message, {
             code: error.code,
             providerContext: error.providerContext,
+            hunkFailures: allHunkFailures,
           });
           return { name, report: errorReport, error: runnerError, failOn, minConfidence };
         }

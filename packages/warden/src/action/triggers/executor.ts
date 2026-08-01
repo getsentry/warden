@@ -220,7 +220,10 @@ export async function executeTrigger(
         if (report.error) {
           throw (
             result.error ??
-            new SkillRunnerError(report.error.message, { code: report.error.code })
+            new SkillRunnerError(report.error.message, {
+              code: report.error.code,
+              hunkFailures: report.hunkFailures,
+            })
           );
         }
 

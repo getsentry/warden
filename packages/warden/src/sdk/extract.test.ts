@@ -44,6 +44,23 @@ describe('extractFindingsWithLLM', () => {
     expect(canUseRuntimeAuth({ apiKey: 'test-key', runtime: 'claude' })).toBe(true);
   });
 
+  it('repairs non-empty output without a findings JSON anchor', async () => {
+    mockCallHaiku.mockResolvedValue({
+      success: true,
+      data: { findings: [] },
+      usage: { inputTokens: 10, outputTokens: 2, costUSD: 0.001 },
+    });
+
+    const result = await extractFindingsWithLLM('I found no security issues.', { apiKey: 'test-key' });
+
+    expect(result).toEqual({
+      success: true,
+      findings: [],
+      usage: { inputTokens: 10, outputTokens: 2, costUSD: 0.001 },
+    });
+    expect(mockCallHaiku).toHaveBeenCalledOnce();
+  });
+
   it('preserves the LLM extraction failure prefix for stable error classification', async () => {
     mockCallHaiku.mockResolvedValue({
       success: false,

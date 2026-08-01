@@ -6,6 +6,7 @@ import {
   aggregateSeverityCounts,
   createCoreCheck,
   updateCoreCheck,
+  failSkillCheck,
 } from './github-checks.js';
 import type { Finding, SkillReport } from '../types/index.js';
 
@@ -49,6 +50,35 @@ describe('check details URL', () => {
       'Failed to set details URL for check 123: Error: Bad credentials'
     );
     warn.mockRestore();
+  });
+});
+
+describe('failSkillCheck', () => {
+  it('includes sanitized hunk diagnostics in the check summary', async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    const error = Object.assign(new Error('Extraction failed with api_key=secret-value'), {
+      hunkFailures: [{
+        type: 'extraction',
+        filename: 'src/auth.ts',
+        lineRange: '10-20',
+        code: 'extraction_invalid_json',
+        message: 'Invalid response with token=secret-value',
+        preview: 'api_key=secret-value malformed output',
+      }],
+    });
+
+    await failSkillCheck(
+      { checks: { update } } as never,
+      123,
+      error,
+      { owner: 'getsentry', repo: 'sentry', headSha: 'abc123' }
+    );
+
+    const summary = update.mock.calls[0]![0].output.summary as string;
+    expect(summary).toContain('src/auth.ts');
+    expect(summary).toContain('extraction_invalid_json');
+    expect(summary).toContain('[redacted]');
+    expect(summary).not.toContain('secret-value');
   });
 });
 
