@@ -412,7 +412,7 @@ export async function createFailedSkillCheck(
   error: unknown,
   options: CheckOptions
 ): Promise<CreateCheckResult> {
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const summary = failureSummary(error);
 
   const { data } = await octokit.checks.create({
     owner: options.owner,
@@ -424,7 +424,7 @@ export async function createFailedSkillCheck(
     completed_at: new Date().toISOString(),
     output: {
       title: 'Skill execution failed',
-      summary: `Error: ${errorMessage}`,
+      summary,
     },
   });
   await setCheckDetailsUrl(octokit, options, data);

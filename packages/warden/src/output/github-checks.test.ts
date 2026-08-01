@@ -7,6 +7,7 @@ import {
   createCoreCheck,
   updateCoreCheck,
   failSkillCheck,
+  createFailedSkillCheck,
 } from './github-checks.js';
 import type { Finding, SkillReport } from '../types/index.js';
 
@@ -129,6 +130,36 @@ describe('failSkillCheck', () => {
     const summary = update.mock.calls[0]![0].output.summary as string;
     expect(Buffer.byteLength(summary, 'utf8')).toBeLessThanOrEqual(65000);
     expect(summary).toContain('[diagnostics truncated]');
+  });
+});
+
+describe('createFailedSkillCheck', () => {
+  it('uses the same sanitized diagnostics as the update path', async () => {
+    const create = vi.fn().mockResolvedValue({
+      data: { id: 123, html_url: null },
+    });
+    const error = Object.assign(new Error('Extraction failed with token=secret-value'), {
+      hunkFailures: [{
+        type: 'extraction',
+        filename: 'src/example.ts',
+        lineRange: '1-2',
+        code: 'extraction_invalid_json',
+        message: 'Malformed output with api_key=secret-value',
+        preview: 'bad output',
+      }],
+    });
+
+    await createFailedSkillCheck(
+      { checks: { create } } as never,
+      'security-review',
+      error,
+      { owner: 'getsentry', repo: 'sentry', headSha: 'abc123' }
+    );
+
+    const summary = create.mock.calls[0]![0].output.summary as string;
+    expect(summary).toContain('extraction_invalid_json');
+    expect(summary).toContain('[redacted]');
+    expect(summary).not.toContain('secret-value');
   });
 });
 
