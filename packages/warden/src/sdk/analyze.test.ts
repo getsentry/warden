@@ -731,6 +731,42 @@ describe('runSkill', () => {
     vi.restoreAllMocks();
   });
 
+  it('reports all-extraction failures without authentication guidance', async () => {
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: vi.fn().mockResolvedValue({
+        result: {
+          status: 'success',
+          text: 'No security issues found.',
+          errors: [],
+          usage: makeUsage(),
+        },
+      }),
+      runAuxiliary: vi.fn().mockResolvedValue({
+        success: false,
+        error: 'malformed tool call',
+      }),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    await expect(runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithOneHunk(),
+      { runtime: 'pi', verifyFindings: false },
+    )).rejects.toMatchObject({
+      code: 'extraction_llm_failed',
+      message: expect.not.stringContaining('authentication'),
+      hunkFailures: [expect.objectContaining({
+        type: 'extraction',
+        code: 'extraction_llm_failed',
+      })],
+    });
+  });
+
   it('records runtime on reports with no hunks to analyze', async () => {
     const context = makeContextWithOneHunk();
     const report = await runSkill(

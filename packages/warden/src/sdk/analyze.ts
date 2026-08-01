@@ -1,5 +1,6 @@
 import type { Span } from '@sentry/node';
 import type { SkillDefinition } from '../config/schema.js';
+import { isExtractionErrorCode } from '../types/index.js';
 import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
@@ -1189,6 +1190,21 @@ async function runSkillAnalysis(
     });
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
+    const extractionFailures = allHunkFailures.filter((failure) => failure.type === 'extraction');
+    if (
+      extractionFailures.length === allHunkFailures.length
+      && extractionFailures.every((failure) => isExtractionErrorCode(failure.code))
+    ) {
+      const extractionCodes = [...new Set(extractionFailures.map((failure) => failure.code))];
+      const primaryCode = extractionCodes[0];
+      if (primaryCode) {
+        throw new SkillRunnerError(
+          `Findings extraction failed for all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} (${extractionCodes.join(', ')}).`,
+          { code: primaryCode, hunkFailures: allHunkFailures },
+        );
+      }
+    }
+
     const analysisFailures = allHunkFailures.filter((failure) => failure.type === 'analysis');
     if (
       analysisFailures.length > 0
