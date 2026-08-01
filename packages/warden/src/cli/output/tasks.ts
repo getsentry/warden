@@ -65,13 +65,16 @@ function firstAnalysisFailureMessage(hunkFailures: HunkFailure[], code: ErrorCod
   return hunkFailures.find((failure) => failure.type === 'analysis' && failure.code === code)?.message;
 }
 
-function allFailuresHaveExtractionCode(hunkFailures: HunkFailure[]): ErrorCode | undefined {
-  const first = hunkFailures[0]?.code;
-  return first
-    && hunkFailures.every((failure) => failure.type === 'extraction' && failure.code === first)
-    && isExtractionErrorCode(first)
-    ? first
-    : undefined;
+function extractionFailureCodes(hunkFailures: HunkFailure[]): ErrorCode[] | undefined {
+  if (
+    hunkFailures.length === 0
+    || !hunkFailures.every(
+      (failure) => failure.type === 'extraction' && isExtractionErrorCode(failure.code),
+    )
+  ) {
+    return undefined;
+  }
+  return [...new Set(hunkFailures.map((failure) => failure.code))];
 }
 
 function summarizeRunFailure(args: {
@@ -105,11 +108,12 @@ function summarizeRunFailure(args: {
       message: `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
     };
   }
-  const extractionCode = allFailuresHaveExtractionCode(hunkFailures);
-  if (extractionCode) {
+  const extractionCodes = extractionFailureCodes(hunkFailures);
+  const primaryExtractionCode = extractionCodes?.[0];
+  if (primaryExtractionCode) {
     return {
-      code: extractionCode,
-      message: `Findings extraction failed for all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} (${extractionCode}).`,
+      code: primaryExtractionCode,
+      message: `Findings extraction failed for all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} (${extractionCodes.join(', ')}).`,
     };
   }
   return {

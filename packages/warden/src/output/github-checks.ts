@@ -331,6 +331,26 @@ export async function updateSkillCheck(
   });
 }
 
+const MAX_CHECK_SUMMARY_BYTES = 65000;
+const TRUNCATION_NOTICE = '\n\n[diagnostics truncated]';
+
+function truncateCheckSummary(summary: string): string {
+  if (Buffer.byteLength(summary, 'utf8') <= MAX_CHECK_SUMMARY_BYTES) return summary;
+
+  const contentBudget = MAX_CHECK_SUMMARY_BYTES - Buffer.byteLength(TRUNCATION_NOTICE, 'utf8');
+  let low = 0;
+  let high = summary.length;
+  while (low < high) {
+    const midpoint = Math.ceil((low + high) / 2);
+    if (Buffer.byteLength(summary.slice(0, midpoint), 'utf8') <= contentBudget) {
+      low = midpoint;
+    } else {
+      high = midpoint - 1;
+    }
+  }
+  return summary.slice(0, low) + TRUNCATION_NOTICE;
+}
+
 function failureSummary(error: unknown): string {
   const errorMessage = sanitizeErrorMessage(error instanceof Error ? error.message : String(error));
   const rawFailures = error && typeof error === 'object' && 'hunkFailures' in error
@@ -351,7 +371,9 @@ function failureSummary(error: unknown): string {
     message: sanitizeErrorMessage(failure.message),
     preview: failure.preview ? sanitizeErrorMessage(failure.preview).slice(0, 500) : undefined,
   }));
-  return `Error: ${errorMessage}\n\nHunk failures:\n\`\`\`json\n${JSON.stringify(sanitizedFailures, null, 2)}\n\`\`\``;
+  return truncateCheckSummary(
+    `Error: ${errorMessage}\n\nHunk failures:\n\`\`\`json\n${JSON.stringify(sanitizedFailures, null, 2)}\n\`\`\``,
+  );
 }
 
 /**

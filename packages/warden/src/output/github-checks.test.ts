@@ -80,6 +80,31 @@ describe('failSkillCheck', () => {
     expect(summary).toContain('[redacted]');
     expect(summary).not.toContain('secret-value');
   });
+
+  it('bounds diagnostics to the GitHub check summary byte limit', async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    const error = Object.assign(new Error('Extraction failed'), {
+      hunkFailures: Array.from({ length: 200 }, (_, index) => ({
+        type: 'extraction',
+        filename: `src/file-${index}.ts`,
+        lineRange: `${index + 1}`,
+        code: 'extraction_invalid_json',
+        message: 'Malformed output',
+        preview: '🔥'.repeat(500),
+      })),
+    });
+
+    await failSkillCheck(
+      { checks: { update } } as never,
+      123,
+      error,
+      { owner: 'getsentry', repo: 'sentry', headSha: 'abc123' }
+    );
+
+    const summary = update.mock.calls[0]![0].output.summary as string;
+    expect(Buffer.byteLength(summary, 'utf8')).toBeLessThanOrEqual(65000);
+    expect(summary).toContain('[diagnostics truncated]');
+  });
 });
 
 describe('severityToAnnotationLevel', () => {
