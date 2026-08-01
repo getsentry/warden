@@ -371,9 +371,11 @@ function failureSummary(error: unknown): string {
     message: sanitizeErrorMessage(failure.message),
     preview: failure.preview ? sanitizeErrorMessage(failure.preview).slice(0, 500) : undefined,
   }));
-  return truncateCheckSummary(
-    `Error: ${errorMessage}\n\nHunk failures:\n\`\`\`json\n${JSON.stringify(sanitizedFailures, null, 2)}\n\`\`\``,
-  );
+  const diagnostics = JSON.stringify(sanitizedFailures, null, 2)
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n');
+  return truncateCheckSummary(`Error: ${errorMessage}\n\nHunk failures:\n${diagnostics}`);
 }
 
 /**

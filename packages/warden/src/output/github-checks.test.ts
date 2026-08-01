@@ -81,6 +81,31 @@ describe('failSkillCheck', () => {
     expect(summary).not.toContain('secret-value');
   });
 
+  it('keeps model markdown inside the indented diagnostics block', async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    const error = Object.assign(new Error('Extraction failed'), {
+      hunkFailures: [{
+        type: 'extraction',
+        filename: 'src/example.ts',
+        lineRange: '1-2',
+        code: 'extraction_invalid_json',
+        message: 'Malformed output',
+        preview: '```json\n{"findings": []}\n```',
+      }],
+    });
+
+    await failSkillCheck(
+      { checks: { update } } as never,
+      123,
+      error,
+      { owner: 'getsentry', repo: 'sentry', headSha: 'abc123' }
+    );
+
+    const summary = update.mock.calls[0]![0].output.summary as string;
+    expect(summary).toContain('    "preview": "```json\\n');
+    expect(summary).not.toContain('\n```json\n');
+  });
+
   it('bounds diagnostics to the GitHub check summary byte limit', async () => {
     const update = vi.fn().mockResolvedValue({ data: {} });
     const error = Object.assign(new Error('Extraction failed'), {
