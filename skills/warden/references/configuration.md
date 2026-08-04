@@ -51,7 +51,7 @@ actions = ["opened", "synchronize"]
 
 **Trigger types:** `pull_request`, `local` (local-only), `schedule` (CI-only)
 
-**Actions (pull_request):** `opened`, `synchronize`, `reopened`, `closed`
+**Actions (pull_request):** `opened`, `synchronize`, `ready_for_review`, `reopened`, `closed` or any valid GitHub `pull_request` webhook action
 
 ## Common Patterns
 
