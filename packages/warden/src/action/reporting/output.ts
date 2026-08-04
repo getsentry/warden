@@ -3,7 +3,6 @@ import type { EventContext, SkillReport } from '../../types/index.js';
 import {
   AuxiliaryUsageMapSchema,
   FindingSchema,
-  findingLine,
   GitHubEventTypeSchema,
   LocationSchema,
   SeverityThresholdSchema,
@@ -11,14 +10,15 @@ import {
   SourceSnippetSchema,
   UsageStatsSchema,
 } from '../../types/index.js';
-import type { FindingObservation } from './outcomes.js';
+import type { DedupeMatchType, FindingObservation } from './outcomes.js';
 import { FindingObservationSchema } from './outcomes.js';
-import { generateContentHash, generateLocationHashKey } from '../../output/dedup.js';
+import { generateContentHash } from '../../output/dedup.js';
 import { getVersion } from '../../utils/version.js';
 import {
   buildProvenanceAndDiscarded,
   DiscardedFindingSchema,
   FindingProvenanceSchema,
+  provenanceKey,
 } from './provenance.js';
 import type { FindingExecutionEvents } from './provenance.js';
 import type { FindingProcessingEvent } from '../../sdk/types.js';
@@ -129,6 +129,9 @@ export const TriggerRunResultSchema = z.discriminatedUnion('status', [
     error: z.never().optional(),
     /** Verification/merge/dedupe events captured during analyze mode, replayed so report mode's export still carries provenance/discardedFindings. */
     findingProcessingEvents: z.array(ReplayFindingProcessingEventSchema).optional(),
+    /** Analyze mode's model lanes, replayed so report mode's export doesn't drop them. */
+    auxiliaryModel: z.string().optional(),
+    synthesisModel: z.string().optional(),
   }),
   TriggerRunResultBaseSchema.extend({
     status: z.literal('error'),
@@ -224,6 +227,8 @@ export interface ReplayTriggerResult {
   report?: SkillReport;
   error?: unknown;
   findingProcessingEvents?: FindingProcessingEvent[];
+  auxiliaryModel?: string;
+  synthesisModel?: string;
 }
 
 /** Per-execution metadata for one `reports[]` entry, matched by object identity. */
@@ -321,6 +326,8 @@ function serializeTriggerResult(result: ReplayTriggerResult): z.infer<typeof Tri
       status: 'success',
       report: serializeReplayReport(result.report),
       findingProcessingEvents: result.findingProcessingEvents,
+      auxiliaryModel: result.auxiliaryModel,
+      synthesisModel: result.synthesisModel,
     };
   }
 
@@ -351,20 +358,35 @@ export function buildFindingsOutput(
   const allFindings = reports.flatMap((r) => r.findings);
   const metaByReport = new Map((options.skillExecutions ?? []).map((meta) => [meta.report, meta]));
 
-  const dedupeByLocationHashKey = new Map(
-    findingObservations
-      .filter((observation) => observation.outcome === 'deduped')
-      .map((observation) => {
-        const hash = generateContentHash(observation.finding.title, observation.finding.description);
-        const key = generateLocationHashKey(observation.finding.location?.path, findingLine(observation.finding), hash);
-        return [key, observation.dedupe];
-      })
-  );
+  // Corroborating skills, grouped by the survivor finding id they were
+  // matched against (`dedupe.existingFindingId`) — not by re-derived
+  // content/location hashing, which misses semantic matches (different
+  // content hash than the survivor) and never lists the observing skill
+  // itself, only whichever skills the matched comment already attributed.
+  const corroborationBySurvivorId = new Map<string, Map<string, { skillName: string; matchType?: DedupeMatchType }>>();
+  function addCorroborator(survivorId: string, skillName: string, matchType: DedupeMatchType | undefined): void {
+    const bySkill = corroborationBySurvivorId.get(survivorId) ?? new Map();
+    bySkill.set(skillName, { skillName, matchType });
+    corroborationBySurvivorId.set(survivorId, bySkill);
+  }
+  for (const observation of findingObservations) {
+    if (observation.outcome !== 'deduped') continue;
+    const survivorId = observation.dedupe.existingFindingId;
+    if (!survivorId) continue;
+    if (observation.skill) {
+      addCorroborator(survivorId, observation.skill, observation.dedupe.matchType);
+    }
+    for (const skillName of observation.dedupe.existingSkills ?? []) {
+      addCorroborator(survivorId, skillName, observation.dedupe.matchType);
+    }
+  }
 
   const { provenanceByFindingId, discarded } = buildProvenanceAndDiscarded(
     (options.skillExecutions ?? []).map((meta): FindingExecutionEvents => ({
       skillExecutionId: meta.skillExecutionId,
       model: meta.report.model,
+      verificationModel: meta.auxiliaryModel,
+      mergeModel: meta.synthesisModel,
       events: meta.findingProcessingEvents ?? [],
     }))
   );
@@ -436,17 +458,17 @@ export function buildFindingsOutput(
         issueUrl: meta?.issueUrl,
         findings: r.findings.map((f) => {
           const contentHash = generateContentHash(f.title, f.description);
-          const locationHashKey = generateLocationHashKey(f.location?.path, findingLine(f), contentHash);
-          const dedupe = dedupeByLocationHashKey.get(locationHashKey);
+          const survivorId = f.reportedId ?? f.id;
+          const corroborators = [...(corroborationBySurvivorId.get(survivorId)?.values() ?? [])];
           const reportedBy = meta?.skillExecutionId !== undefined
             ? [
                 { skillExecutionId: meta.skillExecutionId, skillName: r.skill, role: 'primary' as const },
-                ...(dedupe?.existingSkills ?? [])
-                  .filter((skillName) => skillName !== r.skill)
-                  .map((skillName) => ({
-                    skillName,
+                ...corroborators
+                  .filter((corroborator) => corroborator.skillName !== r.skill)
+                  .map((corroborator) => ({
+                    skillName: corroborator.skillName,
                     role: 'corroborating' as const,
-                    matchType: dedupe?.matchType,
+                    matchType: corroborator.matchType,
                   })),
               ]
             : undefined;
@@ -464,7 +486,7 @@ export function buildFindingsOutput(
             sourceSnippet: f.sourceSnippet,
             contentHash,
             reportedBy,
-            provenance: provenanceByFindingId.get(f.id),
+            provenance: provenanceByFindingId.get(provenanceKey(meta?.skillExecutionId, f.id)),
           };
         }),
       };

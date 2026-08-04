@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Finding } from '../../types/index.js';
 import type { FindingProcessingEvent } from '../../sdk/types.js';
-import { buildProvenanceAndDiscarded } from './provenance.js';
+import { buildProvenanceAndDiscarded, provenanceKey } from './provenance.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -30,7 +30,7 @@ describe('buildProvenanceAndDiscarded', () => {
     };
 
     const result = buildProvenanceAndDiscarded([
-      { skillExecutionId: 'exec-1', model: 'claude-sonnet-4-5', events: [event] },
+      { skillExecutionId: 'exec-1', verificationModel: 'claude-sonnet-4-5', events: [event] },
     ]);
 
     expect(result.provenanceByFindingId.size).toBe(0);
@@ -59,16 +59,16 @@ describe('buildProvenanceAndDiscarded', () => {
     };
 
     const result = buildProvenanceAndDiscarded([
-      { skillExecutionId: 'exec-1', model: 'claude-sonnet-4-5', events: [event] },
+      { skillExecutionId: 'exec-1', model: 'claude-sonnet-4-5', verificationModel: 'claude-haiku-4-5', events: [event] },
     ]);
 
     expect(result.discarded).toEqual([]);
-    expect(result.provenanceByFindingId.get('kept-id')).toEqual({
+    expect(result.provenanceByFindingId.get(provenanceKey('exec-1', 'kept-id'))).toEqual({
       originSkillExecutionId: 'exec-1',
       originModel: 'claude-sonnet-4-5',
       verification: {
         outcome: 'revised',
-        model: 'claude-sonnet-4-5',
+        model: 'claude-haiku-4-5',
         evidence: 'narrowed scope after tracing the guard clause',
         before: {
           title: 'Original title',
@@ -91,15 +91,15 @@ describe('buildProvenanceAndDiscarded', () => {
     ];
 
     const result = buildProvenanceAndDiscarded([
-      { skillExecutionId: 'exec-1', model: 'claude-sonnet-4-5', events },
+      { skillExecutionId: 'exec-1', model: 'claude-sonnet-4-5', mergeModel: 'claude-opus-5', events },
     ]);
 
     expect(result.discarded).toHaveLength(2);
     expect(result.discarded.map((d) => d.survivorFindingId)).toEqual(['survivor-1', 'survivor-1']);
     expect(result.discarded.every((d) => d.stage === 'merge_absorbed')).toBe(true);
 
-    expect(result.provenanceByFindingId.get('survivor-1')?.merge).toEqual({
-      model: 'claude-sonnet-4-5',
+    expect(result.provenanceByFindingId.get(provenanceKey('exec-1', 'survivor-1'))?.merge).toEqual({
+      model: 'claude-opus-5',
       absorbedFindingIds: ['absorbed-a', 'absorbed-b'],
     });
   });

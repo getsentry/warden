@@ -446,6 +446,43 @@ describe('runPRWorkflow', () => {
       expect(finalOptions?.resolvedDefaults).toBeDefined();
     });
 
+    it('report mode round-trips analyze mode\'s auxiliaryModel/synthesisModel through the replay artifact', async () => {
+      // Regression: analyze mode's TriggerResult carries these two model
+      // lanes, but the replay artifact used to drop them, so report mode's
+      // export permanently lost them even though analyze mode had them.
+      const finding = createFinding();
+      const report = createSkillReport({ findings: [finding] });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+          auxiliaryModel: 'anthropic/aux-model',
+          synthesisModel: 'anthropic/synth-model',
+        },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
+      expect(finalOptions?.skillExecutions).toEqual([
+        expect.objectContaining({
+          auxiliaryModel: 'anthropic/aux-model',
+          synthesisModel: 'anthropic/synth-model',
+        }),
+      ]);
+    });
+
     it('analyze mode fails when the findings artifact cannot be written', async () => {
       const report = createSkillReport({ findings: [createFinding()] });
       mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
@@ -1647,6 +1684,40 @@ describe('runPRWorkflow', () => {
       expect(mockRunSkillTask).toHaveBeenCalledTimes(2);
       expect(callsBeforeFirstRunFinished).toBe(1);
       expect(maxActiveRuns).toBe(1);
+    });
+
+    it('accounts for a trigger the circuit breaker aborted before dispatch, and fails the run since nothing succeeded', async () => {
+      // Regression: runPool never dispatches work past an abort, so a second
+      // matched trigger left queued when the circuit opens used to vanish
+      // from the export entirely, and the all-failed check (which only
+      // counted triggers that actually produced an error) could see fewer
+      // errors than matched triggers and let a zero-success run succeed.
+      mockRunSkillTask.mockImplementation(async (taskOptions) => {
+        taskOptions.runnerOptions?.circuitBreaker?.recordFailure('auth_failed', 'provider outage');
+        throw new Error('boom');
+      });
+
+      await expect(
+        runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ parallel: 1 }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          DUPLICATE_TRIGGER_FIXTURES_DIR
+        )
+      ).rejects.toThrow(/All 2 trigger\(s\) failed/);
+
+      // Only the first trigger was actually dispatched before the circuit opened.
+      expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
+
+      // Both matched triggers must be accounted for: the one that actually
+      // ran and errored, and the one the circuit aborted before dispatch —
+      // neither should silently vanish from the export.
+      const finalOptions = mockWriteFindingsOutput.mock.calls.at(-1)?.[3];
+      expect(finalOptions?.skippedTriggers).toEqual([
+        expect.objectContaining({ skillName: 'test-skill', reason: 'error' }),
+        expect.objectContaining({ skillName: 'test-skill', reason: 'error' }),
+      ]);
     });
 
     it('records trigger failure and updates check before failing', async () => {

@@ -29,10 +29,25 @@ describe('findings output schema', () => {
     const context = createContext();
     const finding = createFinding();
     const report = createReport({ findings: [finding] });
-    const output = buildFindingsOutput([report], context, [], {
-      timestamp: '2026-01-01T00:00:00.000Z',
-      runId: '123',
-    });
+
+    // GitHub Actions always sets GITHUB_RUN_ATTEMPT, but this assertion is
+    // specifically about the shape when nothing is available — isolate it
+    // from the ambient environment rather than relying on it being unset.
+    const originalRunAttempt = process.env['GITHUB_RUN_ATTEMPT'];
+    delete process.env['GITHUB_RUN_ATTEMPT'];
+    let output: ReturnType<typeof buildFindingsOutput>;
+    try {
+      output = buildFindingsOutput([report], context, [], {
+        timestamp: '2026-01-01T00:00:00.000Z',
+        runId: '123',
+      });
+    } finally {
+      if (originalRunAttempt === undefined) {
+        delete process.env['GITHUB_RUN_ATTEMPT'];
+      } else {
+        process.env['GITHUB_RUN_ATTEMPT'] = originalRunAttempt;
+      }
+    }
 
     expect(output).toEqual({
       version: '1',
@@ -422,13 +437,15 @@ describe('findings output schema', () => {
       createContext(),
       [
         {
+          // A cross-run dedupe: some other skill's finding matched this
+          // exact survivor (by its own id) on a prior run.
           outcome: 'deduped',
-          finding,
-          skill: 'test-skill',
+          finding: createFinding({ id: 'other-run-finding-id' }),
+          skill: 'other-skill',
           dedupe: {
             source: 'warden',
             matchType: 'hash',
-            existingFindingId: 'prior-id',
+            existingFindingId: finding.id,
             existingSkills: ['test-skill', 'other-skill'],
           },
         },
@@ -563,6 +580,130 @@ describe('findings output schema', () => {
 
     expect(output.discardedFindings).toBeUndefined();
     expect('discardedFindings' in JSON.parse(JSON.stringify(output))).toBe(false);
+  });
+
+  it('keeps each skill execution\'s provenance independent when same-run recentering shares a finding id', () => {
+    // Regression: same-run dedupe can recenter two different skills' survivor
+    // findings onto the same id. A run-global provenance map keyed only by
+    // finding id would let the second skill's event overwrite the first's.
+    const sharedId = 'shared-comment-id';
+    const findingA = createFinding({ id: sharedId });
+    const findingB = createFinding({ id: sharedId, title: 'Different wording' });
+    const reportA = createReport({ skill: 'skill-a', findings: [findingA] });
+    const reportB = createReport({ skill: 'skill-b', findings: [findingB] });
+
+    const output = buildFindingsOutput([reportA, reportB], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+      skillExecutions: [
+        {
+          report: reportA,
+          skillExecutionId: 'exec-a',
+          findingProcessingEvents: [
+            {
+              stage: 'verification',
+              action: 'revised',
+              finding: { ...findingA, title: 'Original A title', severity: 'low' },
+              replacement: findingA,
+              reason: 'narrowed A',
+            },
+          ],
+        },
+        {
+          report: reportB,
+          skillExecutionId: 'exec-b',
+          findingProcessingEvents: [
+            {
+              stage: 'verification',
+              action: 'revised',
+              finding: { ...findingB, title: 'Original B title', severity: 'medium' },
+              replacement: findingB,
+              reason: 'narrowed B',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(output.skills[0]?.findings[0]?.provenance?.verification?.before.title).toBe('Original A title');
+    expect(output.skills[1]?.findings[0]?.provenance?.verification?.before.title).toBe('Original B title');
+  });
+
+  it('attributes provenance to the model that ran each stage, not the primary analysis model', () => {
+    const survivor = createFinding();
+    const absorbed = { ...createFinding(), id: 'absorbed-1' };
+    const report = createReport({ skill: 'security-skill', findings: [survivor], model: 'primary-model' });
+
+    const output = buildFindingsOutput([report], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+      skillExecutions: [
+        {
+          report,
+          skillExecutionId: 'exec-abc',
+          auxiliaryModel: 'verification-model',
+          synthesisModel: 'merge-model',
+          findingProcessingEvents: [
+            {
+              stage: 'verification',
+              action: 'revised',
+              finding: { ...survivor, title: 'Original title' },
+              replacement: survivor,
+              reason: 'narrowed',
+            },
+            { stage: 'merge', action: 'merged', finding: absorbed, replacement: survivor, reason: 'same root cause' },
+          ],
+        },
+      ],
+    });
+
+    const provenance = output.skills[0]?.findings[0]?.provenance;
+    expect(provenance?.originModel).toBe('primary-model');
+    expect(provenance?.verification?.model).toBe('verification-model');
+    expect(provenance?.merge?.model).toBe('merge-model');
+    expect(output.discardedFindings?.[0]).toMatchObject({ stage: 'merge_absorbed', model: 'merge-model' });
+  });
+
+  it('joins same-run cross-skill dedupe by existingFindingId, including semantic matches with a different content hash', () => {
+    const survivorFinding = createFinding({
+      id: 'survivor-id',
+      title: 'SQL injection risk',
+      description: 'user input concatenated into query',
+    });
+    const duplicateFinding = createFinding({
+      id: 'dup-id',
+      title: 'Unsanitized SQL input',
+      description: 'raw value passed to db.query',
+    });
+    const survivorReport = createReport({ skill: 'security-skill', findings: [survivorFinding] });
+
+    const output = buildFindingsOutput(
+      [survivorReport],
+      createContext(),
+      [
+        {
+          outcome: 'deduped',
+          finding: duplicateFinding,
+          skill: 'style-skill',
+          dedupe: {
+            source: 'warden',
+            matchType: 'semantic',
+            existingFindingId: survivorFinding.id,
+            existingSkills: ['security-skill'],
+          },
+        },
+      ],
+      {
+        timestamp: '2026-01-01T00:00:00.000Z',
+        runId: '123',
+        skillExecutions: [{ report: survivorReport, skillExecutionId: 'exec-security' }],
+      }
+    );
+
+    expect(output.skills[0]?.findings[0]?.reportedBy).toEqual([
+      { skillExecutionId: 'exec-security', skillName: 'security-skill', role: 'primary' },
+      { skillName: 'style-skill', role: 'corroborating', matchType: 'semantic' },
+    ]);
   });
 });
 

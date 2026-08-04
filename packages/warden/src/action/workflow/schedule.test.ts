@@ -591,6 +591,11 @@ describe('runScheduleWorkflow', () => {
       expect(mockSetFailed).toHaveBeenCalledWith(
         expect.stringContaining('All 2 trigger(s) failed')
       );
+
+      // Regression: the run's one true final write (`.done` marker,
+      // `findings-file` output) must still happen even on an all-failed run —
+      // it must not be skipped by the all-failed error propagating first.
+      expect(mockWriteFindingsOutput).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -727,6 +732,31 @@ describe('runScheduleWorkflow', () => {
           issueNumber: 42,
           issueUrl: 'https://github.com/test-owner/test-repo/issues/42',
           findingProcessingEvents: [],
+        }),
+      ]);
+    });
+
+    it('keeps a report\'s execution metadata in the final export even when its issue write throws', async () => {
+      // Regression: skillExecutions used to be pushed only after
+      // createOrUpdateIssue resolved, even though the report itself is
+      // pushed to allReports beforehand. A throw from that GitHub write lost
+      // the report's join key and captured provenance events while leaving
+      // the report itself in the final artifact.
+      const finding = createFinding();
+      mockRunSkill.mockResolvedValue(createSkillReport({ findings: [finding] }));
+      mockCreateOrUpdateIssue.mockRejectedValue(new Error('issue API down'));
+
+      await expect(
+        runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_FIXTURES)
+      ).rejects.toThrow('setFailed');
+
+      const finalCall = mockWriteFindingsOutput.mock.calls[0];
+      expect(finalCall?.[0]).toEqual([expect.objectContaining({ findings: [finding] })]);
+      expect(finalCall?.[3]?.skillExecutions).toEqual([
+        expect.objectContaining({
+          skillExecutionId: expect.any(String),
+          triggerId: expect.any(String),
+          triggerName: expect.any(String),
         }),
       ]);
     });

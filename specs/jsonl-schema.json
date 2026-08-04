@@ -149,9 +149,6 @@
         "id": {
           "type": "string"
         },
-        "reportedId": {
-          "type": "string"
-        },
         "severity": {
           "type": "string",
           "enum": [

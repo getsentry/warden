@@ -46,13 +46,32 @@ export type DiscardedFinding = z.infer<typeof DiscardedFindingSchema>;
 /** One skill execution's captured verification/merge events, for provenance matching. */
 export interface FindingExecutionEvents {
   skillExecutionId?: string;
+  /** Primary/analysis model, attributed as a finding's origin. */
   model?: string;
+  /** Model that ran the verification lane; attributed to verification-stage events instead of `model`. */
+  verificationModel?: string;
+  /** Model that ran the merge/synthesis lane; attributed to merge-stage events instead of `model`. */
+  mergeModel?: string;
   events: FindingProcessingEvent[];
 }
 
 export interface ProvenanceAndDiscarded {
+  /** Keyed by `provenanceKey(skillExecutionId, findingId)` — see that function for why. */
   provenanceByFindingId: Map<string, FindingProvenance>;
   discarded: DiscardedFinding[];
+}
+
+/**
+ * Same-run dedupe can recenter two different skill executions' survivor
+ * findings onto the same id (e.g. both matched against the same pre-existing
+ * comment), so `findingId` alone is not a safe map key: a second execution's
+ * event would silently overwrite or merge into the first's entry, and both
+ * exported skill rows would then read the same (wrong) provenance. Scoping
+ * the key to the owning execution keeps each skill row's provenance
+ * independent.
+ */
+export function provenanceKey(skillExecutionId: string | undefined, findingId: string): string {
+  return `${skillExecutionId ?? ''}:${findingId}`;
 }
 
 /**
@@ -72,7 +91,7 @@ export function buildProvenanceAndDiscarded(executions: FindingExecutionEvents[]
   const provenanceByFindingId = new Map<string, FindingProvenance>();
   const discarded: DiscardedFinding[] = [];
 
-  for (const { skillExecutionId, model, events } of executions) {
+  for (const { skillExecutionId, model, verificationModel, mergeModel, events } of executions) {
     for (const event of events) {
       if (event.stage === 'dedupe' && event.action === 'dropped') {
         discarded.push({
@@ -95,20 +114,21 @@ export function buildProvenanceAndDiscarded(executions: FindingExecutionEvents[]
           severity: event.finding.severity,
           title: event.finding.title,
           location: event.finding.location,
-          model,
+          model: verificationModel,
           reason: event.reason,
         });
         continue;
       }
 
       if (event.stage === 'verification' && event.action === 'revised' && event.replacement) {
-        provenanceByFindingId.set(event.replacement.id, {
-          ...provenanceByFindingId.get(event.replacement.id),
+        const key = provenanceKey(skillExecutionId, event.replacement.id);
+        provenanceByFindingId.set(key, {
+          ...provenanceByFindingId.get(key),
           originSkillExecutionId: skillExecutionId,
           originModel: model,
           verification: {
             outcome: 'revised',
-            model,
+            model: verificationModel,
             evidence: event.reason,
             before: {
               title: event.finding.title,
@@ -128,18 +148,19 @@ export function buildProvenanceAndDiscarded(executions: FindingExecutionEvents[]
           severity: event.finding.severity,
           title: event.finding.title,
           location: event.finding.location,
-          model,
+          model: mergeModel,
           reason: event.reason,
           survivorFindingId: event.replacement.id,
         });
 
-        const existing = provenanceByFindingId.get(event.replacement.id);
-        provenanceByFindingId.set(event.replacement.id, {
+        const key = provenanceKey(skillExecutionId, event.replacement.id);
+        const existing = provenanceByFindingId.get(key);
+        provenanceByFindingId.set(key, {
           ...existing,
           originSkillExecutionId: existing?.originSkillExecutionId ?? skillExecutionId,
           originModel: existing?.originModel ?? model,
           merge: {
-            model,
+            model: mergeModel,
             absorbedFindingIds: [...(existing?.merge?.absorbedFindingIds ?? []), event.finding.id],
           },
         });

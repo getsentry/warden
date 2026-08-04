@@ -274,6 +274,21 @@ async function runScheduleWorkflowInner(
       allReports.push(report);
       totalFindings += report.findings.length;
 
+      // Pushed before the fallible issue write below: if createOrUpdateIssue
+      // throws, allReports (and thus the final export) already has this
+      // report, so its execution metadata (join key, model lanes, captured
+      // provenance events) must already be recorded too, not lost with it.
+      const executionMeta: (typeof skillExecutions)[number] = {
+        report,
+        skillExecutionId: resolved.skillExecutionId,
+        triggerId: resolved.id,
+        triggerName: resolved.name,
+        auxiliaryModel: resolved.auxiliaryModel,
+        synthesisModel: resolved.synthesisModel,
+        findingProcessingEvents,
+      };
+      skillExecutions.push(executionMeta);
+
       // Create/update issue with findings
       const scheduleConfig: Partial<ScheduleConfig> = resolved.schedule ?? {};
       const issueTitle = scheduleConfig.issueTitle ?? `Warden: ${resolved.name}`;
@@ -286,19 +301,9 @@ async function runScheduleWorkflowInner(
       if (issueResult) {
         console.log(`${issueResult.created ? 'Created' : 'Updated'} issue #${issueResult.issueNumber}`);
         console.log(`Issue URL: ${issueResult.issueUrl}`);
+        executionMeta.issueNumber = issueResult.issueNumber;
+        executionMeta.issueUrl = issueResult.issueUrl;
       }
-
-      skillExecutions.push({
-        report,
-        skillExecutionId: resolved.skillExecutionId,
-        triggerId: resolved.id,
-        triggerName: resolved.name,
-        auxiliaryModel: resolved.auxiliaryModel,
-        synthesisModel: resolved.synthesisModel,
-        issueNumber: issueResult?.issueNumber,
-        issueUrl: issueResult?.issueUrl,
-        findingProcessingEvents,
-      });
 
       // Check failure condition
       // Filter by confidence first so low-confidence findings don't cause failure
@@ -328,8 +333,6 @@ async function runScheduleWorkflowInner(
     }
   }
 
-  handleTriggerErrors(triggerErrors, scheduleTriggers.length);
-
   // Set outputs
   const highCount = countSeverity(allReports, 'high');
   workflowSpan.setAttribute('warden.finding.count', totalFindings);
@@ -339,6 +342,10 @@ async function runScheduleWorkflowInner(
   setOutput('summary', allReports.map((r) => r.summary).join('\n') || 'Scheduled analysis complete');
 
   // Write structured findings to file for external export (GCS, S3, etc.)
+  // before any all-failed/shouldFail error can propagate — this is the run's
+  // one true final write (`.done` marker + `findings-file` output), and it
+  // must land even when every trigger failed, or a terminated run is left
+  // looking permanently in-progress to a follower of the live snapshots.
   try {
     const findingsPath = writeFindingsOutput(allReports, scheduleContext, [], {
       ...buildBaseOutputOptions(inputs, skippedTriggers),
@@ -348,6 +355,8 @@ async function runScheduleWorkflowInner(
   } catch (error) {
     console.error(`::warning::Failed to write findings output: ${error}`);
   }
+
+  handleTriggerErrors(triggerErrors, scheduleTriggers.length);
 
   if (shouldFailAction) {
     setFailed(failureReasons.join('; '));

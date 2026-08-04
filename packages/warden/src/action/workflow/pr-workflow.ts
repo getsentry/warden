@@ -589,7 +589,7 @@ async function executeAllTriggers(
   const completedSoFar: TriggerResult[] = [];
 
   // Limit trigger dispatch too; the semaphore only gates work after a trigger starts.
-  return runPool(
+  const results = await runPool(
     matchedTriggers,
     concurrency,
     async (trigger) => {
@@ -613,6 +613,28 @@ async function executeAllTriggers(
     },
     { shouldAbort: () => abortController.signal.aborted },
   );
+
+  // `runPool` never dispatches work items past an abort, so a matched trigger
+  // the circuit breaker aborted before it started doesn't appear in `results`
+  // at all — not even as an error. Synthesize an aborted result for each one
+  // so it's still accounted for in `skippedTriggers`/`triggerResults`, and so
+  // an all-dropped run can't look like zero errors occurred.
+  const dispatchedTriggerIds = new Set(results.map((result) => result.triggerId));
+  const undispatched = matchedTriggers.filter((trigger) => !dispatchedTriggerIds.has(trigger.id));
+  if (undispatched.length === 0) {
+    return results;
+  }
+
+  const abortedResults: TriggerResult[] = undispatched.map((trigger) => ({
+    triggerId: trigger.id,
+    skillExecutionId: trigger.skillExecutionId,
+    triggerName: trigger.name,
+    skillName: trigger.skill,
+    error: new Error('Trigger execution aborted before dispatch (circuit breaker tripped)'),
+  }));
+  completedSoFar.push(...abortedResults);
+  options.onTriggerComplete?.([...completedSoFar]);
+  return [...results, ...abortedResults];
 }
 
 /**
@@ -1389,6 +1411,8 @@ function toReplayTriggerResults(results: TriggerResult[]): ReplayTriggerResult[]
     report: result.report,
     error: result.error,
     findingProcessingEvents: result.findingProcessingEvents,
+    auxiliaryModel: result.auxiliaryModel,
+    synthesisModel: result.synthesisModel,
   }));
 }
 
@@ -1514,6 +1538,8 @@ function buildReportModeResults(
       ...baseResult,
       report: outputResult.report,
       findingProcessingEvents: outputResult.findingProcessingEvents,
+      auxiliaryModel: outputResult.auxiliaryModel,
+      synthesisModel: outputResult.synthesisModel,
     };
   });
 
