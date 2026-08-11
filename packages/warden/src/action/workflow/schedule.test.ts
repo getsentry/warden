@@ -780,6 +780,7 @@ describe('runScheduleWorkflow', () => {
           triggerName: expect.any(String),
         }),
       ]);
+      expect(finalCall?.[3]?.skippedTriggers).toEqual([]);
     });
   });
 });

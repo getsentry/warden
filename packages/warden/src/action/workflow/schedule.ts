@@ -213,6 +213,7 @@ async function runScheduleWorkflowInner(
   for (const [triggerIndex, resolved] of scheduleTriggers.entries()) {
     logGroup(`Running trigger: ${resolved.name} (skill: ${resolved.skill})`);
     const findingProcessingEvents: FindingProcessingEvent[] = [];
+    let executionRecorded = false;
 
     try {
       assertValidPiModelSelectors([resolved]);
@@ -294,6 +295,7 @@ async function runScheduleWorkflowInner(
         findingProcessingEvents,
       };
       skillExecutions.push(executionMeta);
+      executionRecorded = true;
 
       // Create/update issue with findings
       const scheduleConfig: Partial<ScheduleConfig> = resolved.schedule ?? {};
@@ -332,7 +334,9 @@ async function runScheduleWorkflowInner(
       });
       const errorMessage = error instanceof Error ? error.message : String(error);
       triggerErrors.push(`${resolved.name}: ${errorMessage}`);
-      skippedTriggers.push({ skillName: resolved.skill, triggerId: resolved.id, triggerName: resolved.name, reason: 'error' });
+      if (!executionRecorded) {
+        skippedTriggers.push({ skillName: resolved.skill, triggerId: resolved.id, triggerName: resolved.name, reason: 'error' });
+      }
       console.error(`::warning::Trigger ${resolved.name} failed: ${error}`);
       logGroupEnd();
       writeLiveSnapshot(triggerIndex);
