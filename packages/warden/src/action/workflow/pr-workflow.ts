@@ -8,7 +8,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { Sentry, logger, emitStaleResolutionMetric, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import {
@@ -24,7 +24,7 @@ import type {
   ResolvedTrigger,
 } from '../../config/loader.js';
 import { buildEventContext } from '../../event/context.js';
-import { matchTrigger, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
+import { matchTrigger, matchPullRequestState, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
 import { fetchExistingComments } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
@@ -60,6 +60,7 @@ import {
   updateSkillCheck,
   buildCoreSummaryData,
   determineCoreConclusion,
+  determineConclusion,
   type CheckOptions,
   type CoreCheckSummaryData,
 } from '../checks/manager.js';
@@ -67,6 +68,8 @@ import {
   setOutput,
   setFailed,
   ActionFailedError,
+  clearStaleFindingsOutput,
+  getFindingsOutputPath,
   ensureClaudeAuth,
   logGroup,
   logGroupEnd,
@@ -77,12 +80,18 @@ import {
   setWorkflowOutputs,
   getAuthenticatedBotLogin,
   writeFindingsOutput,
+  writeFindingsOutputLive,
 } from './base.js';
 import { renderSkillReport } from '../../output/renderer.js';
+import type { z } from 'zod';
 import {
   FindingsOutputSchema,
+  buildBaseOutputOptions,
+  type SkippedTriggerReasonSchema,
   type FindingsOutput,
   type ReplayTriggerResult,
+  type SkillExecutionMeta,
+  type BuildFindingsOutputOptions,
 } from '../reporting/output.js';
 
 // -----------------------------------------------------------------------------
@@ -173,6 +182,92 @@ function checkOptionsForPullRequest(context: EventContext): CheckOptions | undef
     repo: context.repository.name,
     headSha: context.pullRequest.headSha,
   };
+}
+
+/**
+ * The only caller, `toSkippedTriggers`, is always fed a list pre-filtered by
+ * `reportsPullRequestCheck` to `pull_request`/`'*'`-type triggers, so this
+ * only ever needs to explain why a PR-scoped trigger didn't fire this run —
+ * not schedule/local triggers, which never reach this function.
+ */
+function deriveSkippedReason(trigger: ResolvedTrigger, context: EventContext): z.infer<typeof SkippedTriggerReasonSchema> {
+  if (trigger.type === 'pull_request') {
+    if (context.eventType !== 'pull_request') return 'no_event_match';
+    if (!trigger.actions?.includes(context.action)) return 'no_event_match';
+    if (!matchPullRequestState(trigger, context)) {
+      if (context.action === 'labeled' && trigger.labels !== undefined) {
+        const eventLabelMatches = context.label !== undefined && trigger.labels.includes(context.label);
+        if (!eventLabelMatches) return 'label_mismatch';
+      }
+      const labels = context.pullRequest?.labels ?? [];
+      const labelMatches = trigger.labels?.some((label) => labels.includes(label));
+      if (trigger.labels !== undefined && !labelMatches) return 'label_mismatch';
+      return 'draft_state';
+    }
+  }
+  return 'path_filter';
+}
+
+function toSkippedTriggers(
+  skippedTriggers: ResolvedTrigger[],
+  context: EventContext
+): NonNullable<BuildFindingsOutputOptions['skippedTriggers']> {
+  return skippedTriggers.map((t) => ({
+    skillName: t.skill,
+    triggerId: t.id,
+    triggerName: t.name,
+    reason: deriveSkippedReason(t, context),
+  }));
+}
+
+/**
+ * A trigger that threw before producing a report has no `report`, so
+ * `toSkillExecutions`'s filter (which requires one) can never include it —
+ * without this, an errored trigger vanishes from the export entirely aside
+ * from a console warning and (in analyze/report mode) a `triggerResults`
+ * row. Surfacing it here instead keeps it visible in the same place a
+ * schedule-mode trigger error is now surfaced.
+ */
+function toErroredSkippedTriggers(
+  results: TriggerResult[]
+): NonNullable<BuildFindingsOutputOptions['skippedTriggers']> {
+  return results
+    .filter((r) => r.error && !r.report)
+    .map((r) => ({
+      skillName: r.skillName,
+      triggerId: r.triggerId,
+      triggerName: r.triggerName,
+      reason: 'error' as const,
+    }));
+}
+
+/** Build per-execution metadata for the findings output from settled trigger results. */
+function toSkillExecutions(results: TriggerResult[]): SkillExecutionMeta[] {
+  return results
+    .filter((r): r is TriggerResult & { report: SkillReport } => Boolean(r.report))
+    .map((r) => ({
+      report: r.report,
+      skillExecutionId: r.skillExecutionId,
+      triggerId: r.triggerId,
+      triggerName: r.triggerName,
+      checkRunUrl: r.checkRunUrl,
+      checkRunId: r.checkRunId,
+      auxiliaryModel: r.auxiliaryModel,
+      synthesisModel: r.synthesisModel,
+      reviewEvent: r.reviewEventPosted,
+      // Matches buildSkillCheckPayload's own conclusion computation
+      // (confidence-filtered first) so this mirrors what actually posted to
+      // the check run at checkRunUrl/checkRunId. determineConclusion never
+      // returns 'cancelled' — that value exists on CheckConclusion for actual
+      // check-run API responses (aborted runs), which this export doesn't
+      // currently read from.
+      checkConclusion: determineConclusion(
+        filterFindings(r.report.findings, undefined, r.minConfidence),
+        r.failOn,
+        r.failCheck
+      ),
+      findingProcessingEvents: r.findingProcessingEvents,
+    }));
 }
 
 function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): AuxiliaryWorkflowOptions {
@@ -463,6 +558,7 @@ function createTriggerCheckReporter(
       const check = await createSkillCheck(octokit, skillName, checkOptions);
       return {
         url: check.url,
+        checkRunId: check.checkRunId,
         complete: (report, options) =>
           updateSkillCheck(octokit, check.checkRunId, report, {
             ...checkOptions,
@@ -479,7 +575,11 @@ async function executeAllTriggers(
   context: EventContext,
   runnerConcurrency: number | undefined,
   inputs: ActionInputs,
-  options: { checks?: TriggerCheckReporter } = {}
+  options: {
+    checks?: TriggerCheckReporter;
+    /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
+    onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
+  } = {}
 ): Promise<TriggerResult[]> {
   const concurrency = runnerConcurrency ?? inputs.parallel;
   const runtimeEnv = await prepareRuntimeEnvironment(matchedTriggers, inputs);
@@ -487,13 +587,14 @@ async function executeAllTriggers(
   const semaphore = new Semaphore(concurrency);
   const abortController = new AbortController();
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController });
+  const completedSoFar: TriggerResult[] = [];
 
   // Limit trigger dispatch too; the semaphore only gates work after a trigger starts.
-  return runPool(
+  const results = await runPool(
     matchedTriggers,
     concurrency,
-    (trigger) =>
-      executeTrigger(trigger, {
+    async (trigger) => {
+      const result = await executeTrigger(trigger, {
         context,
         anthropicApiKey: inputs.anthropicApiKey,
         claudePath: runtimeEnv.pathToClaudeCodeExecutable,
@@ -506,9 +607,35 @@ async function executeAllTriggers(
         abortController,
         circuitBreaker,
         checks: options.checks,
-      }),
+      });
+      completedSoFar.push(result);
+      options.onTriggerComplete?.([...completedSoFar]);
+      return result;
+    },
     { shouldAbort: () => abortController.signal.aborted },
   );
+
+  // `runPool` never dispatches work items past an abort, so a matched trigger
+  // the circuit breaker aborted before it started doesn't appear in `results`
+  // at all — not even as an error. Synthesize an aborted result for each one
+  // so it's still accounted for in `skippedTriggers`/`triggerResults`, and so
+  // an all-dropped run can't look like zero errors occurred.
+  const dispatchedTriggerIds = new Set(results.map((result) => result.triggerId));
+  const undispatched = matchedTriggers.filter((trigger) => !dispatchedTriggerIds.has(trigger.id));
+  if (undispatched.length === 0) {
+    return results;
+  }
+
+  const abortedResults: TriggerResult[] = undispatched.map((trigger) => ({
+    triggerId: trigger.id,
+    skillExecutionId: trigger.skillExecutionId,
+    triggerName: trigger.name,
+    skillName: trigger.skill,
+    error: new Error('Trigger execution aborted before dispatch (circuit breaker tripped)'),
+  }));
+  completedSoFar.push(...abortedResults);
+  options.onTriggerComplete?.([...completedSoFar]);
+  return [...results, ...abortedResults];
 }
 
 /**
@@ -980,7 +1107,9 @@ async function finalizeWorkflow(
   failureReasons: string[],
   canResolveStale: boolean,
   gate: ReviewFeedbackGate,
-  triggerErrors: string[]
+  triggerErrors: string[],
+  skippedTriggers: ResolvedTrigger[],
+  inputs: ActionInputs
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -999,6 +1128,11 @@ async function finalizeWorkflow(
   try {
     const findingsPath = writeFindingsOutput(reports, context, findingObservations, {
       triggerResults: toReplayTriggerResults(results),
+      ...buildBaseOutputOptions(inputs, [
+        ...toSkippedTriggers(skippedTriggers, context),
+        ...toErroredSkippedTriggers(results),
+      ]),
+      skillExecutions: toSkillExecutions(results),
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
@@ -1277,6 +1411,9 @@ function toReplayTriggerResults(results: TriggerResult[]): ReplayTriggerResult[]
     skillName: result.skillName,
     report: result.report,
     error: result.error,
+    findingProcessingEvents: result.findingProcessingEvents,
+    auxiliaryModel: result.auxiliaryModel,
+    synthesisModel: result.synthesisModel,
   }));
 }
 
@@ -1351,6 +1488,7 @@ function buildReportModeResults(
     const maxFindings = trigger.maxFindings ?? inputs.maxFindings;
     const baseResult = {
       triggerId: trigger.id,
+      skillExecutionId: trigger.skillExecutionId,
       triggerName: trigger.name,
       skillName: trigger.skill,
       failOn,
@@ -1361,9 +1499,24 @@ function buildReportModeResults(
       failCheck,
       maxFindings,
     };
-    const outputResult =
-      outputResults.get(triggerReplayKey(trigger))?.shift() ??
-      outputResults.get(resultKey(trigger.name, trigger.skill))?.shift();
+    let outputResult = outputResults.get(triggerReplayKey(trigger))?.shift();
+    if (!outputResult) {
+      // Only a legacy artifact (predating triggerId) reaches this fallback.
+      // If 2+ current triggers share this name+skill, the fallback can't
+      // tell them apart — fail loudly instead of silently binding a report
+      // to the wrong trigger's policy (failOn/reportOn/etc).
+      const fallbackKey = resultKey(trigger.name, trigger.skill);
+      const sameFallbackKeyTriggers = matchedTriggers.filter(
+        (t) => resultKey(t.name, t.skill) === fallbackKey
+      );
+      if (sameFallbackKeyTriggers.length > 1) {
+        throw new Error(
+          `Findings file has no triggerId-matched result for trigger ${trigger.name} (${trigger.skill}), ` +
+            `and the legacy name/skill fallback is ambiguous: multiple current triggers share this name and skill`
+        );
+      }
+      outputResult = outputResults.get(fallbackKey)?.shift();
+    }
 
     if (!outputResult) {
       return {
@@ -1385,6 +1538,9 @@ function buildReportModeResults(
     return {
       ...baseResult,
       report: outputResult.report,
+      findingProcessingEvents: outputResult.findingProcessingEvents,
+      auxiliaryModel: outputResult.auxiliaryModel,
+      synthesisModel: outputResult.synthesisModel,
     };
   });
 
@@ -1447,7 +1603,9 @@ async function createCompletedSkillChecksForReport(
         minConfidence: result.minConfidence,
         failCheck: result.failCheck,
       });
-      updatedResults.push(withRenderedReviewResult({ ...result, checkRunUrl: check.url }));
+      updatedResults.push(
+        withRenderedReviewResult({ ...result, checkRunUrl: check.url, checkRunId: check.checkRunId })
+      );
       continue;
     }
 
@@ -1572,7 +1730,7 @@ async function finalizeReportWorkflow(
   canResolveStale: boolean,
   gate: ReviewFeedbackGate,
   triggerErrors: string[],
-  options: { failOnWriteError?: boolean } = {}
+  options: { failOnWriteError?: boolean; skippedTriggers?: ResolvedTrigger[]; inputs: ActionInputs }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -1590,6 +1748,11 @@ async function finalizeReportWorkflow(
   try {
     const findingsPath = writeFindingsOutput(reports, context, findingObservations, {
       triggerResults: toReplayTriggerResults(results),
+      ...buildBaseOutputOptions(options.inputs, [
+        ...toSkippedTriggers(options.skippedTriggers ?? [], context),
+        ...toErroredSkippedTriggers(results),
+      ]),
+      skillExecutions: toSkillExecutions(results),
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
@@ -1713,6 +1876,7 @@ async function runAnalyzeMode(
     context,
     runnerConcurrency,
     matchedTriggers,
+    skippedTriggers,
     skipCoreCheck,
   } = initResult;
 
@@ -1721,7 +1885,10 @@ async function runAnalyzeMode(
     setOutput('high-count', 0);
     setOutput('summary', skipCoreCheck?.title ?? 'No triggers matched');
     try {
-      const findingsPath = writeFindingsOutput([], context, [], { triggerResults: [] });
+      const findingsPath = writeFindingsOutput([], context, [], {
+        triggerResults: [],
+        ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+      });
       logAction(`Findings written to ${findingsPath}`);
     } catch (error) {
       setFailed(`Failed to write findings output: ${error}`);
@@ -1736,7 +1903,18 @@ async function runAnalyzeMode(
       name: 'execute triggers',
       attributes: { 'warden.trigger.count': matchedTriggers.length },
     },
-    () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs),
+    () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
+      onTriggerComplete: (completedSoFar) => {
+        const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
+        writeFindingsOutputLive(reportsSoFar, context, [], {
+          ...buildBaseOutputOptions(inputs, [
+            ...toSkippedTriggers(skippedTriggers, context),
+            ...toErroredSkippedTriggers(completedSoFar),
+          ]),
+          skillExecutions: toSkillExecutions(completedSoFar),
+        });
+      },
+    }),
   );
 
   const reports = results.flatMap((result) => (result.report ? [result.report] : []));
@@ -1747,6 +1925,11 @@ async function runAnalyzeMode(
   try {
     const findingsPath = writeFindingsOutput(reports, context, [], {
       triggerResults: toReplayTriggerResults(results),
+      ...buildBaseOutputOptions(inputs, [
+        ...toSkippedTriggers(skippedTriggers, context),
+        ...toErroredSkippedTriggers(results),
+      ]),
+      skillExecutions: toSkillExecutions(results),
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
@@ -1792,7 +1975,10 @@ async function runReportMode(
       const outputs = { findingsCount: 0, highCount: 0, summary: skipCoreCheck.title };
       setWorkflowOutputs(outputs);
       try {
-        const findingsPath = writeFindingsOutput([], context, [], { triggerResults: [] });
+        const findingsPath = writeFindingsOutput([], context, [], {
+          triggerResults: [],
+          ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+        });
         logAction(`Findings written to ${findingsPath}`);
       } catch (error) {
         warnAction(`Failed to write findings output: ${error}`);
@@ -1827,6 +2013,7 @@ async function runReportMode(
       try {
         const findingsPath = writeFindingsOutput([], context, cleanupFindingObservations, {
           triggerResults: [],
+          ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
         });
         logAction(`Findings written to ${findingsPath}`);
       } catch (error) {
@@ -1899,7 +2086,7 @@ async function runReportMode(
       canResolveStale,
       gate,
       triggerErrors,
-      { failOnWriteError: true },
+      { failOnWriteError: true, skippedTriggers, inputs },
     );
   } catch (error) {
     if (error instanceof ActionFailedError) {
@@ -1926,6 +2113,13 @@ export async function runPRWorkflow(
   eventPath: string,
   repoPath: string
 ): Promise<void> {
+  const reportInputPath = inputs.mode === 'report' && inputs.findingsFile
+    ? resolveFindingsFilePath(inputs.findingsFile, repoPath)
+    : undefined;
+  const preservePayload = reportInputPath !== undefined
+    && resolve(reportInputPath) === resolve(getFindingsOutputPath(repoPath));
+  clearStaleFindingsOutput(repoPath, { preservePayload });
+
   return Sentry.startSpan(
     { op: 'workflow.run', name: 'review pull_request' },
     async (span) => {
@@ -1988,7 +2182,9 @@ export async function runPRWorkflow(
         setOutput('high-count', 0);
         setOutput('summary', skipCoreCheck.title);
         try {
-          writeFindingsOutput([], context);
+          writeFindingsOutput([], context, [], {
+            ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+          });
         } catch (error) {
           warnAction(`Failed to write findings output: ${error}`);
         }
@@ -2008,7 +2204,9 @@ export async function runPRWorkflow(
           setOutput('high-count', 0);
           setOutput('summary', 'No triggers matched');
           try {
-            writeFindingsOutput([], context, cleanupFindingObservations);
+            writeFindingsOutput([], context, cleanupFindingObservations, {
+              ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+            });
           } catch (error) {
             warnAction(`Failed to write findings output: ${error}`);
           }
@@ -2030,6 +2228,16 @@ export async function runPRWorkflow(
           },
           () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
             checks: createTriggerCheckReporter(octokit, context),
+            onTriggerComplete: (completedSoFar) => {
+              const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
+              writeFindingsOutputLive(reportsSoFar, context, [], {
+                ...buildBaseOutputOptions(inputs, [
+                  ...toSkippedTriggers(skippedTriggers, context),
+                  ...toErroredSkippedTriggers(completedSoFar),
+                ]),
+                skillExecutions: toSkillExecutions(completedSoFar),
+              });
+            },
           }),
         );
       } catch (error) {
@@ -2088,6 +2296,8 @@ export async function runPRWorkflow(
         canResolveStale,
         gate,
         triggerErrors,
+        skippedTriggers,
+        inputs,
       );
 
       handleTriggerErrors(triggerErrors, matchedTriggers.length);

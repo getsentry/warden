@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EventContext, SkillReport } from '../../types/index.js';
@@ -16,9 +16,12 @@ vi.mock('../../utils/exec.js', async (importOriginal) => {
 
 import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js';
 import {
+  clearStaleDoneMarker,
+  clearStaleFindingsOutput,
   getFindingsOutputPath,
   prepareRuntimeEnvironment,
   writeFindingsOutput,
+  writeFindingsOutputLive,
 } from './base.js';
 import { FindingsOutputSchema } from '../reporting/output.js';
 
@@ -78,6 +81,7 @@ describe('findings output', () => {
 
     expect(filePath).toBe(join(tempDir, 'warden-findings.json'));
     expect(existsSync(filePath)).toBe(true);
+    expect(existsSync(`${filePath}.done`)).toBe(true);
     expect(readFileSync(process.env['GITHUB_OUTPUT']!, 'utf-8')).toBe(
       'findings-file=warden-findings.json\n'
     );
@@ -105,6 +109,140 @@ describe('findings output', () => {
     process.env['RUNNER_TEMP'] = runnerTemp;
 
     expect(getFindingsOutputPath()).toBe(join(runnerTemp, 'warden-findings.json'));
+  });
+});
+
+describe('clearStaleDoneMarker', () => {
+  let tempDir: string;
+  let previousGithubWorkspace: string | undefined;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'warden-clear-done-'));
+    previousGithubWorkspace = process.env['GITHUB_WORKSPACE'];
+    process.env['GITHUB_WORKSPACE'] = tempDir;
+  });
+
+  afterEach(() => {
+    if (previousGithubWorkspace === undefined) {
+      delete process.env['GITHUB_WORKSPACE'];
+    } else {
+      process.env['GITHUB_WORKSPACE'] = previousGithubWorkspace;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('removes a .done marker left over from a previous run at the same path', () => {
+    const filePath = getFindingsOutputPath(tempDir);
+    mkdirSync(tempDir, { recursive: true });
+    writeFileSync(`${filePath}.done`, '');
+
+    clearStaleDoneMarker(tempDir);
+
+    expect(existsSync(`${filePath}.done`)).toBe(false);
+  });
+
+  it('is a no-op when no .done marker exists', () => {
+    expect(() => clearStaleDoneMarker(tempDir)).not.toThrow();
+  });
+});
+
+describe('clearStaleFindingsOutput', () => {
+  let tempDir: string;
+  let previousGithubWorkspace: string | undefined;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'warden-clear-findings-'));
+    previousGithubWorkspace = process.env['GITHUB_WORKSPACE'];
+    process.env['GITHUB_WORKSPACE'] = tempDir;
+  });
+
+  afterEach(() => {
+    if (previousGithubWorkspace === undefined) {
+      delete process.env['GITHUB_WORKSPACE'];
+    } else {
+      process.env['GITHUB_WORKSPACE'] = previousGithubWorkspace;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('removes stale findings and their completion marker before a new run', () => {
+    const filePath = getFindingsOutputPath(tempDir);
+    writeFileSync(filePath, '{"stale":true}');
+    writeFileSync(`${filePath}.done`, '');
+
+    clearStaleFindingsOutput(tempDir);
+
+    expect(existsSync(filePath)).toBe(false);
+    expect(existsSync(`${filePath}.done`)).toBe(false);
+  });
+
+  it('preserves a report input while marking it in progress', () => {
+    const filePath = getFindingsOutputPath(tempDir);
+    writeFileSync(filePath, '{"replay":true}');
+    writeFileSync(`${filePath}.done`, '');
+
+    clearStaleFindingsOutput(tempDir, { preservePayload: true });
+
+    expect(readFileSync(filePath, 'utf-8')).toBe('{"replay":true}');
+    expect(existsSync(`${filePath}.done`)).toBe(false);
+  });
+});
+
+describe('writeFindingsOutputLive', () => {
+  let tempDir: string;
+  let previousGithubOutput: string | undefined;
+  let previousGithubWorkspace: string | undefined;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'warden-findings-live-'));
+    previousGithubOutput = process.env['GITHUB_OUTPUT'];
+    previousGithubWorkspace = process.env['GITHUB_WORKSPACE'];
+    process.env['GITHUB_OUTPUT'] = join(tempDir, 'github-output');
+    process.env['GITHUB_WORKSPACE'] = tempDir;
+  });
+
+  afterEach(() => {
+    if (previousGithubOutput === undefined) {
+      delete process.env['GITHUB_OUTPUT'];
+    } else {
+      process.env['GITHUB_OUTPUT'] = previousGithubOutput;
+    }
+    if (previousGithubWorkspace === undefined) {
+      delete process.env['GITHUB_WORKSPACE'];
+    } else {
+      process.env['GITHUB_WORKSPACE'] = previousGithubWorkspace;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('writes an in-progress snapshot without a .done marker or the findings-file output', () => {
+    const filePath = getFindingsOutputPath(tempDir);
+
+    writeFindingsOutputLive([createReport()], createContext(tempDir), []);
+
+    expect(existsSync(filePath)).toBe(true);
+    expect(existsSync(`${filePath}.done`)).toBe(false);
+    expect(existsSync(process.env['GITHUB_OUTPUT']!)).toBe(false);
+
+    const payload = FindingsOutputSchema.parse(JSON.parse(readFileSync(filePath, 'utf-8')));
+    expect(payload.summary.totalFindings).toBe(1);
+  });
+
+  it('removes a stale .done marker left over from a previous run at the same path', () => {
+    const filePath = getFindingsOutputPath(tempDir);
+    mkdirSync(join(tempDir), { recursive: true });
+    writeFileSync(`${filePath}.done`, '');
+
+    writeFindingsOutputLive([createReport()], createContext(tempDir), []);
+
+    expect(existsSync(`${filePath}.done`)).toBe(false);
+  });
+
+  it('never throws when the write fails', () => {
+    const context = createContext(tempDir);
+    context.repoPath = '/nonexistent-parent/that-cannot-be-created\0invalid';
+
+    expect(() => writeFindingsOutputLive([createReport()], context, [])).not.toThrow();
   });
 });
 

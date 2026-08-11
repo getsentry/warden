@@ -4,17 +4,18 @@
  * Shared infrastructure for PR and schedule workflows.
  */
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Octokit } from '@octokit/rest';
 import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
+import { writeFileAtomic } from '../../utils/fs.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import { buildFindingsOutput } from '../reporting/output.js';
-import type { ReplayTriggerResult } from '../reporting/output.js';
+import type { BuildFindingsOutputOptions } from '../reporting/output.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { ActionInputs } from '../inputs.js';
@@ -348,6 +349,9 @@ export async function getDefaultBranchFromAPI(
 // Findings Output File
 // -----------------------------------------------------------------------------
 
+export const FINDINGS_OUTPUT_FILENAME = 'warden-findings.json';
+export const FINDINGS_OUTPUT_DONE_FILENAME = `${FINDINGS_OUTPUT_FILENAME}.done`;
+
 function getFindingsOutputValue(filePath: string, repoPath: string): string {
   const relativePath = normalizePath(relative(repoPath, filePath));
   return isRepoRelativePath(relativePath) ? relativePath : filePath;
@@ -362,11 +366,51 @@ function getFindingsOutputValue(filePath: string, repoPath: string): string {
  */
 export function getFindingsOutputPath(repoPath?: string): string {
   if (repoPath && process.env['GITHUB_WORKSPACE']) {
-    return join(repoPath, 'warden-findings.json');
+    return join(repoPath, FINDINGS_OUTPUT_FILENAME);
   }
 
   const tmpDir = process.env['RUNNER_TEMP'] ?? tmpdir();
-  return join(tmpDir, 'warden-findings.json');
+  return join(tmpDir, FINDINGS_OUTPUT_FILENAME);
+}
+
+/**
+ * Remove a `.done` marker left over from a previous write at this same path.
+ * Used by workflow-start cleanup and as a defensive backstop before live
+ * writes.
+ */
+export function clearStaleDoneMarker(repoPath: string | undefined): void {
+  const filePath = getFindingsOutputPath(repoPath);
+  if (!existsSync(`${filePath}.done`)) {
+    return;
+  }
+  try {
+    unlinkSync(`${filePath}.done`);
+  } catch {
+    // Best-effort cleanup; a stale marker left behind is not fatal.
+  }
+}
+
+/**
+ * Clear findings state left at the canonical output path by an earlier action
+ * invocation. Report mode may preserve the payload when it is also the replay
+ * artifact that the current invocation must consume.
+ */
+export function clearStaleFindingsOutput(
+  repoPath: string | undefined,
+  options: { preservePayload?: boolean } = {}
+): void {
+  const filePath = getFindingsOutputPath(repoPath);
+  clearStaleDoneMarker(repoPath);
+
+  if (options.preservePayload || !existsSync(filePath)) {
+    return;
+  }
+
+  try {
+    unlinkSync(filePath);
+  } catch {
+    // Best-effort cleanup; live output remains non-fatal by design.
+  }
 }
 
 /**
@@ -374,21 +418,48 @@ export function getFindingsOutputPath(repoPath?: string): string {
  *
  * Sets `findings-file` to a repo-relative path when possible so downstream
  * steps can reference the path without tripping ignore processors on absolute
- * runner temp paths.
+ * runner temp paths. This is always a run's true final write — a `.done`
+ * sidecar is written alongside it so a local follower (see
+ * `writeFindingsOutputLive`) can tell a finished run from one still in
+ * progress.
  */
 export function writeFindingsOutput(
   reports: SkillReport[],
   context: EventContext,
   findingObservations: FindingObservation[] = [],
-  options: { triggerResults?: ReplayTriggerResult[] } = {}
+  options: BuildFindingsOutputOptions = {}
 ): string {
   const filePath = getFindingsOutputPath(context.repoPath);
-  const output = buildFindingsOutput(reports, context, findingObservations, {
-    triggerResults: options.triggerResults,
-  });
+  const output = buildFindingsOutput(reports, context, findingObservations, options);
 
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, JSON.stringify(output, null, 2));
+  writeFileAtomic(filePath, JSON.stringify(output, null, 2));
+  writeFileAtomic(`${filePath}.done`, '');
   setOutput('findings-file', getFindingsOutputValue(filePath, context.repoPath));
   return filePath;
+}
+
+/**
+ * Write the findings file as an in-progress snapshot: no `.done` sidecar, no
+ * `findings-file` action output (that must only ever reflect the run's one
+ * true final write, never race a downstream step reading it mid-run). Never
+ * throws — a transient write hiccup here must not abort a run the way a
+ * final-write failure legitimately can.
+ *
+ * Also clears a stale `.done` sidecar as a defensive backstop. Workflow
+ * entrypoints call `clearStaleFindingsOutput` before fallible setup.
+ */
+export function writeFindingsOutputLive(
+  reports: SkillReport[],
+  context: EventContext,
+  findingObservations: FindingObservation[] = [],
+  options: BuildFindingsOutputOptions = {}
+): void {
+  try {
+    clearStaleDoneMarker(context.repoPath);
+    const filePath = getFindingsOutputPath(context.repoPath);
+    const output = buildFindingsOutput(reports, context, findingObservations, options);
+    writeFileAtomic(filePath, JSON.stringify(output, null, 2));
+  } catch (error) {
+    console.error(`::warning::Failed to write live findings output: ${error}`);
+  }
 }

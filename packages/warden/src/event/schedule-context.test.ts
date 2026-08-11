@@ -66,4 +66,25 @@ describe('buildScheduleEventContext', () => {
       },
     ]);
   });
+
+  it('excludes Warden output artifacts from broad scheduled scans', async () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'warden-schedule-'));
+    tempDirs.push(repoPath);
+    mkdirSync(join(repoPath, 'src'), { recursive: true });
+    writeFileSync(join(repoPath, 'src/index.ts'), 'export const value = true;');
+    writeFileSync(join(repoPath, 'warden-findings.json'), '{"version":"1"}');
+    writeFileSync(join(repoPath, 'warden-findings.json.done'), '');
+
+    const context = await buildScheduleEventContext({
+      patterns: ['**/*'],
+      ignorePatterns: ['warden-findings.json', 'warden-findings.json.done'],
+      repoPath,
+      owner: 'test',
+      name: 'repo',
+      defaultBranch: 'main',
+      headSha: 'abc123',
+    });
+
+    expect(context.pullRequest?.files.map((file) => file.filename)).toEqual(['src/index.ts']);
+  });
 });

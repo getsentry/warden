@@ -19,6 +19,7 @@ import type { SkillTaskOptions } from '../../cli/output/tasks.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
 import { DEFAULT_FILE_CONCURRENCY, type AnalysisChunkingConfig } from '../../sdk/types.js';
+import type { FindingProcessingEvent } from '../../sdk/types.js';
 import { SkillRunnerError } from '../../sdk/errors.js';
 import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
@@ -58,6 +59,7 @@ function toAnalysisChunkingConfig(
  */
 export interface TriggerCheckRun {
   url?: string;
+  checkRunId?: number;
   complete(report: SkillReport, options: TriggerCheckCompleteOptions): Promise<void>;
   fail(error: unknown): Promise<void>;
 }
@@ -112,6 +114,7 @@ export interface TriggerExecutorDeps {
  */
 export interface TriggerResult {
   triggerId?: string;
+  skillExecutionId?: string;
   triggerName: string;
   skillName: string;
   report?: SkillReport;
@@ -123,8 +126,21 @@ export interface TriggerResult {
   requestChanges?: boolean;
   failCheck?: boolean;
   checkRunUrl?: string;
+  checkRunId?: number;
   maxFindings?: number;
+  auxiliaryModel?: string;
+  synthesisModel?: string;
   error?: unknown;
+  /** Verification/merge events captured during post-processing, for provenance export. */
+  findingProcessingEvents?: FindingProcessingEvent[];
+  /**
+   * The review event actually posted to GitHub by `postTriggerReview`, set
+   * only when posting succeeds. Distinct from `renderResult.review.event`,
+   * which reflects pre-posting render intent and can diverge from what (if
+   * anything) actually posted — the gate can block the write, or posting can
+   * fall back to checks-only after rendering already decided an event.
+   */
+  reviewEventPosted?: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
 }
 
 // -----------------------------------------------------------------------------
@@ -155,10 +171,12 @@ export async function executeTrigger(
       // Create skill check (only for PRs)
       let skillCheck: TriggerCheckRun | undefined;
       let skillCheckUrl: string | undefined;
+      let skillCheckRunId: number | undefined;
       if (deps.checks && context.pullRequest) {
         try {
           skillCheck = await deps.checks.start(trigger.skill);
           skillCheckUrl = skillCheck.url;
+          skillCheckRunId = skillCheck.checkRunId;
         } catch (error) {
           console.error(`::warning::Failed to create skill check for ${trigger.skill}: ${error}`);
         }
@@ -204,7 +222,15 @@ export async function executeTrigger(
           },
         };
 
-        const callbacks = createDefaultCallbacks([taskOptions], CI_OUTPUT_MODE, Verbosity.Normal);
+        const defaultCallbacks = createDefaultCallbacks([taskOptions], CI_OUTPUT_MODE, Verbosity.Normal);
+        const findingProcessingEvents: FindingProcessingEvent[] = [];
+        const callbacks = {
+          ...defaultCallbacks,
+          onFindingProcessing: (skillName: string, event: FindingProcessingEvent) => {
+            findingProcessingEvents.push(event);
+            defaultCallbacks.onFindingProcessing?.(skillName, event);
+          },
+        };
         const fileConcurrency = deps.semaphore ? Number.MAX_SAFE_INTEGER : DEFAULT_FILE_CONCURRENCY;
         const result = await runSkillTask(taskOptions, fileConcurrency, callbacks, deps.semaphore);
         const report = result.report;
@@ -257,6 +283,7 @@ export async function executeTrigger(
         logGroupEnd();
         return {
           triggerId: trigger.id,
+          skillExecutionId: trigger.skillExecutionId,
           triggerName: trigger.name,
           skillName: trigger.skill,
           report,
@@ -268,7 +295,11 @@ export async function executeTrigger(
           requestChanges,
           failCheck,
           checkRunUrl: skillCheckUrl,
+          checkRunId: skillCheckRunId,
           maxFindings,
+          auxiliaryModel: trigger.auxiliaryModel,
+          synthesisModel: trigger.synthesisModel,
+          findingProcessingEvents,
         };
       } catch (error) {
         if (error instanceof ActionFailedError) throw error;
@@ -288,7 +319,13 @@ export async function executeTrigger(
 
         console.error(`::warning::Trigger ${trigger.name} failed: ${error}`);
         logGroupEnd();
-        return { triggerId: trigger.id, triggerName: trigger.name, skillName: trigger.skill, error };
+        return {
+          triggerId: trigger.id,
+          skillExecutionId: trigger.skillExecutionId,
+          triggerName: trigger.name,
+          skillName: trigger.skill,
+          error,
+        };
       }
     },
   );

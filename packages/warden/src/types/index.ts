@@ -125,7 +125,15 @@ export const FindingSchema = z.object({
   sourceSnippet: SourceSnippetSchema.optional(),
   elapsedMs: z.number().nonnegative().optional(),
 });
-export type Finding = z.infer<typeof FindingSchema>;
+/**
+ * `reportedId` is intentionally not part of `FindingSchema`: that schema also
+ * validates raw model output in `sdk/extract.ts` and `sdk/verify.ts`, and this
+ * field must only ever be set by Warden's own dedupe/recenter logic in
+ * `poster.ts` — never claimed by a model. Widening the type here (instead of
+ * adding it to the schema) means any `FindingSchema`-validated parse strips a
+ * model-supplied `reportedId` rather than trusting it.
+ */
+export type Finding = z.infer<typeof FindingSchema> & { reportedId?: string };
 
 /**
  * Get the effective line number for a finding (endLine if present, otherwise startLine).
@@ -360,7 +368,7 @@ export const SkillReportSchema = z.object({
   /** Runtime backend used for this skill's analysis. */
   runtime: z.string().optional(),
 });
-export type SkillReport = z.infer<typeof SkillReportSchema>;
+export type SkillReport = Omit<z.infer<typeof SkillReportSchema>, 'findings'> & { findings: Finding[] };
 
 // GitHub event types
 export const GitHubEventTypeSchema = z.enum([

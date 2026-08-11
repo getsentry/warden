@@ -125,7 +125,7 @@ function matchPathFilters(
   return true;
 }
 
-function matchPullRequestState(trigger: ResolvedTrigger, context: EventContext): boolean {
+export function matchPullRequestState(trigger: ResolvedTrigger, context: EventContext): boolean {
   const labels = context.pullRequest?.labels ?? [];
   const labelMatches =
     trigger.labels !== undefined &&

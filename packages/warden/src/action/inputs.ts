@@ -39,6 +39,8 @@ export interface ActionInputs {
   failCheck?: boolean;
   /** Max concurrent trigger executions */
   parallel: number;
+  /** The action ref that produced this run, surfaced in the findings output harness field */
+  actionRef?: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -127,6 +129,7 @@ export function parseActionInputs(): ActionInputs {
     requestChanges,
     failCheck,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
+    actionRef: getInput('action-ref') || undefined,
   };
 }
 

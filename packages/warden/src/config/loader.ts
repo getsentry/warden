@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, normalize } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { Sentry } from '../sentry.js';
@@ -362,6 +363,8 @@ export function loadLayeredWardenConfig(
 export interface ResolvedTrigger {
   /** Stable replay identity derived from the skill and trigger configuration */
   id: string;
+  /** Short, stable join key for this skill×trigger execution, derived from `id`. */
+  skillExecutionId: string;
   /** Skill name (used for display and deduplication) */
   name: string;
   /** Skill reference (same as name, for downstream compatibility) */
@@ -421,6 +424,11 @@ export interface ResolvedTrigger {
   chunking?: ChunkingConfig;
   /** Schedule-specific configuration */
   schedule?: ScheduleConfig;
+}
+
+/** `id` is a verbose JSON blob, too unwieldy for a repeated cross-artifact join key. */
+function deriveSkillExecutionId(identity: string): string {
+  return createHash('sha256').update(identity).digest('hex').slice(0, 12);
 }
 
 function triggerIdentity(skill: SkillConfig, trigger: SkillTrigger | undefined): string {
@@ -539,6 +547,7 @@ export function resolveSkillConfigs(
       // Wildcard: no triggers means run everywhere
       result.push({
         id: triggerIdentity(skill, undefined),
+        skillExecutionId: deriveSkillExecutionId(triggerIdentity(skill, undefined)),
         name: skill.name,
         skill: skill.name,
         type: '*',
@@ -570,6 +579,7 @@ export function resolveSkillConfigs(
       for (const trigger of skill.triggers) {
         result.push({
           id: triggerIdentity(skill, trigger),
+          skillExecutionId: deriveSkillExecutionId(triggerIdentity(skill, trigger)),
           name: skill.name,
           skill: skill.name,
           type: trigger.type,

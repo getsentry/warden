@@ -138,6 +138,7 @@ describe('matchTrigger', () => {
 
   const baseTrigger: ResolvedTrigger = {
     id: 'test-trigger-id',
+    skillExecutionId: 'test-skill-execution-id',
     name: 'test-trigger',
     skill: 'test-skill',
     type: 'pull_request',
