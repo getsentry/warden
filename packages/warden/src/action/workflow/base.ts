@@ -374,13 +374,9 @@ export function getFindingsOutputPath(repoPath?: string): string {
 }
 
 /**
- * Remove a `.done` marker left over from a previous run at this same path.
- * Call once, at the very start of the workflow, before any fallible setup
- * (config load, API calls) — a live write only happens after the first
- * trigger settles, so without this a stale `.done` from a prior run would
- * make a brand-new, still in-progress run look finished to a follower for
- * however long setup plus that first trigger takes. Takes `repoPath`
- * directly (not `EventContext`) so it's callable before the context exists.
+ * Remove a `.done` marker left over from a previous write at this same path.
+ * Used by workflow-start cleanup and as a defensive backstop before live
+ * writes.
  */
 export function clearStaleDoneMarker(repoPath: string | undefined): void {
   const filePath = getFindingsOutputPath(repoPath);
@@ -449,9 +445,8 @@ export function writeFindingsOutput(
  * throws — a transient write hiccup here must not abort a run the way a
  * final-write failure legitimately can.
  *
- * Also clears a stale `.done` sidecar left over from a previous run as a
- * defensive backstop — the primary guarantee is `clearStaleDoneMarker`
- * called once up front by the caller, before this run's first write.
+ * Also clears a stale `.done` sidecar as a defensive backstop. Workflow
+ * entrypoints call `clearStaleFindingsOutput` before fallible setup.
  */
 export function writeFindingsOutputLive(
   reports: SkillReport[],
