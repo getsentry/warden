@@ -17,6 +17,7 @@ vi.mock('../../utils/exec.js', async (importOriginal) => {
 import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js';
 import {
   clearStaleDoneMarker,
+  clearStaleFindingsOutput,
   getFindingsOutputPath,
   prepareRuntimeEnvironment,
   writeFindingsOutput,
@@ -142,6 +143,48 @@ describe('clearStaleDoneMarker', () => {
 
   it('is a no-op when no .done marker exists', () => {
     expect(() => clearStaleDoneMarker(tempDir)).not.toThrow();
+  });
+});
+
+describe('clearStaleFindingsOutput', () => {
+  let tempDir: string;
+  let previousGithubWorkspace: string | undefined;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'warden-clear-findings-'));
+    previousGithubWorkspace = process.env['GITHUB_WORKSPACE'];
+    process.env['GITHUB_WORKSPACE'] = tempDir;
+  });
+
+  afterEach(() => {
+    if (previousGithubWorkspace === undefined) {
+      delete process.env['GITHUB_WORKSPACE'];
+    } else {
+      process.env['GITHUB_WORKSPACE'] = previousGithubWorkspace;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('removes stale findings and their completion marker before a new run', () => {
+    const filePath = getFindingsOutputPath(tempDir);
+    writeFileSync(filePath, '{"stale":true}');
+    writeFileSync(`${filePath}.done`, '');
+
+    clearStaleFindingsOutput(tempDir);
+
+    expect(existsSync(filePath)).toBe(false);
+    expect(existsSync(`${filePath}.done`)).toBe(false);
+  });
+
+  it('preserves a report input while marking it in progress', () => {
+    const filePath = getFindingsOutputPath(tempDir);
+    writeFileSync(filePath, '{"replay":true}');
+    writeFileSync(`${filePath}.done`, '');
+
+    clearStaleFindingsOutput(tempDir, { preservePayload: true });
+
+    expect(readFileSync(filePath, 'utf-8')).toBe('{"replay":true}');
+    expect(existsSync(`${filePath}.done`)).toBe(false);
   });
 });
 

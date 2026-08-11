@@ -8,7 +8,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import { Sentry, logger, emitStaleResolutionMetric, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import {
@@ -68,7 +68,8 @@ import {
   setOutput,
   setFailed,
   ActionFailedError,
-  clearStaleDoneMarker,
+  clearStaleFindingsOutput,
+  getFindingsOutputPath,
   ensureClaudeAuth,
   logGroup,
   logGroupEnd,
@@ -2112,7 +2113,12 @@ export async function runPRWorkflow(
   eventPath: string,
   repoPath: string
 ): Promise<void> {
-  clearStaleDoneMarker(repoPath);
+  const reportInputPath = inputs.mode === 'report' && inputs.findingsFile
+    ? resolveFindingsFilePath(inputs.findingsFile, repoPath)
+    : undefined;
+  const preservePayload = reportInputPath !== undefined
+    && resolve(reportInputPath) === resolve(getFindingsOutputPath(repoPath));
+  clearStaleFindingsOutput(repoPath, { preservePayload });
 
   return Sentry.startSpan(
     { op: 'workflow.run', name: 'review pull_request' },

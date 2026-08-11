@@ -30,7 +30,9 @@ import {
   setOutput,
   setFailed,
   ActionFailedError,
-  clearStaleDoneMarker,
+  clearStaleFindingsOutput,
+  FINDINGS_OUTPUT_DONE_FILENAME,
+  FINDINGS_OUTPUT_FILENAME,
   logGroup,
   logGroupEnd,
   prepareRuntimeEnvironment,
@@ -76,7 +78,7 @@ async function runScheduleWorkflowInner(
 ): Promise<void> {
   const githubRepository = process.env['GITHUB_REPOSITORY'];
   setRepositoryScope(githubRepository);
-  clearStaleDoneMarker(repoPath);
+  clearStaleFindingsOutput(repoPath);
 
   logGroup('Loading configuration');
   if (inputs.baseConfigPath) {
@@ -217,7 +219,11 @@ async function runScheduleWorkflowInner(
 
       // Build context from paths filter
       const patterns = resolved.filters?.paths ?? ['**/*'];
-      const ignorePatterns = resolved.filters?.ignorePaths;
+      const ignorePatterns = [
+        ...(resolved.filters?.ignorePaths ?? []),
+        FINDINGS_OUTPUT_FILENAME,
+        FINDINGS_OUTPUT_DONE_FILENAME,
+      ];
 
       const context = await buildScheduleEventContext({
         patterns,

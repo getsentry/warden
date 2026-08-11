@@ -349,6 +349,9 @@ export async function getDefaultBranchFromAPI(
 // Findings Output File
 // -----------------------------------------------------------------------------
 
+export const FINDINGS_OUTPUT_FILENAME = 'warden-findings.json';
+export const FINDINGS_OUTPUT_DONE_FILENAME = `${FINDINGS_OUTPUT_FILENAME}.done`;
+
 function getFindingsOutputValue(filePath: string, repoPath: string): string {
   const relativePath = normalizePath(relative(repoPath, filePath));
   return isRepoRelativePath(relativePath) ? relativePath : filePath;
@@ -363,11 +366,11 @@ function getFindingsOutputValue(filePath: string, repoPath: string): string {
  */
 export function getFindingsOutputPath(repoPath?: string): string {
   if (repoPath && process.env['GITHUB_WORKSPACE']) {
-    return join(repoPath, 'warden-findings.json');
+    return join(repoPath, FINDINGS_OUTPUT_FILENAME);
   }
 
   const tmpDir = process.env['RUNNER_TEMP'] ?? tmpdir();
-  return join(tmpDir, 'warden-findings.json');
+  return join(tmpDir, FINDINGS_OUTPUT_FILENAME);
 }
 
 /**
@@ -388,6 +391,29 @@ export function clearStaleDoneMarker(repoPath: string | undefined): void {
     unlinkSync(`${filePath}.done`);
   } catch {
     // Best-effort cleanup; a stale marker left behind is not fatal.
+  }
+}
+
+/**
+ * Clear findings state left at the canonical output path by an earlier action
+ * invocation. Report mode may preserve the payload when it is also the replay
+ * artifact that the current invocation must consume.
+ */
+export function clearStaleFindingsOutput(
+  repoPath: string | undefined,
+  options: { preservePayload?: boolean } = {}
+): void {
+  const filePath = getFindingsOutputPath(repoPath);
+  clearStaleDoneMarker(repoPath);
+
+  if (options.preservePayload || !existsSync(filePath)) {
+    return;
+  }
+
+  try {
+    unlinkSync(filePath);
+  } catch {
+    // Best-effort cleanup; live output remains non-fatal by design.
   }
 }
 

@@ -58,6 +58,7 @@ vi.mock('./base.js', async () => {
     getDefaultBranchFromAPI: vi.fn(() => Promise.resolve('main')),
     writeFindingsOutputLive: vi.fn(actual['writeFindingsOutputLive'] as (...args: unknown[]) => void),
     writeFindingsOutput: vi.fn(actual['writeFindingsOutput'] as (...args: unknown[]) => string),
+    clearStaleFindingsOutput: vi.fn(),
     // Override handleTriggerErrors to use the mocked setFailed
     handleTriggerErrors: (triggerErrors: string[], totalTriggers: number) => {
       if (triggerErrors.length === 0) return;
@@ -103,7 +104,12 @@ import { runSkill } from '../../sdk/runner.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { createOrUpdateIssue } from '../../output/github-issues.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
-import { setFailed, writeFindingsOutput, writeFindingsOutputLive } from './base.js';
+import {
+  clearStaleFindingsOutput,
+  setFailed,
+  writeFindingsOutput,
+  writeFindingsOutputLive,
+} from './base.js';
 import { runScheduleWorkflow } from './schedule.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 
@@ -115,6 +121,7 @@ const mockResolveSkillAsync = vi.mocked(resolveSkillAsync);
 const mockSetFailed = vi.mocked(setFailed);
 const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
 const mockWriteFindingsOutputLive = vi.mocked(writeFindingsOutputLive);
+const mockClearStaleFindingsOutput = vi.mocked(clearStaleFindingsOutput);
 
 // -----------------------------------------------------------------------------
 // Mock Octokit Factory
@@ -663,6 +670,20 @@ describe('runScheduleWorkflow', () => {
   // ---------------------------------------------------------------------------
 
   describe('live findings output', () => {
+    it('clears stale output before setup and reserves output artifacts from every scan', async () => {
+      await runScheduleWorkflow(mockOctokit, createDefaultInputs(), SCHEDULE_MULTI_FIXTURES);
+
+      expect(mockClearStaleFindingsOutput).toHaveBeenCalledWith(SCHEDULE_MULTI_FIXTURES);
+      expect(mockClearStaleFindingsOutput.mock.invocationCallOrder[0]!)
+        .toBeLessThan(mockBuildContext.mock.invocationCallOrder[0]!);
+      for (const [options] of mockBuildContext.mock.calls) {
+        expect(options.ignorePatterns).toEqual(expect.arrayContaining([
+          'warden-findings.json',
+          'warden-findings.json.done',
+        ]));
+      }
+    });
+
     it('writes a live snapshot after each trigger, marking not-yet-reached triggers as pending', async () => {
       mockResolveSkillAsync
         .mockResolvedValueOnce({ name: 'test-skill-a', description: 'Test skill A', prompt: 'Review code' })

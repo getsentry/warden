@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -113,6 +113,7 @@ vi.mock('./base.js', async () => {
     writeFindingsOutput: vi.fn(actual.writeFindingsOutput),
     writeFindingsOutputLive: vi.fn(actual.writeFindingsOutputLive),
     clearStaleDoneMarker: vi.fn(actual.clearStaleDoneMarker),
+    clearStaleFindingsOutput: vi.fn(),
   };
 });
 
@@ -120,7 +121,12 @@ vi.mock('./base.js', async () => {
 import { runSkillTask } from '../../cli/output/tasks.js';
 import { fetchExistingComments, deduplicateFindings, processDuplicateActions } from '../../output/dedup.js';
 import { evaluateFixAttempts } from '../fix-evaluation/index.js';
-import { setFailed, writeFindingsOutput, writeFindingsOutputLive, clearStaleDoneMarker } from './base.js';
+import {
+  clearStaleFindingsOutput,
+  setFailed,
+  writeFindingsOutput,
+  writeFindingsOutputLive,
+} from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { Semaphore } from '../../utils/index.js';
@@ -135,7 +141,7 @@ const mockEvaluateFixAttempts = vi.mocked(evaluateFixAttempts);
 const mockSetFailed = vi.mocked(setFailed);
 const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
 const mockWriteFindingsOutputLive = vi.mocked(writeFindingsOutputLive);
-const mockClearStaleDoneMarker = vi.mocked(clearStaleDoneMarker);
+const mockClearStaleFindingsOutput = vi.mocked(clearStaleFindingsOutput);
 
 // Type helper for mocking Octokit responses
 type GetPullResponse = Awaited<ReturnType<Octokit['pulls']['get']>>;
@@ -444,6 +450,46 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
       ]);
       expect(finalOptions?.resolvedDefaults).toBeDefined();
+    });
+
+    it('preserves the canonical analyze artifact when report mode starts', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const sourceFindingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+      const reportRepoPath = mkdtempSync(join(tmpdir(), 'warden-report-repo-'));
+      cpSync(FIXTURES_DIR, reportRepoPath, { recursive: true });
+      const findingsFile = join(reportRepoPath, 'warden-findings.json');
+      copyFileSync(sourceFindingsFile, findingsFile);
+      const previousGithubWorkspace = process.env['GITHUB_WORKSPACE'];
+      process.env['GITHUB_WORKSPACE'] = reportRepoPath;
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          reportRepoPath
+        );
+
+        expect(mockClearStaleFindingsOutput).toHaveBeenCalledWith(
+          reportRepoPath,
+          { preservePayload: true }
+        );
+      } finally {
+        if (previousGithubWorkspace === undefined) {
+          delete process.env['GITHUB_WORKSPACE'];
+        } else {
+          process.env['GITHUB_WORKSPACE'] = previousGithubWorkspace;
+        }
+        rmSync(dirname(sourceFindingsFile), { recursive: true, force: true });
+        rmSync(reportRepoPath, { recursive: true, force: true });
+      }
     });
 
     it('report mode round-trips analyze mode\'s auxiliaryModel/synthesisModel through the replay artifact', async () => {
@@ -1596,13 +1642,16 @@ describe('runPRWorkflow', () => {
       ]);
     });
 
-    it('clears a stale .done marker before the first trigger settles, not lazily on the first live write', async () => {
+    it('clears stale findings before the first trigger settles, not lazily on the first live write', async () => {
       mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
 
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
-      expect(mockClearStaleDoneMarker).toHaveBeenCalledTimes(1);
-      expect(mockClearStaleDoneMarker.mock.invocationCallOrder[0]!)
+      expect(mockClearStaleFindingsOutput).toHaveBeenCalledWith(
+        FIXTURES_DIR,
+        { preservePayload: false }
+      );
+      expect(mockClearStaleFindingsOutput.mock.invocationCallOrder[0]!)
         .toBeLessThan(mockRunSkillTask.mock.invocationCallOrder[0]!);
     });
 
