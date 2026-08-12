@@ -1245,7 +1245,6 @@ async function runSkillAnalysis(
       auxiliaryMaxRetries: options.auxiliaryMaxRetries,
       verifyFindings: options.verifyFindings,
       maxTurns: options.maxTurns,
-      effort: options.effort,
       abortController: options.abortController,
       pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
       prContext,

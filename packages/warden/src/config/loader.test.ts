@@ -1181,11 +1181,38 @@ describe('maxTurns config', () => {
     expect(result.data?.defaults?.agent?.effort).toBe('medium');
   });
 
+  it('accepts effort in auxiliary defaults', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        auxiliary: { effort: 'high' },
+      },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.auxiliary?.effort).toBe('high');
+  });
+
   it('rejects unknown effort levels', () => {
     const config = {
       version: 1,
       defaults: {
         agent: { effort: 'extreme' },
+      },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects unknown auxiliary effort levels', () => {
+    const config = {
+      version: 1,
+      defaults: {
+        auxiliary: { effort: 'extreme' },
       },
       skills: [],
     };

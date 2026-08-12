@@ -209,6 +209,8 @@ describe('executeTrigger', () => {
       ignore: { paths: ['**/fixtures/**'] },
       scan: { maxFiles: 5 },
       chunking: { maxContextFiles: 12, filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }] },
+      auxiliaryModel: 'anthropic/aux-model',
+      auxiliaryEffort: 'high',
       auxiliaryMaxRetries: 9,
     }, {
       ...mockDeps,
@@ -222,6 +224,8 @@ describe('executeTrigger', () => {
           ignore: { paths: ['**/fixtures/**'] },
           scan: { maxFiles: 5 },
           chunking: { filePatterns: [{ pattern: '**/*.snap', mode: 'skip' }] },
+          auxiliaryModel: 'anthropic/aux-model',
+          auxiliaryEffort: 'high',
           auxiliaryMaxRetries: 9,
         }),
       }),

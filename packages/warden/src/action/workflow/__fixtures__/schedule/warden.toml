@@ -3,6 +3,9 @@ version = 1
 [defaults]
 auxiliaryMaxRetries = 3
 
+[defaults.auxiliary]
+effort = "medium"
+
 [defaults.synthesis]
 model = "anthropic/repo-synth-model"
 

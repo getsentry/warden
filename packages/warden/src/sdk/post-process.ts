@@ -18,7 +18,6 @@ export interface PostProcessFindingsOptions {
   auxiliaryMaxRetries?: number;
   verifyFindings?: boolean;
   maxTurns?: number;
-  effort?: Effort;
   abortController?: AbortController;
   pathToClaudeCodeExecutable?: string;
   prContext?: PromptPRContext;

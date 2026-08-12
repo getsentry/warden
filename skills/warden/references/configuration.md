@@ -94,7 +94,9 @@ Warden uses different model lanes for different kinds of work:
 
 If `[defaults.synthesis].model` is omitted, synthesis falls back to `[defaults.auxiliary].model`.
 
-`[defaults.agent].effort` optionally controls repo-aware skill reasoning across runtimes. Supported values are `off`, `low`, `medium`, `high`, and `xhigh`. When omitted, Warden sends explicit `high` adaptive thinking to the Claude runtime; Pi uses its own default thinking level.
+`[defaults.agent].effort` optionally controls repo-aware skill reasoning across runtimes. Supported values are `off`, `low`, `medium`, `high`, `xhigh`, and `max`. When omitted, Warden sends explicit `high` adaptive thinking to the Claude runtime; Pi uses its own default thinking level.
+
+`[defaults.auxiliary].effort` optionally controls reasoning effort for Pi-backed auxiliary structured calls such as extraction repair, verification, merge, dedupe, and fix evaluation. When omitted, Pi uses its own default. Claude structured helper calls currently ignore this field.
 
 ## Model Precedence
 
