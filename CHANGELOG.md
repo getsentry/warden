@@ -1,4 +1,38 @@
 # Changelog
+## 0.44.0
+
+### New Features ✨
+
+- (action) Extend v1 findings output metadata by @dcramer in [#467](https://github.com/getsentry/warden/pull/467)
+
+### Bug Fixes 🐛
+
+#### Github
+
+- Link details to the exact check run by @sentry-junior in [#457](https://github.com/getsentry/warden/pull/457)
+- Link check details to GitHub results by @sentry-junior in [#430](https://github.com/getsentry/warden/pull/430)
+
+#### Other
+
+- (extraction) Report malformed model output accurately by @sentry-junior in [#461](https://github.com/getsentry/warden/pull/461)
+- (telemetry) Allow more time for Sentry flush by @sentry-junior in [#454](https://github.com/getsentry/warden/pull/454)
+
+### Documentation 📚
+
+- (quickstart) Add Warden setup prompt by @sentry-junior in [#453](https://github.com/getsentry/warden/pull/453)
+- (skills) Document ready_for_review and other PR actions by @sentry-junior in [#464](https://github.com/getsentry/warden/pull/464)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump nanoid from 5.1.11 to 5.1.16 by @dependabot in [#465](https://github.com/getsentry/warden/pull/465)
+- Bump hono from 4.12.22 to 4.13.0 by @dependabot in [#463](https://github.com/getsentry/warden/pull/463)
+
+#### Other
+
+- (pi) Update to 0.84.1 by @sentry-junior in [#468](https://github.com/getsentry/warden/pull/468)
+
 ## 0.43.0
 
 ### New Features ✨
