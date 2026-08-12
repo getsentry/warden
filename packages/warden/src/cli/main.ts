@@ -613,6 +613,7 @@ interface SkillToRun {
   effort?: SkillRunnerOptions['effort'];
   runtime?: SkillRunnerOptions['runtime'];
   auxiliaryModel?: string;
+  auxiliaryEffort?: SkillRunnerOptions['auxiliaryEffort'];
   synthesisModel?: string;
   auxiliaryMaxRetries?: number;
   verifyFindings?: boolean;
@@ -644,6 +645,7 @@ type SkillRunnerOptionOverrides = Pick<
   | 'effort'
   | 'runtime'
   | 'auxiliaryModel'
+  | 'auxiliaryEffort'
   | 'synthesisModel'
   | 'auxiliaryMaxRetries'
   | 'verifyFindings'
@@ -710,6 +712,7 @@ export function mergeSkillRunnerOptions(
   if (overrides.effort !== undefined) merged.effort = overrides.effort;
   if (overrides.runtime !== undefined) merged.runtime = overrides.runtime;
   if (overrides.auxiliaryModel !== undefined) merged.auxiliaryModel = overrides.auxiliaryModel;
+  if (overrides.auxiliaryEffort !== undefined) merged.auxiliaryEffort = overrides.auxiliaryEffort;
   if (overrides.synthesisModel !== undefined) merged.synthesisModel = overrides.synthesisModel;
   if (overrides.auxiliaryMaxRetries !== undefined) {
     merged.auxiliaryMaxRetries = overrides.auxiliaryMaxRetries;
@@ -1099,6 +1102,7 @@ export async function runSkills(
       effort: options.effort ?? match?.effort ?? defaultEffort,
       runtime: options.runtime ?? match?.runtime ?? config?.defaults?.runtime ?? 'pi',
       auxiliaryModel: match?.auxiliaryModel ?? defaultAuxiliaryModel,
+      auxiliaryEffort: match?.auxiliaryEffort ?? config?.defaults?.auxiliary?.effort,
       synthesisModel: match?.synthesisModel ?? defaultSynthesisModel,
       auxiliaryMaxRetries:
         match?.auxiliaryMaxRetries ??
@@ -1127,6 +1131,7 @@ export async function runSkills(
         runtime: options.runtime ?? t.runtime,
         effort: options.effort ?? t.effort,
         auxiliaryModel: t.auxiliaryModel,
+        auxiliaryEffort: t.auxiliaryEffort,
         synthesisModel: t.synthesisModel,
         auxiliaryMaxRetries: t.auxiliaryMaxRetries,
         verifyFindings: t.verifyFindings,
@@ -1171,6 +1176,7 @@ export async function runSkills(
     runtime: defaultRuntime,
     pathToClaudeCodeExecutable,
     auxiliaryModel: defaultAuxiliaryModel,
+    auxiliaryEffort: config?.defaults?.auxiliary?.effort,
     synthesisModel: defaultSynthesisModel,
     abortController,
     maxTurns: config?.defaults?.agent?.maxTurns ?? config?.defaults?.maxTurns,
@@ -1518,6 +1524,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       pathToClaudeCodeExecutable,
       effort: options.effort ?? trigger.effort,
       auxiliaryModel: trigger.auxiliaryModel,
+      auxiliaryEffort: trigger.auxiliaryEffort,
       synthesisModel: trigger.synthesisModel,
       abortController,
       maxTurns: trigger.maxTurns,

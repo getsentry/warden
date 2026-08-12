@@ -261,6 +261,7 @@ async function runScheduleWorkflowInner(
         runtime: resolved.runtime,
         effort: resolved.effort,
         auxiliaryModel: resolved.auxiliaryModel,
+        auxiliaryEffort: resolved.auxiliaryEffort,
         synthesisModel: resolved.synthesisModel,
         maxTurns: resolved.maxTurns,
         batchDelayMs: resolved.batchDelayMs,
