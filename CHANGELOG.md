@@ -1,4 +1,10 @@
 # Changelog
+## 0.45.0
+
+### New Features ✨
+
+- (config) Support auxiliary reasoning effort by @sentry-junior in [#469](https://github.com/getsentry/warden/pull/469)
+
 ## 0.44.0
 
 ### New Features ✨
