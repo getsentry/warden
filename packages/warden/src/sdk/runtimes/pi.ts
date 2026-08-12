@@ -147,7 +147,7 @@ async function createModelRuntime(
   const modelRuntime = await ModelRuntime.create();
   const provider = legacyApiKeyProvider(model);
   if (legacyAnthropicApiKey && provider) {
-    await modelRuntime.setRuntimeApiKey(provider, legacyAnthropicApiKey, { allowNetwork: false });
+    await modelRuntime.setRuntimeApiKey(provider, legacyAnthropicApiKey);
   }
   return modelRuntime;
 }

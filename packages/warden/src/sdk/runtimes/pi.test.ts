@@ -375,7 +375,6 @@ describe('piRuntime.runSkill', () => {
     expect(piMocks.modelRuntime.setRuntimeApiKey).toHaveBeenCalledWith(
       'anthropic',
       'sk-ant-test',
-      { allowNetwork: false },
     );
   });
 
@@ -444,7 +443,6 @@ describe('piRuntime structured calls', () => {
     expect(piMocks.modelRuntime.setRuntimeApiKey).toHaveBeenCalledWith(
       'anthropic',
       'sk-ant-test',
-      { allowNetwork: false },
     );
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
       cwd: process.cwd(),
