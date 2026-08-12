@@ -1358,6 +1358,7 @@ describe('runSkillTask model lanes', () => {
       runnerOptions: {
         runtime: 'pi',
         auxiliaryModel: 'claude-haiku-4-5',
+        auxiliaryEffort: 'high',
         synthesisModel: 'claude-opus-4-5',
       },
     }, 1, noopCallbacks());
@@ -1368,6 +1369,7 @@ describe('runSkillTask model lanes', () => {
       expect.objectContaining({
         runtime: 'pi',
         auxiliaryModel: 'claude-haiku-4-5',
+        auxiliaryEffort: 'high',
         synthesisModel: 'claude-opus-4-5',
       })
     );

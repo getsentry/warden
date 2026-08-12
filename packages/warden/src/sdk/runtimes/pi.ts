@@ -650,6 +650,7 @@ async function runStructured<T>(
     prompt: string;
     schema: z.ZodType<T>;
     model?: string;
+    effort?: Effort;
     maxTokens?: number;
     timeout?: number;
     maxRetries?: number;
@@ -687,6 +688,7 @@ async function runStructured<T>(
           userPrompt: request.prompt,
           agentName: request.agentName,
           model: request.model,
+          effort: request.effort,
           legacyAnthropicApiKey: request.apiKey,
           toolNames,
           customTools,

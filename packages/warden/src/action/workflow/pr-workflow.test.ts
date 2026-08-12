@@ -2394,6 +2394,7 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({
           runtime: 'pi',
           model: 'anthropic/org-aux-model',
+          effort: 'high',
           maxRetries: 7,
         })
       );

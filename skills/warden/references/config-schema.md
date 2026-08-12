@@ -51,6 +51,7 @@ effort = "medium"                     # off | low | medium | high | xhigh
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"  # Helper model for extraction and fix gates
+effort = "high"                       # off | low | medium | high | xhigh | max (Pi-backed auxiliary calls)
 maxRetries = 5                        # Retries for auxiliary structured calls
 
 [defaults.synthesis]
@@ -70,6 +71,8 @@ mode = "whole-file"            # per-hunk | whole-file | skip
 ```
 
 `[defaults.agent].effort` controls repo-aware skill reasoning across runtimes. When omitted, Warden sends explicit `high` adaptive thinking to the Claude runtime; Pi uses its own default thinking level.
+
+`[defaults.auxiliary].effort` optionally controls reasoning effort for Pi-backed auxiliary structured calls (extraction repair, verification, merge, dedupe, and fix evaluation). When omitted, the Pi runtime default is used. Claude structured helper calls currently ignore this field.
 
 `[defaults.synthesis].model` falls back to `[defaults.auxiliary].model` when omitted. Legacy `[defaults].model` and `[defaults].maxTurns` are still supported as analysis fallbacks.
 

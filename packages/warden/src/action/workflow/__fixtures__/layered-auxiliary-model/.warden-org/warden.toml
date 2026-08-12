@@ -2,6 +2,7 @@ version = 1
 
 [defaults.auxiliary]
 model = "anthropic/org-aux-model"
+effort = "high"
 maxRetries = 7
 
 [[skills]]

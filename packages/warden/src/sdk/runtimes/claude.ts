@@ -17,7 +17,7 @@
  */
 import type Anthropic from '@anthropic-ai/sdk';
 import { query, type EffortLevel, type SDKResultMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { ToolConfig, ToolName } from '../../config/schema.js';
+import type { Effort, ToolConfig, ToolName } from '../../config/schema.js';
 import { recordTracedSpan, startInactiveTracedSpan, startTracedSpan } from '../../sentry-trace.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
 import {
@@ -141,6 +141,7 @@ async function runStructured<T>(
     prompt: string;
     schema: SynthesisRunRequest<T>['schema'];
     model?: string;
+    effort?: Effort;
     maxTokens?: number;
     timeout?: number;
     maxRetries?: number;

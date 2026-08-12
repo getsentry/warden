@@ -21,6 +21,7 @@ vi.mock('./haiku.js', async (importOriginal) => {
 });
 
 import { callHaiku } from './haiku.js';
+import * as runtimes from './runtimes/index.js';
 const mockCallHaiku = vi.mocked(callHaiku);
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
@@ -167,6 +168,42 @@ describe('mergeCrossLocationFindings', () => {
     expect(mockCallHaiku).toHaveBeenCalledWith(expect.objectContaining({
       model: 'claude-test-fast',
     }));
+  });
+
+  it('forwards effort to the synthesis runtime', async () => {
+    const findings = [
+      makeFinding({ id: 'f1', title: 'Issue A', location: { path: 'src/a.ts', startLine: 1 } }),
+      makeFinding({ id: 'f2', title: 'Issue B', location: { path: 'src/b.ts', startLine: 1 } }),
+    ];
+
+    const runSynthesis = vi.fn().mockResolvedValue({
+      success: true,
+      data: [],
+      usage: { inputTokens: 10, outputTokens: 2, costUSD: 0.001 },
+    });
+    const getRuntimeSpy = vi.spyOn(runtimes, 'getRuntime').mockReturnValue({
+      name: 'pi',
+      runSkill: vi.fn(),
+      runAuxiliary: vi.fn(),
+      runSynthesis,
+    } as unknown as ReturnType<typeof runtimes.getRuntime>);
+
+    try {
+      const result = await mergeCrossLocationFindings(findings, {
+        apiKey: 'test-key',
+        repoPath: tempDir,
+        runtime: 'pi',
+        model: 'openrouter/openai/gpt-5.6-luna',
+        effort: 'high',
+      });
+      expect(result.mergedCount).toBe(0);
+      expect(runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'openrouter/openai/gpt-5.6-luna',
+        effort: 'high',
+      }));
+    } finally {
+      getRuntimeSpy.mockRestore();
+    }
   });
 
   it('merges two findings into one with additionalLocations', async () => {

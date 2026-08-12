@@ -497,7 +497,7 @@ async function findSemanticDuplicates(
   findings: Finding[],
   existingComments: ExistingComment[],
   apiKey: string | undefined,
-  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'maxRetries' | 'currentSkill'> = {}
+  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'effort' | 'maxRetries' | 'currentSkill'> = {}
 ): Promise<SemanticDuplicateResult> {
   if (findings.length === 0 || existingComments.length === 0) {
     return { matches: new Map() };
@@ -536,6 +536,7 @@ Return [] if none are duplicates.`),
     prompt,
     schema: DuplicateMatchesSchema,
     model: options.model,
+    effort: options.effort,
     maxTokens: 512,
     maxRetries: options.maxRetries,
   });
@@ -839,6 +840,7 @@ Singletons (findings with no duplicates) should not appear in any group.
     prompt,
     schema: ConsolidationGroupsSchema,
     model: options.model,
+    effort: options.effort,
     maxTokens: 512,
     maxRetries: options.maxRetries,
   });

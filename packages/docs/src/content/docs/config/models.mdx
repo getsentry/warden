@@ -112,6 +112,7 @@ effort = "medium"
 
 [defaults.auxiliary]
 model = "anthropic/claude-haiku-4-5"
+effort = "high"
 maxRetries = 3
 
 [defaults.synthesis]
@@ -125,6 +126,11 @@ lane. Prefer `defaults.agent.model` and `defaults.agent.maxTurns` in new config.
 across runtimes. Supported values are `off`, `low`, `medium`, `high`, `xhigh`,
 and `max`. When omitted, Warden sends explicit `high` adaptive thinking to the
 Claude runtime; Pi uses its own default thinking level.
+
+`defaults.auxiliary.effort` optionally controls reasoning effort for Pi-backed
+auxiliary structured calls such as extraction repair, verification, merge,
+dedupe, and fix evaluation. When omitted, Pi uses its own default. Claude
+structured helper calls currently ignore this field.
 
 ## Overrides
 
@@ -164,6 +170,8 @@ Auxiliary and synthesis models only come from `[defaults.auxiliary]` and
 Effort is separate from model selection. For local runs,
 `--effort` overrides `defaults.agent.effort` for that
 invocation. Without either setting, each runtime uses its own default.
+`defaults.auxiliary.effort` is independent of `--effort` and only affects
+the auxiliary lane.
 
 ## Generated Skill Commands
 

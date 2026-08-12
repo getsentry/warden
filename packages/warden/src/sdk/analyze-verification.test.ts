@@ -88,6 +88,7 @@ describe('runSkill verification', () => {
 
     const report = await runSkill(makeSkill(), makeContext(), {
       auxiliaryModel: 'claude-haiku-4-5',
+      auxiliaryEffort: 'high',
     });
 
     expect(report.findings).toEqual([]);
@@ -96,7 +97,10 @@ describe('runSkill verification', () => {
     expect(report.auxiliaryUsageAttribution?.['verification']?.model).toBe('claude-haiku-4-5');
     expect(verifyFindings).toHaveBeenCalledWith(
       expect.any(Array),
-      expect.objectContaining({ model: 'claude-haiku-4-5' })
+      expect.objectContaining({
+        model: 'claude-haiku-4-5',
+        effort: 'high',
+      })
     );
   });
 

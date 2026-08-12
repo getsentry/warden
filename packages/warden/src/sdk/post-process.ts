@@ -13,11 +13,11 @@ export interface PostProcessFindingsOptions {
   apiKey?: string;
   runtime?: RuntimeName;
   auxiliaryModel?: string;
+  auxiliaryEffort?: Effort;
   synthesisModel?: string;
   auxiliaryMaxRetries?: number;
   verifyFindings?: boolean;
   maxTurns?: number;
-  effort?: Effort;
   abortController?: AbortController;
   pathToClaudeCodeExecutable?: string;
   prContext?: PromptPRContext;
@@ -50,7 +50,7 @@ export async function postProcessFindings(
       runtime: options.runtime,
       model: options.auxiliaryModel,
       maxTurns: options.maxTurns,
-      effort: options.effort,
+      effort: options.auxiliaryEffort,
       abortController: options.abortController,
       pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
       prContext: options.prContext,
@@ -72,6 +72,7 @@ export async function postProcessFindings(
     repoPath: options.repoPath,
     runtime: options.runtime,
     model: options.synthesisModel,
+    effort: options.auxiliaryEffort,
     maxRetries: options.auxiliaryMaxRetries,
     agentName: options.skill.name,
     onFindingProcessing: options.onFindingProcessing,

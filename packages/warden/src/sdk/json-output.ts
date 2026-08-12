@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { Effort } from '../config/schema.js';
 import type { UsageStats } from '../types/index.js';
 import { extractJson } from './haiku.js';
 import { canUseRuntimeAuth } from './extract.js';
@@ -19,6 +20,7 @@ export interface JsonOutputRepairOptions {
   runtime?: Runtime;
   runtimeName?: RuntimeName;
   model?: string;
+  effort?: Effort;
   maxRetries?: number;
   maxTokens?: number;
   timeout?: number;
@@ -82,6 +84,7 @@ async function repairJsonOutput<T>(
     agentName: repair.agentName,
     apiKey: repair.apiKey,
     model: repair.model,
+    effort: repair.effort,
     maxRetries: repair.maxRetries,
     maxTokens: repair.maxTokens ?? JSON_REPAIR_MAX_TOKENS,
     timeout: repair.timeout ?? JSON_REPAIR_TIMEOUT_MS,

@@ -1,4 +1,5 @@
 import type { Octokit } from '@octokit/rest';
+import type { Effort } from '../../config/schema.js';
 import { z } from 'zod';
 import type { ExistingComment } from '../../output/dedup.js';
 import {
@@ -34,6 +35,7 @@ export interface FixJudgeContext {
 export interface FixJudgeRuntimeOptions {
   runtime?: RuntimeName;
   model?: string;
+  effort?: Effort;
   maxRetries?: number;
 }
 
@@ -232,6 +234,7 @@ export async function evaluateFix(
     tools: TOOL_DEFINITIONS,
     executeTool,
     model: runtimeOptions.model,
+    effort: runtimeOptions.effort,
     maxIterations: 5,
     maxRetries: runtimeOptions.maxRetries,
   });

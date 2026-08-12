@@ -6,6 +6,7 @@
  */
 
 import type { Octokit } from '@octokit/rest';
+import type { Effort } from '../../config/schema.js';
 import type { EventContext, Finding } from '../../types/index.js';
 import { filterFindings } from '../../types/index.js';
 import type { FindingProcessingEvent } from '../../sdk/types.js';
@@ -40,6 +41,7 @@ export interface ReviewPostingContext {
   apiKey: string;
   runtime?: RuntimeName;
   model?: string;
+  effort?: Effort;
   maxRetries?: number;
   /** Throw review posting failures instead of converting them to warnings. */
   failOnPostError?: boolean;
@@ -311,6 +313,7 @@ export async function postTriggerReview(
         apiKey,
         runtime: ctx.runtime,
         model: ctx.model,
+        effort: ctx.effort,
         hashOnly: !canUseAuxiliaryRuntime,
         maxRetries: ctx.maxRetries,
         agentName: skill,
@@ -351,6 +354,7 @@ export async function postTriggerReview(
         apiKey,
         runtime: ctx.runtime,
         model: ctx.model,
+        effort: ctx.effort,
         currentSkill: skill,
         maxRetries: ctx.maxRetries,
       });
