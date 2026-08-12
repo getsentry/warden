@@ -572,6 +572,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     prompt,
     schema: MergeGroupsSchema,
     model: options?.model,
+    effort: options?.effort,
     maxTokens: 512,
     maxRetries: options?.maxRetries,
   });
