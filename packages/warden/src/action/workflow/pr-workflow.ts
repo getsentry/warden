@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
+import type { Effort } from '../../config/schema.js';
 import { Sentry, logger, emitStaleResolutionMetric, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import {
   buildSkillRootsByName,
@@ -131,6 +132,7 @@ interface FixEvaluationCommentGroups {
 interface AuxiliaryWorkflowOptions {
   runtime?: RuntimeName;
   model?: string;
+  effort?: Effort;
   maxRetries?: number;
 }
 
@@ -282,6 +284,7 @@ function resolveWorkflowAuxiliaryOptions(layered: LoadedLayeredConfig): Auxiliar
     model:
       emptyToUndefined(baseDefaults?.auxiliary?.model) ??
       emptyToUndefined(repoDefaults?.auxiliary?.model),
+    effort: baseDefaults?.auxiliary?.effort ?? repoDefaults?.auxiliary?.effort,
     maxRetries:
       baseDefaults?.auxiliary?.maxRetries ??
       baseDefaults?.auxiliaryMaxRetries ??
@@ -704,6 +707,7 @@ async function postReviewsAndTrackFailures(
             apiKey: inputs.anthropicApiKey,
             runtime: auxiliaryOptions.runtime,
             model: auxiliaryOptions.model,
+            effort: auxiliaryOptions.effort,
             maxRetries: auxiliaryOptions.maxRetries,
             failOnPostError: options.failOnPostError,
           },

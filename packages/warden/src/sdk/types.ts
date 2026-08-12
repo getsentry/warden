@@ -116,6 +116,8 @@ export interface SkillRunnerOptions {
   runtime?: RuntimeName;
   /** Model to use for auxiliary structured model calls. Uses runtime default if not specified. */
   auxiliaryModel?: string;
+  /** Effort level for auxiliary structured model calls. Uses the runtime-specific default if omitted. */
+  auxiliaryEffort?: Effort;
   /** Model to use for post-analysis synthesis/consolidation. Falls back to auxiliaryModel when not specified. */
   synthesisModel?: string;
   /** Progress callbacks */

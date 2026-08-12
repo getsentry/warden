@@ -20,6 +20,7 @@ import {
   type LogsConfig,
   type RuntimeName,
   type AgentRuntimeConfig,
+  type AuxiliaryRuntimeConfig,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -404,6 +405,8 @@ export interface ResolvedTrigger {
   runtime?: RuntimeName;
   /** Model for auxiliary structured model calls. */
   auxiliaryModel?: string;
+  /** Effort level for auxiliary structured model calls. */
+  auxiliaryEffort?: AuxiliaryRuntimeConfig['effort'];
   /** Model for post-analysis synthesis/consolidation. */
   synthesisModel?: string;
   /** Max retries for auxiliary structured model calls. */
@@ -514,6 +517,7 @@ export function resolveSkillConfigs(
   const result: ResolvedTrigger[] = [];
   const runtime = defaults?.runtime ?? 'pi';
   const auxiliaryModel = emptyToUndefined(defaults?.auxiliary?.model);
+  const auxiliaryEffort = defaults?.auxiliary?.effort;
   const synthesisModel =
     emptyToUndefined(defaults?.synthesis?.model) ??
     auxiliaryModel;
@@ -565,6 +569,7 @@ export function resolveSkillConfigs(
         effort,
         runtime,
         auxiliaryModel,
+        auxiliaryEffort,
         synthesisModel,
         auxiliaryMaxRetries,
         verifyFindings: resolveVerifyFindings(defaults, skill),
@@ -601,6 +606,7 @@ export function resolveSkillConfigs(
           effort,
           runtime,
           auxiliaryModel,
+          auxiliaryEffort,
           synthesisModel,
           auxiliaryMaxRetries,
           verifyFindings: resolveVerifyFindings(defaults, skill, trigger),

@@ -109,6 +109,7 @@ interface AuxiliaryRunRequestBase<T> {
   prompt: string;
   schema: z.ZodType<T>;
   model?: string;
+  effort?: Effort;
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;
@@ -136,6 +137,7 @@ export interface SynthesisRunRequest<T> {
   prompt: string;
   schema: z.ZodType<T>;
   model?: string;
+  effort?: Effort;
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;

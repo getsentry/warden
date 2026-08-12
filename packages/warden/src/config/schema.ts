@@ -63,6 +63,8 @@ export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeConfigSchema>;
 export const AuxiliaryRuntimeConfigSchema = z.object({
   /** Model for auxiliary structured model calls. Uses runtime default if omitted. */
   model: z.string().optional(),
+  /** Reasoning effort for auxiliary structured model calls. Uses runtime default when omitted. */
+  effort: EffortSchema.optional(),
   /** Max retries for auxiliary structured model calls. Overrides legacy auxiliaryMaxRetries. */
   maxRetries: z.number().int().positive().optional(),
 }).strict();

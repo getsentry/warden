@@ -438,6 +438,7 @@ describe('piRuntime structured calls', () => {
       prompt: 'Return {"ok": true}',
       schema: z.object({ ok: z.boolean() }),
       model: 'anthropic/claude-sonnet-test',
+      effort: 'high',
     });
 
     expect(piMocks.modelRuntime.setRuntimeApiKey).toHaveBeenCalledWith(
@@ -448,6 +449,7 @@ describe('piRuntime structured calls', () => {
       cwd: process.cwd(),
       tools: [],
       noTools: 'all',
+      thinkingLevel: 'high',
     }));
     expect(piMocks.resourceLoaderOptions[0]).toEqual(expect.objectContaining({
       systemPrompt: expect.stringContaining('Return only valid JSON'),

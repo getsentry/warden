@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { customAlphabet } from 'nanoid';
+import type { Effort } from '../config/schema.js';
 import { FindingSchema, compareFindingPriority } from '../types/index.js';
 import type { Finding, Location, UsageStats } from '../types/index.js';
 import { getRuntime } from './runtimes/index.js';
@@ -30,6 +31,7 @@ export interface AuxiliaryCallOptions {
   apiKey?: string;
   runtime?: RuntimeName;
   model?: string;
+  effort?: Effort;
   maxRetries?: number;
   agentName?: string;
 }
@@ -236,6 +238,7 @@ If no findings exist, return: {"findings": []}`),
     prompt: userContent,
     schema: z.object({ findings: z.array(z.unknown()) }),
     model,
+    effort: options.effort,
     maxTokens: LLM_FALLBACK_MAX_TOKENS,
     timeout: LLM_FALLBACK_TIMEOUT_MS,
     maxRetries: options.maxRetries,

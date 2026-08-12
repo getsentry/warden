@@ -464,7 +464,7 @@ describe('resolveSkillConfigs', () => {
         defaults: {
           runtime: 'claude',
           agent: { model: 'claude-main', maxTurns: 12, effort: 'medium' },
-          auxiliary: { model: 'claude-haiku-4-5', maxRetries: 2 },
+          auxiliary: { model: 'claude-haiku-4-5', effort: 'high', maxRetries: 2 },
           synthesis: { model: 'claude-opus-4-5' },
           auxiliaryMaxRetries: 5,
         },
@@ -477,6 +477,7 @@ describe('resolveSkillConfigs', () => {
       expect(resolved?.maxTurns).toBe(12);
       expect(resolved?.effort).toBe('medium');
       expect(resolved?.auxiliaryModel).toBe('claude-haiku-4-5');
+      expect(resolved?.auxiliaryEffort).toBe('high');
       expect(resolved?.synthesisModel).toBe('claude-opus-4-5');
       expect(resolved?.auxiliaryMaxRetries).toBe(2);
     });

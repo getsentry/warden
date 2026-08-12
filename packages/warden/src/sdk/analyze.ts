@@ -195,6 +195,7 @@ async function parseHunkOutput(
       apiKey: options.apiKey,
       runtime: options.runtime,
       model: options.auxiliaryModel,
+      effort: options.auxiliaryEffort,
       maxRetries: options.auxiliaryMaxRetries,
       agentName: skillName,
     });
@@ -1239,6 +1240,7 @@ async function runSkillAnalysis(
       apiKey: options.apiKey,
       runtime: options.runtime,
       auxiliaryModel: options.auxiliaryModel,
+      auxiliaryEffort: options.auxiliaryEffort,
       synthesisModel: options.synthesisModel,
       auxiliaryMaxRetries: options.auxiliaryMaxRetries,
       verifyFindings: options.verifyFindings,

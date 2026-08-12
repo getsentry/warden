@@ -89,7 +89,7 @@ mode = "whole-file"
 Warden uses different model lanes for different kinds of work:
 
 - Analysis: repo-aware skill execution uses `[[skills]].model`, then `[defaults.agent].model`, then legacy `[defaults].model`
-- Auxiliary: structured helper calls use `[defaults.auxiliary].model`
+- Auxiliary: structured helper calls use `[defaults.auxiliary].model`; Pi also supports optional `[defaults.auxiliary].effort`
 - Synthesis: post-analysis consolidation and generated-skill builds use `[defaults.synthesis].model`
 
 If `[defaults.synthesis].model` is omitted, synthesis falls back to `[defaults.auxiliary].model`.

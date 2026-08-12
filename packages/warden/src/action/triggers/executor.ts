@@ -207,6 +207,7 @@ export async function executeTrigger(
             runtime: trigger.runtime,
             effort: trigger.effort,
             auxiliaryModel: trigger.auxiliaryModel,
+            auxiliaryEffort: trigger.auxiliaryEffort,
             synthesisModel: trigger.synthesisModel,
             maxTurns: trigger.maxTurns,
             batchDelayMs: trigger.batchDelayMs,
