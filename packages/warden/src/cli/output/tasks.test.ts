@@ -1140,27 +1140,35 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     expect(onSkillError).not.toHaveBeenCalled();
   });
 
-  it('triggers all_hunks_failed when every hunk succeeded at SDK level but extraction failed for all', async () => {
+  it('reports extraction codes when every hunk has an extraction failure', async () => {
     // Regression test for the if/else mutual-exclusion change: each hunk
     // contributes to either failedHunks OR failedExtractions, not both.
     // If every hunk fails extraction (SDK call succeeds, parsing fails)
     // then failedHunks is 0 — naive `failedHunks === totalHunks` checks
     // would silently produce a "0 findings" run. Detection must sum both.
-    const fakeHunk = {
-      hunk: { newStart: 1, newCount: 10 },
-    } as unknown as HunkWithContext;
+    const fakeHunks = [
+      { hunk: { newStart: 1, newCount: 10 } },
+      { hunk: { newStart: 20, newCount: 5 } },
+    ] as unknown as HunkWithContext[];
     const hunkFailures: HunkFailure[] = [
       {
         type: 'extraction',
         filename: 'a.ts',
         lineRange: '1-10',
-        code: 'extraction_invalid_json',
-        message: 'invalid_json',
+        code: 'extraction_llm_timeout',
+        message: 'timed out',
+      },
+      {
+        type: 'extraction',
+        filename: 'a.ts',
+        lineRange: '20-24',
+        code: 'extraction_llm_failed',
+        message: 'malformed response',
       },
     ];
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
-      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      files: [{ filename: 'a.ts', hunks: fakeHunks }],
       skippedFiles: [],
     });
 
@@ -1169,7 +1177,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       findings: [],
       usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
       failedHunks: 0,
-      failedExtractions: 1,
+      failedExtractions: 2,
       hunkFailures,
     };
     vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue(failedFileResult);
@@ -1189,8 +1197,10 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     const result = await runSkillTask(options, 1, noopCallbacks());
 
     expect(result.report).toBeDefined();
-    expect(result.report!.error?.code).toBe('all_hunks_failed');
-    expect(result.report!.failedExtractions).toBe(1);
+    expect(result.report!.error?.code).toBe('extraction_llm_timeout');
+    expect(result.report!.error?.message).toContain('extraction_llm_timeout, extraction_llm_failed');
+    expect(result.report!.error?.message).not.toContain('authentication');
+    expect(result.report!.failedExtractions).toBe(2);
     expect(result.report!.findings).toEqual([]);
   });
 

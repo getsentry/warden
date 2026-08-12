@@ -1,5 +1,6 @@
 import type { Span } from '@sentry/node';
 import type { SkillDefinition } from '../config/schema.js';
+import { isExtractionErrorCode } from '../types/index.js';
 import type { ErrorCode, Finding, RetryConfig } from '../types/index.js';
 import { getHunkLineRange, type HunkWithContext } from '../diff/index.js';
 import { Sentry, emitExtractionMetrics, emitRetryMetric, emitSkillMetrics, ensureLocalTracing } from '../sentry.js';
@@ -10,6 +11,7 @@ import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
+import type { ExtractFindingsResult } from './extract.js';
 import { postProcessFindings } from './post-process.js';
 import { buildFileReports } from './report-files.js';
 import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
@@ -184,27 +186,37 @@ async function parseHunkOutput(
     return { findings: validateFindings(extracted.findings, filename), extractionFailed: false, extractionMethod: 'regex' };
   }
 
-  // Tier 2: Try LLM fallback for malformed output
-  const fallback = await extractFindingsWithLLM(result.text, {
-    apiKey: options.apiKey,
-    runtime: options.runtime,
-    model: options.auxiliaryModel,
-    maxRetries: options.auxiliaryMaxRetries,
-    agentName: skillName,
-  });
-
-  if (fallback.success) {
-    return { findings: validateFindings(fallback.findings, filename), extractionFailed: false, extractionMethod: 'llm', extractionUsage: fallback.usage };
+  // Tier 2: Try LLM fallback for malformed output, then retry once because
+  // structured extraction failures can be transient even when analysis succeeded.
+  const extractionUsage: UsageStats[] = [];
+  let lastFailure: Extract<ExtractFindingsResult, { success: false }> | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const fallback = await extractFindingsWithLLM(result.text, {
+      apiKey: options.apiKey,
+      runtime: options.runtime,
+      model: options.auxiliaryModel,
+      maxRetries: options.auxiliaryMaxRetries,
+      agentName: skillName,
+    });
+    if (fallback.usage) extractionUsage.push(fallback.usage);
+    if (fallback.success) {
+      return {
+        findings: validateFindings(fallback.findings, filename),
+        extractionFailed: false,
+        extractionMethod: 'llm',
+        extractionUsage: aggregateUsage(extractionUsage),
+      };
+    }
+    lastFailure = fallback;
   }
 
-  // Both tiers failed - return extraction failure info
   return {
     findings: [],
     extractionFailed: true,
     extractionMethod: 'none',
-    extractionError: fallback.error,
-    extractionPreview: fallback.preview,
-    extractionUsage: fallback.usage,
+    extractionError: lastFailure?.error ?? extracted.error,
+    extractionPreview: lastFailure?.preview ?? extracted.preview,
+    extractionUsage: extractionUsage.length > 0 ? aggregateUsage(extractionUsage) : undefined,
   };
 }
 
@@ -1178,6 +1190,21 @@ async function runSkillAnalysis(
     });
   }
   if (totalAttemptFailures > 0 && totalAttemptFailures === totalHunks && allFindings.length === 0) {
+    const extractionFailures = allHunkFailures.filter((failure) => failure.type === 'extraction');
+    if (
+      extractionFailures.length === allHunkFailures.length
+      && extractionFailures.every((failure) => isExtractionErrorCode(failure.code))
+    ) {
+      const extractionCodes = [...new Set(extractionFailures.map((failure) => failure.code))];
+      const primaryCode = extractionCodes[0];
+      if (primaryCode) {
+        throw new SkillRunnerError(
+          `Findings extraction failed for all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} (${extractionCodes.join(', ')}).`,
+          { code: primaryCode, hunkFailures: allHunkFailures },
+        );
+      }
+    }
+
     const analysisFailures = allHunkFailures.filter((failure) => failure.type === 'analysis');
     if (
       analysisFailures.length > 0

@@ -152,9 +152,7 @@ const LLM_FALLBACK_MAX_TOKENS = 4096;
 const LLM_FALLBACK_TIMEOUT_MS = 30000;
 
 /**
- * Truncate text for LLM fallback while preserving the findings JSON.
- *
- * Caller must ensure findings JSON exists in the text before calling.
+ * Truncate text for LLM fallback, preserving findings JSON when present.
  */
 export function truncateForLLMFallback(rawText: string, maxChars: number): string {
   if (rawText.length <= maxChars) {
@@ -162,6 +160,11 @@ export function truncateForLLMFallback(rawText: string, maxChars: number): strin
   }
 
   const findingsIndex = rawText.match(FINDINGS_JSON_START)?.index ?? -1;
+
+  // Without an anchor, preserve the start of the response for best-effort repair.
+  if (findingsIndex === -1) {
+    return rawText.slice(0, maxChars) + '\n[... truncated]';
+  }
 
   // If findings starts within our budget, simple truncation from start preserves it
   if (findingsIndex < maxChars - 20) {
@@ -206,16 +209,15 @@ export async function extractFindingsWithLLM(
     };
   }
 
-  // If no findings anchor exists, there's nothing to extract
-  if (!FINDINGS_JSON_START.test(rawText)) {
+  if (!rawText.trim()) {
     return {
       success: false,
       error: 'no_findings_to_extract',
-      preview: rawText.slice(0, 200),
+      preview: '',
     };
   }
 
-  // Truncate input while preserving JSON boundaries
+  // Truncate input while preserving JSON boundaries when present
   const truncatedText = truncateForLLMFallback(rawText, LLM_FALLBACK_MAX_CHARS);
 
   const userContent = joinPromptSections([

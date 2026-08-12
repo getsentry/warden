@@ -1,8 +1,9 @@
 import type { Octokit } from '@octokit/rest';
-import { SEVERITY_ORDER, filterFindings } from '../types/index.js';
-import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
+import { HunkFailureSchema, SEVERITY_ORDER, filterFindings } from '../types/index.js';
+import type { Severity, SeverityThreshold, ConfidenceThreshold, Finding, SkillReport, UsageStats, AuxiliaryUsageMap, HunkFailure } from '../types/index.js';
 import { formatDuration, formatCost, formatTokens, totalUsageCost, totalUsageStats } from '../cli/output/formatters.js';
 import { escapeHtml } from '../utils/index.js';
+import { sanitizeErrorMessage } from '../sdk/errors.js';
 
 /**
  * GitHub Check annotation for inline code comments.
@@ -330,6 +331,53 @@ export async function updateSkillCheck(
   });
 }
 
+const MAX_CHECK_SUMMARY_BYTES = 65000;
+const TRUNCATION_NOTICE = '\n\n[diagnostics truncated]';
+
+function truncateCheckSummary(summary: string): string {
+  if (Buffer.byteLength(summary, 'utf8') <= MAX_CHECK_SUMMARY_BYTES) return summary;
+
+  const contentBudget = MAX_CHECK_SUMMARY_BYTES - Buffer.byteLength(TRUNCATION_NOTICE, 'utf8');
+  let low = 0;
+  let high = summary.length;
+  while (low < high) {
+    const midpoint = Math.ceil((low + high) / 2);
+    if (Buffer.byteLength(summary.slice(0, midpoint), 'utf8') <= contentBudget) {
+      low = midpoint;
+    } else {
+      high = midpoint - 1;
+    }
+  }
+  return summary.slice(0, low) + TRUNCATION_NOTICE;
+}
+
+function failureSummary(error: unknown): string {
+  const errorMessage = sanitizeErrorMessage(error instanceof Error ? error.message : String(error));
+  const rawFailures = error && typeof error === 'object' && 'hunkFailures' in error
+    ? (error as { hunkFailures?: unknown }).hunkFailures
+    : undefined;
+  const parsedFailures = Array.isArray(rawFailures)
+    ? rawFailures.flatMap((failure) => {
+        const parsed = HunkFailureSchema.safeParse(failure);
+        return parsed.success ? [parsed.data] : [];
+      })
+    : [];
+  if (parsedFailures.length === 0) return `Error: ${errorMessage}`;
+
+  const sanitizedFailures: HunkFailure[] = parsedFailures.map((failure) => ({
+    ...failure,
+    filename: sanitizeErrorMessage(failure.filename),
+    lineRange: sanitizeErrorMessage(failure.lineRange),
+    message: sanitizeErrorMessage(failure.message),
+    preview: failure.preview ? sanitizeErrorMessage(failure.preview).slice(0, 500) : undefined,
+  }));
+  const diagnostics = JSON.stringify(sanitizedFailures, null, 2)
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n');
+  return truncateCheckSummary(`Error: ${errorMessage}\n\nHunk failures:\n${diagnostics}`);
+}
+
 /**
  * Mark a skill check as failed due to execution error.
  */
@@ -339,7 +387,7 @@ export async function failSkillCheck(
   error: unknown,
   options: CheckOptions
 ): Promise<void> {
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const summary = failureSummary(error);
 
   await octokit.checks.update({
     owner: options.owner,
@@ -350,7 +398,7 @@ export async function failSkillCheck(
     completed_at: new Date().toISOString(),
     output: {
       title: 'Skill execution failed',
-      summary: `Error: ${errorMessage}`,
+      summary,
     },
   });
 }
@@ -364,7 +412,7 @@ export async function createFailedSkillCheck(
   error: unknown,
   options: CheckOptions
 ): Promise<CreateCheckResult> {
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const summary = failureSummary(error);
 
   const { data } = await octokit.checks.create({
     owner: options.owner,
@@ -376,7 +424,7 @@ export async function createFailedSkillCheck(
     completed_at: new Date().toISOString(),
     output: {
       title: 'Skill execution failed',
-      summary: `Error: ${errorMessage}`,
+      summary,
     },
   });
   await setCheckDetailsUrl(octokit, options, data);

@@ -5,7 +5,7 @@ import {
   APIConnectionError,
   APIConnectionTimeoutError,
 } from '@anthropic-ai/sdk';
-import type { ErrorCode } from '../types/index.js';
+import type { ErrorCode, HunkFailure } from '../types/index.js';
 import { InvalidPiModelSelectorError } from './runtimes/model-selectors.js';
 import type { RuntimeName, SkillRunStatus } from './runtimes/types.js';
 
@@ -24,11 +24,14 @@ export class SkillRunnerError extends Error {
   code?: ErrorCode;
   /** Sanitized provider diagnostics safe to attach to telemetry. */
   providerContext?: ProviderErrorContext;
-  constructor(message: string, options?: { cause?: unknown; code?: ErrorCode; providerContext?: ProviderErrorContext }) {
+  /** Per-hunk diagnostics safe to surface in execution failure reports. */
+  hunkFailures?: HunkFailure[];
+  constructor(message: string, options?: { cause?: unknown; code?: ErrorCode; providerContext?: ProviderErrorContext; hunkFailures?: HunkFailure[] }) {
     super(message, options);
     this.name = 'SkillRunnerError';
     if (options?.code) this.code = options.code;
     if (options?.providerContext) this.providerContext = options.providerContext;
+    if (options?.hunkFailures) this.hunkFailures = options.hunkFailures;
   }
 }
 
