@@ -647,6 +647,7 @@ export async function runSkillTask(
           apiKey: runnerOptions.apiKey,
           runtime: runnerOptions.runtime,
           auxiliaryModel: runnerOptions.auxiliaryModel,
+          auxiliaryEffort: runnerOptions.auxiliaryEffort,
           synthesisModel: runnerOptions.synthesisModel,
           auxiliaryMaxRetries: runnerOptions.auxiliaryMaxRetries,
           verifyFindings: runnerOptions.verifyFindings,
