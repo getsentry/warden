@@ -36,10 +36,10 @@ Disable that network refresh in durable config:
 offline = true
 ```
 
-`defaults.offline` is preferred for permanent offline policy. It also keeps
-remote skill loading on cache-only behavior. For one-off runs, use CLI
-`--offline` or set `PI_OFFLINE` in the process environment. Any of these blocks
-Pi model-catalog network access.
+`defaults.offline` is preferred for permanent offline policy. It blocks both
+remote skill network fetches and Pi model-catalog refresh. CLI `--offline`
+does the same for one run. `PI_OFFLINE` is a Pi-catalog-only override and does
+not force remote skills onto cache-only mode.
 
 ## Pi Model Selectors
 

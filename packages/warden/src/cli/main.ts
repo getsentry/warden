@@ -10,7 +10,7 @@ import {
   invalidPiModelSelectorMessage,
   type InvalidPiModelSelector,
 } from '../sdk/runtimes/model-selectors.js';
-import { configurePiModelCatalogOffline, isPiModelCatalogOffline } from '../sdk/runtimes/pi-offline.js';
+import { configurePiModelCatalogOffline, isConfiguredOffline } from '../sdk/runtimes/pi-offline.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { aggregateAuxiliaryUsageAttribution, mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
@@ -846,8 +846,9 @@ async function createDirectSkillTask(args: {
   try {
     skill = await resolveSkillAsync(spec.skill, repoPath, {
       remote: spec.remote,
-      // Config/CLI offline policy is applied before task creation; PI_OFFLINE also counts.
-      offline: isPiModelCatalogOffline(),
+      // Config/CLI offline only. PI_OFFLINE is Pi-catalog scoped and must not
+      // force remote skills onto cache-only mode.
+      offline: isConfiguredOffline(),
     });
   } catch (error) {
     if (
