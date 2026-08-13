@@ -15,7 +15,7 @@ export interface ServiceOptionOverrides {
 export interface ResolveServiceOptionsInput {
   explicit?: ServiceOptionOverrides;
   environment?: Record<string, string | undefined>;
-  config?: ServiceConfig;
+  config?: Partial<ServiceConfig>;
   onWarning?: (message: string) => void;
 }
 
@@ -51,13 +51,17 @@ export function resolveServiceOptions(input: ResolveServiceOptionsInput): Resolv
   const memory = input.explicit?.memory
     ?? environmentBoolean(environment['WARDEN_SERVICE_MEMORY'])
     ?? input.config?.memory;
-  const candidate = ServiceConfigSchema.parse({
+  const candidate = ServiceConfigSchema.safeParse({
     url,
     data: input.explicit?.data ?? environment['WARDEN_SERVICE_DATA'] ?? input.config?.data,
     ...(memory === undefined ? {} : { memory }),
     timeoutMs,
   });
-  return { ...candidate, token: token.trim() };
+  if (!candidate.success) {
+    input.onWarning?.('Warden service disabled because its configuration is not valid.');
+    return undefined;
+  }
+  return { ...candidate.data, token: token.trim() };
 }
 
 export const ServiceDataProfileSchema = DataProfileSchema;

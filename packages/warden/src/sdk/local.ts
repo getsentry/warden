@@ -15,6 +15,7 @@ import {
 } from '../service/index.js';
 import type { ServiceOptionOverrides } from '../service/index.js';
 import { runSkill } from './analyze.js';
+import { sanitizeErrorMessage } from './errors.js';
 import type { VerifyFindingsOptions, VerifyFindingsResult } from './verify.js';
 import { verifyFindings } from './verify.js';
 import type { SkillRunnerOptions } from './types.js';
@@ -94,22 +95,26 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     paths,
   }) : undefined;
   const recalledMemories = recall?.memories ?? [];
-  const report = await runSkill(skill, context, {
-    ...runnerOptions,
-    historicalEvidence: renderHistoricalMemory(recalledMemories),
-  });
-
-  if (service) {
-    await publishRunFailOpen(service, {
+  const recalledEvidence = renderHistoricalMemory(recalledMemories);
+  const historicalEvidence = runnerOptions.historicalEvidence && recalledEvidence
+    ? `${runnerOptions.historicalEvidence}\n\n${recalledEvidence}`
+    : (runnerOptions.historicalEvidence ?? recalledEvidence);
+  const publishReport = async (
+    publishedService: typeof service,
+    report: SkillReport,
+    outcome: 'success' | 'failure',
+  ): Promise<void> => {
+    if (!publishedService) return;
+    await publishRunFailOpen(publishedService, {
       clientRunId,
       build: () => buildServiceRunEnvelope({
-        service,
+        service: publishedService,
         clientRunId,
         source: 'sdk',
         wardenVersion: getVersion(),
         startedAt,
         completedAt: new Date(),
-        outcome: report.error ? 'failure' : 'success',
+        outcome,
         repository,
         reports: [{ executionId: `1:${report.skill}`, report }],
         recalledMemories: recalledMemories.map(({ id, version }) => ({ id, version })),
@@ -118,7 +123,31 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
         ...(context.pullRequest?.headSha ? { headSha: context.pullRequest.headSha } : {}),
       }),
     }, serviceInput?.onWarning);
+  };
+
+  let report: SkillReport;
+  try {
+    report = await runSkill(skill, context, {
+      ...runnerOptions,
+      historicalEvidence,
+    });
+  } catch (error) {
+    const failedReport: SkillReport = {
+      skill: skill.name,
+      summary: 'Skill did not complete',
+      findings: [],
+      durationMs: Math.max(0, Date.now() - startedAt.getTime()),
+      error: {
+        code: 'unknown',
+        message: sanitizeErrorMessage(error instanceof Error ? error.message : String(error)),
+        timestamp: new Date().toISOString(),
+      },
+    };
+    await publishReport(service ? { ...service, data: 'metrics', memory: false } : undefined, failedReport, 'failure');
+    throw error;
   }
+
+  await publishReport(service, report, report.error ? 'failure' : 'success');
 
   return { skill, context, report };
 }

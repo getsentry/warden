@@ -80,6 +80,90 @@ describe('buildServiceRunEnvelope', () => {
       expect(serialized).not.toContain('diff');
     }
   });
+
+  it('bounds model-generated finding fields to the service protocol', () => {
+    const oversizedReport: SkillReport = {
+      ...report,
+      findings: [{
+        ...report.findings[0]!,
+        title: 't'.repeat(1_000),
+        description: 'd'.repeat(10_000),
+        verification: 'v'.repeat(5_000),
+        location: { path: 'p'.repeat(2_000), startLine: 10 },
+        additionalLocations: [{ path: 'a'.repeat(2_000), startLine: 11 }],
+        sourceSnippet: {
+          ...report.findings[0]!.sourceSnippet!,
+          path: 's'.repeat(2_000),
+        },
+      }],
+    };
+    const envelope = buildServiceRunEnvelope({
+      ...input('code'),
+      reports: [{ executionId: 'skill-1', report: oversizedReport }],
+    });
+    if (envelope.dataProfile !== 'code') throw new Error('Expected code envelope');
+
+    expect(envelope.findings[0]?.title).toHaveLength(512);
+    expect(envelope.findings[0]?.description).toHaveLength(8_000);
+    expect(envelope.findings[0]?.verification).toHaveLength(4_000);
+    expect(envelope.findings[0]?.location?.path).toHaveLength(1_024);
+    expect(envelope.findings[0]?.additionalLocations?.[0]?.path).toHaveLength(1_024);
+    expect(envelope.findings[0]?.sourceEvidence?.path).toHaveLength(1_024);
+  });
+
+  it('keeps bounded projection arrays internally consistent', () => {
+    const findings = Array.from({ length: 501 }, (_, index) => ({
+      id: `finding-${index}`,
+      severity: 'low' as const,
+      title: `Finding ${index}`,
+      description: 'Description',
+    }));
+    const auxiliaryUsage = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [
+      `lane-${index}`,
+      { inputTokens: 1, outputTokens: 1, costUSD: 0 },
+    ]));
+    const reports = Array.from({ length: 101 }, (_, index) => ({
+      executionId: `skill-${index}`,
+      report: {
+        ...report,
+        skill: `skill-${index}`,
+        findings: index === 0 ? findings : [],
+        auxiliaryUsage: index === 0 ? auxiliaryUsage : undefined,
+      },
+    }));
+    const observedAt = '2026-08-12T10:00:03.000Z';
+    const envelope = buildServiceRunEnvelope({
+      ...input('findings'),
+      reports,
+      observations: [
+        { findingId: 'finding-500', skillExecutionId: 'skill-0', outcome: 'posted', observedAt },
+        { findingId: 'finding-0', skillExecutionId: 'skill-100', outcome: 'posted', observedAt },
+        ...Array.from({ length: 1_001 }, () => ({
+          findingId: 'finding-0',
+          skillExecutionId: 'skill-0',
+          outcome: 'posted' as const,
+          observedAt,
+        })),
+      ],
+      recalledMemories: Array.from({ length: 6 }, (_, index) => ({
+        id: `memory-${index}`,
+        version: 1,
+      })),
+    });
+    if (envelope.dataProfile !== 'findings') throw new Error('Expected findings envelope');
+
+    expect(envelope.skills).toHaveLength(100);
+    expect(envelope.skills[0]?.usage).toHaveLength(64);
+    expect(envelope.findings).toHaveLength(500);
+    expect(envelope.observations).toHaveLength(1_000);
+    expect(envelope.observations).not.toContainEqual(
+      expect.objectContaining({ findingId: 'finding-500' }),
+    );
+    expect(envelope.observations).not.toContainEqual(
+      expect.objectContaining({ skillExecutionId: 'skill-100' }),
+    );
+    expect(envelope.recalledMemories).toHaveLength(5);
+  });
 });
 
 describe('publishRunFailOpen', () => {

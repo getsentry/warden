@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EventContext, SkillReport } from '../types/index.js';
+import { buildFindingsServiceRunEnvelope } from '../service/index.js';
 import { buildFindingsOutput } from './reporting/output.js';
 import type { ActionInputs } from './inputs.js';
 import {
@@ -100,6 +101,42 @@ describe('Action service integration', () => {
       token: 'input-token',
       data: 'findings',
     });
+  });
+
+  it('does not send an Action service token to a repository-configured URL', () => {
+    vi.stubEnv('WARDEN_SERVICE_URL', '');
+
+    expect(resolveActionServiceOptions(inputs({
+      serviceToken: 'input-token',
+    }), {
+      url: 'https://repository-controlled.example.com',
+      data: 'findings',
+      memory: true,
+      timeoutMs: 2_000,
+    })).toBeUndefined();
+  });
+
+  it('records only one failed execution for duplicate trigger IDs', () => {
+    vi.stubEnv('GITHUB_RUN_ATTEMPT', '');
+    const output = buildFindingsOutput([], context, [], {
+      runId: 'action-run-duplicate-trigger',
+      timestamp: '2026-08-12T12:00:01.000Z',
+      triggerResults: [
+        { triggerId: 'trigger-1', triggerName: 'First', skillName: 'security', error: new Error('failed') },
+        { triggerId: 'trigger-1', triggerName: 'Second', skillName: 'security', error: new Error('failed again') },
+      ],
+    });
+
+    const envelope = buildFindingsServiceRunEnvelope(output, {
+      url: 'https://warden.example.com',
+      token: 'service-token',
+      data: 'findings',
+      memory: false,
+      timeoutMs: 2_000,
+    }, 'action');
+
+    expect(envelope.skills).toHaveLength(1);
+    expect(envelope.skills[0]).toMatchObject({ executionId: 'trigger-1', status: 'failure' });
   });
 
   it('publishes the final in-memory findings state as source=action', async () => {

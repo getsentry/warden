@@ -1090,8 +1090,9 @@ function resolveCliService(
   });
 }
 
-function cliRunOutcome(exitCode: number, wasInterrupted: boolean): 'cancelled' | 'success' | 'failure' {
-  if (wasInterrupted || exitCode === 130) return 'cancelled';
+/** Convert the finalized CLI exit status into its service run outcome. */
+export function cliRunOutcome(exitCode: number): 'cancelled' | 'success' | 'failure' {
+  if (exitCode === 130) return 'cancelled';
   if (exitCode === 0) return 'success';
   return 'failure';
 }
@@ -1119,7 +1120,7 @@ async function publishCliRun(args: {
       wardenVersion: getVersion(),
       startedAt: new Date(args.runLog.baseRun.timestamp),
       completedAt: new Date(new Date(args.runLog.baseRun.timestamp).getTime() + args.totalDuration),
-      outcome: cliRunOutcome(args.exitCode, interrupted.value),
+      outcome: cliRunOutcome(args.exitCode),
       repository: {
         provider: 'local',
         owner: repository.owner,
@@ -1646,7 +1647,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   if (pullRequest.files.length === 0) {
-    emitEmptyRunLog(repoPath, options);
+    const run = emitEmptyRunLog(repoPath, options);
+    await publishCliEmptyRun({ service, context, run, reporter });
     if (!options.json) {
       if (options.staged) {
         reporter.renderEmptyState('No staged changes found');
@@ -1687,7 +1689,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const triggersToRun = [...seen.values()];
 
   if (triggersToRun.length === 0) {
-    emitEmptyRunLog(repoPath, options);
+    const run = emitEmptyRunLog(repoPath, options);
+    await publishCliEmptyRun({ service, context, run, reporter });
     if (!options.json) {
       reporter.blank();
       if (options.skill) {

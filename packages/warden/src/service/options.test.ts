@@ -101,4 +101,18 @@ describe('resolveServiceOptions', () => {
       },
     })).toBeUndefined();
   });
+
+  it('disables the optional service instead of throwing for invalid environment configuration', () => {
+    const warning = vi.fn();
+
+    expect(resolveServiceOptions({
+      environment: {
+        WARDEN_SERVICE_URL: 'not-a-url',
+        WARDEN_SERVICE_TOKEN: 'secret',
+        WARDEN_SERVICE_TIMEOUT_MS: 'not-a-number',
+      },
+      onWarning: warning,
+    })).toBeUndefined();
+    expect(warning).toHaveBeenCalledOnce();
+  });
 });

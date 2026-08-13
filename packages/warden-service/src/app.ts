@@ -61,7 +61,6 @@ function createDisabledAuthenticationAdapter(tenantId: string): DashboardAuthent
         roles: ['read'],
         repositoryAllowlist: null,
         credentialKind: 'browser',
-        principalSubject: 'local:auth-disabled',
       };
     },
   };

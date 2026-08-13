@@ -10,7 +10,7 @@ function result<TRow extends Record<string, unknown>>(rows: TRow[]): QueryResult
   return { rows, rowCount: rows.length };
 }
 
-function sessionDatabase() {
+function sessionDatabase(repositoryAllowlist: string[] | null = null) {
   let revoked = false;
   const client: DatabaseClient = {
     async query<TRow extends Record<string, unknown>>(sql: string) {
@@ -20,7 +20,7 @@ function sessionDatabase() {
           tenant_id: '00000000-0000-0000-0000-000000000001',
           token_hash: hashServiceToken(token),
           roles: ['admin'],
-          repository_allowlist: ['acme/widgets'],
+          repository_allowlist: repositoryAllowlist,
         }] as unknown as TRow[]);
       }
       return result([]);
@@ -65,7 +65,7 @@ describe('dashboard token sessions', () => {
     expect(authorized.status).toBe(200);
     await expect(authorized.json()).resolves.toEqual({
       roles: ['admin'],
-      repositoryRestricted: true,
+      repositoryRestricted: false,
       credentialKind: 'service',
       canManagePersonalTokens: true,
       authDisabled: false,
@@ -73,6 +73,23 @@ describe('dashboard token sessions', () => {
 
     fixture.revoke();
     expect((await app.request('/api/v1/auth/context', { headers: { cookie } })).status).toBe(401);
+  });
+
+  it('rejects repository-restricted tokens at the dashboard session boundary', async () => {
+    const fixture = sessionDatabase(['acme/widgets']);
+    const app = createWardenService({
+      database: fixture.database,
+      sessionSecret: 's'.repeat(32),
+    });
+
+    const login = await app.request('/api/auth/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+
+    expect(login.status).toBe(401);
+    expect(login.headers.get('set-cookie')).toBeNull();
   });
 
   it('rejects cross-origin session mutations while bearer requests remain machine-safe', async () => {

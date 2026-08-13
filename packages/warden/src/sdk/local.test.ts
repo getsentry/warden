@@ -131,7 +131,7 @@ describe('local SDK entrypoints', () => {
     expect(warning).toHaveBeenCalledWith(expect.stringContaining('Local results are unchanged'));
   });
 
-  it('returns the unchanged SDK result when service envelope validation fails', async () => {
+  it('publishes findings after bounding oversized service fields', async () => {
     const oversizedReport: SkillReport = {
       ...report,
       findings: [{
@@ -145,7 +145,12 @@ describe('local SDK entrypoints', () => {
     vi.mocked(resolveSkillAsync).mockResolvedValue(skill);
     vi.mocked(runSkill).mockResolvedValue(oversizedReport);
     const warning = vi.fn();
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
+      protocolVersion: 1,
+      runId: 'stored-run',
+      checksum: 'a'.repeat(64),
+      created: true,
+    }));
 
     const result = await runLocalSkill({
       skillPath: '.warden/skills/security-review',
@@ -163,8 +168,94 @@ describe('local SDK entrypoints', () => {
     });
 
     expect(result).toEqual({ skill, context, report: oversizedReport });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(warning).toHaveBeenCalledWith(expect.stringContaining('Local results are unchanged'));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, request] = fetchMock.mock.calls[0] ?? [];
+    const envelope = JSON.parse(String(request?.body)) as {
+      findings: { description: string }[];
+    };
+    expect(envelope.findings[0]?.description).toHaveLength(8_000);
+    expect(warning).not.toHaveBeenCalled();
+  });
+
+  it('appends recalled memory to caller-provided historical evidence', async () => {
+    vi.mocked(buildLocalEventContext).mockReturnValue(context);
+    vi.mocked(resolveSkillAsync).mockResolvedValue(skill);
+    vi.mocked(runSkill).mockResolvedValue(report);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, request) => {
+      const body = JSON.parse(String(request?.body)) as { clientRecallId?: string };
+      if (String(url).endsWith('/api/v1/memory/recall')) {
+        return Response.json({
+          protocolVersion: 1,
+          clientRecallId: body.clientRecallId,
+          memories: [{
+            id: 'memory-1',
+            version: 1,
+            kind: 'convention',
+            content: 'Use the shared query builder.',
+          }],
+        });
+      }
+      return Response.json({
+        protocolVersion: 1,
+        runId: 'stored-run',
+        checksum: 'a'.repeat(64),
+        created: true,
+      });
+    });
+
+    await runLocalSkill({
+      skillPath: '.warden/skills/security-review',
+      cwd: '/tmp/repo',
+      base: 'main',
+      head: 'eval',
+      historicalEvidence: '<caller_evidence>Keep public APIs stable.</caller_evidence>',
+      service: {
+        url: 'https://warden.example.com',
+        token: 'service-token',
+        data: 'findings',
+        memory: true,
+        timeoutMs: 100,
+      },
+    });
+
+    const runnerOptions = vi.mocked(runSkill).mock.calls[0]?.[2];
+    expect(runnerOptions?.historicalEvidence).toContain('Keep public APIs stable.');
+    expect(runnerOptions?.historicalEvidence).toContain('Use the shared query builder.');
+  });
+
+  it('publishes a metrics-only failure before rethrowing a failed SDK run', async () => {
+    vi.mocked(buildLocalEventContext).mockReturnValue(context);
+    vi.mocked(resolveSkillAsync).mockResolvedValue(skill);
+    vi.mocked(runSkill).mockRejectedValue(new Error('analysis failed'));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
+      protocolVersion: 1,
+      runId: 'stored-run',
+      checksum: 'a'.repeat(64),
+      created: true,
+    }));
+
+    await expect(runLocalSkill({
+      skillPath: '.warden/skills/security-review',
+      cwd: '/tmp/repo',
+      base: 'main',
+      head: 'eval',
+      service: {
+        url: 'https://warden.example.com',
+        token: 'service-token',
+        data: 'findings',
+        memory: false,
+        timeoutMs: 100,
+      },
+    })).rejects.toThrow('analysis failed');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, request] = fetchMock.mock.calls[0] ?? [];
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      source: 'sdk',
+      dataProfile: 'metrics',
+      outcome: 'failure',
+      skills: [{ skill: 'security-review', status: 'failure', errorCode: 'unknown' }],
+    });
   });
 
   it('verifies findings with a resolved skill', async () => {

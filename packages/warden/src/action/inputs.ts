@@ -123,6 +123,7 @@ export function parseActionInputs(): ActionInputs {
   const serviceDataInput = getInput('service-data');
   const serviceData = DataProfileSchema.safeParse(serviceDataInput);
   const serviceTimeoutInput = getInput('service-timeout-ms');
+  const serviceTimeoutParsed = serviceTimeoutInput ? Number(serviceTimeoutInput) : undefined;
 
   return {
     anthropicApiKey,
@@ -144,7 +145,9 @@ export function parseActionInputs(): ActionInputs {
     serviceToken: getInput('service-token') || process.env['WARDEN_SERVICE_TOKEN'] || undefined,
     serviceData: serviceData.success ? serviceData.data : undefined,
     serviceMemory: parseBooleanInput(getInput('service-memory')),
-    serviceTimeoutMs: serviceTimeoutInput ? parseInt(serviceTimeoutInput, 10) : undefined,
+    serviceTimeoutMs: serviceTimeoutParsed === undefined || Number.isNaN(serviceTimeoutParsed)
+      ? undefined
+      : serviceTimeoutParsed,
   };
 }
 

@@ -85,6 +85,7 @@ export function registerDashboardSessionRoutes(
       || serviceContext.credentialKind === 'personal'
       || !serviceContext.tokenId
       || !hasRole(serviceContext, 'read')
+      || serviceContext.repositoryAllowlist !== null
     ) {
       return context.json({ error: { code: 'unauthorized', message: 'Authentication required.' } }, 401);
     }

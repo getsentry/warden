@@ -46,6 +46,7 @@ export async function updateRetentionSettings(
   settings: RetentionSettings,
 ): Promise<RetentionSettings | null> {
   const context = requireServiceContext(contextInput);
+  if (context.repositoryAllowlist !== null) return null;
   const result = await database.query<RetentionRow>(`
     UPDATE tenants SET metrics_retention_days = $2, findings_retention_days = $3,
       code_retention_days = $4, lifecycle_retention_days = $5, updated_at = now()

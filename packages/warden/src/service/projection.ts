@@ -25,6 +25,16 @@ const auxiliaryLaneAliases: Record<string, string> = {
   fixGate: 'fix_gate',
 };
 
+const MAX_SKILLS = 100;
+const MAX_FINDINGS = 500;
+const MAX_OBSERVATIONS = 1_000;
+const MAX_USAGE_ITEMS = 64;
+const MAX_RECALLED_MEMORIES = 5;
+const MAX_TITLE_LENGTH = 512;
+const MAX_DESCRIPTION_LENGTH = 8_000;
+const MAX_VERIFICATION_LENGTH = 4_000;
+const MAX_PATH_LENGTH = 1_024;
+
 function usageLine(lane: string, usage: UsageStats, attribution?: UsageAttribution): UsageLineItem {
   return {
     lane: auxiliaryLaneAliases[lane] ?? lane,
@@ -61,15 +71,27 @@ function findingRecord(finding: Finding, skillExecutionId: string, provenance?: 
     skillExecutionId,
     severity: finding.severity,
     ...(finding.confidence ? { confidence: finding.confidence } : {}),
-    title: finding.title,
-    description: finding.description,
-    ...(finding.verification ? { verification: finding.verification } : {}),
-    ...(finding.location ? { location: finding.location } : {}),
-    ...(finding.additionalLocations ? { additionalLocations: finding.additionalLocations.slice(0, 20) } : {}),
+    title: finding.title.slice(0, MAX_TITLE_LENGTH),
+    description: finding.description.slice(0, MAX_DESCRIPTION_LENGTH),
+    ...(finding.verification
+      ? { verification: finding.verification.slice(0, MAX_VERIFICATION_LENGTH) }
+      : {}),
+    ...(finding.location ? {
+      location: {
+        ...finding.location,
+        path: finding.location.path.slice(0, MAX_PATH_LENGTH),
+      },
+    } : {}),
+    ...(finding.additionalLocations ? {
+      additionalLocations: finding.additionalLocations.slice(0, 20).map((location) => ({
+        ...location,
+        path: location.path.slice(0, MAX_PATH_LENGTH),
+      })),
+    } : {}),
     ...(provenance ? { provenance } : {}),
     ...(sourceSnippet ? {
       sourceEvidence: {
-        path: sourceSnippet.path,
+        path: sourceSnippet.path.slice(0, MAX_PATH_LENGTH),
         ...(sourceSnippet.language ? { language: sourceSnippet.language } : {}),
         startLine: sourceSnippet.startLine,
         endLine: sourceSnippet.endLine,
@@ -117,9 +139,14 @@ export interface BuildServiceRunProjectionInput {
 
 /** Convert final in-memory Warden reports into the richer pre-redaction service projection. */
 export function buildServiceRunProjection(input: BuildServiceRunProjectionInput): RunProjection {
-  const findings = input.reports.flatMap(({ executionId, report, findingProvenance }) =>
-    report.findings.map((finding) => findingRecord(finding, executionId, findingProvenance?.[finding.id])));
-  const skills = input.reports.map(({ executionId, report, triggerId, triggerName, skillDigest }) => {
+  const reports = input.reports.slice(0, MAX_SKILLS);
+  const findings = reports.flatMap(({ executionId, report, findingProvenance }) =>
+    report.findings.map((finding) => findingRecord(
+      finding,
+      executionId,
+      findingProvenance?.[finding.id],
+    ))).slice(0, MAX_FINDINGS);
+  const skills = reports.map(({ executionId, report, triggerId, triggerName, skillDigest }) => {
     const usage: UsageLineItem[] = [];
     if (report.usage) {
       usage.push(usageLine('scan', report.usage, { model: report.model, runtime: report.runtime }));
@@ -139,9 +166,15 @@ export function buildServiceRunProjection(input: BuildServiceRunProjectionInput)
       ...(report.error ? { errorCode: report.error.code } : {}),
       ...(report.durationMs !== undefined ? { durationMs: report.durationMs } : {}),
       findingCounts: counts(report.findings),
-      usage,
+      usage: usage.slice(0, MAX_USAGE_ITEMS),
     };
   });
+  const findingIds = new Set(findings.map((finding) => finding.id));
+  const skillExecutionIds = new Set(skills.map((skill) => skill.executionId));
+  const observations = (input.observations ?? [])
+    .filter((observation) => findingIds.has(observation.findingId)
+      && (!observation.skillExecutionId || skillExecutionIds.has(observation.skillExecutionId)))
+    .slice(0, MAX_OBSERVATIONS);
   return {
     protocolVersion: 1,
     dataProfile: input.service.data,
@@ -162,8 +195,10 @@ export function buildServiceRunProjection(input: BuildServiceRunProjectionInput)
     findingCounts: counts(input.reports.flatMap(({ report }) => report.findings)),
     skills,
     findings,
-    observations: [...(input.observations ?? [])],
-    ...(input.recalledMemories?.length ? { recalledMemories: [...input.recalledMemories] } : {}),
+    observations,
+    ...(input.recalledMemories?.length
+      ? { recalledMemories: input.recalledMemories.slice(0, MAX_RECALLED_MEMORIES) }
+      : {}),
     ...(input.memoryRecallId ? { memoryRecallId: input.memoryRecallId } : {}),
   };
 }

@@ -502,6 +502,51 @@ describe('runScheduleWorkflow', () => {
       expect(mockRunSkill).not.toHaveBeenCalled();
       expect(mockCreateOrUpdateIssue).not.toHaveBeenCalled();
     });
+
+    it('recalls schedule memory from the union of trigger paths', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, request) => {
+        const body = JSON.parse(String(request?.body)) as { clientRecallId?: string };
+        if (String(url).endsWith('/api/v1/memory/recall')) {
+          return Response.json({
+            protocolVersion: 1,
+            clientRecallId: body.clientRecallId,
+            memories: [{
+              id: 'memory-1',
+              version: 1,
+              kind: 'convention',
+              content: 'Keep shared behavior consistent.',
+            }],
+          });
+        }
+        return Response.json({
+          protocolVersion: 1,
+          runId: 'stored-run',
+          checksum: 'a'.repeat(64),
+          created: true,
+        });
+      });
+
+      await runScheduleWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          serviceUrl: 'https://warden.example.com',
+          serviceToken: 'service-token',
+          serviceMemory: true,
+        }),
+        SCHEDULE_MULTI_FIXTURES,
+      );
+
+      expect(mockBuildContext.mock.calls[0]?.[0].patterns).toEqual([
+        'src/**/*.ts',
+        'lib/**/*.js',
+      ]);
+      expect(mockRunSkill).toHaveBeenCalledTimes(2);
+      for (const [, , options] of mockRunSkill.mock.calls) {
+        expect(options?.historicalEvidence).toContain('Keep shared behavior consistent.');
+      }
+      expect(fetchMock.mock.calls.filter(([url]) =>
+        String(url).endsWith('/api/v1/memory/recall'))).toHaveLength(1);
+    });
   });
 
   // ---------------------------------------------------------------------------

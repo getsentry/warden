@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceContext } from '../context.js';
 import type { DatabaseClient, QueryResult, WardenDatabase } from '../db/database.js';
-import { applyTenantRetention, deleteRun, deleteTenant, exportServiceData } from './store.js';
+import {
+  applyTenantRetention,
+  deleteRun,
+  deleteTenant,
+  exportServiceData,
+  updateRetentionSettings,
+} from './store.js';
 
 const context: ServiceContext = {
   tenantId: 'tenant-1', tokenId: 'token-1', roles: ['admin'], repositoryAllowlist: ['acme/widgets'],
@@ -83,6 +89,22 @@ describe('service administration store', () => {
     });
 
     await expect(deleteTenant(database, context)).resolves.toBe(false);
+    expect(queried).toBe(false);
+  });
+
+  it('does not let a repository-restricted administrator change tenant retention', async () => {
+    let queried = false;
+    const database = databaseFor(() => {
+      queried = true;
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(updateRetentionSettings(database, context, {
+      metricsDays: 365,
+      findingsDays: 90,
+      codeDays: 30,
+      lifecycleDays: 180,
+    })).resolves.toBeNull();
     expect(queried).toBe(false);
   });
 });

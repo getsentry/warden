@@ -50,7 +50,7 @@ export async function recallActionMemoryFailOpen(
   };
 }
 
-/** Resolve Action inputs and layered repository configuration at the shared service boundary. */
+/** Resolve Action options without trusting repository configuration to choose the authenticated endpoint. */
 export function resolveActionServiceOptions(
   inputs: ActionInputs,
   config?: ServiceConfig,
@@ -63,7 +63,11 @@ export function resolveActionServiceOptions(
       memory: inputs.serviceMemory,
       timeoutMs: inputs.serviceTimeoutMs,
     },
-    config,
+    config: config ? {
+      data: config.data,
+      memory: config.memory,
+      timeoutMs: config.timeoutMs,
+    } : undefined,
     onWarning: warnAction,
   });
 }

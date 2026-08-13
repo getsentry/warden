@@ -164,9 +164,14 @@ describe('createWardenService', () => {
       roles: ['read'],
       repositoryRestricted: false,
       credentialKind: 'browser',
-      canManagePersonalTokens: true,
+      canManagePersonalTokens: false,
       authDisabled: true,
     });
+    expect((await app.request('http://localhost/api/v1/personal-tokens', {
+      method: 'POST',
+      headers: { origin: 'http://localhost', 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Persistent access' }),
+    })).status).toBe(403);
     expect((await app.request('/api/v1/memories', {
       method: 'POST',
       headers: { origin: 'http://localhost' },

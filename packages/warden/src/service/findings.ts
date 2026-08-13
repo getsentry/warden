@@ -63,6 +63,7 @@ function reportsFromFindings(output: FindingsOutput) {
       },
       findingProvenance: {},
     });
+    completedExecutions.add(executionId);
   }
 
   const findingCounts = new Map<string, number>();

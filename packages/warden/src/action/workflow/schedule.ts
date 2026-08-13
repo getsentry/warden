@@ -204,6 +204,29 @@ async function runScheduleWorkflowInner(
     repoPath,
   };
 
+  let memoryRecall: ActionMemoryRecall | undefined;
+  if (service?.memory) {
+    try {
+      const recallContext = await buildScheduleEventContext({
+        patterns: [...new Set(scheduleTriggers.flatMap((trigger) =>
+          trigger.filters?.paths ?? ['**/*']))],
+        ignorePatterns: [FINDINGS_OUTPUT_FILENAME, FINDINGS_OUTPUT_DONE_FILENAME],
+        repoPath,
+        owner,
+        name: repo,
+        defaultBranch,
+        headSha,
+      });
+      memoryRecall = await recallActionMemoryFailOpen(
+        service,
+        recallContext,
+        scheduleTriggers.map((trigger) => trigger.skill),
+      );
+    } catch {
+      console.log('::warning::Warden service memory recall failed. Action results are unchanged.');
+    }
+  }
+
   const allReports: SkillReport[] = [];
   const skillExecutions: SkillExecutionMeta[] = [];
   const skippedTriggers: SkippedScheduleTrigger[] = [];
@@ -211,7 +234,6 @@ async function runScheduleWorkflowInner(
   const failureReasons: string[] = [];
   const triggerErrors: string[] = [];
   let shouldFailAction = false;
-  let memoryRecall: ActionMemoryRecall | undefined;
 
   const writeLiveSnapshot = (processedCount: number): void => {
     const pending: SkippedScheduleTrigger[] = scheduleTriggers.slice(processedCount + 1).map((t) => ({
@@ -265,12 +287,6 @@ async function runScheduleWorkflowInner(
       }
 
       console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
-      memoryRecall ??= await recallActionMemoryFailOpen(
-        service,
-        context,
-        scheduleTriggers.map((trigger) => trigger.skill),
-      );
-
       // Run skill
       const skillRoot = resolved.useBuiltinSkill ? undefined : (resolved.skillRoot ?? repoPath);
       const skill = await resolveSkillAsync(resolved.skill, skillRoot, {
@@ -294,7 +310,7 @@ async function runScheduleWorkflowInner(
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         verifyFindings: resolved.verifyFindings,
         triggerName: resolved.name,
-        historicalEvidence: memoryRecall.historicalEvidence,
+        historicalEvidence: memoryRecall?.historicalEvidence,
         pathToClaudeCodeExecutable: runtimeEnv.pathToClaudeCodeExecutable,
         callbacks: {
           onFindingProcessing: (event) => findingProcessingEvents.push(event),
