@@ -10,7 +10,7 @@ import {
   invalidPiModelSelectorMessage,
   type InvalidPiModelSelector,
 } from '../sdk/runtimes/model-selectors.js';
-import { configurePiModelCatalogOffline, isConfiguredOffline } from '../sdk/runtimes/pi-offline.js';
+import { configureWardenOffline, isWardenOffline } from '../sdk/offline.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { aggregateAuxiliaryUsageAttribution, mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
@@ -745,16 +745,16 @@ function loadOptionalConfig(options: CLIOptions, repoPath?: string): WardenConfi
   const config = configPath && existsSync(configPath)
     ? loadWardenConfigFile(configPath)
     : null;
-  applyPiModelCatalogOfflinePolicy(options, config);
+  applyWardenOfflinePolicy(options, config);
   return config;
 }
 
-/** Apply durable/config and CLI offline intent for Pi catalog refresh. */
-function applyPiModelCatalogOfflinePolicy(
+/** Apply durable config and CLI offline intent for Warden network access. */
+function applyWardenOfflinePolicy(
   options: Pick<CLIOptions, 'offline'>,
   config: WardenConfig | null | undefined,
 ): void {
-  configurePiModelCatalogOffline(Boolean(options.offline || config?.defaults?.offline));
+  configureWardenOffline(Boolean(options.offline || config?.defaults?.offline));
 }
 
 /**
@@ -846,9 +846,8 @@ async function createDirectSkillTask(args: {
   try {
     skill = await resolveSkillAsync(spec.skill, repoPath, {
       remote: spec.remote,
-      // Config/CLI offline only. PI_OFFLINE is Pi-catalog scoped and must not
-      // force remote skills onto cache-only mode.
-      offline: isConfiguredOffline(),
+      // Warden-wide offline gates remote skills. PI_OFFLINE remains catalog-only.
+      offline: isWardenOffline(),
     });
   } catch (error) {
     if (
@@ -1365,7 +1364,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
   const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
-  applyPiModelCatalogOfflinePolicy(options, config);
+  applyWardenOfflinePolicy(options, config);
 
   // Build context from local git
   reporter.startContext(`Analyzing changes from ${gitRef}...`);
@@ -1420,7 +1419,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Load config
   const config = loadWardenConfigFile(configPath);
-  applyPiModelCatalogOfflinePolicy(options, config);
+  applyWardenOfflinePolicy(options, config);
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -1641,7 +1640,7 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
   const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
-  applyPiModelCatalogOfflinePolicy(options, config);
+  applyWardenOfflinePolicy(options, config);
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.

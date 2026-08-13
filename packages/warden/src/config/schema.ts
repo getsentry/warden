@@ -243,9 +243,8 @@ export const DefaultsSchema = z.object({
   runtime: RuntimeNameSchema.optional(),
   /**
    * Block network access for remote skills and Pi model-catalog refresh.
-   * Prefer this durable setting for both. CLI `--offline` enables the same
-   * for one run. `PI_OFFLINE` remains a Pi-catalog-only override and does not
-   * force remote skills onto cache-only mode.
+   * Prefer this durable setting for both. CLI `--offline` and `WARDEN_OFFLINE`
+   * enable the same for one run. `PI_OFFLINE` remains a Pi-catalog-only override.
    */
   offline: z.boolean().optional(),
   /** Model defaults for repo-aware skill execution. */

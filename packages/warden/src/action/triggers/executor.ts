@@ -25,7 +25,7 @@ import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
-import { isConfiguredOffline } from '../../sdk/runtimes/pi-offline.js';
+import { isWardenOffline } from '../../sdk/offline.js';
 import { captureActionTriggerError } from '../error-reporting.js';
 
 /** Log-mode output for CI: no TTY, no color. */
@@ -200,8 +200,8 @@ export async function executeTrigger(
           failOn,
           resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
             remote: trigger.remote,
-            // Config/CLI offline only; PI_OFFLINE does not gate remote skills.
-            offline: isConfiguredOffline(),
+            // Warden-wide offline gates remote skills. PI_OFFLINE remains catalog-only.
+            offline: isWardenOffline(),
           }),
           context: filterContextByPaths(context, trigger.filters),
           runnerOptions: {

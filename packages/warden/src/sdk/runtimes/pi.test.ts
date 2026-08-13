@@ -9,9 +9,9 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { piRuntime } from './pi.js';
 import {
-  configurePiModelCatalogOffline,
-  resetPiModelCatalogOfflineForTests,
-} from './pi-offline.js';
+  configureWardenOffline,
+  resetWardenOfflineForTests,
+} from '../offline.js';
 import { Sentry } from '../../sentry.js';
 import { startTraceRecorder, withTraceRecorder } from '../../sentry-trace.js';
 import type { TraceSpan } from '../../types/index.js';
@@ -162,7 +162,8 @@ function baseSkillRequest() {
 describe('piRuntime.runSkill', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetPiModelCatalogOfflineForTests();
+    resetWardenOfflineForTests();
+    delete process.env['WARDEN_OFFLINE'];
     delete process.env['PI_OFFLINE'];
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
@@ -502,7 +503,7 @@ describe('piRuntime.runSkill', () => {
   });
 
   it('skips shared network catalog refresh when offline policy is configured', async () => {
-    configurePiModelCatalogOffline(true);
+    configureWardenOffline(true);
 
     await piRuntime.runSkill(baseSkillRequest());
 

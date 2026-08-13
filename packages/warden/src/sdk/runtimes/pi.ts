@@ -51,7 +51,7 @@ import {
 } from '../otel.js';
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
-import { isPiModelCatalogOffline } from './pi-offline.js';
+import { isPiModelCatalogOffline } from '../offline.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,

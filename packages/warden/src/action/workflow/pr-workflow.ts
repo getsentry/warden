@@ -48,7 +48,7 @@ import { ReviewFeedbackGate } from '../review/review-feedback-gate.js';
 import type { ReviewFeedbackWritability } from '../review/review-feedback-gate.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
-import { configurePiModelCatalogOffline } from '../../sdk/runtimes/pi-offline.js';
+import { configureWardenOffline } from '../../sdk/offline.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
@@ -419,7 +419,7 @@ async function initializeWorkflow(
       configPath: inputs.configPath,
       onWarning: (message) => console.log(`::warning::${message}`),
     });
-    configurePiModelCatalogOffline(
+    configureWardenOffline(
       layered.baseConfig?.defaults?.offline === true
       || layered.repoConfig?.defaults?.offline === true
       || layered.config.defaults?.offline === true,
