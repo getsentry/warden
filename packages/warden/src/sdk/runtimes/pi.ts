@@ -274,15 +274,13 @@ async function refreshSelectedProviderCatalog(
       waiters: 0,
     };
     // Explicit allowNetwork so Warden offline policy owns network access, not Pi env vars.
+    // Keep the map entry until the last waiter finishes local restore so late joiners
+    // reuse this shared phase instead of starting a redundant network refresh.
     created.promise = modelRuntime.refresh({
       providers: [providerId],
       allowNetwork: true,
       signal: refreshSignal(controller.signal),
-    }).then(() => undefined).finally(() => {
-      if (activeProviderCatalogRefreshes.get(providerId) === created) {
-        activeProviderCatalogRefreshes.delete(providerId);
-      }
-    });
+    }).then(() => undefined);
     active = created;
     activeProviderCatalogRefreshes.set(providerId, active);
   }

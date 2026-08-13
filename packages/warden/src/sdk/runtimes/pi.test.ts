@@ -600,6 +600,46 @@ describe('piRuntime.runSkill', () => {
     expect(restoreCalls).toBe(3);
   });
 
+  it('keeps the shared refresh entry until waiters finish local restore', async () => {
+    let networkCalls = 0;
+    let restoreCalls = 0;
+    let releaseRestore!: () => void;
+    const restoreGate = new Promise<void>((resolve) => {
+      releaseRestore = resolve;
+    });
+    let firstRestoreStarted = false;
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+    }) => {
+      if (options?.allowNetwork === false) {
+        restoreCalls += 1;
+        if (!firstRestoreStarted) {
+          firstRestoreStarted = true;
+          await restoreGate;
+        }
+        return { aborted: false, errors: new Map() };
+      }
+      networkCalls += 1;
+      return { aborted: false, errors: new Map() };
+    });
+
+    const first = piRuntime.runSkill(baseSkillRequest());
+    // Let the shared network settle and the first waiter enter local restore.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(firstRestoreStarted).toBe(true);
+    expect(networkCalls).toBe(1);
+
+    // A late joiner during local restore must not start another network refresh.
+    const second = piRuntime.runSkill(baseSkillRequest());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(networkCalls).toBe(1);
+
+    releaseRestore();
+    await Promise.all([first, second]);
+    expect(networkCalls).toBe(1);
+    expect(restoreCalls).toBe(2);
+  });
+
   it('lets a waiter abort without cancelling a shared peer catalog refresh', async () => {
     let networkSettled = false;
     let releaseNetwork!: () => void;

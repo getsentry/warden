@@ -3,6 +3,19 @@ import { getBuiltinModel } from '@earendil-works/pi-ai/providers/all';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
+/** Build a timeout signal without AbortSignal.timeout (Node < 20.3). */
+function testTimeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+  }, ms);
+  timer.unref?.();
+  return controller.signal;
+}
+
 describe('Pi model catalog', () => {
   it('includes Grok 4.5 through OpenRouter', () => {
     expect(getBuiltinModel('openrouter', 'x-ai/grok-4.5')).toMatchObject({
@@ -57,7 +70,7 @@ describe('Pi model catalog', () => {
         providers: ['openrouter'],
         allowNetwork: true,
         force: true,
-        signal: AbortSignal.timeout(5_000),
+        signal: testTimeoutSignal(5_000),
       });
 
       expect(fetchMock).toHaveBeenCalledWith(
@@ -105,7 +118,7 @@ describe('Pi model catalog', () => {
       await modelRuntime.refresh({
         providers: ['openrouter'],
         allowNetwork: false,
-        signal: AbortSignal.timeout(5_000),
+        signal: testTimeoutSignal(5_000),
       });
 
       expect(fetchMock).not.toHaveBeenCalled();
