@@ -103,6 +103,7 @@ describe('Action service integration', () => {
   });
 
   it('publishes the final in-memory findings state as source=action', async () => {
+    vi.stubEnv('GITHUB_RUN_ATTEMPT', '');
     const service = resolveActionServiceOptions(inputs({
       serviceUrl: 'https://warden.example.com',
       serviceToken: 'service-token',
