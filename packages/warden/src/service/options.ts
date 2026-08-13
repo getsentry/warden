@@ -37,7 +37,10 @@ function environmentBoolean(value: string | undefined): boolean | undefined {
 export function resolveServiceOptions(input: ResolveServiceOptionsInput): ResolvedServiceOptions | undefined {
   if (input.explicit?.disabled) return undefined;
   const environment = input.environment ?? process.env;
-  const url = input.explicit?.url ?? environment['WARDEN_SERVICE_URL'] ?? input.config?.url;
+  const environmentUrl = environment['WARDEN_SERVICE_URL']?.trim() || undefined;
+  const url = input.explicit?.url
+    ?? environmentUrl
+    ?? (input.explicit?.token?.trim() ? input.config?.url : undefined);
   if (!url) return undefined;
   const token = input.explicit?.token ?? environment['WARDEN_SERVICE_TOKEN'];
   if (!token?.trim()) {
@@ -63,6 +66,7 @@ export function resolveServiceOptions(input: ResolveServiceOptionsInput): Resolv
   }
   return {
     ...candidate.data,
+    url,
     token: token.trim(),
     memory: candidate.data.memory ?? candidate.data.data !== 'metrics',
   };

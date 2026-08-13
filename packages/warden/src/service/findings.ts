@@ -18,6 +18,25 @@ function boundedId(value: string): string {
   return `${value.slice(0, 111)}:${digest}`;
 }
 
+function boundedOptionalText(value: string, maximumLength: number): string | undefined {
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, maximumLength) : undefined;
+}
+
+function servicePullRequest(pullRequest: NonNullable<FindingsOutput['pullRequest']>) {
+  const author = boundedOptionalText(pullRequest.author, 255);
+  const title = boundedOptionalText(pullRequest.title, 1_000);
+  const baseBranch = boundedOptionalText(pullRequest.baseBranch, 255);
+  const headBranch = boundedOptionalText(pullRequest.headBranch, 255);
+  return {
+    number: pullRequest.number,
+    ...(author ? { author } : {}),
+    ...(title ? { title } : {}),
+    ...(baseBranch ? { baseBranch } : {}),
+    ...(headBranch ? { headBranch } : {}),
+  };
+}
+
 function reportsFromFindings(output: FindingsOutput) {
   const rawReports = output.skills.map((skill, index) => ({
     executionId: skill.skillExecutionId ?? `${index + 1}:${skill.name}`,
@@ -135,6 +154,7 @@ export function buildFindingsServiceRunEnvelope(
   }
   const completedAt = new Date(output.timestamp);
   const durationMs = Math.max(0, ...reports.map((item) => item.report.durationMs ?? 0));
+  const pullRequest = output.pullRequest ? servicePullRequest(output.pullRequest) : undefined;
   return buildServiceRunEnvelope({
     service,
     clientRunId: output.runAttempt ? `${output.runId}:${output.runAttempt}` : output.runId,
@@ -174,12 +194,6 @@ export function buildFindingsServiceRunEnvelope(
     }),
     event: output.event,
     ...(output.pullRequest?.headSha ? { headSha: output.pullRequest.headSha } : {}),
-    ...(output.pullRequest ? { pullRequest: {
-      number: output.pullRequest.number,
-      author: output.pullRequest.author,
-      title: output.pullRequest.title,
-      baseBranch: output.pullRequest.baseBranch,
-      headBranch: output.pullRequest.headBranch,
-    } } : {}),
+    ...(pullRequest ? { pullRequest } : {}),
   });
 }

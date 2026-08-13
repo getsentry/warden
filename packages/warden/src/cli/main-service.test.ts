@@ -57,9 +57,9 @@ describe('config-mode service publication', () => {
     process.exit = vi.fn() as never;
     process.env = {
       ...originalEnv,
+      WARDEN_SERVICE_URL: 'https://trusted.example.com',
       WARDEN_SERVICE_TOKEN: 'service-token',
     };
-    delete process.env['WARDEN_SERVICE_URL'];
     delete process.env['WARDEN_SERVICE_DATA'];
     delete process.env['WARDEN_SERVICE_MEMORY'];
     delete process.env['WARDEN_SERVICE_TIMEOUT_MS'];
@@ -115,6 +115,16 @@ describe('config-mode service publication', () => {
       outcome: 'skipped',
       skills: [],
     });
+    expect(process.exit).toHaveBeenCalledWith(0);
+  });
+
+  it('does not send an environment token to the repository-configured endpoint', async () => {
+    delete process.env['WARDEN_SERVICE_URL'];
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+    await main();
+
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(process.exit).toHaveBeenCalledWith(0);
   });
 });

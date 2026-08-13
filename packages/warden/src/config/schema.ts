@@ -282,9 +282,22 @@ export const LogsConfigSchema = z.object({
 });
 export type LogsConfig = z.infer<typeof LogsConfigSchema>;
 
+const ServiceEndpointSchema = z.string().url().refine((value) => {
+  let endpoint: URL;
+  try {
+    endpoint = new URL(value);
+  } catch {
+    return false;
+  }
+  if (endpoint.username || endpoint.password) return false;
+  if (endpoint.protocol === 'https:') return true;
+  return endpoint.protocol === 'http:'
+    && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname);
+}, 'Service URL must use HTTPS, except for local development');
+
 export const ServiceConfigSchema = z.object({
-  /** Backing service URL. No default endpoint is implied. */
-  url: z.string().url(),
+  /** Optional endpoint. Environment credentials are never paired with a config-only URL. */
+  url: ServiceEndpointSchema.optional(),
   /** Maximum class of run data sent to the service. Default: findings. */
   data: DataProfileSchema.default('findings'),
   /** Recall and learn repository memory. The final service resolver applies profile-aware defaults. */

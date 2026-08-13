@@ -139,6 +139,36 @@ describe('Action service integration', () => {
     expect(envelope.skills[0]).toMatchObject({ executionId: 'trigger-1', status: 'failure' });
   });
 
+  it('omits empty pull request metadata and bounds retained values', () => {
+    const unsafeContext: EventContext = {
+      ...context,
+      pullRequest: {
+        ...context.pullRequest!,
+        author: '  ',
+        title: '',
+        baseBranch: `  ${'b'.repeat(300)}  `,
+        headBranch: '  feature  ',
+      },
+    };
+    const output = buildFindingsOutput([report], unsafeContext, [], {
+      runId: 'action-run-normalized-metadata',
+      timestamp: '2026-08-12T12:00:01.000Z',
+    });
+    const envelope = buildFindingsServiceRunEnvelope(output, {
+      url: 'https://warden.example.com',
+      token: 'service-token',
+      data: 'findings',
+      memory: false,
+      timeoutMs: 2_000,
+    }, 'action');
+
+    expect(envelope.pullRequest).toEqual({
+      number: 42,
+      baseBranch: 'b'.repeat(255),
+      headBranch: 'feature',
+    });
+  });
+
   it('publishes the final in-memory findings state as source=action', async () => {
     vi.stubEnv('GITHUB_RUN_ATTEMPT', '');
     const service = resolveActionServiceOptions(inputs({

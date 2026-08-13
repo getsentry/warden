@@ -35,6 +35,11 @@ describe('ServiceConfigSchema', () => {
       memory: true,
     }).success).toBe(true);
   });
+
+  it('requires HTTPS except for loopback development', () => {
+    expect(ServiceConfigSchema.safeParse({ url: 'http://service.example.com' }).success).toBe(false);
+    expect(ServiceConfigSchema.safeParse({ url: 'http://127.0.0.1:8787' }).success).toBe(true);
+  });
 });
 
 describe('resolveServiceOptions', () => {
@@ -75,14 +80,37 @@ describe('resolveServiceOptions', () => {
 
     expect(resolveServiceOptions({
       explicit: { data: 'code' },
-      environment: { WARDEN_SERVICE_TOKEN: 'secret' },
+      environment: {
+        WARDEN_SERVICE_URL: 'https://warden.example.com',
+        WARDEN_SERVICE_TOKEN: 'secret',
+      },
       config: metricsConfig,
     })?.memory).toBe(true);
     expect(resolveServiceOptions({
       explicit: { data: 'metrics' },
-      environment: { WARDEN_SERVICE_TOKEN: 'secret' },
+      environment: {
+        WARDEN_SERVICE_URL: 'https://warden.example.com',
+        WARDEN_SERVICE_TOKEN: 'secret',
+      },
       config: findingsConfig,
     })?.memory).toBe(false);
+  });
+
+  it('does not pair an environment token with a config-only endpoint', () => {
+    const config = ServiceConfigSchema.parse({ url: 'https://repository.example.com' });
+
+    expect(resolveServiceOptions({
+      environment: { WARDEN_SERVICE_TOKEN: 'environment-token' },
+      config,
+    })).toBeUndefined();
+    expect(resolveServiceOptions({
+      explicit: { token: 'explicit-token' },
+      environment: {},
+      config,
+    })).toMatchObject({
+      url: 'https://repository.example.com',
+      token: 'explicit-token',
+    });
   });
 
   it('resolves explicit options before environment and configuration', () => {

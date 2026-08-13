@@ -66,21 +66,22 @@ Useful read routes include `/api/v1/findings`, `/api/v1/runs`, `/api/v1/reposito
 
 ## Connect Warden
 
-Set a non-secret URL in `warden.toml`. Supply the token through the environment or a masked Action input.
+Set the URL and token through the environment or masked Action inputs. This keeps repository configuration from choosing the endpoint that receives a service credential.
+
+```bash
+export WARDEN_SERVICE_URL=https://warden-service.example.com
+export WARDEN_SERVICE_TOKEN=wds_example_secret
+```
+
+Once a URL and token are configured, Warden sends the `findings` profile and enables repository memory by default. This includes the data used by current history, cost, and memory features, but not source snippets. Use `warden.toml` to change the data and memory settings. Set `data = "metrics"` to retain counts and usage only; metrics automatically disables memory. Set only `memory = false` to keep finding history without recall and learning.
 
 ```toml
 [service]
-url = "https://warden-service.example.com"
+data = "findings"
+memory = true
 ```
 
-Once a URL and token are configured, Warden sends the `findings` profile and enables repository memory by default. This includes the data used by current history, cost, and memory features, but not source snippets. Set `data = "metrics"` to retain counts and usage only; metrics automatically disables memory. Set only `memory = false` to keep finding history without recall and learning.
-
-```bash
-export WARDEN_SERVICE_TOKEN=wds_example_secret
-warden main..HEAD
-```
-
-Explicit CLI flags override environment variables, which override `warden.toml`:
+The CLI URL flag overrides `WARDEN_SERVICE_URL`. Profile flags override their environment variables and `warden.toml` settings:
 
 ```bash
 warden main..HEAD \
@@ -122,7 +123,7 @@ const result = await runLocalSkill({
 
 | Variable | Purpose |
 | --- | --- |
-| `WARDEN_SERVICE_URL` | Overrides `service.url` |
+| `WARDEN_SERVICE_URL` | Sets the credential-bearing service endpoint |
 | `WARDEN_SERVICE_TOKEN` | Supplies the service credential; never put this value in `warden.toml` |
 | `WARDEN_SERVICE_DATA` | Selects `metrics`, `findings`, or `code`; defaults to `findings` |
 | `WARDEN_SERVICE_MEMORY` | Enables or disables memory; defaults to `true` for `findings`/`code` and `false` for `metrics` |

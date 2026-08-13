@@ -69,7 +69,14 @@ export async function runServiceCommand(
     return 1;
   }
   const configPath = resolve(process.cwd(), 'warden.toml');
-  const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : undefined;
+  let config: ReturnType<typeof loadWardenConfigFile> | undefined;
+  if (existsSync(configPath)) {
+    try {
+      config = loadWardenConfigFile(configPath);
+    } catch {
+      reporter.warning('Could not read warden.toml. Replaying with the command-line service settings.');
+    }
+  }
   const service = resolveServiceOptions({
     explicit: {
       url: options.serviceUrl,

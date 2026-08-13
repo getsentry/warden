@@ -165,6 +165,31 @@ describe('service replay', () => {
     expect(output.success).toHaveBeenCalledWith('Published run findings-run-123.');
   });
 
+  it('uses explicit replay settings when warden.toml cannot be read', async () => {
+    const artifactPath = join(testDir, 'findings.json');
+    writeFileSync(artifactPath, findingsArtifact);
+    writeFileSync(join(testDir, 'warden.toml'), 'not valid toml = [');
+    vi.spyOn(process, 'cwd').mockReturnValue(testDir);
+    const output = reporter();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
+      protocolVersion: 1,
+      runId: 'stored-run-123',
+      checksum: 'a'.repeat(64),
+      created: true,
+    }));
+
+    await expect(runServiceCommand(
+      { subcommand: 'replay', artifact: artifactPath },
+      { serviceUrl: serviceOptions.url } as never,
+      output,
+    )).resolves.toBe(0);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(output.warning).toHaveBeenCalledWith(
+      'Could not read warden.toml. Replaying with the command-line service settings.',
+    );
+  });
+
   it('rejects an unsupported artifact before publication', async () => {
     const artifactPath = join(testDir, 'invalid.json');
     writeFileSync(artifactPath, '{"not":"a completed run"}');
