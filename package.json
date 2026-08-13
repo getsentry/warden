@@ -62,7 +62,8 @@
   },
   "pnpm": {
     "overrides": {
-      "@vercel/fun>tar": "7.5.22"
+      "@vercel/fun>tar": "7.5.22",
+      "@vercel/python-analysis>minimatch": "10.2.5"
     }
   }
 }
