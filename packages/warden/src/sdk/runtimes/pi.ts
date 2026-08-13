@@ -69,6 +69,7 @@ const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
+const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 const PI_TOOL_NAMES: Record<Exclude<ToolName, 'WebFetch' | 'WebSearch'>, string[]> = {
   Read: ['read'],
   Write: ['write'],
@@ -145,9 +146,17 @@ async function createModelRuntime(
   legacyAnthropicApiKey: string | undefined,
 ): Promise<ModelRuntime> {
   const modelRuntime = await ModelRuntime.create();
-  const provider = legacyApiKeyProvider(model);
-  if (legacyAnthropicApiKey && provider) {
-    await modelRuntime.setRuntimeApiKey(provider, legacyAnthropicApiKey);
+  const selectedProvider = model ? parseModelSelector(model).provider : undefined;
+  const legacyProvider = legacyApiKeyProvider(model);
+  if (legacyAnthropicApiKey && legacyProvider) {
+    await modelRuntime.setRuntimeApiKey(legacyProvider, legacyAnthropicApiKey);
+  }
+  if (selectedProvider) {
+    await modelRuntime.refresh({
+      providers: [selectedProvider],
+      allowNetwork: true,
+      signal: AbortSignal.timeout(PI_MODEL_REFRESH_TIMEOUT_MS),
+    });
   }
   return modelRuntime;
 }

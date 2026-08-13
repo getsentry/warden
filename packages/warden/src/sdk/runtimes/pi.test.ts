@@ -20,6 +20,7 @@ const piMocks = vi.hoisted(() => {
   };
   const modelRuntime = {
     setRuntimeApiKey: vi.fn(),
+    refresh: vi.fn(async () => ({ aborted: false, errors: new Map() })),
     getModel: vi.fn((_provider: string, _modelId: string) => model),
     getModels: vi.fn(() => [model]),
   };
@@ -165,6 +166,11 @@ describe('piRuntime.runSkill', () => {
     const result = await piRuntime.runSkill(baseSkillRequest());
 
     expect(ModelRuntime.create).toHaveBeenCalled();
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: true,
+      signal: expect.any(AbortSignal),
+    });
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith('openai', 'gpt-test');
     expect(DefaultResourceLoader).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
@@ -389,6 +395,25 @@ describe('piRuntime.runSkill', () => {
     });
 
     expect(piMocks.modelRuntime.setRuntimeApiKey).not.toHaveBeenCalled();
+  });
+
+  it('refreshes only the selected provider before resolving its model', async () => {
+    await piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'openrouter/x-ai/grok-4.6',
+      },
+    });
+
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openrouter'],
+      allowNetwork: true,
+      signal: expect.any(AbortSignal),
+    });
+    expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith(
+      'openrouter',
+      'x-ai/grok-4.6'
+    );
   });
 
   it('resolves provider-specific Pi model IDs that contain slashes', async () => {
