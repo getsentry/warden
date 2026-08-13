@@ -20,7 +20,11 @@ const piMocks = vi.hoisted(() => {
   };
   const modelRuntime = {
     setRuntimeApiKey: vi.fn(),
-    refresh: vi.fn(async () => ({ aborted: false, errors: new Map() })),
+    refresh: vi.fn(async (_options?: {
+      providers?: string[];
+      allowNetwork?: boolean;
+      signal?: AbortSignal;
+    }) => ({ aborted: false, errors: new Map() })),
     getModel: vi.fn((_provider: string, _modelId: string) => model),
     getModels: vi.fn(() => [model]),
   };
@@ -168,9 +172,12 @@ describe('piRuntime.runSkill', () => {
     expect(ModelRuntime.create).toHaveBeenCalled();
     expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
       providers: ['openai'],
-      allowNetwork: true,
       signal: expect.any(AbortSignal),
     });
+    const firstRefresh = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
+      | { allowNetwork?: boolean }
+      | undefined;
+    expect(firstRefresh).not.toHaveProperty('allowNetwork');
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith('openai', 'gpt-test');
     expect(DefaultResourceLoader).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
@@ -407,13 +414,54 @@ describe('piRuntime.runSkill', () => {
 
     expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
       providers: ['openrouter'],
-      allowNetwork: true,
       signal: expect.any(AbortSignal),
     });
+    const openrouterRefresh = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
+      | { allowNetwork?: boolean }
+      | undefined;
+    expect(openrouterRefresh).not.toHaveProperty('allowNetwork');
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith(
       'openrouter',
       'x-ai/grok-4.6'
     );
+  });
+
+  it('honors caller abort during selected provider catalog refresh', async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'openai/gpt-test',
+        abortController,
+      },
+    });
+
+    const refreshArgs = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
+      | { signal?: AbortSignal }
+      | undefined;
+    expect(refreshArgs?.signal?.aborted).toBe(true);
+  });
+
+  it('shares one in-flight provider catalog refresh across concurrent prompts', async () => {
+    let active = 0;
+    let maxActive = 0;
+    piMocks.modelRuntime.refresh.mockImplementation(async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      active -= 1;
+      return { aborted: false, errors: new Map() };
+    });
+
+    await Promise.all([
+      piRuntime.runSkill(baseSkillRequest()),
+      piRuntime.runSkill(baseSkillRequest()),
+    ]);
+
+    expect(maxActive).toBe(1);
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledTimes(2);
   });
 
   it('resolves provider-specific Pi model IDs that contain slashes', async () => {

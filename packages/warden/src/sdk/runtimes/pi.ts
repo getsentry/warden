@@ -70,6 +70,8 @@ const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
+/** Share cold-cache provider catalog refreshes across concurrent Pi prompts. */
+const inFlightProviderCatalogRefreshes = new Map<string, Promise<void>>();
 const PI_TOOL_NAMES: Record<Exclude<ToolName, 'WebFetch' | 'WebSearch'>, string[]> = {
   Read: ['read'],
   Write: ['write'],
@@ -141,9 +143,54 @@ function legacyApiKeyProvider(model: string | undefined): string | undefined {
   return selector.provider === 'anthropic' ? 'anthropic' : undefined;
 }
 
+function refreshSignal(abortSignal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(PI_MODEL_REFRESH_TIMEOUT_MS);
+  return abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
+}
+
+/**
+ * Refresh one provider catalog through Pi, with a deadline and optional caller abort.
+ * Concurrent prompts for the same provider share one in-flight refresh so a cold
+ * models-store does not stampede pi.dev. Omit allowNetwork so PI_OFFLINE is honored.
+ */
+async function refreshSelectedProviderCatalog(
+  modelRuntime: ModelRuntime,
+  providerId: string,
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  const runRefresh = async (): Promise<void> => {
+    await modelRuntime.refresh({
+      providers: [providerId],
+      signal: refreshSignal(abortSignal),
+    });
+  };
+
+  const existing = inFlightProviderCatalogRefreshes.get(providerId);
+  if (existing) {
+    try {
+      await existing;
+    } catch {
+      // A failed or aborted peer refresh must not block this runtime.
+    }
+    // Peer refresh (if it succeeded) warmed the shared models-store; this call
+    // restores into the current runtime and is throttled against another network fetch.
+    await runRefresh();
+    return;
+  }
+
+  const pending = runRefresh().finally(() => {
+    if (inFlightProviderCatalogRefreshes.get(providerId) === pending) {
+      inFlightProviderCatalogRefreshes.delete(providerId);
+    }
+  });
+  inFlightProviderCatalogRefreshes.set(providerId, pending);
+  await pending;
+}
+
 async function createModelRuntime(
   model: string | undefined,
   legacyAnthropicApiKey: string | undefined,
+  abortSignal?: AbortSignal,
 ): Promise<ModelRuntime> {
   const modelRuntime = await ModelRuntime.create();
   const selectedProvider = model ? parseModelSelector(model).provider : undefined;
@@ -152,11 +199,7 @@ async function createModelRuntime(
     await modelRuntime.setRuntimeApiKey(legacyProvider, legacyAnthropicApiKey);
   }
   if (selectedProvider) {
-    await modelRuntime.refresh({
-      providers: [selectedProvider],
-      allowNetwork: true,
-      signal: AbortSignal.timeout(PI_MODEL_REFRESH_TIMEOUT_MS),
-    });
+    await refreshSelectedProviderCatalog(modelRuntime, selectedProvider, abortSignal);
   }
   return modelRuntime;
 }
@@ -355,7 +398,11 @@ async function promptWithTimeout(
 async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const warnings: string[] = [];
   bridgeWardenProviderApiKeyEnv();
-  const modelRuntime = await createModelRuntime(options.model, options.legacyAnthropicApiKey);
+  const modelRuntime = await createModelRuntime(
+    options.model,
+    options.legacyAnthropicApiKey,
+    options.abortController?.signal,
+  );
   const model = resolvePiModel(options.model, modelRuntime);
   const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
   const agentDir = getAgentDir();

@@ -83,4 +83,40 @@ describe('Pi model catalog', () => {
       compat: { thinkingFormat: 'openrouter' },
     });
   });
+
+  it('does not network-refresh catalogs when PI_OFFLINE is set', async () => {
+    const previous = process.env['PI_OFFLINE'];
+    process.env['PI_OFFLINE'] = '1';
+    const fetchMock = vi.fn(async () => new Response('should not fetch', { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const credentials = new InMemoryCredentialStore();
+      await credentials.modify('openrouter', async () => ({
+        type: 'api_key',
+        key: 'test-api-key',
+      }));
+      const modelRuntime = await ModelRuntime.create({
+        credentials,
+        modelsPath: null,
+      });
+      // Match Warden's refresh call: omit allowNetwork so ModelRuntime honors PI_OFFLINE.
+      await modelRuntime.refresh({
+        providers: ['openrouter'],
+        signal: AbortSignal.timeout(5_000),
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(modelRuntime.getModel('openrouter', 'x-ai/grok-4.5')).toMatchObject({
+        id: 'x-ai/grok-4.5',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      if (previous === undefined) {
+        delete process.env['PI_OFFLINE'];
+      } else {
+        process.env['PI_OFFLINE'] = previous;
+      }
+    }
+  });
 });
