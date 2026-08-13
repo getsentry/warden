@@ -61,7 +61,11 @@ export function resolveServiceOptions(input: ResolveServiceOptionsInput): Resolv
     input.onWarning?.('Warden service disabled because its configuration is not valid.');
     return undefined;
   }
-  return { ...candidate.data, token: token.trim() };
+  return {
+    ...candidate.data,
+    token: token.trim(),
+    memory: candidate.data.memory ?? candidate.data.data !== 'metrics',
+  };
 }
 
 export const ServiceDataProfileSchema = DataProfileSchema;

@@ -287,14 +287,11 @@ export const ServiceConfigSchema = z.object({
   url: z.string().url(),
   /** Maximum class of run data sent to the service. Default: findings. */
   data: DataProfileSchema.default('findings'),
-  /** Recall and learn repository memory. Defaults on for findings/code and off for metrics. */
+  /** Recall and learn repository memory. The final service resolver applies profile-aware defaults. */
   memory: z.boolean().optional(),
   /** Total deadline for each optional service operation. */
   timeoutMs: z.number().int().min(100).max(30_000).default(2_000),
-}).transform((service) => ({
-  ...service,
-  memory: service.memory ?? (service.data !== 'metrics'),
-})).superRefine((service, context) => {
+}).superRefine((service, context) => {
   if (service.memory && service.data === 'metrics') {
     context.addIssue({
       code: z.ZodIssueCode.custom,

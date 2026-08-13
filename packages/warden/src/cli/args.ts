@@ -128,6 +128,18 @@ function sharedOptions(values: ParsedOptionValues, verboseCount: number): Partia
   };
 }
 
+function serviceMemoryOption(values: ParsedOptionValues): boolean | undefined {
+  if (values['no-service-memory'] === true) return false;
+  if (values['service-memory'] === true) return true;
+  return undefined;
+}
+
+function serviceTimeoutOption(values: ParsedOptionValues): number | undefined {
+  const value = values['service-timeout-ms'];
+  if (typeof value !== 'string') return undefined;
+  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
+}
+
 function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTarget | undefined {
   if (tokens.length === 0) {
     return undefined;
@@ -371,6 +383,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       'service-url': { type: 'string' },
       'service-data': { type: 'string' },
       'service-memory': { type: 'boolean' },
+      'no-service-memory': { type: 'boolean' },
       'service-timeout-ms': { type: 'string' },
       'no-service': { type: 'boolean' },
     },
@@ -543,10 +556,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         ...sharedOptions(values, verboseCount),
         serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
         serviceData: values['service-data'],
-        serviceMemory: values['service-memory'] || undefined,
-        serviceTimeoutMs: typeof values['service-timeout-ms'] === 'string'
-          ? parseInt(values['service-timeout-ms'], 10)
-          : undefined,
+        serviceMemory: serviceMemoryOption(values),
+        serviceTimeoutMs: serviceTimeoutOption(values),
         noService: values['no-service'] || undefined,
       }),
       serviceOptions: { subcommand: 'replay', artifact: rest[1] },
@@ -579,10 +590,8 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       failFast: Boolean(values['fail-fast']),
       serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
       serviceData: values['service-data'] as DataProfile | undefined,
-      serviceMemory: values['service-memory'] === true ? true : undefined,
-      serviceTimeoutMs: typeof values['service-timeout-ms'] === 'string'
-        ? parseInt(values['service-timeout-ms'], 10)
-        : undefined,
+      serviceMemory: serviceMemoryOption(values),
+      serviceTimeoutMs: serviceTimeoutOption(values),
       noService: values['no-service'] === true ? true : undefined,
     }),
   };

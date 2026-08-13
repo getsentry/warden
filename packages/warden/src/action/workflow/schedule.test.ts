@@ -225,6 +225,7 @@ describe('runScheduleWorkflow', () => {
     // Environment setup
     process.env['GITHUB_REPOSITORY'] = 'test-owner/test-repo';
     process.env['GITHUB_SHA'] = 'abc123';
+    process.env['GITHUB_RUN_ID'] = '123';
 
     // Default mock: context with files, no findings
     mockBuildContext.mockResolvedValue(createScheduleContext());
@@ -247,6 +248,7 @@ describe('runScheduleWorkflow', () => {
   afterEach(() => {
     delete process.env['GITHUB_REPOSITORY'];
     delete process.env['GITHUB_SHA'];
+    delete process.env['GITHUB_RUN_ID'];
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
@@ -265,6 +267,33 @@ describe('runScheduleWorkflow', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(
         '::warning::No warden.toml found. Skipping analysis.'
       );
+    });
+
+    it('publishes an empty run when the local findings write fails', async () => {
+      mockWriteFindingsOutput.mockImplementationOnce(() => {
+        throw new Error('disk unavailable');
+      });
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
+        protocolVersion: 1,
+        runId: 'stored-run',
+        checksum: 'a'.repeat(64),
+        created: true,
+      }));
+
+      try {
+        await runScheduleWorkflow(mockOctokit, createDefaultInputs({
+          serviceUrl: 'https://warden.example.com',
+          serviceToken: 'service-token',
+          serviceMemory: false,
+        }), NO_CONFIG_FIXTURES);
+
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Failed to write findings output'),
+        );
+      } finally {
+        fetchMock.mockRestore();
+      }
     });
 
     it('loads the base config when repo warden.toml is missing', async () => {

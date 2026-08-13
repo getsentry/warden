@@ -15,7 +15,7 @@ import {
 } from '../service/index.js';
 import type { ServiceOptionOverrides } from '../service/index.js';
 import { runSkill } from './analyze.js';
-import { sanitizeErrorMessage } from './errors.js';
+import { classifyError, sanitizeErrorMessage } from './errors.js';
 import type { VerifyFindingsOptions, VerifyFindingsResult } from './verify.js';
 import { verifyFindings } from './verify.js';
 import type { SkillRunnerOptions } from './types.js';
@@ -132,14 +132,15 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
       historicalEvidence,
     });
   } catch (error) {
+    const classified = classifyError(error);
     const failedReport: SkillReport = {
       skill: skill.name,
       summary: 'Skill did not complete',
       findings: [],
       durationMs: Math.max(0, Date.now() - startedAt.getTime()),
       error: {
-        code: 'unknown',
-        message: sanitizeErrorMessage(error instanceof Error ? error.message : String(error)),
+        code: classified.code,
+        message: sanitizeErrorMessage(classified.message),
         timestamp: new Date().toISOString(),
       },
     };

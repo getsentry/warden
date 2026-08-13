@@ -3,23 +3,24 @@ import { ServiceConfigSchema } from '../config/schema.js';
 import { resolveServiceOptions } from './options.js';
 
 describe('ServiceConfigSchema', () => {
-  it('defaults a configured service to findings and memory', () => {
+  it('leaves profile-aware memory defaulting to final option resolution', () => {
     expect(ServiceConfigSchema.parse({
       url: 'https://warden.example.com',
     })).toMatchObject({
       data: 'findings',
-      memory: true,
     });
-  });
-
-  it('disables memory when metrics is explicitly selected', () => {
     expect(ServiceConfigSchema.parse({
       url: 'https://warden.example.com',
+    }).memory).toBeUndefined();
+  });
+
+  it('retains an omitted memory setting for metrics', () => {
+    const service = ServiceConfigSchema.parse({
+      url: 'https://warden.example.com',
       data: 'metrics',
-    })).toMatchObject({
-      data: 'metrics',
-      memory: false,
     });
+    expect(service.data).toBe('metrics');
+    expect(service.memory).toBeUndefined();
   });
 
   it('requires the data profile needed by memory', () => {
@@ -60,6 +61,28 @@ describe('resolveServiceOptions', () => {
       data: 'findings',
       memory: false,
     });
+  });
+
+  it('re-applies the memory default when the data profile is overridden', () => {
+    const metricsConfig = ServiceConfigSchema.parse({
+      url: 'https://warden.example.com',
+      data: 'metrics',
+    });
+    const findingsConfig = ServiceConfigSchema.parse({
+      url: 'https://warden.example.com',
+      data: 'findings',
+    });
+
+    expect(resolveServiceOptions({
+      explicit: { data: 'code' },
+      environment: { WARDEN_SERVICE_TOKEN: 'secret' },
+      config: metricsConfig,
+    })?.memory).toBe(true);
+    expect(resolveServiceOptions({
+      explicit: { data: 'metrics' },
+      environment: { WARDEN_SERVICE_TOKEN: 'secret' },
+      config: findingsConfig,
+    })?.memory).toBe(false);
   });
 
   it('resolves explicit options before environment and configuration', () => {

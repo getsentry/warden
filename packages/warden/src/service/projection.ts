@@ -52,7 +52,7 @@ function usageLine(lane: string, usage: UsageStats, attribution?: UsageAttributi
   };
 }
 
-function counts(findings: readonly Finding[]) {
+function counts(findings: readonly Pick<Finding, 'severity'>[]) {
   return {
     total: findings.length,
     bySeverity: {
@@ -192,7 +192,7 @@ export function buildServiceRunProjection(input: BuildServiceRunProjectionInput)
     features: {
       memory: input.service.memory,
     },
-    findingCounts: counts(input.reports.flatMap(({ report }) => report.findings)),
+    findingCounts: counts(findings),
     skills,
     findings,
     observations,

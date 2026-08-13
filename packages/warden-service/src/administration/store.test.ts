@@ -78,6 +78,9 @@ describe('service administration store', () => {
       { type: 'run', id: 'run-1', data: { dataProfile: 'metrics' } },
     ]);
     expect(statements.find((sql) => sql.includes('FROM repositories WHERE'))).toContain('full_name = ANY');
+    const findingExport = statements.find((sql) => sql.includes('FROM findings f')) ?? '';
+    expect(findingExport).not.toContain('source_evidence');
+    expect(findingExport).not.toContain('f.verification');
     expect(JSON.stringify(records)).not.toMatch(/token|authorization|prompt|transcript/i);
   });
 

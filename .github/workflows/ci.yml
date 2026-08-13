@@ -83,5 +83,6 @@ jobs:
         with:
           name: ${{ github.sha }}
           path: |
-            *.tgz
+            packages/warden-service-api/*.tgz
+            packages/warden/*.tgz
           if-no-files-found: error

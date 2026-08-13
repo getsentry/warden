@@ -4,6 +4,7 @@ import type { EventContext, Finding, SkillReport } from '../types/index.js';
 import { buildLocalEventContext } from '../cli/context.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import { runSkill } from './analyze.js';
+import { SkillRunnerError } from './errors.js';
 import { verifyFindings } from './verify.js';
 import { runLocalSkill, verifyLocalFindings } from './local.js';
 
@@ -226,7 +227,9 @@ describe('local SDK entrypoints', () => {
   it('publishes a metrics-only failure before rethrowing a failed SDK run', async () => {
     vi.mocked(buildLocalEventContext).mockReturnValue(context);
     vi.mocked(resolveSkillAsync).mockResolvedValue(skill);
-    vi.mocked(runSkill).mockRejectedValue(new Error('analysis failed'));
+    vi.mocked(runSkill).mockRejectedValue(new SkillRunnerError('analysis failed', {
+      code: 'all_hunks_failed',
+    }));
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
       protocolVersion: 1,
       runId: 'stored-run',
@@ -254,7 +257,7 @@ describe('local SDK entrypoints', () => {
       source: 'sdk',
       dataProfile: 'metrics',
       outcome: 'failure',
-      skills: [{ skill: 'security-review', status: 'failure', errorCode: 'unknown' }],
+      skills: [{ skill: 'security-review', status: 'failure', errorCode: 'all_hunks_failed' }],
     });
   });
 

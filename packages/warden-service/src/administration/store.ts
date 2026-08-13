@@ -230,8 +230,7 @@ export async function exportServiceData(
     database.query<{ id: string; repository_id: string; data: Record<string, unknown> }>(`
       SELECT f.id, r.repository_id, jsonb_build_object(
         'runId', f.run_id, 'skillExecutionId', f.skill_execution_id, 'severity', f.severity,
-        'confidence', f.confidence, 'title', f.title, 'description', f.description,
-        'verification', f.verification, 'sourceEvidence', f.source_evidence
+        'confidence', f.confidence, 'title', f.title, 'description', f.description
       ) AS data FROM findings f JOIN runs r ON r.id = f.run_id AND r.tenant_id = f.tenant_id
       WHERE f.tenant_id = $1 AND r.repository_id = ANY($2::uuid[]) LIMIT 50_000
     `, [context.tenantId, repositoryIds]),

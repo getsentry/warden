@@ -22,6 +22,7 @@ import { resolveSkillAsync } from '../../skills/loader.js';
 import { filterFindings } from '../../types/index.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingProcessingEvent } from '../../sdk/types.js';
+import type { ResolvedServiceOptions } from '../../service/index.js';
 import { Sentry, logger, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import type { ActionInputs } from '../inputs.js';
 import { buildBaseOutputOptions, buildFindingsOutput } from '../reporting/output.js';
@@ -59,6 +60,31 @@ interface SkippedScheduleTrigger {
 interface WorkflowSpan {
   setAttribute(key: string, value: string | number | boolean): void;
   spanContext?: () => { traceId: string };
+}
+
+async function emitEmptyScheduleRun(
+  inputs: ActionInputs,
+  repoPath: string,
+  service: ResolvedServiceOptions | undefined,
+): Promise<void> {
+  const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
+  const [owner = '', name = ''] = fullName.split('/');
+  const context: EventContext = {
+    eventType: 'schedule',
+    action: 'scheduled',
+    repository: { owner, name, fullName, defaultBranch: '' },
+    repoPath,
+  };
+  const findingsOptions = buildBaseOutputOptions(inputs, []);
+  try {
+    writeFindingsOutput([], context, [], findingsOptions);
+  } catch (error) {
+    console.error(`::warning::Failed to write findings output: ${error}`);
+  }
+  await publishActionRunFailOpen(
+    service,
+    () => buildFindingsOutput([], context, [], findingsOptions),
+  );
 }
 
 export async function runScheduleWorkflow(
@@ -115,26 +141,9 @@ async function runScheduleWorkflowInner(
       setOutput('findings-count', 0);
       setOutput('high-count', 0);
       setOutput('summary', 'No warden.toml found');
-      try {
-        const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
-        const [o = '', n = ''] = fullName.split('/');
-        const context: EventContext = {
-          eventType: 'schedule',
-          action: 'scheduled',
-          repository: { owner: o, name: n, fullName, defaultBranch: '' },
-          repoPath,
-        };
-        const findingsOptions = buildBaseOutputOptions(inputs, []);
-        workflowSpan.setAttribute('warden.trigger.count', 0);
-        workflowSpan.setAttribute('warden.finding.count', 0);
-        writeFindingsOutput([], context, [], findingsOptions);
-        await publishActionRunFailOpen(
-          service,
-          () => buildFindingsOutput([], context, [], findingsOptions),
-        );
-      } catch (writeError) {
-        console.error(`::warning::Failed to write findings output: ${writeError}`);
-      }
+      workflowSpan.setAttribute('warden.trigger.count', 0);
+      workflowSpan.setAttribute('warden.finding.count', 0);
+      await emitEmptyScheduleRun(inputs, repoPath, service);
       return;
     }
     throw error;
@@ -154,24 +163,7 @@ async function runScheduleWorkflowInner(
     setOutput('high-count', 0);
     setOutput('summary', 'No schedule triggers configured');
     workflowSpan.setAttribute('warden.finding.count', 0);
-    try {
-      const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
-      const [o = '', n = ''] = fullName.split('/');
-      const context: EventContext = {
-        eventType: 'schedule',
-        action: 'scheduled',
-        repository: { owner: o, name: n, fullName, defaultBranch: '' },
-        repoPath,
-      };
-      const findingsOptions = buildBaseOutputOptions(inputs, []);
-      writeFindingsOutput([], context, [], findingsOptions);
-      await publishActionRunFailOpen(
-        service,
-        () => buildFindingsOutput([], context, [], findingsOptions),
-      );
-    } catch (writeError) {
-      console.error(`::warning::Failed to write findings output: ${writeError}`);
-    }
+    await emitEmptyScheduleRun(inputs, repoPath, service);
     return;
   }
 

@@ -155,6 +155,10 @@ describe('buildServiceRunEnvelope', () => {
     expect(envelope.skills).toHaveLength(100);
     expect(envelope.skills[0]?.usage).toHaveLength(64);
     expect(envelope.findings).toHaveLength(500);
+    expect(envelope.findingCounts).toEqual({
+      total: 500,
+      bySeverity: { high: 0, medium: 0, low: 500 },
+    });
     expect(envelope.observations).toHaveLength(1_000);
     expect(envelope.observations).not.toContainEqual(
       expect.objectContaining({ findingId: 'finding-500' }),
