@@ -25,6 +25,16 @@ describe('findings output schema', () => {
     });
   });
 
+  it('defaults observations for historical version 1 artifacts', () => {
+    const output = buildFindingsOutput([createReport()], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+    });
+    const { findingObservations: _observations, ...historical } = output;
+
+    expect(FindingsOutputSchema.parse(historical).findingObservations).toEqual([]);
+  });
+
   it('produces the exact pre-existing shape when none of the new inputs are available', () => {
     const context = createContext();
     const finding = createFinding();

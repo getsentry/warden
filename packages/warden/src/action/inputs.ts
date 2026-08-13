@@ -41,6 +41,11 @@ export interface ActionInputs {
   parallel: number;
   /** The action ref that produced this run, surfaced in the findings output harness field */
   actionRef?: string;
+  serviceUrl?: string;
+  serviceToken?: string;
+  serviceData?: 'metrics' | 'findings' | 'code';
+  serviceMemory?: boolean;
+  serviceTimeoutMs?: number;
 }
 
 // -----------------------------------------------------------------------------
@@ -113,6 +118,8 @@ export function parseActionInputs(): ActionInputs {
 
   const requestChanges = parseBooleanInput(getInput('request-changes'));
   const failCheck = parseBooleanInput(getInput('fail-check'));
+  const serviceDataInput = getInput('service-data');
+  const serviceTimeoutInput = getInput('service-timeout-ms');
 
   return {
     anthropicApiKey,
@@ -130,6 +137,13 @@ export function parseActionInputs(): ActionInputs {
     failCheck,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
     actionRef: getInput('action-ref') || undefined,
+    serviceUrl: getInput('service-url') || undefined,
+    serviceToken: getInput('service-token') || process.env['WARDEN_SERVICE_TOKEN'] || undefined,
+    serviceData: serviceDataInput === 'metrics' || serviceDataInput === 'findings' || serviceDataInput === 'code'
+      ? serviceDataInput
+      : undefined,
+    serviceMemory: parseBooleanInput(getInput('service-memory')),
+    serviceTimeoutMs: serviceTimeoutInput ? parseInt(serviceTimeoutInput, 10) : undefined,
   };
 }
 
@@ -146,6 +160,9 @@ export function validateInputs(inputs: ActionInputs): void {
   }
   if (inputs.mode === 'report' && !inputs.findingsFile) {
     throw new Error('findings-file is required when mode is report');
+  }
+  if (inputs.serviceMemory && inputs.serviceData === 'metrics') {
+    throw new Error('service-memory requires service-data findings or code');
   }
 }
 

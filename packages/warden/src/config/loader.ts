@@ -18,6 +18,7 @@ import {
   type ScanConfig,
   type RunnerConfig,
   type LogsConfig,
+  type ServiceConfig,
   type RuntimeName,
   type AgentRuntimeConfig,
   type AuxiliaryRuntimeConfig,
@@ -174,6 +175,12 @@ function mergeLogsConfig(
   return { ...base, ...overlay };
 }
 
+function mergeServiceConfig(base?: ServiceConfig, overlay?: ServiceConfig): ServiceConfig | undefined {
+  if (!base) return overlay;
+  if (!overlay) return base;
+  return { ...base, ...overlay };
+}
+
 function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | undefined {
   const inherited: Defaults = { ...(repo ?? {}) };
 
@@ -235,6 +242,7 @@ export function mergeWardenConfigs(
     skills: [...base.skills, ...effectiveOverlay.skills],
     runner: mergeRunnerConfig(base.runner, effectiveOverlay.runner),
     logs: mergeLogsConfig(base.logs, effectiveOverlay.logs),
+    service: mergeServiceConfig(base.service, effectiveOverlay.service),
   };
 
   const result = WardenConfigSchema.safeParse(mergedConfig);

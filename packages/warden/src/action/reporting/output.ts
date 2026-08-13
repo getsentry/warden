@@ -161,6 +161,11 @@ export const FindingsOutputSchema = z.object({
     headSha: z.string(),
   }).optional(),
   runId: z.string(),
+  recalledMemories: z.array(z.object({
+    id: z.string().trim().min(1).max(128),
+    version: z.number().int().positive(),
+  }).strict()).max(5).optional(),
+  memoryRecallId: z.string().trim().min(1).max(128).optional(),
   /** The model/threshold config this run resolved to at the action level. */
   resolvedDefaults: ResolvedDefaultsSchema.optional(),
   /** Configured triggers that never fired this run, with why. */
@@ -215,7 +220,7 @@ export const FindingsOutputSchema = z.object({
   /** Verifier-rejected and merge-absorbed candidates that never reached `findings[]`. */
   discardedFindings: z.array(DiscardedFindingSchema).optional(),
   triggerResults: z.array(TriggerRunResultSchema).optional(),
-  findingObservations: z.array(FindingObservationSchema),
+  findingObservations: z.array(FindingObservationSchema).default([]),
 });
 
 export type FindingsOutput = z.infer<typeof FindingsOutputSchema>;
@@ -258,6 +263,8 @@ export interface BuildFindingsOutputOptions {
   skippedTriggers?: z.infer<typeof SkippedTriggerSchema>[];
   /** Per-execution metadata (skillExecutionId, posting-derived fields, captured provenance events) matched to `reports[]` by object identity. */
   skillExecutions?: SkillExecutionMeta[];
+  recalledMemories?: readonly { id: string; version: number }[];
+  memoryRecallId?: string;
 }
 
 /** Build the action-level `resolvedDefaults` block from parsed action inputs. */
@@ -424,6 +431,8 @@ export function buildFindingsOutput(
       },
     }),
     runId: options.runId ?? process.env['GITHUB_RUN_ID'] ?? '',
+    ...(options.recalledMemories?.length ? { recalledMemories: [...options.recalledMemories] } : {}),
+    ...(options.memoryRecallId ? { memoryRecallId: options.memoryRecallId } : {}),
     ...(options.resolvedDefaults && { resolvedDefaults: options.resolvedDefaults }),
     ...(options.skippedTriggers && { skippedTriggers: options.skippedTriggers }),
     summary: {

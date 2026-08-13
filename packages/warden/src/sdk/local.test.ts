@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SkillDefinition } from '../config/schema.js';
 import type { EventContext, Finding, SkillReport } from '../types/index.js';
 import { buildLocalEventContext } from '../cli/context.js';
@@ -41,7 +41,7 @@ const context: EventContext = {
     author: 'dev',
     baseBranch: 'main',
     headBranch: 'feature',
-    headSha: 'abc123',
+    headSha: 'abc1234',
     baseSha: 'def456',
     files: [],
   },
@@ -57,6 +57,11 @@ const report: SkillReport = {
     costUSD: 0,
   },
 };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+});
 
 describe('local SDK entrypoints', () => {
   it('runs a resolved skill against a local diff', async () => {
@@ -95,6 +100,71 @@ describe('local SDK entrypoints', () => {
       callbacks,
     }));
     expect(result).toEqual({ skill, context, report });
+  });
+
+  it('returns the unchanged SDK result when final service publication fails', async () => {
+    vi.mocked(buildLocalEventContext).mockReturnValue(context);
+    vi.mocked(resolveSkillAsync).mockResolvedValue(skill);
+    vi.mocked(runSkill).mockResolvedValue(report);
+    const warning = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json({ responseBody: 'not the service schema' }),
+    );
+
+    const result = await runLocalSkill({
+      skillPath: '.warden/skills/security-review',
+      cwd: '/tmp/repo',
+      base: 'main',
+      head: 'eval',
+      service: {
+        url: 'https://warden.example.com',
+        token: 'service-token',
+        data: 'metrics',
+        timeoutMs: 100,
+        onWarning: warning,
+      },
+    });
+
+    expect(result).toEqual({ skill, context, report });
+    expect(result.report).toBe(report);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('Local results are unchanged'));
+  });
+
+  it('returns the unchanged SDK result when service envelope validation fails', async () => {
+    const oversizedReport: SkillReport = {
+      ...report,
+      findings: [{
+        id: 'finding-oversized',
+        severity: 'high',
+        title: 'Oversized service finding',
+        description: 'x'.repeat(20_000),
+      }],
+    };
+    vi.mocked(buildLocalEventContext).mockReturnValue(context);
+    vi.mocked(resolveSkillAsync).mockResolvedValue(skill);
+    vi.mocked(runSkill).mockResolvedValue(oversizedReport);
+    const warning = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+
+    const result = await runLocalSkill({
+      skillPath: '.warden/skills/security-review',
+      cwd: '/tmp/repo',
+      base: 'main',
+      head: 'eval',
+      service: {
+        url: 'https://warden.example.com',
+        token: 'service-token',
+        data: 'findings',
+        memory: false,
+        timeoutMs: 100,
+        onWarning: warning,
+      },
+    });
+
+    expect(result).toEqual({ skill, context, report: oversizedReport });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('Local results are unchanged'));
   });
 
   it('verifies findings with a resolved skill', async () => {

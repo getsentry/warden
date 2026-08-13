@@ -1,0 +1,63 @@
+import { z } from 'zod';
+import { ServiceConfigSchema } from '../config/schema.js';
+import type { ServiceConfig } from '../config/schema.js';
+
+export interface ServiceOptionOverrides {
+  url?: string;
+  token?: string;
+  data?: 'metrics' | 'findings' | 'code';
+  memory?: boolean;
+  timeoutMs?: number;
+  disabled?: boolean;
+}
+
+export interface ResolveServiceOptionsInput {
+  explicit?: ServiceOptionOverrides;
+  environment?: Record<string, string | undefined>;
+  config?: ServiceConfig;
+  onWarning?: (message: string) => void;
+}
+
+export interface ResolvedServiceOptions {
+  url: string;
+  token: string;
+  data: 'metrics' | 'findings' | 'code';
+  memory: boolean;
+  timeoutMs: number;
+}
+
+function environmentBoolean(value: string | undefined): boolean | undefined {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+/** Resolve explicit, environment, and layered-config service options without implicit discovery. */
+export function resolveServiceOptions(input: ResolveServiceOptionsInput): ResolvedServiceOptions | undefined {
+  if (input.explicit?.disabled) return undefined;
+  const environment = input.environment ?? process.env;
+  const url = input.explicit?.url ?? environment['WARDEN_SERVICE_URL'] ?? input.config?.url;
+  if (!url) return undefined;
+  const token = input.explicit?.token ?? environment['WARDEN_SERVICE_TOKEN'];
+  if (!token?.trim()) {
+    input.onWarning?.('Warden service disabled because no service token is configured.');
+    return undefined;
+  }
+  const timeoutEnvironment = environment['WARDEN_SERVICE_TIMEOUT_MS'];
+  const timeoutMs = input.explicit?.timeoutMs
+    ?? (timeoutEnvironment ? Number(timeoutEnvironment) : undefined)
+    ?? input.config?.timeoutMs
+    ?? 2_000;
+  const memory = input.explicit?.memory
+    ?? environmentBoolean(environment['WARDEN_SERVICE_MEMORY'])
+    ?? input.config?.memory;
+  const candidate = ServiceConfigSchema.parse({
+    url,
+    data: input.explicit?.data ?? environment['WARDEN_SERVICE_DATA'] ?? input.config?.data ?? 'findings',
+    ...(memory === undefined ? {} : { memory }),
+    timeoutMs,
+  });
+  return { ...candidate, token: token.trim() };
+}
+
+export const ServiceDataProfileSchema = z.enum(['metrics', 'findings', 'code']);

@@ -50,7 +50,6 @@ describe('runSkills auth flow', () => {
   const originalEnv = { ...process.env };
   const originalCwd = process.cwd();
   let tempDir: string;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'warden-cli-auth-'));
@@ -59,12 +58,12 @@ describe('runSkills auth flow', () => {
     delete process.env['WARDEN_ANTHROPIC_API_KEY'];
     delete process.env['ANTHROPIC_API_KEY'];
     delete process.env['CLAUDE_CODE_PATH'];
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     verifyAuthMock.mockReset();
   });
 
   afterEach(() => {
-    consoleErrorSpy.mockRestore();
+    vi.restoreAllMocks();
     process.chdir(originalCwd);
     process.env = { ...originalEnv };
     rmSync(tempDir, { recursive: true, force: true });
@@ -83,6 +82,36 @@ describe('runSkills auth flow', () => {
 
     expect(exitCode).toBe(0);
     expect(verifyAuthMock).not.toHaveBeenCalled();
+  });
+
+  it('publishes a no-skill run as skipped when the service is configured', async () => {
+    process.env['WARDEN_SERVICE_TOKEN'] = 'warden-test-token';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
+      protocolVersion: 1,
+      runId: 'stored-run',
+      checksum: 'a'.repeat(64),
+      created: true,
+    }));
+
+    const exitCode = await runSkills(
+      makeContext(tempDir),
+      CLIOptionsSchema.parse({
+        targets: ['src/example.ts'],
+        serviceUrl: 'https://warden.example.com',
+        quiet: true,
+      }),
+      new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(verifyAuthMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, request] = fetchMock.mock.calls[0] ?? [];
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      source: 'cli',
+      outcome: 'skipped',
+      skills: [],
+    });
   });
 
   it('emits a JSONL error when Pi model validation fails', async () => {
@@ -138,6 +167,91 @@ describe('runSkills auth flow', () => {
     expect(verifyAuthMock).toHaveBeenCalledWith({
       apiKey: undefined,
       pathToClaudeCodeExecutable: fakeClaudePath,
+    });
+  });
+
+  it('publishes a metrics envelope after writing an early authentication failure', async () => {
+    process.env['WARDEN_SERVICE_TOKEN'] = 'warden-test-token';
+    verifyAuthMock.mockImplementation(() => {
+      throw new WardenAuthenticationError('missing auth');
+    });
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      expect(writes.join('')).toContain('"error":{"code":"auth_failed"');
+      return Response.json({
+        protocolVersion: 1,
+        runId: 'stored-run',
+        checksum: 'a'.repeat(64),
+        created: true,
+      });
+    });
+
+    const exitCode = await runSkills(
+      makeContext(tempDir),
+      CLIOptionsSchema.parse({
+        targets: ['src/example.ts'],
+        skill: 'security-review',
+        runtime: 'claude',
+        serviceUrl: 'https://warden.example.com',
+        serviceData: 'findings',
+        json: true,
+        quiet: true,
+      }),
+      new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const summary = JSON.parse(writes.join('').trim()) as { run: { runId: string } };
+    const [, request] = fetchMock.mock.calls[0] ?? [];
+    const envelope = JSON.parse(String(request?.body)) as {
+      clientRunId: string;
+      dataProfile: string;
+      outcome: string;
+      skills: { errorCode?: string }[];
+    };
+    expect(envelope).toMatchObject({
+      clientRunId: summary.run.runId,
+      dataProfile: 'metrics',
+      outcome: 'failure',
+      skills: [{ errorCode: 'auth_failed' }],
+    });
+  });
+
+  it('preserves CLI exit status and JSONL when early publication fails', async () => {
+    process.env['WARDEN_SERVICE_TOKEN'] = 'warden-test-token';
+    verifyAuthMock.mockImplementation(() => {
+      throw new WardenAuthenticationError('missing auth');
+    });
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('network unavailable'));
+
+    const exitCode = await runSkills(
+      makeContext(tempDir),
+      CLIOptionsSchema.parse({
+        targets: ['src/example.ts'],
+        skill: 'security-review',
+        runtime: 'claude',
+        serviceUrl: 'https://warden.example.com',
+        json: true,
+        quiet: true,
+      }),
+      new Reporter({ isTTY: false, supportsColor: false, columns: 80 }, Verbosity.Quiet),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(writes.join('').trim())).toMatchObject({
+      error: { code: 'auth_failed', message: expect.stringContaining('missing auth') },
+      totalFindings: 0,
     });
   });
 

@@ -345,7 +345,7 @@ async function analyzeHunk(
       const runtimeName = options.runtime ?? 'pi';
       const traceRecorder = options.captureTraces ? startTraceRecorder(span) : undefined;
 
-      const systemPrompt = buildHunkSystemPrompt(skill);
+      const systemPrompt = buildHunkSystemPrompt(skill, options.historicalEvidence);
       const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
 
       // Report prompt size information

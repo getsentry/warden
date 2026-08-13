@@ -1,0 +1,188 @@
+---
+title: Backing Service
+description: Deploy and connect the optional Warden history, cost, and memory service.
+---
+
+The Warden backing service stores run history, cost attribution, and repository memory in Postgres. It is optional and disabled by default. Local JSONL, findings output, GitHub Checks, and SDK return values remain authoritative when the service is enabled or unavailable.
+
+## Deploy on Vercel
+
+The reference app is [`apps/warden-service`](https://github.com/getsentry/warden/tree/main/apps/warden-service). It uses Vercel Node functions, static dashboard files, Vercel Cron, and a Postgres provider connected through Vercel Marketplace. Neon is the default. Redis and an always-on worker are not required.
+
+[Deploy Warden Service with Vercel](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgetsentry%2Fwarden&project-name=warden-service&repository-name=warden-service&root-directory=apps%2Fwarden-service&env=WARDEN_SERVICE_SESSION_SECRET%2CCRON_SECRET%2CWARDEN_SERVICE_TENANT_ID%2CGOOGLE_CLIENT_ID%2CGOOGLE_CLIENT_SECRET)
+
+1. Import the Warden repository and set the project root to `apps/warden-service`.
+2. Add Neon from Storage or Marketplace. Confirm that the integration created `DATABASE_URL`.
+3. Set independent random values for `WARDEN_SERVICE_SESSION_SECRET` and `CRON_SECRET`.
+4. Keep `WARDEN_SERVICE_DATABASE_DRIVER=neon`, `WARDEN_SERVICE_DATABASE_MAX_CONNECTIONS=3`, and `WARDEN_SERVICE_DATABASE_STATEMENT_TIMEOUT_MS=15000` for the initial deployment.
+5. Run the locked migrations before sending traffic to the new version.
+
+```bash
+pnpm --filter @sentry/warden-service build
+pnpm --filter @sentry/warden-service exec warden-service db migrate
+pnpm --filter @sentry/warden-service exec warden-service db status
+```
+
+Create a tenant and an ingest credential. Each token is displayed once and stored as a SHA-256 hash.
+
+```bash
+TENANT_ID=$(pnpm --silent --filter @sentry/warden-service exec warden-service tenant create \
+  --slug acme --name "Acme" | tail -1)
+
+pnpm --filter @sentry/warden-service exec warden-service token create \
+  --tenant "$TENANT_ID" --name ingest --role ingest --repository acme/widgets
+```
+
+The dashboard uses the same stateless Better Auth Google OAuth design as Junior:
+
+1. Choose a stable production origin. Keep the deployment public at the Vercel layer so agents can reach it with Warden PATs.
+2. In Google Auth Platform, create a Web application OAuth client. Add the production origin as an authorized JavaScript origin and `<origin>/api/auth/callback/google` as an authorized redirect URI.
+3. Set `WARDEN_SERVICE_TENANT_ID` to the tenant above and add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Warden uses Vercel's stable production URL automatically; set `WARDEN_SERVICE_BASE_URL` only for a custom origin.
+4. Redeploy and sign in. `WARDEN_SERVICE_GOOGLE_DOMAIN` defaults to `sentry.io`.
+
+Browser sessions are encrypted cookies with an eight-hour lifetime. Warden accepts only verified accounts in the configured domain and uses the normalized Google email as the personal-token owner. `DISABLE_AUTH` defaults to `false`. Local or private deployments may set it to `true`; anonymous requests then receive only tenant-wide `read` authority, while bearer credentials keep their normal authentication and roles.
+
+Deploy and check `/health` and `/ready`. Vercel calls `/api/internal/jobs/tick` every five minutes with `Authorization: Bearer <CRON_SECRET>`. Migrations never run during a function cold start.
+
+## Read the API from an Agent
+
+Open **API access** in the dashboard and create a personal token. The token is shown once, expires after 90 days, and accepts only `GET` and `HEAD` read requests. It cannot ingest runs, call memory recall, change memory, administer retention, delete data, or manage tokens.
+
+```bash
+export WARDEN_PAT=wds_pat_example
+
+curl --fail --silent \
+  -H "Authorization: Bearer $WARDEN_PAT" \
+  'https://warden-service.example.com/api/v1/findings?limit=30&skill=security'
+
+curl --fail --silent \
+  -H "Authorization: Bearer $WARDEN_PAT" \
+  'https://warden-service.example.com/api/v1/costs?groupBy=repository'
+```
+
+Useful read routes include `/api/v1/findings`, `/api/v1/runs`, `/api/v1/repositories`, `/api/v1/skills`, `/api/v1/costs`, `/api/v1/outcomes/summary`, and `/api/v1/export`. Filters use the same query parameters as the Explore dashboard.
+
+## Connect Warden
+
+Set a non-secret URL in `warden.toml`. Supply the token through the environment or a masked Action input.
+
+```toml
+[service]
+url = "https://warden-service.example.com"
+```
+
+Once a URL and token are configured, Warden sends the `findings` profile and enables repository memory by default. This includes the data used by current history, cost, and memory features, but not source snippets. Set `data = "metrics"` to retain counts and usage only; metrics automatically disables memory. Set only `memory = false` to keep finding history without recall and learning.
+
+```bash
+export WARDEN_SERVICE_TOKEN=wds_example_secret
+warden main..HEAD
+```
+
+Explicit CLI flags override environment variables, which override `warden.toml`:
+
+```bash
+warden main..HEAD \
+  --service-url https://warden-service.example.com \
+  --service-data metrics
+```
+
+Use `--no-service` to skip both recall and publication for one run. A configured URL without a token produces one safe warning and continues locally.
+
+GitHub Actions accepts the masked inputs `service-url`, `service-token`, `service-data`, `service-memory`, and `service-timeout-ms`.
+
+```yaml
+jobs:
+  review:
+    env:
+      WARDEN_SERVICE_URL: ${{ vars.WARDEN_SERVICE_URL }}
+      WARDEN_SERVICE_TOKEN: ${{ secrets.WARDEN_SERVICE_TOKEN }}
+```
+
+Those two values are sufficient for both one-step and split analyze/report workflows. Set `WARDEN_SERVICE_MEMORY=false` to disable memory. A published minor release updates the current `v0` major tag; exact-version consumers remain pinned.
+
+Pass the equivalent `service` object to the public SDK:
+
+```ts
+import { runLocalSkill } from '@sentry/warden';
+
+const result = await runLocalSkill({
+  skillPath: '.warden/skills/security-review',
+  base: 'main',
+  head: 'HEAD',
+  service: {
+    url: 'https://warden-service.example.com',
+    token: process.env.WARDEN_SERVICE_TOKEN,
+  },
+});
+```
+
+### Environment Variables
+
+| Variable | Purpose |
+| --- | --- |
+| `WARDEN_SERVICE_URL` | Overrides `service.url` |
+| `WARDEN_SERVICE_TOKEN` | Supplies the service credential; never put this value in `warden.toml` |
+| `WARDEN_SERVICE_DATA` | Selects `metrics`, `findings`, or `code`; defaults to `findings` |
+| `WARDEN_SERVICE_MEMORY` | Enables or disables memory; defaults to `true` for `findings`/`code` and `false` for `metrics` |
+| `WARDEN_SERVICE_TIMEOUT_MS` | Sets the total request deadline from 100 to 30,000 milliseconds |
+
+Explicit CLI, Action, or SDK options take priority over environment variables. Environment variables take priority over the merged base and repository configuration. The token only comes from an explicit secret option or `WARDEN_SERVICE_TOKEN`.
+
+### Replay a Saved Run
+
+Replay a completed CLI JSONL log or Action findings file when final publication was missed:
+
+```bash
+warden service replay .warden/logs/0191-example.jsonl
+warden service replay warden-findings.json --service-data findings
+```
+
+Replay uses the artifact's original run ID and the current profile validation and redaction rules. Sending the same artifact again is idempotent. Warden reads the file without changing or deleting it. Replay never runs automatically.
+
+## Data Profiles
+
+| Profile | Sent | Not sent |
+| --- | --- | --- |
+| `metrics` | Repository and run identity, commit and event metadata, skill and trigger identity, timing, stable errors, model and runtime attribution, usage, cost, and finding counts | Finding prose, file paths, snippets, and trace content |
+| `findings` | Everything in `metrics`, plus bounded finding identity, title, description, locations, provenance, and outcome observations | Source snippets, raw diffs, prompts, model output, tool data, and trace content |
+| `code` | Everything in `findings`, plus bounded source evidence already attached to a finding | Unrestricted files, repository snapshots, raw diffs, prompts, transcripts, tool data, and trace content |
+
+Warden never sends service credentials, authorization headers, unrestricted prompts, model transcripts, tool arguments or results, raw trace bodies, or complete repository diffs. Memory requires `findings` or `code`.
+
+## Retention and Deletion
+
+Each tenant has separate retention windows for metrics, finding content, code evidence, and archived lifecycle records. Administrators can read or replace them at `/api/v1/admin/retention`. The retention job removes code evidence first, then finding content, then run metrics according to those windows.
+
+Administrators can delete one run, one repository, or the tenant through `/api/v1/admin/runs/:id`, `/api/v1/admin/repositories/:id`, and `/api/v1/admin/tenant`. Run deletion removes matching job payload references and recalculates passive memory evidence. Repository and tenant deletion cascade through owned history, embeddings, jobs, and memories.
+
+Read and admin credentials can download retained, authorized data from `/api/v1/export`. Add `repositoryId` to narrow the export. Repository allowlists still apply.
+
+Deleting a deployment or database removes its service history but does not remove local JSONL, Action findings files, GitHub Checks, or Sentry telemetry. Those systems have separate retention controls. Back up Postgres before deleting service data.
+
+Memory archive actions stop recall immediately and retain lifecycle records until lifecycle retention expires. Passive extraction creates inactive candidates by default. Automatic promotion remains off unless the operator configures a repeated-evidence policy. Embeddings and relevance classification are optional; full-text retrieval remains the fallback.
+
+## Operations
+
+### Database Connections
+
+The Vercel app reuses a maximum of three Neon serverless connections per warm function instance by default. Lower this value when the database has a small connection budget. Use a pooled provider URL. Standard Node deployments can set `WARDEN_SERVICE_DATABASE_DRIVER=postgres` and use the same schema and transaction behavior.
+
+### Migrations and Readiness
+
+Run `warden-service db migrate` during deployment. An advisory lock serializes concurrent migration attempts. `/ready` reports `migration_required` when code expects a newer migration and does not modify the schema.
+
+### Cron Recovery
+
+Jobs are persisted before execution. A tick claims a bounded batch with leases and stops before the function deadline. Expired leases return to the retry queue. The next Vercel Cron request continues the work. Standard hosts can run `warden-service worker` against the same tables.
+
+### Token Rotation
+
+Create a replacement token, update the client secret, verify ingestion, then revoke the old token. Use `warden-service token list --tenant <id>` to inspect safe token metadata and `warden-service token revoke --tenant <id> --id <token-id>` to revoke it. Tokens can expire and can be limited to specific repositories and roles. Google dashboard sessions expire after eight hours.
+
+### Backup and Restore
+
+Back up Postgres with the provider's managed backup feature or standard `pg_dump`. Restore into an empty database at the same or newer migration version, run `warden-service db migrate`, then verify `/ready`. Embeddings are derived data and can be rebuilt. Full-text memory recall does not require pgvector.
+
+### Outages
+
+Recall and publication have bounded deadlines and fail open. A service outage does not change CLI exit status, GitHub review output, findings files, JSONL, or SDK results. Keep local artifacts until the missed run has been replayed or is no longer needed.

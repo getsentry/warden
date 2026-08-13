@@ -35,7 +35,12 @@ type HelpOptionId =
   | 'name'
   | 'noOpen'
   | 'follow'
-  | 'all';
+  | 'all'
+  | 'serviceUrl'
+  | 'serviceData'
+  | 'serviceMemory'
+  | 'serviceTimeoutMs'
+  | 'noService';
 
 export type HelpTarget =
   | 'run'
@@ -49,7 +54,8 @@ export type HelpTarget =
   | 'runs:list'
   | 'runs:show'
   | 'runs:follow'
-  | 'runs:gc';
+  | 'runs:gc'
+  | 'service';
 
 interface HelpOptionSpec {
   label: string;
@@ -106,6 +112,27 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   runtime: {
     label: '--runtime <claude|pi>',
     description: 'Runtime backend for model-backed execution',
+  },
+  serviceUrl: {
+    label: '--service-url <url>',
+    description: 'Publish this run to an optional Warden service',
+  },
+  serviceData: {
+    label: '--service-data <profile>',
+    description: 'Set the service data profile; defaults to findings',
+    continuation: 'Values: metrics, findings, code',
+  },
+  serviceMemory: {
+    label: '--service-memory',
+    description: 'Enable repository memory; enabled by default for a configured service',
+  },
+  serviceTimeoutMs: {
+    label: '--service-timeout-ms <ms>',
+    description: 'Set the total deadline for each service request',
+  },
+  noService: {
+    label: '--no-service',
+    description: 'Disable service publishing and recall for this run',
   },
   json: {
     label: '--json',
@@ -266,6 +293,11 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'staged',
       'git',
       'offline',
+      'serviceUrl',
+      'serviceData',
+      'serviceMemory',
+      'serviceTimeoutMs',
+      'noService',
       ...SHARED_COMMAND_OPTIONS,
     ],
     examples: [
@@ -442,6 +474,27 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden runs gc',
     ],
   },
+  service: {
+    summary: 'Publish a saved run to the backing service',
+    description: 'Replay a completed JSONL or findings-output artifact through the current validation and data-profile boundary.',
+    usage: ['warden service replay <artifact> [options]'],
+    arguments: [
+      { label: 'artifact', description: 'Completed JSONL or findings-output path' },
+    ],
+    options: [
+      'cwd',
+      'serviceUrl',
+      'serviceData',
+      'serviceMemory',
+      'serviceTimeoutMs',
+      'noService',
+      ...SHARED_COMMAND_OPTIONS,
+    ],
+    examples: [
+      'warden service replay .warden/logs/a1b2c3d4.jsonl',
+      'warden service replay warden-findings.json --service-data findings',
+    ],
+  },
 };
 
 const ROOT_COMMANDS: { label: string; summary: string }[] = [
@@ -451,6 +504,7 @@ const ROOT_COMMANDS: { label: string; summary: string }[] = [
   { label: 'sync [remote]', summary: 'Update cached remote skills to latest' },
   { label: 'build <skill>', summary: 'Build a repo-local generated skill' },
   { label: 'runs', summary: 'Inspect saved sessions and run logs' },
+  { label: 'service replay', summary: 'Publish a saved run to the backing service' },
   { label: 'setup-app', summary: 'Create a GitHub App via manifest flow' },
   { label: 'help [command]', summary: 'Show help for a command' },
 ];

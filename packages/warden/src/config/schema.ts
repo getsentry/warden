@@ -281,6 +281,29 @@ export const LogsConfigSchema = z.object({
 });
 export type LogsConfig = z.infer<typeof LogsConfigSchema>;
 
+export const ServiceConfigSchema = z.object({
+  /** Backing service URL. No default endpoint is implied. */
+  url: z.string().url(),
+  /** Maximum class of run data sent to the service. Default: findings. */
+  data: z.enum(['metrics', 'findings', 'code']).default('findings'),
+  /** Recall and learn repository memory. Defaults on for findings/code and off for metrics. */
+  memory: z.boolean().optional(),
+  /** Total deadline for each optional service operation. */
+  timeoutMs: z.number().int().min(100).max(30_000).default(2_000),
+}).transform((service) => ({
+  ...service,
+  memory: service.memory ?? (service.data !== 'metrics'),
+})).superRefine((service, context) => {
+  if (service.memory && service.data === 'metrics') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['memory'],
+      message: 'service.memory requires service.data to be findings or code',
+    });
+  }
+});
+export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
+
 // Main warden.toml configuration
 export const WardenConfigSchema = z
   .object({
@@ -289,6 +312,7 @@ export const WardenConfigSchema = z
     skills: z.array(SkillConfigSchema).default([]),
     runner: RunnerConfigSchema.optional(),
     logs: LogsConfigSchema.optional(),
+    service: ServiceConfigSchema.optional(),
   })
   .superRefine((config, ctx) => {
     const names = config.skills.map((s) => s.name);

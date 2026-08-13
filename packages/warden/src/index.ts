@@ -98,6 +98,7 @@ export {
   ChunkingConfigSchema,
   DEFAULT_SCAN_LIMITS,
   WardenConfigSchema,
+  ServiceConfigSchema,
   // Functions
   loadWardenConfig,
   resolveSkillConfigs,
@@ -119,8 +120,23 @@ export type {
   ScanConfig,
   ChunkingConfig,
   WardenConfig,
+  ServiceConfig,
   ResolvedTrigger,
 } from './config/index.js';
+
+export {
+  buildServiceRunEnvelope,
+  publishRunFailOpen,
+  recallMemoryFailOpen,
+  renderHistoricalMemory,
+  resolveServiceOptions,
+} from './service/index.js';
+export type {
+  BuildServiceRunProjectionInput,
+  ResolvedServiceOptions,
+  ServiceOptionOverrides,
+  ServiceSkillReport,
+} from './service/index.js';
 
 // -----------------------------------------------------------------------------
 // SDK Runner
@@ -138,6 +154,7 @@ export {
 } from './sdk/runner.js';
 
 export type {
+  LocalSkillServiceOptions,
   RunLocalSkillOptions,
   RunLocalSkillResult,
   VerifyLocalFindingsOptions,

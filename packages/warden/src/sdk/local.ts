@@ -1,16 +1,33 @@
+import { randomUUID } from 'node:crypto';
+import { extname } from 'node:path';
 import type { SkillDefinition } from '../config/schema.js';
 import { buildLocalEventContext, type LocalContextOptions } from '../cli/context.js';
 import { resolveSkillAsync } from '../skills/loader.js';
 import type { EventContext, Finding, SkillReport } from '../types/index.js';
 import { isPathLike } from '../utils/path.js';
+import { getVersion } from '../utils/index.js';
+import {
+  buildServiceRunEnvelope,
+  publishRunFailOpen,
+  recallMemoryFailOpen,
+  renderHistoricalMemory,
+  resolveServiceOptions,
+} from '../service/index.js';
+import type { ServiceOptionOverrides } from '../service/index.js';
 import { runSkill } from './analyze.js';
 import type { VerifyFindingsOptions, VerifyFindingsResult } from './verify.js';
 import { verifyFindings } from './verify.js';
 import type { SkillRunnerOptions } from './types.js';
 
+export interface LocalSkillServiceOptions extends ServiceOptionOverrides {
+  onWarning?: (message: string) => void;
+}
+
 export interface RunLocalSkillOptions extends LocalContextOptions, SkillRunnerOptions {
   /** Skill file or directory to run. */
   skillPath: string;
+  /** Optional fail-open backing-service integration. */
+  service?: LocalSkillServiceOptions;
 }
 
 export interface RunLocalSkillResult {
@@ -43,8 +60,14 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     cwd,
     defaultBranch,
     staged,
+    service: serviceInput,
     ...runnerOptions
   } = options;
+  const service = resolveServiceOptions({
+    explicit: serviceInput,
+    onWarning: serviceInput?.onWarning,
+  });
+  const startedAt = new Date();
   const context = buildLocalEventContext({
     base,
     head,
@@ -54,7 +77,48 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
   });
   const skillRoot = isPathLike(skillPath) ? cwd ?? process.cwd() : context.repoPath;
   const skill = await resolveSkillAsync(skillPath, skillRoot);
-  const report = await runSkill(skill, context, runnerOptions);
+  const repository = {
+    provider: 'local' as const,
+    owner: context.repository.owner,
+    name: context.repository.name,
+    fullName: context.repository.fullName,
+  };
+  const clientRunId = randomUUID();
+  const paths = context.pullRequest?.files.map((file) => file.filename) ?? [];
+  const recall = service ? await recallMemoryFailOpen(service, {
+    protocolVersion: 1,
+    clientRecallId: clientRunId,
+    repository,
+    skills: [skill.name],
+    languages: [...new Set(paths.map((path) => extname(path).slice(1)).filter(Boolean))],
+    paths,
+  }) : undefined;
+  const recalledMemories = recall?.memories ?? [];
+  const report = await runSkill(skill, context, {
+    ...runnerOptions,
+    historicalEvidence: renderHistoricalMemory(recalledMemories),
+  });
+
+  if (service) {
+    await publishRunFailOpen(service, {
+      clientRunId,
+      build: () => buildServiceRunEnvelope({
+        service,
+        clientRunId,
+        source: 'sdk',
+        wardenVersion: getVersion(),
+        startedAt,
+        completedAt: new Date(),
+        outcome: report.error ? 'failure' : 'success',
+        repository,
+        reports: [{ executionId: `1:${report.skill}`, report }],
+        recalledMemories: recalledMemories.map(({ id, version }) => ({ id, version })),
+        ...(recall ? { memoryRecallId: recall.clientRecallId } : {}),
+        event: context.eventType,
+        ...(context.pullRequest?.headSha ? { headSha: context.pullRequest.headSha } : {}),
+      }),
+    }, serviceInput?.onWarning);
+  }
 
   return { skill, context, report };
 }

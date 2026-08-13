@@ -107,6 +107,8 @@ export interface TriggerExecutorDeps {
   circuitBreaker?: ProviderFailureCircuitBreaker;
   /** Optional context-bound check writer. Omit for analyze mode. */
   checks?: TriggerCheckReporter;
+  /** Lower-authority repository memory recalled once for the Action run. */
+  historicalEvidence?: string;
 }
 
 /**
@@ -220,6 +222,7 @@ export async function executeTrigger(
             verifyFindings: trigger.verifyFindings,
             abortController: deps.abortController,
             circuitBreaker: deps.circuitBreaker,
+            historicalEvidence: deps.historicalEvidence,
           },
         };
 

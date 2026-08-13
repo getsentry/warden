@@ -58,6 +58,11 @@ export const CLIOptionsSchema = z.object({
   regenerate: z.boolean().default(false),
   /** Prompt for creating a new generated skill. Prefix with @ to load from a file. */
   prompt: z.string().optional(),
+  serviceUrl: z.string().url().optional(),
+  serviceData: z.enum(['metrics', 'findings', 'code']).optional(),
+  serviceMemory: z.boolean().optional(),
+  serviceTimeoutMs: z.number().int().min(100).max(30_000).optional(),
+  noService: z.boolean().optional(),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -79,12 +84,18 @@ export interface RunsOptions {
   all?: boolean;
 }
 
+export interface ServiceCommandOptions {
+  subcommand: 'replay';
+  artifact: string;
+}
+
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'build' | 'improve';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'service' | 'build' | 'improve';
   options: CLIOptions;
   helpTarget?: HelpTarget;
   setupAppOptions?: SetupAppOptions;
   runsOptions?: RunsOptions;
+  serviceOptions?: ServiceCommandOptions;
 }
 
 export function showVersion(): void {
@@ -145,6 +156,8 @@ function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTa
       if (values['all']) return 'runs:list';
       if (subcommand) return 'runs:show';
       return 'runs';
+    case 'service':
+      return 'service';
     case 'help':
     case 'version':
       return undefined;
@@ -353,6 +366,11 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       // (no short alias for --follow: -f already maps to --force on init/add)
       follow: { type: 'boolean', default: false },
       all: { type: 'boolean', default: false },
+      'service-url': { type: 'string' },
+      'service-data': { type: 'string' },
+      'service-memory': { type: 'boolean' },
+      'service-timeout-ms': { type: 'string' },
+      'no-service': { type: 'boolean' },
     },
     allowPositionals: true,
   });
@@ -509,6 +527,30 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     };
   }
 
+  if (command === 'service') {
+    if (rest[0] !== 'replay' || !rest[1]) {
+      return {
+        command: 'help',
+        options: parseCliOptions({ ...sharedOptions(values, verboseCount), help: true }),
+        helpTarget: 'service',
+      };
+    }
+    return {
+      command: 'service',
+      options: parseCliOptions({
+        ...sharedOptions(values, verboseCount),
+        serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
+        serviceData: values['service-data'],
+        serviceMemory: values['service-memory'] || undefined,
+        serviceTimeoutMs: typeof values['service-timeout-ms'] === 'string'
+          ? parseInt(values['service-timeout-ms'], 10)
+          : undefined,
+        noService: values['no-service'] || undefined,
+      }),
+      serviceOptions: { subcommand: 'replay', artifact: rest[1] },
+    };
+  }
+
   const targets = command === 'run' ? rest : positionals;
   return {
     command: 'run',
@@ -533,6 +575,13 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       staged: Boolean(values.staged),
       offline: Boolean(values.offline),
       failFast: Boolean(values['fail-fast']),
+      serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
+      serviceData: values['service-data'] as 'metrics' | 'findings' | 'code' | undefined,
+      serviceMemory: values['service-memory'] === true ? true : undefined,
+      serviceTimeoutMs: typeof values['service-timeout-ms'] === 'string'
+        ? parseInt(values['service-timeout-ms'], 10)
+        : undefined,
+      noService: values['no-service'] === true ? true : undefined,
     }),
   };
 }
