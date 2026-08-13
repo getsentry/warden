@@ -1,11 +1,12 @@
-import { z } from 'zod';
+import { DataProfileSchema } from '@sentry/warden-service-api';
+import type { DataProfile } from '@sentry/warden-service-api';
 import { ServiceConfigSchema } from '../config/schema.js';
 import type { ServiceConfig } from '../config/schema.js';
 
 export interface ServiceOptionOverrides {
   url?: string;
   token?: string;
-  data?: 'metrics' | 'findings' | 'code';
+  data?: DataProfile;
   memory?: boolean;
   timeoutMs?: number;
   disabled?: boolean;
@@ -21,7 +22,7 @@ export interface ResolveServiceOptionsInput {
 export interface ResolvedServiceOptions {
   url: string;
   token: string;
-  data: 'metrics' | 'findings' | 'code';
+  data: DataProfile;
   memory: boolean;
   timeoutMs: number;
 }
@@ -46,18 +47,17 @@ export function resolveServiceOptions(input: ResolveServiceOptionsInput): Resolv
   const timeoutEnvironment = environment['WARDEN_SERVICE_TIMEOUT_MS'];
   const timeoutMs = input.explicit?.timeoutMs
     ?? (timeoutEnvironment ? Number(timeoutEnvironment) : undefined)
-    ?? input.config?.timeoutMs
-    ?? 2_000;
+    ?? input.config?.timeoutMs;
   const memory = input.explicit?.memory
     ?? environmentBoolean(environment['WARDEN_SERVICE_MEMORY'])
     ?? input.config?.memory;
   const candidate = ServiceConfigSchema.parse({
     url,
-    data: input.explicit?.data ?? environment['WARDEN_SERVICE_DATA'] ?? input.config?.data ?? 'findings',
+    data: input.explicit?.data ?? environment['WARDEN_SERVICE_DATA'] ?? input.config?.data,
     ...(memory === undefined ? {} : { memory }),
     timeoutMs,
   });
   return { ...candidate, token: token.trim() };
 }
 
-export const ServiceDataProfileSchema = z.enum(['metrics', 'findings', 'code']);
+export const ServiceDataProfileSchema = DataProfileSchema;

@@ -10,6 +10,7 @@ import {
   recordMemoryFeedback,
   transitionMemory,
 } from './store.js';
+import type { MemoryRelevanceCandidate } from './store.js';
 
 const context: ServiceContext = {
   tenantId: '00000000-0000-0000-0000-000000000001',
@@ -156,6 +157,7 @@ describe('memory store', () => {
 
   it('uses compatible vector ranks and schedules stale embedding regeneration', async () => {
     const statements: string[] = [];
+    let relevanceCandidates: readonly MemoryRelevanceCandidate[] = [];
     const database = databaseFor((sql) => {
       statements.push(sql);
       if (sql.includes('FROM repositories')) return { rows: [{
@@ -180,6 +182,12 @@ describe('memory store', () => {
         provider: 'example', model: 'embedding-v2', dimensions: 3,
         async embed() { return { vector: [0.1, 0.2, 0.3] }; },
       },
+      relevance: {
+        async classify(input) {
+          relevanceCandidates = input.candidates;
+          return { admittedIds: input.candidates.map((candidate) => candidate.id) };
+        },
+      },
     });
 
     expect(response.memories).toHaveLength(2);
@@ -187,6 +195,8 @@ describe('memory store', () => {
     expect(vectorSql).toContain('me.content_hash = m.content_hash');
     expect(vectorSql).toContain('me.dimensions = $10');
     expect(statements.some((sql) => sql.includes("'memory_embed'"))).toBe(true);
+    expect(relevanceCandidates[0]).toMatchObject({ pathFamily: 'src' });
+    expect(relevanceCandidates[0]).not.toHaveProperty('path_family');
   });
 
   it('admits no memories when optional relevance classification fails or is uncertain', async () => {

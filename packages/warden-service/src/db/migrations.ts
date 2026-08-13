@@ -6,6 +6,10 @@ import type { DatabaseClient, WardenDatabase } from './database.js';
 const MIGRATION_LOCK_ID = 8_217_436_291;
 const MIGRATIONS_DIRECTORY = join(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
 
+function isUndefinedTable(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '42P01';
+}
+
 export interface SchemaStatus {
   ready: boolean;
   currentVersion: string | null;
@@ -37,7 +41,8 @@ export async function getSchemaStatus(database: WardenDatabase): Promise<SchemaS
     );
     const currentVersion = result.rows[0]?.version ?? null;
     return { ready: currentVersion === requiredVersion, currentVersion, requiredVersion };
-  } catch {
+  } catch (error) {
+    if (!isUndefinedTable(error)) throw error;
     return { ready: requiredVersion === null, currentVersion: null, requiredVersion };
   }
 }

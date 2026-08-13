@@ -46,20 +46,25 @@ function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-async function loadEvidence(database: WardenDatabase, tenantId: string, repositoryId: string) {
+async function loadEvidence(database: WardenDatabase, tenantId: string, repositoryId: string, runId: string) {
   const result = await database.query<EvidenceRow>(`
-    SELECT f.id AS finding_id, fo.id AS observation_id, r.id AS run_id,
-      se.skill, f.title, f.description, fo.outcome, fo.observed_at
-    FROM finding_observations fo
-    JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
-    JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
-    JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
-    JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
-    WHERE fo.tenant_id = $1 AND r.repository_id = $2 AND repo.memory_enabled = true
-      AND r.data_profile IN ('findings', 'code')
-      AND fo.outcome IN ('posted', 'resolved', 'rejected', 'revised')
-    ORDER BY fo.observed_at, fo.id LIMIT 100
-  `, [tenantId, repositoryId]);
+    SELECT finding_id, observation_id, run_id, skill, title, description, outcome, observed_at
+    FROM (
+      SELECT f.id AS finding_id, fo.id AS observation_id, r.id AS run_id,
+        se.skill, f.title, f.description, fo.outcome, fo.observed_at
+      FROM finding_observations fo
+      JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
+      JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
+      JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
+      JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
+      WHERE fo.tenant_id = $1 AND r.repository_id = $2 AND repo.memory_enabled = true
+        AND r.data_profile IN ('findings', 'code')
+        AND fo.outcome IN ('posted', 'resolved', 'rejected', 'revised')
+      ORDER BY (r.id = $3) DESC, fo.observed_at DESC, fo.id DESC
+      LIMIT 100
+    ) evidence
+    ORDER BY observed_at, observation_id
+  `, [tenantId, repositoryId, runId]);
   return result.rows.map((row): PassiveEvidence => ({
     findingId: row.finding_id,
     observationId: row.observation_id,
@@ -89,7 +94,7 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
   return {
     async memory_extract(job) {
       if (!job.repositoryId || !job.entityId) return { complete: true };
-      const evidence = await loadEvidence(database, job.tenantId, job.repositoryId);
+      const evidence = await loadEvidence(database, job.tenantId, job.repositoryId, job.entityId);
       if (evidence.length === 0) return { complete: true };
       const input = PassiveExtractionInputSchema.parse({ runId: job.entityId, evidence });
       const extracted = options.extractor

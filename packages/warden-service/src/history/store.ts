@@ -10,6 +10,7 @@ import type {
   SkillListResponse,
   UsageLineItem,
 } from '@sentry/warden-service-api';
+import { z } from 'zod';
 import { requireServiceContext } from '../context.js';
 import type { ServiceContext } from '../context.js';
 import type { WardenDatabase } from '../db/database.js';
@@ -29,7 +30,7 @@ export interface HistoryFilters {
 }
 
 export interface RunListFilters extends HistoryFilters {
-  cursor?: string;
+  cursor?: HistoryCursor;
   limit?: number;
 }
 
@@ -41,11 +42,24 @@ export interface FindingListFilters {
   severity?: 'high' | 'medium' | 'low';
   outcome?: FindingFeedItem['outcome'];
   query?: string;
-  cursor?: string;
+  cursor?: HistoryCursor;
   limit?: number;
 }
 
 export type CostDimension = 'day' | 'repository' | 'skill' | 'model' | 'runtime' | 'provider' | 'lane' | 'source' | 'outcome';
+
+export const HistoryCursorSchema = z.string().trim().min(1).max(512).transform((cursor, context) => {
+  try {
+    const decoded: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    const parsed = z.tuple([z.string().datetime(), z.string().uuid()]).safeParse(decoded);
+    if (parsed.success) return parsed.data;
+  } catch {
+    // The validation issue below owns malformed base64 and JSON alike.
+  }
+  context.addIssue({ code: 'custom', message: 'Invalid history cursor.' });
+  return z.NEVER;
+});
+export type HistoryCursor = z.output<typeof HistoryCursorSchema>;
 
 interface RunRow extends Record<string, unknown> {
   id: string;
@@ -107,37 +121,38 @@ function addFilter(conditions: string[], values: unknown[], expression: string, 
   conditions.push(`${expression} $${values.length}`);
 }
 
-function historyWhere(context: ServiceContext, filters: HistoryFilters, aliases = { run: 'r', repository: 'repo', skill: 'se', usage: 'u' }) {
+function historyWhere(context: ServiceContext, filters: HistoryFilters, executionScope: 'run' | 'usage' = 'run') {
   const values: unknown[] = [context.tenantId];
-  const conditions = [`${aliases.run}.tenant_id = $1`];
+  const conditions = ['r.tenant_id = $1'];
+  const filtersUsage = Boolean(filters.model || filters.runtime || filters.provider || filters.lane);
   if (context.repositoryAllowlist) {
     values.push(context.repositoryAllowlist);
-    conditions.push(`${aliases.repository}.full_name = ANY($${values.length}::text[])`);
+    conditions.push(`repo.full_name = ANY($${values.length}::text[])`);
   }
-  if (filters.from) addFilter(conditions, values, `${aliases.run}.completed_at >=`, filters.from);
-  if (filters.to) addFilter(conditions, values, `${aliases.run}.completed_at <=`, filters.to);
-  if (filters.repositoryId) addFilter(conditions, values, `${aliases.run}.repository_id =`, filters.repositoryId);
-  if (filters.source) addFilter(conditions, values, `${aliases.run}.source =`, filters.source);
-  if (filters.outcome) addFilter(conditions, values, `${aliases.run}.outcome =`, filters.outcome);
-  if (filters.skill) addFilter(conditions, values, `${aliases.skill}.skill =`, filters.skill);
-  if (filters.errorCode) addFilter(conditions, values, `${aliases.skill}.error_code =`, filters.errorCode);
-  if (filters.model) addFilter(conditions, values, `${aliases.usage}.model =`, filters.model);
-  if (filters.runtime) addFilter(conditions, values, `${aliases.usage}.runtime =`, filters.runtime);
-  if (filters.provider) addFilter(conditions, values, `${aliases.usage}.provider =`, filters.provider);
-  if (filters.lane) addFilter(conditions, values, `${aliases.usage}.lane =`, filters.lane);
+  if (filters.from) addFilter(conditions, values, 'r.completed_at >=', filters.from);
+  if (filters.to) addFilter(conditions, values, 'r.completed_at <=', filters.to);
+  if (filters.repositoryId) addFilter(conditions, values, 'r.repository_id =', filters.repositoryId);
+  if (filters.source) addFilter(conditions, values, 'r.source =', filters.source);
+  if (filters.outcome) addFilter(conditions, values, 'r.outcome =', filters.outcome);
+  if (executionScope === 'usage') {
+    if (filters.skill) addFilter(conditions, values, 'se.skill =', filters.skill);
+    if (filters.errorCode) addFilter(conditions, values, 'se.error_code =', filters.errorCode);
+  } else if (filters.skill || filters.errorCode) {
+    const executionConditions = ['filtered_se.tenant_id = r.tenant_id', 'filtered_se.run_id = r.id'];
+    if (filtersUsage) executionConditions.push('filtered_se.id = u.skill_execution_id');
+    if (filters.skill) addFilter(executionConditions, values, 'filtered_se.skill =', filters.skill);
+    if (filters.errorCode) addFilter(executionConditions, values, 'filtered_se.error_code =', filters.errorCode);
+    conditions.push(`EXISTS (SELECT 1 FROM skill_executions filtered_se WHERE ${executionConditions.join(' AND ')})`);
+  }
+  if (filters.model) addFilter(conditions, values, 'u.model =', filters.model);
+  if (filters.runtime) addFilter(conditions, values, 'u.runtime =', filters.runtime);
+  if (filters.provider) addFilter(conditions, values, 'u.provider =', filters.provider);
+  if (filters.lane) addFilter(conditions, values, 'u.lane =', filters.lane);
   return { conditions, values };
 }
 
 function encodeCursor(completedAt: Date | string, id: string): string {
   return Buffer.from(JSON.stringify([iso(completedAt), id]), 'utf8').toString('base64url');
-}
-
-function decodeCursor(cursor: string): [string, string] {
-  const decoded: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-  if (!Array.isArray(decoded) || decoded.length !== 2 || decoded.some((part) => typeof part !== 'string')) {
-    throw new TypeError('invalid cursor');
-  }
-  return decoded as [string, string];
 }
 
 interface FindingFeedRow extends Record<string, unknown> {
@@ -215,7 +230,7 @@ export async function listFindings(
     conditions.push(`POSITION($${values.length} IN LOWER(f.title || ' ' || f.description || ' ' || COALESCE(location.path, ''))) > 0`);
   }
   if (filters.cursor) {
-    const [completedAt, id] = decodeCursor(filters.cursor);
+    const [completedAt, id] = filters.cursor;
     values.push(completedAt, id);
     conditions.push(`(r.completed_at, f.id) < ($${values.length - 1}, $${values.length})`);
   }
@@ -258,10 +273,8 @@ export async function listRuns(database: WardenDatabase, contextInput: ServiceCo
   const context = requireServiceContext(contextInput);
   const limit = Math.min(100, Math.max(1, filters.limit ?? 50));
   const { conditions, values } = historyWhere(context, filters);
-  if (filters.skill || filters.errorCode) conditions.push('se.id IS NOT NULL');
-  if (filters.model || filters.runtime || filters.provider || filters.lane) conditions.push('u.id IS NOT NULL');
   if (filters.cursor) {
-    const [completedAt, id] = decodeCursor(filters.cursor);
+    const [completedAt, id] = filters.cursor;
     values.push(completedAt, id);
     conditions.push(`(r.completed_at, r.id) < ($${values.length - 1}, $${values.length})`);
   }
@@ -275,7 +288,6 @@ export async function listRuns(database: WardenDatabase, contextInput: ServiceCo
     FROM runs r
     JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
     LEFT JOIN usage_line_items u ON u.run_id = r.id AND u.tenant_id = r.tenant_id
-    LEFT JOIN skill_executions se ON se.id = u.skill_execution_id AND se.tenant_id = r.tenant_id
     WHERE ${conditions.join(' AND ')}
     ORDER BY r.completed_at DESC, r.id DESC
     LIMIT $${values.length}
@@ -410,7 +422,7 @@ interface AggregateRow extends Record<string, unknown> {
 }
 
 async function aggregateRows(database: WardenDatabase, context: ServiceContext, filters: HistoryFilters, dimensions: readonly CostDimension[]) {
-  const { conditions, values } = historyWhere(context, filters);
+  const { conditions, values } = historyWhere(context, filters, 'usage');
   const selectDimensions = dimensions.map((dimension, index) => `${dimensionSql[dimension]} AS dimension_${index}`);
   const groupDimensions = dimensions.map((dimension) => dimensionSql[dimension]);
   const result = await database.query<AggregateRow>(`
@@ -547,7 +559,6 @@ export async function summarizeOutcomes(database: WardenDatabase, contextInput: 
       FROM runs r
       JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
       LEFT JOIN usage_line_items u ON u.run_id = r.id AND u.tenant_id = r.tenant_id
-      LEFT JOIN skill_executions se ON se.id = u.skill_execution_id AND se.tenant_id = r.tenant_id
       WHERE ${conditions.join(' AND ')}
     ), run_costs AS (
       SELECT run_id, SUM(cost_usd) AS cost_usd

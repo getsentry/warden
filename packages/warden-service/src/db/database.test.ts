@@ -13,7 +13,6 @@ describe('createDatabase', () => {
     expect(database.driver).toBe(driver);
     expect(database.maxConnections).toBe(4);
     expect(database.statementTimeoutMs).toBe(2_500);
-    expect(database.orm).toBeDefined();
     await database.close();
   });
 

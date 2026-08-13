@@ -8,7 +8,6 @@ function readyDatabase(): WardenDatabase {
     driver: 'postgres',
     maxConnections: 3,
     statementTimeoutMs: 15_000,
-    orm: {} as WardenDatabase['orm'],
     async query(sql: string) {
       return sql.includes('_warden_service_migrations')
         ? { rows: [{ version: '0001_magical_puppet_master' }], rowCount: 1 } as never
@@ -43,6 +42,26 @@ describe('createWardenService', () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ status: 'not_ready', database: 'unavailable' });
+  });
+
+  it('distinguishes a missing migration table from other database failures', async () => {
+    const missingTable = readyDatabase();
+    missingTable.query = async () => { throw Object.assign(new Error('missing table'), { code: '42P01' }); };
+    const missingResponse = await createWardenService({ database: missingTable }).request('/ready');
+
+    expect(missingResponse.status).toBe(503);
+    await expect(missingResponse.json()).resolves.toMatchObject({
+      status: 'not_ready',
+      database: 'migration_required',
+      currentVersion: null,
+    });
+
+    const unavailable = readyDatabase();
+    unavailable.query = async () => { throw Object.assign(new Error('permission denied'), { code: '42501' }); };
+    const unavailableResponse = await createWardenService({ database: unavailable }).request('/ready');
+
+    expect(unavailableResponse.status).toBe(503);
+    await expect(unavailableResponse.json()).resolves.toEqual({ status: 'not_ready', database: 'unavailable' });
   });
 
   it('returns safe not-found and error responses', async () => {
@@ -155,5 +174,51 @@ describe('createWardenService', () => {
     expect((await app.request('/api/v1/auth/context', {
       headers: { authorization: 'Bearer wds_invalid' },
     })).status).toBe(401);
+  });
+
+  it('serves filtered findings and grouped costs through the authenticated read API', async () => {
+    const database = {
+      ...readyDatabase(),
+      async query<TRow extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
+        if (sql.includes('FROM findings f')) return { rows: [{
+          id: '00000000-0000-4000-8000-000000000010',
+          run_id: '00000000-0000-4000-8000-000000000011',
+          client_run_id: 'run-11',
+          provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
+          skill: 'security', severity: 'high', confidence: 'high',
+          title: 'Unsafe query', description: 'Use parameters.',
+          path: 'src/query.ts', start_line: 12, end_line: 12,
+          observation_outcome: 'posted', observed_at: '2026-08-12T10:01:00.000Z',
+          completed_at: '2026-08-12T10:01:00.000Z',
+        }] as unknown as TRow[], rowCount: 1 };
+        if (sql.includes('FROM runs r') && sql.includes('SUM(u.input_tokens)')) {
+          const grouped = sql.includes('GROUP BY');
+          return { rows: [{
+            ...(grouped ? { dimension_0: 'security' } : {}),
+            runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
+          }] as unknown as TRow[], rowCount: 1 };
+        }
+        throw new Error(`unexpected query: ${sql} ${JSON.stringify(values)}`);
+      },
+    } satisfies WardenDatabase;
+    const app = createWardenService({
+      database,
+      disableAuth: { tenantId: '00000000-0000-4000-8000-000000000001' },
+    });
+
+    const findings = await app.request('/api/v1/findings?skill=security&query=unsafe');
+    expect(findings.status).toBe(200);
+    await expect(findings.json()).resolves.toMatchObject({
+      items: [{ title: 'Unsafe query', skill: 'security', repository: { fullName: 'acme/widgets' } }],
+    });
+
+    const costs = await app.request('/api/v1/costs?groupBy=skill&skill=security');
+    expect(costs.status).toBe(200);
+    await expect(costs.json()).resolves.toEqual({
+      groups: [{ dimensions: { skill: 'security' }, runs: 1, inputTokens: 100, outputTokens: 20, costUsd: 0.012 }],
+      totals: { runs: 1, inputTokens: 100, outputTokens: 20, costUsd: 0.012 },
+    });
+
+    expect((await app.request('/api/v1/runs?cursor=not-a-cursor')).status).toBe(400);
   });
 });

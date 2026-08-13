@@ -26,6 +26,7 @@
   ],
   "scripts": {
     "build": "pnpm run clean:dist && tsc -p tsconfig.build.json",
+    "cli": "node dist/cli.js",
     "clean:dist": "rm -rf dist",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "test": "vitest run --config vitest.config.ts",

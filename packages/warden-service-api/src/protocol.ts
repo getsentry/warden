@@ -211,7 +211,7 @@ export type RunEnvelopeV1 = z.infer<typeof RunEnvelopeV1Schema>;
 
 export const RunProjectionSchema = RunEnvelopeBaseSchema.omit({}).extend({
   dataProfile: DataProfileSchema,
-  findings: z.array(CodeFindingRecordSchema).max(500).default([]),
-  observations: z.array(FindingObservationSchema).max(1_000).default([]),
+  findings: z.array(CodeFindingRecordSchema).max(500),
+  observations: z.array(FindingObservationSchema).max(1_000),
 }).strict();
 export type RunProjection = z.input<typeof RunProjectionSchema>;

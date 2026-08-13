@@ -103,4 +103,10 @@ describe('redactRunProjection', () => {
       [field]: 'private content',
     })).toThrow();
   });
+
+  it('rejects projections that omit finding collections', () => {
+    const { findings: _findings, ...missingFindings } = projection('findings');
+
+    expect(() => redactRunProjection(missingFindings as RunProjection)).toThrow();
+  });
 });

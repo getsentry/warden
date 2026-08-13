@@ -54,6 +54,15 @@ const report: SkillReport = {
     description: 'Use a parameterized query.',
     location: { path: 'src/query.ts', startLine: 12 },
   }],
+  model: 'primary-model',
+  runtime: 'pi',
+  usage: { inputTokens: 100, outputTokens: 20, costUSD: 0.01 },
+  auxiliaryUsage: {
+    verification: { inputTokens: 30, outputTokens: 5, costUSD: 0.002 },
+  },
+  auxiliaryUsageAttribution: {
+    verification: { model: 'verification-model', runtime: 'claude' },
+  },
   durationMs: 1_000,
 };
 
@@ -125,7 +134,17 @@ describe('Action service integration', () => {
       clientRunId: 'action-run-123',
       source: 'action',
       dataProfile: 'findings',
-      skills: [{ executionId: 'execution-1', triggerId: 'trigger-1' }],
+      skills: [{
+        executionId: 'execution-1',
+        triggerId: 'trigger-1',
+        runtime: 'pi',
+        usage: [
+          expect.objectContaining({ lane: 'scan', model: 'primary-model', runtime: 'pi', costUsd: 0.01 }),
+          expect.objectContaining({
+            lane: 'verification', model: 'verification-model', runtime: 'claude', costUsd: 0.002,
+          }),
+        ],
+      }],
       findings: [{ id: 'finding-1', skillExecutionId: 'execution-1' }],
     });
   });

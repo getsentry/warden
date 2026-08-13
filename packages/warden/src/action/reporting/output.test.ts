@@ -200,6 +200,7 @@ describe('findings output schema', () => {
     const report = createReport({
       metadata: { internal: true },
       runtime: 'pi',
+      auxiliaryUsageAttribution: { verification: { model: 'verifier', runtime: 'claude' } },
       failedHunks: 1,
     });
     const output = buildFindingsOutput([report], createContext(), [], {
@@ -219,10 +220,11 @@ describe('findings output schema', () => {
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
+        runtime: 'pi',
+        auxiliaryUsageAttribution: { verification: { model: 'verifier', runtime: 'claude' } },
       },
     });
     expect(output.triggerResults?.[0]).not.toHaveProperty('report.metadata');
-    expect(output.triggerResults?.[0]).not.toHaveProperty('report.runtime');
     expect(output.triggerResults?.[0]).not.toHaveProperty('report.failedHunks');
   });
 

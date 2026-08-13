@@ -15,21 +15,23 @@ The reference app is [`apps/warden-service`](https://github.com/getsentry/warden
 2. Add Neon from Storage or Marketplace. Confirm that the integration created `DATABASE_URL`.
 3. Set independent random values for `WARDEN_SERVICE_SESSION_SECRET` and `CRON_SECRET`.
 4. Keep `WARDEN_SERVICE_DATABASE_DRIVER=neon`, `WARDEN_SERVICE_DATABASE_MAX_CONNECTIONS=3`, and `WARDEN_SERVICE_DATABASE_STATEMENT_TIMEOUT_MS=15000` for the initial deployment.
-5. Run the locked migrations before sending traffic to the new version.
+5. Copy the pooled `DATABASE_URL` from the Vercel project environment into the shell that will run the service CLI.
+6. Run the locked migrations before sending traffic to the new version.
 
 ```bash
-pnpm --filter @sentry/warden-service build
-pnpm --filter @sentry/warden-service exec warden-service db migrate
-pnpm --filter @sentry/warden-service exec warden-service db status
+export DATABASE_URL='postgresql://...'
+pnpm --filter @sentry/warden-service... build
+pnpm --filter @sentry/warden-service cli db migrate
+pnpm --filter @sentry/warden-service cli db status
 ```
 
 Create a tenant and an ingest credential. Each token is displayed once and stored as a SHA-256 hash.
 
 ```bash
-TENANT_ID=$(pnpm --silent --filter @sentry/warden-service exec warden-service tenant create \
+TENANT_ID=$(pnpm --silent --filter @sentry/warden-service cli tenant create \
   --slug acme --name "Acme" | tail -1)
 
-pnpm --filter @sentry/warden-service exec warden-service token create \
+pnpm --filter @sentry/warden-service cli token create \
   --tenant "$TENANT_ID" --name ingest --role ingest --repository acme/widgets
 ```
 

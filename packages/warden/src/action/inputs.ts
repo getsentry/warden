@@ -4,6 +4,8 @@
  * Handles parsing inputs from GitHub Actions environment and validates them.
  */
 
+import { DataProfileSchema } from '@sentry/warden-service-api';
+import type { DataProfile } from '@sentry/warden-service-api';
 import { SeverityThresholdSchema } from '../types/index.js';
 import type { SeverityThreshold } from '../types/index.js';
 import { DEFAULT_CONCURRENCY } from '../utils/index.js';
@@ -43,7 +45,7 @@ export interface ActionInputs {
   actionRef?: string;
   serviceUrl?: string;
   serviceToken?: string;
-  serviceData?: 'metrics' | 'findings' | 'code';
+  serviceData?: DataProfile;
   serviceMemory?: boolean;
   serviceTimeoutMs?: number;
 }
@@ -119,6 +121,7 @@ export function parseActionInputs(): ActionInputs {
   const requestChanges = parseBooleanInput(getInput('request-changes'));
   const failCheck = parseBooleanInput(getInput('fail-check'));
   const serviceDataInput = getInput('service-data');
+  const serviceData = DataProfileSchema.safeParse(serviceDataInput);
   const serviceTimeoutInput = getInput('service-timeout-ms');
 
   return {
@@ -139,9 +142,7 @@ export function parseActionInputs(): ActionInputs {
     actionRef: getInput('action-ref') || undefined,
     serviceUrl: getInput('service-url') || undefined,
     serviceToken: getInput('service-token') || process.env['WARDEN_SERVICE_TOKEN'] || undefined,
-    serviceData: serviceDataInput === 'metrics' || serviceDataInput === 'findings' || serviceDataInput === 'code'
-      ? serviceDataInput
-      : undefined,
+    serviceData: serviceData.success ? serviceData.data : undefined,
     serviceMemory: parseBooleanInput(getInput('service-memory')),
     serviceTimeoutMs: serviceTimeoutInput ? parseInt(serviceTimeoutInput, 10) : undefined,
   };

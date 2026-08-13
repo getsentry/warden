@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DataProfileSchema } from '@sentry/warden-service-api';
 import { RuntimeNameSchema, type RuntimeName } from '../sdk/runtimes/types.js';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
 
@@ -285,7 +286,7 @@ export const ServiceConfigSchema = z.object({
   /** Backing service URL. No default endpoint is implied. */
   url: z.string().url(),
   /** Maximum class of run data sent to the service. Default: findings. */
-  data: z.enum(['metrics', 'findings', 'code']).default('findings'),
+  data: DataProfileSchema.default('findings'),
   /** Recall and learn repository memory. Defaults on for findings/code and off for metrics. */
   memory: z.boolean().optional(),
   /** Total deadline for each optional service operation. */

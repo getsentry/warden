@@ -5,6 +5,7 @@ import { createMemoryJobHandlers } from './handlers.js';
 
 function databaseFixture() {
   const statements: string[] = [];
+  const statementValues: (readonly unknown[])[] = [];
   const evidence = [1, 2].map((index) => ({
     finding_id: `finding-${index}`,
     observation_id: `observation-${index}`,
@@ -13,14 +14,16 @@ function databaseFixture() {
     outcome: 'resolved', observed_at: new Date(`2026-08-0${index}T10:00:00.000Z`),
   }));
   const client: DatabaseClient = {
-    async query<TRow extends Record<string, unknown>>(sql: string): Promise<QueryResult<TRow>> {
+    async query<TRow extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<QueryResult<TRow>> {
       statements.push(sql.replace(/\s+/g, ' ').trim());
+      statementValues.push(values);
       if (sql.includes('FROM finding_observations fo')) return { rows: evidence as unknown as TRow[], rowCount: 2 };
       return { rows: [], rowCount: 0 };
     },
   };
   return {
     statements,
+    statementValues,
     database: {
       query: client.query,
       async withClient<T>(operation: (connection: DatabaseClient) => Promise<T>) { return operation(client); },
@@ -37,12 +40,14 @@ const job: ClaimedJob = {
 
 describe('memory job handlers', () => {
   it('performs no candidate mutation when the optional extraction model fails', async () => {
-    const { database, statements } = databaseFixture();
+    const { database, statements, statementValues } = databaseFixture();
     const handler = createMemoryJobHandlers(database, {
       extractor: { async extract() { throw new Error('model response with private content'); } },
     }).memory_extract;
 
     await expect(handler?.(job, { deadline: Date.now() + 5_000 })).rejects.toThrow();
+    expect(statements[0]).toContain('ORDER BY (r.id = $3) DESC, fo.observed_at DESC, fo.id DESC');
+    expect(statementValues[0]).toEqual([job.tenantId, job.repositoryId, job.entityId]);
     expect(statements.some((sql) => sql.includes('INSERT INTO memories'))).toBe(false);
   });
 

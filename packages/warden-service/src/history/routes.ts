@@ -20,6 +20,7 @@ import {
   listRuns,
   listSkills,
   summarizeOutcomes,
+  HistoryCursorSchema,
 } from './store.js';
 import type { CostDimension, HistoryFilters } from './store.js';
 
@@ -38,7 +39,7 @@ const QuerySchema = z.object({
 }).strict();
 
 const RunQuerySchema = QuerySchema.extend({
-  cursor: z.string().trim().min(1).max(512).optional(),
+  cursor: HistoryCursorSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 }).strict();
 
@@ -50,7 +51,7 @@ const FindingQuerySchema = z.object({
   severity: z.enum(['high', 'medium', 'low']).optional(),
   outcome: z.enum(['posted', 'deduped', 'skipped', 'resolved', 'failed', 'rejected', 'revised']).optional(),
   query: z.string().trim().min(1).max(256).optional(),
-  cursor: z.string().trim().min(1).max(512).optional(),
+  cursor: HistoryCursorSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 }).strict();
 

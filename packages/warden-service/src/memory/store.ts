@@ -67,12 +67,21 @@ export interface MemoryEmbeddingProvider {
   embed(query: string): Promise<{ vector: number[]; usage?: MemoryOperationUsage }>;
 }
 
+export interface MemoryRelevanceCandidate {
+  id: string;
+  kind: MemoryRecord['kind'];
+  content: string;
+  skill?: string;
+  language?: string;
+  pathFamily?: string;
+}
+
 export interface MemoryRelevanceClassifier {
   classify(input: {
     skills: readonly string[];
     languages: readonly string[];
     paths: readonly string[];
-    candidates: readonly Pick<MemoryRow, 'id' | 'kind' | 'content' | 'skill' | 'language' | 'path_family'>[];
+    candidates: readonly MemoryRelevanceCandidate[];
   }): Promise<{ admittedIds: string[]; uncertain?: boolean; usage?: MemoryOperationUsage }>;
 }
 
@@ -541,9 +550,9 @@ export async function recallMemories(
             id: row.id,
             kind: row.kind,
             content: row.content,
-            skill: row.skill,
-            language: row.language,
-            path_family: row.path_family,
+            ...(row.skill ? { skill: row.skill } : {}),
+            ...(row.language ? { language: row.language } : {}),
+            ...(row.path_family ? { pathFamily: row.path_family } : {}),
           })),
         });
         relevanceUsage = parseOperationUsage(classified.usage);

@@ -10,19 +10,20 @@ This is the reference deployment for the optional Warden backing service. It use
 2. Add Neon from the Vercel Storage or Marketplace screen and connect it to the project. Confirm that Vercel created `DATABASE_URL`.
 3. Add independent random values for `WARDEN_SERVICE_SESSION_SECRET` and `CRON_SECRET`. The session secret must contain at least 32 characters. The Cron secret must contain at least 16.
 4. Keep `WARDEN_SERVICE_DATABASE_DRIVER=neon` and the default connection limit of 3 unless the database operator gives you a different limit.
-5. Run migrations from the repository root before directing clients to the deployment:
+5. Copy the pooled `DATABASE_URL` from the Vercel project environment into your shell, then run migrations from the repository root before directing clients to the deployment:
 
    ```bash
-   pnpm --filter @sentry/warden-service build
-   pnpm --filter @sentry/warden-service exec warden-service db migrate
-   pnpm --filter @sentry/warden-service exec warden-service db status
+   export DATABASE_URL='postgresql://...'
+   pnpm --filter @sentry/warden-service... build
+   pnpm --filter @sentry/warden-service cli db migrate
+   pnpm --filter @sentry/warden-service cli db status
    ```
 
 6. Create the first tenant and ingest token. Save the token when it is printed. The service stores only its hash.
 
    ```bash
-   TENANT_ID=$(pnpm --silent --filter @sentry/warden-service exec warden-service tenant create --slug acme --name "Acme" | tail -1)
-   pnpm --filter @sentry/warden-service exec warden-service token create \
+   TENANT_ID=$(pnpm --silent --filter @sentry/warden-service cli tenant create --slug acme --name "Acme" | tail -1)
+   pnpm --filter @sentry/warden-service cli token create \
      --tenant "$TENANT_ID" --name ingest --role ingest
    ```
 

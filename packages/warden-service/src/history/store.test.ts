@@ -79,9 +79,8 @@ describe('history store', () => {
     });
 
     expect(captured?.sql).toContain('r.tenant_id = $1');
-    expect(captured?.sql).toContain('se.id IS NOT NULL');
-    expect(captured?.sql).toContain('u.id IS NOT NULL');
-    expect(captured?.sql).toContain('se.id = u.skill_execution_id');
+    expect(captured?.sql).toContain('EXISTS (SELECT 1 FROM skill_executions filtered_se');
+    expect(captured?.sql).toContain('filtered_se.id = u.skill_execution_id');
     expect(captured?.values).toEqual(expect.arrayContaining([
       context.tenantId,
       'security',
@@ -89,6 +88,26 @@ describe('history store', () => {
       'verification',
       'provider_unavailable',
     ]));
+  });
+
+  it('filters runs and outcomes by executions even when they have no usage rows', async () => {
+    const statements: string[] = [];
+    const database = databaseFor((sql) => {
+      statements.push(sql);
+      return { rows: [], rowCount: 0 };
+    });
+
+    await listRuns(database, context, { skill: 'security', errorCode: 'provider_unavailable' });
+    await summarizeOutcomes(database, context, { skill: 'security', errorCode: 'provider_unavailable' });
+
+    expect(statements).toHaveLength(2);
+    for (const sql of statements) {
+      expect(sql).toContain('EXISTS (SELECT 1 FROM skill_executions filtered_se');
+      expect(sql).toContain('filtered_se.skill =');
+      expect(sql).toContain('filtered_se.error_code =');
+      expect(sql).not.toContain('filtered_se.id = u.skill_execution_id');
+      expect(sql).not.toContain('se.id = u.skill_execution_id');
+    }
   });
 
   it('lists findings with literal search and investigation filters', async () => {

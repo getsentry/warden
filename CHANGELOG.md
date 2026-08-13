@@ -1,4 +1,11 @@
 # Changelog
+## 0.46.0
+
+### New Features ✨
+
+- Add an optional, default-off Warden backing service for run history, cost attribution, and reviewed repository memory. Configured clients default to finding history and memory; local outputs remain authoritative.
+- Add Google-authenticated dashboard access and expiring read-only personal API tokens for agents and scripts.
+
 ## 0.45.0
 
 ### New Features ✨
@@ -42,9 +49,6 @@
 ## 0.43.0
 
 ### New Features ✨
-
-- Add an optional, default-off Warden backing service for run history, cost attribution, and reviewed repository memory. Configured clients default to finding history and memory; local outputs remain authoritative.
-- Add Google-authenticated dashboard access and expiring read-only personal API tokens for agents and scripts.
 - (output) Separate attribution footer fields by @sentry-junior in [#443](https://github.com/getsentry/warden/pull/443)
 - (pi) Add Kimi K3 benchmark support by @dcramer in [#448](https://github.com/getsentry/warden/pull/448)
 - Report structured provider error context by @sentry-junior in [#442](https://github.com/getsentry/warden/pull/442)

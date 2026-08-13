@@ -64,19 +64,6 @@ export {
   summarizeOutcomes,
 } from './history/store.js';
 export {
-  applyTenantRetention,
-  deleteRepository,
-  deleteRun,
-  deleteTenant,
-  exportServiceData,
-  getRetentionSettings,
-  updateRetentionSettings,
-} from './administration/store.js';
-export type {
-  RetentionSettings,
-  ServiceExportRecord,
-} from './administration/store.js';
-export {
   processJobSlice,
   runWorker,
 } from './jobs/runner.js';
@@ -119,6 +106,7 @@ export type { CreateMemoryInput } from './memory/store.js';
 export type {
   MemoryEmbeddingProvider,
   MemoryOperationUsage,
+  MemoryRelevanceCandidate,
   MemoryRelevanceClassifier,
   RecallMemoryOptions,
 } from './memory/store.js';

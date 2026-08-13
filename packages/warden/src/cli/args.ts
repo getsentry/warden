@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { DataProfileSchema } from '@sentry/warden-service-api';
+import type { DataProfile } from '@sentry/warden-service-api';
 import { z } from 'zod';
 import { EffortSchema, type Effort } from '../config/schema.js';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
@@ -59,7 +61,7 @@ export const CLIOptionsSchema = z.object({
   /** Prompt for creating a new generated skill. Prefix with @ to load from a file. */
   prompt: z.string().optional(),
   serviceUrl: z.string().url().optional(),
-  serviceData: z.enum(['metrics', 'findings', 'code']).optional(),
+  serviceData: DataProfileSchema.optional(),
   serviceMemory: z.boolean().optional(),
   serviceTimeoutMs: z.number().int().min(100).max(30_000).optional(),
   noService: z.boolean().optional(),
@@ -576,7 +578,7 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       offline: Boolean(values.offline),
       failFast: Boolean(values['fail-fast']),
       serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
-      serviceData: values['service-data'] as 'metrics' | 'findings' | 'code' | undefined,
+      serviceData: values['service-data'] as DataProfile | undefined,
       serviceMemory: values['service-memory'] === true ? true : undefined,
       serviceTimeoutMs: typeof values['service-timeout-ms'] === 'string'
         ? parseInt(values['service-timeout-ms'], 10)

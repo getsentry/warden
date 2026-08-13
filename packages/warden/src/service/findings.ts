@@ -28,8 +28,13 @@ function reportsFromFindings(output: FindingsOutput) {
       summary: skill.summary,
       findings: skill.findings,
       ...(skill.model ? { model: skill.model } : {}),
+      ...(skill.runtime ? { runtime: skill.runtime } : {}),
       ...(skill.durationMs === undefined ? {} : { durationMs: skill.durationMs }),
       ...(skill.usage ? { usage: skill.usage } : {}),
+      ...(skill.auxiliaryUsage ? { auxiliaryUsage: skill.auxiliaryUsage } : {}),
+      ...(skill.auxiliaryUsageAttribution
+        ? { auxiliaryUsageAttribution: skill.auxiliaryUsageAttribution }
+        : {}),
       ...(skill.failedHunks === undefined ? {} : { failedHunks: skill.failedHunks }),
       ...(skill.failedExtractions === undefined ? {} : { failedExtractions: skill.failedExtractions }),
       ...(skill.error ? { error: skill.error } : {}),

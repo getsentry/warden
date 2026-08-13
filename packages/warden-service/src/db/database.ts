@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto';
 import { neonConfig, Pool as NeonPool } from '@neondatabase/serverless';
-import { drizzle as neonDrizzle } from 'drizzle-orm/neon-serverless';
-import { drizzle as postgresDrizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import WebSocket from 'ws';
 import { z } from 'zod';
-import * as schema from './schema.js';
 
 export const DatabaseDriverSchema = z.enum(['neon', 'postgres']);
 export type DatabaseDriver = z.infer<typeof DatabaseDriverSchema>;
@@ -33,7 +30,6 @@ export interface WardenDatabase {
   readonly driver: DatabaseDriver;
   readonly maxConnections: number;
   readonly statementTimeoutMs: number;
-  readonly orm: ReturnType<typeof neonDrizzle<typeof schema>> | ReturnType<typeof postgresDrizzle<typeof schema>>;
   query<TRow extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     values?: readonly unknown[],
@@ -83,11 +79,10 @@ function databaseKey(options: Required<DatabaseOptions>): string {
 
 const warmDatabases = new Map<string, WardenDatabase>();
 
-/** Create a bounded Drizzle/Postgres database handle without applying migrations. */
+/** Create a bounded Postgres database handle without applying migrations. */
 export function createDatabase(input: DatabaseOptions): WardenDatabase {
   const options = DatabaseOptionsSchema.parse(input) as Required<DatabaseOptions>;
   let pool: StructuralPool;
-  let orm: WardenDatabase['orm'];
 
   if (options.driver === 'neon') {
     neonConfig.webSocketConstructor = WebSocket;
@@ -98,7 +93,6 @@ export function createDatabase(input: DatabaseOptions): WardenDatabase {
       idleTimeoutMillis: 30_000,
     });
     pool = neonPool as unknown as StructuralPool;
-    orm = neonDrizzle({ client: neonPool, schema });
   } else {
     const postgresPool = new pg.Pool({
       connectionString: options.url,
@@ -109,7 +103,6 @@ export function createDatabase(input: DatabaseOptions): WardenDatabase {
       application_name: 'warden-service',
     });
     pool = postgresPool as unknown as StructuralPool;
-    orm = postgresDrizzle({ client: postgresPool, schema });
   }
 
   async function withClient<T>(operation: (client: DatabaseClient) => Promise<T>): Promise<T> {
@@ -131,7 +124,6 @@ export function createDatabase(input: DatabaseOptions): WardenDatabase {
     driver: options.driver,
     maxConnections: options.maxConnections,
     statementTimeoutMs: options.statementTimeoutMs,
-    orm,
     withClient,
     query(text, values) {
       return withClient((client) => client.query(text, values));

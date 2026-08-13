@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import {
+  AuxiliaryUsageAttributionMapSchema,
   AuxiliaryUsageMapSchema,
   FindingSchema,
   GitHubEventTypeSchema,
@@ -119,7 +120,9 @@ const ReplaySkillReportSchema = z.object({
   durationMs: z.number().nonnegative().optional(),
   usage: UsageStatsSchema.optional(),
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+  auxiliaryUsageAttribution: AuxiliaryUsageAttributionMapSchema.optional(),
   model: z.string().optional(),
+  runtime: z.string().optional(),
 });
 
 export const TriggerRunResultSchema = z.discriminatedUnion('status', [
@@ -191,6 +194,9 @@ export const FindingsOutputSchema = z.object({
     name: z.string(),
     summary: z.string(),
     model: z.string().optional(),
+    runtime: z.string().optional(),
+    auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+    auxiliaryUsageAttribution: AuxiliaryUsageAttributionMapSchema.optional(),
     auxiliaryModel: z.string().optional(),
     synthesisModel: z.string().optional(),
     durationMs: z.number().nonnegative().optional(),
@@ -320,7 +326,9 @@ function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillR
     durationMs: report.durationMs,
     usage: report.usage,
     auxiliaryUsage: report.auxiliaryUsage,
+    auxiliaryUsageAttribution: report.auxiliaryUsageAttribution,
     model: report.model,
+    runtime: report.runtime,
   };
 }
 
@@ -448,6 +456,9 @@ export function buildFindingsOutput(
         name: r.skill,
         summary: r.summary,
         model: r.model,
+        runtime: r.runtime,
+        auxiliaryUsage: r.auxiliaryUsage,
+        auxiliaryUsageAttribution: r.auxiliaryUsageAttribution,
         auxiliaryModel: meta?.auxiliaryModel,
         synthesisModel: meta?.synthesisModel,
         durationMs: r.durationMs,
