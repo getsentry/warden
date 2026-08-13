@@ -52,9 +52,11 @@ describe('Pi model catalog', () => {
         credentials,
         modelsPath: null,
       });
+      // Match production: omit allowNetwork so ModelRuntime defaults from PI_OFFLINE.
       await modelRuntime.refresh({
         providers: ['openrouter'],
-        allowNetwork: true,
+        force: true,
+        signal: AbortSignal.timeout(5_000),
       });
 
       expect(fetchMock).toHaveBeenCalledWith(
