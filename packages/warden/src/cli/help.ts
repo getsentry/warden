@@ -153,7 +153,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   offline: {
     label: '--offline',
-    description: 'Use cached remote skills without network access',
+    description: 'Use cached remote skills and skip Pi model-catalog network refresh',
   },
   quiet: {
     label: '--quiet',

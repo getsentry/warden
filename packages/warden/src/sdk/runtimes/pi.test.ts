@@ -8,6 +8,10 @@ import {
   createAgentSession,
 } from '@earendil-works/pi-coding-agent';
 import { piRuntime } from './pi.js';
+import {
+  configurePiModelCatalogOffline,
+  resetPiModelCatalogOfflineForTests,
+} from './pi-offline.js';
 import { Sentry } from '../../sentry.js';
 import { startTraceRecorder, withTraceRecorder } from '../../sentry-trace.js';
 import type { TraceSpan } from '../../types/index.js';
@@ -158,6 +162,8 @@ function baseSkillRequest() {
 describe('piRuntime.runSkill', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetPiModelCatalogOfflineForTests();
+    delete process.env['PI_OFFLINE'];
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
@@ -493,6 +499,32 @@ describe('piRuntime.runSkill', () => {
     } finally {
       AbortSignal.any = originalAny;
     }
+  });
+
+  it('skips shared network catalog refresh when offline policy is configured', async () => {
+    configurePiModelCatalogOffline(true);
+
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledTimes(1);
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('skips shared network catalog refresh when PI_OFFLINE is set', async () => {
+    process.env['PI_OFFLINE'] = '1';
+
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledTimes(1);
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('builds catalog refresh deadlines without AbortSignal.timeout on older Node 20', async () => {

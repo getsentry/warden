@@ -51,6 +51,7 @@ import {
 } from '../otel.js';
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
+import { isPiModelCatalogOffline } from './pi-offline.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -243,7 +244,8 @@ function waitForSharedRefresh(
  * Concurrent prompts for the same provider share one in-flight network refresh so a
  * cold models-store does not stampede pi.dev. After the shared phase settles, each
  * runtime does a local restore/refresh so its own ModelRuntime overlay is updated.
- * Omit allowNetwork so PI_OFFLINE is honored.
+ * Offline mode (warden.toml defaults.offline, CLI --offline, or PI_OFFLINE) skips
+ * the shared network phase and only restores from local cache/builtins.
  */
 async function refreshSelectedProviderCatalog(
   modelRuntime: ModelRuntime,
@@ -254,6 +256,15 @@ async function refreshSelectedProviderCatalog(
     throw abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError');
   }
 
+  if (isPiModelCatalogOffline()) {
+    await modelRuntime.refresh({
+      providers: [providerId],
+      allowNetwork: false,
+      signal: refreshSignal(abortSignal),
+    });
+    return;
+  }
+
   let active = activeProviderCatalogRefreshes.get(providerId);
   if (!active) {
     const controller = new AbortController();
@@ -262,6 +273,7 @@ async function refreshSelectedProviderCatalog(
       promise: undefined as unknown as Promise<void>,
       waiters: 0,
     };
+    // Omit allowNetwork so ModelRuntime still honors PI_OFFLINE if set mid-process.
     created.promise = modelRuntime.refresh({
       providers: [providerId],
       signal: refreshSignal(controller.signal),

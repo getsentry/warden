@@ -167,7 +167,7 @@ describe('executeTrigger', () => {
     expect(resolveSkillAsync).toHaveBeenCalledWith(
       'test-skill',
       '/org/skills-root',
-      { remote: undefined }
+      { remote: undefined, offline: false }
     );
   });
 
@@ -191,7 +191,7 @@ describe('executeTrigger', () => {
     expect(resolveSkillAsync).toHaveBeenCalledWith(
       'test-skill',
       undefined,
-      { remote: undefined }
+      { remote: undefined, offline: false }
     );
   });
 
