@@ -241,6 +241,12 @@ export const DefaultsSchema = z.object({
   maxTurns: z.number().int().positive().optional(),
   /** Runtime backend for all model-backed execution. Default: pi */
   runtime: RuntimeNameSchema.optional(),
+  /**
+   * Block network access for remote skills and Pi model-catalog refresh.
+   * Prefer this durable setting for both. CLI `--offline` and `WARDEN_OFFLINE`
+   * enable the same for one run.
+   */
+  offline: z.boolean().optional(),
   /** Model defaults for repo-aware skill execution. */
   agent: AgentRuntimeConfigSchema.optional(),
   /** Model defaults for auxiliary structured model calls. */

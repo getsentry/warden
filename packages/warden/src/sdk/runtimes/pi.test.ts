@@ -8,6 +8,10 @@ import {
   createAgentSession,
 } from '@earendil-works/pi-coding-agent';
 import { piRuntime } from './pi.js';
+import {
+  configureWardenOffline,
+  resetWardenOfflineForTests,
+} from '../offline.js';
 import { Sentry } from '../../sentry.js';
 import { startTraceRecorder, withTraceRecorder } from '../../sentry-trace.js';
 import type { TraceSpan } from '../../types/index.js';
@@ -20,6 +24,11 @@ const piMocks = vi.hoisted(() => {
   };
   const modelRuntime = {
     setRuntimeApiKey: vi.fn(),
+    refresh: vi.fn(async (_options?: {
+      providers?: string[];
+      allowNetwork?: boolean;
+      signal?: AbortSignal;
+    }) => ({ aborted: false, errors: new Map() })),
     getModel: vi.fn((_provider: string, _modelId: string) => model),
     getModels: vi.fn(() => [model]),
   };
@@ -153,6 +162,8 @@ function baseSkillRequest() {
 describe('piRuntime.runSkill', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetWardenOfflineForTests();
+    delete process.env['WARDEN_OFFLINE'];
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
@@ -165,6 +176,16 @@ describe('piRuntime.runSkill', () => {
     const result = await piRuntime.runSkill(baseSkillRequest());
 
     expect(ModelRuntime.create).toHaveBeenCalled();
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: true,
+      signal: expect.any(AbortSignal),
+    });
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith('openai', 'gpt-test');
     expect(DefaultResourceLoader).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
@@ -389,6 +410,274 @@ describe('piRuntime.runSkill', () => {
     });
 
     expect(piMocks.modelRuntime.setRuntimeApiKey).not.toHaveBeenCalled();
+  });
+
+  it('refreshes only the selected provider before resolving its model', async () => {
+    await piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'openrouter/x-ai/grok-4.6',
+      },
+    });
+
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openrouter'],
+      allowNetwork: true,
+      signal: expect.any(AbortSignal),
+    });
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openrouter'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
+    expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith(
+      'openrouter',
+      'x-ai/grok-4.6'
+    );
+  });
+
+  it('honors caller abort during selected provider catalog refresh', async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'openai/gpt-test',
+        abortController,
+      },
+    })).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(piMocks.modelRuntime.refresh).not.toHaveBeenCalled();
+  });
+
+  it('honors caller abort without AbortSignal.any on older Node 20', async () => {
+    const originalAny = AbortSignal.any;
+    // Simulate Node 20.0-20.2 where AbortSignal.any is missing.
+    // @ts-expect-error intentional runtime deletion for compatibility coverage
+    delete AbortSignal.any;
+
+    try {
+      const abortController = new AbortController();
+      let releaseNetwork!: () => void;
+      const networkGate = new Promise<void>((resolve) => {
+        releaseNetwork = resolve;
+      });
+      piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+        allowNetwork?: boolean;
+        signal?: AbortSignal;
+      }) => {
+        if (options?.allowNetwork === false) {
+          return { aborted: false, errors: new Map() };
+        }
+        await networkGate;
+        if (options?.signal?.aborted) {
+          throw options.signal.reason ?? new DOMException('This operation was aborted', 'AbortError');
+        }
+        return { aborted: false, errors: new Map() };
+      });
+
+      const waiting = piRuntime.runSkill({
+        ...baseSkillRequest(),
+        options: {
+          model: 'openai/gpt-test',
+          abortController,
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      abortController.abort();
+      releaseNetwork();
+
+      await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+    } finally {
+      AbortSignal.any = originalAny;
+    }
+  });
+
+  it('skips shared network catalog refresh when offline policy is configured', async () => {
+    configureWardenOffline(true);
+
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledTimes(1);
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('skips shared network catalog refresh when WARDEN_OFFLINE is set', async () => {
+    process.env['WARDEN_OFFLINE'] = '1';
+
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledTimes(1);
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('builds catalog refresh deadlines without AbortSignal.timeout on older Node 20', async () => {
+    const originalTimeout = AbortSignal.timeout;
+    // Simulate Node 20.0-20.2 where AbortSignal.timeout is missing.
+    // @ts-expect-error intentional runtime deletion for compatibility coverage
+    delete AbortSignal.timeout;
+
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+        providers: ['openai'],
+        allowNetwork: true,
+        signal: expect.any(AbortSignal),
+      });
+      expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+        providers: ['openai'],
+        allowNetwork: false,
+        signal: expect.any(AbortSignal),
+      });
+    } finally {
+      AbortSignal.timeout = originalTimeout;
+    }
+  });
+
+  it('shares one in-flight provider catalog refresh across concurrent prompts', async () => {
+    let networkActive = 0;
+    let maxNetworkActive = 0;
+    let networkCalls = 0;
+    let restoreCalls = 0;
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+    }) => {
+      if (options?.allowNetwork === false) {
+        restoreCalls += 1;
+        return { aborted: false, errors: new Map() };
+      }
+      networkCalls += 1;
+      networkActive += 1;
+      maxNetworkActive = Math.max(maxNetworkActive, networkActive);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      networkActive -= 1;
+      return { aborted: false, errors: new Map() };
+    });
+
+    await Promise.all([
+      piRuntime.runSkill(baseSkillRequest()),
+      piRuntime.runSkill(baseSkillRequest()),
+    ]);
+
+    expect(maxNetworkActive).toBe(1);
+    expect(networkCalls).toBe(1);
+    expect(restoreCalls).toBe(2);
+  });
+
+  it('does not stampede pi.dev when a shared catalog refresh fails', async () => {
+    let networkCalls = 0;
+    let restoreCalls = 0;
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+    }) => {
+      if (options?.allowNetwork === false) {
+        restoreCalls += 1;
+        return { aborted: false, errors: new Map() };
+      }
+      networkCalls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      throw new Error('catalog unavailable');
+    });
+
+    await Promise.all([
+      piRuntime.runSkill(baseSkillRequest()),
+      piRuntime.runSkill(baseSkillRequest()),
+      piRuntime.runSkill(baseSkillRequest()),
+    ]);
+
+    expect(networkCalls).toBe(1);
+    expect(restoreCalls).toBe(3);
+  });
+
+  it('keeps the shared refresh entry until waiters finish local restore', async () => {
+    let networkCalls = 0;
+    let restoreCalls = 0;
+    let releaseRestore!: () => void;
+    const restoreGate = new Promise<void>((resolve) => {
+      releaseRestore = resolve;
+    });
+    let firstRestoreStarted = false;
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+    }) => {
+      if (options?.allowNetwork === false) {
+        restoreCalls += 1;
+        if (!firstRestoreStarted) {
+          firstRestoreStarted = true;
+          await restoreGate;
+        }
+        return { aborted: false, errors: new Map() };
+      }
+      networkCalls += 1;
+      return { aborted: false, errors: new Map() };
+    });
+
+    const first = piRuntime.runSkill(baseSkillRequest());
+    // Let the shared network settle and the first waiter enter local restore.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(firstRestoreStarted).toBe(true);
+    expect(networkCalls).toBe(1);
+
+    // A late joiner during local restore must not start another network refresh.
+    const second = piRuntime.runSkill(baseSkillRequest());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(networkCalls).toBe(1);
+
+    releaseRestore();
+    await Promise.all([first, second]);
+    expect(networkCalls).toBe(1);
+    expect(restoreCalls).toBe(2);
+  });
+
+  it('lets a waiter abort without cancelling a shared peer catalog refresh', async () => {
+    let networkSettled = false;
+    let releaseNetwork!: () => void;
+    const networkGate = new Promise<void>((resolve) => {
+      releaseNetwork = resolve;
+    });
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+      signal?: AbortSignal;
+    }) => {
+      if (options?.allowNetwork === false) {
+        return { aborted: false, errors: new Map() };
+      }
+      await networkGate;
+      networkSettled = true;
+      return { aborted: false, errors: new Map() };
+    });
+
+    const abortController = new AbortController();
+    const waiting = piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'openai/gpt-test',
+        abortController,
+      },
+    });
+    const peer = piRuntime.runSkill(baseSkillRequest());
+
+    // Let both join the shared refresh, then abort only the waiter.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    abortController.abort();
+
+    await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+    expect(networkSettled).toBe(false);
+
+    releaseNetwork();
+    await peer;
+    expect(networkSettled).toBe(true);
   });
 
   it('resolves provider-specific Pi model IDs that contain slashes', async () => {

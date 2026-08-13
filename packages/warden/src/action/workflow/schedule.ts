@@ -16,6 +16,7 @@ import type { ScheduleConfig } from '../../config/schema.js';
 import { buildScheduleEventContext } from '../../event/schedule-context.js';
 import { runSkill } from '../../sdk/runner.js';
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
+import { configureWardenOffline, isWardenOffline } from '../../sdk/offline.js';
 import { createOrUpdateIssue } from '../../output/github-issues.js';
 import { shouldFail, countFindingsAtOrAbove, countSeverity } from '../../triggers/matcher.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -98,6 +99,11 @@ async function runScheduleWorkflowInner(
       configPath: inputs.configPath,
       onWarning: (message) => console.log(`::warning::${message}`),
     });
+    configureWardenOffline(
+      layered.baseConfig?.defaults?.offline === true
+      || layered.repoConfig?.defaults?.offline === true
+      || layered.config.defaults?.offline === true,
+    );
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
     scheduleTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName)
       .filter((t) => t.type === 'schedule');
@@ -253,6 +259,7 @@ async function runScheduleWorkflowInner(
       const skillRoot = resolved.useBuiltinSkill ? undefined : (resolved.skillRoot ?? repoPath);
       const skill = await resolveSkillAsync(resolved.skill, skillRoot, {
         remote: resolved.remote,
+        offline: isWardenOffline(),
       });
       const runtimeEnv = await prepareRuntimeEnvironment([resolved], inputs);
       const report = await runSkill(skill, context, {

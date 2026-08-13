@@ -25,6 +25,7 @@ import type { Semaphore } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
+import { isWardenOffline } from '../../sdk/offline.js';
 import { captureActionTriggerError } from '../error-reporting.js';
 
 /** Log-mode output for CI: no TTY, no color. */
@@ -199,6 +200,7 @@ export async function executeTrigger(
           failOn,
           resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
             remote: trigger.remote,
+            offline: isWardenOffline(),
           }),
           context: filterContextByPaths(context, trigger.filters),
           runnerOptions: {
