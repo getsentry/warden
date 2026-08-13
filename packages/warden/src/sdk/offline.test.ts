@@ -11,11 +11,23 @@ describe('offline policy', () => {
     delete process.env['WARDEN_OFFLINE'];
   });
 
-  it('uses WARDEN_OFFLINE for Warden-wide offline behavior', () => {
-    process.env['WARDEN_OFFLINE'] = '1';
+  it.each(['1', 'true', ' TRUE '])(
+    'uses WARDEN_OFFLINE=%s for Warden-wide offline behavior',
+    (value) => {
+      process.env['WARDEN_OFFLINE'] = value;
 
-    expect(isWardenOffline()).toBe(true);
-  });
+      expect(isWardenOffline()).toBe(true);
+    },
+  );
+
+  it.each(['0', 'false', '', 'invalid'])(
+    'stays online when WARDEN_OFFLINE=%s',
+    (value) => {
+      process.env['WARDEN_OFFLINE'] = value;
+
+      expect(isWardenOffline()).toBe(false);
+    },
+  );
 
   it('treats warden.toml / CLI offline as Warden-wide offline', () => {
     configureWardenOffline(true);

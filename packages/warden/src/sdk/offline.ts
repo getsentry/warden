@@ -21,5 +21,6 @@ export function resetWardenOfflineForTests(): void {
 
 /** Whether Warden-wide offline mode is active. */
 export function isWardenOffline(): boolean {
-  return configuredOffline || process.env['WARDEN_OFFLINE'] !== undefined;
+  const envValue = process.env['WARDEN_OFFLINE']?.trim().toLowerCase();
+  return configuredOffline || envValue === 'true' || envValue === '1';
 }
