@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Octokit } from '@octokit/rest';
 import type { ActionInputs } from '../inputs.js';
 import type { SkillReport, Finding, EventContext } from '../../types/index.js';
+import { resetWardenOfflineForTests } from '../../sdk/offline.js';
 
 // -----------------------------------------------------------------------------
 // Fixtures Directory
@@ -220,6 +221,8 @@ describe('runScheduleWorkflow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearSkillsCache();
+    resetWardenOfflineForTests();
+    delete process.env['WARDEN_OFFLINE'];
     mockOctokit = createMockOctokit();
 
     // Environment setup
