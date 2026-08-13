@@ -181,8 +181,26 @@ function anyAbortSignal(...signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
+/**
+ * Build a timeout signal without AbortSignal.timeout (Node < 20.3).
+ * Same engines window as anyAbortSignal above.
+ */
+function timeoutAbortSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+  }, ms);
+  // Match Node's AbortSignal.timeout: do not keep the process alive for the deadline alone.
+  timer.unref?.();
+  return controller.signal;
+}
+
 function refreshSignal(abortSignal?: AbortSignal): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(PI_MODEL_REFRESH_TIMEOUT_MS);
+  const timeoutSignal = timeoutAbortSignal(PI_MODEL_REFRESH_TIMEOUT_MS);
   return abortSignal ? anyAbortSignal(abortSignal, timeoutSignal) : timeoutSignal;
 }
 

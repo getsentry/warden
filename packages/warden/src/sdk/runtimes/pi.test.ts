@@ -495,6 +495,29 @@ describe('piRuntime.runSkill', () => {
     }
   });
 
+  it('builds catalog refresh deadlines without AbortSignal.timeout on older Node 20', async () => {
+    const originalTimeout = AbortSignal.timeout;
+    // Simulate Node 20.0-20.2 where AbortSignal.timeout is missing.
+    // @ts-expect-error intentional runtime deletion for compatibility coverage
+    delete AbortSignal.timeout;
+
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+        providers: ['openai'],
+        signal: expect.any(AbortSignal),
+      });
+      expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+        providers: ['openai'],
+        allowNetwork: false,
+        signal: expect.any(AbortSignal),
+      });
+    } finally {
+      AbortSignal.timeout = originalTimeout;
+    }
+  });
+
   it('shares one in-flight provider catalog refresh across concurrent prompts', async () => {
     let networkActive = 0;
     let maxNetworkActive = 0;
