@@ -63,7 +63,8 @@
   "pnpm": {
     "overrides": {
       "@vercel/fun>tar": "7.5.22",
-      "@vercel/python-analysis>minimatch": "10.2.5"
+      "@vercel/python-analysis>minimatch": "10.2.5",
+      "path-to-regexp@6.1.0": "6.3.0"
     }
   }
 }
