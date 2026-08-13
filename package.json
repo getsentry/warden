@@ -64,7 +64,11 @@
     "overrides": {
       "@vercel/fun>tar": "7.5.22",
       "@vercel/python-analysis>minimatch": "10.2.5",
-      "path-to-regexp@6.1.0": "6.3.0"
+      "path-to-regexp@6.1.0": "6.3.0",
+      "path-to-regexp@8.2.0": "8.4.2",
+      "path-to-regexp@8.3.0": "8.4.2",
+      "undici@5.28.4": "6.28.0",
+      "undici@5.29.0": "6.28.0"
     }
   }
 }

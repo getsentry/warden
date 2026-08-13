@@ -8,6 +8,10 @@ overrides:
   '@vercel/fun>tar': 7.5.22
   '@vercel/python-analysis>minimatch': 10.2.5
   path-to-regexp@6.1.0: 6.3.0
+  path-to-regexp@8.2.0: 8.4.2
+  path-to-regexp@8.3.0: 8.4.2
+  undici@5.28.4: 6.28.0
+  undici@5.29.0: 6.28.0
 
 importers:
 
@@ -1444,10 +1448,6 @@ packages:
 
   '@expressive-code/plugin-text-markers@0.42.0':
     resolution: {integrity: sha512-l59lUx8fq1v5g6SpmbDjiU0+7IdfbiWnAyRmtTVSpfhyq+nZMN4UcmYyu2b9Mynhzt7Gr+O+cXyEPDNb2AVWVQ==}
-
-  '@fastify/busboy@2.1.1':
-    resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
-    engines: {node: '>=14'}
 
   '@fastify/otel@0.18.0':
     resolution: {integrity: sha512-3TASCATfw+ctICSb4ymrv7iCm0qJ0N9CarB+CZ7zIJ7KqNbwI5JjyDL1/sxoC0ccTO1Zyd1iQ+oqncPg5FJXaA==}
@@ -4990,13 +4990,6 @@ packages:
   path-to-regexp@6.3.0:
     resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
 
-  path-to-regexp@8.2.0:
-    resolution: {integrity: sha512-TdrF7fW9Rphjq4RjrW0Kp2AW0Ahwu9sRGTkS6bvDi0SCwZlEZYmcfDbEsTz8RVk0EHIS/Vd1bv3JhG+1xZuAyQ==}
-    engines: {node: '>=16'}
-
-  path-to-regexp@8.3.0:
-    resolution: {integrity: sha512-7jdwVIRtsP8MYpdXSwOS0YdD0Du+qOoF/AEPIt88PcCFrZCzx41oxku1jD88hZBwbNUIEfpqvuhjFaMAqMTWnA==}
-
   path-to-regexp@8.4.2:
     resolution: {integrity: sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA==}
 
@@ -5700,14 +5693,6 @@ packages:
 
   undici-types@7.24.6:
     resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
-
-  undici@5.28.4:
-    resolution: {integrity: sha512-72RFADWFqKmUb2hmmvNODKL3p9hcB6Gt2DOQMis1SEBaV6a4MH8soBvzg+95CYhCKPFedut2JY9bMfrDl9D23g==}
-    engines: {node: '>=14.0'}
-
-  undici@5.29.0:
-    resolution: {integrity: sha512-raqeBD6NQK4SkWhQzeYKd1KmIG6dllBOTt55Rmkt4HtI9mwdWtJljnrXjAFUBLTSN67HWrOIZ3EPF4kjUw80Bg==}
-    engines: {node: '>=14.0'}
 
   undici@6.28.0:
     resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
@@ -7100,8 +7085,6 @@ snapshots:
     dependencies:
       '@expressive-code/core': 0.42.0
 
-  '@fastify/busboy@2.1.1': {}
-
   '@fastify/otel@0.18.0(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
@@ -8356,7 +8339,7 @@ snapshots:
       fs-extra: 11.1.0
       get-port: 5.1.1
       oxc-transform: 0.111.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.10.0)
-      path-to-regexp: 8.3.0
+      path-to-regexp: 8.4.2
       resolve.exports: 2.0.3
       rolldown: 1.0.0-rc.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.10.0)
       srvx: 0.11.16
@@ -8429,7 +8412,7 @@ snapshots:
       '@vercel/node': 5.8.22(rollup@4.60.4)
       '@vercel/static-config': 3.4.0
       fs-extra: 11.1.0
-      path-to-regexp: 8.3.0
+      path-to-regexp: 8.4.2
       ts-morph: 12.0.0
       zod: 3.22.4
     transitivePeerDependencies:
@@ -8457,7 +8440,7 @@ snapshots:
       micro: 9.3.5-canary.3
       ms: 2.1.1
       node-fetch: 2.6.7
-      path-to-regexp: 8.2.0
+      path-to-regexp: 8.4.2
       promisepipe: 3.0.0
       semver: 7.5.4
       stat-mode: 0.3.0
@@ -8507,7 +8490,7 @@ snapshots:
       '@vercel/node': 5.8.22(rollup@4.60.4)
       '@vercel/static-config': 3.4.0
       fs-extra: 11.1.0
-      path-to-regexp: 8.3.0
+      path-to-regexp: 8.4.2
       ts-morph: 12.0.0
       zod: 3.22.4
     transitivePeerDependencies:
@@ -8590,7 +8573,7 @@ snapshots:
       ts-morph: 12.0.0
       tsx: 4.21.0
       typescript: 5.9.3
-      undici: 5.28.4
+      undici: 6.28.0
     transitivePeerDependencies:
       - encoding
       - rollup
@@ -11143,10 +11126,6 @@ snapshots:
 
   path-to-regexp@6.3.0: {}
 
-  path-to-regexp@8.2.0: {}
-
-  path-to-regexp@8.3.0: {}
-
   path-to-regexp@8.4.2: {}
 
   pathe@2.0.3: {}
@@ -12005,14 +11984,6 @@ snapshots:
 
   undici-types@7.24.6: {}
 
-  undici@5.28.4:
-    dependencies:
-      '@fastify/busboy': 2.1.1
-
-  undici@5.29.0:
-    dependencies:
-      '@fastify/busboy': 2.1.1
-
   undici@6.28.0: {}
 
   undici@7.29.0: {}
@@ -12144,7 +12115,7 @@ snapshots:
       proxy-agent: 6.4.0
       sandbox: 3.4.0
       smol-toml: 1.5.2
-      undici: 5.29.0
+      undici: 6.28.0
       zod: 4.1.11
     transitivePeerDependencies:
       - '@emnapi/core'
