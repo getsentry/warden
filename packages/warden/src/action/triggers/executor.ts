@@ -200,7 +200,6 @@ export async function executeTrigger(
           failOn,
           resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
             remote: trigger.remote,
-            // Warden-wide offline gates remote skills. PI_OFFLINE remains catalog-only.
             offline: isWardenOffline(),
           }),
           context: filterContextByPaths(context, trigger.filters),

@@ -259,7 +259,6 @@ async function runScheduleWorkflowInner(
       const skillRoot = resolved.useBuiltinSkill ? undefined : (resolved.skillRoot ?? repoPath);
       const skill = await resolveSkillAsync(resolved.skill, skillRoot, {
         remote: resolved.remote,
-        // Warden-wide offline gates remote skills. PI_OFFLINE remains catalog-only.
         offline: isWardenOffline(),
       });
       const runtimeEnv = await prepareRuntimeEnvironment([resolved], inputs);

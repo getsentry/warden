@@ -2,7 +2,7 @@
  * Offline policy for Warden network side effects.
  *
  * `defaults.offline`, CLI `--offline`, and `WARDEN_OFFLINE` block remote skill
- * loading and Pi model-catalog refresh. `PI_OFFLINE` only blocks Pi catalogs.
+ * loading and Pi model-catalog refresh.
  */
 
 let configuredOffline = false;
@@ -22,9 +22,4 @@ export function resetWardenOfflineForTests(): void {
 /** Whether Warden-wide offline mode is active. */
 export function isWardenOffline(): boolean {
   return configuredOffline || process.env['WARDEN_OFFLINE'] !== undefined;
-}
-
-/** Whether Pi provider catalog refresh should avoid network access. */
-export function isPiModelCatalogOffline(): boolean {
-  return isWardenOffline() || process.env['PI_OFFLINE'] !== undefined;
 }

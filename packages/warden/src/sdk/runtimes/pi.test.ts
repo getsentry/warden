@@ -164,7 +164,6 @@ describe('piRuntime.runSkill', () => {
     vi.clearAllMocks();
     resetWardenOfflineForTests();
     delete process.env['WARDEN_OFFLINE'];
-    delete process.env['PI_OFFLINE'];
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
@@ -179,6 +178,7 @@ describe('piRuntime.runSkill', () => {
     expect(ModelRuntime.create).toHaveBeenCalled();
     expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
       providers: ['openai'],
+      allowNetwork: true,
       signal: expect.any(AbortSignal),
     });
     expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
@@ -186,10 +186,6 @@ describe('piRuntime.runSkill', () => {
       allowNetwork: false,
       signal: expect.any(AbortSignal),
     });
-    const networkRefresh = piMocks.modelRuntime.refresh.mock.calls.find(
-      (call) => call[0]?.allowNetwork !== false,
-    )?.[0];
-    expect(networkRefresh).not.toHaveProperty('allowNetwork');
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith('openai', 'gpt-test');
     expect(DefaultResourceLoader).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
@@ -426,6 +422,7 @@ describe('piRuntime.runSkill', () => {
 
     expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
       providers: ['openrouter'],
+      allowNetwork: true,
       signal: expect.any(AbortSignal),
     });
     expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
@@ -433,10 +430,6 @@ describe('piRuntime.runSkill', () => {
       allowNetwork: false,
       signal: expect.any(AbortSignal),
     });
-    const openrouterNetworkRefresh = piMocks.modelRuntime.refresh.mock.calls.find(
-      (call) => call[0]?.allowNetwork !== false,
-    )?.[0];
-    expect(openrouterNetworkRefresh).not.toHaveProperty('allowNetwork');
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith(
       'openrouter',
       'x-ai/grok-4.6'
@@ -515,8 +508,8 @@ describe('piRuntime.runSkill', () => {
     });
   });
 
-  it('skips shared network catalog refresh when PI_OFFLINE is set', async () => {
-    process.env['PI_OFFLINE'] = '1';
+  it('skips shared network catalog refresh when WARDEN_OFFLINE is set', async () => {
+    process.env['WARDEN_OFFLINE'] = '1';
 
     await piRuntime.runSkill(baseSkillRequest());
 
@@ -539,6 +532,7 @@ describe('piRuntime.runSkill', () => {
 
       expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
         providers: ['openai'],
+        allowNetwork: true,
         signal: expect.any(AbortSignal),
       });
       expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({

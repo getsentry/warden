@@ -846,7 +846,6 @@ async function createDirectSkillTask(args: {
   try {
     skill = await resolveSkillAsync(spec.skill, repoPath, {
       remote: spec.remote,
-      // Warden-wide offline gates remote skills. PI_OFFLINE remains catalog-only.
       offline: isWardenOffline(),
     });
   } catch (error) {

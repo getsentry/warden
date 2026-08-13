@@ -52,9 +52,10 @@ describe('Pi model catalog', () => {
         credentials,
         modelsPath: null,
       });
-      // Match production: omit allowNetwork so ModelRuntime defaults from PI_OFFLINE.
+      // Match production: explicit allowNetwork so Warden offline policy owns network access.
       await modelRuntime.refresh({
         providers: ['openrouter'],
+        allowNetwork: true,
         force: true,
         signal: AbortSignal.timeout(5_000),
       });
@@ -86,9 +87,7 @@ describe('Pi model catalog', () => {
     });
   });
 
-  it('does not network-refresh catalogs when PI_OFFLINE is set', async () => {
-    const previous = process.env['PI_OFFLINE'];
-    process.env['PI_OFFLINE'] = '1';
+  it('does not network-refresh catalogs when allowNetwork is false', async () => {
     const fetchMock = vi.fn(async () => new Response('should not fetch', { status: 500 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -102,9 +101,10 @@ describe('Pi model catalog', () => {
         credentials,
         modelsPath: null,
       });
-      // Match Warden's refresh call: omit allowNetwork so ModelRuntime honors PI_OFFLINE.
+      // Match Warden offline path: explicit allowNetwork false.
       await modelRuntime.refresh({
         providers: ['openrouter'],
+        allowNetwork: false,
         signal: AbortSignal.timeout(5_000),
       });
 
@@ -114,11 +114,6 @@ describe('Pi model catalog', () => {
       });
     } finally {
       vi.unstubAllGlobals();
-      if (previous === undefined) {
-        delete process.env['PI_OFFLINE'];
-      } else {
-        process.env['PI_OFFLINE'] = previous;
-      }
     }
   });
 });
