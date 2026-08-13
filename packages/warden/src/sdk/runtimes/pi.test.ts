@@ -174,10 +174,15 @@ describe('piRuntime.runSkill', () => {
       providers: ['openai'],
       signal: expect.any(AbortSignal),
     });
-    const firstRefresh = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
-      | { allowNetwork?: boolean }
-      | undefined;
-    expect(firstRefresh).not.toHaveProperty('allowNetwork');
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openai'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
+    const networkRefresh = piMocks.modelRuntime.refresh.mock.calls.find(
+      (call) => call[0]?.allowNetwork !== false,
+    )?.[0];
+    expect(networkRefresh).not.toHaveProperty('allowNetwork');
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith('openai', 'gpt-test');
     expect(DefaultResourceLoader).toHaveBeenCalledWith(expect.objectContaining({
       cwd: '/repo',
@@ -416,10 +421,15 @@ describe('piRuntime.runSkill', () => {
       providers: ['openrouter'],
       signal: expect.any(AbortSignal),
     });
-    const openrouterRefresh = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
-      | { allowNetwork?: boolean }
-      | undefined;
-    expect(openrouterRefresh).not.toHaveProperty('allowNetwork');
+    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledWith({
+      providers: ['openrouter'],
+      allowNetwork: false,
+      signal: expect.any(AbortSignal),
+    });
+    const openrouterNetworkRefresh = piMocks.modelRuntime.refresh.mock.calls.find(
+      (call) => call[0]?.allowNetwork !== false,
+    )?.[0];
+    expect(openrouterNetworkRefresh).not.toHaveProperty('allowNetwork');
     expect(piMocks.modelRuntime.getModel).toHaveBeenCalledWith(
       'openrouter',
       'x-ai/grok-4.6'
@@ -430,18 +440,15 @@ describe('piRuntime.runSkill', () => {
     const abortController = new AbortController();
     abortController.abort();
 
-    await piRuntime.runSkill({
+    await expect(piRuntime.runSkill({
       ...baseSkillRequest(),
       options: {
         model: 'openai/gpt-test',
         abortController,
       },
-    });
+    })).rejects.toMatchObject({ name: 'AbortError' });
 
-    const refreshArgs = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
-      | { signal?: AbortSignal }
-      | undefined;
-    expect(refreshArgs?.signal?.aborted).toBe(true);
+    expect(piMocks.modelRuntime.refresh).not.toHaveBeenCalled();
   });
 
   it('honors caller abort without AbortSignal.any on older Node 20', async () => {
@@ -452,9 +459,25 @@ describe('piRuntime.runSkill', () => {
 
     try {
       const abortController = new AbortController();
-      abortController.abort();
+      let releaseNetwork!: () => void;
+      const networkGate = new Promise<void>((resolve) => {
+        releaseNetwork = resolve;
+      });
+      piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+        allowNetwork?: boolean;
+        signal?: AbortSignal;
+      }) => {
+        if (options?.allowNetwork === false) {
+          return { aborted: false, errors: new Map() };
+        }
+        await networkGate;
+        if (options?.signal?.aborted) {
+          throw options.signal.reason ?? new DOMException('This operation was aborted', 'AbortError');
+        }
+        return { aborted: false, errors: new Map() };
+      });
 
-      await piRuntime.runSkill({
+      const waiting = piRuntime.runSkill({
         ...baseSkillRequest(),
         options: {
           model: 'openai/gpt-test',
@@ -462,23 +485,33 @@ describe('piRuntime.runSkill', () => {
         },
       });
 
-      const refreshArgs = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
-        | { signal?: AbortSignal }
-        | undefined;
-      expect(refreshArgs?.signal?.aborted).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      abortController.abort();
+      releaseNetwork();
+
+      await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
     } finally {
       AbortSignal.any = originalAny;
     }
   });
 
   it('shares one in-flight provider catalog refresh across concurrent prompts', async () => {
-    let active = 0;
-    let maxActive = 0;
-    piMocks.modelRuntime.refresh.mockImplementation(async () => {
-      active += 1;
-      maxActive = Math.max(maxActive, active);
+    let networkActive = 0;
+    let maxNetworkActive = 0;
+    let networkCalls = 0;
+    let restoreCalls = 0;
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+    }) => {
+      if (options?.allowNetwork === false) {
+        restoreCalls += 1;
+        return { aborted: false, errors: new Map() };
+      }
+      networkCalls += 1;
+      networkActive += 1;
+      maxNetworkActive = Math.max(maxNetworkActive, networkActive);
       await new Promise((resolve) => setTimeout(resolve, 40));
-      active -= 1;
+      networkActive -= 1;
       return { aborted: false, errors: new Map() };
     });
 
@@ -487,8 +520,74 @@ describe('piRuntime.runSkill', () => {
       piRuntime.runSkill(baseSkillRequest()),
     ]);
 
-    expect(maxActive).toBe(1);
-    expect(piMocks.modelRuntime.refresh).toHaveBeenCalledTimes(2);
+    expect(maxNetworkActive).toBe(1);
+    expect(networkCalls).toBe(1);
+    expect(restoreCalls).toBe(2);
+  });
+
+  it('does not stampede pi.dev when a shared catalog refresh fails', async () => {
+    let networkCalls = 0;
+    let restoreCalls = 0;
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+    }) => {
+      if (options?.allowNetwork === false) {
+        restoreCalls += 1;
+        return { aborted: false, errors: new Map() };
+      }
+      networkCalls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      throw new Error('catalog unavailable');
+    });
+
+    await Promise.all([
+      piRuntime.runSkill(baseSkillRequest()),
+      piRuntime.runSkill(baseSkillRequest()),
+      piRuntime.runSkill(baseSkillRequest()),
+    ]);
+
+    expect(networkCalls).toBe(1);
+    expect(restoreCalls).toBe(3);
+  });
+
+  it('lets a waiter abort without cancelling a shared peer catalog refresh', async () => {
+    let networkSettled = false;
+    let releaseNetwork!: () => void;
+    const networkGate = new Promise<void>((resolve) => {
+      releaseNetwork = resolve;
+    });
+    piMocks.modelRuntime.refresh.mockImplementation(async (options?: {
+      allowNetwork?: boolean;
+      signal?: AbortSignal;
+    }) => {
+      if (options?.allowNetwork === false) {
+        return { aborted: false, errors: new Map() };
+      }
+      await networkGate;
+      networkSettled = true;
+      return { aborted: false, errors: new Map() };
+    });
+
+    const abortController = new AbortController();
+    const waiting = piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        model: 'openai/gpt-test',
+        abortController,
+      },
+    });
+    const peer = piRuntime.runSkill(baseSkillRequest());
+
+    // Let both join the shared refresh, then abort only the waiter.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    abortController.abort();
+
+    await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+    expect(networkSettled).toBe(false);
+
+    releaseNetwork();
+    await peer;
+    expect(networkSettled).toBe(true);
   });
 
   it('resolves provider-specific Pi model IDs that contain slashes', async () => {

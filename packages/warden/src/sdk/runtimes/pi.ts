@@ -70,8 +70,18 @@ const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
-/** Share cold-cache provider catalog refreshes across concurrent Pi prompts. */
-const inFlightProviderCatalogRefreshes = new Map<string, Promise<void>>();
+/**
+ * Share one network catalog refresh per provider across concurrent Pi prompts.
+ * Waiters can stop waiting via their own abort signal without cancelling shared
+ * work until the last waiter leaves.
+ */
+interface ActiveProviderCatalogRefresh {
+  controller: AbortController;
+  promise: Promise<void>;
+  waiters: number;
+}
+
+const activeProviderCatalogRefreshes = new Map<string, ActiveProviderCatalogRefresh>();
 const PI_TOOL_NAMES: Record<Exclude<ToolName, 'WebFetch' | 'WebSearch'>, string[]> = {
   Read: ['read'],
   Write: ['write'],
@@ -176,43 +186,102 @@ function refreshSignal(abortSignal?: AbortSignal): AbortSignal {
   return abortSignal ? anyAbortSignal(abortSignal, timeoutSignal) : timeoutSignal;
 }
 
+function waitForSharedRefresh(
+  shared: Promise<void>,
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  if (!abortSignal) {
+    return shared;
+  }
+  if (abortSignal.aborted) {
+    return Promise.reject(abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError'));
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      cleanup();
+      reject(abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError'));
+    };
+    const cleanup = (): void => {
+      abortSignal.removeEventListener('abort', onAbort);
+    };
+
+    abortSignal.addEventListener('abort', onAbort, { once: true });
+    shared.then(
+      () => {
+        cleanup();
+        resolve();
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Refresh one provider catalog through Pi, with a deadline and optional caller abort.
- * Concurrent prompts for the same provider share one in-flight refresh so a cold
- * models-store does not stampede pi.dev. Omit allowNetwork so PI_OFFLINE is honored.
+ * Concurrent prompts for the same provider share one in-flight network refresh so a
+ * cold models-store does not stampede pi.dev. After the shared phase settles, each
+ * runtime does a local restore/refresh so its own ModelRuntime overlay is updated.
+ * Omit allowNetwork so PI_OFFLINE is honored.
  */
 async function refreshSelectedProviderCatalog(
   modelRuntime: ModelRuntime,
   providerId: string,
   abortSignal?: AbortSignal,
 ): Promise<void> {
-  const runRefresh = async (): Promise<void> => {
-    await modelRuntime.refresh({
-      providers: [providerId],
-      signal: refreshSignal(abortSignal),
-    });
-  };
-
-  const existing = inFlightProviderCatalogRefreshes.get(providerId);
-  if (existing) {
-    try {
-      await existing;
-    } catch {
-      // A failed or aborted peer refresh must not block this runtime.
-    }
-    // Peer refresh (if it succeeded) warmed the shared models-store; this call
-    // restores into the current runtime and is throttled against another network fetch.
-    await runRefresh();
-    return;
+  if (abortSignal?.aborted) {
+    throw abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError');
   }
 
-  const pending = runRefresh().finally(() => {
-    if (inFlightProviderCatalogRefreshes.get(providerId) === pending) {
-      inFlightProviderCatalogRefreshes.delete(providerId);
+  let active = activeProviderCatalogRefreshes.get(providerId);
+  if (!active) {
+    const controller = new AbortController();
+    const created: ActiveProviderCatalogRefresh = {
+      controller,
+      promise: undefined as unknown as Promise<void>,
+      waiters: 0,
+    };
+    created.promise = modelRuntime.refresh({
+      providers: [providerId],
+      signal: refreshSignal(controller.signal),
+    }).then(() => undefined).finally(() => {
+      if (activeProviderCatalogRefreshes.get(providerId) === created) {
+        activeProviderCatalogRefreshes.delete(providerId);
+      }
+    });
+    active = created;
+    activeProviderCatalogRefreshes.set(providerId, active);
+  }
+
+  active.waiters += 1;
+  try {
+    try {
+      await waitForSharedRefresh(active.promise, abortSignal);
+    } catch (error) {
+      // Shared network failure must not strand this runtime; local restore/refresh
+      // below can still recover from models-store or built-ins. Caller aborts exit now.
+      if (abortSignal?.aborted) {
+        throw error;
+      }
     }
-  });
-  inFlightProviderCatalogRefreshes.set(providerId, pending);
-  await pending;
+
+    // Shared work (if it succeeded) warmed models-store. Restore into this runtime
+    // without another network attempt so failed shared refreshes cannot stampede.
+    await modelRuntime.refresh({
+      providers: [providerId],
+      allowNetwork: false,
+      signal: refreshSignal(abortSignal),
+    });
+  } finally {
+    active.waiters -= 1;
+    if (active.waiters === 0 && activeProviderCatalogRefreshes.get(providerId) === active) {
+      active.controller.abort();
+      activeProviderCatalogRefreshes.delete(providerId);
+    }
+  }
 }
 
 async function createModelRuntime(
