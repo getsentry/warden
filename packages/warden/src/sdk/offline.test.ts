@@ -35,6 +35,13 @@ describe('offline policy', () => {
     expect(isWardenOffline()).toBe(true);
   });
 
+  it('clears configured offline when later set to false', () => {
+    configureWardenOffline(true);
+    configureWardenOffline(false);
+
+    expect(isWardenOffline()).toBe(false);
+  });
+
   it('stays online when no offline controls are set', () => {
     expect(isWardenOffline()).toBe(false);
   });

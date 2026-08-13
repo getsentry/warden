@@ -9,9 +9,8 @@ let configuredOffline = false;
 
 /** Record offline intent from warden.toml / CLI for this process. */
 export function configureWardenOffline(offline: boolean | undefined): void {
-  if (offline) {
-    configuredOffline = true;
-  }
+  // Explicit false clears sticky offline so reused processes can go back online.
+  configuredOffline = Boolean(offline);
 }
 
 /** Reset process offline state. Intended for tests. */
