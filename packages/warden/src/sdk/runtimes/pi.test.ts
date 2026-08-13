@@ -444,6 +444,33 @@ describe('piRuntime.runSkill', () => {
     expect(refreshArgs?.signal?.aborted).toBe(true);
   });
 
+  it('honors caller abort without AbortSignal.any on older Node 20', async () => {
+    const originalAny = AbortSignal.any;
+    // Simulate Node 20.0-20.2 where AbortSignal.any is missing.
+    // @ts-expect-error intentional runtime deletion for compatibility coverage
+    delete AbortSignal.any;
+
+    try {
+      const abortController = new AbortController();
+      abortController.abort();
+
+      await piRuntime.runSkill({
+        ...baseSkillRequest(),
+        options: {
+          model: 'openai/gpt-test',
+          abortController,
+        },
+      });
+
+      const refreshArgs = piMocks.modelRuntime.refresh.mock.calls[0]?.[0] as
+        | { signal?: AbortSignal }
+        | undefined;
+      expect(refreshArgs?.signal?.aborted).toBe(true);
+    } finally {
+      AbortSignal.any = originalAny;
+    }
+  });
+
   it('shares one in-flight provider catalog refresh across concurrent prompts', async () => {
     let active = 0;
     let maxActive = 0;

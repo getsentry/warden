@@ -143,9 +143,37 @@ function legacyApiKeyProvider(model: string | undefined): string | undefined {
   return selector.provider === 'anthropic' ? 'anthropic' : undefined;
 }
 
+/**
+ * Combine abort signals without AbortSignal.any (Node < 20.3).
+ * Warden's engines field allows Node >= 20.0.0.
+ */
+function anyAbortSignal(...signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any(signals);
+  }
+
+  const controller = new AbortController();
+  const onAbort = (): void => {
+    controller.abort();
+    for (const signal of signals) {
+      signal.removeEventListener('abort', onAbort);
+    }
+  };
+
+  for (const signal of signals) {
+    if (signal.aborted) {
+      onAbort();
+      break;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  return controller.signal;
+}
+
 function refreshSignal(abortSignal?: AbortSignal): AbortSignal {
   const timeoutSignal = AbortSignal.timeout(PI_MODEL_REFRESH_TIMEOUT_MS);
-  return abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
+  return abortSignal ? anyAbortSignal(abortSignal, timeoutSignal) : timeoutSignal;
 }
 
 /**
