@@ -41,6 +41,7 @@ import { renderSkillReport } from '../../output/renderer.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { InvalidPiModelSelectorError } from '../../sdk/runtimes/model-selectors.js';
 import { SkillRunnerError } from '../../sdk/errors.js';
+import { resetWardenOfflineForTests } from '../../sdk/offline.js';
 
 const capturedEvents: ErrorEvent[] = [];
 
@@ -65,6 +66,8 @@ describe('executeTrigger', () => {
     capturedEvents.length = 0;
     Sentry.getGlobalScope().clear();
     Sentry.getIsolationScope().clear();
+    resetWardenOfflineForTests();
+    delete process.env['WARDEN_OFFLINE'];
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.clearAllMocks();
@@ -167,7 +170,7 @@ describe('executeTrigger', () => {
     expect(resolveSkillAsync).toHaveBeenCalledWith(
       'test-skill',
       '/org/skills-root',
-      { remote: undefined }
+      { remote: undefined, offline: false }
     );
   });
 
@@ -191,7 +194,7 @@ describe('executeTrigger', () => {
     expect(resolveSkillAsync).toHaveBeenCalledWith(
       'test-skill',
       undefined,
-      { remote: undefined }
+      { remote: undefined, offline: false }
     );
   });
 

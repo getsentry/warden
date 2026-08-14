@@ -25,6 +25,21 @@ runtime = "pi"
 Runtime selection is global within a config layer. `runtime` is not currently a
 skill-level or trigger-level field.
 
+## Offline model catalogs
+
+When `runtime = "pi"`, Warden refreshes the selected provider catalog before
+model resolution so newly published models are available without a package bump.
+Disable that network refresh in durable config:
+
+```toml title="warden.toml"
+[defaults]
+offline = true
+```
+
+`defaults.offline` is preferred for permanent offline policy. It blocks both
+remote skill network fetches and Pi model-catalog refresh. CLI `--offline` or
+`WARDEN_OFFLINE` does the same for one run.
+
 ## Pi Model Selectors
 
 When `runtime = "pi"`, configured model values must include a provider prefix:

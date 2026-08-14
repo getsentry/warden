@@ -192,6 +192,11 @@ function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | 
     inherited.runtime = base.runtime;
   }
 
+  // Offline is sticky across layers: either layer can force offline for the run.
+  if (base?.offline === true || repo?.offline === true) {
+    inherited.offline = true;
+  }
+
   const verification = mergeNestedConfig(base?.verification, repo?.verification);
   if (verification) {
     inherited.verification = verification;

@@ -10,6 +10,7 @@ import {
   invalidPiModelSelectorMessage,
   type InvalidPiModelSelector,
 } from '../sdk/runtimes/model-selectors.js';
+import { configureWardenOffline, isWardenOffline } from '../sdk/offline.js';
 import { mapExtractionErrorCode } from '../sdk/errors.js';
 import { aggregateAuxiliaryUsageAttribution, mergeAuxiliaryUsage } from '../sdk/usage.js';
 import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
@@ -752,9 +753,19 @@ function loadOptionalConfig(options: CLIOptions, repoPath?: string): WardenConfi
       ? resolve(repoPath, 'warden.toml')
       : null;
 
-  return configPath && existsSync(configPath)
+  const config = configPath && existsSync(configPath)
     ? loadWardenConfigFile(configPath)
     : null;
+  applyWardenOfflinePolicy(options, config);
+  return config;
+}
+
+/** Apply durable config and CLI offline intent for Warden network access. */
+function applyWardenOfflinePolicy(
+  options: Pick<CLIOptions, 'offline'>,
+  config: WardenConfig | null | undefined,
+): void {
+  configureWardenOffline(Boolean(options.offline || config?.defaults?.offline));
 }
 
 /**
@@ -847,7 +858,7 @@ async function createDirectSkillTask(args: {
   try {
     skill = await resolveSkillAsync(spec.skill, repoPath, {
       remote: spec.remote,
-      offline: options.offline,
+      offline: isWardenOffline(),
     });
   } catch (error) {
     if (
@@ -1569,6 +1580,7 @@ async function runGitRefMode(gitRef: string, options: CLIOptions, reporter: Repo
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
   const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
+  applyWardenOfflinePolicy(options, config);
 
   // Build context from local git
   reporter.startContext(`Analyzing changes from ${gitRef}...`);
@@ -1623,6 +1635,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
 
   // Load config
   const config = loadWardenConfigFile(configPath);
+  applyWardenOfflinePolicy(options, config);
   const service = resolveCliService(options, config, reporter);
 
   // Build context from local git. By default, mirror PR-style analysis:
@@ -1904,6 +1917,7 @@ async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Prom
   // Load config to get defaultBranch if available
   const configPath = resolveConfigPath(options, repoPath);
   const config = existsSync(configPath) ? loadWardenConfigFile(configPath) : null;
+  applyWardenOfflinePolicy(options, config);
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.

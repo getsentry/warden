@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Octokit } from '@octokit/rest';
 import type { ActionInputs } from '../inputs.js';
 import type { SkillReport, Finding, EventContext } from '../../types/index.js';
+import { resetWardenOfflineForTests } from '../../sdk/offline.js';
 
 // -----------------------------------------------------------------------------
 // Fixtures Directory
@@ -220,6 +221,8 @@ describe('runScheduleWorkflow', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     clearSkillsCache();
+    resetWardenOfflineForTests();
+    delete process.env['WARDEN_OFFLINE'];
     mockOctokit = createMockOctokit();
 
     // Environment setup
@@ -312,7 +315,7 @@ describe('runScheduleWorkflow', () => {
       expect(mockResolveSkillAsync).toHaveBeenCalledWith(
         'org-skill',
         join(SCHEDULE_BASE_ONLY_FIXTURES, '.warden-org'),
-        { remote: undefined }
+        { remote: undefined, offline: false }
       );
     });
 
@@ -330,8 +333,8 @@ describe('runScheduleWorkflow', () => {
 
       expect(mockRunSkill).toHaveBeenCalledTimes(2);
       expect(mockResolveSkillAsync.mock.calls).toEqual([
-        ['org-skill', join(SCHEDULE_FIXTURES, '.warden-org'), { remote: undefined }],
-        ['test-skill', SCHEDULE_FIXTURES, { remote: undefined }],
+        ['org-skill', join(SCHEDULE_FIXTURES, '.warden-org'), { remote: undefined, offline: false }],
+        ['test-skill', SCHEDULE_FIXTURES, { remote: undefined, offline: false }],
       ]);
     });
 

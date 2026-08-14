@@ -1169,6 +1169,7 @@ describe('maxTurns config', () => {
       version: 1,
       defaults: {
         runtime: 'pi',
+        offline: true,
         agent: { model: 'claude-main', maxTurns: 25 },
         auxiliary: { model: 'claude-haiku-4-5', maxRetries: 2 },
         synthesis: { model: 'claude-opus-4-5' },
@@ -1179,6 +1180,7 @@ describe('maxTurns config', () => {
     const result = WardenConfigSchema.safeParse(config);
     expect(result.success).toBe(true);
     expect(result.data?.defaults?.runtime).toBe('pi');
+    expect(result.data?.defaults?.offline).toBe(true);
     expect(result.data?.defaults?.auxiliary?.model).toBe('claude-haiku-4-5');
     expect(result.data?.defaults?.synthesis?.model).toBe('claude-opus-4-5');
   });

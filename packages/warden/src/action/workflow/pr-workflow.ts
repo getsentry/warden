@@ -56,6 +56,7 @@ import { ReviewFeedbackGate } from '../review/review-feedback-gate.js';
 import type { ReviewFeedbackWritability } from '../review/review-feedback-gate.js';
 import type { FindingObservation } from '../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
+import { configureWardenOffline } from '../../sdk/offline.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import {
@@ -429,6 +430,11 @@ async function initializeWorkflow(
       configPath: inputs.configPath,
       onWarning: (message) => console.log(`::warning::${message}`),
     });
+    configureWardenOffline(
+      layered.baseConfig?.defaults?.offline === true
+      || layered.repoConfig?.defaults?.offline === true
+      || layered.config.defaults?.offline === true,
+    );
     // The org base config is an enforced baseline. Repo config extends the run
     // with additional repo-local triggers, but does not override these
     // action-level settings for the global workflow.

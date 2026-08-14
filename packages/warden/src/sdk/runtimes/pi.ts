@@ -51,6 +51,7 @@ import {
 } from '../otel.js';
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
+import { isWardenOffline } from '../offline.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -69,6 +70,19 @@ const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
+const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
+/**
+ * Share one network catalog refresh per provider across concurrent Pi prompts.
+ * Waiters can stop waiting via their own abort signal without cancelling shared
+ * work until the last waiter leaves.
+ */
+interface ActiveProviderCatalogRefresh {
+  controller: AbortController;
+  promise: Promise<void>;
+  waiters: number;
+}
+
+const activeProviderCatalogRefreshes = new Map<string, ActiveProviderCatalogRefresh>();
 const PI_TOOL_NAMES: Record<Exclude<ToolName, 'WebFetch' | 'WebSearch'>, string[]> = {
   Read: ['read'],
   Write: ['write'],
@@ -140,14 +154,178 @@ function legacyApiKeyProvider(model: string | undefined): string | undefined {
   return selector.provider === 'anthropic' ? 'anthropic' : undefined;
 }
 
+/**
+ * Combine abort signals without AbortSignal.any (Node < 20.3).
+ * Warden's engines field allows Node >= 20.0.0.
+ */
+function anyAbortSignal(...signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any(signals);
+  }
+
+  const controller = new AbortController();
+  const onAbort = (): void => {
+    controller.abort();
+    for (const signal of signals) {
+      signal.removeEventListener('abort', onAbort);
+    }
+  };
+
+  for (const signal of signals) {
+    if (signal.aborted) {
+      onAbort();
+      break;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  return controller.signal;
+}
+
+/**
+ * Build a timeout signal without AbortSignal.timeout (Node < 20.3).
+ * Same engines window as anyAbortSignal above.
+ */
+function timeoutAbortSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+  }, ms);
+  // Match Node's AbortSignal.timeout: do not keep the process alive for the deadline alone.
+  timer.unref?.();
+  return controller.signal;
+}
+
+function refreshSignal(abortSignal?: AbortSignal): AbortSignal {
+  const timeoutSignal = timeoutAbortSignal(PI_MODEL_REFRESH_TIMEOUT_MS);
+  return abortSignal ? anyAbortSignal(abortSignal, timeoutSignal) : timeoutSignal;
+}
+
+function waitForSharedRefresh(
+  shared: Promise<void>,
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  if (!abortSignal) {
+    return shared;
+  }
+  if (abortSignal.aborted) {
+    return Promise.reject(abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError'));
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      cleanup();
+      reject(abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError'));
+    };
+    const cleanup = (): void => {
+      abortSignal.removeEventListener('abort', onAbort);
+    };
+
+    abortSignal.addEventListener('abort', onAbort, { once: true });
+    shared.then(
+      () => {
+        cleanup();
+        resolve();
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * Refresh one provider catalog through Pi, with a deadline and optional caller abort.
+ * Concurrent prompts for the same provider share one in-flight network refresh so a
+ * cold models-store does not stampede pi.dev. After the shared phase settles, each
+ * runtime does a local restore/refresh so its own ModelRuntime overlay is updated.
+ * Offline mode (warden.toml defaults.offline, CLI --offline, or WARDEN_OFFLINE)
+ * skips the shared network phase and only restores from local cache/builtins.
+ */
+async function refreshSelectedProviderCatalog(
+  modelRuntime: ModelRuntime,
+  providerId: string,
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  if (abortSignal?.aborted) {
+    throw abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError');
+  }
+
+  if (isWardenOffline()) {
+    await modelRuntime.refresh({
+      providers: [providerId],
+      allowNetwork: false,
+      signal: refreshSignal(abortSignal),
+    });
+    return;
+  }
+
+  let active = activeProviderCatalogRefreshes.get(providerId);
+  if (!active) {
+    const controller = new AbortController();
+    const created: ActiveProviderCatalogRefresh = {
+      controller,
+      promise: undefined as unknown as Promise<void>,
+      waiters: 0,
+    };
+    // Explicit allowNetwork so Warden offline policy owns network access, not Pi env vars.
+    // Keep the map entry until the last waiter finishes local restore so late joiners
+    // reuse this shared phase instead of starting a redundant network refresh.
+    created.promise = modelRuntime.refresh({
+      providers: [providerId],
+      allowNetwork: true,
+      signal: refreshSignal(controller.signal),
+    }).then(() => undefined);
+    active = created;
+    activeProviderCatalogRefreshes.set(providerId, active);
+  }
+
+  active.waiters += 1;
+  try {
+    try {
+      await waitForSharedRefresh(active.promise, abortSignal);
+    } catch (error) {
+      // Shared network failure must not strand this runtime; local restore/refresh
+      // below can still recover from models-store or built-ins. Caller aborts exit now.
+      if (abortSignal?.aborted) {
+        throw error;
+      }
+    }
+
+    // Shared work (if it succeeded) warmed models-store. Restore into this runtime
+    // without another network attempt so failed shared refreshes cannot stampede.
+    await modelRuntime.refresh({
+      providers: [providerId],
+      allowNetwork: false,
+      signal: refreshSignal(abortSignal),
+    });
+  } finally {
+    active.waiters -= 1;
+    if (active.waiters === 0 && activeProviderCatalogRefreshes.get(providerId) === active) {
+      active.controller.abort();
+      activeProviderCatalogRefreshes.delete(providerId);
+    }
+  }
+}
+
 async function createModelRuntime(
   model: string | undefined,
   legacyAnthropicApiKey: string | undefined,
+  abortSignal?: AbortSignal,
 ): Promise<ModelRuntime> {
   const modelRuntime = await ModelRuntime.create();
-  const provider = legacyApiKeyProvider(model);
-  if (legacyAnthropicApiKey && provider) {
-    await modelRuntime.setRuntimeApiKey(provider, legacyAnthropicApiKey);
+  const selectedProvider = model ? parseModelSelector(model).provider : undefined;
+  const legacyProvider = legacyApiKeyProvider(model);
+  if (legacyAnthropicApiKey && legacyProvider) {
+    await modelRuntime.setRuntimeApiKey(legacyProvider, legacyAnthropicApiKey);
+  }
+  if (selectedProvider) {
+    await refreshSelectedProviderCatalog(modelRuntime, selectedProvider, abortSignal);
   }
   return modelRuntime;
 }
@@ -346,7 +524,11 @@ async function promptWithTimeout(
 async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const warnings: string[] = [];
   bridgeWardenProviderApiKeyEnv();
-  const modelRuntime = await createModelRuntime(options.model, options.legacyAnthropicApiKey);
+  const modelRuntime = await createModelRuntime(
+    options.model,
+    options.legacyAnthropicApiKey,
+    options.abortController?.signal,
+  );
   const model = resolvePiModel(options.model, modelRuntime);
   const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
   const agentDir = getAgentDir();
