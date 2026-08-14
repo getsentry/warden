@@ -20,7 +20,12 @@ function bearerToken(header: string | undefined): string | null {
 }
 
 /** Authenticate bearer credentials and attach runtime-derived authority to Hono context. */
-export function authenticate(database: WardenDatabase, dashboardAuth?: DashboardAuthenticationAdapter) {
+export function authenticate(
+  database: WardenDatabase,
+  dashboardAuth?: DashboardAuthenticationAdapter,
+  sessionOrigin?: string,
+) {
+  const expectedSessionOrigin = sessionOrigin ? new URL(sessionOrigin).origin : undefined;
   return createMiddleware<{ Variables: ServiceVariables }>(async (context, next) => {
     const token = bearerToken(context.req.header('authorization'));
     const serviceContext = token
@@ -43,7 +48,7 @@ export function authenticate(database: WardenDatabase, dashboardAuth?: Dashboard
     }
     if (context.get('authenticationMethod') === 'session' && !['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) {
       const origin = context.req.header('origin');
-      if (!origin || origin !== new URL(context.req.url).origin) {
+      if (!origin || origin !== (expectedSessionOrigin ?? new URL(context.req.url).origin)) {
         return context.json({ error: { code: 'forbidden', message: 'Permission denied.' } }, 403);
       }
     }

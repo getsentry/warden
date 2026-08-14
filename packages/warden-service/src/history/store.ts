@@ -1,5 +1,6 @@
 import type {
   CostAggregateResponse,
+  FindingDetailResponse,
   FindingFeedItem,
   FindingListResponse,
   OutcomeSummaryResponse,
@@ -157,6 +158,8 @@ function encodeCursor(completedAt: Date | string, id: string): string {
 
 interface FindingFeedRow extends Record<string, unknown> {
   id: string;
+  client_finding_id: string;
+  reported_id: string | null;
   run_id: string;
   client_run_id: string;
   provider: FindingFeedItem['repository']['provider'];
@@ -179,6 +182,7 @@ interface FindingFeedRow extends Record<string, unknown> {
 function mapFinding(row: FindingFeedRow): FindingFeedItem {
   return {
     id: row.id,
+    displayId: row.reported_id ?? row.client_finding_id,
     runId: row.run_id,
     clientRunId: row.client_run_id,
     repository: {
@@ -236,7 +240,8 @@ export async function listFindings(
   }
   values.push(limit + 1);
   const result = await database.query<FindingFeedRow>(`
-    SELECT f.id, f.run_id, r.client_run_id, repo.provider, repo.owner, repo.name, repo.full_name,
+    SELECT f.id, f.client_finding_id, f.reported_id, f.run_id, r.client_run_id,
+      repo.provider, repo.owner, repo.name, repo.full_name,
       se.skill, f.severity, f.confidence, f.title, f.description,
       location.path, location.start_line, location.end_line,
       observation.outcome AS observation_outcome, observation.observed_at, r.completed_at
@@ -266,6 +271,48 @@ export async function listFindings(
     items: page.map(mapFinding),
     ...(result.rows.length > limit && last ? { nextCursor: encodeCursor(last.completed_at, last.id) } : {}),
   };
+}
+
+/** Return one authorized finding without revealing cross-tenant or restricted repository IDs. */
+export async function getFindingDetail(
+  database: WardenDatabase,
+  contextInput: ServiceContext | undefined,
+  findingId: string,
+): Promise<FindingDetailResponse | null> {
+  const context = requireServiceContext(contextInput);
+  const values: unknown[] = [context.tenantId, findingId];
+  const repositoryScope = context.repositoryAllowlist
+    ? (() => {
+        values.push(context.repositoryAllowlist);
+        return `AND repo.full_name = ANY($${values.length}::text[])`;
+      })()
+    : '';
+  const result = await database.query<FindingFeedRow>(`
+    SELECT f.id, f.client_finding_id, f.reported_id, f.run_id, r.client_run_id,
+      repo.provider, repo.owner, repo.name, repo.full_name,
+      se.skill, f.severity, f.confidence, f.title, f.description,
+      location.path, location.start_line, location.end_line,
+      observation.outcome AS observation_outcome, observation.observed_at, r.completed_at
+    FROM findings f
+    JOIN runs r ON r.id = f.run_id AND r.tenant_id = f.tenant_id
+    JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
+    JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
+    LEFT JOIN LATERAL (
+      SELECT fl.path, fl.start_line, fl.end_line
+      FROM finding_locations fl
+      WHERE fl.tenant_id = f.tenant_id AND fl.finding_id = f.id
+      ORDER BY fl.ordinal LIMIT 1
+    ) location ON true
+    LEFT JOIN LATERAL (
+      SELECT fo.outcome, fo.observed_at
+      FROM finding_observations fo
+      WHERE fo.tenant_id = f.tenant_id AND fo.finding_id = f.id
+      ORDER BY fo.observed_at DESC, fo.id DESC LIMIT 1
+    ) observation ON true
+    WHERE f.tenant_id = $1 AND f.id = $2 ${repositoryScope}
+  `, values);
+  const finding = result.rows[0];
+  return finding ? { finding: mapFinding(finding) } : null;
 }
 
 /** List runs visible to an authenticated tenant with stable cursor pagination. */

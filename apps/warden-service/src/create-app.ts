@@ -34,6 +34,9 @@ export function createVercelWardenService(environment: NodeJS.ProcessEnv) {
     jobHandlers: {
       ...createMemoryJobHandlers(database),
     },
+    ...(config.WARDEN_SERVICE_BASE_URL
+      ? { sessionOrigin: config.WARDEN_SERVICE_BASE_URL }
+      : {}),
     ...(config.DISABLE_AUTH
       ? { disableAuth: { tenantId: config.WARDEN_SERVICE_TENANT_ID } }
       : {

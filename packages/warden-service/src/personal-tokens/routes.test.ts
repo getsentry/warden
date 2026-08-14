@@ -71,6 +71,7 @@ describe('personal API token routes', () => {
     } as unknown as WardenDatabase;
     const app = createWardenService({
       database,
+      sessionOrigin: 'https://warden.example',
       dashboardAuth: {
         async authenticate() {
           return {
@@ -85,7 +86,7 @@ describe('personal API token routes', () => {
       },
     });
 
-    const response = await app.request('https://warden.example/api/v1/personal-tokens', {
+    const response = await app.request('http://internal.vercel/api/v1/personal-tokens', {
       method: 'POST',
       headers: { origin: 'https://warden.example', 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Codex' }),
@@ -96,5 +97,12 @@ describe('personal API token routes', () => {
     expect(body.token).toMatch(/^wds_pat_/);
     expect(values.flat()).not.toContain(body.token);
     expect(values.flat()).toContain('browser:owner-1234567890');
+
+    const crossOrigin = await app.request('http://internal.vercel/api/v1/personal-tokens', {
+      method: 'POST',
+      headers: { origin: 'https://attacker.example', 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Blocked' }),
+    });
+    expect(crossOrigin.status).toBe(403);
   });
 });

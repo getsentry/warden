@@ -18,6 +18,7 @@ import { registerAdministrationRoutes } from './administration/routes.js';
 import { registerPersonalTokenRoutes } from './personal-tokens/routes.js';
 import {
   createGoogleAuthenticationAdapter,
+  dashboardLoginPath,
   registerGoogleAuthRoutes,
 } from './google-auth.js';
 import type { GoogleBrowserAuthOptions } from './google-auth.js';
@@ -54,6 +55,7 @@ export interface CreateWardenServiceOptions {
   sessionSecret?: string;
   sessionTtlSeconds?: number;
   dashboardAuth?: DashboardAuthenticationAdapter;
+  sessionOrigin?: string;
   googleAuth?: GoogleBrowserAuthOptions;
   disableAuth?: { tenantId: string };
   memoryRecall?: RecallMemoryOptions;
@@ -77,7 +79,7 @@ function createDisabledAuthenticationAdapter(tenantId: string): DashboardAuthent
 function requireDashboardSession(authentication?: DashboardAuthenticationAdapter) {
   return createMiddleware<{ Variables: ServiceVariables }>(async (context, next) => {
     const serviceContext = await authentication?.authenticate(context.req.raw) ?? null;
-    if (!serviceContext) return context.redirect('/api/auth/login');
+    if (!serviceContext) return context.redirect(dashboardLoginPath(context.req.raw));
     if (!hasRole(serviceContext, 'read')) {
       return context.json({ error: { code: 'forbidden', message: 'Permission denied.' } }, 403);
     }
@@ -236,6 +238,7 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
       for (const path of ['/', '/index.html']) {
         app.get(path, requireSession, (context) => context.html(dashboard.html));
       }
+      app.get('/findings/:id', requireSession, (context) => context.html(dashboard.html));
       app.get('/assets/app.js', requireSession, (context) => context.body(
         dashboard.script,
         200,
@@ -247,7 +250,7 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
         { 'Content-Type': 'text/css; charset=utf-8' },
       ));
     }
-    app.use('/api/v1/*', authenticate(options.database, dashboardAuth));
+    app.use('/api/v1/*', authenticate(options.database, dashboardAuth, options.sessionOrigin));
     app.get('/api/v1/auth/context', requireRole('read'), (context) => {
       const serviceContext = context.get('serviceContext');
       return context.json({

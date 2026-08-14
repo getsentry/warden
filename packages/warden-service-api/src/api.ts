@@ -60,6 +60,7 @@ export const FindingOutcomeSchema = z.enum([
 
 export const FindingFeedItemSchema = z.object({
   id: IdSchema,
+  displayId: IdSchema,
   runId: IdSchema,
   clientRunId: IdSchema,
   repository: RepositoryIdentitySchema,
@@ -78,6 +79,11 @@ export const FindingFeedItemSchema = z.object({
   completedAt: TimestampSchema,
 }).strict();
 export type FindingFeedItem = z.infer<typeof FindingFeedItemSchema>;
+
+export const FindingDetailResponseSchema = z.object({
+  finding: FindingFeedItemSchema,
+}).strict();
+export type FindingDetailResponse = z.infer<typeof FindingDetailResponseSchema>;
 
 export const FindingListResponseSchema = z.object({
   items: z.array(FindingFeedItemSchema),

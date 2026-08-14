@@ -1,5 +1,6 @@
 import {
   CostAggregateResponseSchema,
+  FindingDetailResponseSchema,
   FindingListResponseSchema,
   OutcomeSummaryResponseSchema,
   RepositoryListResponseSchema,
@@ -14,6 +15,7 @@ import type { ServiceVariables } from '../auth.js';
 import type { WardenDatabase } from '../db/database.js';
 import {
   aggregateCosts,
+  getFindingDetail,
   getRunDetail,
   listFindings,
   listRepositories,
@@ -86,6 +88,14 @@ export function registerHistoryRoutes(app: Hono<{ Variables: ServiceVariables }>
       context.get('serviceContext'),
       query,
     )));
+  });
+
+  app.get('/api/v1/findings/:id', requireRole('read'), async (context) => {
+    const id = z.string().uuid().safeParse(context.req.param('id'));
+    if (!id.success) return context.json({ error: { code: 'not_found', message: 'Finding not found.' } }, 404);
+    const detail = await getFindingDetail(database, context.get('serviceContext'), id.data);
+    if (!detail) return context.json({ error: { code: 'not_found', message: 'Finding not found.' } }, 404);
+    return context.json(FindingDetailResponseSchema.parse(detail));
   });
 
   app.get('/api/v1/repositories', requireRole('read'), async (context) => context.json(

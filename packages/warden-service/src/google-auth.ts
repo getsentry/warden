@@ -33,6 +33,30 @@ export interface GoogleBrowserAuthOptions {
   allowedDomain: string;
 }
 
+function dashboardReturnPath(value: string | undefined): string {
+  if (!value) return '/';
+  try {
+    const base = new URL('https://warden.invalid');
+    const target = new URL(value, base);
+    const isDashboardPage = target.pathname === '/'
+      || /^\/findings\/[^/]+\/?$/.test(target.pathname);
+    return target.origin === base.origin && isDashboardPage
+      ? `${target.pathname}${target.search}`
+      : '/';
+  } catch {
+    return '/';
+  }
+}
+
+/** Build a login path that returns authenticated users to the requested dashboard page. */
+export function dashboardLoginPath(request: Request): string {
+  const url = new URL(request.url);
+  const returnTo = dashboardReturnPath(`${url.pathname}${url.search}`);
+  return returnTo === '/'
+    ? '/api/auth/login'
+    : `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 function normalizedAuthorizedEmail(session: GoogleAuthSession | null, allowedDomain: string): string | null {
   if (!session?.user.emailVerified) return null;
   const email = session.user.email.trim().toLowerCase();
@@ -133,11 +157,12 @@ export function registerGoogleAuthRoutes(
   options: GoogleBrowserAuthOptions,
 ): void {
   app.get('/api/auth/login', async (context) => {
+    const returnTo = dashboardReturnPath(context.req.query('returnTo'));
     const session = await options.auth.getSession(context.req.raw);
     if (normalizedAuthorizedEmail(session, options.allowedDomain)) {
-      return context.redirect('/');
+      return context.redirect(returnTo);
     }
-    return options.auth.signInWithGoogle(context.req.raw, new URL('/', context.req.url).toString());
+    return options.auth.signInWithGoogle(context.req.raw, new URL(returnTo, context.req.url).toString());
   });
   app.on(['GET', 'POST'], '/api/auth/*', (context) => options.auth.handler(context.req.raw));
 }
