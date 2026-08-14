@@ -93,6 +93,51 @@ describe('createWardenService', () => {
     expect(response.status).toBe(413);
   });
 
+  it('buffers request bodies before asynchronous authentication', async () => {
+    const encoded = new TextEncoder().encode('{}');
+    let bodyRead = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        bodyRead = true;
+        controller.enqueue(encoded);
+        controller.close();
+      },
+    }, { highWaterMark: 0 });
+    const app = createWardenService({
+      database: readyDatabase(),
+      dashboardAuth: {
+        async authenticate() {
+          if (!bodyRead) throw new Error('request body was not buffered');
+          return {
+            tenantId: '00000000-0000-4000-8000-000000000001',
+            tokenId: null,
+            roles: ['ingest'],
+            repositoryAllowlist: null,
+            credentialKind: 'browser',
+          };
+        },
+      },
+    });
+    const request = new Request('http://localhost/api/v1/runs', {
+      method: 'POST',
+      headers: {
+        'content-length': String(encoded.byteLength),
+        'content-type': 'application/json',
+        origin: 'http://localhost',
+      },
+      body,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+
+    const response = await app.request(request);
+
+    expect(bodyRead).toBe(true);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'invalid_envelope', message: 'Run envelope is not valid.' },
+    });
+  });
+
   it('never passes bearer credentials to rate-limit hooks or reflects thrown content', async () => {
     const inputs: unknown[] = [];
     const app = createWardenService({
