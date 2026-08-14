@@ -51,6 +51,50 @@ describe('memory job handlers', () => {
     expect(statements.some((sql) => sql.includes('INSERT INTO memories'))).toBe(false);
   });
 
+  it('attributes one extraction call across its proposals without duplicating usage', async () => {
+    const { database, statements, statementValues } = databaseFixture();
+    let memories = 0;
+    const original = database.transaction.bind(database);
+    database.transaction = async (operation) => original(async (client) => {
+      const query = client.query.bind(client);
+      client.query = async <TRow extends Record<string, unknown>>(sql: string, values?: readonly unknown[]) => {
+        const result = await query<TRow>(sql, values);
+        return sql.includes('INSERT INTO memories')
+          ? { rows: [{ id: `memory-${++memories}` } as unknown as TRow], rowCount: 1 }
+          : result;
+      };
+      return operation(client);
+    });
+    const handler = createMemoryJobHandlers(database, {
+      extractor: {
+        async extract(input) {
+          return {
+            proposals: ['Use parameterized queries.', 'Validate query identifiers.'].map((content) => ({
+              kind: 'confirmed_pattern' as const,
+              content,
+              evidenceIds: input.evidence.map((item) => item.observationId),
+              skill: 'security',
+              confidence: 0.9,
+            })),
+            modelVersion: 'test-model',
+            usage: {
+              provider: 'test', model: 'test-model', runtime: 'test',
+              inputTokens: 101, outputTokens: 21, costUsd: 0.011, costBasis: 'estimated' as const,
+            },
+          };
+        },
+      },
+    }).memory_extract;
+
+    await expect(handler?.(job, { deadline: Date.now() + 5_000 })).resolves.toEqual({ complete: true });
+    const usage = statements.flatMap((sql, index) => (
+      sql.includes('INSERT INTO memories') ? [statementValues[index]!] : []
+    ));
+    expect(usage.map((values) => values[18])).toEqual([51, 50]);
+    expect(usage.map((values) => values[19])).toEqual([11, 10]);
+    expect(usage.reduce((total, values) => total + Number(values[20]), 0)).toBeCloseTo(0.011);
+  });
+
   it('expires inactive memory indexes through the retention handler', async () => {
     const { database, statements } = databaseFixture();
     const original = database.transaction.bind(database);

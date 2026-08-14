@@ -96,6 +96,25 @@ function deterministicProposals(evidence: readonly PassiveEvidence[]): PassiveMe
   });
 }
 
+function apportionCount(value: number | undefined, index: number, total: number): number | undefined {
+  if (value === undefined) return undefined;
+  return Math.floor(value / total) + (index < value % total ? 1 : 0);
+}
+
+function apportionUsage(
+  usage: MemoryOperationUsage | undefined,
+  index: number,
+  total: number,
+): MemoryOperationUsage | undefined {
+  if (!usage) return undefined;
+  return {
+    ...usage,
+    inputTokens: apportionCount(usage.inputTokens, index, total),
+    outputTokens: apportionCount(usage.outputTokens, index, total),
+    costUsd: usage.costUsd === null ? null : usage.costUsd === undefined ? undefined : usage.costUsd / total,
+  };
+}
+
 /** Build passive extraction, embedding, and expiration handlers on the shared durable runner. */
 export function createMemoryJobHandlers(database: WardenDatabase, options: MemoryJobHandlerOptions = {}): JobHandlers {
   return {
@@ -108,14 +127,14 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
         ? await options.extractor.extract(input)
         : { proposals: deterministicProposals(evidence), modelVersion: PASSIVE_MEMORY_MODEL_VERSION };
       const proposals = extracted.proposals.map((proposal) => PassiveMemoryProposalSchema.parse(proposal));
-      for (const proposal of proposals) {
+      for (const [index, proposal] of proposals.entries()) {
         const persisted = await persistPassiveMemoryCandidate(database, {
           tenantId: job.tenantId,
           repositoryId: job.repositoryId,
           proposal,
           evidence,
           modelVersion: extracted.modelVersion,
-          extractionUsage: extracted.usage,
+          extractionUsage: apportionUsage(extracted.usage, index, proposals.length),
           policy: options.promotionPolicy ?? defaultPassivePromotionPolicy,
         });
         if (persisted?.lifecycle === 'active' && options.embedding) {
