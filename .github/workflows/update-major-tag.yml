@@ -53,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build service API
+        run: pnpm --filter @sentry/warden-service-api build
+
       - name: Build action bundle
         run: pnpm build:action
 
