@@ -10,7 +10,7 @@ function readyDatabase(): WardenDatabase {
     statementTimeoutMs: 15_000,
     async query(sql: string) {
       return sql.includes('_warden_service_migrations')
-        ? { rows: [{ version: '0003_hosted_memory_vectors' }], rowCount: 1 } as never
+        ? { rows: [{ version: '0004_dazzling_vermin' }], rowCount: 1 } as never
         : { rows: [], rowCount: 0 } as never;
     },
     async withClient<T>(operation: (client: DatabaseClient) => Promise<T>) {
@@ -62,8 +62,8 @@ describe('createWardenService', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ready: true,
-      currentVersion: '0003_hosted_memory_vectors',
-      requiredVersion: '0003_hosted_memory_vectors',
+      currentVersion: '0004_dazzling_vermin',
+      requiredVersion: '0004_dazzling_vermin',
     });
   });
 

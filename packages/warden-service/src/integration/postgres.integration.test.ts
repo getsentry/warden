@@ -8,6 +8,8 @@ import { createDatabase, type DatabaseDriver, type WardenDatabase } from '../db/
 import { migrateDatabase } from '../db/migrations.js';
 import { getRunDetail } from '../history/store.js';
 import { createMemory } from '../memory/store.js';
+import { persistPassiveMemoryCandidate } from '../memory/passive-store.js';
+import type { PassiveEvidence } from '../memory/passive.js';
 import { ingestRun } from '../runs/ingest.js';
 import type { RunIngestionError } from '../runs/ingest.js';
 import { createTenant } from '../tenants.js';
@@ -221,6 +223,66 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       await expect(ingestRun(database, context, invalid)).rejects.toThrow();
       const rolledBack = await database.query('SELECT 1 FROM runs WHERE tenant_id = $1 AND client_run_id = $2', [tenantId, invalidId]);
       expect(rolledBack.rowCount).toBe(0);
+    }, 30_000);
+
+    it('persists multiple passive evidence rows in one transaction', async () => {
+      const tenantId = await createTenant(database, { slug: `evidence-${randomUUID()}`, name: 'Evidence Tenant' });
+      tenantIds.push(tenantId);
+      const token = await createServiceToken(database, { tenantId, name: 'Admin', roles: ['admin'] });
+      const context = await authenticateServiceToken(database, token.token);
+      if (!context) throw new Error('admin token did not authenticate');
+      const first = await ingestRun(database, context, findingsEnvelope(`evidence-a-${randomUUID()}`));
+      const second = await ingestRun(database, context, findingsEnvelope(`evidence-b-${randomUUID()}`));
+      const stored = await database.query<{
+        repository_id: string;
+        finding_id: string;
+        observation_id: string;
+        run_id: string;
+        skill: string;
+        title: string;
+        description: string;
+        outcome: PassiveEvidence['outcome'];
+        observed_at: Date;
+      }>(`
+        SELECT r.repository_id, f.id AS finding_id, fo.id AS observation_id,
+          r.id AS run_id, se.skill, f.title, f.description, fo.outcome, fo.observed_at
+        FROM finding_observations fo
+        JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
+        JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
+        JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
+        WHERE fo.tenant_id = $1 AND r.id = ANY($2::uuid[])
+        ORDER BY r.id
+      `, [tenantId, [first.runId, second.runId]]);
+      const source = stored.rows.map((row): PassiveEvidence => ({
+        findingId: row.finding_id,
+        observationId: row.observation_id,
+        runId: row.run_id,
+        skill: row.skill,
+        title: row.title,
+        description: row.description,
+        outcome: row.outcome,
+        observedAt: row.observed_at.toISOString(),
+      }));
+      const memory = await persistPassiveMemoryCandidate(database, {
+        tenantId,
+        repositoryId: stored.rows[0]!.repository_id,
+        proposal: {
+          kind: 'confirmed_pattern',
+          content: 'Use parameterized queries for user-controlled values.',
+          evidenceIds: source.map((item) => item.observationId),
+          skill: 'security',
+          confidence: 0.9,
+        },
+        evidence: source,
+        modelVersion: 'integration-test',
+      });
+
+      expect(memory).toMatchObject({ created: true });
+      const evidenceRows = await database.query<{ count: number }>(
+        'SELECT count(*)::integer AS count FROM memory_evidence WHERE tenant_id = $1 AND memory_id = $2',
+        [tenantId, memory!.id],
+      );
+      expect(evidenceRows.rows[0]?.count).toBe(2);
     }, 30_000);
   });
 }

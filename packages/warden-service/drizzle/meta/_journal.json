@@ -29,6 +29,13 @@
       "when": 1786722427725,
       "tag": "0003_hosted_memory_vectors",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786725721309,
+      "tag": "0004_dazzling_vermin",
+      "breakpoints": true
     }
   ]
 }
