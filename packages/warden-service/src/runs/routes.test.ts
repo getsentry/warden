@@ -94,6 +94,9 @@ function fakeDatabase(repositoryAllowlist: string[] | null = ['acme/widgets'], f
         nextId += 1;
         return result([{ id: `skill-row-${nextId}` }] as unknown as TRow[]);
       }
+      if (sql.includes('INSERT INTO findings')) {
+        return result([{ id: 'finding-row-1', client_finding_id: 'finding-1' }] as unknown as TRow[]);
+      }
       if (sql.includes('FROM memory_recall_batches')) {
         return result([{
           id: 'recall-batch-id',
@@ -182,6 +185,39 @@ describe('POST /api/v1/runs', () => {
     expect(statements.some((statement) => statement.startsWith('UPDATE memory_recall_batches SET run_id'))).toBe(true);
     expect(statements.some((statement) => statement.startsWith('UPDATE memory_recalls SET run_id'))).toBe(true);
     expect(statements.some((statement) => statement.startsWith('INSERT INTO usage_line_items'))).toBe(true);
+  });
+
+  it('enqueues memory extraction only for outcomes that provide memory evidence', async () => {
+    const finding = {
+      id: 'finding-1',
+      skillExecutionId: 'skill-1',
+      severity: 'high' as const,
+      title: 'Unsafe sink',
+      description: 'Untrusted input reaches a sensitive sink.',
+    };
+    const findingsEnvelope = (outcome: 'posted' | 'deduped') => RunEnvelopeV1Schema.parse({
+      ...envelope,
+      clientRunId: `run-${outcome}`,
+      dataProfile: 'findings',
+      features: { memory: true },
+      findingCounts: { total: 1, bySeverity: { high: 1, medium: 0, low: 0 } },
+      skills: [{ ...envelope.skills[0]!, findingCounts: { total: 1, bySeverity: { high: 1, medium: 0, low: 0 } } }],
+      findings: [finding],
+      observations: [{
+        findingId: finding.id,
+        skillExecutionId: finding.skillExecutionId,
+        outcome,
+        observedAt: envelope.completedAt,
+      }],
+    });
+
+    const eligible = fakeDatabase();
+    expect((await request(eligible.database, findingsEnvelope('posted'))).status).toBe(201);
+    expect(eligible.statements.some((statement) => statement.startsWith('INSERT INTO jobs'))).toBe(true);
+
+    const ineligible = fakeDatabase();
+    expect((await request(ineligible.database, findingsEnvelope('deduped'))).status).toBe(201);
+    expect(ineligible.statements.some((statement) => statement.startsWith('INSERT INTO jobs'))).toBe(false);
   });
 
   it('rejects unauthorized repositories and mismatched checksums without writing a run', async () => {
