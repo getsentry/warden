@@ -103,6 +103,7 @@ Use `/dex` to break down complex work, track progress across sessions, and coord
 
 ### Code Quality
 - `/warden` — Run Warden analysis before committing. See `packages/warden/skills/warden/SKILL.md`
+- `/warden-service` — Query the Warden Service read API. See `packages/warden/skills/warden-service/SKILL.md`
 - `/warden-sweep` — Full-repo code sweep: scan, verify, patch, draft PRs. See `packages/warden/skills/warden-sweep/SKILL.md`
 - `/code-simplifier` — Simplify and refine code
 - `/architecture-review` — Staff-level codebase health review. See `.agents/skills/architecture-review/SKILL.md`

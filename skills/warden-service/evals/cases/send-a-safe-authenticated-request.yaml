@@ -1,0 +1,5 @@
+behavior: send-a-safe-authenticated-request
+prompt: |
+  WARDEN_SERVICE_URL and WARDEN_PAT are already exported in my shell. Give me a curl command to fetch up to 25 medium-severity findings whose text contains `null pointer`, without exposing the token or breaking on the space in the search text.
+checks:
+  - judge: The command performs a GET to /api/v1/findings, reads the bearer token from WARDEN_PAT without embedding or printing its value, requests JSON, fails visibly for HTTP errors, and safely URL-encodes severity=medium, query=null pointer, and limit=25 rather than manually concatenating an unsafe query string.
