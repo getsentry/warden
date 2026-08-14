@@ -157,7 +157,7 @@ describe('createWardenService', () => {
     session = null;
     const protectedPage = await app.request('https://warden.example/');
     expect(protectedPage.status).toBe(302);
-    expect(protectedPage.headers.get('location')).toBe('https://warden.example/api/auth/login');
+    expect(protectedPage.headers.get('location')).toBe('/api/auth/login');
     expect((await app.request('https://warden.example/assets/app.js')).status).toBe(302);
     expect((await app.request('https://warden.example/api/auth/login')).headers.get('location'))
       .toBe('https://accounts.google.com/');

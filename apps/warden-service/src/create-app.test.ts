@@ -152,11 +152,11 @@ describe('Vercel service app', () => {
 
     const page = await app.request('https://warden.example/');
     expect(page.status).toBe(302);
-    expect(page.headers.get('location')).toBe('https://warden.example/api/auth/login');
+    expect(page.headers.get('location')).toBe('/api/auth/login');
 
     const asset = await app.request('https://warden.example/assets/app.js');
     expect(asset.status).toBe(302);
-    expect(asset.headers.get('location')).toBe('https://warden.example/api/auth/login');
+    expect(asset.headers.get('location')).toBe('/api/auth/login');
     expect((await app.request('https://warden.example/index.html')).status).toBe(302);
 
     const response = await app.request('https://warden.example/api/auth/login');
