@@ -5,6 +5,8 @@ export type VercelIncomingMessage = IncomingMessage & {
   rawBody?: Buffer;
 };
 
+export type FetchCallback = (request: Request, ...args: unknown[]) => Response | Promise<Response>;
+
 function formBody(body: Record<string, unknown>): string {
   const form = new URLSearchParams();
   for (const [key, value] of Object.entries(body)) {
@@ -15,6 +17,29 @@ function formBody(body: Record<string, unknown>): string {
     }
   }
   return form.toString();
+}
+
+function forwardedProtocol(header: string | null): 'http' | 'https' | null {
+  const value = header?.split(',')[0]?.trim().toLowerCase();
+  return value === 'http' || value === 'https' ? value : null;
+}
+
+/** Rebuild the request URL with the public protocol Vercel terminates at the edge. */
+export function requestWithForwardedProtocol(request: Request): Request {
+  const protocol = forwardedProtocol(request.headers.get('x-forwarded-proto'));
+  if (!protocol) return request;
+  const url = new URL(request.url);
+  if (url.protocol === `${protocol}:`) return request;
+  url.protocol = `${protocol}:`;
+  return new Request(url, request);
+}
+
+/**
+ * Make Hono see the browser-facing origin behind Vercel's TLS terminator.
+ * Without this, session CSRF checks compare `https://` Origin to an `http://` request URL.
+ */
+export function withForwardedProtocol(fetch: FetchCallback): FetchCallback {
+  return (request, ...args) => fetch(requestWithForwardedProtocol(request), ...args);
 }
 
 /** Preserve Vercel's parsed request body for Hono's Node adapter. */

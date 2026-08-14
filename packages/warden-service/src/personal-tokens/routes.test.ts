@@ -97,4 +97,45 @@ describe('personal API token routes', () => {
     expect(values.flat()).not.toContain(body.token);
     expect(values.flat()).toContain('browser:owner-1234567890');
   });
+
+  it('creates a token when TLS is terminated and Origin is https against an http request URL', async () => {
+    const createdAt = new Date('2026-08-13T10:00:00.000Z');
+    const database = {
+      async query() {
+        return { rows: [{ id: tokenId, created_at: createdAt }], rowCount: 1 };
+      },
+    } as unknown as WardenDatabase;
+    const app = createWardenService({
+      database,
+      dashboardAuth: {
+        async authenticate() {
+          return {
+            tenantId,
+            tokenId: null,
+            roles: ['read'],
+            repositoryAllowlist: null,
+            credentialKind: 'browser',
+            principalSubject: 'google:alex@sentry.io',
+          };
+        },
+      },
+    });
+
+    const response = await app.request('http://warden-prod.sentry.dev/api/v1/personal-tokens', {
+      method: 'POST',
+      headers: {
+        origin: 'https://warden-prod.sentry.dev',
+        'x-forwarded-proto': 'https',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'Alex API access' }),
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      id: tokenId,
+      name: 'Alex API access',
+      token: expect.stringMatching(/^wds_pat_/),
+    });
+  });
 });

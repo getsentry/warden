@@ -19,6 +19,23 @@ function bearerToken(header: string | undefined): string | null {
   return token || null;
 }
 
+/**
+ * Browser-facing origin for same-site CSRF checks.
+ * Prefer the first `x-forwarded-proto` value so TLS terminators like Vercel do not
+ * make `https://` Origin fail against an internal `http://` request URL.
+ */
+export function browserFacingOrigin(
+  requestUrl: string,
+  forwardedProtoHeader: string | undefined,
+): string {
+  const url = new URL(requestUrl);
+  const protocol = forwardedProtoHeader?.split(',')[0]?.trim().toLowerCase();
+  if (protocol === 'http' || protocol === 'https') {
+    url.protocol = `${protocol}:`;
+  }
+  return url.origin;
+}
+
 /** Authenticate bearer credentials and attach runtime-derived authority to Hono context. */
 export function authenticate(database: WardenDatabase, dashboardAuth?: DashboardAuthenticationAdapter) {
   return createMiddleware<{ Variables: ServiceVariables }>(async (context, next) => {
@@ -43,7 +60,11 @@ export function authenticate(database: WardenDatabase, dashboardAuth?: Dashboard
     }
     if (context.get('authenticationMethod') === 'session' && !['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) {
       const origin = context.req.header('origin');
-      if (!origin || origin !== new URL(context.req.url).origin) {
+      const expectedOrigin = browserFacingOrigin(
+        context.req.url,
+        context.req.header('x-forwarded-proto'),
+      );
+      if (!origin || origin !== expectedOrigin) {
         return context.json({ error: { code: 'forbidden', message: 'Permission denied.' } }, 403);
       }
     }
