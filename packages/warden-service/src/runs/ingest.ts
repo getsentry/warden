@@ -339,7 +339,11 @@ async function enqueueDerivedJobs(
   runId: string,
   envelope: RunEnvelopeV1,
 ): Promise<void> {
-  const jobTypes = envelope.features.memory && envelope.dataProfile !== 'metrics' ? ['memory_extract'] : [];
+  const jobTypes = envelope.features.memory
+    && envelope.dataProfile !== 'metrics'
+    && envelope.observations.length > 0
+    ? ['memory_extract']
+    : [];
   for (const type of jobTypes) {
     await client.query(`
       INSERT INTO jobs (

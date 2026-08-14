@@ -2,10 +2,12 @@ import {
   createWardenService,
   createGoogleAuth,
   createMemoryJobHandlers,
+  defaultPassivePromotionPolicy,
   getWarmDatabase,
   parseServiceEnvironment,
 } from '@sentry/warden-service';
 import { readFileSync } from 'node:fs';
+import { createHostedMemoryRuntime } from './memory-ai.js';
 
 const dashboard = {
   html: readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'),
@@ -27,12 +29,26 @@ export function createVercelWardenService(environment: NodeJS.ProcessEnv) {
     maxConnections: config.WARDEN_SERVICE_DATABASE_MAX_CONNECTIONS,
     statementTimeoutMs: config.WARDEN_SERVICE_DATABASE_STATEMENT_TIMEOUT_MS,
   });
+  const memory = createHostedMemoryRuntime({
+    memoryModel: config.WARDEN_SERVICE_MEMORY_MODEL,
+    embeddingModel: config.WARDEN_SERVICE_EMBEDDING_MODEL,
+    environment,
+  });
   return createWardenService({
     database,
     dashboard,
     cronSecret: config.CRON_SECRET,
-    jobHandlers: {
-      ...createMemoryJobHandlers(database),
+    jobHandlers: createMemoryJobHandlers(database, {
+      extractor: memory.extractor,
+      embedding: memory.embedding,
+      promotionPolicy: {
+        ...defaultPassivePromotionPolicy,
+        autoPromote: config.WARDEN_SERVICE_MEMORY_AUTO_PROMOTE,
+      },
+    }),
+    memoryRecall: {
+      embedding: memory.embedding,
+      relevance: memory.relevance,
     },
     ...(config.WARDEN_SERVICE_BASE_URL
       ? { sessionOrigin: config.WARDEN_SERVICE_BASE_URL }

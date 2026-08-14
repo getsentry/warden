@@ -10,7 +10,7 @@ function readyDatabase(): WardenDatabase {
     statementTimeoutMs: 15_000,
     async query(sql: string) {
       return sql.includes('_warden_service_migrations')
-        ? { rows: [{ version: '0001_magical_puppet_master' }], rowCount: 1 } as never
+        ? { rows: [{ version: '0003_hosted_memory_vectors' }], rowCount: 1 } as never
         : { rows: [], rowCount: 0 } as never;
     },
     async withClient() { throw new Error('not used'); },

@@ -47,7 +47,10 @@ describe('passive memory persistence', () => {
       },
       evidence: source,
       modelVersion: 'model-v1',
-      extractionCostUsd: 0.01,
+      extractionUsage: {
+        provider: 'test', model: 'model-v1', runtime: 'test-runtime',
+        inputTokens: 100, outputTokens: 20, costUsd: 0.01, costBasis: 'estimated',
+      },
     })).resolves.toEqual({ id: 'memory-1', lifecycle: 'candidate', created: true });
     expect(statements.find((item) => item.sql.includes('INSERT INTO memories'))?.values[4]).toBe('candidate');
     expect(statements.filter((item) => item.sql.includes('INSERT INTO memory_evidence'))).toHaveLength(2);
@@ -79,6 +82,38 @@ describe('passive memory persistence', () => {
       decision: 'uncertain', targetIds: ['memory-existing'],
     })).resolves.toBe(false);
     expect(queries).toBe(afterDuplicate);
+  });
+
+  it('promotes a reused candidate after evidence from a third independent run', async () => {
+    const source = [evidence(1), evidence(2), evidence(3)];
+    const statements: { sql: string; values: readonly unknown[] }[] = [];
+    const database = databaseFor((sql, values) => {
+      statements.push({ sql, values });
+      if (sql.includes('FROM finding_observations fo')) return {
+        rows: source.map((item) => ({ finding_id: item.findingId, observation_id: item.observationId, run_id: item.runId })), rowCount: 1,
+      };
+      if (sql.includes('SELECT id, lifecycle FROM memories')) {
+        return { rows: [{ id: 'memory-existing', lifecycle: 'candidate' }], rowCount: 1 };
+      }
+      if (sql.includes('count(*) FILTER')) return {
+        rows: [{ support_count: 3, contradiction_count: 0, independent_runs: 3 }], rowCount: 1,
+      };
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(persistPassiveMemoryCandidate(database, {
+      tenantId: 'tenant-1', repositoryId: 'repository-1',
+      proposal: {
+        kind: 'confirmed_pattern', content: 'Repeated unsafe sink.',
+        evidenceIds: source.map((item) => item.observationId), skill: 'security', confidence: 0.8,
+      },
+      evidence: source,
+      modelVersion: 'model-v1',
+      policy: { autoPromote: true, minimumIndependentEvidence: 3, version: 'policy-v1' },
+    })).resolves.toEqual({ id: 'memory-existing', lifecycle: 'active', created: false });
+    expect(statements.some((item) => item.sql.includes('INSERT INTO memory_evidence'))).toBe(true);
+    expect(statements.some((item) => item.sql.includes('UPDATE memories SET'))).toBe(true);
+    expect(statements.some((item) => item.sql.includes("'candidate', 'active', 'passive_policy_promotion'"))).toBe(true);
   });
 
   it('rejects missing or deleted evidence without creating a candidate', async () => {

@@ -226,6 +226,15 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .finding-page-card { padding: 24px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .finding-page-heading { display: flex; align-items: center; gap: 16px; }
 .finding-page-description { margin: 20px 0 26px; color: var(--muted-strong); font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
+.source-context { overflow: hidden; margin: 0 0 20px; border: 1px solid var(--border); border-radius: 8px; background: #0c0a0f; }
+.source-context-header { display: flex; justify-content: space-between; gap: 16px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+.source-context-header strong { overflow: hidden; color: var(--muted-strong); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.source-context pre { overflow: auto; margin: 0; padding: 8px 0; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
+.source-line { display: grid; grid-template-columns: 48px minmax(max-content, 1fr); min-height: 19px; }
+.source-line-target { background: #7d5cc726; box-shadow: inset 2px 0 var(--accent); }
+.source-line-number { padding-right: 12px; color: #736c77; text-align: right; user-select: none; }
+.source-line-content { padding-right: 16px; color: #ddd6e1; white-space: pre; }
+.source-link { display: inline-block; margin: -6px 0 22px; font-size: 12px; }
 .finding-page-metadata { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 28px; margin: 0; padding-top: 20px; border-top: 1px solid var(--border); }
 .finding-page-metadata dt { color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
 .finding-page-metadata dd { overflow-wrap: anywhere; margin: 5px 0 0; color: var(--muted-strong); font-size: 12px; line-height: 1.45; }
