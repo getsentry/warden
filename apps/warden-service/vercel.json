@@ -4,7 +4,7 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "public",
   "functions": {
-    "api/[[...route]].ts": {
+    "api/[...route].ts": {
       "maxDuration": 30,
       "memory": 1024
     }
