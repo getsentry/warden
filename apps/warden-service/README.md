@@ -19,13 +19,15 @@ This is the reference deployment for the optional Warden backing service. It use
    pnpm --filter @sentry/warden-service cli db status
    ```
 
-6. Create the first tenant and ingest token. Save the token when it is printed. The service stores only its hash.
+6. Create the first tenant and write-only ingest token. Save the token when it is printed. The service stores only its hash.
 
    ```bash
    TENANT_ID=$(pnpm --silent --filter @sentry/warden-service cli tenant create --slug acme --name "Acme" | tail -1)
    pnpm --filter @sentry/warden-service cli token create \
      --tenant "$TENANT_ID" --name ingest --role ingest
    ```
+
+   The `ingest` role can submit runs and request server-side memory extraction, but cannot read findings, history, or memory. Memory recall requires `read`; only combine `ingest` and `read` on a repository-scoped token.
 
 7. In Google Auth Platform, create a Web application OAuth client. Add the stable production origin as an authorized JavaScript origin and `<origin>/api/auth/callback/google` as an authorized redirect URI.
 8. Set `WARDEN_SERVICE_TENANT_ID=$TENANT_ID` and add the OAuth client as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Warden uses Vercel's stable production URL automatically; set `WARDEN_SERVICE_BASE_URL` only to override it with a custom origin. `WARDEN_SERVICE_GOOGLE_DOMAIN` defaults to `sentry.io`.
