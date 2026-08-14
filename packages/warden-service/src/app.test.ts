@@ -13,7 +13,9 @@ function readyDatabase(): WardenDatabase {
         ? { rows: [{ version: '0003_hosted_memory_vectors' }], rowCount: 1 } as never
         : { rows: [], rowCount: 0 } as never;
     },
-    async withClient() { throw new Error('not used'); },
+    async withClient<T>(operation: (client: DatabaseClient) => Promise<T>) {
+      return operation({ query: this.query });
+    },
     async transaction<T>(operation: (client: DatabaseClient) => Promise<T>) {
       return operation({
         async query() { return { rows: [], rowCount: 0 }; },
@@ -42,6 +44,27 @@ describe('createWardenService', () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ status: 'not_ready', database: 'unavailable' });
+  });
+
+  it('runs explicit migrations only with the cron secret', async () => {
+    const app = createWardenService({
+      database: readyDatabase(),
+      cronSecret: 'cron-secret',
+      jobHandlers: { retention: async () => ({ complete: true }) },
+    });
+
+    expect((await app.request('/api/internal/db/migrate', { method: 'POST' })).status).toBe(401);
+    const response = await app.request('/api/internal/db/migrate', {
+      method: 'POST',
+      headers: { authorization: 'Bearer cron-secret' },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ready: true,
+      currentVersion: '0003_hosted_memory_vectors',
+      requiredVersion: '0003_hosted_memory_vectors',
+    });
   });
 
   it('distinguishes a missing migration table from other database failures', async () => {
