@@ -51,7 +51,7 @@ describe('memory job handlers', () => {
     expect(statements.some((sql) => sql.includes('INSERT INTO memories'))).toBe(false);
   });
 
-  it('attributes one extraction call across its proposals without duplicating usage', async () => {
+  it('records one extraction usage line even when the call returns multiple proposals', async () => {
     const { database, statements, statementValues } = databaseFixture();
     let memories = 0;
     const original = database.transaction.bind(database);
@@ -88,11 +88,27 @@ describe('memory job handlers', () => {
 
     await expect(handler?.(job, { deadline: Date.now() + 5_000 })).resolves.toEqual({ complete: true });
     const usage = statements.flatMap((sql, index) => (
+      sql.includes('INSERT INTO usage_line_items') ? [statementValues[index]!] : []
+    ));
+    expect(usage).toEqual([[
+      job.tenantId,
+      job.entityId,
+      `memory_extract:${job.id}:attempt:${job.attempts}`,
+      'test',
+      'test-model',
+      'test',
+      101,
+      21,
+      0.011,
+      'estimated',
+    ]]);
+    const memoriesUsage = statements.flatMap((sql, index) => (
       sql.includes('INSERT INTO memories') ? [statementValues[index]!] : []
     ));
-    expect(usage.map((values) => values[18])).toEqual([51, 50]);
-    expect(usage.map((values) => values[19])).toEqual([11, 10]);
-    expect(usage.reduce((total, values) => total + Number(values[20]), 0)).toBeCloseTo(0.011);
+    expect(memoriesUsage.map((values) => values.slice(18, 22))).toEqual([
+      [null, null, null, null],
+      [null, null, null, null],
+    ]);
   });
 
   it('expires inactive memory indexes through the retention handler', async () => {

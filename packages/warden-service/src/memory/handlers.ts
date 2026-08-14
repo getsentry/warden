@@ -96,22 +96,39 @@ function deterministicProposals(evidence: readonly PassiveEvidence[]): PassiveMe
   });
 }
 
-function apportionCount(value: number | undefined, index: number, total: number): number | undefined {
-  if (value === undefined) return undefined;
-  return Math.floor(value / total) + (index < value % total ? 1 : 0);
+async function recordExtractionUsage(
+  database: WardenDatabase,
+  job: { id: string; tenantId: string },
+  runId: string,
+  attempt: number,
+  usage: MemoryOperationUsage | undefined,
+): Promise<void> {
+  if (!usage) return;
+  await database.query(`
+    INSERT INTO usage_line_items (
+      tenant_id, run_id, skill_execution_id, lane, operation,
+      provider, model, runtime, input_tokens, output_tokens, cost_usd, cost_basis
+    ) VALUES ($1, $2, NULL, 'service', $3, $4, $5, $6, $7, $8, $9, $10::cost_basis)
+  `, [
+    job.tenantId,
+    runId,
+    `memory_extract:${job.id}:attempt:${attempt}`,
+    usage.provider ?? null,
+    usage.model ?? null,
+    usage.runtime ?? null,
+    usage.inputTokens ?? null,
+    usage.outputTokens ?? null,
+    usage.costUsd ?? null,
+    usage.costBasis ?? 'unknown',
+  ]);
 }
 
-function apportionUsage(
-  usage: MemoryOperationUsage | undefined,
-  index: number,
-  total: number,
-): MemoryOperationUsage | undefined {
+function extractionProvenance(usage: MemoryOperationUsage | undefined): MemoryOperationUsage | undefined {
   if (!usage) return undefined;
   return {
-    ...usage,
-    inputTokens: apportionCount(usage.inputTokens, index, total),
-    outputTokens: apportionCount(usage.outputTokens, index, total),
-    costUsd: usage.costUsd === null ? null : usage.costUsd === undefined ? undefined : usage.costUsd / total,
+    ...(usage.provider ? { provider: usage.provider } : {}),
+    ...(usage.model ? { model: usage.model } : {}),
+    ...(usage.runtime ? { runtime: usage.runtime } : {}),
   };
 }
 
@@ -126,15 +143,16 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
       const extracted = options.extractor
         ? await options.extractor.extract(input)
         : { proposals: deterministicProposals(evidence), modelVersion: PASSIVE_MEMORY_MODEL_VERSION };
+      await recordExtractionUsage(database, job, job.entityId, job.attempts, extracted.usage);
       const proposals = extracted.proposals.map((proposal) => PassiveMemoryProposalSchema.parse(proposal));
-      for (const [index, proposal] of proposals.entries()) {
+      for (const proposal of proposals) {
         const persisted = await persistPassiveMemoryCandidate(database, {
           tenantId: job.tenantId,
           repositoryId: job.repositoryId,
           proposal,
           evidence,
           modelVersion: extracted.modelVersion,
-          extractionUsage: apportionUsage(extracted.usage, index, proposals.length),
+          extractionUsage: extractionProvenance(extracted.usage),
           policy: options.promotionPolicy ?? defaultPassivePromotionPolicy,
         });
         if (persisted?.lifecycle === 'active' && options.embedding) {
