@@ -285,6 +285,7 @@ export const memories = pgTable('memories', {
 ]);
 
 export const memoryEvidence = pgTable('memory_evidence', {
+  id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   memoryId: uuid('memory_id').notNull().references(() => memories.id, { onDelete: 'cascade' }),
   findingId: uuid('finding_id').references(() => findings.id, { onDelete: 'cascade' }),
@@ -292,7 +293,9 @@ export const memoryEvidence = pgTable('memory_evidence', {
   evidenceKind: text('evidence_kind').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  primaryKey({ columns: [table.memoryId, table.evidenceKind, table.createdAt] }),
+  uniqueIndex('memory_evidence_memory_observation_unique')
+    .on(table.memoryId, table.observationId)
+    .where(sql`${table.observationId} IS NOT NULL`),
   index('memory_evidence_tenant_idx').on(table.tenantId, table.memoryId),
 ]);
 

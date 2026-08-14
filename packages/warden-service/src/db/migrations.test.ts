@@ -18,6 +18,7 @@ describe('migrateDatabase', () => {
             { version: '0001_magical_puppet_master' },
             { version: '0002_hosted_memory_costs' },
             { version: '0003_hosted_memory_vectors' },
+            { version: '0004_dazzling_vermin' },
           ]) as unknown as QueryResult<TRow>;
         }
         return result();
@@ -29,7 +30,7 @@ describe('migrateDatabase', () => {
       statementTimeoutMs: 15_000,
       withClient: (operation) => operation(client),
       query: async <TRow extends Record<string, unknown>>() => (
-        result([{ version: '0003_hosted_memory_vectors' }]) as unknown as QueryResult<TRow>
+        result([{ version: '0004_dazzling_vermin' }]) as unknown as QueryResult<TRow>
       ),
       transaction: (operation) => operation(client),
       close: () => Promise.resolve(),
