@@ -339,9 +339,15 @@ async function enqueueDerivedJobs(
   runId: string,
   envelope: RunEnvelopeV1,
 ): Promise<void> {
+  const hasMemoryEvidence = envelope.dataProfile !== 'metrics'
+    && envelope.observations.some((observation) => (
+      observation.outcome === 'posted'
+      || observation.outcome === 'resolved'
+      || observation.outcome === 'rejected'
+      || observation.outcome === 'revised'
+    ));
   const jobTypes = envelope.features.memory
-    && envelope.dataProfile !== 'metrics'
-    && envelope.observations.length > 0
+    && hasMemoryEvidence
     ? ['memory_extract']
     : [];
   for (const type of jobTypes) {
