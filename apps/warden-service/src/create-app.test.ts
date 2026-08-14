@@ -20,7 +20,7 @@ describe('Vercel service app', () => {
       outputDirectory: string;
     };
 
-    expect(config.functions['api/index.ts']).toEqual({ maxDuration: 30, memory: 1024 });
+    expect(config.functions['api/index.ts']).toEqual({ maxDuration: 300, memory: 1024 });
     expect(config.crons).toContainEqual(expect.objectContaining({ path: '/api/internal/jobs/tick' }));
     expect(config.outputDirectory).toBe('static');
     expect(config.rewrites).toEqual(expect.arrayContaining([
@@ -121,7 +121,7 @@ describe('Vercel service app', () => {
     const route = await import('../api/index.js');
 
     expect(route.runtime).toBe('nodejs');
-    expect(route.maxDuration).toBe(30);
+    expect(route.maxDuration).toBe(300);
     const server = createServer(route.default);
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     try {

@@ -4,7 +4,7 @@ import { prepareVercelRequest } from '../src/vercel-request.js';
 import type { VercelIncomingMessage } from '../src/vercel-request.js';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 300;
 
 const honoHandler = handle(createVercelWardenService(process.env));
 

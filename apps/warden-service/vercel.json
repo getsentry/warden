@@ -5,7 +5,7 @@
   "outputDirectory": "static",
   "functions": {
     "api/index.ts": {
-      "maxDuration": 30,
+      "maxDuration": 300,
       "memory": 1024
     }
   },
