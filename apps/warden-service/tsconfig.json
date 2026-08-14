@@ -9,6 +9,7 @@
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true,
     "noPropertyAccessFromIndexSignature": true,
+    "types": ["node"],
     "skipLibCheck": true
   },
   "include": ["api/**/*.ts", "examples/**/*.ts", "src/**/*.ts", "vitest.config.ts"],

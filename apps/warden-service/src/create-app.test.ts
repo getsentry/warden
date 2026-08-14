@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ServiceEnvironmentSchema } from '@sentry/warden-service';
 
@@ -107,9 +109,19 @@ describe('Vercel service app', () => {
 
     expect(route.runtime).toBe('nodejs');
     expect(route.maxDuration).toBe(30);
-    const response = await route.default(new Request('https://warden.example/health'));
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ status: 'ok', service: 'warden-service' });
+    const server = createServer(route.default);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ status: 'ok', service: 'warden-service' });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      }));
+    }
   });
 
   it('starts Google OAuth when auth is enabled by default', async () => {
