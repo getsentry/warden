@@ -1,5 +1,4 @@
 import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
 import {
   createDatabase,
   createGoogleAuth,
@@ -7,8 +6,7 @@ import {
   createWardenService,
   parseServiceEnvironment,
 } from '@sentry/warden-service';
-import { Hono } from 'hono';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 const environment = parseServiceEnvironment(process.env);
 function requiredAuthValue(value: string | undefined, name: string): string {
@@ -24,6 +22,11 @@ const database = createDatabase({
 });
 const service = createWardenService({
   database,
+  dashboard: {
+    html: readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8'),
+    script: readFileSync(new URL('../../public/assets/app.js', import.meta.url), 'utf8'),
+    stylesheet: readFileSync(new URL('../../public/assets/styles.css', import.meta.url), 'utf8'),
+  },
   cronSecret: environment.CRON_SECRET,
   jobHandlers: createMemoryJobHandlers(database),
   ...(environment.DISABLE_AUTH
@@ -42,11 +45,8 @@ const service = createWardenService({
         },
       }),
 });
-const app = new Hono();
-app.use('*', serveStatic({ root: fileURLToPath(new URL('../../public', import.meta.url)) }));
-app.route('/', service);
 const port = Number(process.env['PORT'] ?? 3000);
-const server = serve({ fetch: app.fetch, port });
+const server = serve({ fetch: service.fetch, port });
 
 async function stop(): Promise<void> {
   server.close();

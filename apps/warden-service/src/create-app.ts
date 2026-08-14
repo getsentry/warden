@@ -5,6 +5,13 @@ import {
   getWarmDatabase,
   parseServiceEnvironment,
 } from '@sentry/warden-service';
+import { readFileSync } from 'node:fs';
+
+const dashboard = {
+  html: readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'),
+  script: readFileSync(new URL('../public/assets/app.js', import.meta.url), 'utf8'),
+  stylesheet: readFileSync(new URL('../public/assets/styles.css', import.meta.url), 'utf8'),
+};
 
 function requiredAuthValue(value: string | undefined, name: string): string {
   if (!value) throw new TypeError(`${name} is required when auth is enabled`);
@@ -22,6 +29,7 @@ export function createVercelWardenService(environment: NodeJS.ProcessEnv) {
   });
   return createWardenService({
     database,
+    dashboard,
     cronSecret: config.CRON_SECRET,
     jobHandlers: {
       ...createMemoryJobHandlers(database),

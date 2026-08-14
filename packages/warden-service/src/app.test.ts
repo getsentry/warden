@@ -128,7 +128,16 @@ describe('createWardenService', () => {
     const app = createWardenService({
       database: readyDatabase(),
       googleAuth: { auth, tenantId, allowedDomain: 'sentry.io' },
+      dashboard: {
+        html: '<!doctype html><title>Warden</title>',
+        script: 'console.log("warden")',
+        stylesheet: 'body { color: white; }',
+      },
     });
+
+    const page = await app.request('https://warden.example/');
+    expect(page.status).toBe(200);
+    expect(page.headers.get('content-type')).toContain('text/html');
 
     const authenticated = await app.request('https://warden.example/api/v1/auth/context');
     expect(authenticated.status).toBe(200);
@@ -146,6 +155,10 @@ describe('createWardenService', () => {
     expect((await app.request('/api/v1/auth/context')).status).toBe(401);
 
     session = null;
+    const protectedPage = await app.request('https://warden.example/');
+    expect(protectedPage.status).toBe(302);
+    expect(protectedPage.headers.get('location')).toBe('https://warden.example/api/auth/login');
+    expect((await app.request('https://warden.example/assets/app.js')).status).toBe(302);
     expect((await app.request('https://warden.example/api/auth/login')).headers.get('location'))
       .toBe('https://accounts.google.com/');
     expect(callbackURL).toBe('https://warden.example/');
