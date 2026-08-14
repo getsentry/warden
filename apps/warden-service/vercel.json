@@ -4,7 +4,7 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "public",
   "functions": {
-    "api/[...route].ts": {
+    "api/index.ts": {
       "maxDuration": 30,
       "memory": 1024
     }
@@ -17,12 +17,16 @@
   ],
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "/api"
+    },
+    {
       "source": "/health",
-      "destination": "/api/health"
+      "destination": "/api"
     },
     {
       "source": "/ready",
-      "destination": "/api/ready"
+      "destination": "/api"
     },
     {
       "source": "/((?!api/|assets/).*)",
