@@ -115,6 +115,11 @@ describe('parseActionInputs', () => {
       // DEFAULT_CONCURRENCY is 4
       expect(inputs.parallel).toBe(4);
     });
+
+    it('ignores a non-numeric optional service timeout', () => {
+      process.env['INPUT_SERVICE_TIMEOUT_MS'] = 'not-a-number';
+      expect(parseActionInputs().serviceTimeoutMs).toBeUndefined();
+    });
   });
 
   describe('config path handling', () => {

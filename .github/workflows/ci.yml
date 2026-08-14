@@ -76,6 +76,7 @@ jobs:
             }
           "
 
+      - run: pnpm --filter @sentry/warden-service-api pack
       - run: pnpm --filter @sentry/warden pack
 
       - uses: actions/upload-artifact@v4
@@ -83,5 +84,4 @@ jobs:
           name: ${{ github.sha }}
           path: |
             *.tgz
-            packages/warden/*.tgz
           if-no-files-found: error

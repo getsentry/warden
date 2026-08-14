@@ -15,6 +15,20 @@ Primary backend: Sentry Logs, Issues, Spans/Traces, and Metrics. Local CLI runs
 also write `.warden/logs/*.jsonl`; those logs can carry the Sentry `traceId`
 when telemetry is enabled.
 
+## Backing Service vs. Telemetry
+
+Sentry telemetry is the operational investigation surface. It answers why a
+run was slow or failed through logs, spans, metrics, and errors. The optional
+Warden backing service is a separate product-history surface. It stores
+normalized runs, skill executions, usage, costs, findings permitted by the
+selected data profile, outcome observations, and reviewed memory lifecycle.
+
+Neither system replaces the other. The backing service does not store trace
+content. A run can carry the same `traceId` in JSONL, Sentry, and service
+history so an operator can move from a cost or outcome record to the matching
+Sentry trace. Service history remains useful when operational trace retention
+has ended. Sentry remains the place to inspect model and tool spans.
+
 ## Where To Query
 
 | Starting Point | Query Surface | Pivot | Answers | Next Step |

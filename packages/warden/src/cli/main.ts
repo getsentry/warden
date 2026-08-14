@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { extname, join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId, initSentry } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfigFile, resolveSkillConfigs } from '../config/loader.js';
@@ -17,7 +17,15 @@ import { resolveSkillAsync, SkillLoaderError } from '../skills/loader.js';
 import { matchTrigger, filterContextByPaths, shouldFail, countFindingsAtOrAbove } from '../triggers/matcher.js';
 import type { SkillReport, SeverityThreshold, ConfidenceThreshold, SkillError, Finding, UsageStats, AuxiliaryUsageMap } from '../types/index.js';
 import { filterFindings } from '../types/index.js';
-import { DEFAULT_CONCURRENCY, getAnthropicApiKey } from '../utils/index.js';
+import { DEFAULT_CONCURRENCY, getAnthropicApiKey, getVersion } from '../utils/index.js';
+import {
+  buildServiceRunEnvelope,
+  publishRunFailOpen,
+  recallMemoryFailOpen,
+  renderHistoricalMemory,
+  resolveServiceOptions,
+} from '../service/index.js';
+import type { ResolvedServiceOptions } from '../service/index.js';
 import { isRepoRelativePath, normalizePath, resolveConfigInput } from '../utils/path.js';
 import { parseCliArgs, showVersion, classifyTargets, expandTargetFileReferences, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
@@ -56,6 +64,7 @@ import { runSetupApp } from './commands/setup-app.js';
 import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
 import { runBuild, runImprove } from './commands/build.js';
+import { runServiceCommand } from './commands/service.js';
 import {
   generatedSkillDefinitionRootExists,
   resolveGeneratedSkillTarget,
@@ -143,9 +152,10 @@ function emitEmptyRunLog(
   repoPath: string,
   options: CLIOptions,
   error?: SkillError,
-): void {
+): { runId: string; timestamp: Date; traceId?: string; headSha?: string } {
   const runId = generateRunId();
   const timestamp = new Date();
+  const traceId = getTraceId();
   let headSha: string | undefined;
   try {
     headSha = getHeadSha(repoPath);
@@ -154,7 +164,7 @@ function emitEmptyRunLog(
   }
   const content = renderJsonlString([], 0, {
     runId,
-    traceId: getTraceId(),
+    traceId,
     timestamp,
     headSha,
     error,
@@ -177,6 +187,7 @@ function emitEmptyRunLog(
   if (options.json) {
     process.stdout.write(content);
   }
+  return { runId, timestamp, traceId, headSha };
 }
 
 /**
@@ -780,12 +791,13 @@ function emitInvalidPiModelSelectorRunLog(
   repoPath: string,
   options: CLIOptions,
   invalid: InvalidPiModelSelector
-): void {
-  emitEmptyRunLog(repoPath, options, {
+): { run: ReturnType<typeof emitEmptyRunLog>; error: SkillError } {
+  const error: SkillError = {
     code: 'invalid_model_selector',
     message: invalidPiModelSelectorMessage(invalid),
     timestamp: new Date().toISOString(),
-  });
+  };
+  return { run: emitEmptyRunLog(repoPath, options, error), error };
 }
 
 function verifyClaudeAuthForRun(args: {
@@ -794,7 +806,7 @@ function verifyClaudeAuthForRun(args: {
   reporter: Reporter;
   repoPath: string;
   options: CLIOptions;
-}): boolean {
+}): { run: ReturnType<typeof emitEmptyRunLog>; error: SkillError } | undefined {
   const { apiKey, pathToClaudeCodeExecutable, reporter, repoPath, options } = args;
   if (!apiKey) {
     reporter.debug('No API key found. Using Claude Code local auth.');
@@ -802,16 +814,16 @@ function verifyClaudeAuthForRun(args: {
 
   try {
     verifyAuth({ apiKey, pathToClaudeCodeExecutable });
-    return true;
+    return undefined;
   } catch (error: unknown) {
     const message = (error as WardenAuthenticationError).message;
     reporter.error(message);
-    emitEmptyRunLog(repoPath, options, {
+    const skillError: SkillError = {
       code: 'auth_failed',
       message,
       timestamp: new Date().toISOString(),
-    });
-    return false;
+    };
+    return { run: emitEmptyRunLog(repoPath, options, skillError), error: skillError };
   }
 }
 
@@ -1071,6 +1083,176 @@ async function outputResultsAndHandleFixes(
   return 0;
 }
 
+function resolveCliService(
+  options: CLIOptions,
+  config: WardenConfig | null,
+  reporter: Reporter,
+): ResolvedServiceOptions | undefined {
+  return resolveServiceOptions({
+    explicit: {
+      url: options.serviceUrl,
+      data: options.serviceData,
+      memory: options.serviceMemory,
+      timeoutMs: options.serviceTimeoutMs,
+      disabled: options.noService,
+    },
+    config: config?.service,
+    onWarning: (message) => reporter.warning(message),
+  });
+}
+
+/** Convert the finalized CLI exit status into its service run outcome. */
+export function cliRunOutcome(exitCode: number): 'cancelled' | 'success' | 'failure' {
+  if (exitCode === 130) return 'cancelled';
+  if (exitCode === 0) return 'success';
+  return 'failure';
+}
+
+async function publishCliRun(args: {
+  service: ResolvedServiceOptions | undefined;
+  context: Awaited<ReturnType<typeof buildLocalEventContext>>;
+  processed: ProcessedResults;
+  runLog: RunLog;
+  totalDuration: number;
+  exitCode: number;
+  reporter: Reporter;
+  recalledMemories?: readonly { id: string; version: number }[];
+  memoryRecallId?: string;
+}): Promise<void> {
+  if (!args.service) return;
+  const service = args.service;
+  const repository = args.context.repository;
+  await publishRunFailOpen(service, {
+    clientRunId: args.runLog.baseRun.runId,
+    build: () => buildServiceRunEnvelope({
+      service,
+      clientRunId: args.runLog.baseRun.runId,
+      source: 'cli',
+      wardenVersion: getVersion(),
+      startedAt: new Date(args.runLog.baseRun.timestamp),
+      completedAt: new Date(new Date(args.runLog.baseRun.timestamp).getTime() + args.totalDuration),
+      outcome: cliRunOutcome(args.exitCode),
+      repository: {
+        provider: 'local',
+        owner: repository.owner,
+        name: repository.name,
+        fullName: repository.fullName,
+      },
+      reports: args.processed.reports.map((report, index) => ({
+        executionId: `${index + 1}:${report.skill}`,
+        report,
+      })),
+      ...(args.recalledMemories?.length ? { recalledMemories: [...args.recalledMemories] } : {}),
+      ...(args.memoryRecallId ? { memoryRecallId: args.memoryRecallId } : {}),
+      ...(args.runLog.baseRun.traceId ? { traceId: args.runLog.baseRun.traceId } : {}),
+      ...(args.runLog.baseRun.headSha ? { headSha: args.runLog.baseRun.headSha } : {}),
+      event: args.context.eventType,
+    }),
+  }, (message) => args.reporter.warning(message));
+}
+
+async function publishCliEarlyFailure(args: {
+  service: ResolvedServiceOptions | undefined;
+  context: Awaited<ReturnType<typeof buildLocalEventContext>>;
+  run: ReturnType<typeof emitEmptyRunLog>;
+  error: SkillError;
+  skills: readonly { skill: string; model?: string; runtime?: string }[];
+  reporter: Reporter;
+}): Promise<void> {
+  if (!args.service) return;
+  const service = args.service;
+  const completedAt = new Date();
+  const repository = args.context.repository;
+  await publishRunFailOpen(service, {
+    clientRunId: args.run.runId,
+    build: () => buildServiceRunEnvelope({
+      service: { ...service, data: 'metrics', memory: false },
+      clientRunId: args.run.runId,
+      source: 'cli',
+      wardenVersion: getVersion(),
+      startedAt: args.run.timestamp,
+      completedAt,
+      outcome: 'failure',
+      repository: {
+        provider: 'local',
+        owner: repository.owner,
+        name: repository.name,
+        fullName: repository.fullName,
+      },
+      reports: args.skills.map((skill, index) => ({
+        executionId: `${index + 1}:${skill.skill}`,
+        report: {
+          skill: skill.skill,
+          summary: 'Skill did not start',
+          findings: [],
+          ...(skill.model ? { model: skill.model } : {}),
+          ...(skill.runtime ? { runtime: skill.runtime } : {}),
+          durationMs: Math.max(0, completedAt.getTime() - args.run.timestamp.getTime()),
+          error: args.error,
+        },
+      })),
+      ...(args.run.traceId ? { traceId: args.run.traceId } : {}),
+      ...(args.run.headSha ? { headSha: args.run.headSha } : {}),
+      event: args.context.eventType,
+    }),
+  }, (message) => args.reporter.warning(message));
+}
+
+async function publishCliEmptyRun(args: {
+  service: ResolvedServiceOptions | undefined;
+  context: Awaited<ReturnType<typeof buildLocalEventContext>>;
+  run: ReturnType<typeof emitEmptyRunLog>;
+  reporter: Reporter;
+}): Promise<void> {
+  if (!args.service) return;
+  const service = args.service;
+  const repository = args.context.repository;
+  await publishRunFailOpen(service, {
+    clientRunId: args.run.runId,
+    build: () => buildServiceRunEnvelope({
+      service,
+      clientRunId: args.run.runId,
+      source: 'cli',
+      wardenVersion: getVersion(),
+      startedAt: args.run.timestamp,
+      completedAt: new Date(),
+      outcome: 'skipped',
+      repository: {
+        provider: 'local',
+        owner: repository.owner,
+        name: repository.name,
+        fullName: repository.fullName,
+      },
+      reports: [],
+      ...(args.run.traceId ? { traceId: args.run.traceId } : {}),
+      ...(args.run.headSha ? { headSha: args.run.headSha } : {}),
+      event: args.context.eventType,
+    }),
+  }, (message) => args.reporter.warning(message));
+}
+
+async function recallCliMemory(args: {
+  service: ResolvedServiceOptions | undefined;
+  context: Awaited<ReturnType<typeof buildLocalEventContext>>;
+  skills: readonly string[];
+}) {
+  if (!args.service?.memory) return undefined;
+  const paths = args.context.pullRequest?.files.map((file) => file.filename) ?? [];
+  return recallMemoryFailOpen(args.service, {
+    protocolVersion: 1,
+    clientRecallId: generateRunId(),
+    repository: {
+      provider: 'local',
+      owner: args.context.repository.owner,
+      name: args.context.repository.name,
+      fullName: args.context.repository.fullName,
+    },
+    skills: [...args.skills],
+    languages: [...new Set(paths.map((path) => extname(path).slice(1)).filter(Boolean))],
+    paths,
+  });
+}
+
 /** Run one or more skills against an already constructed review context. */
 export async function runSkills(
   context: Awaited<ReturnType<typeof buildLocalEventContext>>,
@@ -1085,6 +1267,7 @@ export async function runSkills(
 
   const repoPath = findRepoPath(cwd);
   const config = loadOptionalConfig(options, repoPath);
+  const service = resolveCliService(options, config, reporter);
   const defaultModel = resolveCliDefaultModel(config, options.model);
   const defaultAuxiliaryModel = resolveCliDefaultAuxiliaryModel(config);
   const defaultSynthesisModel = resolveCliDefaultSynthesisModel(config);
@@ -1157,7 +1340,8 @@ export async function runSkills(
 
   // Handle case where no skills to run
   if (skillsToRun.length === 0) {
-    emitEmptyRunLog(repoPath ?? cwd, options);
+    const run = emitEmptyRunLog(repoPath ?? cwd, options);
+    await publishCliEmptyRun({ service, context, run, reporter });
     if (!options.json) {
       reporter.warning('No triggers matched for the changed files');
       reporter.tip('Specify a skill explicitly: warden <target> --skill <name>');
@@ -1165,15 +1349,32 @@ export async function runSkills(
     return 0;
   }
 
-  if (needsClaudeAuth(skillsToRun) && !verifyClaudeAuthForRun({
-    apiKey,
-    pathToClaudeCodeExecutable,
-    reporter,
-    repoPath: repoPath ?? cwd,
-    options,
-  })) {
+  const authFailure = needsClaudeAuth(skillsToRun)
+    ? verifyClaudeAuthForRun({
+      apiKey,
+      pathToClaudeCodeExecutable,
+      reporter,
+      repoPath: repoPath ?? cwd,
+      options,
+    })
+    : undefined;
+  if (authFailure) {
+    await publishCliEarlyFailure({
+      service,
+      context,
+      ...authFailure,
+      skills: skillsToRun,
+      reporter,
+    });
     return 1;
   }
+
+  const recall = await recallCliMemory({
+    service,
+    context,
+    skills: skillsToRun.map((skill) => skill.skill),
+  });
+  const recalledMemories = recall?.memories ?? [];
 
   // Build skill tasks
   // Model precedence: defaults.agent.model > defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
@@ -1202,6 +1403,7 @@ export async function runSkills(
       config?.defaults?.auxiliaryMaxRetries,
     verifyFindings: config?.defaults?.verification?.enabled !== false,
     captureTraces: options.traces,
+    historicalEvidence: renderHistoricalMemory(recalledMemories),
   };
   const specs: RunSkillSpec[] = skillsToRun.map(({ skill, remote, filters, ...skillOptions }) => ({
     name: skill,
@@ -1214,7 +1416,8 @@ export async function runSkills(
   const invalidModelSelector = findInvalidPiModelSelector(specs);
   if (invalidModelSelector) {
     reportInvalidPiModelSelector(reporter, invalidModelSelector);
-    emitInvalidPiModelSelectorRunLog(repoPath ?? cwd, options, invalidModelSelector);
+    const failure = emitInvalidPiModelSelectorRunLog(repoPath ?? cwd, options, invalidModelSelector);
+    await publishCliEarlyFailure({ service, context, ...failure, skills: skillsToRun, reporter });
     return 1;
   }
   let tasks: SkillTaskOptions[];
@@ -1230,11 +1433,13 @@ export async function runSkills(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     reporter.error(message);
-    emitEmptyRunLog(repoPath ?? cwd, options, {
+    const skillError: SkillError = {
       code: 'unknown',
       message,
       timestamp: new Date().toISOString(),
-    });
+    };
+    const run = emitEmptyRunLog(repoPath ?? cwd, options, skillError);
+    await publishCliEarlyFailure({ service, context, run, error: skillError, skills: skillsToRun, reporter });
     return 1;
   }
 
@@ -1279,7 +1484,19 @@ export async function runSkills(
   const totalDuration = Date.now() - startTime;
   const effectiveMinConfidence = options.minConfidence ?? config?.defaults?.minConfidence ?? 'medium';
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  return outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
+  const exitCode = await outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
+  await publishCliRun({
+    service,
+    context,
+    processed,
+    runLog,
+    totalDuration,
+    exitCode,
+    reporter,
+    recalledMemories,
+    memoryRecallId: recall?.clientRecallId,
+  });
+  return exitCode;
 }
 
 async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
@@ -1419,6 +1636,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Load config
   const config = loadWardenConfigFile(configPath);
   applyWardenOfflinePolicy(options, config);
+  const service = resolveCliService(options, config, reporter);
 
   // Build context from local git. By default, mirror PR-style analysis:
   // compare the configured/default branch merge base to HEAD.
@@ -1442,7 +1660,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   }
 
   if (pullRequest.files.length === 0) {
-    emitEmptyRunLog(repoPath, options);
+    const run = emitEmptyRunLog(repoPath, options);
+    await publishCliEmptyRun({ service, context, run, reporter });
     if (!options.json) {
       if (options.staged) {
         reporter.renderEmptyState('No staged changes found');
@@ -1483,7 +1702,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const triggersToRun = [...seen.values()];
 
   if (triggersToRun.length === 0) {
-    emitEmptyRunLog(repoPath, options);
+    const run = emitEmptyRunLog(repoPath, options);
+    await publishCliEmptyRun({ service, context, run, reporter });
     if (!options.json) {
       reporter.blank();
       if (options.skill) {
@@ -1509,15 +1729,36 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   const triggerRuntimes = triggersToRun.map((trigger) => ({
     runtime: options.runtime ?? trigger.runtime,
   }));
-  if (needsClaudeAuth(triggerRuntimes) && !verifyClaudeAuthForRun({
-    apiKey,
-    pathToClaudeCodeExecutable,
-    reporter,
-    repoPath,
-    options,
-  })) {
+  const authFailure = needsClaudeAuth(triggerRuntimes)
+    ? verifyClaudeAuthForRun({
+      apiKey,
+      pathToClaudeCodeExecutable,
+      reporter,
+      repoPath,
+      options,
+    })
+    : undefined;
+  if (authFailure) {
+    await publishCliEarlyFailure({
+      service,
+      context,
+      ...authFailure,
+      skills: triggersToRun.map((trigger) => ({
+        skill: trigger.skill,
+        model: trigger.model,
+        runtime: options.runtime ?? trigger.runtime,
+      })),
+      reporter,
+    });
     return 1;
   }
+
+  const recall = await recallCliMemory({
+    service,
+    context,
+    skills: triggersToRun.map((trigger) => trigger.skill),
+  });
+  const recalledMemories = recall?.memories ?? [];
 
   // Build trigger tasks
   const effectiveMinConfidence = options.minConfidence ?? config.defaults?.minConfidence ?? 'medium';
@@ -1548,12 +1789,24 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
       verifyFindings: trigger.verifyFindings,
       captureTraces: options.traces,
+      historicalEvidence: renderHistoricalMemory(recalledMemories),
     },
   }));
   const invalidModelSelector = findInvalidPiModelSelector(specs);
   if (invalidModelSelector) {
     reportInvalidPiModelSelector(reporter, invalidModelSelector);
-    emitInvalidPiModelSelectorRunLog(repoPath, options, invalidModelSelector);
+    const failure = emitInvalidPiModelSelectorRunLog(repoPath, options, invalidModelSelector);
+    await publishCliEarlyFailure({
+      service,
+      context,
+      ...failure,
+      skills: triggersToRun.map((trigger) => ({
+        skill: trigger.skill,
+        model: trigger.model,
+        runtime: options.runtime ?? trigger.runtime,
+      })),
+      reporter,
+    });
     return 1;
   }
   let tasks: SkillTaskOptions[];
@@ -1569,10 +1822,23 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     reporter.error(message);
-    emitEmptyRunLog(repoPath, options, {
+    const skillError: SkillError = {
       code: 'unknown',
       message,
       timestamp: new Date().toISOString(),
+    };
+    const run = emitEmptyRunLog(repoPath, options, skillError);
+    await publishCliEarlyFailure({
+      service,
+      context,
+      run,
+      error: skillError,
+      skills: triggersToRun.map((trigger) => ({
+        skill: trigger.skill,
+        model: trigger.model,
+        runtime: options.runtime ?? trigger.runtime,
+      })),
+      reporter,
     });
     return 1;
   }
@@ -1621,7 +1887,19 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
   // Process results and output
   const totalDuration = Date.now() - startTime;
   const processed = processTaskResults(results, options.reportOn, effectiveMinConfidence);
-  return outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
+  const exitCode = await outputResultsAndHandleFixes(processed, options, reporter, runLog, totalDuration, failFastController?.signal.aborted);
+  await publishCliRun({
+    service,
+    context,
+    processed,
+    runLog,
+    totalDuration,
+    exitCode,
+    reporter,
+    recalledMemories,
+    memoryRecallId: recall?.clientRecallId,
+  });
+  return exitCode;
 }
 
 async function runDirectSkillMode(options: CLIOptions, reporter: Reporter): Promise<number> {
@@ -1741,7 +2019,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
 
 /** Parse CLI input, dispatch the selected command, and perform shutdown cleanup. */
 export async function main(): Promise<void> {
-  const { command, options, helpTarget, setupAppOptions, runsOptions } = parseCliArgs();
+  const { command, options, helpTarget, setupAppOptions, runsOptions, serviceOptions } = parseCliArgs();
 
   if (command === 'help') {
     showHelp(helpTarget);
@@ -1813,6 +2091,12 @@ export async function main(): Promise<void> {
             process.exit(1);
           }
           return runRuns(runsOptions, options, reporter);
+        case 'service':
+          if (!serviceOptions) {
+            reporter.error('Missing service command options');
+            return 1;
+          }
+          return runServiceCommand(serviceOptions, options, reporter);
         case 'build':
           return runBuild(options, reporter, { abortController, interrupted });
         case 'improve':

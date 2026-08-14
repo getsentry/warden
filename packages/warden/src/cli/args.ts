@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { DataProfileSchema } from '@sentry/warden-service-api';
+import type { DataProfile } from '@sentry/warden-service-api';
 import { z } from 'zod';
 import { EffortSchema, type Effort } from '../config/schema.js';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
@@ -58,6 +60,11 @@ export const CLIOptionsSchema = z.object({
   regenerate: z.boolean().default(false),
   /** Prompt for creating a new generated skill. Prefix with @ to load from a file. */
   prompt: z.string().optional(),
+  serviceUrl: z.string().url().optional(),
+  serviceData: DataProfileSchema.optional(),
+  serviceMemory: z.boolean().optional(),
+  serviceTimeoutMs: z.number().int().min(100).max(30_000).optional(),
+  noService: z.boolean().optional(),
 });
 
 export type CLIOptions = z.infer<typeof CLIOptionsSchema>;
@@ -79,12 +86,18 @@ export interface RunsOptions {
   all?: boolean;
 }
 
+export interface ServiceCommandOptions {
+  subcommand: 'replay';
+  artifact: string;
+}
+
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'build' | 'improve';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'service' | 'build' | 'improve';
   options: CLIOptions;
   helpTarget?: HelpTarget;
   setupAppOptions?: SetupAppOptions;
   runsOptions?: RunsOptions;
+  serviceOptions?: ServiceCommandOptions;
 }
 
 export function showVersion(): void {
@@ -113,6 +126,18 @@ function sharedOptions(values: ParsedOptionValues, verboseCount: number): Partia
     log: Boolean(values['log']),
     color: resolveColorOption(values),
   };
+}
+
+function serviceMemoryOption(values: ParsedOptionValues): boolean | undefined {
+  if (values['no-service-memory'] === true) return false;
+  if (values['service-memory'] === true) return true;
+  return undefined;
+}
+
+function serviceTimeoutOption(values: ParsedOptionValues): number | undefined {
+  const value = values['service-timeout-ms'];
+  if (typeof value !== 'string') return undefined;
+  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
 }
 
 function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTarget | undefined {
@@ -145,6 +170,8 @@ function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTa
       if (values['all']) return 'runs:list';
       if (subcommand) return 'runs:show';
       return 'runs';
+    case 'service':
+      return 'service';
     case 'help':
     case 'version':
       return undefined;
@@ -353,6 +380,12 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       // (no short alias for --follow: -f already maps to --force on init/add)
       follow: { type: 'boolean', default: false },
       all: { type: 'boolean', default: false },
+      'service-url': { type: 'string' },
+      'service-data': { type: 'string' },
+      'service-memory': { type: 'boolean' },
+      'no-service-memory': { type: 'boolean' },
+      'service-timeout-ms': { type: 'string' },
+      'no-service': { type: 'boolean' },
     },
     allowPositionals: true,
   });
@@ -509,6 +542,28 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     };
   }
 
+  if (command === 'service') {
+    if (rest[0] !== 'replay' || !rest[1]) {
+      return {
+        command: 'help',
+        options: parseCliOptions({ ...sharedOptions(values, verboseCount), help: true }),
+        helpTarget: 'service',
+      };
+    }
+    return {
+      command: 'service',
+      options: parseCliOptions({
+        ...sharedOptions(values, verboseCount),
+        serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
+        serviceData: values['service-data'],
+        serviceMemory: serviceMemoryOption(values),
+        serviceTimeoutMs: serviceTimeoutOption(values),
+        noService: values['no-service'] || undefined,
+      }),
+      serviceOptions: { subcommand: 'replay', artifact: rest[1] },
+    };
+  }
+
   const targets = command === 'run' ? rest : positionals;
   return {
     command: 'run',
@@ -533,6 +588,11 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
       staged: Boolean(values.staged),
       offline: Boolean(values.offline),
       failFast: Boolean(values['fail-fast']),
+      serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
+      serviceData: values['service-data'] as DataProfile | undefined,
+      serviceMemory: serviceMemoryOption(values),
+      serviceTimeoutMs: serviceTimeoutOption(values),
+      noService: values['no-service'] === true ? true : undefined,
     }),
   };
 }

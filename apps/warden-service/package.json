@@ -1,0 +1,26 @@
+{
+  "name": "warden-service-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && tsc --noEmit && node scripts/check-static-assets.mjs",
+    "dev": "vercel dev",
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.17",
+    "@sentry/warden-service": "workspace:*",
+    "hono": "^4.12.27"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vercel": "^54.4.0",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

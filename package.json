@@ -6,18 +6,18 @@
   "scripts": {
     "cli": "pnpm --filter @sentry/warden cli",
     "clean:dist": "rm -rf dist packages/*/dist",
-    "build": "pnpm --filter @sentry/warden build",
+    "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && pnpm --filter warden-service-app build && pnpm --filter @sentry/warden build",
     "build:action": "pnpm --filter @sentry/warden build:action",
     "dev": "pnpm --filter @sentry/warden dev",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
-    "test": "pnpm --filter @sentry/warden test",
+    "test": "pnpm --filter @sentry/warden-service-api test && pnpm --filter @sentry/warden-service test && pnpm --filter warden-service-app test && pnpm --filter @sentry/warden test",
     "test:coverage": "pnpm --filter @sentry/warden test:coverage",
     "test:watch": "pnpm --filter @sentry/warden test:watch",
     "test:examples": "pnpm --filter @sentry/warden test:examples",
     "evals": "pnpm -C packages/evals evals",
     "evals:scaffold": "pnpm -C packages/evals scaffold",
-    "typecheck": "pnpm --filter @sentry/warden typecheck && pnpm -C packages/evals typecheck",
+    "typecheck": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && pnpm --filter warden-service-app typecheck && pnpm --filter @sentry/warden typecheck && pnpm -C packages/evals typecheck",
     "generate:jsonl-schema": "pnpm --filter @sentry/warden generate:jsonl-schema",
     "docs": "pnpm --filter warden-docs dev",
     "docs:check": "pnpm -C packages/docs check",
@@ -59,5 +59,16 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@vercel/fun>tar": "7.5.22",
+      "@vercel/python-analysis>minimatch": "10.2.5",
+      "path-to-regexp@6.1.0": "6.3.0",
+      "path-to-regexp@8.2.0": "8.4.2",
+      "path-to-regexp@8.3.0": "8.4.2",
+      "undici@5.28.4": "6.28.0",
+      "undici@5.29.0": "6.28.0"
+    }
   }
 }

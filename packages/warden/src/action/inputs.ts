@@ -4,6 +4,8 @@
  * Handles parsing inputs from GitHub Actions environment and validates them.
  */
 
+import { DataProfileSchema } from '@sentry/warden-service-api';
+import type { DataProfile } from '@sentry/warden-service-api';
 import { SeverityThresholdSchema } from '../types/index.js';
 import type { SeverityThreshold } from '../types/index.js';
 import { DEFAULT_CONCURRENCY } from '../utils/index.js';
@@ -41,6 +43,11 @@ export interface ActionInputs {
   parallel: number;
   /** The action ref that produced this run, surfaced in the findings output harness field */
   actionRef?: string;
+  serviceUrl?: string;
+  serviceToken?: string;
+  serviceData?: DataProfile;
+  serviceMemory?: boolean;
+  serviceTimeoutMs?: number;
 }
 
 // -----------------------------------------------------------------------------
@@ -113,6 +120,10 @@ export function parseActionInputs(): ActionInputs {
 
   const requestChanges = parseBooleanInput(getInput('request-changes'));
   const failCheck = parseBooleanInput(getInput('fail-check'));
+  const serviceDataInput = getInput('service-data');
+  const serviceData = DataProfileSchema.safeParse(serviceDataInput);
+  const serviceTimeoutInput = getInput('service-timeout-ms');
+  const serviceTimeoutParsed = serviceTimeoutInput ? Number(serviceTimeoutInput) : undefined;
 
   return {
     anthropicApiKey,
@@ -130,6 +141,13 @@ export function parseActionInputs(): ActionInputs {
     failCheck,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
     actionRef: getInput('action-ref') || undefined,
+    serviceUrl: getInput('service-url') || undefined,
+    serviceToken: getInput('service-token') || process.env['WARDEN_SERVICE_TOKEN'] || undefined,
+    serviceData: serviceData.success ? serviceData.data : undefined,
+    serviceMemory: parseBooleanInput(getInput('service-memory')),
+    serviceTimeoutMs: serviceTimeoutParsed === undefined || Number.isNaN(serviceTimeoutParsed)
+      ? undefined
+      : serviceTimeoutParsed,
   };
 }
 
@@ -146,6 +164,9 @@ export function validateInputs(inputs: ActionInputs): void {
   }
   if (inputs.mode === 'report' && !inputs.findingsFile) {
     throw new Error('findings-file is required when mode is report');
+  }
+  if (inputs.serviceMemory && inputs.serviceData === 'metrics') {
+    throw new Error('service-memory requires service-data findings or code');
   }
 }
 

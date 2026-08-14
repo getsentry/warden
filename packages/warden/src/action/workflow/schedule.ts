@@ -23,10 +23,13 @@ import { resolveSkillAsync } from '../../skills/loader.js';
 import { filterFindings } from '../../types/index.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import type { FindingProcessingEvent } from '../../sdk/types.js';
+import type { ResolvedServiceOptions } from '../../service/index.js';
 import { Sentry, logger, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import type { ActionInputs } from '../inputs.js';
-import { buildBaseOutputOptions } from '../reporting/output.js';
+import { buildBaseOutputOptions, buildFindingsOutput } from '../reporting/output.js';
 import type { SkillExecutionMeta } from '../reporting/output.js';
+import { publishActionRunFailOpen, recallActionMemoryFailOpen, resolveActionServiceOptions } from '../service.js';
+import type { ActionMemoryRecall } from '../service.js';
 import {
   setOutput,
   setFailed,
@@ -58,6 +61,31 @@ interface SkippedScheduleTrigger {
 interface WorkflowSpan {
   setAttribute(key: string, value: string | number | boolean): void;
   spanContext?: () => { traceId: string };
+}
+
+async function emitEmptyScheduleRun(
+  inputs: ActionInputs,
+  repoPath: string,
+  service: ResolvedServiceOptions | undefined,
+): Promise<void> {
+  const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
+  const [owner = '', name = ''] = fullName.split('/');
+  const context: EventContext = {
+    eventType: 'schedule',
+    action: 'scheduled',
+    repository: { owner, name, fullName, defaultBranch: '' },
+    repoPath,
+  };
+  const findingsOptions = buildBaseOutputOptions(inputs, []);
+  try {
+    writeFindingsOutput([], context, [], findingsOptions);
+  } catch (error) {
+    console.error(`::warning::Failed to write findings output: ${error}`);
+  }
+  await publishActionRunFailOpen(
+    service,
+    () => buildFindingsOutput([], context, [], findingsOptions),
+  );
 }
 
 export async function runScheduleWorkflow(
@@ -93,6 +121,7 @@ async function runScheduleWorkflowInner(
 
   let scheduleTriggers: ResolvedTrigger[];
   let skillRootsByName: LayeredSkillRootsByName | undefined;
+  let service = resolveActionServiceOptions(inputs);
   try {
     const layered = loadLayeredWardenConfig(repoPath, {
       baseConfigPath: inputs.baseConfigPath,
@@ -105,6 +134,7 @@ async function runScheduleWorkflowInner(
       || layered.config.defaults?.offline === true,
     );
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
+    service = resolveActionServiceOptions(inputs, layered.config.service);
     scheduleTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName)
       .filter((t) => t.type === 'schedule');
   } catch (error) {
@@ -117,20 +147,9 @@ async function runScheduleWorkflowInner(
       setOutput('findings-count', 0);
       setOutput('high-count', 0);
       setOutput('summary', 'No warden.toml found');
-      try {
-        const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
-        const [o = '', n = ''] = fullName.split('/');
-        workflowSpan.setAttribute('warden.trigger.count', 0);
-        workflowSpan.setAttribute('warden.finding.count', 0);
-        writeFindingsOutput([], {
-          eventType: 'schedule',
-          action: 'scheduled',
-          repository: { owner: o, name: n, fullName, defaultBranch: '' },
-          repoPath,
-        }, [], buildBaseOutputOptions(inputs, []));
-      } catch (writeError) {
-        console.error(`::warning::Failed to write findings output: ${writeError}`);
-      }
+      workflowSpan.setAttribute('warden.trigger.count', 0);
+      workflowSpan.setAttribute('warden.finding.count', 0);
+      await emitEmptyScheduleRun(inputs, repoPath, service);
       return;
     }
     throw error;
@@ -150,18 +169,7 @@ async function runScheduleWorkflowInner(
     setOutput('high-count', 0);
     setOutput('summary', 'No schedule triggers configured');
     workflowSpan.setAttribute('warden.finding.count', 0);
-    try {
-      const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
-      const [o = '', n = ''] = fullName.split('/');
-      writeFindingsOutput([], {
-        eventType: 'schedule',
-        action: 'scheduled',
-        repository: { owner: o, name: n, fullName, defaultBranch: '' },
-        repoPath,
-      }, [], buildBaseOutputOptions(inputs, []));
-    } catch (writeError) {
-      console.error(`::warning::Failed to write findings output: ${writeError}`);
-    }
+    await emitEmptyScheduleRun(inputs, repoPath, service);
     return;
   }
 
@@ -193,6 +201,29 @@ async function runScheduleWorkflowInner(
     repository: { owner, name: repo, fullName: `${owner}/${repo}`, defaultBranch },
     repoPath,
   };
+
+  let memoryRecall: ActionMemoryRecall | undefined;
+  if (service?.memory) {
+    try {
+      const recallContext = await buildScheduleEventContext({
+        patterns: [...new Set(scheduleTriggers.flatMap((trigger) =>
+          trigger.filters?.paths ?? ['**/*']))],
+        ignorePatterns: [FINDINGS_OUTPUT_FILENAME, FINDINGS_OUTPUT_DONE_FILENAME],
+        repoPath,
+        owner,
+        name: repo,
+        defaultBranch,
+        headSha,
+      });
+      memoryRecall = await recallActionMemoryFailOpen(
+        service,
+        recallContext,
+        scheduleTriggers.map((trigger) => trigger.skill),
+      );
+    } catch {
+      console.log('::warning::Warden service memory recall failed. Action results are unchanged.');
+    }
+  }
 
   const allReports: SkillReport[] = [];
   const skillExecutions: SkillExecutionMeta[] = [];
@@ -254,7 +285,6 @@ async function runScheduleWorkflowInner(
       }
 
       console.log(`Found ${context.pullRequest.files.length} files matching patterns`);
-
       // Run skill
       const skillRoot = resolved.useBuiltinSkill ? undefined : (resolved.skillRoot ?? repoPath);
       const skill = await resolveSkillAsync(resolved.skill, skillRoot, {
@@ -279,6 +309,7 @@ async function runScheduleWorkflowInner(
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         verifyFindings: resolved.verifyFindings,
         triggerName: resolved.name,
+        historicalEvidence: memoryRecall?.historicalEvidence,
         pathToClaudeCodeExecutable: runtimeEnv.pathToClaudeCodeExecutable,
         callbacks: {
           onFindingProcessing: (event) => findingProcessingEvents.push(event),
@@ -364,15 +395,23 @@ async function runScheduleWorkflowInner(
   // one true final write (`.done` marker + `findings-file` output), and it
   // must land even when every trigger failed, or a terminated run is left
   // looking permanently in-progress to a follower of the live snapshots.
+  const findingsOptions = {
+    ...buildBaseOutputOptions(inputs, skippedTriggers),
+    skillExecutions,
+    recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
+    memoryRecallId: memoryRecall?.clientRecallId,
+  };
   try {
-    const findingsPath = writeFindingsOutput(allReports, scheduleContext, [], {
-      ...buildBaseOutputOptions(inputs, skippedTriggers),
-      skillExecutions,
-    });
+    const findingsPath = writeFindingsOutput(allReports, scheduleContext, [], findingsOptions);
     console.log(`Findings written to ${findingsPath}`);
   } catch (error) {
     console.error(`::warning::Failed to write findings output: ${error}`);
   }
+
+  await publishActionRunFailOpen(
+    service,
+    () => buildFindingsOutput(allReports, scheduleContext, [], findingsOptions),
+  );
 
   handleTriggerErrors(triggerErrors, scheduleTriggers.length);
 

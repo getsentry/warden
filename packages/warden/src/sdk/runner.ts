@@ -70,6 +70,7 @@ export type {
 export { analyzeFile, runSkill, generateSummary } from './analyze.js';
 export { runLocalSkill, verifyLocalFindings } from './local.js';
 export type {
+  LocalSkillServiceOptions,
   RunLocalSkillOptions,
   RunLocalSkillResult,
   VerifyLocalFindingsOptions,

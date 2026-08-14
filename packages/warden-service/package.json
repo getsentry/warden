@@ -1,0 +1,58 @@
+{
+  "name": "@sentry/warden-service",
+  "version": "0.1.0",
+  "description": "Optional backing service for Warden history and memory",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/db/schema.d.ts",
+      "import": "./dist/db/schema.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "warden-service": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "drizzle",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "pnpm run clean:dist && tsc -p tsconfig.build.json",
+    "cli": "node dist/cli.js",
+    "clean:dist": "rm -rf dist",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.17",
+    "@neondatabase/serverless": "^1.1.0",
+    "@sentry/warden-service-api": "workspace:*",
+    "better-auth": "^1.6.27",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.27",
+    "pg": "^8.16.3",
+    "ws": "^8.18.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/pg": "^8.15.6",
+    "@types/ws": "^8.18.1",
+    "drizzle-kit": "^0.31.9",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "FSL-1.1-ALv2"
+}

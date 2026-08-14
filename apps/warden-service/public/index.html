@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="robots" content="noindex">
+    <title>Warden Service</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script type="module" src="/assets/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M32 10 50 17v18c0 10-8 17-18 20-10-3-18-10-18-20V17Z" fill="currentColor"/>
+          <path d="m32 17 12 5v13c0 7-5 12-12 14-7-2-12-7-12-14V22Z" fill="#0c0a0f"/>
+          <circle cx="32" cy="33" r="5" fill="currentColor"/>
+        </svg>
+        <span>Warden</span>
+      </a>
+      <div id="account-menu" class="account-menu" hidden>
+        <button id="account-menu-trigger" class="account-menu-trigger" type="button" aria-controls="account-menu-popover" aria-expanded="false" aria-haspopup="true" aria-label="Open account menu">
+          <span class="account-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="8" r="4"/>
+              <path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>
+            </svg>
+          </span>
+          <svg class="account-chevron" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="m4 6 4 4 4-4"/>
+          </svg>
+        </button>
+        <div id="account-menu-popover" class="account-popover" hidden>
+          <button id="api-access" class="account-menu-item" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="7.5" cy="15.5" r="4.5"/>
+              <path d="m11 12 9-9m-4 4 3 3m-1.5-5.5 2 2"/>
+            </svg>
+            API access
+          </button>
+          <button id="sign-out" class="account-menu-item" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10 17 15 12 10 7m5 5H3m12-9h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+            </svg>
+            Sign out
+          </button>
+        </div>
+      </div>
+    </header>
+    <main class="shell">
+      <header class="page-header">
+        <div class="eyebrow">Warden Service</div>
+        <h1 id="page-title">Explore</h1>
+        <p id="page-description">Filter findings and understand where Warden spends time and money.</p>
+      </header>
+      <section id="filters" class="filter-host" hidden></section>
+      <section id="content" aria-live="polite">
+        <div class="empty">Loading data</div>
+      </section>
+    </main>
+    <dialog id="api-dialog" aria-labelledby="api-dialog-title">
+      <header class="dialog-header">
+        <div>
+          <h2 id="api-dialog-title">API Access</h2>
+          <p>Read-only tokens for agents and scripts. Tokens expire after 90 days.</p>
+        </div>
+        <button id="api-dialog-close" class="quiet-button" type="button" aria-label="Close">Close</button>
+      </header>
+      <div id="api-dialog-content"></div>
+    </dialog>
+  </body>
+</html>

@@ -40,6 +40,14 @@ import { formatCost, formatTokens, formatDuration } from '../../cli/output/forma
 import { findBotReviewState } from '../review-state.js';
 import type { BotReviewInfo } from '../review-state.js';
 import type { ActionInputs } from '../inputs.js';
+import {
+  publishActionEarlyFailureFailOpen,
+  publishActionRunFailOpen,
+  recallActionMemoryFailOpen,
+  resolveActionServiceOptions,
+} from '../service.js';
+import type { ActionMemoryRecall } from '../service.js';
+import type { ResolvedServiceOptions } from '../../service/index.js';
 import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
@@ -88,6 +96,7 @@ import { renderSkillReport } from '../../output/renderer.js';
 import type { z } from 'zod';
 import {
   FindingsOutputSchema,
+  buildFindingsOutput,
   buildBaseOutputOptions,
   type SkippedTriggerReasonSchema,
   type FindingsOutput,
@@ -102,10 +111,12 @@ import {
 
 interface InitResult {
   context: EventContext;
+  service?: ResolvedServiceOptions;
   runnerConcurrency?: number;
   auxiliaryOptions: AuxiliaryWorkflowOptions;
   matchedTriggers: ResolvedTrigger[];
   skippedTriggers: ResolvedTrigger[];
+  memoryRecall?: ActionMemoryRecall;
   skipCoreCheck?: SkippedCoreCheck;
 }
 
@@ -449,7 +460,19 @@ async function initializeWorkflow(
       console.log('No triggers matched for this event');
     }
 
-    return { context, runnerConcurrency, auxiliaryOptions, matchedTriggers, skippedTriggers };
+    const service = resolveActionServiceOptions(inputs, layered.config.service);
+    const memoryRecall = inputs.mode === 'report' || matchedTriggers.length === 0
+      ? undefined
+      : await recallActionMemoryFailOpen(service, context, matchedTriggers.map((trigger) => trigger.skill));
+    return {
+      context,
+      service,
+      runnerConcurrency,
+      auxiliaryOptions,
+      matchedTriggers,
+      skippedTriggers,
+      memoryRecall,
+    };
   } catch (error) {
     if (
       error instanceof ConfigLoadError &&
@@ -460,6 +483,7 @@ async function initializeWorkflow(
       console.log(`::warning::${message}`);
       return {
         context,
+        service: resolveActionServiceOptions(inputs),
         runnerConcurrency,
         auxiliaryOptions,
         matchedTriggers: [],
@@ -586,6 +610,7 @@ async function executeAllTriggers(
   inputs: ActionInputs,
   options: {
     checks?: TriggerCheckReporter;
+    memoryRecall?: ActionMemoryRecall;
     /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
     onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
   } = {}
@@ -616,6 +641,7 @@ async function executeAllTriggers(
         abortController,
         circuitBreaker,
         checks: options.checks,
+        historicalEvidence: options.memoryRecall?.historicalEvidence,
       });
       completedSoFar.push(result);
       options.onTriggerComplete?.([...completedSoFar]);
@@ -1119,7 +1145,9 @@ async function finalizeWorkflow(
   gate: ReviewFeedbackGate,
   triggerErrors: string[],
   skippedTriggers: ResolvedTrigger[],
-  inputs: ActionInputs
+  inputs: ActionInputs,
+  service: ResolvedServiceOptions | undefined,
+  memoryRecall: ActionMemoryRecall | undefined,
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -1135,15 +1163,18 @@ async function finalizeWorkflow(
   setWorkflowOutputs(outputs);
 
   // Write structured findings to file for external export (GCS, S3, etc.)
+  const findingsOptions: BuildFindingsOutputOptions = {
+    triggerResults: toReplayTriggerResults(results),
+    ...buildBaseOutputOptions(inputs, [
+      ...toSkippedTriggers(skippedTriggers, context),
+      ...toErroredSkippedTriggers(results),
+    ]),
+    skillExecutions: toSkillExecutions(results),
+    recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
+    memoryRecallId: memoryRecall?.clientRecallId,
+  };
   try {
-    const findingsPath = writeFindingsOutput(reports, context, findingObservations, {
-      triggerResults: toReplayTriggerResults(results),
-      ...buildBaseOutputOptions(inputs, [
-        ...toSkippedTriggers(skippedTriggers, context),
-        ...toErroredSkippedTriggers(results),
-      ]),
-      skillExecutions: toSkillExecutions(results),
-    });
+    const findingsPath = writeFindingsOutput(reports, context, findingObservations, findingsOptions);
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
     warnAction(`Failed to write findings output: ${error}`);
@@ -1167,6 +1198,11 @@ async function finalizeWorkflow(
       warnAction(`Failed to update core check: ${error}`);
     }
   }
+
+  await publishActionRunFailOpen(
+    service,
+    () => buildFindingsOutput(reports, context, findingObservations, findingsOptions),
+  );
 
   if (shouldFailAction) {
     setFailed(failureReasons.join('; '));
@@ -1740,7 +1776,14 @@ async function finalizeReportWorkflow(
   canResolveStale: boolean,
   gate: ReviewFeedbackGate,
   triggerErrors: string[],
-  options: { failOnWriteError?: boolean; skippedTriggers?: ResolvedTrigger[]; inputs: ActionInputs }
+  options: {
+    failOnWriteError?: boolean;
+    skippedTriggers?: ResolvedTrigger[];
+    inputs: ActionInputs;
+    service?: ResolvedServiceOptions;
+    recalledMemories?: readonly { id: string; version: number }[];
+    memoryRecallId?: string;
+  }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -1755,15 +1798,18 @@ async function finalizeReportWorkflow(
   const outputs = computeWorkflowOutputs(reports);
   setWorkflowOutputs(outputs);
 
+  const findingsOptions: BuildFindingsOutputOptions = {
+    triggerResults: toReplayTriggerResults(results),
+    ...buildBaseOutputOptions(options.inputs, [
+      ...toSkippedTriggers(options.skippedTriggers ?? [], context),
+      ...toErroredSkippedTriggers(results),
+    ]),
+    skillExecutions: toSkillExecutions(results),
+    recalledMemories: options.recalledMemories,
+    memoryRecallId: options.memoryRecallId,
+  };
   try {
-    const findingsPath = writeFindingsOutput(reports, context, findingObservations, {
-      triggerResults: toReplayTriggerResults(results),
-      ...buildBaseOutputOptions(options.inputs, [
-        ...toSkippedTriggers(options.skippedTriggers ?? [], context),
-        ...toErroredSkippedTriggers(results),
-      ]),
-      skillExecutions: toSkillExecutions(results),
-    });
+    const findingsPath = writeFindingsOutput(reports, context, findingObservations, findingsOptions);
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
     warnAction(`Failed to write findings output: ${error}`);
@@ -1776,6 +1822,11 @@ async function finalizeReportWorkflow(
     reports,
     shouldFailAction || triggerErrors.length > 0,
     outputs
+  );
+
+  await publishActionRunFailOpen(
+    options.service,
+    () => buildFindingsOutput(reports, context, findingObservations, findingsOptions),
   );
 
   if (shouldFailAction) {
@@ -1888,6 +1939,7 @@ async function runAnalyzeMode(
     matchedTriggers,
     skippedTriggers,
     skipCoreCheck,
+    memoryRecall,
   } = initResult;
 
   if (skipCoreCheck || matchedTriggers.length === 0) {
@@ -1914,6 +1966,7 @@ async function runAnalyzeMode(
       attributes: { 'warden.trigger.count': matchedTriggers.length },
     },
     () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
+      memoryRecall,
       onTriggerComplete: (completedSoFar) => {
         const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
         writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -1940,6 +1993,8 @@ async function runAnalyzeMode(
         ...toErroredSkippedTriggers(results),
       ]),
       skillExecutions: toSkillExecutions(results),
+      recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
+      memoryRecallId: memoryRecall?.clientRecallId,
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
@@ -1963,6 +2018,7 @@ async function runReportMode(
 ): Promise<void> {
   const {
     context,
+    service,
     auxiliaryOptions,
     matchedTriggers,
     skippedTriggers,
@@ -1970,6 +2026,10 @@ async function runReportMode(
   } = initResult;
   const findingsOutput = readFindingsFile(inputs.findingsFile, repoPath);
   validateFindingsMatchContext(findingsOutput, context);
+  const replayMemoryOptions = {
+    recalledMemories: findingsOutput.recalledMemories,
+    memoryRecallId: findingsOutput.memoryRecallId,
+  };
 
   let results: TriggerResult[] = [];
   let previousReviewInfo: BotReviewInfo | null = null;
@@ -1984,11 +2044,13 @@ async function runReportMode(
     if (skipCoreCheck) {
       const outputs = { findingsCount: 0, highCount: 0, summary: skipCoreCheck.title };
       setWorkflowOutputs(outputs);
+      const findingsOptions = {
+        triggerResults: [],
+        ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+        ...replayMemoryOptions,
+      } satisfies BuildFindingsOutputOptions;
       try {
-        const findingsPath = writeFindingsOutput([], context, [], {
-          triggerResults: [],
-          ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
-        });
+        const findingsPath = writeFindingsOutput([], context, [], findingsOptions);
         logAction(`Findings written to ${findingsPath}`);
       } catch (error) {
         warnAction(`Failed to write findings output: ${error}`);
@@ -2006,6 +2068,7 @@ async function runReportMode(
         },
         'neutral'
       );
+      await publishActionRunFailOpen(service, () => buildFindingsOutput([], context, [], findingsOptions));
       logAction('Analysis complete: 0 total findings');
       return;
     }
@@ -2020,11 +2083,13 @@ async function runReportMode(
       );
       const outputs = { findingsCount: 0, highCount: 0, summary: 'No triggers matched' };
       setWorkflowOutputs(outputs);
+      const findingsOptions = {
+        triggerResults: [],
+        ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+        ...replayMemoryOptions,
+      } satisfies BuildFindingsOutputOptions;
       try {
-        const findingsPath = writeFindingsOutput([], context, cleanupFindingObservations, {
-          triggerResults: [],
-          ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
-        });
+        const findingsPath = writeFindingsOutput([], context, cleanupFindingObservations, findingsOptions);
         logAction(`Findings written to ${findingsPath}`);
       } catch (error) {
         warnAction(`Failed to write findings output: ${error}`);
@@ -2041,6 +2106,10 @@ async function runReportMode(
           message: 'No triggers matched for this event.',
         },
         'neutral'
+      );
+      await publishActionRunFailOpen(
+        service,
+        () => buildFindingsOutput([], context, cleanupFindingObservations, findingsOptions),
       );
       logAction('Analysis complete: 0 total findings');
       return;
@@ -2096,7 +2165,7 @@ async function runReportMode(
       canResolveStale,
       gate,
       triggerErrors,
-      { failOnWriteError: true, skippedTriggers, inputs },
+      { failOnWriteError: true, skippedTriggers, inputs, service, ...replayMemoryOptions },
     );
   } catch (error) {
     if (error instanceof ActionFailedError) {
@@ -2140,11 +2209,13 @@ export async function runPRWorkflow(
 
       const {
         context,
+        service,
         runnerConcurrency,
         auxiliaryOptions,
         matchedTriggers,
         skippedTriggers,
         skipCoreCheck,
+        memoryRecall,
       } = initResult;
       span.setAttribute('warden.trigger.count', matchedTriggers.length);
 
@@ -2191,14 +2262,14 @@ export async function runPRWorkflow(
         setOutput('findings-count', 0);
         setOutput('high-count', 0);
         setOutput('summary', skipCoreCheck.title);
+        const findingsOptions = buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context));
         try {
-          writeFindingsOutput([], context, [], {
-            ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
-          });
+          writeFindingsOutput([], context, [], findingsOptions);
         } catch (error) {
           warnAction(`Failed to write findings output: ${error}`);
         }
         await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck);
+        await publishActionRunFailOpen(service, () => buildFindingsOutput([], context, [], findingsOptions));
         return;
       }
 
@@ -2213,10 +2284,9 @@ export async function runPRWorkflow(
           setOutput('findings-count', 0);
           setOutput('high-count', 0);
           setOutput('summary', 'No triggers matched');
+          const findingsOptions = buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context));
           try {
-            writeFindingsOutput([], context, cleanupFindingObservations, {
-              ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
-            });
+            writeFindingsOutput([], context, cleanupFindingObservations, findingsOptions);
           } catch (error) {
             warnAction(`Failed to write findings output: ${error}`);
           }
@@ -2224,6 +2294,10 @@ export async function runPRWorkflow(
             title: 'No triggers matched',
             message: 'No triggers matched for this event.',
           });
+          await publishActionRunFailOpen(
+            service,
+            () => buildFindingsOutput([], context, cleanupFindingObservations, findingsOptions),
+          );
         });
         return;
       }
@@ -2238,6 +2312,7 @@ export async function runPRWorkflow(
           },
           () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
             checks: createTriggerCheckReporter(octokit, context),
+            memoryRecall,
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
               writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -2253,6 +2328,33 @@ export async function runPRWorkflow(
       } catch (error) {
         await failUndispatchedSkillChecks(octokit, context, matchedTriggers, error);
         await failCoreCheck(octokit, context, coreCheckId, error);
+        const triggerResults: ReplayTriggerResult[] = matchedTriggers.map((trigger) => ({
+          triggerId: trigger.id,
+          triggerName: trigger.name,
+          skillName: trigger.skill,
+          error,
+        }));
+        const findingsOptions: BuildFindingsOutputOptions = {
+          triggerResults,
+          ...buildBaseOutputOptions(inputs, [
+            ...toSkippedTriggers(skippedTriggers, context),
+            ...matchedTriggers.map((trigger) => ({
+              skillName: trigger.skill,
+              triggerId: trigger.id,
+              triggerName: trigger.name,
+              reason: 'error' as const,
+            })),
+          ]),
+        };
+        try {
+          writeFindingsOutput([], context, [], findingsOptions);
+        } catch (writeError) {
+          warnAction(`Failed to write findings output: ${writeError}`);
+        }
+        await publishActionEarlyFailureFailOpen(
+          service,
+          () => buildFindingsOutput([], context, [], findingsOptions),
+        );
         throw error;
       }
 
@@ -2308,6 +2410,8 @@ export async function runPRWorkflow(
         triggerErrors,
         skippedTriggers,
         inputs,
+        service,
+        memoryRecall,
       );
 
       handleTriggerErrors(triggerErrors, matchedTriggers.length);

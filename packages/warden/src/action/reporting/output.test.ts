@@ -25,6 +25,16 @@ describe('findings output schema', () => {
     });
   });
 
+  it('defaults observations for historical version 1 artifacts', () => {
+    const output = buildFindingsOutput([createReport()], createContext(), [], {
+      timestamp: '2026-01-01T00:00:00.000Z',
+      runId: '123',
+    });
+    const { findingObservations: _observations, ...historical } = output;
+
+    expect(FindingsOutputSchema.parse(historical).findingObservations).toEqual([]);
+  });
+
   it('produces the exact pre-existing shape when none of the new inputs are available', () => {
     const context = createContext();
     const finding = createFinding();
@@ -190,6 +200,7 @@ describe('findings output schema', () => {
     const report = createReport({
       metadata: { internal: true },
       runtime: 'pi',
+      auxiliaryUsageAttribution: { verification: { model: 'verifier', runtime: 'claude' } },
       failedHunks: 1,
     });
     const output = buildFindingsOutput([report], createContext(), [], {
@@ -209,10 +220,11 @@ describe('findings output schema', () => {
       report: {
         skill: 'test-skill',
         summary: 'Found 1 issue',
+        runtime: 'pi',
+        auxiliaryUsageAttribution: { verification: { model: 'verifier', runtime: 'claude' } },
       },
     });
     expect(output.triggerResults?.[0]).not.toHaveProperty('report.metadata');
-    expect(output.triggerResults?.[0]).not.toHaveProperty('report.runtime');
     expect(output.triggerResults?.[0]).not.toHaveProperty('report.failedHunks');
   });
 

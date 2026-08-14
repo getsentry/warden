@@ -19,7 +19,7 @@ export type PRPromptContext = PromptPRContext;
  * (applicationType, trustBoundaries, filesChecked) to cache across hunks, allow
  * user overrides, or build analytics. Not implemented since we don't consume it yet.
  */
-export function buildHunkSystemPrompt(skill: SkillDefinition): string {
+export function buildHunkSystemPrompt(skill: SkillDefinition, historicalEvidence?: string): string {
   const sections = [
     `<role>
 You are a code analysis agent for Warden. You evaluate code changes against specific skill criteria and report findings ONLY when the code violates or conflicts with those criteria. You do not perform general code review or report issues outside the skill's scope.
@@ -77,6 +77,8 @@ Requirements:
 - Focus your analysis on the code changes in the hunk. Surrounding context and tool results are for understanding only -- all findings must reference lines within the hunk range.
 `),
   ];
+
+  if (historicalEvidence) sections.push(historicalEvidence);
 
   const { rootDir } = skill;
   if (rootDir) {

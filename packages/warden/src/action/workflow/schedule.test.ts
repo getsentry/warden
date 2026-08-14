@@ -228,6 +228,7 @@ describe('runScheduleWorkflow', () => {
     // Environment setup
     process.env['GITHUB_REPOSITORY'] = 'test-owner/test-repo';
     process.env['GITHUB_SHA'] = 'abc123';
+    process.env['GITHUB_RUN_ID'] = '123';
 
     // Default mock: context with files, no findings
     mockBuildContext.mockResolvedValue(createScheduleContext());
@@ -250,6 +251,7 @@ describe('runScheduleWorkflow', () => {
   afterEach(() => {
     delete process.env['GITHUB_REPOSITORY'];
     delete process.env['GITHUB_SHA'];
+    delete process.env['GITHUB_RUN_ID'];
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
@@ -268,6 +270,33 @@ describe('runScheduleWorkflow', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(
         '::warning::No warden.toml found. Skipping analysis.'
       );
+    });
+
+    it('publishes an empty run when the local findings write fails', async () => {
+      mockWriteFindingsOutput.mockImplementationOnce(() => {
+        throw new Error('disk unavailable');
+      });
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
+        protocolVersion: 1,
+        runId: 'stored-run',
+        checksum: 'a'.repeat(64),
+        created: true,
+      }));
+
+      try {
+        await runScheduleWorkflow(mockOctokit, createDefaultInputs({
+          serviceUrl: 'https://warden.example.com',
+          serviceToken: 'service-token',
+          serviceMemory: false,
+        }), NO_CONFIG_FIXTURES);
+
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Failed to write findings output'),
+        );
+      } finally {
+        fetchMock.mockRestore();
+      }
     });
 
     it('loads the base config when repo warden.toml is missing', async () => {
@@ -504,6 +533,51 @@ describe('runScheduleWorkflow', () => {
 
       expect(mockRunSkill).not.toHaveBeenCalled();
       expect(mockCreateOrUpdateIssue).not.toHaveBeenCalled();
+    });
+
+    it('recalls schedule memory from the union of trigger paths', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, request) => {
+        const body = JSON.parse(String(request?.body)) as { clientRecallId?: string };
+        if (String(url).endsWith('/api/v1/memory/recall')) {
+          return Response.json({
+            protocolVersion: 1,
+            clientRecallId: body.clientRecallId,
+            memories: [{
+              id: 'memory-1',
+              version: 1,
+              kind: 'convention',
+              content: 'Keep shared behavior consistent.',
+            }],
+          });
+        }
+        return Response.json({
+          protocolVersion: 1,
+          runId: 'stored-run',
+          checksum: 'a'.repeat(64),
+          created: true,
+        });
+      });
+
+      await runScheduleWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          serviceUrl: 'https://warden.example.com',
+          serviceToken: 'service-token',
+          serviceMemory: true,
+        }),
+        SCHEDULE_MULTI_FIXTURES,
+      );
+
+      expect(mockBuildContext.mock.calls[0]?.[0].patterns).toEqual([
+        'src/**/*.ts',
+        'lib/**/*.js',
+      ]);
+      expect(mockRunSkill).toHaveBeenCalledTimes(2);
+      for (const [, , options] of mockRunSkill.mock.calls) {
+        expect(options?.historicalEvidence).toContain('Keep shared behavior consistent.');
+      }
+      expect(fetchMock.mock.calls.filter(([url]) =>
+        String(url).endsWith('/api/v1/memory/recall'))).toHaveLength(1);
     });
   });
 

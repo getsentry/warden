@@ -17,6 +17,8 @@ import {
   resolveCliEffort,
   appendReportToRunLog,
   buildFinalChunkRecords,
+  cliRunOutcome,
+  interrupted,
   renderFinalRunLogContent,
   type RunLog,
   type RunSkillSpec,
@@ -38,6 +40,7 @@ const tempDirs: string[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+  interrupted.value = false;
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -84,6 +87,16 @@ function createCliOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     ...overrides,
   };
 }
+
+describe('cliRunOutcome', () => {
+  it('uses the finalized exit code even if an interrupt arrives later', () => {
+    interrupted.value = true;
+    expect(cliRunOutcome(0)).toBe('success');
+    expect(cliRunOutcome(1)).toBe('failure');
+    expect(cliRunOutcome(130)).toBe('cancelled');
+    interrupted.value = false;
+  });
+});
 
 describe('buildFinalChunkRecords', () => {
   it('adds missing post-processing auxiliary usage without double-counting chunk auxiliary usage', () => {

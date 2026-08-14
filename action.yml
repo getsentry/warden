@@ -59,6 +59,21 @@ inputs:
     description: 'The action ref that produced this run, surfaced in the findings output harness field'
     required: false
     default: ${{ github.action_ref }}
+  service-url:
+    description: 'Optional Warden service URL'
+    required: false
+  service-token:
+    description: 'Warden service token. Store this value as a GitHub secret.'
+    required: false
+  service-data:
+    description: 'Service data profile: metrics, findings, or code. Defaults to findings.'
+    required: false
+  service-memory:
+    description: 'Enable repository memory. Defaults to true for findings/code and false for metrics.'
+    required: false
+  service-timeout-ms:
+    description: 'Total deadline for each optional service request'
+    required: false
 
 outputs:
   findings-count:
@@ -95,4 +110,9 @@ runs:
         INPUT_FAIL_CHECK: ${{ inputs.fail-check }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
         INPUT_ACTION_REF: ${{ inputs.action-ref }}
+        INPUT_SERVICE_URL: ${{ inputs.service-url }}
+        INPUT_SERVICE_TOKEN: ${{ inputs.service-token }}
+        INPUT_SERVICE_DATA: ${{ inputs.service-data }}
+        INPUT_SERVICE_MEMORY: ${{ inputs.service-memory }}
+        INPUT_SERVICE_TIMEOUT_MS: ${{ inputs.service-timeout-ms }}
       run: node ${{ github.action_path }}/dist/action/index.js

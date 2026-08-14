@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { EventContext, SkillReport } from '../../types/index.js';
 import {
+  AuxiliaryUsageAttributionMapSchema,
   AuxiliaryUsageMapSchema,
   FindingSchema,
   GitHubEventTypeSchema,
@@ -119,7 +120,9 @@ const ReplaySkillReportSchema = z.object({
   durationMs: z.number().nonnegative().optional(),
   usage: UsageStatsSchema.optional(),
   auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+  auxiliaryUsageAttribution: AuxiliaryUsageAttributionMapSchema.optional(),
   model: z.string().optional(),
+  runtime: z.string().optional(),
 });
 
 export const TriggerRunResultSchema = z.discriminatedUnion('status', [
@@ -161,6 +164,11 @@ export const FindingsOutputSchema = z.object({
     headSha: z.string(),
   }).optional(),
   runId: z.string(),
+  recalledMemories: z.array(z.object({
+    id: z.string().trim().min(1).max(128),
+    version: z.number().int().positive(),
+  }).strict()).max(5).optional(),
+  memoryRecallId: z.string().trim().min(1).max(128).optional(),
   /** The model/threshold config this run resolved to at the action level. */
   resolvedDefaults: ResolvedDefaultsSchema.optional(),
   /** Configured triggers that never fired this run, with why. */
@@ -186,6 +194,9 @@ export const FindingsOutputSchema = z.object({
     name: z.string(),
     summary: z.string(),
     model: z.string().optional(),
+    runtime: z.string().optional(),
+    auxiliaryUsage: AuxiliaryUsageMapSchema.optional(),
+    auxiliaryUsageAttribution: AuxiliaryUsageAttributionMapSchema.optional(),
     auxiliaryModel: z.string().optional(),
     synthesisModel: z.string().optional(),
     durationMs: z.number().nonnegative().optional(),
@@ -215,7 +226,7 @@ export const FindingsOutputSchema = z.object({
   /** Verifier-rejected and merge-absorbed candidates that never reached `findings[]`. */
   discardedFindings: z.array(DiscardedFindingSchema).optional(),
   triggerResults: z.array(TriggerRunResultSchema).optional(),
-  findingObservations: z.array(FindingObservationSchema),
+  findingObservations: z.array(FindingObservationSchema).default([]),
 });
 
 export type FindingsOutput = z.infer<typeof FindingsOutputSchema>;
@@ -258,6 +269,8 @@ export interface BuildFindingsOutputOptions {
   skippedTriggers?: z.infer<typeof SkippedTriggerSchema>[];
   /** Per-execution metadata (skillExecutionId, posting-derived fields, captured provenance events) matched to `reports[]` by object identity. */
   skillExecutions?: SkillExecutionMeta[];
+  recalledMemories?: readonly { id: string; version: number }[];
+  memoryRecallId?: string;
 }
 
 /** Build the action-level `resolvedDefaults` block from parsed action inputs. */
@@ -313,7 +326,9 @@ function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillR
     durationMs: report.durationMs,
     usage: report.usage,
     auxiliaryUsage: report.auxiliaryUsage,
+    auxiliaryUsageAttribution: report.auxiliaryUsageAttribution,
     model: report.model,
+    runtime: report.runtime,
   };
 }
 
@@ -424,6 +439,8 @@ export function buildFindingsOutput(
       },
     }),
     runId: options.runId ?? process.env['GITHUB_RUN_ID'] ?? '',
+    ...(options.recalledMemories?.length ? { recalledMemories: [...options.recalledMemories] } : {}),
+    ...(options.memoryRecallId ? { memoryRecallId: options.memoryRecallId } : {}),
     ...(options.resolvedDefaults && { resolvedDefaults: options.resolvedDefaults }),
     ...(options.skippedTriggers && { skippedTriggers: options.skippedTriggers }),
     summary: {
@@ -439,6 +456,9 @@ export function buildFindingsOutput(
         name: r.skill,
         summary: r.summary,
         model: r.model,
+        runtime: r.runtime,
+        auxiliaryUsage: r.auxiliaryUsage,
+        auxiliaryUsageAttribution: r.auxiliaryUsageAttribution,
         auxiliaryModel: meta?.auxiliaryModel,
         synthesisModel: meta?.synthesisModel,
         durationMs: r.durationMs,

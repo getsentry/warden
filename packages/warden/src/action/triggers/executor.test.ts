@@ -238,6 +238,26 @@ describe('executeTrigger', () => {
     );
   });
 
+  it('passes recalled repository memory to the skill runner as historical evidence', async () => {
+    const mockReport = createReport();
+    const historicalEvidence = '<historical_evidence>Prefer repository conventions.</historical_evidence>';
+
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    await executeTrigger(mockTrigger, { ...mockDeps, historicalEvidence });
+
+    expect(runSkillTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runnerOptions: expect.objectContaining({ historicalEvidence }),
+      }),
+      expect.any(Number),
+      expect.anything(),
+      undefined
+    );
+  });
+
   it('executes a trigger successfully with findings', async () => {
     const mockReport = createReport([
       { id: 'test-1', severity: 'medium', confidence: 'high', title: 'Test finding', description: 'Test' },

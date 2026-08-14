@@ -150,6 +150,8 @@ export interface SkillRunnerOptions {
   triggerName?: string;
   /** Capture per-hunk runtime traces in structured run output. Defaults to false. */
   captureTraces?: boolean;
+  /** Quoted, lower-authority repository history admitted by the optional memory service. */
+  historicalEvidence?: string;
 }
 
 export type AnalysisChunkingConfig = Pick<ChunkingConfig, 'filePatterns' | 'coalesce'>;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DataProfileSchema } from '@sentry/warden-service-api';
 import { RuntimeNameSchema, type RuntimeName } from '../sdk/runtimes/types.js';
 import { SeverityThresholdSchema, ConfidenceThresholdSchema } from '../types/index.js';
 
@@ -287,6 +288,39 @@ export const LogsConfigSchema = z.object({
 });
 export type LogsConfig = z.infer<typeof LogsConfigSchema>;
 
+const ServiceEndpointSchema = z.string().url().refine((value) => {
+  let endpoint: URL;
+  try {
+    endpoint = new URL(value);
+  } catch {
+    return false;
+  }
+  if (endpoint.username || endpoint.password) return false;
+  if (endpoint.protocol === 'https:') return true;
+  return endpoint.protocol === 'http:'
+    && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname);
+}, 'Service URL must use HTTPS, except for local development');
+
+export const ServiceConfigSchema = z.object({
+  /** Optional endpoint. Environment credentials are never paired with a config-only URL. */
+  url: ServiceEndpointSchema.optional(),
+  /** Maximum class of run data sent to the service. Default: findings. */
+  data: DataProfileSchema.default('findings'),
+  /** Recall and learn repository memory. The final service resolver applies profile-aware defaults. */
+  memory: z.boolean().optional(),
+  /** Total deadline for each optional service operation. */
+  timeoutMs: z.number().int().min(100).max(30_000).default(2_000),
+}).superRefine((service, context) => {
+  if (service.memory && service.data === 'metrics') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['memory'],
+      message: 'service.memory requires service.data to be findings or code',
+    });
+  }
+});
+export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
+
 // Main warden.toml configuration
 export const WardenConfigSchema = z
   .object({
@@ -295,6 +329,7 @@ export const WardenConfigSchema = z
     skills: z.array(SkillConfigSchema).default([]),
     runner: RunnerConfigSchema.optional(),
     logs: LogsConfigSchema.optional(),
+    service: ServiceConfigSchema.optional(),
   })
   .superRefine((config, ctx) => {
     const names = config.skills.map((s) => s.name);
