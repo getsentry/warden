@@ -1,6 +1,7 @@
 export { createWardenService } from './app.js';
 export type {
   CreateWardenServiceOptions,
+  DashboardAssets,
   RateLimitHook,
   WardenServiceApp,
 } from './app.js';

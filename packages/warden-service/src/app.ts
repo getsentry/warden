@@ -1,9 +1,11 @@
 import { ApiErrorSchema } from '@sentry/warden-service-api';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 import { authenticate, requireRole } from './auth.js';
 import type { DashboardAuthenticationAdapter, ServiceVariables } from './auth.js';
+import { hasRole } from './context.js';
 import { createTokenSessionAdapter, registerDashboardSessionRoutes } from './dashboard-auth.js';
 import type { WardenDatabase } from './db/database.js';
 import { getSchemaStatus } from './db/migrations.js';
@@ -38,6 +40,12 @@ export type RateLimitHook = (input: {
   credentialPresent: boolean;
 }) => boolean | Promise<boolean>;
 
+export interface DashboardAssets {
+  html: string;
+  script: string;
+  stylesheet: string;
+}
+
 export interface CreateWardenServiceOptions {
   database?: WardenDatabase;
   rateLimit?: RateLimitHook;
@@ -50,6 +58,7 @@ export interface CreateWardenServiceOptions {
   googleAuth?: GoogleBrowserAuthOptions;
   disableAuth?: { tenantId: string };
   memoryRecall?: RecallMemoryOptions;
+  dashboard?: DashboardAssets;
 }
 
 function createDisabledAuthenticationAdapter(tenantId: string): DashboardAuthenticationAdapter {
@@ -64,6 +73,21 @@ function createDisabledAuthenticationAdapter(tenantId: string): DashboardAuthent
       };
     },
   };
+}
+
+function requireDashboardSession(authentication?: DashboardAuthenticationAdapter) {
+  return createMiddleware<{ Variables: ServiceVariables }>(async (context, next) => {
+    const serviceContext = await authentication?.authenticate(context.req.raw) ?? null;
+    if (!serviceContext) {
+      return context.redirect(new URL('/api/auth/login', context.req.url).toString());
+    }
+    if (!hasRole(serviceContext, 'read')) {
+      return context.json({ error: { code: 'forbidden', message: 'Permission denied.' } }, 403);
+    }
+    context.set('serviceContext', serviceContext);
+    context.set('authenticationMethod', 'session');
+    await next();
+  });
 }
 
 function validatedJson<TSchema extends z.ZodType>(
@@ -178,6 +202,23 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
     }
     if (options.googleAuth) {
       registerGoogleAuthRoutes(app, options.googleAuth);
+    }
+    if (options.dashboard) {
+      const dashboard = options.dashboard;
+      const requireSession = requireDashboardSession(dashboardAuth);
+      for (const path of ['/', '/index.html']) {
+        app.get(path, requireSession, (context) => context.html(dashboard.html));
+      }
+      app.get('/assets/app.js', requireSession, (context) => context.body(
+        dashboard.script,
+        200,
+        { 'Content-Type': 'text/javascript; charset=utf-8' },
+      ));
+      app.get('/assets/styles.css', requireSession, (context) => context.body(
+        dashboard.stylesheet,
+        200,
+        { 'Content-Type': 'text/css; charset=utf-8' },
+      ));
     }
     app.use('/api/v1/*', authenticate(options.database, dashboardAuth));
     app.get('/api/v1/auth/context', requireRole('read'), (context) => {

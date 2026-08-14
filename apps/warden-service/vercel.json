@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "pnpm build",
-  "outputDirectory": "public",
+  "outputDirectory": "static",
   "functions": {
     "api/index.ts": {
       "maxDuration": 30,
@@ -29,8 +29,16 @@
       "destination": "/api"
     },
     {
-      "source": "/((?!api/|assets/).*)",
-      "destination": "/index.html"
+      "source": "/assets/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/api"
+    },
+    {
+      "source": "/",
+      "destination": "/api"
     }
   ],
   "headers": [

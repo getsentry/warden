@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe('Vercel service app', () => {
-  it('declares Node functions, bounded resources, cron, and static dashboard assets', async () => {
+  it('declares Node functions, bounded resources, cron, and protected dashboard routes', async () => {
     const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8')) as {
       functions: Record<string, { maxDuration: number; memory: number }>;
       crons: { path: string }[];
@@ -22,13 +22,17 @@ describe('Vercel service app', () => {
 
     expect(config.functions['api/index.ts']).toEqual({ maxDuration: 30, memory: 1024 });
     expect(config.crons).toContainEqual(expect.objectContaining({ path: '/api/internal/jobs/tick' }));
-    expect(config.outputDirectory).toBe('public');
+    expect(config.outputDirectory).toBe('static');
     expect(config.rewrites).toEqual(expect.arrayContaining([
       { source: '/health', destination: '/api' },
       { source: '/ready', destination: '/api' },
+      { source: '/assets/(.*)', destination: '/api' },
+      { source: '/index.html', destination: '/api' },
+      { source: '/', destination: '/api' },
     ]));
     expect(config.rewrites).toContainEqual({ source: '/api/(.*)', destination: '/api' });
     expect(config.rewrites).not.toContainEqual({ source: '/api/:path*', destination: '/api' });
+    expect(config.rewrites).not.toContainEqual({ source: '/((?!api/|assets/).*)', destination: '/index.html' });
     expect(ServiceEnvironmentSchema.safeParse({}).success).toBe(false);
   });
 
@@ -117,6 +121,15 @@ describe('Vercel service app', () => {
       const response = await fetch(`http://127.0.0.1:${port}/health`);
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toEqual({ status: 'ok', service: 'warden-service' });
+
+      const page = await fetch(`http://127.0.0.1:${port}/`);
+      expect(page.status).toBe(200);
+      expect(page.headers.get('content-type')).toContain('text/html');
+      expect(await page.text()).toContain('<title>Warden Service</title>');
+
+      const asset = await fetch(`http://127.0.0.1:${port}/assets/app.js`);
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get('content-type')).toContain('text/javascript');
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => {
         if (error) reject(error);
@@ -136,6 +149,15 @@ describe('Vercel service app', () => {
       GOOGLE_CLIENT_ID: 'google-client-id',
       GOOGLE_CLIENT_SECRET: 'google-client-secret',
     });
+
+    const page = await app.request('https://warden.example/');
+    expect(page.status).toBe(302);
+    expect(page.headers.get('location')).toBe('https://warden.example/api/auth/login');
+
+    const asset = await app.request('https://warden.example/assets/app.js');
+    expect(asset.status).toBe(302);
+    expect(asset.headers.get('location')).toBe('https://warden.example/api/auth/login');
+    expect((await app.request('https://warden.example/index.html')).status).toBe(302);
 
     const response = await app.request('https://warden.example/api/auth/login');
     expect(response.status).toBe(302);
