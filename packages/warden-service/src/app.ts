@@ -1,6 +1,5 @@
 import { ApiErrorSchema } from '@sentry/warden-service-api';
 import { Hono } from 'hono';
-import { bodyLimit } from 'hono/body-limit';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 import { authenticate, requireRole } from './auth.js';
@@ -97,6 +96,41 @@ function validatedJson<TSchema extends z.ZodType>(
   return context.json(schema.parse(value), status);
 }
 
+function bufferRequestBody(maxSize: number) {
+  return createMiddleware(async (context, next) => {
+    const request = context.req.raw;
+    if (!request.body) return next();
+
+    const declaredSize = Number(request.headers.get('content-length'));
+    if (Number.isFinite(declaredSize) && declaredSize > maxSize) {
+      return context.json({ error: { code: 'payload_too_large', message: 'Request is too large.' } }, 413);
+    }
+
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxSize) {
+        await reader.cancel();
+        return context.json({ error: { code: 'payload_too_large', message: 'Request is too large.' } }, 413);
+      }
+      chunks.push(value);
+    }
+
+    const body = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    context.req.raw = new Request(request, { body });
+    await next();
+  });
+}
+
 /** Create the portable Hono application used by Vercel and Node hosts. */
 export function createWardenService(options: CreateWardenServiceOptions = {}) {
   const jobHandlers = options.jobHandlers;
@@ -115,12 +149,7 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
     context.header('X-Content-Type-Options', 'nosniff');
   });
 
-  app.use('/api/*', bodyLimit({
-    maxSize: maxRequestBytes,
-    onError: (context) => context.json({
-      error: { code: 'payload_too_large', message: 'Request is too large.' },
-    }, 413),
-  }));
+  app.use('/api/*', bufferRequestBody(maxRequestBytes));
 
   app.use('/api/*', async (context, next) => {
     if (options.rateLimit && !await options.rateLimit({
