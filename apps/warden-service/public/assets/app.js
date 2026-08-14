@@ -8,6 +8,8 @@ const apiAccess = document.querySelector('#api-access');
 const apiDialog = document.querySelector('#api-dialog');
 const apiDialogContent = document.querySelector('#api-dialog-content');
 const apiDialogClose = document.querySelector('#api-dialog-close');
+const pageTitle = document.querySelector('#page-title');
+const pageDescription = document.querySelector('#page-description');
 let dimensions;
 let filterTimer;
 let renderVersion = 0;
@@ -43,6 +45,12 @@ function formatDate(value) {
   return value
     ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
     : 'Never';
+}
+
+function setPage(title, description) {
+  pageTitle.textContent = title;
+  pageDescription.textContent = description;
+  document.title = title === 'Explore' ? 'Warden Service' : `${title} · Warden`;
 }
 
 function setAccountMenuOpen(open) {
@@ -82,9 +90,14 @@ async function api(path, options) {
     headers: { accept: 'application/json', ...headers },
   });
   if (!response.ok) {
-    const error = new Error(response.status === 401
-      ? 'Authentication required.'
-      : 'Could not load service data. Try again.');
+    let message = response.status === 401 ? 'Authentication required.' : 'Request failed. Try again.';
+    try {
+      const body = await response.json();
+      if (body?.error?.message) message = body.error.message;
+    } catch {
+      // The status-based message covers non-JSON responses.
+    }
+    const error = new Error(message);
     error.status = response.status;
     throw error;
   }
@@ -158,8 +171,9 @@ async function renderApiAccess() {
         form.after(notice);
         const list = apiDialogContent.querySelector('.token-list');
         if (list) list.prepend(tokenRow(created));
-      } catch {
-        error.textContent = 'Could not create the token. Try again.';
+      } catch (cause) {
+        const detail = cause instanceof Error ? cause.message : 'Try again.';
+        error.textContent = `Could not create the token. ${detail}`;
       } finally {
         create.disabled = false;
       }
@@ -426,6 +440,7 @@ function findingRows(finding) {
   disclosure.setAttribute('aria-hidden', 'true');
   const summaryText = element('div', undefined, 'finding-summary-text');
   summaryText.append(
+    element('div', finding.displayId, 'finding-display-id'),
     element('div', finding.title, 'finding-title'),
     element('div', finding.description, 'finding-description'),
   );
@@ -461,9 +476,11 @@ function findingRows(finding) {
   description.append(
     element('div', 'Description', 'finding-detail-label'),
     element('p', finding.description, 'finding-detail-description'),
+    link('View finding', `/findings/${encodeURIComponent(finding.id)}`),
   );
   const metadata = element('dl', undefined, 'finding-detail-metadata');
   metadata.append(
+    findingDetail('ID', finding.displayId),
     findingDetail('Repository', finding.repository.fullName),
     findingDetail('Skill', finding.skill),
     findingDetail('Location', locationText),
@@ -525,6 +542,8 @@ function findingsSection(data, params) {
 }
 
 async function renderExplore(version) {
+  setPage('Explore', 'Filter findings and understand where Warden spends time and money.');
+  filterHost.hidden = false;
   if (!filterHost.querySelector('form')) await renderFilters();
   if (version !== renderVersion) return;
   const params = new URLSearchParams(location.search);
@@ -573,9 +592,40 @@ async function renderExplore(version) {
   content.replaceChildren(section);
 }
 
+async function renderFinding(version, findingId) {
+  setPage('Finding', 'Loading finding details.');
+  filterHost.replaceChildren();
+  filterHost.hidden = true;
+  const { finding } = await api(`/api/v1/findings/${encodeURIComponent(findingId)}`);
+  if (version !== renderVersion) return;
+  setPage(finding.displayId, finding.title);
+
+  const section = element('section', undefined, 'finding-page');
+  section.append(link('Back to findings', '/'));
+  const article = element('article', undefined, 'finding-page-card');
+  const heading = element('div', undefined, 'finding-page-heading');
+  heading.append(
+    element('span', finding.severity, `severity ${finding.severity}`),
+    element('span', finding.outcome ?? 'Not reported', `finding-status ${finding.outcome ?? ''}`),
+  );
+  const description = element('p', finding.description, 'finding-page-description');
+  const metadata = element('dl', undefined, 'finding-page-metadata');
+  metadata.append(
+    findingDetail('ID', finding.displayId),
+    findingDetail('Repository', finding.repository.fullName),
+    findingDetail('Skill', finding.skill),
+    findingDetail('Location', findingLocation(finding)),
+    findingDetail('Confidence', finding.confidence ?? 'Not reported'),
+    findingDetail('Observed', finding.observedAt ? formatDate(finding.observedAt) : 'Not reported'),
+    findingDetail('Completed', formatDate(finding.completedAt)),
+  );
+  article.append(heading, description, metadata);
+  section.append(article);
+  content.replaceChildren(section);
+}
+
 async function render() {
   const version = ++renderVersion;
-  if (location.pathname !== '/') history.replaceState({}, '', `/${location.search}`);
   if (!content.children.length || content.querySelector('.login-panel, .empty')) {
     content.replaceChildren(empty('Loading data'));
   }
@@ -585,7 +635,9 @@ async function render() {
     apiAccess.hidden = !authContext.canManagePersonalTokens;
     signOut.hidden = authContext.authDisabled;
     accountMenu.hidden = apiAccess.hidden && signOut.hidden;
-    await renderExplore(version);
+    const findingPath = location.pathname.match(/^\/findings\/([^/]+)\/?$/);
+    if (findingPath) await renderFinding(version, decodeURIComponent(findingPath[1]));
+    else await renderExplore(version);
     if (version !== renderVersion) return;
   } catch (error) {
     if (version !== renderVersion) return;

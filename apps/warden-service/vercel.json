@@ -37,6 +37,10 @@
       "destination": "/api"
     },
     {
+      "source": "/findings/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/",
       "destination": "/api"
     }

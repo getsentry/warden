@@ -28,6 +28,7 @@ describe('Vercel service app', () => {
       { source: '/ready', destination: '/api' },
       { source: '/assets/(.*)', destination: '/api' },
       { source: '/index.html', destination: '/api' },
+      { source: '/findings/(.*)', destination: '/api' },
       { source: '/', destination: '/api' },
     ]));
     expect(config.rewrites).toContainEqual({ source: '/api/(.*)', destination: '/api' });
@@ -59,6 +60,9 @@ describe('Vercel service app', () => {
     expect(script).not.toContain('renderRuns');
     expect(script).not.toContain('renderMemory');
     expect(script).toContain("'/api/v1/findings'");
+    expect(script).toContain("`/api/v1/findings/${encodeURIComponent(findingId)}`");
+    expect(script).toContain("`/findings/${encodeURIComponent(finding.id)}`");
+    expect(script).toContain('finding.displayId');
     expect(script).toContain("'groupBy', 'repository'");
     expect(script).toContain("'groupBy', 'skill'");
     expect(script).toContain("const byDay = await api(apiPath('/api/v1/costs', dayCosts))");
@@ -158,6 +162,7 @@ describe('Vercel service app', () => {
     expect(asset.status).toBe(302);
     expect(asset.headers.get('location')).toBe('/api/auth/login');
     expect((await app.request('https://warden.example/index.html')).status).toBe(302);
+    expect((await app.request('https://warden.example/findings/00000000-0000-4000-8000-000000000001')).status).toBe(302);
 
     const response = await app.request('https://warden.example/api/auth/login');
     expect(response.status).toBe(302);

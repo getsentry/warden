@@ -54,6 +54,7 @@ export interface CreateWardenServiceOptions {
   sessionSecret?: string;
   sessionTtlSeconds?: number;
   dashboardAuth?: DashboardAuthenticationAdapter;
+  sessionOrigin?: string;
   googleAuth?: GoogleBrowserAuthOptions;
   disableAuth?: { tenantId: string };
   memoryRecall?: RecallMemoryOptions;
@@ -236,6 +237,7 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
       for (const path of ['/', '/index.html']) {
         app.get(path, requireSession, (context) => context.html(dashboard.html));
       }
+      app.get('/findings/:id', requireSession, (context) => context.html(dashboard.html));
       app.get('/assets/app.js', requireSession, (context) => context.body(
         dashboard.script,
         200,
@@ -247,7 +249,7 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
         { 'Content-Type': 'text/css; charset=utf-8' },
       ));
     }
-    app.use('/api/v1/*', authenticate(options.database, dashboardAuth));
+    app.use('/api/v1/*', authenticate(options.database, dashboardAuth, options.sessionOrigin));
     app.get('/api/v1/auth/context', requireRole('read'), (context) => {
       const serviceContext = context.get('serviceContext');
       return context.json({

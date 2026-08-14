@@ -58,7 +58,9 @@ export { ingestRun, RunIngestionError } from './runs/ingest.js';
 export type { IngestRunResult } from './runs/ingest.js';
 export {
   aggregateCosts,
+  getFindingDetail,
   getRunDetail,
+  listFindings,
   listRepositories,
   listRuns,
   listSkills,
@@ -122,6 +124,7 @@ export type {
 } from './jobs/runner.js';
 export type {
   CostDimension,
+  FindingListFilters,
   HistoryFilters,
   RunListFilters,
 } from './history/store.js';

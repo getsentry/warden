@@ -183,6 +183,7 @@ describe('createWardenService', () => {
     const page = await app.request('https://warden.example/');
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toContain('text/html');
+    expect((await app.request('https://warden.example/findings/00000000-0000-4000-8000-000000000001')).status).toBe(200);
 
     const authenticated = await app.request('https://warden.example/api/v1/auth/context');
     expect(authenticated.status).toBe(200);
@@ -245,6 +246,7 @@ describe('createWardenService', () => {
       async query<TRow extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
         if (sql.includes('FROM findings f')) return { rows: [{
           id: '00000000-0000-4000-8000-000000000010',
+          client_finding_id: '7MV-5V7', reported_id: null,
           run_id: '00000000-0000-4000-8000-000000000011',
           client_run_id: 'run-11',
           provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
@@ -272,8 +274,15 @@ describe('createWardenService', () => {
     const findings = await app.request('/api/v1/findings?skill=security&query=unsafe');
     expect(findings.status).toBe(200);
     await expect(findings.json()).resolves.toMatchObject({
-      items: [{ title: 'Unsafe query', skill: 'security', repository: { fullName: 'acme/widgets' } }],
+      items: [{ displayId: '7MV-5V7', title: 'Unsafe query', skill: 'security', repository: { fullName: 'acme/widgets' } }],
     });
+
+    const detail = await app.request('/api/v1/findings/00000000-0000-4000-8000-000000000010');
+    expect(detail.status).toBe(200);
+    await expect(detail.json()).resolves.toMatchObject({
+      finding: { id: '00000000-0000-4000-8000-000000000010', displayId: '7MV-5V7' },
+    });
+    expect((await app.request('/api/v1/findings/not-a-uuid')).status).toBe(404);
 
     const costs = await app.request('/api/v1/costs?groupBy=skill&skill=security');
     expect(costs.status).toBe(200);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceContext } from '../context.js';
 import type { QueryResult, WardenDatabase } from '../db/database.js';
-import { aggregateCosts, getRunDetail, listFindings, listRepositories, listRuns, listSkills, summarizeOutcomes } from './store.js';
+import { aggregateCosts, getFindingDetail, getRunDetail, listFindings, listRepositories, listRuns, listSkills, summarizeOutcomes } from './store.js';
 
 const context: ServiceContext = {
   tenantId: '00000000-0000-0000-0000-000000000001',
@@ -116,6 +116,8 @@ describe('history store', () => {
       captured = { sql, values };
       return { rows: [{
         id: '00000000-0000-0000-0000-000000000020',
+        client_finding_id: '7MV-5V7',
+        reported_id: null,
         run_id: '00000000-0000-0000-0000-000000000021',
         client_run_id: 'run-21',
         provider: 'github',
@@ -145,6 +147,7 @@ describe('history store', () => {
     });
 
     expect(page.items[0]).toMatchObject({
+      displayId: '7MV-5V7',
       title: 'Missing authorization check',
       repository: { fullName: 'acme/widgets' },
       location: { path: 'src/api.ts', startLine: 42 },
@@ -171,13 +174,14 @@ describe('history store', () => {
 
     await listRuns(database, restricted, {});
     await listFindings(database, restricted, {});
+    await getFindingDetail(database, restricted, '00000000-0000-0000-0000-000000000098');
     await getRunDetail(database, restricted, '00000000-0000-0000-0000-000000000099');
     await listRepositories(database, restricted);
     await listSkills(database, restricted);
     await summarizeOutcomes(database, restricted, {});
     await aggregateCosts(database, restricted, {}, ['repository']);
 
-    expect(statements).toHaveLength(8);
+    expect(statements).toHaveLength(9);
     for (const statement of statements) {
       expect(statement.sql).toContain('full_name = ANY');
       expect(statement.values).toContainEqual(['acme/widgets']);

@@ -40,6 +40,7 @@ export type {
 export {
   ApiErrorSchema,
   CostAggregateResponseSchema,
+  FindingDetailResponseSchema,
   FindingFeedItemSchema,
   FindingListResponseSchema,
   FindingOutcomeSchema,
@@ -64,6 +65,7 @@ export {
 export type {
   ApiError,
   CostAggregateResponse,
+  FindingDetailResponse,
   FindingFeedItem,
   FindingListResponse,
   IngestRunResponse,
