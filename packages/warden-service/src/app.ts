@@ -78,9 +78,7 @@ function createDisabledAuthenticationAdapter(tenantId: string): DashboardAuthent
 function requireDashboardSession(authentication?: DashboardAuthenticationAdapter) {
   return createMiddleware<{ Variables: ServiceVariables }>(async (context, next) => {
     const serviceContext = await authentication?.authenticate(context.req.raw) ?? null;
-    if (!serviceContext) {
-      return context.redirect(new URL('/api/auth/login', context.req.url).toString());
-    }
+    if (!serviceContext) return context.redirect('/api/auth/login');
     if (!hasRole(serviceContext, 'read')) {
       return context.json({ error: { code: 'forbidden', message: 'Permission denied.' } }, 403);
     }
