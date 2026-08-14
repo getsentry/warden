@@ -75,7 +75,9 @@ describe('Vercel service app', () => {
     expect(`${html}\n${script}`).not.toContain('WARDEN_SERVICE_TOKEN');
     expect(`${html}\n${script}`).not.toContain('localStorage');
     expect(script).toContain("'/api/v1/personal-tokens'");
-    expect(script).toContain("window.location.assign('/api/auth/login')");
+    expect(script).toContain(
+      'window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`)',
+    );
     expect(script).toContain("fetch('/api/auth/sign-out'");
     expect(script).toContain("row.setAttribute('aria-expanded', 'false')");
     expect(script).toContain("event.key !== 'Enter' && event.key !== ' '");

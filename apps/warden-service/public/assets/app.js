@@ -642,7 +642,8 @@ async function render() {
   } catch (error) {
     if (version !== renderVersion) return;
     if (error instanceof Error && error.status === 401) {
-      window.location.assign('/api/auth/login');
+      const returnTo = `${location.pathname}${location.search}`;
+      window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`);
       return;
     }
     content.replaceChildren(element('div', error instanceof Error

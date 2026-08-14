@@ -205,8 +205,24 @@ describe('createWardenService', () => {
     expect(protectedPage.status).toBe(302);
     expect(protectedPage.headers.get('location')).toBe('/api/auth/login');
     expect((await app.request('https://warden.example/assets/app.js')).status).toBe(302);
+    const protectedFinding = await app.request(
+      'https://warden.example/findings/00000000-0000-4000-8000-000000000001',
+    );
+    expect(protectedFinding.headers.get('location')).toBe(
+      '/api/auth/login?returnTo=%2Ffindings%2F00000000-0000-4000-8000-000000000001',
+    );
     expect((await app.request('https://warden.example/api/auth/login')).headers.get('location'))
       .toBe('https://accounts.google.com/');
+    expect(callbackURL).toBe('https://warden.example/');
+
+    await app.request(
+      'https://warden.example/api/auth/login?returnTo=%2Ffindings%2F00000000-0000-4000-8000-000000000001',
+    );
+    expect(callbackURL).toBe(
+      'https://warden.example/findings/00000000-0000-4000-8000-000000000001',
+    );
+
+    await app.request('https://warden.example/api/auth/login?returnTo=https%3A%2F%2Fexample.com');
     expect(callbackURL).toBe('https://warden.example/');
     expect(await (await app.request('/api/auth/sign-out', { method: 'POST' })).text()).toBe('handled');
   });

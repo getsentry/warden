@@ -18,6 +18,7 @@ import { registerAdministrationRoutes } from './administration/routes.js';
 import { registerPersonalTokenRoutes } from './personal-tokens/routes.js';
 import {
   createGoogleAuthenticationAdapter,
+  dashboardLoginPath,
   registerGoogleAuthRoutes,
 } from './google-auth.js';
 import type { GoogleBrowserAuthOptions } from './google-auth.js';
@@ -78,7 +79,7 @@ function createDisabledAuthenticationAdapter(tenantId: string): DashboardAuthent
 function requireDashboardSession(authentication?: DashboardAuthenticationAdapter) {
   return createMiddleware<{ Variables: ServiceVariables }>(async (context, next) => {
     const serviceContext = await authentication?.authenticate(context.req.raw) ?? null;
-    if (!serviceContext) return context.redirect('/api/auth/login');
+    if (!serviceContext) return context.redirect(dashboardLoginPath(context.req.raw));
     if (!hasRole(serviceContext, 'read')) {
       return context.json({ error: { code: 'forbidden', message: 'Permission denied.' } }, 403);
     }
