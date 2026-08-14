@@ -1,4 +1,4 @@
-import { handle } from 'hono/vercel';
+import { handle } from '@hono/node-server/vercel';
 import { createVercelWardenService } from '../src/create-app.js';
 
 export const runtime = 'nodejs';
