@@ -35,11 +35,24 @@ const MAX_DESCRIPTION_LENGTH = 8_000;
 const MAX_VERIFICATION_LENGTH = 4_000;
 const MAX_PATH_LENGTH = 1_024;
 
+function attributionLabel(
+  single: string | undefined,
+  multiple: string[] | undefined,
+  maxLength: number,
+): string | undefined {
+  const values = [...new Set([single, ...(multiple ?? [])]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim()))];
+  return values.length > 0 ? values.join(', ').slice(0, maxLength) : undefined;
+}
+
 function usageLine(lane: string, usage: UsageStats, attribution?: UsageAttribution): UsageLineItem {
+  const model = attributionLabel(attribution?.model, attribution?.models, 255);
+  const runtime = attributionLabel(attribution?.runtime, attribution?.runtimes, 128);
   return {
     lane: auxiliaryLaneAliases[lane] ?? lane,
-    ...(attribution?.model ? { model: attribution.model } : {}),
-    ...(attribution?.runtime ? { runtime: attribution.runtime } : {}),
+    ...(model ? { model } : {}),
+    ...(runtime ? { runtime } : {}),
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     ...(usage.cacheReadInputTokens !== undefined ? { cacheReadInputTokens: usage.cacheReadInputTokens } : {}),

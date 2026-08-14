@@ -747,6 +747,22 @@ describe('mergeWardenConfigs', () => {
     });
   });
 
+  it('applies the metrics memory default when a repository changes the data profile', () => {
+    const baseConfig = WardenConfigSchema.parse({
+      version: 1,
+      service: { data: 'findings', memory: true },
+    });
+    const repoConfig = WardenConfigSchema.parse({
+      version: 1,
+      service: { data: 'metrics' },
+    });
+
+    const merged = mergeWardenConfigs(baseConfig, repoConfig);
+
+    expect(merged.service).toMatchObject({ data: 'metrics' });
+    expect(merged.service?.memory).toBeUndefined();
+  });
+
   it('uses base skills and warns for duplicate skill names across layers', () => {
     const baseConfig: WardenConfig = {
       version: 1,

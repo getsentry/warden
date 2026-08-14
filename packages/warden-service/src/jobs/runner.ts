@@ -129,6 +129,14 @@ async function continueJob(client: DatabaseClient, job: ClaimedJob, workerId: st
   `, [job.id, job.attempts]);
 }
 
+async function releaseUnstartedJob(client: DatabaseClient, job: ClaimedJob, workerId: string): Promise<void> {
+  await client.query(`
+    UPDATE jobs SET state = 'retry', attempts = GREATEST(0, attempts - 1),
+      next_attempt_at = now(), lease_owner = NULL, lease_expires_at = NULL, updated_at = now()
+    WHERE id = $1 AND tenant_id = $2 AND state = 'running' AND lease_owner = $3
+  `, [job.id, job.tenantId, workerId]);
+}
+
 async function failJob(client: DatabaseClient, job: ClaimedJob, workerId: string, safeErrorCode: string): Promise<void> {
   const ageSeconds = (Date.now() - job.createdAt.getTime()) / 1_000;
   const terminal = job.attempts >= job.maxAttempts || ageSeconds >= job.maxAgeSeconds;
@@ -169,7 +177,7 @@ export async function processJobSlice(
   for (const job of jobs) {
     if (Date.now() >= options.deadline - 250) {
       result.deadlineReached = true;
-      await database.transaction((client) => continueJob(client, job, workerId, job.continuation));
+      await database.transaction((client) => releaseUnstartedJob(client, job, workerId));
       result.continued += 1;
       continue;
     }

@@ -104,7 +104,7 @@ describe('durable job runner', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
-  it('recovers stale leases and persists continuation before a soft deadline', async () => {
+  it('recovers stale leases and releases unstarted work before a soft deadline', async () => {
     const { database, statements } = durableDatabase({ continuation: { cursor: 'page-1' } });
     const handler = vi.fn();
 
@@ -116,7 +116,8 @@ describe('durable job runner', () => {
     expect(result).toMatchObject({ claimed: 1, continued: 1, deadlineReached: true });
     expect(handler).not.toHaveBeenCalled();
     expect(statements.some((statement) => statement.includes("safe_error_code = 'stale_lease'"))).toBe(true);
-    expect(statements.some((statement) => statement.includes("safe_error_code = 'continuation'"))).toBe(true);
+    expect(statements.some((statement) => statement.includes('attempts = GREATEST(0, attempts - 1)'))).toBe(true);
+    expect(statements.some((statement) => statement.includes("safe_error_code = 'continuation'"))).toBe(false);
   });
 
   it('moves terminal attempts to dead with a content-safe error code', async () => {

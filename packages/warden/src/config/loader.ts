@@ -178,7 +178,11 @@ function mergeLogsConfig(
 function mergeServiceConfig(base?: ServiceConfig, overlay?: ServiceConfig): ServiceConfig | undefined {
   if (!base) return overlay;
   if (!overlay) return base;
-  return { ...base, ...overlay };
+  const merged = { ...base, ...overlay };
+  if (overlay.data === 'metrics' && overlay.memory === undefined) {
+    delete merged.memory;
+  }
+  return merged;
 }
 
 function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | undefined {

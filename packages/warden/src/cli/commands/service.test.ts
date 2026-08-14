@@ -75,6 +75,7 @@ describe('service replay', () => {
 
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'warden-service-replay-'));
+    vi.stubEnv('WARDEN_SERVICE_URL', '');
     vi.stubEnv('WARDEN_SERVICE_TOKEN', 'warden-test-token');
   });
 

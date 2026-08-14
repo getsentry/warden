@@ -61,6 +61,30 @@ describe('buildServiceRunEnvelope', () => {
     expect(envelope.findingCounts.total).toBe(1);
   });
 
+  it('retains mixed auxiliary attribution without duplicating usage', () => {
+    const mixedReport: SkillReport = {
+      ...report,
+      auxiliaryUsageAttribution: {
+        verification: {
+          models: ['verifier-a', 'verifier-b'],
+          runtimes: ['claude', 'pi'],
+        },
+      },
+    };
+
+    const envelope = buildServiceRunEnvelope({
+      ...input('metrics'),
+      reports: [{ executionId: 'skill-1', report: mixedReport }],
+    });
+
+    expect(envelope.skills[0]?.usage[1]).toEqual(expect.objectContaining({
+      lane: 'verification',
+      model: 'verifier-a, verifier-b',
+      runtime: 'claude, pi',
+      costUsd: 0.002,
+    }));
+  });
+
   it('redacts finding and code data at the final pre-fetch boundary', () => {
     const metrics = JSON.stringify(buildServiceRunEnvelope(input('metrics')));
     const findings = JSON.stringify(buildServiceRunEnvelope(input('findings')));
