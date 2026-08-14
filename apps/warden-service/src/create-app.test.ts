@@ -27,7 +27,8 @@ describe('Vercel service app', () => {
       { source: '/health', destination: '/api' },
       { source: '/ready', destination: '/api' },
     ]));
-    expect(config.rewrites).toContainEqual({ source: '/api/:path*', destination: '/api' });
+    expect(config.rewrites).toContainEqual({ source: '/api/(.*)', destination: '/api' });
+    expect(config.rewrites).not.toContainEqual({ source: '/api/:path*', destination: '/api' });
     expect(ServiceEnvironmentSchema.safeParse({}).success).toBe(false);
   });
 
