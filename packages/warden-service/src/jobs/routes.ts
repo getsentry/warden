@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { Context, Hono } from 'hono';
 import type { ServiceVariables } from '../auth.js';
 import type { WardenDatabase } from '../db/database.js';
+import { migrateDatabase } from '../db/migrations.js';
 import { processJobSlice } from './runner.js';
 import type { JobHandlers } from './runner.js';
 
@@ -46,4 +47,10 @@ export function registerJobRoutes(
   };
   app.get('/api/internal/jobs/tick', tick);
   app.post('/api/internal/jobs/tick', tick);
+  app.post('/api/internal/db/migrate', async (context) => {
+    if (!authorized(context.req.header('authorization'), cronSecret)) {
+      return context.json({ error: { code: 'unauthorized', message: 'Authentication required.' } }, 401);
+    }
+    return context.json(await migrateDatabase(database));
+  });
 }
