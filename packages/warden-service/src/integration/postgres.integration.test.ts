@@ -179,11 +179,14 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
 
       await ingestRun(database, context, findingsEnvelope(`findings-${randomUUID()}`));
       const code = await ingestRun(database, context, codeEnvelope(`code-${randomUUID()}`));
+      await ingestRun(database, context, metricsEnvelope(`memory-disabled-${randomUUID()}`));
       const detail = await getRunDetail(database, context, stored.runId);
       expect(detail?.skills).toHaveLength(2);
       expect(detail?.skills.flatMap((skill) => skill.usage).map((usage) => usage.lane).sort()).toEqual(['dedup', 'scan', 'verification']);
       expect(await database.query('SELECT 1 FROM findings WHERE tenant_id = $1 AND run_id = $2 AND source_evidence IS NOT NULL', [tenantId, code.runId]))
         .toMatchObject({ rowCount: 1 });
+      expect(await database.query('SELECT memory_enabled FROM repositories WHERE tenant_id = $1 AND full_name = $2', [tenantId, 'acme/widgets']))
+        .toMatchObject({ rows: [{ memory_enabled: true }] });
 
       const idempotencyKey = `memory-${randomUUID()}`;
       const memoryInput = {

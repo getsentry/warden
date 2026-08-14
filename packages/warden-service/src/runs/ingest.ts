@@ -35,7 +35,7 @@ async function resolveRepository(
     ) VALUES ($1, $2, $3, $4, $5, $6)
     ON CONFLICT (tenant_id, provider, owner, name) DO UPDATE SET
       full_name = EXCLUDED.full_name,
-      memory_enabled = CASE WHEN $7 THEN repositories.memory_enabled ELSE EXCLUDED.memory_enabled END,
+      memory_enabled = repositories.memory_enabled OR EXCLUDED.memory_enabled,
       updated_at = now()
     RETURNING id
   `, [
@@ -45,7 +45,6 @@ async function resolveRepository(
     envelope.repository.name,
     envelope.repository.fullName,
     envelope.features.memory,
-    envelope.dataProfile === 'metrics' && envelope.outcome === 'failure' && envelope.skills.length === 0,
   ]);
   const id = result.rows[0]?.id;
   if (!id) throw new RunIngestionError('invalid_reference');
