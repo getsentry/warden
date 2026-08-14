@@ -19,6 +19,9 @@ describe('parseServiceEnvironment', () => {
       WARDEN_SERVICE_DATABASE_STATEMENT_TIMEOUT_MS: 15_000,
       DISABLE_AUTH: false,
       WARDEN_SERVICE_GOOGLE_DOMAIN: 'sentry.io',
+      WARDEN_SERVICE_MEMORY_MODEL: 'openai/gpt-5.6-luna',
+      WARDEN_SERVICE_EMBEDDING_MODEL: 'openai/text-embedding-3-small',
+      WARDEN_SERVICE_MEMORY_AUTO_PROMOTE: true,
     });
   });
 

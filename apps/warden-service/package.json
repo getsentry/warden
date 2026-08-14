@@ -10,9 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^3.0.173",
     "@hono/node-server": "^1.19.17",
     "@sentry/warden-service": "workspace:*",
-    "hono": "^4.12.27"
+    "@vercel/oidc": "^3.4.1",
+    "ai": "^6.0.255",
+    "hono": "^4.12.27",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

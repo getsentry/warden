@@ -46,6 +46,13 @@ function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function isVectorUnavailable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? error.code : undefined;
+  if (code === '42703' || code === '42704') return true;
+  return 'cause' in error && isVectorUnavailable(error.cause);
+}
+
 async function loadEvidence(database: WardenDatabase, tenantId: string, repositoryId: string, runId: string) {
   const result = await database.query<EvidenceRow>(`
     SELECT finding_id, observation_id, run_id, skill, title, description, outcome, observed_at
@@ -102,15 +109,30 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
         : { proposals: deterministicProposals(evidence), modelVersion: PASSIVE_MEMORY_MODEL_VERSION };
       const proposals = extracted.proposals.map((proposal) => PassiveMemoryProposalSchema.parse(proposal));
       for (const proposal of proposals) {
-        await persistPassiveMemoryCandidate(database, {
+        const persisted = await persistPassiveMemoryCandidate(database, {
           tenantId: job.tenantId,
           repositoryId: job.repositoryId,
           proposal,
           evidence,
           modelVersion: extracted.modelVersion,
-          extractionCostUsd: extracted.usage?.costUsd,
+          extractionUsage: extracted.usage,
           policy: options.promotionPolicy ?? defaultPassivePromotionPolicy,
         });
+        if (persisted?.lifecycle === 'active' && options.embedding) {
+          await database.query(`
+            INSERT INTO jobs (
+              tenant_id, repository_id, type, entity_id, input_version,
+              idempotency_key, payload_ref
+            ) VALUES ($1, $2, 'memory_embed', $3, 1, $4, $5)
+            ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+          `, [
+            job.tenantId,
+            job.repositoryId,
+            persisted.id,
+            `memory_embed:${persisted.id}:v1:${options.embedding.provider}:${options.embedding.model}`,
+            JSON.stringify({ memoryId: persisted.id }),
+          ]);
+        }
       }
       return { complete: true };
     },
@@ -132,17 +154,40 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
       if (embedded.vector.length !== options.embedding.dimensions || embedded.vector.some((value) => !Number.isFinite(value))) {
         throw new TypeError('invalid_memory_embedding');
       }
-      await database.query(`
-        INSERT INTO memory_embeddings (
-          tenant_id, memory_id, provider, model, dimensions, content_hash, embedding
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (memory_id, provider, model) DO UPDATE SET
-          dimensions = EXCLUDED.dimensions, content_hash = EXCLUDED.content_hash,
-          embedding = EXCLUDED.embedding, created_at = now()
-      `, [
+      const values = [
         job.tenantId, memory.id, options.embedding.provider, options.embedding.model,
-        options.embedding.dimensions, memory.content_hash, JSON.stringify(embedded.vector),
-      ]);
+        options.embedding.dimensions, memory.content_hash, `[${embedded.vector.join(',')}]`,
+        embedded.usage?.inputTokens ?? null,
+        embedded.usage?.costUsd ?? null,
+        embedded.usage?.costBasis ?? null,
+      ];
+      try {
+        await database.query(`
+          INSERT INTO memory_embeddings (
+            tenant_id, memory_id, provider, model, dimensions, content_hash,
+            embedding, embedding_vector, input_tokens, cost_usd, cost_basis
+          ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7::vector(1536), $8, $9, $10::cost_basis)
+          ON CONFLICT (memory_id, provider, model) DO UPDATE SET
+            dimensions = EXCLUDED.dimensions, content_hash = EXCLUDED.content_hash,
+            embedding = NULL, embedding_vector = EXCLUDED.embedding_vector,
+            input_tokens = EXCLUDED.input_tokens, cost_usd = EXCLUDED.cost_usd,
+            cost_basis = EXCLUDED.cost_basis,
+            created_at = now()
+        `, values);
+      } catch (error) {
+        if (!isVectorUnavailable(error)) throw error;
+        await database.query(`
+          INSERT INTO memory_embeddings (
+            tenant_id, memory_id, provider, model, dimensions, content_hash,
+            embedding, input_tokens, cost_usd, cost_basis
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10::cost_basis)
+          ON CONFLICT (memory_id, provider, model) DO UPDATE SET
+            dimensions = EXCLUDED.dimensions, content_hash = EXCLUDED.content_hash,
+            embedding = EXCLUDED.embedding, input_tokens = EXCLUDED.input_tokens,
+            cost_usd = EXCLUDED.cost_usd, cost_basis = EXCLUDED.cost_basis,
+            created_at = now()
+        `, values);
+      }
       return { complete: true };
     },
     async retention(job) {

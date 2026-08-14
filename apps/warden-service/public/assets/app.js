@@ -425,6 +425,33 @@ function findingDetail(label, value) {
   return item;
 }
 
+function sourceContext(evidence) {
+  const context = element('section', undefined, 'source-context');
+  const header = element('div', undefined, 'source-context-header');
+  header.append(
+    element('strong', evidence.path),
+    element('span', evidence.language ?? 'Code'),
+  );
+  const pre = document.createElement('pre');
+  const code = document.createElement('code');
+  const lines = evidence.content.split('\n');
+  lines.forEach((content, index) => {
+    const lineNumber = evidence.startLine + index;
+    const line = element('span', undefined, 'source-line');
+    if (lineNumber >= evidence.targetStartLine && lineNumber <= evidence.targetEndLine) {
+      line.classList.add('source-line-target');
+    }
+    line.append(
+      element('span', lineNumber, 'source-line-number'),
+      element('span', content || ' ', 'source-line-content'),
+    );
+    code.append(line);
+  });
+  pre.append(code);
+  context.append(header, pre);
+  return context;
+}
+
 function findingRows(finding) {
   const row = document.createElement('tr');
   row.className = 'finding-row';
@@ -596,7 +623,8 @@ async function renderFinding(version, findingId) {
   setPage('Finding', 'Loading finding details.');
   filterHost.replaceChildren();
   filterHost.hidden = true;
-  const { finding } = await api(`/api/v1/findings/${encodeURIComponent(findingId)}`);
+  const detail = await api(`/api/v1/findings/${encodeURIComponent(findingId)}`);
+  const { finding } = detail;
   if (version !== renderVersion) return;
   setPage(finding.displayId, finding.title);
 
@@ -619,7 +647,15 @@ async function renderFinding(version, findingId) {
     findingDetail('Observed', finding.observedAt ? formatDate(finding.observedAt) : 'Not reported'),
     findingDetail('Completed', formatDate(finding.completedAt)),
   );
-  article.append(heading, description, metadata);
+  article.append(heading, description);
+  if (detail.sourceEvidence) article.append(sourceContext(detail.sourceEvidence));
+  if (detail.sourceUrl) {
+    const sourceLink = link('View on GitHub', detail.sourceUrl, 'source-link text-link');
+    sourceLink.target = '_blank';
+    sourceLink.rel = 'noreferrer';
+    article.append(sourceLink);
+  }
+  article.append(metadata);
   section.append(article);
   content.replaceChildren(section);
 }

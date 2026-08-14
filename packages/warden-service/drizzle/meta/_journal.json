@@ -15,6 +15,20 @@
       "when": 1786622075619,
       "tag": "0001_magical_puppet_master",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786722427724,
+      "tag": "0002_hosted_memory_costs",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786722427725,
+      "tag": "0003_hosted_memory_vectors",
+      "breakpoints": true
     }
   ]
 }

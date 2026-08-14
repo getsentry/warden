@@ -4,6 +4,7 @@ import {
   FindingCountsSchema,
   RepositoryIdentitySchema,
   SERVICE_PROTOCOL_VERSION,
+  SourceEvidenceSchema,
   UsageLineItemSchema,
 } from './protocol.js';
 
@@ -82,6 +83,9 @@ export type FindingFeedItem = z.infer<typeof FindingFeedItemSchema>;
 
 export const FindingDetailResponseSchema = z.object({
   finding: FindingFeedItemSchema,
+  headSha: z.string().trim().min(7).max(128).optional(),
+  sourceUrl: z.url().max(4_096).optional(),
+  sourceEvidence: SourceEvidenceSchema.optional(),
 }).strict();
 export type FindingDetailResponse = z.infer<typeof FindingDetailResponseSchema>;
 

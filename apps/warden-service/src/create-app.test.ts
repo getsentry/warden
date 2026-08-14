@@ -82,6 +82,8 @@ describe('Vercel service app', () => {
     expect(script).toContain("row.setAttribute('aria-expanded', 'false')");
     expect(script).toContain("event.key !== 'Enter' && event.key !== ' '");
     expect(script).toContain('detailRow.hidden = !expanded');
+    expect(script).toContain("link('View on GitHub'");
+    expect(script).toContain("element('span', lineNumber, 'source-line-number')");
     expect(script).not.toContain('protected-session');
     expect(script).not.toContain("'/api/auth/session'");
   });

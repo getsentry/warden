@@ -486,7 +486,7 @@ export async function recallMemories(
           const vector = `[${embedded.vector.join(',')}]`;
           const vectorResult = await client.query<MemoryRow>(`
             SELECT m.*, repo.provider, repo.owner, repo.name, repo.full_name,
-              1 - (me.embedding::text::vector <=> $7::vector) AS rank
+              1 - (me.embedding_vector <=> $7::vector(1536)) AS rank
             FROM memory_embeddings me
             JOIN memories m ON m.id = me.memory_id AND m.tenant_id = me.tenant_id
             JOIN repositories repo ON repo.id = m.repository_id AND repo.tenant_id = m.tenant_id
@@ -500,7 +500,8 @@ export async function recallMemories(
               )
               AND me.provider = $8 AND me.model = $9 AND me.dimensions = $10
               AND me.content_hash = m.content_hash
-            ORDER BY me.embedding::text::vector <=> $7::vector, m.updated_at DESC, m.id
+              AND me.embedding_vector IS NOT NULL
+            ORDER BY me.embedding_vector <=> $7::vector(1536), m.updated_at DESC, m.id
             LIMIT 20
           `, [
             context.tenantId, repository.id, query, request.skills, request.languages,
@@ -529,7 +530,7 @@ export async function recallMemories(
           FROM memories m
           LEFT JOIN memory_embeddings me ON me.memory_id = m.id AND me.tenant_id = m.tenant_id
             AND me.provider = $3 AND me.model = $4 AND me.dimensions = $5
-            AND me.content_hash = m.content_hash
+            AND me.content_hash = m.content_hash AND me.embedding_vector IS NOT NULL
           WHERE m.tenant_id = $1 AND m.repository_id = $2 AND m.lifecycle = 'active' AND me.memory_id IS NULL
           ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
         `, [context.tenantId, repository.id, options.embedding.provider, options.embedding.model, options.embedding.dimensions]);

@@ -72,4 +72,63 @@ describe('memory job handlers', () => {
     expect(statements.some((sql) => sql.startsWith('DELETE FROM memory_embeddings'))).toBe(true);
     expect(statements.some((sql) => sql.includes("'retention_expired'"))).toBe(true);
   });
+
+  it('does not hide non-vector database failures while storing embeddings', async () => {
+    const { database } = databaseFixture();
+    database.query = async (sql) => {
+      if (sql.includes('FROM memories')) {
+        return {
+          rows: [{
+            id: 'memory-1', repository_id: 'repository-1', version: 1,
+            content: 'Use the established parser.', content_hash: 'hash-1',
+          }],
+          rowCount: 1,
+        } as never;
+      }
+      const error = new Error('connection lost') as Error & { code: string };
+      error.code = '08006';
+      throw error;
+    };
+    const handler = createMemoryJobHandlers(database, {
+      embedding: {
+        provider: 'test', model: 'test-embedding', dimensions: 2,
+        async embed() { return { vector: [0.1, 0.2] }; },
+      },
+    }).memory_embed;
+
+    await expect(handler?.({ ...job, type: 'memory_embed', entityId: 'memory-1' }, { deadline: Date.now() + 5_000 }))
+      .rejects.toThrow('connection lost');
+  });
+
+  it('uses JSON embeddings when pgvector is unavailable', async () => {
+    const { database, statements } = databaseFixture();
+    database.query = async (sql) => {
+      statements.push(sql.replace(/\s+/g, ' ').trim());
+      if (sql.includes('FROM memories')) {
+        return {
+          rows: [{
+            id: 'memory-1', repository_id: 'repository-1', version: 1,
+            content: 'Use the established parser.', content_hash: 'hash-1',
+          }],
+          rowCount: 1,
+        } as never;
+      }
+      if (sql.includes('embedding_vector')) {
+        const error = new Error('column does not exist') as Error & { code: string };
+        error.code = '42703';
+        throw error;
+      }
+      return { rows: [], rowCount: 0 } as never;
+    };
+    const handler = createMemoryJobHandlers(database, {
+      embedding: {
+        provider: 'test', model: 'test-embedding', dimensions: 2,
+        async embed() { return { vector: [0.1, 0.2] }; },
+      },
+    }).memory_embed;
+
+    await expect(handler?.({ ...job, type: 'memory_embed', entityId: 'memory-1' }, { deadline: Date.now() + 5_000 }))
+      .resolves.toEqual({ complete: true });
+    expect(statements.some((sql) => sql.includes('embedding, input_tokens'))).toBe(true);
+  });
 });

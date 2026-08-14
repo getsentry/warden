@@ -11,6 +11,7 @@ import type {
   SkillListResponse,
   UsageLineItem,
 } from '@sentry/warden-service-api';
+import { SourceEvidenceSchema } from '@sentry/warden-service-api';
 import { z } from 'zod';
 import { requireServiceContext } from '../context.js';
 import type { ServiceContext } from '../context.js';
@@ -179,6 +180,11 @@ interface FindingFeedRow extends Record<string, unknown> {
   completed_at: Date | string;
 }
 
+interface FindingDetailRow extends FindingFeedRow {
+  head_sha: string | null;
+  source_evidence: unknown;
+}
+
 function mapFinding(row: FindingFeedRow): FindingFeedItem {
   return {
     id: row.id,
@@ -207,6 +213,14 @@ function mapFinding(row: FindingFeedRow): FindingFeedItem {
     observedAt: row.observed_at ? iso(row.observed_at) : null,
     completedAt: iso(row.completed_at),
   };
+}
+
+function githubSourceUrl(row: FindingDetailRow): string | undefined {
+  if (row.provider !== 'github' || !row.head_sha || !row.path || !row.start_line) return undefined;
+  const repository = [row.owner, row.name].map(encodeURIComponent).join('/');
+  const path = row.path.split('/').map(encodeURIComponent).join('/');
+  const endLine = row.end_line && row.end_line !== row.start_line ? `-L${row.end_line}` : '';
+  return `https://github.com/${repository}/blob/${encodeURIComponent(row.head_sha)}/${path}#L${row.start_line}${endLine}`;
 }
 
 /** List authorized findings newest first for dashboard and API investigations. */
@@ -287,8 +301,9 @@ export async function getFindingDetail(
         return `AND repo.full_name = ANY($${values.length}::text[])`;
       })()
     : '';
-  const result = await database.query<FindingFeedRow>(`
+  const result = await database.query<FindingDetailRow>(`
     SELECT f.id, f.client_finding_id, f.reported_id, f.run_id, r.client_run_id,
+      r.head_sha, f.source_evidence,
       repo.provider, repo.owner, repo.name, repo.full_name,
       se.skill, f.severity, f.confidence, f.title, f.description,
       location.path, location.start_line, location.end_line,
@@ -312,7 +327,15 @@ export async function getFindingDetail(
     WHERE f.tenant_id = $1 AND f.id = $2 ${repositoryScope}
   `, values);
   const finding = result.rows[0];
-  return finding ? { finding: mapFinding(finding) } : null;
+  if (!finding) return null;
+  const sourceEvidence = SourceEvidenceSchema.safeParse(finding.source_evidence);
+  const sourceUrl = githubSourceUrl(finding);
+  return {
+    finding: mapFinding(finding),
+    ...(finding.head_sha ? { headSha: finding.head_sha } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...(sourceEvidence.success ? { sourceEvidence: sourceEvidence.data } : {}),
+  };
 }
 
 /** List runs visible to an authenticated tenant with stable cursor pagination. */

@@ -8,7 +8,7 @@ describe('warden-service CLI', () => {
     let output = '';
     const database = {
       async query() {
-        return { rows: [{ version: '0001_magical_puppet_master' }], rowCount: 1 };
+        return { rows: [{ version: '0003_hosted_memory_vectors' }], rowCount: 1 };
       },
       async close() { closed = true; },
     } as unknown as WardenDatabase;
@@ -18,8 +18,8 @@ describe('warden-service CLI', () => {
     expect(exitCode).toBe(0);
     expect(JSON.parse(output)).toEqual({
       ready: true,
-      currentVersion: '0001_magical_puppet_master',
-      requiredVersion: '0001_magical_puppet_master',
+      currentVersion: '0003_hosted_memory_vectors',
+      requiredVersion: '0003_hosted_memory_vectors',
     });
     expect(closed).toBe(true);
   });
