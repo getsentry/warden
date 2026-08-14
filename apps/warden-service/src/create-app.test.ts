@@ -20,7 +20,7 @@ describe('Vercel service app', () => {
       outputDirectory: string;
     };
 
-    expect(config.functions['api/[[...route]].ts']).toEqual({ maxDuration: 30, memory: 1024 });
+    expect(config.functions['api/[...route].ts']).toEqual({ maxDuration: 30, memory: 1024 });
     expect(config.crons).toContainEqual(expect.objectContaining({ path: '/api/internal/jobs/tick' }));
     expect(config.outputDirectory).toBe('public');
     expect(config.rewrites).toEqual(expect.arrayContaining([
@@ -105,7 +105,7 @@ describe('Vercel service app', () => {
     process.env['CRON_SECRET'] = 'c'.repeat(16);
     process.env['DISABLE_AUTH'] = 'true';
     process.env['WARDEN_SERVICE_TENANT_ID'] = '00000000-0000-4000-8000-000000000001';
-    const route = await import('../api/[[...route]].js');
+    const route = await import('../api/[...route].js');
 
     expect(route.runtime).toBe('nodejs');
     expect(route.maxDuration).toBe(30);
