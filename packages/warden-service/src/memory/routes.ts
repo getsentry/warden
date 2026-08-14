@@ -50,7 +50,7 @@ export function registerMemoryRoutes(
   database: WardenDatabase,
   recallOptions: RecallMemoryOptions = {},
 ): void {
-  app.post('/api/v1/memory/recall', requireRole('ingest'), async (context) => {
+  app.post('/api/v1/memory/recall', requireRole('read'), async (context) => {
     const body = MemoryRecallRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!body.success) return context.json({ error: { code: 'invalid_request', message: 'Recall request is not valid.' } }, 400);
     return context.json(MemoryRecallResponseSchema.parse(await recallMemories(

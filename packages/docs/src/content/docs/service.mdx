@@ -25,7 +25,7 @@ pnpm --filter @sentry/warden-service cli db migrate
 pnpm --filter @sentry/warden-service cli db status
 ```
 
-Create a tenant and an ingest credential. Each token is displayed once and stored as a SHA-256 hash.
+Create a tenant and a write-only ingest credential. Each token is displayed once and stored as a SHA-256 hash.
 
 ```bash
 TENANT_ID=$(pnpm --silent --filter @sentry/warden-service cli tenant create \
@@ -34,6 +34,8 @@ TENANT_ID=$(pnpm --silent --filter @sentry/warden-service cli tenant create \
 pnpm --filter @sentry/warden-service cli token create \
   --tenant "$TENANT_ID" --name ingest --role ingest --repository acme/widgets
 ```
+
+The `ingest` role can submit runs and request server-side memory extraction. It cannot read findings, history, costs, or memory. Memory recall requires `read`; only combine `--role ingest --role read` on a repository-scoped token. Do not distribute a tenant-wide read token through organization-level Actions secrets.
 
 The dashboard uses the same stateless Better Auth Google OAuth design as Junior:
 
@@ -73,7 +75,7 @@ export WARDEN_SERVICE_URL=https://warden-service.example.com
 export WARDEN_SERVICE_TOKEN=wds_example_secret
 ```
 
-Once a URL and token are configured, Warden sends the `findings` profile and enables repository memory by default. This includes the data used by current history, cost, and memory features, but not source snippets. Use `warden.toml` to change the data and memory settings. Set `data = "metrics"` to retain counts and usage only; metrics automatically disables memory. Set only `memory = false` to keep finding history without recall and learning.
+Once a URL and token are configured, Warden sends the `findings` profile and requests server-side repository memory extraction by default. This includes the data used by current history, cost, and memory features, but not source snippets. A token with `read` can also recall memory; an ingest-only token receives no stored data and continues without recalled memory. Use `warden.toml` to change the data and memory settings. Set `data = "metrics"` to retain counts and usage only; metrics automatically disables memory. Set only `memory = false` to keep finding history without recall and learning.
 
 ```toml
 [service]

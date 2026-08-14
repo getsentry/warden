@@ -9,7 +9,7 @@ function result<TRow extends Record<string, unknown>>(rows: TRow[]): QueryResult
   return { rows, rowCount: rows.length };
 }
 
-function conflictDatabase(): WardenDatabase {
+function conflictDatabase(roles: readonly string[] = ['admin']): WardenDatabase {
   const client: DatabaseClient = {
     async query<TRow extends Record<string, unknown>>(sql: string) {
       if (sql.includes('FROM service_tokens')) {
@@ -17,7 +17,7 @@ function conflictDatabase(): WardenDatabase {
           id: 'token-id',
           tenant_id: 'tenant-id',
           token_hash: hashServiceToken(token),
-          roles: ['admin'],
+          roles,
           repository_allowlist: ['acme/widgets'],
         }] as unknown as TRow[]);
       }
@@ -85,6 +85,34 @@ describe('POST /api/v1/memories', () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'conflict' },
+    });
+  });
+});
+
+describe('POST /api/v1/memory/recall', () => {
+  it('denies write-only ingest credentials', async () => {
+    const response = await createWardenService({ database: conflictDatabase(['ingest']) }).request(
+      'http://localhost/api/v1/memory/recall',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          protocolVersion: 1,
+          clientRecallId: '00000000-0000-4000-8000-000000000003',
+          repository: memory.repository,
+          skills: ['security'],
+          languages: ['typescript'],
+          paths: ['src/auth.ts'],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'forbidden', message: 'Permission denied.' },
     });
   });
 });
