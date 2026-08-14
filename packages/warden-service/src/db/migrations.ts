@@ -3,7 +3,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseClient, WardenDatabase } from './database.js';
 
-const MIGRATION_LOCK_ID = 8_217_436_291;
+// This differs from the legacy session-lock key so a lock stranded by an old
+// pooled deployment cannot block the transactional migrator.
+const MIGRATION_LOCK_ID = 8_217_436_292;
 const MIGRATIONS_DIRECTORY = join(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
 
 function isUndefinedTable(error: unknown): boolean {
@@ -51,8 +53,9 @@ export async function getSchemaStatus(database: WardenDatabase): Promise<SchemaS
 export async function migrateDatabase(database: WardenDatabase): Promise<SchemaStatus> {
   const files = await migrationFiles();
   await database.withClient(async (client) => {
-    await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
+    await client.query('BEGIN');
     try {
+      await client.query('SELECT pg_advisory_xact_lock($1)', [MIGRATION_LOCK_ID]);
       await ensureMigrationTable(client);
       const applied = await client.query<{ version: string }>('SELECT version FROM _warden_service_migrations');
       const appliedVersions = new Set(applied.rows.map((row) => row.version));
@@ -61,18 +64,13 @@ export async function migrateDatabase(database: WardenDatabase): Promise<SchemaS
         const version = file.replace(/\.sql$/, '');
         if (appliedVersions.has(version)) continue;
         const sql = await readFile(join(MIGRATIONS_DIRECTORY, file), 'utf8');
-        await client.query('BEGIN');
-        try {
-          await client.query(sql);
-          await client.query('INSERT INTO _warden_service_migrations (version) VALUES ($1)', [version]);
-          await client.query('COMMIT');
-        } catch (error) {
-          await client.query('ROLLBACK');
-          throw error;
-        }
+        await client.query(sql);
+        await client.query('INSERT INTO _warden_service_migrations (version) VALUES ($1)', [version]);
       }
-    } finally {
-      await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_ID]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     }
   });
   return getSchemaStatus(database);
