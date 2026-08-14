@@ -1,4 +1,10 @@
 # Changelog
+## 0.46.1
+
+### Internal Changes 🔧
+
+- (release) Build service API before Action bundle by @gricha in [#475](https://github.com/getsentry/warden/pull/475)
+
 ## 0.46.0
 
 ### New Features ✨
