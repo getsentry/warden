@@ -172,6 +172,8 @@ describe('init command', () => {
 
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden', 'SKILL.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden', 'SPEC.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-service', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-service', 'spec.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SKILL.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'warden-sweep', 'SPEC.md'))).toBe(true);
       expect(existsSync(join(tempDir, '.agents', 'skills', 'security-review', 'SKILL.md'))).toBe(false);
@@ -185,6 +187,14 @@ describe('init command', () => {
       const refsDir = join(tempDir, '.agents', 'skills', 'warden', 'references');
       expect(existsSync(join(refsDir, 'cli-reference.md'))).toBe(true);
       expect(existsSync(join(refsDir, 'configuration.md'))).toBe(true);
+    });
+
+    it('copies warden-service API references with --force', async () => {
+      const reporter = createMockReporter();
+      await runInit(createOptions({ force: true }), reporter);
+
+      const refsDir = join(tempDir, '.agents', 'skills', 'warden-service', 'references');
+      expect(existsSync(join(refsDir, 'read-api.md'))).toBe(true);
     });
 
     it('copies warden-sweep scripts with --force', async () => {
@@ -205,12 +215,16 @@ describe('init command', () => {
       const sweepDir = join(tempDir, '.agents', 'skills', 'warden-sweep');
       mkdirSync(sweepDir, { recursive: true });
       writeFileSync(join(sweepDir, 'SKILL.md'), 'custom sweep');
+      const serviceDir = join(tempDir, '.agents', 'skills', 'warden-service');
+      mkdirSync(serviceDir, { recursive: true });
+      writeFileSync(join(serviceDir, 'SKILL.md'), 'custom service');
 
       const reporter = createMockReporter();
       await runInit(createOptions(), reporter);
 
       // Custom content should be preserved
       expect(readFileSync(join(skillDir, 'SKILL.md'), 'utf-8')).toBe('custom content');
+      expect(readFileSync(join(serviceDir, 'SKILL.md'), 'utf-8')).toBe('custom service');
     });
 
     it('overwrites bundled skills with --force', async () => {
@@ -234,6 +248,7 @@ describe('init command', () => {
 
       const toml = readFileSync(join(tempDir, 'warden.toml'), 'utf-8');
       expect(toml).not.toContain('name = "warden"');
+      expect(toml).not.toContain('name = "warden-service"');
       expect(toml).not.toContain('name = "warden-sweep"');
     });
 

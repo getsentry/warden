@@ -22,6 +22,7 @@ import { getMajorVersion } from '../../utils/index.js';
 
 const INSTALLABLE_BUNDLED_SKILLS = new Set([
   'warden',
+  'warden-service',
   'warden-sweep',
 ]);
 

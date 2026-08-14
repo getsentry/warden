@@ -1,0 +1,5 @@
+behavior: select-documented-read-routes-and-filters
+prompt: |
+  I need Warden Service's high-severity security-review findings from the last week, plus cost grouped by repository and skill for the same period. Which API requests should I make? Use a maximum of 30 findings and assume I will substitute valid RFC 3339 timestamps.
+checks:
+  - judge: The response selects GET /api/v1/findings with severity=high, skill=security-review, limit=30, from, and to, and GET /api/v1/costs with groupBy=repository,skill, from, and to. It does not invent routes or unsupported parameters.

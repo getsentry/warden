@@ -27,8 +27,8 @@
     "test:examples": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
     "generate:jsonl-schema": "tsx scripts/generate-jsonl-schema.ts",
-    "prepublishOnly": "rm -f skills/warden skills/warden-sweep && cp -rL ../../skills/warden skills/warden && cp -rL ../../skills/warden-sweep skills/warden-sweep",
-    "postpublish": "rm -rf skills/warden skills/warden-sweep && ln -s ../../../skills/warden skills/warden && ln -s ../../../skills/warden-sweep skills/warden-sweep"
+    "prepublishOnly": "rm -f skills/warden skills/warden-service skills/warden-sweep && cp -rL ../../skills/warden skills/warden && cp -rL ../../skills/warden-service skills/warden-service && cp -rL ../../skills/warden-sweep skills/warden-sweep",
+    "postpublish": "rm -rf skills/warden skills/warden-service skills/warden-sweep && ln -s ../../../skills/warden skills/warden && ln -s ../../../skills/warden-service skills/warden-service && ln -s ../../../skills/warden-sweep skills/warden-sweep"
   },
   "keywords": [
     "github",

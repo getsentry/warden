@@ -19,7 +19,7 @@ export function validateActionLayout(options: ValidateActionLayoutOptions): stri
   // skills/ at the repo root is the canonical discovery location for both
   // dotagents (default scan dir) and the Claude Code marketplace plugin.
   // Validate that each skill dir exists and is readable.
-  for (const skillName of ['warden', 'warden-sweep']) {
+  for (const skillName of ['warden', 'warden-service', 'warden-sweep']) {
     expectFile(join(options.repoRoot, `skills/${skillName}/SKILL.md`), errors);
   }
 

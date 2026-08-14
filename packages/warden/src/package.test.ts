@@ -41,6 +41,7 @@ describe('npm package contents', () => {
     expect(ignored.ignores('src/builtin-skills/code-review/references/github-workflows.md')).toBe(false);
     expect(ignored.ignores('src/builtin-skills/code-review/references/python.md')).toBe(false);
     expect(ignored.ignores('skills/warden/SPEC.md')).toBe(false);
+    expect(ignored.ignores('skills/warden-service/spec.md')).toBe(false);
     expect(ignored.ignores('src/internal-skills/skill-writer/scripts/quick_validate_test.py')).toBe(true);
     expect(ignored.ignores('.warden/skills/security/SKILL.md')).toBe(true);
     expect(ignored.ignores('.codex/config.toml')).toBe(true);
@@ -63,11 +64,14 @@ describe('GitHub Action layout', () => {
       execFileSync('git', ['init'], { cwd: tempDir });
       writeFileSync(join(tempDir, 'action.yml'), 'name: test\nruns:\n  using: composite\n  steps: []\n');
       mkdirSync(join(tempDir, 'skills/warden'), { recursive: true });
+      mkdirSync(join(tempDir, 'skills/warden-service'), { recursive: true });
       mkdirSync(join(tempDir, 'skills/warden-sweep'), { recursive: true });
       writeFileSync(join(tempDir, 'skills/warden/SKILL.md'), '---\nname: warden\n---\n');
+      writeFileSync(join(tempDir, 'skills/warden-service/SKILL.md'), '---\nname: warden-service\n---\n');
       writeFileSync(join(tempDir, 'skills/warden-sweep/SKILL.md'), '---\nname: warden-sweep\n---\n');
       mkdirSync(join(tempDir, 'plugins/warden/skills'), { recursive: true });
       symlinkSync('../../../skills/warden', join(tempDir, 'plugins/warden/skills/warden'));
+      symlinkSync('../../../skills/warden-service', join(tempDir, 'plugins/warden/skills/warden-service'));
       symlinkSync('missing-target', join(tempDir, 'broken-link'));
       symlinkSync('target', join(tempDir, 'missing-link'));
       execFileSync('git', ['add', 'action.yml', 'skills', 'plugins', 'broken-link', 'missing-link'], {
