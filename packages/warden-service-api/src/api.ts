@@ -112,14 +112,17 @@ export const RunDetailResponseSchema = z.object({
 }).strict();
 export type RunDetailResponse = z.infer<typeof RunDetailResponseSchema>;
 
+export const CostGroupSchema = z.object({
+  dimensions: z.record(z.string(), z.string()),
+  runs: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  costUsd: z.number().finite().nonnegative().nullable(),
+}).strict();
+export type CostGroup = z.infer<typeof CostGroupSchema>;
+
 export const CostAggregateResponseSchema = z.object({
-  groups: z.array(z.object({
-    dimensions: z.record(z.string(), z.string()),
-    runs: z.number().int().nonnegative(),
-    inputTokens: z.number().int().nonnegative(),
-    outputTokens: z.number().int().nonnegative(),
-    costUsd: z.number().finite().nonnegative().nullable(),
-  }).strict()),
+  groups: z.array(CostGroupSchema),
   totals: z.object({
     runs: z.number().int().nonnegative(),
     inputTokens: z.number().int().nonnegative(),
@@ -128,6 +131,23 @@ export const CostAggregateResponseSchema = z.object({
   }).strict(),
 }).strict();
 export type CostAggregateResponse = z.infer<typeof CostAggregateResponseSchema>;
+
+export const CostBreakdownsResponseSchema = z.object({
+  breakdowns: z.array(z.object({
+    dimension: z.enum(['day', 'repository', 'skill', 'model', 'runtime', 'provider', 'lane', 'source', 'outcome']),
+    groups: z.array(CostGroupSchema),
+  }).strict()),
+}).strict();
+export type CostBreakdownsResponse = z.infer<typeof CostBreakdownsResponseSchema>;
+
+export const HistoryDimensionsResponseSchema = z.object({
+  repositories: z.array(z.object({
+    id: IdSchema,
+    repository: RepositoryIdentitySchema,
+  }).strict()),
+  skills: z.array(z.string().trim().min(1).max(512)),
+}).strict();
+export type HistoryDimensionsResponse = z.infer<typeof HistoryDimensionsResponseSchema>;
 
 export const RepositorySummarySchema = z.object({
   id: IdSchema,

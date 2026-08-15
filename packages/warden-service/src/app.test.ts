@@ -309,6 +309,15 @@ describe('createWardenService', () => {
     const database = {
       ...readyDatabase(),
       async query<TRow extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
+        if (sql.includes('select distinct') && sql.includes('"skill_executions"."skill"')) {
+          return { rows: [{ skill: 'security' }] as unknown as TRow[], rowCount: 1 };
+        }
+        if (sql.includes('from "repositories"') && !sql.includes('join')) {
+          return { rows: [{
+            id: '00000000-0000-4000-8000-000000000012',
+            provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
+          }] as unknown as TRow[], rowCount: 1 };
+        }
         if (sql.includes('inner join "findings"') || sql.includes('from "findings"')) {
           const finding = {
           id: '00000000-0000-4000-8000-000000000010',
@@ -328,6 +337,25 @@ describe('createWardenService', () => {
           completed_at: '2026-08-12T10:01:00.000Z',
           };
           return { rows: [finding] as unknown as TRow[], rowCount: 1 };
+        }
+        if (sql.includes('GROUPING SETS')) {
+          return { rows: [
+            {
+              dimension_0: '2026-08-15', dimension_1: null, dimension_2: null,
+              grouping_0: 0, grouping_1: 1, grouping_2: 1,
+              runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
+            },
+            {
+              dimension_0: null, dimension_1: 'acme/widgets', dimension_2: null,
+              grouping_0: 1, grouping_1: 0, grouping_2: 1,
+              runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
+            },
+            {
+              dimension_0: null, dimension_1: null, dimension_2: 'security',
+              grouping_0: 1, grouping_1: 1, grouping_2: 0,
+              runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
+            },
+          ] as unknown as TRow[], rowCount: 3 };
         }
         if (sql.includes('from "runs"') && sql.includes('SUM("usage_line_items"."input_tokens")')) {
           const grouped = sql.includes('group by');
@@ -362,12 +390,33 @@ describe('createWardenService', () => {
     });
     expect((await app.request('/api/v1/findings/not-a-uuid')).status).toBe(404);
 
+    const dimensions = await app.request('/api/v1/history/dimensions');
+    expect(dimensions.status).toBe(200);
+    await expect(dimensions.json()).resolves.toEqual({
+      repositories: [{
+        id: '00000000-0000-4000-8000-000000000012',
+        repository: { provider: 'github', owner: 'acme', name: 'widgets', fullName: 'acme/widgets' },
+      }],
+      skills: ['security'],
+    });
+
     const costs = await app.request('/api/v1/costs?groupBy=skill&skill=security');
     expect(costs.status).toBe(200);
     await expect(costs.json()).resolves.toEqual({
       groups: [{ dimensions: { skill: 'security' }, runs: 1, inputTokens: 100, outputTokens: 20, costUsd: 0.012 }],
       totals: { runs: 1, inputTokens: 100, outputTokens: 20, costUsd: 0.012 },
     });
+
+    const breakdowns = await app.request('/api/v1/costs/breakdowns?groupBy=day,repository,skill');
+    expect(breakdowns.status).toBe(200);
+    await expect(breakdowns.json()).resolves.toMatchObject({
+      breakdowns: [
+        { dimension: 'day', groups: [{ dimensions: { day: '2026-08-15' } }] },
+        { dimension: 'repository', groups: [{ dimensions: { repository: 'acme/widgets' } }] },
+        { dimension: 'skill', groups: [{ dimensions: { skill: 'security' } }] },
+      ],
+    });
+    expect((await app.request('/api/v1/costs/breakdowns?groupBy=day,day')).status).toBe(400);
 
     expect((await app.request('/api/v1/runs?cursor=not-a-cursor')).status).toBe(400);
   });

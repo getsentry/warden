@@ -1,8 +1,11 @@
 import type {
   CostAggregateResponse,
+  CostBreakdownsResponse,
+  CostGroup,
   FindingDetailResponse,
   FindingFeedItem,
   FindingListResponse,
+  HistoryDimensionsResponse,
   OutcomeSummaryResponse,
   RepositoryListResponse,
   RunDetailResponse,
@@ -628,6 +631,17 @@ interface AggregateRow extends Record<string, unknown> {
   [key: `dimension_${number}`]: string;
 }
 
+type BreakdownRow = AggregateRow & Record<`grouping_${number}`, number>;
+
+function mapAggregateRow(row: AggregateRow): Omit<CostGroup, 'dimensions'> {
+  return {
+    runs: Number(row.runs),
+    inputTokens: Number(row.input_tokens),
+    outputTokens: Number(row.output_tokens),
+    costUsd: numberOrNull(row.cost_usd),
+  };
+}
+
 async function aggregateRows(database: WardenDatabase, context: ServiceContext, filters: HistoryFilters, dimensions: readonly CostDimension[]) {
   const read = getReadDatabase(database);
   const conditions = historyWhere(read, context, filters, 'usage');
@@ -654,6 +668,41 @@ async function aggregateRows(database: WardenDatabase, context: ServiceContext, 
   return result as unknown as AggregateRow[];
 }
 
+async function aggregateBreakdownRows(
+  database: WardenDatabase,
+  context: ServiceContext,
+  filters: HistoryFilters,
+  dimensions: readonly CostDimension[],
+): Promise<BreakdownRow[]> {
+  const read = getReadDatabase(database);
+  const conditions = historyWhere(read, context, filters, 'usage');
+  const groupDimensions = dimensions.map((dimension) => dimensionSql[dimension]);
+  const selectDimensions = Object.fromEntries(groupDimensions.map((dimension, index) => [
+    `dimension_${index}`,
+    dimension.as(`dimension_${index}`),
+  ]));
+  const selectGrouping = Object.fromEntries(groupDimensions.map((dimension, index) => [
+    `grouping_${index}`,
+    sql<number>`GROUPING(${dimension})`.as(`grouping_${index}`),
+  ]));
+  const groupingSets = groupDimensions.map((dimension) => sql`(${dimension})`);
+  const result = await read.select({
+    ...selectDimensions,
+    ...selectGrouping,
+    runs: sql<number>`COUNT(DISTINCT ${runs.id})::integer`.as('runs'),
+    input_tokens: sql<string | number>`COALESCE(SUM(${usageLineItems.inputTokens}), 0)`.as('input_tokens'),
+    output_tokens: sql<string | number>`COALESCE(SUM(${usageLineItems.outputTokens}), 0)`.as('output_tokens'),
+    cost_usd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
+  })
+    .from(runs)
+    .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
+    .leftJoin(usageLineItems, and(eq(usageLineItems.runId, runs.id), eq(usageLineItems.tenantId, runs.tenantId)))
+    .leftJoin(skillExecutions, and(eq(skillExecutions.id, usageLineItems.skillExecutionId), eq(skillExecutions.tenantId, runs.tenantId)))
+    .where(and(...conditions))
+    .groupBy(sql`GROUPING SETS (${sql.join(groupingSets, sql`, `)})`);
+  return result as unknown as BreakdownRow[];
+}
+
 /** Aggregate additive usage and nullable cost over explicit, allowlisted dimensions. */
 export async function aggregateCosts(
   database: WardenDatabase,
@@ -666,19 +715,79 @@ export async function aggregateCosts(
     aggregateRows(database, context, filters, dimensions),
     aggregateRows(database, context, filters, []),
   ]);
-  const mapAggregate = (row: AggregateRow) => ({
-    runs: Number(row.runs),
-    inputTokens: Number(row.input_tokens),
-    outputTokens: Number(row.output_tokens),
-    costUsd: numberOrNull(row.cost_usd),
-  });
   const total = totalRows[0] ?? { runs: 0, input_tokens: 0, output_tokens: 0, cost_usd: null } as AggregateRow;
   return {
     groups: rows.map((row) => ({
       dimensions: Object.fromEntries(dimensions.map((dimension, index) => [dimension, String(row[`dimension_${index}`])])),
-      ...mapAggregate(row),
+      ...mapAggregateRow(row),
     })),
-    totals: mapAggregate(total),
+    totals: mapAggregateRow(total),
+  };
+}
+
+/** Aggregate several independent cost breakdowns without repeating total scans. */
+export async function aggregateCostBreakdowns(
+  database: WardenDatabase,
+  contextInput: ServiceContext | undefined,
+  filters: HistoryFilters,
+  dimensions: readonly CostDimension[],
+): Promise<CostBreakdownsResponse> {
+  const context = requireServiceContext(contextInput);
+  const rows = await aggregateBreakdownRows(database, context, filters, dimensions);
+  const breakdowns = dimensions.map((dimension) => ({ dimension, groups: [] as CostGroup[] }));
+  for (const row of rows) {
+    const dimensionIndex = dimensions.findIndex((_, index) => Number(row[`grouping_${index}`]) === 0);
+    const breakdown = breakdowns[dimensionIndex];
+    if (!breakdown) continue;
+    breakdown.groups.push({
+      dimensions: { [breakdown.dimension]: String(row[`dimension_${dimensionIndex}`]) },
+      ...mapAggregateRow(row),
+    });
+  }
+  return { breakdowns };
+}
+
+/** List lightweight repository and skill values used by history filters. */
+export async function listHistoryDimensions(
+  database: WardenDatabase,
+  contextInput: ServiceContext | undefined,
+): Promise<HistoryDimensionsResponse> {
+  const context = requireServiceContext(contextInput);
+  const read = getReadDatabase(database);
+  const repositoryConditions: SQL[] = [eq(repositories.tenantId, context.tenantId)];
+  const authorizedRepositories = repositoryScope(context);
+  if (authorizedRepositories) repositoryConditions.push(authorizedRepositories);
+
+  const [repositoryRows, skillRows] = await Promise.all([
+    read.select({
+      id: repositories.id,
+      provider: repositories.provider,
+      owner: repositories.owner,
+      name: repositories.name,
+      fullName: repositories.fullName,
+    })
+      .from(repositories)
+      .where(and(...repositoryConditions))
+      .orderBy(asc(repositories.fullName), asc(repositories.provider)),
+    read.selectDistinct({ skill: skillExecutions.skill })
+      .from(skillExecutions)
+      .innerJoin(runs, and(eq(runs.id, skillExecutions.runId), eq(runs.tenantId, skillExecutions.tenantId)))
+      .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
+      .where(and(eq(skillExecutions.tenantId, context.tenantId), authorizedRepositories))
+      .orderBy(asc(skillExecutions.skill)),
+  ]);
+
+  return {
+    repositories: repositoryRows.map((row) => ({
+      id: row.id,
+      repository: {
+        provider: row.provider as 'github' | 'gitlab' | 'local',
+        owner: row.owner,
+        name: row.name,
+        fullName: row.fullName,
+      },
+    })),
+    skills: skillRows.map((row) => row.skill),
   };
 }
 

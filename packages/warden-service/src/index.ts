@@ -57,10 +57,12 @@ export type { ServiceContext, ServiceRole } from './context.js';
 export { ingestRun, RunIngestionError } from './runs/ingest.js';
 export type { IngestRunResult } from './runs/ingest.js';
 export {
+  aggregateCostBreakdowns,
   aggregateCosts,
   getFindingDetail,
   getRunDetail,
   listFindings,
+  listHistoryDimensions,
   listRepositories,
   listRuns,
   listSkills,
