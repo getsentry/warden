@@ -183,6 +183,7 @@ interface FindingFeedRow extends Record<string, unknown> {
 interface FindingDetailRow extends FindingFeedRow {
   head_sha: string | null;
   source_evidence: unknown;
+  verification: string | null;
 }
 
 function mapFinding(row: FindingFeedRow): FindingFeedItem {
@@ -303,7 +304,7 @@ export async function getFindingDetail(
     : '';
   const result = await database.query<FindingDetailRow>(`
     SELECT f.id, f.client_finding_id, f.reported_id, f.run_id, r.client_run_id,
-      r.head_sha, f.source_evidence,
+      r.head_sha, f.source_evidence, f.verification,
       repo.provider, repo.owner, repo.name, repo.full_name,
       se.skill, f.severity, f.confidence, f.title, f.description,
       location.path, location.start_line, location.end_line,
@@ -335,6 +336,7 @@ export async function getFindingDetail(
     ...(finding.head_sha ? { headSha: finding.head_sha } : {}),
     ...(sourceUrl ? { sourceUrl } : {}),
     ...(sourceEvidence.success ? { sourceEvidence: sourceEvidence.data } : {}),
+    ...(finding.verification ? { verification: finding.verification } : {}),
   };
 }
 

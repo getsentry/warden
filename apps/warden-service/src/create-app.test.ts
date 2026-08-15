@@ -69,7 +69,7 @@ describe('Vercel service app', () => {
     expect(script).toContain("const byRepository = await api(apiPath('/api/v1/costs', repositoryCosts))");
     expect(script).toContain("const bySkill = await api(apiPath('/api/v1/costs', skillCosts))");
     expect(script).toContain("document.createElement('table')");
-    expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'Seen']");
+    expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'Last observed']");
     expect(script).not.toContain('finding-card');
     expect(script).not.toContain('badge');
     expect(`${html}\n${script}`).not.toContain('WARDEN_SERVICE_TOKEN');
@@ -82,8 +82,13 @@ describe('Vercel service app', () => {
     expect(script).toContain("row.setAttribute('aria-expanded', 'false')");
     expect(script).toContain("event.key !== 'Enter' && event.key !== ' '");
     expect(script).toContain('detailRow.hidden = !expanded');
-    expect(script).toContain("link('View on GitHub'");
+    expect(script).toContain("link('Open on GitHub'");
     expect(script).toContain("element('span', lineNumber, 'source-line-number')");
+    expect(script).toContain("findingPageSection('Why Warden Flagged This')");
+    expect(script).toContain("element('h2', 'Code Context')");
+    expect(script).toContain("findingPageSection('Finding Details')");
+    expect(script).toContain("'No source snippet was retained for this finding.'");
+    expect(script).toContain("findingDetail('Last observed'");
     expect(script).not.toContain('protected-session');
     expect(script).not.toContain("'/api/auth/session'");
   });

@@ -288,6 +288,8 @@ describe('createWardenService', () => {
           client_finding_id: '7MV-5V7', reported_id: null,
           run_id: '00000000-0000-4000-8000-000000000011',
           client_run_id: 'run-11',
+          head_sha: 'abc123def456', source_evidence: null,
+          verification: 'The query interpolates untrusted input.',
           provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
           skill: 'security', severity: 'high', confidence: 'high',
           title: 'Unsafe query', description: 'Use parameters.',
@@ -319,7 +321,12 @@ describe('createWardenService', () => {
     const detail = await app.request('/api/v1/findings/00000000-0000-4000-8000-000000000010');
     expect(detail.status).toBe(200);
     await expect(detail.json()).resolves.toMatchObject({
-      finding: { id: '00000000-0000-4000-8000-000000000010', displayId: '7MV-5V7' },
+      finding: {
+        id: '00000000-0000-4000-8000-000000000010',
+        displayId: '7MV-5V7',
+        observedAt: '2026-08-12T10:01:00.000Z',
+      },
+      verification: 'The query interpolates untrusted input.',
     });
     expect((await app.request('/api/v1/findings/not-a-uuid')).status).toBe(404);
 
