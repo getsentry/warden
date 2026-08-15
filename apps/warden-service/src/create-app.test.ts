@@ -110,6 +110,15 @@ describe('Vercel service app', () => {
     expect(script).toContain("findings.set('limit', '30')");
   });
 
+  it('defaults Explore to findings from the last 30 days', async () => {
+    const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
+
+    expect(script).toContain("const DEFAULT_RANGE_DAYS = '30';");
+    expect(script).toContain("{ value: 'all', label: 'All time' }");
+    expect(script).toContain("params.set('range', DEFAULT_RANGE_DAYS)");
+    expect(script).toMatch(/ensureDefaultRange\(\);\s+await renderExplore\(version\);/);
+  });
+
   it('renders service content through text nodes without HTML injection sinks', async () => {
     const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
 
