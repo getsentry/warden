@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && tsc --noEmit && node scripts/check-static-assets.mjs",
+    "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && node scripts/migrate-database.mjs && tsc --noEmit && node scripts/check-static-assets.mjs",
     "dev": "vercel dev",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit"

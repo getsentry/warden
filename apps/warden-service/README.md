@@ -10,7 +10,7 @@ This is the reference deployment for the optional Warden backing service. It use
 2. Add Neon from the Vercel Storage or Marketplace screen and connect it to the project. Confirm that Vercel created `DATABASE_URL`.
 3. Add independent random values for `WARDEN_SERVICE_SESSION_SECRET` and `CRON_SECRET`. The session secret must contain at least 32 characters. The Cron secret must contain at least 16.
 4. Keep `WARDEN_SERVICE_DATABASE_DRIVER=neon` and the default connection limit of 3 unless the database operator gives you a different limit.
-5. Run migrations before directing clients to the deployment. Either use the pooled `DATABASE_URL` from the database provider locally, or call the signed migration endpoint so the command uses the database attached to the Vercel function:
+5. Production Vercel builds apply migrations after the service packages compile and before Vercel promotes the new deployment. Preview and local builds never mutate the database. A failed migration fails the build. For manual recovery or non-Vercel deployments, use the pooled `DATABASE_URL` locally or call the signed migration endpoint:
 
    ```bash
    export DATABASE_URL='postgresql://...'
@@ -40,7 +40,7 @@ This is the reference deployment for the optional Warden backing service. It use
 
 At current AI Gateway rates, the defaults cost $0.20 per million extraction input tokens, $1.20 per million extraction output tokens, and $0.02 per million embedding tokens. The service records model, token, cost, and cost-basis metadata for extraction, embedding, and relevance operations. Provider work is bounded and retried through durable jobs; run ingestion remains independent from model availability.
 
-The service never runs migrations during a function cold start.
+The service never runs migrations during a function cold start. Production deploy builds own schema rollout so new code is not promoted before its required migration completes.
 
 ## API Access
 

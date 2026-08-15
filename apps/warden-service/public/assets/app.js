@@ -629,13 +629,14 @@ async function renderExplore(version) {
   repositoryCosts.set('groupBy', 'repository');
   const skillCosts = new URLSearchParams(common);
   skillCosts.set('groupBy', 'skill');
-  const [outcomes, feed] = await Promise.all([
+  // Fire every first-paint query together so cost charts do not wait on findings.
+  const [outcomes, feed, byDay, byRepository, bySkill] = await Promise.all([
     api(apiPath('/api/v1/outcomes/summary', common)),
     api(apiPath('/api/v1/findings', findings)),
+    api(apiPath('/api/v1/costs', dayCosts)),
+    api(apiPath('/api/v1/costs', repositoryCosts)),
+    api(apiPath('/api/v1/costs', skillCosts)),
   ]);
-  const byDay = await api(apiPath('/api/v1/costs', dayCosts));
-  const byRepository = await api(apiPath('/api/v1/costs', repositoryCosts));
-  const bySkill = await api(apiPath('/api/v1/costs', skillCosts));
   if (version !== renderVersion) return;
   const totals = outcomes.totals;
   const section = document.createDocumentFragment();

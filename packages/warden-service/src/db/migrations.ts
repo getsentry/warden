@@ -39,10 +39,15 @@ export async function getSchemaStatus(database: WardenDatabase): Promise<SchemaS
   const requiredVersion = files.at(-1)?.replace(/\.sql$/, '') ?? null;
   try {
     const result = await database.query<{ version: string }>(
-      'SELECT version FROM _warden_service_migrations ORDER BY version DESC LIMIT 1',
+      'SELECT version FROM _warden_service_migrations ORDER BY version DESC',
     );
     const currentVersion = result.rows[0]?.version ?? null;
-    return { ready: currentVersion === requiredVersion, currentVersion, requiredVersion };
+    const appliedVersions = new Set(result.rows.map((row) => row.version));
+    return {
+      ready: requiredVersion === null || appliedVersions.has(requiredVersion),
+      currentVersion,
+      requiredVersion,
+    };
   } catch (error) {
     if (!isUndefinedTable(error)) throw error;
     return { ready: requiredVersion === null, currentVersion: null, requiredVersion };

@@ -135,6 +135,7 @@ export const skillExecutions = pgTable('skill_executions', {
   ...timestamps,
 }, (table) => [
   uniqueIndex('skill_executions_run_client_unique').on(table.runId, table.clientExecutionId),
+  index('skill_executions_tenant_run_idx').on(table.tenantId, table.runId),
   index('skill_executions_tenant_skill_idx').on(table.tenantId, table.skill),
   index('skill_executions_tenant_error_idx').on(table.tenantId, table.errorCode),
 ]);
@@ -181,6 +182,9 @@ export const findings = pgTable('findings', {
   ...timestamps,
 }, (table) => [
   uniqueIndex('findings_run_client_unique').on(table.runId, table.clientFindingId),
+  // Dashboard feed joins findings to recent runs, then filters by severity/skill.
+  index('findings_tenant_run_idx').on(table.tenantId, table.runId),
+  index('findings_tenant_severity_idx').on(table.tenantId, table.severity),
   index('findings_tenant_skill_idx').on(table.tenantId, table.skillExecutionId),
 ]);
 
@@ -207,7 +211,15 @@ export const findingObservations = pgTable('finding_observations', {
   reason: text('reason'),
   observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
   ...timestamps,
-}, (table) => [index('finding_observations_tenant_finding_idx').on(table.tenantId, table.findingId)]);
+}, (table) => [
+  // Latest observation per finding uses ORDER BY observed_at DESC, id DESC LIMIT 1.
+  index('finding_observations_tenant_finding_observed_idx').on(
+    table.tenantId,
+    table.findingId,
+    table.observedAt,
+    table.id,
+  ),
+]);
 
 export const jobs = pgTable('jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
