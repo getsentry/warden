@@ -59,6 +59,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.17
         version: 1.19.17(hono@4.13.1)
+      '@sentry/node':
+        specifier: ^10.53.1
+        version: 10.53.1
       '@sentry/warden-service':
         specifier: workspace:*
         version: link:../../packages/warden-service

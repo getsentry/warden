@@ -26,10 +26,6 @@ describe('history store', () => {
       client_run_id: `client-${id}`,
       source: 'action',
       data_profile: 'metrics',
-      provider: 'github',
-      owner: 'acme',
-      name: 'widgets',
-      full_name: 'acme/widgets',
       started_at: '2026-08-12T10:00:00.000Z',
       completed_at: completedAt,
       outcome: 'success',
@@ -37,8 +33,12 @@ describe('history store', () => {
       high_count: 0,
       medium_count: 0,
       low_count: 0,
-      cost_usd: null,
       trace_id: null,
+      provider: 'github',
+      owner: 'acme',
+      name: 'widgets',
+      full_name: 'acme/widgets',
+      cost_usd: null,
     });
     const database = databaseFor((sql, values) => {
       seen.push({ sql, values });
@@ -53,8 +53,8 @@ describe('history store', () => {
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.costUsd).toBeNull();
     expect(page.nextCursor).toBeTypeOf('string');
-    expect(seen[0]?.sql).toContain('r.tenant_id = $1');
-    expect(seen[0]?.values[0]).toBe(context.tenantId);
+    expect(seen[0]?.sql).toContain('"runs"."tenant_id" = $1');
+    expect(seen[0]?.values).toContain(context.tenantId);
   });
 
   it('combines history dimensions without weakening tenant scope', async () => {
@@ -78,9 +78,9 @@ describe('history store', () => {
       errorCode: 'provider_unavailable',
     });
 
-    expect(captured?.sql).toContain('r.tenant_id = $1');
-    expect(captured?.sql).toContain('EXISTS (SELECT 1 FROM skill_executions filtered_se');
-    expect(captured?.sql).toContain('filtered_se.id = u.skill_execution_id');
+    expect(captured?.sql).toContain('"runs"."tenant_id" = $1');
+    expect(captured?.sql).toContain('exists (select 1 from "skill_executions" "filtered_se"');
+    expect(captured?.sql).toContain('"filtered_se"."id" = "usage_line_items"."skill_execution_id"');
     expect(captured?.values).toEqual(expect.arrayContaining([
       context.tenantId,
       'security',
@@ -102,11 +102,10 @@ describe('history store', () => {
 
     expect(statements).toHaveLength(2);
     for (const sql of statements) {
-      expect(sql).toContain('EXISTS (SELECT 1 FROM skill_executions filtered_se');
-      expect(sql).toContain('filtered_se.skill =');
-      expect(sql).toContain('filtered_se.error_code =');
-      expect(sql).not.toContain('filtered_se.id = u.skill_execution_id');
-      expect(sql).not.toContain('se.id = u.skill_execution_id');
+      expect(sql).toContain('exists (select 1 from "skill_executions" "filtered_se"');
+      expect(sql).toContain('"filtered_se"."skill" =');
+      expect(sql).toContain('"filtered_se"."error_code" =');
+      expect(sql).not.toContain('"filtered_se"."id" = "usage_line_items"."skill_execution_id"');
     }
   });
 
@@ -153,11 +152,11 @@ describe('history store', () => {
       location: { path: 'src/api.ts', startLine: 42 },
       outcome: 'posted',
     });
-    expect(captured?.sql).toContain('FROM runs r');
-    expect(captured?.sql).toContain('JOIN findings f ON f.run_id = r.id');
-    expect(captured?.sql).toContain('r.tenant_id = $1');
+    expect(captured?.sql).toContain('from "runs" inner join "findings"');
+    expect(captured?.sql).toContain('"findings"."run_id" = "runs"."id"');
+    expect(captured?.sql).toContain('"runs"."tenant_id" =');
     expect(captured?.sql).toContain('POSITION(');
-    expect(captured?.sql).toContain('LEFT JOIN LATERAL');
+    expect(captured?.sql).toContain('left join lateral');
     expect(captured?.values).toEqual(expect.arrayContaining([
       context.tenantId,
       'security-review',
@@ -206,7 +205,9 @@ describe('history store', () => {
       verification: 'The route reads an account before checking the caller.',
       finding: { observedAt: '2026-08-12T10:02:00.000Z' },
     });
-    expect(detailSql).toContain('ORDER BY fo.observed_at DESC, fo.id DESC LIMIT 1');
+    expect(detailSql).toContain(
+      'order by "finding_observations"."observed_at" desc, "finding_observations"."id" desc limit',
+    );
   });
 
   it('applies repository allowlists to every history read boundary', async () => {
@@ -228,8 +229,8 @@ describe('history store', () => {
 
     expect(statements).toHaveLength(9);
     for (const statement of statements) {
-      expect(statement.sql).toContain('full_name = ANY');
-      expect(statement.values).toContainEqual(['acme/widgets']);
+      expect(statement.sql).toContain('"repositories"."full_name" in');
+      expect(statement.values).toContain('acme/widgets');
     }
   });
 
@@ -244,18 +245,18 @@ describe('history store', () => {
     await listSkills(database, context);
     await summarizeOutcomes(database, context, {});
 
-    expect(statements[0]).toContain('WITH run_costs AS');
-    expect(statements[0]).toContain('LEFT JOIN run_costs costs ON costs.run_id = r.id');
-    expect(statements[1]).toContain('WITH skill_costs AS');
-    expect(statements[1]).toContain('LEFT JOIN skill_costs costs ON costs.skill_execution_id = se.id');
-    expect(statements[2]).toContain('run_costs AS');
-    expect(statements[2]).toContain('LEFT JOIN run_costs costs ON costs.run_id = filtered_runs.id');
-    expect(statements).not.toEqual(expect.arrayContaining([expect.stringContaining('LEFT JOIN LATERAL')]));
+    expect(statements[0]).toContain('with "run_costs" as');
+    expect(statements[0]).toContain('left join "run_costs" on "run_costs"."run_id" = "runs"."id"');
+    expect(statements[1]).toContain('with "skill_costs" as');
+    expect(statements[1]).toContain('left join "skill_costs" on "skill_costs"."skill_execution_id" = "skill_executions"."id"');
+    expect(statements[2]).toContain('"run_costs" as');
+    expect(statements[2]).toContain('left join "run_costs" on "run_costs"."run_id" = "filtered_runs"."id"');
+    expect(statements).not.toEqual(expect.arrayContaining([expect.stringContaining('left join lateral')]));
   });
 
   it('aggregates allowlisted dimensions while keeping unknown cost null', async () => {
     const database = databaseFor((sql) => ({
-      rows: sql.includes('GROUP BY') ? [{
+      rows: sql.includes('group by') ? [{
         dimension_0: 'acme/widgets',
         dimension_1: 'security',
         runs: 2,

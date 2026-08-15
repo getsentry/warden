@@ -48,6 +48,7 @@ export interface DashboardAssets {
 
 export interface CreateWardenServiceOptions {
   database?: WardenDatabase;
+  onError?: (error: Error) => void;
   rateLimit?: RateLimitHook;
   maxRequestBytes?: number;
   cronSecret?: string;
@@ -277,10 +278,17 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
     404,
   ));
 
-  app.onError((_error, context) => context.json(
-    ApiErrorSchema.parse({ error: { code: 'internal_error', message: 'The service could not complete the request.' } }),
-    500,
-  ));
+  app.onError((error, context) => {
+    try {
+      options.onError?.(error);
+    } catch {
+      // Observability hooks must not change the safe service response.
+    }
+    return context.json(
+      ApiErrorSchema.parse({ error: { code: 'internal_error', message: 'The service could not complete the request.' } }),
+      500,
+    );
+  });
 
   return app;
 }
