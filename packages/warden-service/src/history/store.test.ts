@@ -235,10 +235,11 @@ describe('history store', () => {
     await getRunDetail(database, restricted, '00000000-0000-0000-0000-000000000099');
     await listRepositories(database, restricted);
     await listSkills(database, restricted);
+    await listHistoryDimensions(database, restricted);
     await summarizeOutcomes(database, restricted, {});
     await aggregateCosts(database, restricted, {}, ['repository']);
 
-    expect(statements).toHaveLength(9);
+    expect(statements).toHaveLength(11);
     for (const statement of statements) {
       expect(statement.sql).toContain('"repositories"."full_name" in');
       expect(statement.values).toContain('acme/widgets');
@@ -319,6 +320,9 @@ describe('history store', () => {
       skills: ['security'],
     });
     expect(statements).toHaveLength(2);
+    const skillStatement = statements.find((statement) => statement.includes('select distinct'));
+    expect(skillStatement).not.toContain('join "runs"');
+    expect(skillStatement).not.toContain('join "repositories"');
     expect(statements).not.toEqual(expect.arrayContaining([
       expect.stringContaining('SUM('),
       expect.stringContaining('COUNT('),

@@ -12,6 +12,7 @@ const apiDialogClose = document.querySelector('#api-dialog-close');
 const pageTitle = document.querySelector('#page-title');
 const pageDescription = document.querySelector('#page-description');
 let dimensions;
+let dimensionsPromise;
 let filterTimer;
 let renderVersion = 0;
 
@@ -203,25 +204,30 @@ async function renderApiAccess() {
 
 async function loadDimensions() {
   if (dimensions) return dimensions;
-  const available = await api('/api/v1/history/dimensions');
-  const nameCounts = new Map();
-  for (const item of available.repositories) {
-    nameCounts.set(item.repository.fullName, (nameCounts.get(item.repository.fullName) ?? 0) + 1);
-  }
-  dimensions = {
-    repositories: available.repositories
-      .map((item) => ({
-        value: item.id,
-        label: nameCounts.get(item.repository.fullName) > 1
-          ? `${item.repository.fullName} (${item.repository.provider})`
-          : item.repository.fullName,
-      }))
-      .sort((left, right) => left.label.localeCompare(right.label)),
-    skills: available.skills
-      .map((skill) => ({ value: skill, label: skill }))
-      .sort((left, right) => left.label.localeCompare(right.label)),
-  };
-  return dimensions;
+  dimensionsPromise ??= api('/api/v1/history/dimensions').then((available) => {
+    const nameCounts = new Map();
+    for (const item of available.repositories) {
+      nameCounts.set(item.repository.fullName, (nameCounts.get(item.repository.fullName) ?? 0) + 1);
+    }
+    dimensions = {
+      repositories: available.repositories
+        .map((item) => ({
+          value: item.id,
+          label: nameCounts.get(item.repository.fullName) > 1
+            ? `${item.repository.fullName} (${item.repository.provider})`
+            : item.repository.fullName,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label)),
+      skills: available.skills
+        .map((skill) => ({ value: skill, label: skill }))
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    };
+    return dimensions;
+  }).catch((error) => {
+    dimensionsPromise = undefined;
+    throw error;
+  });
+  return dimensionsPromise;
 }
 
 function field(params, config) {
@@ -251,6 +257,54 @@ function filterOptions(items, allLabel) {
   return [{ value: '', label: allLabel }, ...items];
 }
 
+function dimensionFilterOptions(params, name, items, allLabel, pendingLabel) {
+  const selected = params.get(name);
+  const available = items ?? (selected ? [{ value: selected, label: pendingLabel ?? selected }] : []);
+  return filterOptions(available, allLabel);
+}
+
+function replaceFilterOptions(control, items, allLabel) {
+  const selected = new URLSearchParams(location.search).get(control.name) ?? control.value;
+  control.replaceChildren();
+  for (const option of filterOptions(items, allLabel)) {
+    const node = element('option', option.label);
+    node.value = option.value;
+    control.append(node);
+  }
+  control.value = selected;
+}
+
+async function hydrateFilterDimensions(form) {
+  if (!form.isConnected || form.dataset.dimensionsState) return;
+  form.dataset.dimensionsState = 'loading';
+  try {
+    const available = await loadDimensions();
+    if (!form.isConnected) return;
+    replaceFilterOptions(form.elements.namedItem('repositoryId'), available.repositories, 'All repositories');
+    replaceFilterOptions(form.elements.namedItem('skill'), available.skills, 'All skills');
+    form.dataset.dimensionsState = 'loaded';
+  } catch {
+    delete form.dataset.dimensionsState;
+  }
+}
+
+function listenForFilterDimensions(form) {
+  const hydrate = () => hydrateFilterDimensions(form);
+  for (const name of ['repositoryId', 'skill']) {
+    const control = form.elements.namedItem(name);
+    control.addEventListener('focus', hydrate);
+    control.addEventListener('pointerdown', hydrate);
+  }
+}
+
+function scheduleFilterDimensions(form) {
+  const hydrate = () => hydrateFilterDimensions(form);
+  requestAnimationFrame(() => {
+    if ('requestIdleCallback' in window) window.requestIdleCallback(hydrate, { timeout: 2_000 });
+    else setTimeout(hydrate, 0);
+  });
+}
+
 function ensureDefaultRange() {
   const params = new URLSearchParams(location.search);
   if (params.get('range')) return;
@@ -269,9 +323,7 @@ function applyFilters(form) {
   render();
 }
 
-async function renderFilters(version) {
-  const available = await loadDimensions();
-  if (version !== renderVersion) return;
+function renderFilters() {
   const params = new URLSearchParams(location.search);
   const form = element('form', undefined, 'filter-bar');
   form.append(field(params, {
@@ -284,12 +336,18 @@ async function renderFilters(version) {
     field(params, {
       name: 'repositoryId',
       label: 'Repository',
-      options: filterOptions(available.repositories, 'All repositories'),
+      options: dimensionFilterOptions(
+        params,
+        'repositoryId',
+        dimensions?.repositories,
+        'All repositories',
+        'Selected repository',
+      ),
     }),
     field(params, {
       name: 'skill',
       label: 'Skill',
-      options: filterOptions(available.skills, 'All skills'),
+      options: dimensionFilterOptions(params, 'skill', dimensions?.skills, 'All skills'),
     }),
     field(params, {
       name: 'range',
@@ -346,6 +404,8 @@ async function renderFilters(version) {
   });
   filterHost.replaceChildren(form);
   filterHost.hidden = false;
+  listenForFilterDimensions(form);
+  return form;
 }
 
 function commonApiParams(params) {
@@ -608,16 +668,7 @@ function findingsSection(data, params) {
 async function renderExplore(version) {
   setPage('Explore', 'Filter findings and understand where Warden spends time and money.');
   filterHost.hidden = false;
-  const filtersReady = filterHost.querySelector('form')
-    ? Promise.resolve()
-    : renderFilters(version).catch((error) => {
-        if (version !== renderVersion) return;
-        filterHost.replaceChildren(element(
-          'div',
-          error instanceof Error ? error.message : 'Could not load filters. Try again.',
-          'error',
-        ));
-      });
+  const filterForm = filterHost.querySelector('form') ?? renderFilters();
   const params = new URLSearchParams(location.search);
   const common = commonApiParams(params);
   const findings = new URLSearchParams(common);
@@ -631,7 +682,6 @@ async function renderExplore(version) {
 
   const costBreakdowns = new URLSearchParams(common);
   costBreakdowns.set('groupBy', 'day,repository,skill');
-  // Filters and first-paint data are independent and must share one waterfall level.
   const [outcomes, feed, costs] = await Promise.all([
     api(apiPath('/api/v1/outcomes/summary', common)),
     api(apiPath('/api/v1/findings', findings)),
@@ -658,7 +708,7 @@ async function renderExplore(version) {
   analytics.append(grid);
   section.append(analytics, findingsSection(feed, params));
   content.replaceChildren(section);
-  await filtersReady;
+  scheduleFilterDimensions(filterForm);
 }
 
 async function renderFinding(version, findingId) {
