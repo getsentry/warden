@@ -6,7 +6,16 @@ import { createWardenService } from '../app.js';
 import type { ServiceContext } from '../context.js';
 import { createDatabase, type DatabaseDriver, type WardenDatabase } from '../db/database.js';
 import { migrateDatabase } from '../db/migrations.js';
-import { getRunDetail } from '../history/store.js';
+import {
+  aggregateCosts,
+  getFindingDetail,
+  getRunDetail,
+  listFindings,
+  listRepositories,
+  listRuns,
+  listSkills,
+  summarizeOutcomes,
+} from '../history/store.js';
 import { createMemory } from '../memory/store.js';
 import { persistPassiveMemoryCandidate } from '../memory/passive-store.js';
 import type { PassiveEvidence } from '../memory/passive.js';
@@ -223,6 +232,48 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       await expect(ingestRun(database, context, invalid)).rejects.toThrow();
       const rolledBack = await database.query('SELECT 1 FROM runs WHERE tenant_id = $1 AND client_run_id = $2', [tenantId, invalidId]);
       expect(rolledBack.rowCount).toBe(0);
+    }, 30_000);
+
+    it('executes typed Drizzle history reads against PostgreSQL', async () => {
+      const tenantId = await createTenant(database, {
+        slug: `history-${randomUUID()}`,
+        name: 'History Tenant',
+      });
+      tenantIds.push(tenantId);
+      const reader = await createServiceToken(database, {
+        tenantId,
+        name: 'History reader',
+        roles: ['ingest', 'read'],
+      });
+      const context = await authenticateServiceToken(database, reader.token);
+      if (!context) throw new Error('history token did not authenticate');
+      const stored = await ingestRun(database, context, findingsEnvelope(`history-${randomUUID()}`));
+
+      await expect(listRuns(database, context, {})).resolves.toMatchObject({
+        items: [{ id: stored.runId, repository: { fullName: 'acme/widgets' }, costUsd: 0.01 }],
+      });
+      const findingPage = await listFindings(database, context, { query: 'unsafe' });
+      expect(findingPage.items).toHaveLength(1);
+      await expect(getFindingDetail(database, context, findingPage.items[0]!.id)).resolves.toMatchObject({
+        finding: { title: 'Unsafe sink', outcome: 'resolved' },
+      });
+      await expect(listRepositories(database, context)).resolves.toMatchObject({
+        items: [{ repository: { fullName: 'acme/widgets' }, runs: 1, findings: 1, costUsd: 0.01 }],
+      });
+      await expect(listSkills(database, context)).resolves.toMatchObject({
+        items: expect.arrayContaining([
+          expect.objectContaining({ skill: 'security', executions: 1 }),
+        ]),
+      });
+      await expect(summarizeOutcomes(database, context, {})).resolves.toMatchObject({
+        totals: { runs: 1, successful: 1, findings: 1, costUsd: 0.01 },
+      });
+      await expect(aggregateCosts(database, context, {}, ['repository', 'skill'])).resolves.toMatchObject({
+        groups: expect.arrayContaining([
+          expect.objectContaining({ dimensions: { repository: 'acme/widgets', skill: 'security' } }),
+        ]),
+        totals: { runs: 1, inputTokens: 110, outputTokens: 22, costUsd: 0.01 },
+      });
     }, 30_000);
 
     it('persists multiple passive evidence rows in one transaction', async () => {

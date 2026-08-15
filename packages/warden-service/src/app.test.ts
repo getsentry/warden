@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createWardenService } from './app.js';
 import type { DatabaseClient, WardenDatabase } from './db/database.js';
 import type { GoogleAuthBridge, GoogleAuthSession } from './google-auth.js';
@@ -109,8 +109,10 @@ describe('createWardenService', () => {
   });
 
   it('returns safe not-found and error responses', async () => {
+    const onError = vi.fn();
     const app = createWardenService({
       rateLimit() { throw new Error('sql contains private finding'); },
+      onError,
     });
 
     const missing = await app.request('/missing');
@@ -120,6 +122,9 @@ describe('createWardenService', () => {
     const failed = await app.request('/api/explode');
     expect(failed.status).toBe(500);
     expect(await failed.text()).not.toContain('private finding');
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'sql contains private finding',
+    }));
   });
 
   it('applies payload and rate-limit hooks before API handlers', async () => {
@@ -304,22 +309,28 @@ describe('createWardenService', () => {
     const database = {
       ...readyDatabase(),
       async query<TRow extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
-        if (sql.includes('JOIN findings f') || sql.includes('FROM findings f')) return { rows: [{
+        if (sql.includes('inner join "findings"') || sql.includes('from "findings"')) {
+          const finding = {
           id: '00000000-0000-4000-8000-000000000010',
           client_finding_id: '7MV-5V7', reported_id: null,
           run_id: '00000000-0000-4000-8000-000000000011',
           client_run_id: 'run-11',
-          head_sha: 'abc123def456', source_evidence: null,
-          verification: 'The query interpolates untrusted input.',
+          ...(sql.includes('"runs"."head_sha"') ? {
+            head_sha: 'abc123def456',
+            source_evidence: null,
+            verification: 'The query interpolates untrusted input.',
+          } : {}),
           provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
           skill: 'security', severity: 'high', confidence: 'high',
           title: 'Unsafe query', description: 'Use parameters.',
           path: 'src/query.ts', start_line: 12, end_line: 12,
           observation_outcome: 'posted', observed_at: '2026-08-12T10:01:00.000Z',
           completed_at: '2026-08-12T10:01:00.000Z',
-        }] as unknown as TRow[], rowCount: 1 };
-        if (sql.includes('FROM runs r') && sql.includes('SUM(u.input_tokens)')) {
-          const grouped = sql.includes('GROUP BY');
+          };
+          return { rows: [finding] as unknown as TRow[], rowCount: 1 };
+        }
+        if (sql.includes('from "runs"') && sql.includes('SUM("usage_line_items"."input_tokens")')) {
+          const grouped = sql.includes('group by');
           return { rows: [{
             ...(grouped ? { dimension_0: 'security' } : {}),
             runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',

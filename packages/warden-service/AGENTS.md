@@ -1,5 +1,11 @@
 # Warden Service Instructions
 
+## Database Queries
+
+- Use the Drizzle schema and typed query builder for new or changed runtime queries.
+- Use raw SQL only when PostgreSQL behavior cannot be expressed clearly in Drizzle; keep it parameterized and tenant-scoped.
+- Keep tracing at the database boundary. Never record query parameter values.
+
 ## Database Migrations
 
 - Assume migrations run while the previous production version is still serving traffic.

@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.173",
     "@hono/node-server": "^1.19.17",
+    "@sentry/node": "^10.53.1",
     "@sentry/warden-service": "workspace:*",
     "@vercel/oidc": "^3.4.1",
     "ai": "^6.0.255",

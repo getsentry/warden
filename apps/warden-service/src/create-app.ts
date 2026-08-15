@@ -8,6 +8,7 @@ import {
 } from '@sentry/warden-service';
 import { readFileSync } from 'node:fs';
 import { createHostedMemoryRuntime } from './memory-ai.js';
+import { captureServiceError, traceDatabase } from './sentry.js';
 
 const dashboard = {
   html: readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'),
@@ -23,12 +24,12 @@ function requiredAuthValue(value: string | undefined, name: string): string {
 /** Build the Vercel app from an explicitly validated environment. */
 export function createVercelWardenService(environment: NodeJS.ProcessEnv) {
   const config = parseServiceEnvironment(environment);
-  const database = getWarmDatabase({
+  const database = traceDatabase(getWarmDatabase({
     url: config.DATABASE_URL,
     driver: config.WARDEN_SERVICE_DATABASE_DRIVER,
     maxConnections: config.WARDEN_SERVICE_DATABASE_MAX_CONNECTIONS,
     statementTimeoutMs: config.WARDEN_SERVICE_DATABASE_STATEMENT_TIMEOUT_MS,
-  });
+  }));
   const memory = createHostedMemoryRuntime({
     memoryModel: config.WARDEN_SERVICE_MEMORY_MODEL,
     embeddingModel: config.WARDEN_SERVICE_EMBEDDING_MODEL,
@@ -36,6 +37,7 @@ export function createVercelWardenService(environment: NodeJS.ProcessEnv) {
   });
   return createWardenService({
     database,
+    onError: captureServiceError,
     dashboard,
     cronSecret: config.CRON_SECRET,
     jobHandlers: createMemoryJobHandlers(database, {

@@ -36,7 +36,8 @@ This is the reference deployment for the optional Warden backing service. It use
 7. In Google Auth Platform, create a Web application OAuth client. Add the stable production origin as an authorized JavaScript origin and `<origin>/api/auth/callback/google` as an authorized redirect URI.
 8. Set `WARDEN_SERVICE_TENANT_ID=$TENANT_ID` and add the OAuth client as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Warden uses Vercel's stable production URL automatically; set `WARDEN_SERVICE_BASE_URL` only to override it with a custom origin. `WARDEN_SERVICE_GOOGLE_DOMAIN` defaults to `sentry.io`.
 9. Vercel functions use the project OIDC token for AI Gateway. For local or non-Vercel deployments, set `AI_GATEWAY_API_KEY` instead. The hosted defaults use `openai/gpt-5.6-luna` for bounded extraction and relevance, `openai/text-embedding-3-small` for vectors, and promote only after three supporting independent runs with no contradictions. Set `WARDEN_SERVICE_MEMORY_AUTO_PROMOTE=false` to require manual approval.
-10. Deploy, open `/health` and `/ready`, then verify that Google sign-in and the Cron request to `/api/internal/jobs/tick` work.
+10. Set `WARDEN_SENTRY_DSN` to enable errors, request traces, and database query spans. The existing Warden project DSN can be reused; service events carry `service.name=warden-service`.
+11. Deploy, open `/health` and `/ready`, then verify that Google sign-in and the Cron request to `/api/internal/jobs/tick` work.
 
 At current AI Gateway rates, the defaults cost $0.20 per million extraction input tokens, $1.20 per million extraction output tokens, and $0.02 per million embedding tokens. The service records model, token, cost, and cost-basis metadata for extraction, embedding, and relevance operations. Provider work is bounded and retried through durable jobs; run ingestion remains independent from model availability.
 
