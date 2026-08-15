@@ -164,28 +164,33 @@ describe('history store', () => {
     ]));
   });
 
-  it('returns bounded source evidence and a commit-pinned GitHub link for finding detail', async () => {
-    const database = databaseFor(() => ({
-      rows: [{
-        id: '00000000-0000-0000-0000-000000000020',
-        client_finding_id: 'finding-20',
-        reported_id: '7MV-5V7',
-        run_id: '00000000-0000-0000-0000-000000000021',
-        client_run_id: 'run-21',
-        head_sha: 'abc123def456',
-        source_evidence: {
-          path: 'src/api route.ts', language: 'typescript', startLine: 40, endLine: 49,
-          targetStartLine: 42, targetEndLine: 48, content: 'authorize(request);',
-        },
-        provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
-        skill: 'security-review', severity: 'high', confidence: 'high',
-        title: 'Missing authorization check', description: 'The endpoint does not verify ownership.',
-        path: 'src/api route.ts', start_line: 42, end_line: 48,
-        observation_outcome: 'posted', observed_at: '2026-08-12T10:02:00.000Z',
-        completed_at: '2026-08-12T10:01:00.000Z',
-      }],
-      rowCount: 1,
-    }));
+  it('returns source and verification context with the latest finding observation', async () => {
+    let detailSql = '';
+    const database = databaseFor((sql) => {
+      detailSql = sql;
+      return {
+        rows: [{
+          id: '00000000-0000-0000-0000-000000000020',
+          client_finding_id: 'finding-20',
+          reported_id: '7MV-5V7',
+          run_id: '00000000-0000-0000-0000-000000000021',
+          client_run_id: 'run-21',
+          head_sha: 'abc123def456',
+          source_evidence: {
+            path: 'src/api route.ts', language: 'typescript', startLine: 40, endLine: 49,
+            targetStartLine: 42, targetEndLine: 48, content: 'authorize(request);',
+          },
+          verification: 'The route reads an account before checking the caller.',
+          provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
+          skill: 'security-review', severity: 'high', confidence: 'high',
+          title: 'Missing authorization check', description: 'The endpoint does not verify ownership.',
+          path: 'src/api route.ts', start_line: 42, end_line: 48,
+          observation_outcome: 'posted', observed_at: '2026-08-12T10:02:00.000Z',
+          completed_at: '2026-08-12T10:01:00.000Z',
+        }],
+        rowCount: 1,
+      };
+    });
 
     await expect(getFindingDetail(
       database,
@@ -195,7 +200,10 @@ describe('history store', () => {
       headSha: 'abc123def456',
       sourceUrl: 'https://github.com/acme/widgets/blob/abc123def456/src/api%20route.ts#L42-L48',
       sourceEvidence: { targetStartLine: 42, content: 'authorize(request);' },
+      verification: 'The route reads an account before checking the caller.',
+      finding: { observedAt: '2026-08-12T10:02:00.000Z' },
     });
+    expect(detailSql).toContain('ORDER BY fo.observed_at DESC, fo.id DESC LIMIT 1');
   });
 
   it('applies repository allowlists to every history read boundary', async () => {

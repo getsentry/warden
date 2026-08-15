@@ -86,6 +86,7 @@ export const FindingDetailResponseSchema = z.object({
   headSha: z.string().trim().min(7).max(128).optional(),
   sourceUrl: z.url().max(4_096).optional(),
   sourceEvidence: SourceEvidenceSchema.optional(),
+  verification: z.string().trim().min(1).max(4_000).optional(),
 }).strict();
 export type FindingDetailResponse = z.infer<typeof FindingDetailResponseSchema>;
 

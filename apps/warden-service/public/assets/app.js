@@ -47,6 +47,14 @@ function formatDate(value) {
     : 'Never';
 }
 
+function dateTime(value, fallback = 'Not reported') {
+  if (!value) return element('span', fallback);
+  const time = element('time', formatDate(value));
+  time.dateTime = value;
+  time.title = new Date(value).toISOString();
+  return time;
+}
+
 function setPage(title, description) {
   pageTitle.textContent = title;
   pageDescription.textContent = description;
@@ -421,7 +429,10 @@ function findingLocation(finding) {
 
 function findingDetail(label, value) {
   const item = element('div', undefined, 'finding-detail-item');
-  item.append(element('dt', label), element('dd', value));
+  const description = element('dd');
+  if (value instanceof Node) description.append(value);
+  else description.textContent = String(value);
+  item.append(element('dt', label), description);
   return item;
 }
 
@@ -449,6 +460,27 @@ function sourceContext(evidence) {
   });
   pre.append(code);
   context.append(header, pre);
+  return context;
+}
+
+function findingPageSection(title) {
+  const section = element('section', undefined, 'finding-page-section');
+  section.append(element('h2', title));
+  return section;
+}
+
+function githubLink(sourceUrl) {
+  const sourceLink = link('Open on GitHub', sourceUrl, 'source-link text-link');
+  sourceLink.target = '_blank';
+  sourceLink.rel = 'noreferrer';
+  return sourceLink;
+}
+
+function unavailableSourceContext(finding) {
+  const context = element('div', undefined, 'source-context-empty');
+  const location = findingLocation(finding);
+  if (location !== '—') context.append(element('code', location));
+  context.append(element('p', 'No source snippet was retained for this finding.'));
   return context;
 }
 
@@ -485,12 +517,10 @@ function findingRows(finding) {
   location.title = locationText;
 
   const status = element('td', finding.outcome ?? '—', `finding-status ${finding.outcome ?? ''}`);
-  const seen = document.createElement('td');
-  const time = element('time', formatDate(finding.completedAt));
-  time.dateTime = finding.completedAt;
-  seen.append(time);
+  const observed = document.createElement('td');
+  observed.append(dateTime(finding.observedAt, '—'));
 
-  row.append(severity, summary, context, location, status, seen);
+  row.append(severity, summary, context, location, status, observed);
 
   const detailRow = document.createElement('tr');
   detailRow.id = `finding-detail-${finding.id}`;
@@ -513,7 +543,7 @@ function findingRows(finding) {
     findingDetail('Location', locationText),
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
     findingDetail('Status', finding.outcome ?? 'Not reported'),
-    findingDetail('Observed', finding.observedAt ? formatDate(finding.observedAt) : 'Not reported'),
+    findingDetail('Last observed', dateTime(finding.observedAt)),
   );
   detailContent.append(description, metadata);
   detailCell.append(detailContent);
@@ -537,7 +567,7 @@ function findingRows(finding) {
 
 function findingsSection(data, params) {
   const section = element('section', undefined, 'section');
-  section.append(sectionHeader('Findings', `${data.items.length} shown, newest first`));
+  section.append(sectionHeader('Findings', `${data.items.length} shown, newest runs first`));
   if (!data.items.length) {
     section.append(empty('No findings match these filters.'));
     return section;
@@ -547,7 +577,7 @@ function findingsSection(data, params) {
   table.className = 'finding-table';
   const head = document.createElement('thead');
   const headings = document.createElement('tr');
-  for (const label of ['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'Seen']) {
+  for (const label of ['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'Last observed']) {
     const heading = element('th', label);
     heading.scope = 'col';
     headings.append(heading);
@@ -636,7 +666,27 @@ async function renderFinding(version, findingId) {
     element('span', finding.severity, `severity ${finding.severity}`),
     element('span', finding.outcome ?? 'Not reported', `finding-status ${finding.outcome ?? ''}`),
   );
-  const description = element('p', finding.description, 'finding-page-description');
+
+  const explanation = findingPageSection('Why Warden Flagged This');
+  explanation.append(element('p', finding.description, 'finding-page-description'));
+  if (detail.verification) {
+    const verification = element('div', undefined, 'finding-verification');
+    verification.append(
+      element('strong', 'Verification evidence'),
+      element('p', detail.verification),
+    );
+    explanation.append(verification);
+  }
+
+  const codeContext = element('section', undefined, 'finding-page-section');
+  const codeContextHeader = element('div', undefined, 'finding-page-section-header');
+  codeContextHeader.append(element('h2', 'Code Context'));
+  if (detail.sourceUrl) codeContextHeader.append(githubLink(detail.sourceUrl));
+  codeContext.append(codeContextHeader, detail.sourceEvidence
+    ? sourceContext(detail.sourceEvidence)
+    : unavailableSourceContext(finding));
+
+  const details = findingPageSection('Finding Details');
   const metadata = element('dl', undefined, 'finding-page-metadata');
   metadata.append(
     findingDetail('ID', finding.displayId),
@@ -644,18 +694,14 @@ async function renderFinding(version, findingId) {
     findingDetail('Skill', finding.skill),
     findingDetail('Location', findingLocation(finding)),
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
-    findingDetail('Observed', finding.observedAt ? formatDate(finding.observedAt) : 'Not reported'),
-    findingDetail('Completed', formatDate(finding.completedAt)),
+    findingDetail('Latest outcome', finding.outcome ?? 'Not reported'),
+    findingDetail('Last observed', dateTime(finding.observedAt)),
+    findingDetail('Run completed', dateTime(finding.completedAt)),
+    findingDetail('Run', finding.clientRunId),
+    findingDetail('Commit', detail.headSha ? detail.headSha.slice(0, 12) : 'Not reported'),
   );
-  article.append(heading, description);
-  if (detail.sourceEvidence) article.append(sourceContext(detail.sourceEvidence));
-  if (detail.sourceUrl) {
-    const sourceLink = link('View on GitHub', detail.sourceUrl, 'source-link text-link');
-    sourceLink.target = '_blank';
-    sourceLink.rel = 'noreferrer';
-    article.append(sourceLink);
-  }
-  article.append(metadata);
+  details.append(metadata);
+  article.append(heading, explanation, codeContext, details);
   section.append(article);
   content.replaceChildren(section);
 }
