@@ -731,6 +731,56 @@ describe('runSkill', () => {
     vi.restoreAllMocks();
   });
 
+  it('omits ignored files from repeated hunk context but keeps budget-limited files', async () => {
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'success',
+        text: JSON.stringify({ findings: [] }),
+        errors: [],
+        usage: makeUsage(),
+      },
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const context = makeContextWithOneHunk();
+    context.pullRequest!.files.push(
+      {
+        filename: 'pnpm-lock.yaml',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+        chunks: 1,
+      },
+      {
+        filename: 'src/unscanned.ts',
+        status: 'modified',
+        additions: 1,
+        deletions: 1,
+        patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+        chunks: 1,
+      },
+    );
+
+    await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      context,
+      { runtime: 'pi', scan: { maxFiles: 1 }, verifyFindings: false },
+    );
+
+    const userPrompt = runSkillMock.mock.calls[0]?.[0].userPrompt;
+    expect(userPrompt).not.toContain('pnpm-lock.yaml');
+    expect(userPrompt).toContain('src/unscanned.ts');
+  });
+
   it('reports all-extraction failures without authentication guidance', async () => {
     vi.mocked(getRuntime).mockReturnValue({
       name: 'pi',

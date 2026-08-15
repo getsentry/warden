@@ -17,6 +17,7 @@ import {
   aggregateAuxiliaryUsage,
   postProcessFindings,
   generateSummary,
+  selectChangedFilesForPrompt,
   type AuxiliaryUsageEntry,
   type SkillRunnerOptions,
   type FileAnalysisCallbacks,
@@ -377,7 +378,12 @@ export async function runSkillTask(
         const isPullRequest = context.pullRequest ? context.pullRequest.number !== 0 : false;
         const prContext: PRPromptContext | undefined = context.pullRequest
           ? {
-              changedFiles: isPullRequest ? context.pullRequest.files.map((f) => f.filename) : [],
+              changedFiles: isPullRequest
+                ? selectChangedFilesForPrompt(
+                    context.pullRequest.files.map((file) => file.filename),
+                    skippedFiles,
+                  )
+                : [],
               title: context.pullRequest.title,
               body: context.pullRequest.body,
               maxContextFiles: runnerOptions.maxContextFiles,
