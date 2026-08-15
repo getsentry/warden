@@ -90,8 +90,10 @@ describe('history store', () => {
     });
 
     expect(captured?.sql).toContain('"runs"."tenant_id" = $1');
-    expect(captured?.sql).toContain('exists (select 1 from "skill_executions" "filtered_se"');
-    expect(captured?.sql).toContain('"filtered_se"."id" = "usage_line_items"."skill_execution_id"');
+    expect(captured?.sql).toContain('exists (select 1 from "usage_line_items" "filtered_usage"');
+    expect(captured?.sql).toContain('inner join "skill_executions" "filtered_se"');
+    expect(captured?.sql).toContain('"filtered_se"."id" = "filtered_usage"."skill_execution_id"');
+    expect(captured?.sql).not.toContain('left join "usage_line_items"');
     expect(captured?.values).toEqual(expect.arrayContaining([
       context.tenantId,
       'security',
@@ -111,7 +113,7 @@ describe('history store', () => {
     await listRuns(database, context, { skill: 'security', errorCode: 'provider_unavailable' });
     await summarizeOutcomes(database, context, { skill: 'security', errorCode: 'provider_unavailable' });
 
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(3);
     for (const sql of statements) {
       expect(sql).toContain('exists (select 1 from "skill_executions" "filtered_se"');
       expect(sql).toContain('"filtered_se"."skill" =');
@@ -239,14 +241,14 @@ describe('history store', () => {
     await summarizeOutcomes(database, restricted, {});
     await aggregateCosts(database, restricted, {}, ['repository']);
 
-    expect(statements).toHaveLength(11);
+    expect(statements).toHaveLength(15);
     for (const statement of statements) {
-      expect(statement.sql).toContain('"repositories"."full_name" in');
+      expect(statement.sql).toContain('"full_name" in');
       expect(statement.values).toContain('acme/widgets');
     }
   });
 
-  it('pre-aggregates summary costs instead of probing usage for every row', async () => {
+  it('uses narrow indexable aggregates instead of tenant-wide cost CTEs', async () => {
     const statements: string[] = [];
     const database = databaseFor((sql) => {
       statements.push(sql);
@@ -257,13 +259,18 @@ describe('history store', () => {
     await listSkills(database, context);
     await summarizeOutcomes(database, context, {});
 
-    expect(statements[0]).toContain('with "run_costs" as');
-    expect(statements[0]).toContain('left join "run_costs" on "run_costs"."run_id" = "runs"."id"');
-    expect(statements[1]).toContain('with "skill_costs" as');
-    expect(statements[1]).toContain('left join "skill_costs" on "skill_costs"."skill_execution_id" = "skill_executions"."id"');
-    expect(statements[2]).toContain('"run_costs" as');
-    expect(statements[2]).toContain('left join "run_costs" on "run_costs"."run_id" = "filtered_runs"."id"');
-    expect(statements).not.toEqual(expect.arrayContaining([expect.stringContaining('left join lateral')]));
+    expect(statements).toHaveLength(7);
+    expect(statements).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('with "run_costs" as'),
+      expect.stringContaining('with "skill_costs" as'),
+      expect.stringContaining('select distinct'),
+    ]));
+    expect(statements).toEqual(expect.arrayContaining([
+      expect.stringContaining('from "runs" where "runs"."tenant_id" = $1 group by "runs"."repository_id"'),
+      expect.stringContaining('from "usage_line_items" inner join "runs"'),
+      expect.stringContaining('from "skill_executions" where "skill_executions"."tenant_id" = $1 group by "skill_executions"."skill"'),
+      expect.stringContaining('from "usage_line_items" inner join "skill_executions"'),
+    ]));
   });
 
   it('aggregates allowlisted dimensions while keeping unknown cost null', async () => {
@@ -334,25 +341,17 @@ describe('history store', () => {
     const statements: string[] = [];
     const database = databaseFor((sql) => {
       statements.push(sql);
+      const dimension = sql.includes("date_trunc('day'")
+        ? '2026-08-15'
+        : sql.includes('"repositories"."full_name" as "dimension_0"')
+          ? 'acme/widgets'
+          : 'security';
       return {
-        rows: [
-          {
-            dimension_0: '2026-08-15', dimension_1: null, dimension_2: null,
-            grouping_0: 0, grouping_1: 1, grouping_2: 1,
-            runs: 2, input_tokens: '120', output_tokens: '30', cost_usd: '0.01',
-          },
-          {
-            dimension_0: null, dimension_1: 'acme/widgets', dimension_2: null,
-            grouping_0: 1, grouping_1: 0, grouping_2: 1,
-            runs: 2, input_tokens: '120', output_tokens: '30', cost_usd: '0.01',
-          },
-          {
-            dimension_0: null, dimension_1: null, dimension_2: 'security',
-            grouping_0: 1, grouping_1: 1, grouping_2: 0,
-            runs: 2, input_tokens: '120', output_tokens: '30', cost_usd: '0.01',
-          },
-        ],
-        rowCount: 3,
+        rows: [{
+          dimension_0: dimension,
+          runs: 2, input_tokens: '120', output_tokens: '30', cost_usd: '0.01',
+        }],
+        rowCount: 1,
       };
     });
 
@@ -364,8 +363,17 @@ describe('history store', () => {
       { repository: 'acme/widgets' },
       { skill: 'security' },
     ]);
-    expect(statements).toHaveLength(1);
-    expect(statements[0]).toContain('group by GROUPING SETS');
+    expect(statements).toHaveLength(3);
+    expect(statements).not.toEqual(expect.arrayContaining([expect.stringContaining('GROUPING SETS')]));
+    const day = statements.find((statement) => statement.includes("date_trunc('day'"));
+    const repository = statements.find((statement) => statement.includes('"repositories"."full_name" as "dimension_0"'));
+    const skill = statements.find((statement) => statement.includes('"skill_executions"."skill"'));
+    expect(day).not.toContain('join "repositories"');
+    expect(day).not.toContain('join "skill_executions"');
+    expect(repository).toContain('join "repositories"');
+    expect(repository).not.toContain('join "skill_executions"');
+    expect(skill).toContain('join "skill_executions"');
+    expect(skill).not.toContain('join "repositories"');
   });
 
   it('returns not found for a run ID absent from the authenticated tenant', async () => {

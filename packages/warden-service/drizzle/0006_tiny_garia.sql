@@ -1,0 +1,1 @@
+CREATE INDEX "usage_tenant_skill_execution_idx" ON "usage_line_items" USING btree ("tenant_id","skill_execution_id");

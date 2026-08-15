@@ -4,7 +4,7 @@ import type { DatabaseClient, WardenDatabase } from './db/database.js';
 import type { GoogleAuthBridge, GoogleAuthSession } from './google-auth.js';
 
 function readyDatabase(
-  versions: string[] = ['0005_large_mattie_franklin'],
+  versions: string[] = ['0006_tiny_garia'],
 ): WardenDatabase {
   return {
     driver: 'postgres',
@@ -44,7 +44,8 @@ describe('createWardenService', () => {
   it('stays ready when newer backward-compatible migrations are applied', async () => {
     const app = createWardenService({
       database: readyDatabase([
-        '0006_future_migration',
+        '0007_future_migration',
+        '0006_tiny_garia',
         '0005_large_mattie_franklin',
       ]),
     });
@@ -55,8 +56,8 @@ describe('createWardenService', () => {
     await expect(response.json()).resolves.toEqual({
       status: 'ready',
       database: 'ready',
-      currentVersion: '0006_future_migration',
-      requiredVersion: '0005_large_mattie_franklin',
+      currentVersion: '0007_future_migration',
+      requiredVersion: '0006_tiny_garia',
     });
   });
 
@@ -83,8 +84,8 @@ describe('createWardenService', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ready: true,
-      currentVersion: '0005_large_mattie_franklin',
-      requiredVersion: '0005_large_mattie_franklin',
+      currentVersion: '0006_tiny_garia',
+      requiredVersion: '0006_tiny_garia',
     });
   });
 
@@ -338,29 +339,15 @@ describe('createWardenService', () => {
           };
           return { rows: [finding] as unknown as TRow[], rowCount: 1 };
         }
-        if (sql.includes('GROUPING SETS')) {
-          return { rows: [
-            {
-              dimension_0: '2026-08-15', dimension_1: null, dimension_2: null,
-              grouping_0: 0, grouping_1: 1, grouping_2: 1,
-              runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
-            },
-            {
-              dimension_0: null, dimension_1: 'acme/widgets', dimension_2: null,
-              grouping_0: 1, grouping_1: 0, grouping_2: 1,
-              runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
-            },
-            {
-              dimension_0: null, dimension_1: null, dimension_2: 'security',
-              grouping_0: 1, grouping_1: 1, grouping_2: 0,
-              runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
-            },
-          ] as unknown as TRow[], rowCount: 3 };
-        }
         if (sql.includes('from "runs"') && sql.includes('SUM("usage_line_items"."input_tokens")')) {
           const grouped = sql.includes('group by');
+          const dimension = sql.includes("date_trunc('day'")
+            ? '2026-08-15'
+            : sql.includes('"repositories"."full_name" as "dimension_0"')
+              ? 'acme/widgets'
+              : 'security';
           return { rows: [{
-            ...(grouped ? { dimension_0: 'security' } : {}),
+            ...(grouped ? { dimension_0: dimension } : {}),
             runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
           }] as unknown as TRow[], rowCount: 1 };
         }

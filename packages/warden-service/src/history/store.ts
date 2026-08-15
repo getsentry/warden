@@ -146,10 +146,26 @@ function mapRun(row: RunRow): RunSummary {
 }
 
 const filteredSkillExecutions = alias(skillExecutions, 'filtered_se');
+const filteredUsageLineItems = alias(usageLineItems, 'filtered_usage');
+const authorizedRepository = alias(repositories, 'authorized_repository');
 
 function repositoryScope(context: ServiceContext): SQL | undefined {
   return context.repositoryAllowlist
     ? inArray(repositories.fullName, context.repositoryAllowlist)
+    : undefined;
+}
+
+function runRepositoryScope(database: WardenReadDatabase, context: ServiceContext): SQL | undefined {
+  return context.repositoryAllowlist
+    ? exists(
+        database.select({ value: sql`1` })
+          .from(authorizedRepository)
+          .where(and(
+            eq(authorizedRepository.id, runs.repositoryId),
+            eq(authorizedRepository.tenantId, runs.tenantId),
+            inArray(authorizedRepository.fullName, context.repositoryAllowlist),
+          )),
+      )
     : undefined;
 }
 
@@ -161,7 +177,7 @@ function historyWhere(
 ): SQL[] {
   const conditions: SQL[] = [eq(runs.tenantId, context.tenantId)];
   const filtersUsage = Boolean(filters.model || filters.runtime || filters.provider || filters.lane);
-  const authorizedRepositories = repositoryScope(context);
+  const authorizedRepositories = runRepositoryScope(database, context);
   if (authorizedRepositories) conditions.push(authorizedRepositories);
   if (filters.from) conditions.push(gte(runs.completedAt, new Date(filters.from)));
   if (filters.to) conditions.push(lte(runs.completedAt, new Date(filters.to)));
@@ -171,12 +187,38 @@ function historyWhere(
   if (executionScope === 'usage') {
     if (filters.skill) conditions.push(eq(skillExecutions.skill, filters.skill));
     if (filters.errorCode) conditions.push(eq(skillExecutions.errorCode, filters.errorCode));
+    if (filters.model) conditions.push(eq(usageLineItems.model, filters.model));
+    if (filters.runtime) conditions.push(eq(usageLineItems.runtime, filters.runtime));
+    if (filters.provider) conditions.push(eq(usageLineItems.provider, filters.provider));
+    if (filters.lane) conditions.push(eq(usageLineItems.lane, filters.lane));
+    return conditions;
+  }
+  if (filtersUsage) {
+    const executionConditions: SQL[] = [
+      eq(filteredUsageLineItems.tenantId, runs.tenantId),
+      eq(filteredUsageLineItems.runId, runs.id),
+    ];
+    if (filters.model) executionConditions.push(eq(filteredUsageLineItems.model, filters.model));
+    if (filters.runtime) executionConditions.push(eq(filteredUsageLineItems.runtime, filters.runtime));
+    if (filters.provider) executionConditions.push(eq(filteredUsageLineItems.provider, filters.provider));
+    if (filters.lane) executionConditions.push(eq(filteredUsageLineItems.lane, filters.lane));
+    let usageQuery = database.select({ value: sql`1` })
+      .from(filteredUsageLineItems)
+      .$dynamic();
+    if (filters.skill || filters.errorCode) {
+      usageQuery = usageQuery.innerJoin(filteredSkillExecutions, and(
+        eq(filteredSkillExecutions.id, filteredUsageLineItems.skillExecutionId),
+        eq(filteredSkillExecutions.tenantId, filteredUsageLineItems.tenantId),
+      ));
+      if (filters.skill) executionConditions.push(eq(filteredSkillExecutions.skill, filters.skill));
+      if (filters.errorCode) executionConditions.push(eq(filteredSkillExecutions.errorCode, filters.errorCode));
+    }
+    conditions.push(exists(usageQuery.where(and(...executionConditions))));
   } else if (filters.skill || filters.errorCode) {
     const executionConditions: SQL[] = [
       eq(filteredSkillExecutions.tenantId, runs.tenantId),
       eq(filteredSkillExecutions.runId, runs.id),
     ];
-    if (filtersUsage) executionConditions.push(eq(filteredSkillExecutions.id, usageLineItems.skillExecutionId));
     if (filters.skill) executionConditions.push(eq(filteredSkillExecutions.skill, filters.skill));
     if (filters.errorCode) executionConditions.push(eq(filteredSkillExecutions.errorCode, filters.errorCode));
     conditions.push(exists(
@@ -185,10 +227,6 @@ function historyWhere(
         .where(and(...executionConditions)),
     ));
   }
-  if (filters.model) conditions.push(eq(usageLineItems.model, filters.model));
-  if (filters.runtime) conditions.push(eq(usageLineItems.runtime, filters.runtime));
-  if (filters.provider) conditions.push(eq(usageLineItems.provider, filters.provider));
-  if (filters.lane) conditions.push(eq(usageLineItems.lane, filters.lane));
   return conditions;
 }
 
@@ -430,7 +468,7 @@ export async function listRuns(database: WardenDatabase, contextInput: ServiceCo
     const [completedAt, id] = filters.cursor;
     conditions.push(sql`(${runs.completedAt}, ${runs.id}) < (${new Date(completedAt)}, ${id})`);
   }
-  const result = await read.selectDistinct({
+  const result = await read.select({
     id: runs.id,
     client_run_id: runs.clientRunId,
     source: runs.source,
@@ -450,12 +488,12 @@ export async function listRuns(database: WardenDatabase, contextInput: ServiceCo
     cost_usd: sql<string | null>`(
       SELECT SUM(${usageLineItems.costUsd})
       FROM ${usageLineItems}
-      WHERE ${usageLineItems.runId} = ${runs.id}
+      WHERE ${usageLineItems.tenantId} = ${runs.tenantId}
+        AND ${usageLineItems.runId} = ${runs.id}
     )`.as('cost_usd'),
   })
     .from(runs)
     .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
-    .leftJoin(usageLineItems, and(eq(usageLineItems.runId, runs.id), eq(usageLineItems.tenantId, runs.tenantId)))
     .where(and(...conditions))
     .orderBy(desc(runs.completedAt), desc(runs.id))
     .limit(limit + 1);
@@ -546,7 +584,8 @@ export async function getRunDetail(database: WardenDatabase, contextInput: Servi
     cost_usd: sql<string | null>`(
       SELECT SUM(${usageLineItems.costUsd})
       FROM ${usageLineItems}
-      WHERE ${usageLineItems.runId} = ${runs.id}
+      WHERE ${usageLineItems.tenantId} = ${runs.tenantId}
+        AND ${usageLineItems.runId} = ${runs.id}
     )`.as('cost_usd'),
   })
     .from(runs)
@@ -631,8 +670,6 @@ interface AggregateRow extends Record<string, unknown> {
   [key: `dimension_${number}`]: string;
 }
 
-type BreakdownRow = AggregateRow & Record<`grouping_${number}`, number>;
-
 function mapAggregateRow(row: AggregateRow): Omit<CostGroup, 'dimensions'> {
   return {
     runs: Number(row.runs),
@@ -645,12 +682,14 @@ function mapAggregateRow(row: AggregateRow): Omit<CostGroup, 'dimensions'> {
 async function aggregateRows(database: WardenDatabase, context: ServiceContext, filters: HistoryFilters, dimensions: readonly CostDimension[]) {
   const read = getReadDatabase(database);
   const conditions = historyWhere(read, context, filters, 'usage');
+  const needsRepositories = dimensions.includes('repository');
+  const needsSkills = dimensions.includes('skill') || Boolean(filters.skill || filters.errorCode);
   const groupDimensions = dimensions.map((dimension) => dimensionSql[dimension]);
   const selectDimensions = Object.fromEntries(dimensions.map((dimension, index) => [
     `dimension_${index}`,
     dimensionSql[dimension].as(`dimension_${index}`),
   ]));
-  const query = read.select({
+  let query = read.select({
     ...selectDimensions,
     runs: sql<number>`COUNT(DISTINCT ${runs.id})::integer`.as('runs'),
     input_tokens: sql<string | number>`COALESCE(SUM(${usageLineItems.inputTokens}), 0)`.as('input_tokens'),
@@ -658,49 +697,28 @@ async function aggregateRows(database: WardenDatabase, context: ServiceContext, 
     cost_usd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
   })
     .from(runs)
-    .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
-    .leftJoin(usageLineItems, and(eq(usageLineItems.runId, runs.id), eq(usageLineItems.tenantId, runs.tenantId)))
-    .leftJoin(skillExecutions, and(eq(skillExecutions.id, usageLineItems.skillExecutionId), eq(skillExecutions.tenantId, runs.tenantId)))
-    .where(and(...conditions));
+    .$dynamic();
+  if (needsRepositories) {
+    query = query.innerJoin(repositories, and(
+      eq(repositories.id, runs.repositoryId),
+      eq(repositories.tenantId, runs.tenantId),
+    ));
+  }
+  query = query.leftJoin(usageLineItems, and(
+    eq(usageLineItems.runId, runs.id),
+    eq(usageLineItems.tenantId, runs.tenantId),
+  ));
+  if (needsSkills) {
+    query = query.leftJoin(skillExecutions, and(
+      eq(skillExecutions.id, usageLineItems.skillExecutionId),
+      eq(skillExecutions.tenantId, runs.tenantId),
+    ));
+  }
+  query = query.where(and(...conditions));
   const result = groupDimensions.length > 0
     ? await query.groupBy(...groupDimensions).orderBy(...groupDimensions)
     : await query;
   return result as unknown as AggregateRow[];
-}
-
-async function aggregateBreakdownRows(
-  database: WardenDatabase,
-  context: ServiceContext,
-  filters: HistoryFilters,
-  dimensions: readonly CostDimension[],
-): Promise<BreakdownRow[]> {
-  const read = getReadDatabase(database);
-  const conditions = historyWhere(read, context, filters, 'usage');
-  const groupDimensions = dimensions.map((dimension) => dimensionSql[dimension]);
-  const selectDimensions = Object.fromEntries(groupDimensions.map((dimension, index) => [
-    `dimension_${index}`,
-    dimension.as(`dimension_${index}`),
-  ]));
-  const selectGrouping = Object.fromEntries(groupDimensions.map((dimension, index) => [
-    `grouping_${index}`,
-    sql<number>`GROUPING(${dimension})`.as(`grouping_${index}`),
-  ]));
-  const groupingSets = groupDimensions.map((dimension) => sql`(${dimension})`);
-  const result = await read.select({
-    ...selectDimensions,
-    ...selectGrouping,
-    runs: sql<number>`COUNT(DISTINCT ${runs.id})::integer`.as('runs'),
-    input_tokens: sql<string | number>`COALESCE(SUM(${usageLineItems.inputTokens}), 0)`.as('input_tokens'),
-    output_tokens: sql<string | number>`COALESCE(SUM(${usageLineItems.outputTokens}), 0)`.as('output_tokens'),
-    cost_usd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
-  })
-    .from(runs)
-    .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
-    .leftJoin(usageLineItems, and(eq(usageLineItems.runId, runs.id), eq(usageLineItems.tenantId, runs.tenantId)))
-    .leftJoin(skillExecutions, and(eq(skillExecutions.id, usageLineItems.skillExecutionId), eq(skillExecutions.tenantId, runs.tenantId)))
-    .where(and(...conditions))
-    .groupBy(sql`GROUPING SETS (${sql.join(groupingSets, sql`, `)})`);
-  return result as unknown as BreakdownRow[];
 }
 
 /** Aggregate additive usage and nullable cost over explicit, allowlisted dimensions. */
@@ -733,18 +751,18 @@ export async function aggregateCostBreakdowns(
   dimensions: readonly CostDimension[],
 ): Promise<CostBreakdownsResponse> {
   const context = requireServiceContext(contextInput);
-  const rows = await aggregateBreakdownRows(database, context, filters, dimensions);
-  const breakdowns = dimensions.map((dimension) => ({ dimension, groups: [] as CostGroup[] }));
-  for (const row of rows) {
-    const dimensionIndex = dimensions.findIndex((_, index) => Number(row[`grouping_${index}`]) === 0);
-    const breakdown = breakdowns[dimensionIndex];
-    if (!breakdown) continue;
-    breakdown.groups.push({
-      dimensions: { [breakdown.dimension]: String(row[`dimension_${dimensionIndex}`]) },
-      ...mapAggregateRow(row),
-    });
-  }
-  return { breakdowns };
+  const rowsByDimension = await Promise.all(
+    dimensions.map((dimension) => aggregateRows(database, context, filters, [dimension])),
+  );
+  return {
+    breakdowns: dimensions.map((dimension, index) => ({
+      dimension,
+      groups: (rowsByDimension[index] ?? []).map((row) => ({
+        dimensions: { [dimension]: String(row['dimension_0']) },
+        ...mapAggregateRow(row),
+      })),
+    })),
+  };
 }
 
 /** List lightweight repository and skill values used by history filters. */
@@ -801,91 +819,128 @@ export async function listHistoryDimensions(
 export async function listRepositories(database: WardenDatabase, contextInput: ServiceContext | undefined): Promise<RepositoryListResponse> {
   const context = requireServiceContext(contextInput);
   const read = getReadDatabase(database);
-  const costs = read.$with('run_costs').as(
+  const repositoryConditions: SQL[] = [eq(repositories.tenantId, context.tenantId)];
+  const authorizedRepositories = repositoryScope(context);
+  if (authorizedRepositories) repositoryConditions.push(authorizedRepositories);
+  const runConditions: SQL[] = [eq(runs.tenantId, context.tenantId)];
+  const authorizedRuns = runRepositoryScope(read, context);
+  if (authorizedRuns) runConditions.push(authorizedRuns);
+
+  const [repositoryRows, runRows, costRows] = await Promise.all([
     read.select({
-      runId: usageLineItems.runId,
+      id: repositories.id,
+      provider: repositories.provider,
+      owner: repositories.owner,
+      name: repositories.name,
+      fullName: repositories.fullName,
+    })
+      .from(repositories)
+      .where(and(...repositoryConditions)),
+    read.select({
+      repositoryId: runs.repositoryId,
+      runs: sql<number>`COUNT(*)::integer`.as('runs'),
+      findings: sql<number>`COALESCE(SUM(${runs.findingCount}), 0)::integer`.as('findings'),
+      lastRunAt: sql<Date | string | null>`MAX(${runs.completedAt})`.as('last_run_at'),
+    })
+      .from(runs)
+      .where(and(...runConditions))
+      .groupBy(runs.repositoryId),
+    read.select({
+      repositoryId: runs.repositoryId,
       costUsd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
     })
       .from(usageLineItems)
-      .where(eq(usageLineItems.tenantId, context.tenantId))
-      .groupBy(usageLineItems.runId),
-  );
-  const conditions: SQL[] = [eq(repositories.tenantId, context.tenantId)];
-  const authorizedRepositories = repositoryScope(context);
-  if (authorizedRepositories) conditions.push(authorizedRepositories);
-  const result = await read.with(costs).select({
-    id: repositories.id,
-    provider: repositories.provider,
-    owner: repositories.owner,
-    name: repositories.name,
-    full_name: repositories.fullName,
-    runs: sql<number>`COUNT(DISTINCT ${runs.id})::integer`.as('runs'),
-    findings: sql<number>`COALESCE(SUM(${runs.findingCount}), 0)::integer`.as('findings'),
-    cost_usd: sql<string | number | null>`SUM(${costs.costUsd})`.as('cost_usd'),
-    last_run_at: sql<Date | string | null>`MAX(${runs.completedAt})`.as('last_run_at'),
-  })
-    .from(repositories)
-    .leftJoin(runs, and(eq(runs.repositoryId, repositories.id), eq(runs.tenantId, repositories.tenantId)))
-    .leftJoin(costs, eq(costs.runId, runs.id))
-    .where(and(...conditions))
-    .groupBy(repositories.id)
-    .orderBy(sql`MAX(${runs.completedAt}) DESC NULLS LAST`, asc(repositories.fullName));
-  return { items: result.map((row) => ({
-    id: String(row['id']),
-    repository: {
-      provider: row['provider'] as 'github' | 'gitlab' | 'local',
-      owner: String(row['owner']),
-      name: String(row['name']),
-      fullName: String(row['full_name']),
-    },
-    runs: Number(row['runs']),
-    findings: Number(row['findings']),
-    costUsd: numberOrNull(row['cost_usd'] as string | number | null),
-    lastRunAt: row['last_run_at'] ? iso(row['last_run_at'] as Date | string) : null,
-  })) };
+      .innerJoin(runs, and(
+        eq(runs.id, usageLineItems.runId),
+        eq(runs.tenantId, usageLineItems.tenantId),
+      ))
+      .where(and(eq(usageLineItems.tenantId, context.tenantId), ...runConditions))
+      .groupBy(runs.repositoryId),
+  ]);
+  const runsByRepository = new Map(runRows.map((row) => [row.repositoryId, row]));
+  const costsByRepository = new Map(costRows.map((row) => [row.repositoryId, row.costUsd]));
+  const items = repositoryRows.map((row) => {
+    const aggregate = runsByRepository.get(row.id);
+    return {
+      id: row.id,
+      repository: {
+        provider: row.provider as 'github' | 'gitlab' | 'local',
+        owner: row.owner,
+        name: row.name,
+        fullName: row.fullName,
+      },
+      runs: Number(aggregate?.runs ?? 0),
+      findings: Number(aggregate?.findings ?? 0),
+      costUsd: numberOrNull(costsByRepository.get(row.id) ?? null),
+      lastRunAt: aggregate?.lastRunAt ? iso(aggregate.lastRunAt) : null,
+    };
+  });
+  items.sort((left, right) => {
+    if (left.lastRunAt && right.lastRunAt && left.lastRunAt !== right.lastRunAt) {
+      return right.lastRunAt.localeCompare(left.lastRunAt);
+    }
+    if (left.lastRunAt) return -1;
+    if (right.lastRunAt) return 1;
+    return left.repository.fullName.localeCompare(right.repository.fullName);
+  });
+  return { items };
 }
 
 /** Summarize skill execution quality with explicit success/failure denominators. */
 export async function listSkills(database: WardenDatabase, contextInput: ServiceContext | undefined): Promise<SkillListResponse> {
   const context = requireServiceContext(contextInput);
   const read = getReadDatabase(database);
-  const costs = read.$with('skill_costs').as(
-    read.select({
-      skillExecutionId: usageLineItems.skillExecutionId,
-      costUsd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
-    })
-      .from(usageLineItems)
-      .where(and(
-        eq(usageLineItems.tenantId, context.tenantId),
-        sql`${usageLineItems.skillExecutionId} IS NOT NULL`,
-      ))
-      .groupBy(usageLineItems.skillExecutionId),
-  );
-  const conditions: SQL[] = [eq(skillExecutions.tenantId, context.tenantId)];
-  const authorizedRepositories = repositoryScope(context);
-  if (authorizedRepositories) conditions.push(authorizedRepositories);
-  const result = await read.with(costs).select({
+  const selectSummary = {
     skill: skillExecutions.skill,
     executions: sql<number>`COUNT(*)::integer`.as('executions'),
     successful: sql<number>`COUNT(*) FILTER (WHERE ${skillExecutions.status} = 'success')::integer`.as('successful'),
     failed: sql<number>`COUNT(*) FILTER (WHERE ${skillExecutions.status} = 'failure')::integer`.as('failed'),
     findings: sql<number>`COALESCE(SUM(${skillExecutions.findingCount}), 0)::integer`.as('findings'),
-    cost_usd: sql<string | number | null>`SUM(${costs.costUsd})`.as('cost_usd'),
-  })
-    .from(skillExecutions)
-    .innerJoin(runs, and(eq(runs.id, skillExecutions.runId), eq(runs.tenantId, skillExecutions.tenantId)))
-    .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
-    .leftJoin(costs, eq(costs.skillExecutionId, skillExecutions.id))
-    .where(and(...conditions))
-    .groupBy(skillExecutions.skill)
-    .orderBy(desc(sql`COUNT(*)`), asc(skillExecutions.skill));
-  return { items: result.map((row) => ({
-    skill: String(row['skill']),
-    executions: Number(row['executions']),
-    successful: Number(row['successful']),
-    failed: Number(row['failed']),
-    findings: Number(row['findings']),
-    costUsd: numberOrNull(row['cost_usd'] as string | number | null),
+  };
+  const selectCosts = {
+    skill: skillExecutions.skill,
+    costUsd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
+  };
+  const authorizedRuns = runRepositoryScope(read, context);
+  const summaryQuery = authorizedRuns
+    ? read.select(selectSummary)
+        .from(skillExecutions)
+        .innerJoin(runs, and(eq(runs.id, skillExecutions.runId), eq(runs.tenantId, skillExecutions.tenantId)))
+        .where(and(eq(skillExecutions.tenantId, context.tenantId), authorizedRuns))
+        .groupBy(skillExecutions.skill)
+        .orderBy(desc(sql`COUNT(*)`), asc(skillExecutions.skill))
+    : read.select(selectSummary)
+        .from(skillExecutions)
+        .where(eq(skillExecutions.tenantId, context.tenantId))
+        .groupBy(skillExecutions.skill)
+        .orderBy(desc(sql`COUNT(*)`), asc(skillExecutions.skill));
+  const costQuery = authorizedRuns
+    ? read.select(selectCosts)
+        .from(usageLineItems)
+        .innerJoin(skillExecutions, and(
+          eq(skillExecutions.id, usageLineItems.skillExecutionId),
+          eq(skillExecutions.tenantId, usageLineItems.tenantId),
+        ))
+        .innerJoin(runs, and(eq(runs.id, skillExecutions.runId), eq(runs.tenantId, skillExecutions.tenantId)))
+        .where(and(eq(usageLineItems.tenantId, context.tenantId), authorizedRuns))
+        .groupBy(skillExecutions.skill)
+    : read.select(selectCosts)
+        .from(usageLineItems)
+        .innerJoin(skillExecutions, and(
+          eq(skillExecutions.id, usageLineItems.skillExecutionId),
+          eq(skillExecutions.tenantId, usageLineItems.tenantId),
+        ))
+        .where(eq(usageLineItems.tenantId, context.tenantId))
+        .groupBy(skillExecutions.skill);
+  const [summaryRows, costRows] = await Promise.all([summaryQuery, costQuery]);
+  const costsBySkill = new Map(costRows.map((row) => [row.skill, row.costUsd]));
+  return { items: summaryRows.map((row) => ({
+    skill: row.skill,
+    executions: Number(row.executions),
+    successful: Number(row.successful),
+    failed: Number(row.failed),
+    findings: Number(row.findings),
+    costUsd: numberOrNull(costsBySkill.get(row.skill) ?? null),
   })) };
 }
 
@@ -894,38 +949,28 @@ export async function summarizeOutcomes(database: WardenDatabase, contextInput: 
   const context = requireServiceContext(contextInput);
   const read = getReadDatabase(database);
   const conditions = historyWhere(read, context, filters);
-  const filteredRuns = read.$with('filtered_runs').as(
-    read.selectDistinct({
-      id: runs.id,
-      outcome: runs.outcome,
-      findingCount: runs.findingCount,
+  const [totalRows, costRows] = await Promise.all([
+    read.select({
+      runs: sql<number>`COUNT(*)::integer`.as('runs'),
+      successful: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'success')::integer`.as('successful'),
+      failed: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'failure')::integer`.as('failed'),
+      cancelled: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'cancelled')::integer`.as('cancelled'),
+      skipped: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'skipped')::integer`.as('skipped'),
+      findings: sql<number>`COALESCE(SUM(${runs.findingCount}), 0)::integer`.as('findings'),
     })
       .from(runs)
-      .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
-      .leftJoin(usageLineItems, and(eq(usageLineItems.runId, runs.id), eq(usageLineItems.tenantId, runs.tenantId)))
       .where(and(...conditions)),
-  );
-  const costs = read.$with('run_costs').as(
     read.select({
-      runId: usageLineItems.runId,
       costUsd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
     })
       .from(usageLineItems)
-      .where(eq(usageLineItems.tenantId, context.tenantId))
-      .groupBy(usageLineItems.runId),
-  );
-  const result = await read.with(filteredRuns, costs).select({
-    runs: sql<number>`COUNT(*)::integer`.as('runs'),
-    successful: sql<number>`COUNT(*) FILTER (WHERE ${filteredRuns.outcome} = 'success')::integer`.as('successful'),
-    failed: sql<number>`COUNT(*) FILTER (WHERE ${filteredRuns.outcome} = 'failure')::integer`.as('failed'),
-    cancelled: sql<number>`COUNT(*) FILTER (WHERE ${filteredRuns.outcome} = 'cancelled')::integer`.as('cancelled'),
-    skipped: sql<number>`COUNT(*) FILTER (WHERE ${filteredRuns.outcome} = 'skipped')::integer`.as('skipped'),
-    findings: sql<number>`COALESCE(SUM(${filteredRuns.findingCount}), 0)::integer`.as('findings'),
-    cost_usd: sql<string | number | null>`SUM(${costs.costUsd})`.as('cost_usd'),
-  })
-    .from(filteredRuns)
-    .leftJoin(costs, eq(costs.runId, filteredRuns.id));
-  const row = result[0];
+      .innerJoin(runs, and(
+        eq(runs.id, usageLineItems.runId),
+        eq(runs.tenantId, usageLineItems.tenantId),
+      ))
+      .where(and(eq(usageLineItems.tenantId, context.tenantId), ...conditions)),
+  ]);
+  const row = totalRows[0];
   return { totals: {
     runs: Number(row?.runs ?? 0),
     successful: Number(row?.successful ?? 0),
@@ -933,6 +978,6 @@ export async function summarizeOutcomes(database: WardenDatabase, contextInput: 
     cancelled: Number(row?.cancelled ?? 0),
     skipped: Number(row?.skipped ?? 0),
     findings: Number(row?.findings ?? 0),
-    costUsd: numberOrNull(row?.cost_usd ?? null),
+    costUsd: numberOrNull(costRows[0]?.costUsd ?? null),
   } };
 }
