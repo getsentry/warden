@@ -1,3 +1,4 @@
+const DEFAULT_RANGE_DAYS = '30';
 const content = document.querySelector('#content');
 const filterHost = document.querySelector('#filters');
 const accountMenu = document.querySelector('#account-menu');
@@ -253,6 +254,13 @@ function filterOptions(items, allLabel) {
   return [{ value: '', label: allLabel }, ...items];
 }
 
+function ensureDefaultRange() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('range')) return;
+  params.set('range', DEFAULT_RANGE_DAYS);
+  history.replaceState({}, '', `/?${params}`);
+}
+
 function applyFilters(form) {
   const next = new URLSearchParams();
   for (const [name, value] of new FormData(form)) {
@@ -289,7 +297,8 @@ async function renderFilters() {
       name: 'range',
       label: 'Time',
       options: [
-        { value: '', label: 'All time' },
+        // Keep "all" explicit so a missing range can retain its faster default.
+        { value: 'all', label: 'All time' },
         { value: '7', label: 'Last 7 days' },
         { value: '30', label: 'Last 30 days' },
         { value: '90', label: 'Last 90 days' },
@@ -719,7 +728,10 @@ async function render() {
     accountMenu.hidden = apiAccess.hidden && signOut.hidden;
     const findingPath = location.pathname.match(/^\/findings\/([^/]+)\/?$/);
     if (findingPath) await renderFinding(version, decodeURIComponent(findingPath[1]));
-    else await renderExplore(version);
+    else {
+      ensureDefaultRange();
+      await renderExplore(version);
+    }
     if (version !== renderVersion) return;
   } catch (error) {
     if (version !== renderVersion) return;
