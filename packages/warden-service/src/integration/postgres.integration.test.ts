@@ -7,10 +7,12 @@ import type { ServiceContext } from '../context.js';
 import { createDatabase, type DatabaseDriver, type WardenDatabase } from '../db/database.js';
 import { migrateDatabase } from '../db/migrations.js';
 import {
+  aggregateCostBreakdowns,
   aggregateCosts,
   getFindingDetail,
   getRunDetail,
   listFindings,
+  listHistoryDimensions,
   listRepositories,
   listRuns,
   listSkills,
@@ -265,6 +267,10 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
           expect.objectContaining({ skill: 'security', executions: 1 }),
         ]),
       });
+      await expect(listHistoryDimensions(database, context)).resolves.toMatchObject({
+        repositories: [{ repository: { fullName: 'acme/widgets' } }],
+        skills: expect.arrayContaining(['security']),
+      });
       await expect(summarizeOutcomes(database, context, {})).resolves.toMatchObject({
         totals: { runs: 1, successful: 1, findings: 1, costUsd: 0.01 },
       });
@@ -273,6 +279,13 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
           expect.objectContaining({ dimensions: { repository: 'acme/widgets', skill: 'security' } }),
         ]),
         totals: { runs: 1, inputTokens: 110, outputTokens: 22, costUsd: 0.01 },
+      });
+      await expect(aggregateCostBreakdowns(database, context, {}, ['day', 'repository', 'skill'])).resolves.toMatchObject({
+        breakdowns: [
+          { dimension: 'day', groups: expect.any(Array) },
+          { dimension: 'repository', groups: expect.any(Array) },
+          { dimension: 'skill', groups: expect.any(Array) },
+        ],
       });
     }, 30_000);
 

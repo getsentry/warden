@@ -1,7 +1,9 @@
 import {
   CostAggregateResponseSchema,
+  CostBreakdownsResponseSchema,
   FindingDetailResponseSchema,
   FindingListResponseSchema,
+  HistoryDimensionsResponseSchema,
   OutcomeSummaryResponseSchema,
   RepositoryListResponseSchema,
   RunDetailResponseSchema,
@@ -14,10 +16,12 @@ import { requireRole } from '../auth.js';
 import type { ServiceVariables } from '../auth.js';
 import type { WardenDatabase } from '../db/database.js';
 import {
+  aggregateCostBreakdowns,
   aggregateCosts,
   getFindingDetail,
   getRunDetail,
   listFindings,
+  listHistoryDimensions,
   listRepositories,
   listRuns,
   listSkills,
@@ -105,6 +109,29 @@ export function registerHistoryRoutes(app: Hono<{ Variables: ServiceVariables }>
   app.get('/api/v1/skills', requireRole('read'), async (context) => context.json(
     SkillListResponseSchema.parse(await listSkills(database, context.get('serviceContext'))),
   ));
+
+  app.get('/api/v1/history/dimensions', requireRole('read'), async (context) => context.json(
+    HistoryDimensionsResponseSchema.parse(await listHistoryDimensions(database, context.get('serviceContext'))),
+  ));
+
+  app.get('/api/v1/costs/breakdowns', requireRole('read'), async (context) => {
+    const raw = context.req.query();
+    const groups = (raw['groupBy'] ?? 'day').split(',');
+    const dimensions = z.array(CostDimensionSchema).min(1).max(4)
+      .refine((items) => new Set(items).size === items.length)
+      .safeParse(groups);
+    const { groupBy: _groupBy, ...filterInput } = raw;
+    const filters = parseQuery(QuerySchema, filterInput);
+    if (!dimensions.success || !filters) {
+      return context.json({ error: { code: 'invalid_query', message: 'Cost filters are not valid.' } }, 400);
+    }
+    return context.json(CostBreakdownsResponseSchema.parse(await aggregateCostBreakdowns(
+      database,
+      context.get('serviceContext'),
+      filters,
+      dimensions.data as CostDimension[],
+    )));
+  });
 
   app.get('/api/v1/costs', requireRole('read'), async (context) => {
     const raw = context.req.query();

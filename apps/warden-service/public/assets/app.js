@@ -203,16 +203,13 @@ async function renderApiAccess() {
 
 async function loadDimensions() {
   if (dimensions) return dimensions;
-  const [repositories, skills] = await Promise.all([
-    api('/api/v1/repositories'),
-    api('/api/v1/skills'),
-  ]);
+  const available = await api('/api/v1/history/dimensions');
   const nameCounts = new Map();
-  for (const item of repositories.items) {
+  for (const item of available.repositories) {
     nameCounts.set(item.repository.fullName, (nameCounts.get(item.repository.fullName) ?? 0) + 1);
   }
   dimensions = {
-    repositories: repositories.items
+    repositories: available.repositories
       .map((item) => ({
         value: item.id,
         label: nameCounts.get(item.repository.fullName) > 1
@@ -220,8 +217,8 @@ async function loadDimensions() {
           : item.repository.fullName,
       }))
       .sort((left, right) => left.label.localeCompare(right.label)),
-    skills: skills.items
-      .map((item) => ({ value: item.skill, label: item.skill }))
+    skills: available.skills
+      .map((skill) => ({ value: skill, label: skill }))
       .sort((left, right) => left.label.localeCompare(right.label)),
   };
   return dimensions;
@@ -272,8 +269,9 @@ function applyFilters(form) {
   render();
 }
 
-async function renderFilters() {
+async function renderFilters(version) {
   const available = await loadDimensions();
+  if (version !== renderVersion) return;
   const params = new URLSearchParams(location.search);
   const form = element('form', undefined, 'filter-bar');
   form.append(field(params, {
@@ -610,8 +608,16 @@ function findingsSection(data, params) {
 async function renderExplore(version) {
   setPage('Explore', 'Filter findings and understand where Warden spends time and money.');
   filterHost.hidden = false;
-  if (!filterHost.querySelector('form')) await renderFilters();
-  if (version !== renderVersion) return;
+  const filtersReady = filterHost.querySelector('form')
+    ? Promise.resolve()
+    : renderFilters(version).catch((error) => {
+        if (version !== renderVersion) return;
+        filterHost.replaceChildren(element(
+          'div',
+          error instanceof Error ? error.message : 'Could not load filters. Try again.',
+          'error',
+        ));
+      });
   const params = new URLSearchParams(location.search);
   const common = commonApiParams(params);
   const findings = new URLSearchParams(common);
@@ -623,21 +629,16 @@ async function renderExplore(version) {
   if (params.get('cursor')) findings.set('cursor', params.get('cursor'));
   findings.set('limit', '30');
 
-  const dayCosts = new URLSearchParams(common);
-  dayCosts.set('groupBy', 'day');
-  const repositoryCosts = new URLSearchParams(common);
-  repositoryCosts.set('groupBy', 'repository');
-  const skillCosts = new URLSearchParams(common);
-  skillCosts.set('groupBy', 'skill');
-  // Fire every first-paint query together so cost charts do not wait on findings.
-  const [outcomes, feed, byDay, byRepository, bySkill] = await Promise.all([
+  const costBreakdowns = new URLSearchParams(common);
+  costBreakdowns.set('groupBy', 'day,repository,skill');
+  // Filters and first-paint data are independent and must share one waterfall level.
+  const [outcomes, feed, costs] = await Promise.all([
     api(apiPath('/api/v1/outcomes/summary', common)),
     api(apiPath('/api/v1/findings', findings)),
-    api(apiPath('/api/v1/costs', dayCosts)),
-    api(apiPath('/api/v1/costs', repositoryCosts)),
-    api(apiPath('/api/v1/costs', skillCosts)),
+    api(apiPath('/api/v1/costs/breakdowns', costBreakdowns)),
   ]);
   if (version !== renderVersion) return;
+  const breakdown = (dimension) => costs.breakdowns.find((item) => item.dimension === dimension) ?? { groups: [] };
   const totals = outcomes.totals;
   const section = document.createDocumentFragment();
   section.append(metrics([
@@ -650,13 +651,14 @@ async function renderExplore(version) {
   analytics.append(sectionHeader('Cost', 'Reported and estimated usage'));
   const grid = element('div', undefined, 'analytics-grid');
   grid.append(
-    dailyChart(byDay),
-    barBreakdown('By repository', byRepository, 'repository'),
-    barBreakdown('By skill', bySkill, 'skill'),
+    dailyChart(breakdown('day')),
+    barBreakdown('By repository', breakdown('repository'), 'repository'),
+    barBreakdown('By skill', breakdown('skill'), 'skill'),
   );
   analytics.append(grid);
   section.append(analytics, findingsSection(feed, params));
   content.replaceChildren(section);
+  await filtersReady;
 }
 
 async function renderFinding(version, findingId) {

@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceContext } from '../context.js';
 import type { QueryResult, WardenDatabase } from '../db/database.js';
-import { aggregateCosts, getFindingDetail, getRunDetail, listFindings, listRepositories, listRuns, listSkills, summarizeOutcomes } from './store.js';
+import {
+  aggregateCostBreakdowns,
+  aggregateCosts,
+  getFindingDetail,
+  getRunDetail,
+  listFindings,
+  listHistoryDimensions,
+  listRepositories,
+  listRuns,
+  listSkills,
+  summarizeOutcomes,
+} from './store.js';
 
 const context: ServiceContext = {
   tenantId: '00000000-0000-0000-0000-000000000001',
@@ -282,6 +293,75 @@ describe('history store', () => {
       costUsd: null,
     });
     expect(aggregate.totals.costUsd).toBeNull();
+  });
+
+  it('loads filter dimensions without running summary aggregations', async () => {
+    const statements: string[] = [];
+    const database = databaseFor((sql) => {
+      statements.push(sql);
+      if (sql.includes('select distinct')) {
+        return { rows: [{ skill: 'security' }], rowCount: 1 };
+      }
+      return { rows: [{
+        id: '00000000-0000-0000-0000-000000000010',
+        provider: 'github',
+        owner: 'acme',
+        name: 'widgets',
+        fullName: 'acme/widgets',
+      }], rowCount: 1 };
+    });
+
+    await expect(listHistoryDimensions(database, context)).resolves.toEqual({
+      repositories: [{
+        id: '00000000-0000-0000-0000-000000000010',
+        repository: { provider: 'github', owner: 'acme', name: 'widgets', fullName: 'acme/widgets' },
+      }],
+      skills: ['security'],
+    });
+    expect(statements).toHaveLength(2);
+    expect(statements).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('SUM('),
+      expect.stringContaining('COUNT('),
+      expect.stringContaining('usage_line_items'),
+    ]));
+  });
+
+  it('loads independent cost breakdowns without unused total queries', async () => {
+    const statements: string[] = [];
+    const database = databaseFor((sql) => {
+      statements.push(sql);
+      return {
+        rows: [
+          {
+            dimension_0: '2026-08-15', dimension_1: null, dimension_2: null,
+            grouping_0: 0, grouping_1: 1, grouping_2: 1,
+            runs: 2, input_tokens: '120', output_tokens: '30', cost_usd: '0.01',
+          },
+          {
+            dimension_0: null, dimension_1: 'acme/widgets', dimension_2: null,
+            grouping_0: 1, grouping_1: 0, grouping_2: 1,
+            runs: 2, input_tokens: '120', output_tokens: '30', cost_usd: '0.01',
+          },
+          {
+            dimension_0: null, dimension_1: null, dimension_2: 'security',
+            grouping_0: 1, grouping_1: 1, grouping_2: 0,
+            runs: 2, input_tokens: '120', output_tokens: '30', cost_usd: '0.01',
+          },
+        ],
+        rowCount: 3,
+      };
+    });
+
+    const response = await aggregateCostBreakdowns(database, context, {}, ['day', 'repository', 'skill']);
+
+    expect(response.breakdowns.map((item) => item.dimension)).toEqual(['day', 'repository', 'skill']);
+    expect(response.breakdowns.map((item) => item.groups[0]?.dimensions)).toEqual([
+      { day: '2026-08-15' },
+      { repository: 'acme/widgets' },
+      { skill: 'security' },
+    ]);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain('group by GROUPING SETS');
   });
 
   it('returns not found for a run ID absent from the authenticated tenant', async () => {
