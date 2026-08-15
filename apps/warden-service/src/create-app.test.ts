@@ -44,6 +44,9 @@ describe('Vercel service app', () => {
 
     expect(manifest.scripts.build).toContain('--filter @sentry/warden-service-api build');
     expect(manifest.scripts.build).toContain('--filter @sentry/warden-service build');
+    expect(manifest.scripts.build).toContain('node scripts/migrate-database.mjs');
+    expect(manifest.scripts.build.indexOf('node scripts/migrate-database.mjs'))
+      .toBeLessThan(manifest.scripts.build.indexOf('tsc --noEmit'));
   });
 
   it('ships one Explore workspace without embedding credentials', async () => {
