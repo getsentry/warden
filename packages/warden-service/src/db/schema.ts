@@ -162,6 +162,7 @@ export const usageLineItems = pgTable('usage_line_items', {
   ...timestamps,
 }, (table) => [
   index('usage_tenant_run_idx').on(table.tenantId, table.runId),
+  index('usage_tenant_skill_execution_idx').on(table.tenantId, table.skillExecutionId),
   index('usage_tenant_dimensions_idx').on(table.tenantId, table.lane, table.model, table.runtime, table.provider),
 ]);
 
