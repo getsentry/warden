@@ -3,14 +3,16 @@ import { createWardenService } from './app.js';
 import type { DatabaseClient, WardenDatabase } from './db/database.js';
 import type { GoogleAuthBridge, GoogleAuthSession } from './google-auth.js';
 
-function readyDatabase(): WardenDatabase {
+function readyDatabase(
+  versions: string[] = ['0005_large_mattie_franklin'],
+): WardenDatabase {
   return {
     driver: 'postgres',
     maxConnections: 3,
     statementTimeoutMs: 15_000,
     async query(sql: string) {
       return sql.includes('_warden_service_migrations')
-        ? { rows: [{ version: '0005_large_mattie_franklin' }], rowCount: 1 } as never
+        ? { rows: versions.map((version) => ({ version })), rowCount: versions.length } as never
         : { rows: [], rowCount: 0 } as never;
     },
     async withClient<T>(operation: (client: DatabaseClient) => Promise<T>) {
@@ -37,6 +39,25 @@ describe('createWardenService', () => {
     const ready = await app.request('/ready');
     expect(ready.status).toBe(200);
     await expect(ready.json()).resolves.toMatchObject({ status: 'ready', database: 'ready' });
+  });
+
+  it('stays ready when newer backward-compatible migrations are applied', async () => {
+    const app = createWardenService({
+      database: readyDatabase([
+        '0006_future_migration',
+        '0005_large_mattie_franklin',
+      ]),
+    });
+
+    const response = await app.request('/ready');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: 'ready',
+      database: 'ready',
+      currentVersion: '0006_future_migration',
+      requiredVersion: '0005_large_mattie_franklin',
+    });
   });
 
   it('reports an unavailable database without trying to migrate', async () => {
