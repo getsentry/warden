@@ -65,9 +65,10 @@ describe('Vercel service app', () => {
     expect(script).toContain('finding.displayId');
     expect(script).toContain("'groupBy', 'repository'");
     expect(script).toContain("'groupBy', 'skill'");
-    expect(script).toContain("const byDay = await api(apiPath('/api/v1/costs', dayCosts))");
-    expect(script).toContain("const byRepository = await api(apiPath('/api/v1/costs', repositoryCosts))");
-    expect(script).toContain("const bySkill = await api(apiPath('/api/v1/costs', skillCosts))");
+    expect(script).toContain("const [outcomes, feed, byDay, byRepository, bySkill] = await Promise.all([");
+    expect(script).toContain("api(apiPath('/api/v1/costs', dayCosts))");
+    expect(script).toContain("api(apiPath('/api/v1/costs', repositoryCosts))");
+    expect(script).toContain("api(apiPath('/api/v1/costs', skillCosts))");
     expect(script).toContain("document.createElement('table')");
     expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'Last observed']");
     expect(script).not.toContain('finding-card');

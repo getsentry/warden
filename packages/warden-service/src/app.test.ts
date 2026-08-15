@@ -10,7 +10,7 @@ function readyDatabase(): WardenDatabase {
     statementTimeoutMs: 15_000,
     async query(sql: string) {
       return sql.includes('_warden_service_migrations')
-        ? { rows: [{ version: '0004_dazzling_vermin' }], rowCount: 1 } as never
+        ? { rows: [{ version: '0005_large_mattie_franklin' }], rowCount: 1 } as never
         : { rows: [], rowCount: 0 } as never;
     },
     async withClient<T>(operation: (client: DatabaseClient) => Promise<T>) {
@@ -62,8 +62,8 @@ describe('createWardenService', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ready: true,
-      currentVersion: '0004_dazzling_vermin',
-      requiredVersion: '0004_dazzling_vermin',
+      currentVersion: '0005_large_mattie_franklin',
+      requiredVersion: '0005_large_mattie_franklin',
     });
   });
 
@@ -283,7 +283,7 @@ describe('createWardenService', () => {
     const database = {
       ...readyDatabase(),
       async query<TRow extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []) {
-        if (sql.includes('FROM findings f')) return { rows: [{
+        if (sql.includes('JOIN findings f') || sql.includes('FROM findings f')) return { rows: [{
           id: '00000000-0000-4000-8000-000000000010',
           client_finding_id: '7MV-5V7', reported_id: null,
           run_id: '00000000-0000-4000-8000-000000000011',

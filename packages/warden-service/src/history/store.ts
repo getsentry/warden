@@ -233,7 +233,8 @@ export async function listFindings(
   const context = requireServiceContext(contextInput);
   const limit = Math.min(100, Math.max(1, filters.limit ?? 50));
   const values: unknown[] = [context.tenantId];
-  const conditions = ['f.tenant_id = $1'];
+  // Scope runs first so completed_at range/order can use runs_tenant_* indexes.
+  const conditions = ['r.tenant_id = $1'];
   if (context.repositoryAllowlist) {
     values.push(context.repositoryAllowlist);
     conditions.push(`repo.full_name = ANY($${values.length}::text[])`);
@@ -254,14 +255,16 @@ export async function listFindings(
     conditions.push(`(r.completed_at, f.id) < ($${values.length - 1}, $${values.length})`);
   }
   values.push(limit + 1);
+  // Drive from runs so tenant + completed_at (+ repository) indexes own the sort,
+  // then join findings by run instead of scanning findings and sorting after the fact.
   const result = await database.query<FindingFeedRow>(`
     SELECT f.id, f.client_finding_id, f.reported_id, f.run_id, r.client_run_id,
       repo.provider, repo.owner, repo.name, repo.full_name,
       se.skill, f.severity, f.confidence, f.title, f.description,
       location.path, location.start_line, location.end_line,
       observation.outcome AS observation_outcome, observation.observed_at, r.completed_at
-    FROM findings f
-    JOIN runs r ON r.id = f.run_id AND r.tenant_id = f.tenant_id
+    FROM runs r
+    JOIN findings f ON f.run_id = r.id AND f.tenant_id = r.tenant_id
     JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
     JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
     LEFT JOIN LATERAL (

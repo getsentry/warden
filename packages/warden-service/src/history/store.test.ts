@@ -153,6 +153,9 @@ describe('history store', () => {
       location: { path: 'src/api.ts', startLine: 42 },
       outcome: 'posted',
     });
+    expect(captured?.sql).toContain('FROM runs r');
+    expect(captured?.sql).toContain('JOIN findings f ON f.run_id = r.id');
+    expect(captured?.sql).toContain('r.tenant_id = $1');
     expect(captured?.sql).toContain('POSITION(');
     expect(captured?.sql).toContain('LEFT JOIN LATERAL');
     expect(captured?.values).toEqual(expect.arrayContaining([
