@@ -757,6 +757,17 @@ export async function listHistoryDimensions(
   const repositoryConditions: SQL[] = [eq(repositories.tenantId, context.tenantId)];
   const authorizedRepositories = repositoryScope(context);
   if (authorizedRepositories) repositoryConditions.push(authorizedRepositories);
+  const skillRowsPromise = authorizedRepositories
+    ? read.selectDistinct({ skill: skillExecutions.skill })
+        .from(skillExecutions)
+        .innerJoin(runs, and(eq(runs.id, skillExecutions.runId), eq(runs.tenantId, skillExecutions.tenantId)))
+        .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
+        .where(and(eq(skillExecutions.tenantId, context.tenantId), authorizedRepositories))
+        .orderBy(asc(skillExecutions.skill))
+    : read.selectDistinct({ skill: skillExecutions.skill })
+        .from(skillExecutions)
+        .where(eq(skillExecutions.tenantId, context.tenantId))
+        .orderBy(asc(skillExecutions.skill));
 
   const [repositoryRows, skillRows] = await Promise.all([
     read.select({
@@ -769,12 +780,7 @@ export async function listHistoryDimensions(
       .from(repositories)
       .where(and(...repositoryConditions))
       .orderBy(asc(repositories.fullName), asc(repositories.provider)),
-    read.selectDistinct({ skill: skillExecutions.skill })
-      .from(skillExecutions)
-      .innerJoin(runs, and(eq(runs.id, skillExecutions.runId), eq(runs.tenantId, skillExecutions.tenantId)))
-      .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
-      .where(and(eq(skillExecutions.tenantId, context.tenantId), authorizedRepositories))
-      .orderBy(asc(skillExecutions.skill)),
+    skillRowsPromise,
   ]);
 
   return {
