@@ -290,7 +290,7 @@ function mapFinding(row: FindingFeedRow): FindingFeedItem {
     } : {}),
     outcome: row.observation_outcome,
     firstObservedAt: row.first_observed_at ? iso(row.first_observed_at) : null,
-    observedAt: row.observed_at ? iso(row.observed_at) : null,
+    lastObservedAt: row.observed_at ? iso(row.observed_at) : null,
     completedAt: iso(row.completed_at),
   };
 }

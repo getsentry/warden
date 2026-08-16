@@ -374,7 +374,7 @@ describe('createWardenService', () => {
         id: '00000000-0000-4000-8000-000000000010',
         displayId: '7MV-5V7',
         firstObservedAt: '2026-08-12T10:00:00.000Z',
-        observedAt: '2026-08-12T10:01:00.000Z',
+        lastObservedAt: '2026-08-12T10:01:00.000Z',
       },
       verification: 'The query interpolates untrusted input.',
     });

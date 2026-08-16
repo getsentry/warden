@@ -166,7 +166,7 @@ describe('history store', () => {
       location: { path: 'src/api.ts', startLine: 42 },
       outcome: 'posted',
       firstObservedAt: '2026-08-12T10:00:00.000Z',
-      observedAt: '2026-08-12T10:02:00.000Z',
+      lastObservedAt: '2026-08-12T10:02:00.000Z',
     });
     expect(captured?.sql).toContain('from "runs" inner join "findings"');
     expect(captured?.sql).toContain('"findings"."run_id" = "runs"."id"');
@@ -223,7 +223,7 @@ describe('history store', () => {
       verification: 'The route reads an account before checking the caller.',
       finding: {
         firstObservedAt: '2026-08-12T09:55:00.000Z',
-        observedAt: '2026-08-12T10:02:00.000Z',
+        lastObservedAt: '2026-08-12T10:02:00.000Z',
       },
     });
     expect(detailSql).toContain(

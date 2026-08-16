@@ -585,7 +585,7 @@ function findingRows(finding) {
 
   const status = element('td', finding.outcome ?? '—', `finding-status ${finding.outcome ?? ''}`);
   const observed = document.createElement('td');
-  observed.append(dateTime(finding.observedAt, '—'));
+  observed.append(dateTime(finding.lastObservedAt, '—'));
 
   row.append(severity, summary, context, location, status, observed);
 
@@ -611,7 +611,7 @@ function findingRows(finding) {
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
     findingDetail('Status', finding.outcome ?? 'Not reported'),
     findingDetail('First observed', dateTime(finding.firstObservedAt)),
-    findingDetail('Last observed', dateTime(finding.observedAt)),
+    findingDetail('Last observed', dateTime(finding.lastObservedAt)),
   );
   detailContent.append(description, metadata);
   detailCell.append(detailContent);
@@ -759,7 +759,7 @@ async function renderFinding(version, findingId) {
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
     findingDetail('Latest outcome', finding.outcome ?? 'Not reported'),
     findingDetail('First observed', dateTime(finding.firstObservedAt)),
-    findingDetail('Last observed', dateTime(finding.observedAt)),
+    findingDetail('Last observed', dateTime(finding.lastObservedAt)),
     findingDetail('Run completed', dateTime(finding.completedAt)),
     findingDetail('Run', finding.clientRunId),
     findingDetail('Commit', detail.headSha ? detail.headSha.slice(0, 12) : 'Not reported'),
