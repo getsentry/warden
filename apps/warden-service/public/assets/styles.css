@@ -174,7 +174,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .chart-caption { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); font-size: 11px; }
 
 .finding-table-shell { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.finding-table { width: 100%; min-width: 980px; border-collapse: collapse; table-layout: fixed; }
+.finding-table { width: 100%; min-width: 1120px; border-collapse: collapse; table-layout: fixed; }
 .finding-table th {
   padding: 9px 12px;
   color: var(--muted);
@@ -184,11 +184,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   text-align: left;
 }
 .finding-table th:nth-child(1) { width: 82px; }
-.finding-table th:nth-child(2) { width: 36%; }
-.finding-table th:nth-child(3) { width: 19%; }
-.finding-table th:nth-child(4) { width: 19%; }
+.finding-table th:nth-child(2) { width: 30%; }
+.finding-table th:nth-child(3) { width: 16%; }
+.finding-table th:nth-child(4) { width: 16%; }
 .finding-table th:nth-child(5) { width: 82px; }
-.finding-table th:nth-child(6) { width: 158px; }
+.finding-table th:nth-child(6),
+.finding-table th:nth-child(7) { width: 146px; }
 .finding-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; font-size: 12px; }
 .finding-row { cursor: pointer; outline: none; }
 .finding-row:hover,
@@ -299,7 +300,7 @@ dialog::backdrop { background: #08060ab8; backdrop-filter: blur(3px); }
   .metrics { grid-template-columns: 1fr 1fr; }
   .analytics-grid { grid-template-columns: 1fr; }
   .analytics-grid .panel:first-child { grid-column: auto; }
-  .finding-table { min-width: 900px; }
+  .finding-table { min-width: 1040px; }
   .finding-detail-content { grid-template-columns: 1fr; }
   .finding-page-metadata { grid-template-columns: 1fr 1fr; }
 }

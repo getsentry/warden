@@ -85,7 +85,7 @@ describe('Vercel service app', () => {
     expect(script).not.toContain("api('/api/v1/repositories')");
     expect(script).not.toContain("api('/api/v1/skills')");
     expect(script).toContain("document.createElement('table')");
-    expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'Last observed']");
+    expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']");
     expect(script).not.toContain('finding-card');
     expect(script).not.toContain('badge');
     expect(`${html}\n${script}`).not.toContain('WARDEN_SERVICE_TOKEN');

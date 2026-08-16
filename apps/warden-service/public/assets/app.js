@@ -584,17 +584,19 @@ function findingRows(finding) {
   location.title = locationText;
 
   const status = element('td', finding.outcome ?? '—', `finding-status ${finding.outcome ?? ''}`);
-  const observed = document.createElement('td');
-  observed.append(dateTime(finding.lastObservedAt, '—'));
+  const firstObserved = document.createElement('td');
+  firstObserved.append(dateTime(finding.firstObservedAt, '—'));
+  const lastObserved = document.createElement('td');
+  lastObserved.append(dateTime(finding.lastObservedAt, '—'));
 
-  row.append(severity, summary, context, location, status, observed);
+  row.append(severity, summary, context, location, status, firstObserved, lastObserved);
 
   const detailRow = document.createElement('tr');
   detailRow.id = `finding-detail-${finding.id}`;
   detailRow.className = 'finding-detail-row';
   detailRow.hidden = true;
   const detailCell = document.createElement('td');
-  detailCell.colSpan = 6;
+  detailCell.colSpan = 7;
   const detailContent = element('div', undefined, 'finding-detail-content');
   const description = element('div', undefined, 'finding-detail-copy');
   description.append(
@@ -645,7 +647,7 @@ function findingsSection(data, params) {
   table.className = 'finding-table';
   const head = document.createElement('thead');
   const headings = document.createElement('tr');
-  for (const label of ['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'Last observed']) {
+  for (const label of ['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']) {
     const heading = element('th', label);
     heading.scope = 'col';
     headings.append(heading);
