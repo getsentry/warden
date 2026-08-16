@@ -145,6 +145,7 @@ describe('history store', () => {
         start_line: 42,
         end_line: 48,
         observation_outcome: 'posted',
+        first_observed_at: '2026-08-12T10:00:00.000Z',
         observed_at: '2026-08-12T10:02:00.000Z',
         completed_at: '2026-08-12T10:01:00.000Z',
       }], rowCount: 1 };
@@ -164,6 +165,8 @@ describe('history store', () => {
       repository: { fullName: 'acme/widgets' },
       location: { path: 'src/api.ts', startLine: 42 },
       outcome: 'posted',
+      firstObservedAt: '2026-08-12T10:00:00.000Z',
+      observedAt: '2026-08-12T10:02:00.000Z',
     });
     expect(captured?.sql).toContain('from "runs" inner join "findings"');
     expect(captured?.sql).toContain('"findings"."run_id" = "runs"."id"');
@@ -200,7 +203,9 @@ describe('history store', () => {
           skill: 'security-review', severity: 'high', confidence: 'high',
           title: 'Missing authorization check', description: 'The endpoint does not verify ownership.',
           path: 'src/api route.ts', start_line: 42, end_line: 48,
-          observation_outcome: 'posted', observed_at: '2026-08-12T10:02:00.000Z',
+          observation_outcome: 'posted',
+          first_observed_at: '2026-08-12T09:55:00.000Z',
+          observed_at: '2026-08-12T10:02:00.000Z',
           completed_at: '2026-08-12T10:01:00.000Z',
         }],
         rowCount: 1,
@@ -216,10 +221,16 @@ describe('history store', () => {
       sourceUrl: 'https://github.com/acme/widgets/blob/abc123def456/src/api%20route.ts#L42-L48',
       sourceEvidence: { targetStartLine: 42, content: 'authorize(request);' },
       verification: 'The route reads an account before checking the caller.',
-      finding: { observedAt: '2026-08-12T10:02:00.000Z' },
+      finding: {
+        firstObservedAt: '2026-08-12T09:55:00.000Z',
+        observedAt: '2026-08-12T10:02:00.000Z',
+      },
     });
     expect(detailSql).toContain(
       'order by "finding_observations"."observed_at" desc, "finding_observations"."id" desc limit',
+    );
+    expect(detailSql).toContain(
+      'order by "finding_observations"."observed_at" asc, "finding_observations"."id" asc limit',
     );
   });
 

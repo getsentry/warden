@@ -610,6 +610,7 @@ function findingRows(finding) {
     findingDetail('Location', locationText),
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
     findingDetail('Status', finding.outcome ?? 'Not reported'),
+    findingDetail('First observed', dateTime(finding.firstObservedAt)),
     findingDetail('Last observed', dateTime(finding.observedAt)),
   );
   detailContent.append(description, metadata);
@@ -757,6 +758,7 @@ async function renderFinding(version, findingId) {
     findingDetail('Location', findingLocation(finding)),
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
     findingDetail('Latest outcome', finding.outcome ?? 'Not reported'),
+    findingDetail('First observed', dateTime(finding.firstObservedAt)),
     findingDetail('Last observed', dateTime(finding.observedAt)),
     findingDetail('Run completed', dateTime(finding.completedAt)),
     findingDetail('Run', finding.clientRunId),

@@ -76,6 +76,9 @@ export const FindingFeedItemSchema = z.object({
     endLine: z.number().int().positive().optional(),
   }).strict().optional(),
   outcome: FindingOutcomeSchema.nullable(),
+  /** Earliest observation timestamp for this finding row. */
+  firstObservedAt: TimestampSchema.nullable(),
+  /** Latest observation timestamp for this finding row. */
   observedAt: TimestampSchema.nullable(),
   completedAt: TimestampSchema,
 }).strict();

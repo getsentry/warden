@@ -334,7 +334,9 @@ describe('createWardenService', () => {
           skill: 'security', severity: 'high', confidence: 'high',
           title: 'Unsafe query', description: 'Use parameters.',
           path: 'src/query.ts', start_line: 12, end_line: 12,
-          observation_outcome: 'posted', observed_at: '2026-08-12T10:01:00.000Z',
+          observation_outcome: 'posted',
+          first_observed_at: '2026-08-12T10:00:00.000Z',
+          observed_at: '2026-08-12T10:01:00.000Z',
           completed_at: '2026-08-12T10:01:00.000Z',
           };
           return { rows: [finding] as unknown as TRow[], rowCount: 1 };
@@ -371,6 +373,7 @@ describe('createWardenService', () => {
       finding: {
         id: '00000000-0000-4000-8000-000000000010',
         displayId: '7MV-5V7',
+        firstObservedAt: '2026-08-12T10:00:00.000Z',
         observedAt: '2026-08-12T10:01:00.000Z',
       },
       verification: 'The query interpolates untrusted input.',
