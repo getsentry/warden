@@ -253,6 +253,7 @@ interface FindingFeedRow extends Record<string, unknown> {
   start_line: number | null;
   end_line: number | null;
   observation_outcome: FindingFeedItem['outcome'];
+  first_observed_at: Date | string | null;
   observed_at: Date | string | null;
   completed_at: Date | string;
 }
@@ -288,7 +289,8 @@ function mapFinding(row: FindingFeedRow): FindingFeedItem {
       },
     } : {}),
     outcome: row.observation_outcome,
-    observedAt: row.observed_at ? iso(row.observed_at) : null,
+    firstObservedAt: row.first_observed_at ? iso(row.first_observed_at) : null,
+    lastObservedAt: row.observed_at ? iso(row.observed_at) : null,
     completedAt: iso(row.completed_at),
   };
 }
@@ -327,7 +329,19 @@ function findingContextQueries(database: WardenReadDatabase) {
     .orderBy(desc(findingObservations.observedAt), desc(findingObservations.id))
     .limit(1)
     .as('observation');
-  return { location, observation };
+  // Earliest observation is first seen for this finding row (per-run identity today).
+  const firstObservation = database.select({
+    observed_at: findingObservations.observedAt,
+  })
+    .from(findingObservations)
+    .where(and(
+      eq(findingObservations.tenantId, findings.tenantId),
+      eq(findingObservations.findingId, findings.id),
+    ))
+    .orderBy(asc(findingObservations.observedAt), asc(findingObservations.id))
+    .limit(1)
+    .as('first_observation');
+  return { location, observation, firstObservation };
 }
 
 /** List authorized findings newest first for dashboard and API investigations. */
@@ -339,7 +353,7 @@ export async function listFindings(
   const context = requireServiceContext(contextInput);
   const limit = Math.min(100, Math.max(1, filters.limit ?? 50));
   const read = getReadDatabase(database);
-  const { location, observation } = findingContextQueries(read);
+  const { location, observation, firstObservation } = findingContextQueries(read);
   // Scope runs first so completed_at range/order can use runs_tenant_* indexes.
   const conditions: SQL[] = [eq(runs.tenantId, context.tenantId)];
   const authorizedRepositories = repositoryScope(context);
@@ -380,6 +394,7 @@ export async function listFindings(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
+    first_observed_at: firstObservation.observed_at,
     observed_at: observation.observed_at,
     completed_at: runs.completedAt,
   })
@@ -389,6 +404,7 @@ export async function listFindings(
     .innerJoin(skillExecutions, and(eq(skillExecutions.id, findings.skillExecutionId), eq(skillExecutions.tenantId, findings.tenantId)))
     .leftJoinLateral(location, sql`true`)
     .leftJoinLateral(observation, sql`true`)
+    .leftJoinLateral(firstObservation, sql`true`)
     .where(and(...conditions))
     .orderBy(desc(runs.completedAt), desc(findings.id))
     .limit(limit + 1);
@@ -409,7 +425,7 @@ export async function getFindingDetail(
 ): Promise<FindingDetailResponse | null> {
   const context = requireServiceContext(contextInput);
   const read = getReadDatabase(database);
-  const { location, observation } = findingContextQueries(read);
+  const { location, observation, firstObservation } = findingContextQueries(read);
   const conditions: SQL[] = [eq(findings.tenantId, context.tenantId), eq(findings.id, findingId)];
   const authorizedRepositories = repositoryScope(context);
   if (authorizedRepositories) conditions.push(authorizedRepositories);
@@ -435,6 +451,7 @@ export async function getFindingDetail(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
+    first_observed_at: firstObservation.observed_at,
     observed_at: observation.observed_at,
     completed_at: runs.completedAt,
   })
@@ -444,6 +461,7 @@ export async function getFindingDetail(
     .innerJoin(skillExecutions, and(eq(skillExecutions.id, findings.skillExecutionId), eq(skillExecutions.tenantId, findings.tenantId)))
     .leftJoinLateral(location, sql`true`)
     .leftJoinLateral(observation, sql`true`)
+    .leftJoinLateral(firstObservation, sql`true`)
     .where(and(...conditions));
   const finding = result[0] as unknown as FindingDetailRow | undefined;
   if (!finding) return null;
