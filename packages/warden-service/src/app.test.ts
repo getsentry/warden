@@ -336,7 +336,7 @@ describe('createWardenService', () => {
           path: 'src/query.ts', start_line: 12, end_line: 12,
           observation_outcome: 'posted',
           first_observed_at: '2026-08-12T10:00:00.000Z',
-          observed_at: '2026-08-12T10:01:00.000Z',
+          last_observed_at: '2026-08-12T10:01:00.000Z',
           completed_at: '2026-08-12T10:01:00.000Z',
           };
           return { rows: [finding] as unknown as TRow[], rowCount: 1 };

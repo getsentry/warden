@@ -146,7 +146,7 @@ describe('history store', () => {
         end_line: 48,
         observation_outcome: 'posted',
         first_observed_at: '2026-08-12T10:00:00.000Z',
-        observed_at: '2026-08-12T10:02:00.000Z',
+        last_observed_at: '2026-08-12T10:02:00.000Z',
         completed_at: '2026-08-12T10:01:00.000Z',
       }], rowCount: 1 };
     });
@@ -182,6 +182,80 @@ describe('history store', () => {
     ]));
   });
 
+  it('preserves duplicate observation timestamp columns returned by PostgreSQL', async () => {
+    const rowValues = [
+      '00000000-0000-0000-0000-000000000020',
+      '7MV-5V7',
+      null,
+      '00000000-0000-0000-0000-000000000021',
+      'run-21',
+      'github',
+      'acme',
+      'widgets',
+      'acme/widgets',
+      'security-review',
+      'high',
+      'high',
+      'Missing authorization check',
+      'The endpoint does not verify ownership.',
+      'src/api.ts',
+      42,
+      48,
+      'posted',
+      '2026-08-12T10:00:00.000Z',
+      '2026-08-12T10:02:00.000Z',
+      '2026-08-12T10:01:00.000Z',
+    ];
+    let capturedSql = '';
+    const database = {
+      async query(sql: string) {
+        capturedSql = sql;
+        const timestamps = sql.includes('as "first_observed_at"')
+          && sql.includes('as "last_observed_at"')
+          ? {
+              first_observed_at: rowValues[18],
+              last_observed_at: rowValues[19],
+            }
+          : { observed_at: rowValues[19] };
+        return {
+          rows: [{
+            id: rowValues[0],
+            client_finding_id: rowValues[1],
+            reported_id: rowValues[2],
+            run_id: rowValues[3],
+            client_run_id: rowValues[4],
+            provider: rowValues[5],
+            owner: rowValues[6],
+            name: rowValues[7],
+            full_name: rowValues[8],
+            skill: rowValues[9],
+            severity: rowValues[10],
+            confidence: rowValues[11],
+            title: rowValues[12],
+            description: rowValues[13],
+            path: rowValues[14],
+            start_line: rowValues[15],
+            end_line: rowValues[16],
+            observation_outcome: rowValues[17],
+            ...timestamps,
+            completed_at: rowValues[20],
+          }],
+          rowCount: 1,
+        };
+      },
+    } as unknown as WardenDatabase;
+
+    const page = await listFindings(database, context, {});
+
+    expect(page.items[0]).toMatchObject({
+      firstObservedAt: '2026-08-12T10:00:00.000Z',
+      lastObservedAt: '2026-08-12T10:02:00.000Z',
+      completedAt: '2026-08-12T10:01:00.000Z',
+    });
+    expect(capturedSql).toContain('as "first_observed_at"');
+    expect(capturedSql).toContain('as "last_observed_at"');
+  });
+
   it('returns source and verification context with the latest finding observation', async () => {
     let detailSql = '';
     const database = databaseFor((sql) => {
@@ -205,7 +279,7 @@ describe('history store', () => {
           path: 'src/api route.ts', start_line: 42, end_line: 48,
           observation_outcome: 'posted',
           first_observed_at: '2026-08-12T09:55:00.000Z',
-          observed_at: '2026-08-12T10:02:00.000Z',
+          last_observed_at: '2026-08-12T10:02:00.000Z',
           completed_at: '2026-08-12T10:01:00.000Z',
         }],
         rowCount: 1,
