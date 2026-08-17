@@ -254,7 +254,7 @@ interface FindingFeedRow extends Record<string, unknown> {
   end_line: number | null;
   observation_outcome: FindingFeedItem['outcome'];
   first_observed_at: Date | string | null;
-  observed_at: Date | string | null;
+  last_observed_at: Date | string | null;
   completed_at: Date | string;
 }
 
@@ -290,7 +290,7 @@ function mapFinding(row: FindingFeedRow): FindingFeedItem {
     } : {}),
     outcome: row.observation_outcome,
     firstObservedAt: row.first_observed_at ? iso(row.first_observed_at) : null,
-    lastObservedAt: row.observed_at ? iso(row.observed_at) : null,
+    lastObservedAt: row.last_observed_at ? iso(row.last_observed_at) : null,
     completedAt: iso(row.completed_at),
   };
 }
@@ -319,7 +319,7 @@ function findingContextQueries(database: WardenReadDatabase) {
     .as('location');
   const observation = database.select({
     outcome: findingObservations.outcome,
-    observed_at: findingObservations.observedAt,
+    last_observed_at: sql<Date>`${findingObservations.observedAt}`.as('last_observed_at'),
   })
     .from(findingObservations)
     .where(and(
@@ -331,7 +331,7 @@ function findingContextQueries(database: WardenReadDatabase) {
     .as('observation');
   // Earliest observation is first seen for this finding row (per-run identity today).
   const firstObservation = database.select({
-    observed_at: findingObservations.observedAt,
+    first_observed_at: sql<Date>`${findingObservations.observedAt}`.as('first_observed_at'),
   })
     .from(findingObservations)
     .where(and(
@@ -394,8 +394,8 @@ export async function listFindings(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
-    first_observed_at: firstObservation.observed_at,
-    observed_at: observation.observed_at,
+    first_observed_at: firstObservation.first_observed_at,
+    last_observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,
   })
     .from(runs)
@@ -451,8 +451,8 @@ export async function getFindingDetail(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
-    first_observed_at: firstObservation.observed_at,
-    observed_at: observation.observed_at,
+    first_observed_at: firstObservation.first_observed_at,
+    last_observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,
   })
     .from(findings)
