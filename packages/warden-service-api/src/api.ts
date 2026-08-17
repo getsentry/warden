@@ -76,6 +76,8 @@ export const FindingFeedItemSchema = z.object({
     endLine: z.number().int().positive().optional(),
   }).strict().optional(),
   outcome: FindingOutcomeSchema.nullable(),
+  /** Machine-readable reason attached to the latest finding observation. */
+  outcomeReason: z.string().trim().min(1).max(128).nullable(),
   /** Earliest observation timestamp for this finding row. */
   firstObservedAt: TimestampSchema.nullable(),
   /** Latest observation timestamp for this finding row. */

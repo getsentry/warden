@@ -1410,6 +1410,15 @@ describe('runPRWorkflow', () => {
         expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
         expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
         expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+        const [, , observations] = mockWriteFindingsOutput.mock.calls[0]!;
+        expect(observations).toEqual([
+          expect.objectContaining({
+            outcome: 'skipped',
+            finding,
+            skill: 'test-skill',
+            skippedReason: 'pull_request_changed',
+          }),
+        ]);
       } finally {
         dateNowSpy.mockRestore();
       }

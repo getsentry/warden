@@ -146,6 +146,7 @@ describe('history store', () => {
         start_line: 42,
         end_line: 48,
         observation_outcome: 'posted',
+        observation_reason: null,
         first_observed_at: '2026-08-12T10:00:00.000Z',
         last_observed_at: '2026-08-12T10:02:00.000Z',
         completed_at: '2026-08-12T10:01:00.000Z',
@@ -166,6 +167,7 @@ describe('history store', () => {
       repository: { fullName: 'acme/widgets' },
       location: { path: 'src/api.ts', startLine: 42 },
       outcome: 'posted',
+      outcomeReason: null,
       firstObservedAt: '2026-08-12T10:00:00.000Z',
       lastObservedAt: '2026-08-12T10:02:00.000Z',
     });
@@ -203,6 +205,7 @@ describe('history store', () => {
       42,
       48,
       'posted',
+      null,
       '2026-08-12T10:00:00.000Z',
       '2026-08-12T10:02:00.000Z',
       '2026-08-12T10:01:00.000Z',
@@ -214,10 +217,10 @@ describe('history store', () => {
         const timestamps = sql.includes('as "first_observed_at"')
           && sql.includes('as "last_observed_at"')
           ? {
-              first_observed_at: rowValues[18],
-              last_observed_at: rowValues[19],
+              first_observed_at: rowValues[19],
+              last_observed_at: rowValues[20],
             }
-          : { observed_at: rowValues[19] };
+          : { observed_at: rowValues[20] };
         return {
           rows: [{
             id: rowValues[0],
@@ -238,8 +241,9 @@ describe('history store', () => {
             start_line: rowValues[15],
             end_line: rowValues[16],
             observation_outcome: rowValues[17],
+            observation_reason: rowValues[18],
             ...timestamps,
-            completed_at: rowValues[20],
+            completed_at: rowValues[21],
           }],
           rowCount: 1,
         };
@@ -278,7 +282,8 @@ describe('history store', () => {
           skill: 'security-review', severity: 'high', confidence: 'high',
           title: 'Missing authorization check', description: 'The endpoint does not verify ownership.',
           path: 'src/api route.ts', start_line: 42, end_line: 48,
-          observation_outcome: 'posted',
+          observation_outcome: 'skipped',
+          observation_reason: 'pull_request_changed',
           first_observed_at: '2026-08-12T09:55:00.000Z',
           last_observed_at: '2026-08-12T10:02:00.000Z',
           completed_at: '2026-08-12T10:01:00.000Z',
@@ -297,6 +302,8 @@ describe('history store', () => {
       sourceEvidence: { targetStartLine: 42, content: 'authorize(request);' },
       verification: 'The route reads an account before checking the caller.',
       finding: {
+        outcome: 'skipped',
+        outcomeReason: 'pull_request_changed',
         firstObservedAt: '2026-08-12T09:55:00.000Z',
         lastObservedAt: '2026-08-12T10:02:00.000Z',
       },

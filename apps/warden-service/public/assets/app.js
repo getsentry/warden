@@ -57,6 +57,27 @@ function dateTime(value, fallback = 'Not reported') {
   return time;
 }
 
+function findingOutcomeLabel(finding, fallback = 'Delivery not tracked') {
+  if (finding.outcome === 'skipped' && finding.outcomeReason === 'pull_request_changed') {
+    return 'Not posted: PR changed';
+  }
+  if (!finding.outcome) return fallback;
+  return finding.outcome.charAt(0).toUpperCase() + finding.outcome.slice(1);
+}
+
+function findingOutcomeDescription(finding) {
+  if (finding.outcome === 'skipped' && finding.outcomeReason === 'pull_request_changed') {
+    return 'Warden did not post this finding because the pull request changed before Warden finished. It refers to an older commit; the newer run reviews the updated code.';
+  }
+  if (finding.outcome === 'skipped' && finding.outcomeReason === 'review_not_posted') {
+    return 'Skipped because Warden could not verify that the pull request was still current, so it did not add review feedback.';
+  }
+  if (!finding.outcome) {
+    return 'Warden did not record how this finding was delivered. Scheduled scans and older runs may omit this data.';
+  }
+  return findingOutcomeLabel(finding);
+}
+
 function setPage(title, description) {
   pageTitle.textContent = title;
   pageDescription.textContent = description;
@@ -583,7 +604,7 @@ function findingRows(finding) {
   const location = element('td', locationText, 'finding-location');
   location.title = locationText;
 
-  const status = element('td', finding.outcome ?? '—', `finding-status ${finding.outcome ?? ''}`);
+  const status = element('td', findingOutcomeLabel(finding), `finding-status ${finding.outcome ?? ''}`);
   const firstObserved = document.createElement('td');
   firstObserved.append(dateTime(finding.firstObservedAt, '—'));
   const lastObserved = document.createElement('td');
@@ -611,7 +632,7 @@ function findingRows(finding) {
     findingDetail('Skill', finding.skill),
     findingDetail('Location', locationText),
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
-    findingDetail('Status', finding.outcome ?? 'Not reported'),
+    findingDetail('Reporting outcome', findingOutcomeDescription(finding)),
     findingDetail('First observed', dateTime(finding.firstObservedAt)),
     findingDetail('Last observed', dateTime(finding.lastObservedAt)),
   );
@@ -726,8 +747,13 @@ async function renderFinding(version, findingId) {
   const heading = element('div', undefined, 'finding-page-heading');
   heading.append(
     element('span', finding.severity, `severity ${finding.severity}`),
-    element('span', finding.outcome ?? 'Not reported', `finding-status ${finding.outcome ?? ''}`),
+    element('span', findingOutcomeLabel(finding), `finding-status ${finding.outcome ?? ''}`),
   );
+
+  const outcomeDescription = findingOutcomeDescription(finding);
+  const reportingNote = outcomeDescription !== findingOutcomeLabel(finding)
+    ? element('p', outcomeDescription, 'finding-reporting-note')
+    : undefined;
 
   const explanation = findingPageSection('Why Warden Flagged This');
   explanation.append(element('p', finding.description, 'finding-page-description'));
@@ -756,7 +782,7 @@ async function renderFinding(version, findingId) {
     findingDetail('Skill', finding.skill),
     findingDetail('Location', findingLocation(finding)),
     findingDetail('Confidence', finding.confidence ?? 'Not reported'),
-    findingDetail('Latest outcome', finding.outcome ?? 'Not reported'),
+    findingDetail('Latest outcome', findingOutcomeDescription(finding)),
     findingDetail('First observed', dateTime(finding.firstObservedAt)),
     findingDetail('Last observed', dateTime(finding.lastObservedAt)),
     findingDetail('Run completed', dateTime(finding.completedAt)),
@@ -764,7 +790,9 @@ async function renderFinding(version, findingId) {
     findingDetail('Commit', detail.headSha ? detail.headSha.slice(0, 12) : 'Not reported'),
   );
   details.append(metadata);
-  article.append(heading, explanation, codeContext, details);
+  article.append(heading);
+  if (reportingNote) article.append(reportingNote);
+  article.append(explanation, codeContext, details);
   section.append(article);
   content.replaceChildren(section);
 }

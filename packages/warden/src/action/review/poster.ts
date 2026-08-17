@@ -159,9 +159,15 @@ function remapFindingProcessingEvents(
  * - `posted`: the review was created on the PR
  * - `checks_only`: findings could not be attached inline; they stay in Checks
  * - `no_review`: nothing to post (no PR context or no rendered review)
- * - `blocked`: the run may no longer write feedback for the current PR head
+ * - `pull_request_changed`: the run targets an older PR head
+ * - `review_not_posted`: the current PR head could not be verified
  */
-type PostReviewOutcome = 'posted' | 'checks_only' | 'no_review' | 'blocked';
+type PostReviewOutcome =
+  | 'posted'
+  | 'checks_only'
+  | 'no_review'
+  | 'pull_request_changed'
+  | 'review_not_posted';
 
 /**
  * Post a PR review to GitHub.
@@ -203,9 +209,9 @@ async function postReviewToGitHub(
 
   // Duplicate-action comment updates between the poster's gate check and this
   // write can outlive the gate's cache window; verify once more.
-  if (!(await feedbackGate.canWrite())) {
-    return 'blocked';
-  }
+  const writability = await feedbackGate.check();
+  if (writability === 'blocked') return 'pull_request_changed';
+  if (writability === 'unknown') return 'review_not_posted';
 
   await octokit.pulls.createReview({
     owner,
@@ -393,14 +399,18 @@ export async function postTriggerReview(
     // Consolidation and dedup above can spend minutes in LLM calls. Re-verify
     // head freshness before the first GitHub write (duplicate-action comment
     // updates below, then the review itself).
-    if (!(await deps.feedbackGate.canWrite())) {
+    const writability = await deps.feedbackGate.check();
+    if (writability !== 'writable') {
+      const skippedReason = writability === 'blocked'
+        ? 'pull_request_changed' as const
+        : 'review_not_posted' as const;
       for (const finding of findingsToPost) {
         findingObservations.push({
           outcome: 'skipped',
           finding,
           skill,
           skillExecutionId: result.skillExecutionId,
-          skippedReason: 'review_not_posted',
+          skippedReason,
         });
       }
       return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
@@ -506,14 +516,14 @@ export async function postTriggerReview(
         return emptyReviewPostResult(newComments, activeWardenCommentIds, findingObservations);
       }
       if (postOutcome !== 'posted') {
-        if (postOutcome === 'blocked') {
+        if (postOutcome === 'pull_request_changed' || postOutcome === 'review_not_posted') {
           for (const finding of postedFindings) {
             findingObservations.push({
               outcome: 'skipped',
               finding,
               skill,
               skillExecutionId: result.skillExecutionId,
-              skippedReason: 'review_not_posted',
+              skippedReason: postOutcome,
             });
           }
         }

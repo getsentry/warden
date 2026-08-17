@@ -411,7 +411,7 @@ describe('postTriggerReview', () => {
     // Regression: these findings were about to post — the export must record
     // why they didn't, not silently drop them from findingObservations.
     expect(
-      postResult.findingObservations.filter((o) => o.outcome === 'skipped' && o.skippedReason === 'review_not_posted')
+      postResult.findingObservations.filter((o) => o.outcome === 'skipped' && o.skippedReason === 'pull_request_changed')
     ).toHaveLength(2);
   });
 
@@ -477,7 +477,7 @@ describe('postTriggerReview', () => {
       // Regression: the finding that would have posted must be recorded as
       // blocked, not vanish from the export.
       expect(
-        postResult.findingObservations.filter((o) => o.outcome === 'skipped' && o.skippedReason === 'review_not_posted')
+        postResult.findingObservations.filter((o) => o.outcome === 'skipped' && o.skippedReason === 'pull_request_changed')
       ).toEqual([expect.objectContaining({ finding: findings[0] })]);
     } finally {
       dateNowSpy.mockRestore();
