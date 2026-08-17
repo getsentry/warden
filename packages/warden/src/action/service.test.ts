@@ -176,7 +176,13 @@ describe('Action service integration', () => {
       serviceToken: 'service-token',
       serviceData: 'findings',
     }));
-    const buildOutput = vi.fn(() => buildFindingsOutput([report], context, [], {
+    const buildOutput = vi.fn(() => buildFindingsOutput([report], context, [{
+      outcome: 'skipped',
+      finding: report.findings[0]!,
+      skill: report.skill,
+      skillExecutionId: 'execution-1',
+      skippedReason: 'pull_request_changed',
+    }], {
       runId: 'action-run-123',
       timestamp: '2026-08-12T12:00:01.000Z',
       skillExecutions: [{
@@ -214,6 +220,12 @@ describe('Action service integration', () => {
         ],
       }],
       findings: [{ id: 'finding-1', skillExecutionId: 'execution-1' }],
+      observations: [{
+        findingId: 'finding-1',
+        skillExecutionId: 'execution-1',
+        outcome: 'skipped',
+        reason: 'pull_request_changed',
+      }],
     });
   });
 

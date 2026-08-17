@@ -751,6 +751,23 @@ async function postReviewsAndTrackFailures(
         postResult.activeWardenCommentIds.forEach((id) => activeWardenCommentIds.add(id));
         findingObservations.push(...postResult.findingObservations);
         reviewPosted = postResult.posted;
+      } else {
+        const skippedReason = writability === 'blocked'
+          ? 'pull_request_changed' as const
+          : 'review_not_posted' as const;
+        const reportableFindings = filterFindings(
+          result.report.findings,
+          result.reportOn,
+          result.minConfidence,
+        );
+        const skill = result.report.skill;
+        findingObservations.push(...reportableFindings.map((finding): FindingObservation => ({
+          outcome: 'skipped',
+          finding,
+          skill,
+          skillExecutionId: result.skillExecutionId,
+          skippedReason,
+        })));
       }
       // A stale head skips silently (the newer run owns feedback), but an
       // unverifiable head must not silently swallow a blocking review.

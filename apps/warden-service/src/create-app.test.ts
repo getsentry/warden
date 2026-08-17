@@ -104,6 +104,12 @@ describe('Vercel service app', () => {
     expect(script).toContain("element('h2', 'Code Context')");
     expect(script).toContain("findingPageSection('Finding Details')");
     expect(script).toContain("'No source snippet was retained for this finding.'");
+    expect(script).toContain("'Not posted: PR changed'");
+    expect(script).toContain(
+      "'Warden did not post this finding because the pull request changed before Warden finished. It refers to an older commit; the newer run reviews the updated code.'",
+    );
+    expect(script).toContain("'This older run retained the finding but did not record what happened during review posting.'");
+    expect(script).toContain("findingDetail('Reporting outcome', findingOutcomeDescription(finding))");
     expect(script).toContain("findingDetail('First observed'");
     expect(script).toContain("findingDetail('Last observed'");
     expect(script).not.toContain('protected-session');

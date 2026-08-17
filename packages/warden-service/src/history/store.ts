@@ -253,6 +253,7 @@ interface FindingFeedRow extends Record<string, unknown> {
   start_line: number | null;
   end_line: number | null;
   observation_outcome: FindingFeedItem['outcome'];
+  observation_reason: string | null;
   first_observed_at: Date | string | null;
   last_observed_at: Date | string | null;
   completed_at: Date | string;
@@ -289,6 +290,7 @@ function mapFinding(row: FindingFeedRow): FindingFeedItem {
       },
     } : {}),
     outcome: row.observation_outcome,
+    outcomeReason: row.observation_reason ?? null,
     firstObservedAt: row.first_observed_at ? iso(row.first_observed_at) : null,
     lastObservedAt: row.last_observed_at ? iso(row.last_observed_at) : null,
     completedAt: iso(row.completed_at),
@@ -319,6 +321,7 @@ function findingContextQueries(database: WardenReadDatabase) {
     .as('location');
   const observation = database.select({
     outcome: findingObservations.outcome,
+    reason: findingObservations.reason,
     last_observed_at: sql<Date>`${findingObservations.observedAt}`.as('last_observed_at'),
   })
     .from(findingObservations)
@@ -394,6 +397,7 @@ export async function listFindings(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
+    observation_reason: observation.reason,
     first_observed_at: firstObservation.first_observed_at,
     last_observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,
@@ -451,6 +455,7 @@ export async function getFindingDetail(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
+    observation_reason: observation.reason,
     first_observed_at: firstObservation.first_observed_at,
     last_observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,

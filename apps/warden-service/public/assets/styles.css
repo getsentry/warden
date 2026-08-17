@@ -187,7 +187,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .finding-table th:nth-child(2) { width: 30%; }
 .finding-table th:nth-child(3) { width: 16%; }
 .finding-table th:nth-child(4) { width: 16%; }
-.finding-table th:nth-child(5) { width: 82px; }
+.finding-table th:nth-child(5) { width: 170px; }
 .finding-table th:nth-child(6),
 .finding-table th:nth-child(7) { width: 146px; }
 .finding-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; font-size: 12px; }
@@ -209,7 +209,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .finding-context, .finding-location { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .finding-skill { margin-top: 3px; color: var(--muted); }
 .finding-location { color: var(--muted-strong); font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.finding-status { color: var(--muted-strong); font-size: 11px; text-transform: capitalize; }
+.finding-status { color: var(--muted-strong); font-size: 11px; }
 .finding-status.posted, .finding-status.resolved, .finding-status.revised { color: var(--success); }
 .finding-table time { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .finding-detail-row > td { border-top: 0; padding: 0 12px 14px 112px; background: var(--surface-raised); }
@@ -226,6 +226,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .finding-page > .text-link { width: fit-content; font-size: 12px; }
 .finding-page-card { min-width: 0; padding: 24px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .finding-page-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.finding-reporting-note { margin: -8px 0 22px; padding: 12px 14px; border-left: 2px solid var(--medium); background: #1b1714; color: var(--muted-strong); font-size: 13px; line-height: 1.5; }
 .finding-page-section { min-width: 0; padding-top: 22px; border-top: 1px solid var(--border); }
 .finding-page-heading + .finding-page-section { padding-top: 0; border-top: 0; }
 .finding-page-section + .finding-page-section { margin-top: 24px; }
