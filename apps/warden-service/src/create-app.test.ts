@@ -108,7 +108,12 @@ describe('Vercel service app', () => {
     expect(script).toContain(
       "'Warden did not post this finding because the pull request changed before Warden finished. It refers to an older commit; the newer run reviews the updated code.'",
     );
-    expect(script).toContain("'This older run retained the finding but did not record what happened during review posting.'");
+    expect(script).toContain("fallback = 'Delivery not tracked'");
+    expect(script).toContain(
+      "'Warden did not record how this finding was delivered. Scheduled scans and older runs may omit this data.'",
+    );
+    expect(script).not.toContain('This older run retained the finding');
+    expect(script).toContain("element('td', findingOutcomeLabel(finding), `finding-status");
     expect(script).toContain("findingDetail('Reporting outcome', findingOutcomeDescription(finding))");
     expect(script).toContain("findingDetail('First observed'");
     expect(script).toContain("findingDetail('Last observed'");

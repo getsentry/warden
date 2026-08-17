@@ -57,7 +57,7 @@ function dateTime(value, fallback = 'Not reported') {
   return time;
 }
 
-function findingOutcomeLabel(finding, fallback = 'No posting record') {
+function findingOutcomeLabel(finding, fallback = 'Delivery not tracked') {
   if (finding.outcome === 'skipped' && finding.outcomeReason === 'pull_request_changed') {
     return 'Not posted: PR changed';
   }
@@ -73,7 +73,7 @@ function findingOutcomeDescription(finding) {
     return 'Skipped because Warden could not verify that the pull request was still current, so it did not add review feedback.';
   }
   if (!finding.outcome) {
-    return 'This older run retained the finding but did not record what happened during review posting.';
+    return 'Warden did not record how this finding was delivered. Scheduled scans and older runs may omit this data.';
   }
   return findingOutcomeLabel(finding);
 }
@@ -604,7 +604,7 @@ function findingRows(finding) {
   const location = element('td', locationText, 'finding-location');
   location.title = locationText;
 
-  const status = element('td', findingOutcomeLabel(finding, '—'), `finding-status ${finding.outcome ?? ''}`);
+  const status = element('td', findingOutcomeLabel(finding), `finding-status ${finding.outcome ?? ''}`);
   const firstObserved = document.createElement('td');
   firstObserved.append(dateTime(finding.firstObservedAt, '—'));
   const lastObserved = document.createElement('td');
