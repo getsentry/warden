@@ -67,6 +67,7 @@ export {
   listRuns,
   listSkills,
   summarizeOutcomes,
+  summarizeDashboard,
 } from './history/store.js';
 export {
   processJobSlice,

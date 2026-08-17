@@ -2,6 +2,7 @@ import type {
   CostAggregateResponse,
   CostBreakdownsResponse,
   CostGroup,
+  DashboardSummaryResponse,
   FindingDetailResponse,
   FindingFeedItem,
   FindingListResponse,
@@ -688,6 +689,11 @@ interface AggregateRow extends Record<string, unknown> {
   [key: `dimension_${number}`]: string;
 }
 
+interface DashboardCostRow extends Record<string, unknown> {
+  dimension_0: string;
+  cost_usd: string | number | null;
+}
+
 function mapAggregateRow(row: AggregateRow): Omit<CostGroup, 'dimensions'> {
   return {
     runs: Number(row.runs),
@@ -781,6 +787,47 @@ export async function aggregateCostBreakdowns(
       })),
     })),
   };
+}
+
+type DashboardCostDimension = 'day' | 'repository' | 'skill';
+
+async function aggregateDashboardCostRows(
+  database: WardenDatabase,
+  context: ServiceContext,
+  filters: HistoryFilters,
+  dimension: DashboardCostDimension,
+): Promise<DashboardCostRow[]> {
+  const read = getReadDatabase(database);
+  const conditions = historyWhere(read, context, filters, 'usage');
+  const dimensionExpression = dimensionSql[dimension];
+  const needsSkills = dimension === 'skill' || Boolean(filters.skill || filters.errorCode);
+  let query = read.select({
+    dimension_0: dimensionExpression.as('dimension_0'),
+    cost_usd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
+  })
+    .from(usageLineItems)
+    .innerJoin(runs, and(
+      eq(runs.id, usageLineItems.runId),
+      eq(runs.tenantId, usageLineItems.tenantId),
+    ))
+    .$dynamic();
+  if (dimension === 'repository') {
+    query = query.innerJoin(repositories, and(
+      eq(repositories.id, runs.repositoryId),
+      eq(repositories.tenantId, runs.tenantId),
+    ));
+  }
+  if (needsSkills) {
+    query = query.leftJoin(skillExecutions, and(
+      eq(skillExecutions.id, usageLineItems.skillExecutionId),
+      eq(skillExecutions.tenantId, usageLineItems.tenantId),
+    ));
+  }
+  const result = await query
+    .where(and(eq(usageLineItems.tenantId, context.tenantId), ...conditions))
+    .groupBy(dimensionExpression)
+    .orderBy(dimensionExpression);
+  return result as unknown as DashboardCostRow[];
 }
 
 /** List lightweight repository and skill values used by history filters. */
@@ -962,22 +1009,44 @@ export async function listSkills(database: WardenDatabase, contextInput: Service
   })) };
 }
 
+async function aggregateOutcomeRow(
+  database: WardenDatabase,
+  context: ServiceContext,
+  filters: HistoryFilters,
+) {
+  const read = getReadDatabase(database);
+  const conditions = historyWhere(read, context, filters);
+  const rows = await read.select({
+    runs: sql<number>`COUNT(*)::integer`.as('runs'),
+    successful: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'success')::integer`.as('successful'),
+    failed: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'failure')::integer`.as('failed'),
+    cancelled: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'cancelled')::integer`.as('cancelled'),
+    skipped: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'skipped')::integer`.as('skipped'),
+    findings: sql<number>`COALESCE(SUM(${runs.findingCount}), 0)::integer`.as('findings'),
+  })
+    .from(runs)
+    .where(and(...conditions));
+  return rows[0];
+}
+
+function mapOutcomeRow(row: Awaited<ReturnType<typeof aggregateOutcomeRow>>) {
+  return {
+    runs: Number(row?.runs ?? 0),
+    successful: Number(row?.successful ?? 0),
+    failed: Number(row?.failed ?? 0),
+    cancelled: Number(row?.cancelled ?? 0),
+    skipped: Number(row?.skipped ?? 0),
+    findings: Number(row?.findings ?? 0),
+  };
+}
+
 /** Return run outcome denominators and nullable total cost for the authorized tenant. */
 export async function summarizeOutcomes(database: WardenDatabase, contextInput: ServiceContext | undefined, filters: HistoryFilters): Promise<OutcomeSummaryResponse> {
   const context = requireServiceContext(contextInput);
   const read = getReadDatabase(database);
   const conditions = historyWhere(read, context, filters);
-  const [totalRows, costRows] = await Promise.all([
-    read.select({
-      runs: sql<number>`COUNT(*)::integer`.as('runs'),
-      successful: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'success')::integer`.as('successful'),
-      failed: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'failure')::integer`.as('failed'),
-      cancelled: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'cancelled')::integer`.as('cancelled'),
-      skipped: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'skipped')::integer`.as('skipped'),
-      findings: sql<number>`COALESCE(SUM(${runs.findingCount}), 0)::integer`.as('findings'),
-    })
-      .from(runs)
-      .where(and(...conditions)),
+  const [row, costRows] = await Promise.all([
+    aggregateOutcomeRow(database, context, filters),
     read.select({
       costUsd: sql<string | number | null>`SUM(${usageLineItems.costUsd})`.as('cost_usd'),
     })
@@ -988,14 +1057,41 @@ export async function summarizeOutcomes(database: WardenDatabase, contextInput: 
       ))
       .where(and(eq(usageLineItems.tenantId, context.tenantId), ...conditions)),
   ]);
-  const row = totalRows[0];
   return { totals: {
-    runs: Number(row?.runs ?? 0),
-    successful: Number(row?.successful ?? 0),
-    failed: Number(row?.failed ?? 0),
-    cancelled: Number(row?.cancelled ?? 0),
-    skipped: Number(row?.skipped ?? 0),
-    findings: Number(row?.findings ?? 0),
+    ...mapOutcomeRow(row),
     costUsd: numberOrNull(costRows[0]?.costUsd ?? null),
   } };
+}
+
+/** Load the outcome and cost-only aggregates rendered by the dashboard. */
+export async function summarizeDashboard(
+  database: WardenDatabase,
+  contextInput: ServiceContext | undefined,
+  filters: HistoryFilters,
+): Promise<DashboardSummaryResponse> {
+  const context = requireServiceContext(contextInput);
+  const dimensions = ['day', 'repository', 'skill'] as const;
+  const [outcome, ...rowsByDimension] = await Promise.all([
+    aggregateOutcomeRow(database, context, filters),
+    ...dimensions.map((dimension) => aggregateDashboardCostRows(database, context, filters, dimension)),
+  ]);
+  const dayCosts = rowsByDimension[0] ?? [];
+  const knownDayCosts = dayCosts
+    .map((row) => numberOrNull(row.cost_usd))
+    .filter((cost): cost is number => cost !== null);
+  return {
+    totals: {
+      ...mapOutcomeRow(outcome),
+      costUsd: knownDayCosts.length > 0
+        ? knownDayCosts.reduce((total, cost) => total + cost, 0)
+        : null,
+    },
+    breakdowns: dimensions.map((dimension, index) => ({
+      dimension,
+      groups: (rowsByDimension[index] ?? []).map((row) => ({
+        dimensions: { [dimension]: String(row.dimension_0) },
+        costUsd: numberOrNull(row.cost_usd),
+      })),
+    })),
+  };
 }
