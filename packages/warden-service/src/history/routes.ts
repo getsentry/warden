@@ -1,6 +1,7 @@
 import {
   CostAggregateResponseSchema,
   CostBreakdownsResponseSchema,
+  DashboardSummaryResponseSchema,
   FindingDetailResponseSchema,
   FindingListResponseSchema,
   HistoryDimensionsResponseSchema,
@@ -25,6 +26,7 @@ import {
   listRepositories,
   listRuns,
   listSkills,
+  summarizeDashboard,
   summarizeOutcomes,
   HistoryCursorSchema,
 } from './store.js';
@@ -154,6 +156,16 @@ export function registerHistoryRoutes(app: Hono<{ Variables: ServiceVariables }>
     const filters = parseQuery(QuerySchema, context.req.query());
     if (!filters) return context.json({ error: { code: 'invalid_query', message: 'Outcome filters are not valid.' } }, 400);
     return context.json(OutcomeSummaryResponseSchema.parse(await summarizeOutcomes(
+      database,
+      context.get('serviceContext'),
+      filters as HistoryFilters,
+    )));
+  });
+
+  app.get('/api/v1/dashboard/summary', requireRole('read'), async (context) => {
+    const filters = parseQuery(QuerySchema, context.req.query());
+    if (!filters) return context.json({ error: { code: 'invalid_query', message: 'Dashboard filters are not valid.' } }, 400);
+    return context.json(DashboardSummaryResponseSchema.parse(await summarizeDashboard(
       database,
       context.get('serviceContext'),
       filters as HistoryFilters,

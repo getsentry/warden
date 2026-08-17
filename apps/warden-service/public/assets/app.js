@@ -683,16 +683,13 @@ async function renderExplore(version) {
   if (params.get('cursor')) findings.set('cursor', params.get('cursor'));
   findings.set('limit', '30');
 
-  const costBreakdowns = new URLSearchParams(common);
-  costBreakdowns.set('groupBy', 'day,repository,skill');
-  const [outcomes, feed, costs] = await Promise.all([
-    api(apiPath('/api/v1/outcomes/summary', common)),
+  const [summary, feed] = await Promise.all([
+    api(apiPath('/api/v1/dashboard/summary', common)),
     api(apiPath('/api/v1/findings', findings)),
-    api(apiPath('/api/v1/costs/breakdowns', costBreakdowns)),
   ]);
   if (version !== renderVersion) return;
-  const breakdown = (dimension) => costs.breakdowns.find((item) => item.dimension === dimension) ?? { groups: [] };
-  const totals = outcomes.totals;
+  const breakdown = (dimension) => summary.breakdowns.find((item) => item.dimension === dimension) ?? { groups: [] };
+  const totals = summary.totals;
   const section = document.createDocumentFragment();
   section.append(metrics([
     ['Runs', formatNumber(totals.runs)],

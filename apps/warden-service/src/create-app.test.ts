@@ -67,9 +67,8 @@ describe('Vercel service app', () => {
     expect(script).toContain("`/findings/${encodeURIComponent(finding.id)}`");
     expect(script).toContain('finding.displayId');
     expect(script).toContain("api('/api/v1/history/dimensions')");
-    expect(script).toContain("costBreakdowns.set('groupBy', 'day,repository,skill')");
-    expect(script).toContain('const [outcomes, feed, costs] = await Promise.all([');
-    expect(script).toContain("api(apiPath('/api/v1/costs/breakdowns', costBreakdowns))");
+    expect(script).toContain('const [summary, feed] = await Promise.all([');
+    expect(script).toContain("api(apiPath('/api/v1/dashboard/summary', common))");
     expect(script).toContain('function renderFilters()');
     expect(script).not.toContain('async function renderFilters');
     const renderFilters = script.slice(script.indexOf('function renderFilters()'), script.indexOf('function commonApiParams'));
@@ -131,6 +130,9 @@ describe('Vercel service app', () => {
     const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
 
     expect(script).toContain("const DEFAULT_RANGE_DAYS = '30';");
+    expect(script).toContain("'/api/v1/dashboard/summary'");
+    expect(script).not.toContain("'/api/v1/costs/breakdowns'");
+    expect(script).not.toContain("'/api/v1/outcomes/summary'");
     expect(script).toContain("{ value: 'all', label: 'All time' }");
     expect(script).toContain("params.set('range', DEFAULT_RANGE_DAYS)");
     expect(script).toMatch(/ensureDefaultRange\(\);\s+await renderExplore\(version\);/);

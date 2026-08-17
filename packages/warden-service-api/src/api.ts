@@ -195,6 +195,20 @@ export const OutcomeSummaryResponseSchema = z.object({
 }).strict();
 export type OutcomeSummaryResponse = z.infer<typeof OutcomeSummaryResponseSchema>;
 
+const DashboardCostGroupSchema = CostGroupSchema.pick({
+  dimensions: true,
+  costUsd: true,
+});
+
+export const DashboardSummaryResponseSchema = z.object({
+  totals: OutcomeSummaryResponseSchema.shape.totals,
+  breakdowns: z.array(z.object({
+    dimension: z.enum(['day', 'repository', 'skill']),
+    groups: z.array(DashboardCostGroupSchema),
+  }).strict()),
+}).strict();
+export type DashboardSummaryResponse = z.infer<typeof DashboardSummaryResponseSchema>;
+
 export const MemoryKindSchema = z.enum(['convention', 'confirmed_pattern', 'false_positive', 'review_guidance']);
 export const MemoryLifecycleSchema = z.enum(['candidate', 'active', 'superseded', 'archived', 'expired']);
 

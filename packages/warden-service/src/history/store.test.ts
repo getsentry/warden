@@ -11,6 +11,7 @@ import {
   listRepositories,
   listRuns,
   listSkills,
+  summarizeDashboard,
   summarizeOutcomes,
 } from './store.js';
 
@@ -324,9 +325,10 @@ describe('history store', () => {
     await listSkills(database, restricted);
     await listHistoryDimensions(database, restricted);
     await summarizeOutcomes(database, restricted, {});
+    await summarizeDashboard(database, restricted, {});
     await aggregateCosts(database, restricted, {}, ['repository']);
 
-    expect(statements).toHaveLength(15);
+    expect(statements).toHaveLength(19);
     for (const statement of statements) {
       expect(statement.sql).toContain('"full_name" in');
       expect(statement.values).toContain('acme/widgets');
@@ -459,6 +461,58 @@ describe('history store', () => {
     expect(repository).not.toContain('join "skill_executions"');
     expect(skill).toContain('join "skill_executions"');
     expect(skill).not.toContain('join "repositories"');
+  });
+
+  it('loads dashboard costs without calculating unused usage totals', async () => {
+    const statements: string[] = [];
+    const database = databaseFor((sql) => {
+      statements.push(sql);
+      if (sql.includes('COUNT(*)')) {
+        return { rows: [{
+          runs: 3,
+          successful: 2,
+          failed: 1,
+          cancelled: 0,
+          skipped: 0,
+          findings: 4,
+        }], rowCount: 1 };
+      }
+      const dimension = sql.includes("date_trunc('day'")
+        ? '2026-08-15'
+        : sql.includes('"repositories"."full_name" as "dimension_0"')
+          ? 'acme/widgets'
+          : 'security';
+      return {
+        rows: [{ dimension_0: dimension, cost_usd: '0.01' }],
+        rowCount: 1,
+      };
+    });
+
+    const response = await summarizeDashboard(database, context, {});
+
+    expect(response.totals).toEqual({
+      runs: 3,
+      successful: 2,
+      failed: 1,
+      cancelled: 0,
+      skipped: 0,
+      findings: 4,
+      costUsd: 0.01,
+    });
+    expect(response.breakdowns.map((item) => item.groups[0])).toEqual([
+      { dimensions: { day: '2026-08-15' }, costUsd: 0.01 },
+      { dimensions: { repository: 'acme/widgets' }, costUsd: 0.01 },
+      { dimensions: { skill: 'security' }, costUsd: 0.01 },
+    ]);
+    expect(statements).toHaveLength(4);
+    const costStatements = statements.filter((statement) => statement.includes('from "usage_line_items"'));
+    expect(costStatements).toHaveLength(3);
+    for (const statement of costStatements) {
+      expect(statement).toContain('SUM("usage_line_items"."cost_usd")');
+      expect(statement).not.toContain('input_tokens');
+      expect(statement).not.toContain('output_tokens');
+      expect(statement).not.toContain('COUNT(DISTINCT');
+    }
   });
 
   it('returns not found for a run ID absent from the authenticated tenant', async () => {

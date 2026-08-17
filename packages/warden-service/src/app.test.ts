@@ -353,6 +353,27 @@ describe('createWardenService', () => {
             runs: 1, input_tokens: '100', output_tokens: '20', cost_usd: '0.012',
           }] as unknown as TRow[], rowCount: 1 };
         }
+        if (sql.includes('from "runs"') && sql.includes('COUNT(*)')) {
+          return { rows: [{
+            runs: 1,
+            successful: 1,
+            failed: 0,
+            cancelled: 0,
+            skipped: 0,
+            findings: 1,
+          }] as unknown as TRow[], rowCount: 1 };
+        }
+        if (sql.includes('from "usage_line_items"') && sql.includes('SUM("usage_line_items"."cost_usd")')) {
+          const dimension = sql.includes("date_trunc('day'")
+            ? '2026-08-15'
+            : sql.includes('"repositories"."full_name" as "dimension_0"')
+              ? 'acme/widgets'
+              : 'security';
+          return { rows: [{
+            dimension_0: dimension,
+            cost_usd: '0.012',
+          }] as unknown as TRow[], rowCount: 1 };
+        }
         throw new Error(`unexpected query: ${sql} ${JSON.stringify(values)}`);
       },
     } satisfies WardenDatabase;
@@ -407,6 +428,25 @@ describe('createWardenService', () => {
       ],
     });
     expect((await app.request('/api/v1/costs/breakdowns?groupBy=day,day')).status).toBe(400);
+
+    const dashboard = await app.request('/api/v1/dashboard/summary?skill=security');
+    expect(dashboard.status).toBe(200);
+    await expect(dashboard.json()).resolves.toEqual({
+      totals: {
+        runs: 1,
+        successful: 1,
+        failed: 0,
+        cancelled: 0,
+        skipped: 0,
+        findings: 1,
+        costUsd: 0.012,
+      },
+      breakdowns: [
+        { dimension: 'day', groups: [{ dimensions: { day: '2026-08-15' }, costUsd: 0.012 }] },
+        { dimension: 'repository', groups: [{ dimensions: { repository: 'acme/widgets' }, costUsd: 0.012 }] },
+        { dimension: 'skill', groups: [{ dimensions: { skill: 'security' }, costUsd: 0.012 }] },
+      ],
+    });
 
     expect((await app.request('/api/v1/runs?cursor=not-a-cursor')).status).toBe(400);
   });
