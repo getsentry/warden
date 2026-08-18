@@ -2,9 +2,12 @@
  * Source resolver for `warden inspect`.
  *
  * Preference order (ISC-6, ISC-11, ISC-12):
- *   1. `finding.sourceSnippet` already attached to the finding → `kind: 'snippet'`
- *   2. Readable `finding.location.path` on disk                → `kind: 'file'`
+ *   1. Readable `finding.location.path` on disk                → `kind: 'file'`
+ *   2. `finding.sourceSnippet` already attached to the finding → `kind: 'snippet'`
  *   3. Everything else                                         → `kind: 'empty'`
+ *
+ * The working-tree file is preferred so the pane can show surrounding context.
+ * The logged snippet is a fallback when the file is missing or unreadable.
  *
  * This module is pure TypeScript — no Ink, no CLI dispatch.
  */
@@ -82,7 +85,13 @@ export function resolveSource(
   finding: Finding,
   options: ResolveSourceOptions = {},
 ): ResolvedSource {
-  // 1. Prefer attached snippet (ISC-6, ISC-11).
+  // 1. Prefer the working-tree file so the pane has full surrounding context.
+  if (finding.location?.path) {
+    const fileSource = hydrateFromDisk(finding, options);
+    if (fileSource) return fileSource;
+  }
+
+  // 2. Fall back to the logged snippet when the file is missing or unreadable.
   if (finding.sourceSnippet) {
     return {
       kind: 'snippet',
@@ -91,28 +100,31 @@ export function resolveSource(
     };
   }
 
-  // 2. Hydrate from working tree.
   if (!finding.location?.path) {
     return { kind: 'empty', reason: 'No source location available.' };
   }
 
-  const locationPath = finding.location.path;
-  const resolved = resolvePath(locationPath, options.repoRoot, options.cwd);
-  if (!resolved) {
-    return {
-      kind: 'empty',
-      reason: `Source file not found: ${locationPath}`,
-    };
-  }
+  return {
+    kind: 'empty',
+    reason: `Source file not found: ${finding.location.path}`,
+  };
+}
+
+function hydrateFromDisk(
+  finding: Finding,
+  options: ResolveSourceOptions,
+): FileSource | undefined {
+  const location = finding.location;
+  if (!location?.path) return undefined;
+
+  const resolved = resolvePath(location.path, options.repoRoot, options.cwd);
+  if (!resolved) return undefined;
 
   let content: string;
   try {
     content = readFileSync(resolved.absolutePath, 'utf-8');
   } catch {
-    return {
-      kind: 'empty',
-      reason: `Cannot read source file: ${locationPath}`,
-    };
+    return undefined;
   }
 
   const lines = content.split('\n');
@@ -121,17 +133,15 @@ export function resolveSource(
     lines.pop();
   }
 
-  const relativePath = resolved.relativePath;
-
   return {
     kind: 'file',
-    title: `Source - File: ${relativePath}`,
+    title: `Source - File: ${resolved.relativePath}`,
     absolutePath: resolved.absolutePath,
-    relativePath,
+    relativePath: resolved.relativePath,
     lines,
-    startLine: finding.location.startLine,
-    endLine: finding.location.endLine,
-    language: languageFromPath(locationPath),
+    startLine: location.startLine,
+    endLine: location.endLine,
+    language: languageFromPath(location.path),
   };
 }
 

@@ -97,7 +97,7 @@ describe('resolveSource', () => {
     expect(result.kind).toBe('empty');
   });
 
-  it('snippet takes priority over a matching file on disk', () => {
+  it('prefers the working-tree file over an attached snippet', () => {
     writeFileSync(join(tempDir, 'foo.ts'), 'file content\n');
     const snippet = {
       path: 'foo.ts',
@@ -112,7 +112,29 @@ describe('resolveSource', () => {
       sourceSnippet: snippet,
     });
     const result = resolveSource(finding, { repoRoot: tempDir });
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') throw new Error('unreachable');
+    expect(result.title).toBe('Source - File: foo.ts');
+    expect(result.lines).toEqual(['file content']);
+  });
+
+  it('falls back to the snippet when the file is missing', () => {
+    const snippet = {
+      path: 'missing.ts',
+      startLine: 1,
+      endLine: 1,
+      targetStartLine: 1,
+      targetEndLine: 1,
+      lines: [{ line: 1, content: 'snippet content', highlighted: true }],
+    };
+    const finding = makeFinding({
+      location: { path: 'missing.ts', startLine: 1 },
+      sourceSnippet: snippet,
+    });
+    const result = resolveSource(finding, { repoRoot: tempDir });
     expect(result.kind).toBe('snippet');
+    if (result.kind !== 'snippet') throw new Error('unreachable');
+    expect(result.title).toBe('Source - Snippet');
   });
 
   it('falls back to cwd when file is not under repoRoot', () => {
