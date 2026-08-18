@@ -65,6 +65,7 @@ import { runSync } from './commands/sync.js';
 import { runRuns } from './commands/runs.js';
 import { runBuild, runImprove } from './commands/build.js';
 import { runServiceCommand } from './commands/service.js';
+import { runInspect } from './commands/inspect.js';
 import {
   generatedSkillDefinitionRootExists,
   resolveGeneratedSkillTarget,
@@ -2019,7 +2020,7 @@ async function runCommand(options: CLIOptions, reporter: Reporter): Promise<numb
 
 /** Parse CLI input, dispatch the selected command, and perform shutdown cleanup. */
 export async function main(): Promise<void> {
-  const { command, options, helpTarget, setupAppOptions, runsOptions, serviceOptions } = parseCliArgs();
+  const { command, options, helpTarget, setupAppOptions, runsOptions, serviceOptions, inspectOptions } = parseCliArgs();
 
   if (command === 'help') {
     showHelp(helpTarget);
@@ -2101,6 +2102,12 @@ export async function main(): Promise<void> {
           return runBuild(options, reporter, { abortController, interrupted });
         case 'improve':
           return runImprove(options, reporter, { abortController, interrupted });
+        case 'inspect':
+          if (!inspectOptions) {
+            reporter.error('Missing inspect options');
+            return 1;
+          }
+          return runInspect(inspectOptions, options, reporter);
         default:
           return runCommand(options, reporter);
       }

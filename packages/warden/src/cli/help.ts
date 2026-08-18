@@ -55,7 +55,8 @@ export type HelpTarget =
   | 'runs:show'
   | 'runs:follow'
   | 'runs:gc'
-  | 'service';
+  | 'service'
+  | 'inspect';
 
 interface HelpOptionSpec {
   label: string;
@@ -474,6 +475,19 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden runs gc',
     ],
   },
+  inspect: {
+    summary: 'Interactively review findings from a saved log',
+    description: 'Open an interactive TUI to review findings from a saved Warden JSONL log. Verdicts are persisted to .warden/reviews/ without touching the log.',
+    usage: ['warden inspect <id> [options]'],
+    arguments: [
+      { label: 'id', description: 'JSONL path or short run ID (same as warden runs show)' },
+    ],
+    options: ['cwd', ...SHARED_COMMAND_OPTIONS],
+    examples: [
+      'warden inspect deadbeef',
+      'warden inspect .warden/logs/a1b2c3d4-2026-08-18T09-11-07-000Z.jsonl',
+    ],
+  },
   service: {
     summary: 'Publish a saved run to the backing service',
     description: 'Replay a completed JSONL or findings-output artifact through the current validation and data-profile boundary.',
@@ -504,6 +518,7 @@ const ROOT_COMMANDS: { label: string; summary: string }[] = [
   { label: 'sync [remote]', summary: 'Update cached remote skills to latest' },
   { label: 'build <skill>', summary: 'Build a repo-local generated skill' },
   { label: 'runs', summary: 'Inspect saved sessions and run logs' },
+  { label: 'inspect <id>', summary: 'Interactively review findings from a saved log' },
   { label: 'service replay', summary: 'Publish a saved run to the backing service' },
   { label: 'setup-app', summary: 'Create a GitHub App via manifest flow' },
   { label: 'help [command]', summary: 'Show help for a command' },

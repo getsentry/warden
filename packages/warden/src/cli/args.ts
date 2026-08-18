@@ -91,13 +91,19 @@ export interface ServiceCommandOptions {
   artifact: string;
 }
 
+export interface InspectOptions {
+  /** JSONL path or short run ID to inspect. */
+  target: string;
+}
+
 export interface ParsedArgs {
-  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'service' | 'build' | 'improve';
+  command: 'run' | 'help' | 'init' | 'add' | 'version' | 'setup-app' | 'sync' | 'runs' | 'service' | 'build' | 'improve' | 'inspect';
   options: CLIOptions;
   helpTarget?: HelpTarget;
   setupAppOptions?: SetupAppOptions;
   runsOptions?: RunsOptions;
   serviceOptions?: ServiceCommandOptions;
+  inspectOptions?: InspectOptions;
 }
 
 export function showVersion(): void {
@@ -172,6 +178,8 @@ function resolveHelpTarget(tokens: string[], values: ParsedOptionValues): HelpTa
       return 'runs';
     case 'service':
       return 'service';
+    case 'inspect':
+      return 'inspect';
     case 'help':
     case 'version':
       return undefined;
@@ -503,6 +511,21 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
         name: typeof values.name === 'string' ? values.name : undefined,
         open: !values['no-open'],
       },
+    };
+  }
+
+  if (command === 'inspect') {
+    if (!rest[0]) {
+      return {
+        command: 'help',
+        options: parseCliOptions({ ...sharedOptions(values, verboseCount), help: true }),
+        helpTarget: 'inspect',
+      };
+    }
+    return {
+      command: 'inspect',
+      options: parseCliOptions(sharedOptions(values, verboseCount)),
+      inspectOptions: { target: rest[0] },
     };
   }
 

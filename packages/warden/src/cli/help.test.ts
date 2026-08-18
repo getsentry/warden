@@ -52,4 +52,20 @@ describe('renderHelp', () => {
     expect(output).toContain('--min-confidence <level>');
     expect(output).toContain('--report-on <severity>');
   });
+
+  it('renders inspect help with usage and argument', () => {
+    const output = renderHelp('inspect');
+
+    expect(output).toContain('warden inspect <id> [options]');
+    expect(output).toContain('JSONL path or short run ID');
+    expect(output).not.toContain('--json');
+    expect(output).not.toContain('--skill');
+  });
+
+  it('includes inspect in root help commands', () => {
+    const output = renderHelp();
+
+    expect(output).toContain('inspect <id>');
+    expect(output).toContain('Interactively review findings');
+  });
 });

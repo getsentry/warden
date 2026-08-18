@@ -28,7 +28,7 @@ import {
 /**
  * Resolve a log directory path from the repo root.
  */
-function resolveLogDir(): { logDir: string; repoPath: string } | undefined {
+export function resolveLogDir(): { logDir: string; repoPath: string } | undefined {
   const cwd = process.cwd();
   let repoPath: string;
   try {
@@ -57,7 +57,7 @@ function filenameTimestamp(filename: string): string {
  * Resolve a file argument to a full path.
  * If the argument looks like a run ID (no `/` or `.`), look up matching files in .warden/logs/.
  */
-function resolveFileArg(arg: string, logDir: string): string[] {
+export function resolveFileArg(arg: string, logDir: string): string[] {
   // If it contains path separators or dots, treat as a file path
   if (arg.includes('/') || arg.includes('.')) {
     return [resolve(process.cwd(), arg)];

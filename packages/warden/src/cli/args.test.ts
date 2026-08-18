@@ -597,6 +597,39 @@ describe('parseCliArgs', () => {
     expect(result.runsOptions!.subcommand).toBe('show');
     expect(result.runsOptions!.files).toEqual(['deadbeef']);
   });
+
+  // ISC-1: inspect command parsing
+  it('parses inspect command with a short run ID', () => {
+    const result = parseCliArgs(['inspect', 'deadbeef']);
+    expect(result.command).toBe('inspect');
+    expect(result.inspectOptions!.target).toBe('deadbeef');
+  });
+
+  it('parses inspect command with a path target', () => {
+    const result = parseCliArgs(['inspect', '.warden/logs/abc.jsonl']);
+    expect(result.command).toBe('inspect');
+    expect(result.inspectOptions!.target).toBe('.warden/logs/abc.jsonl');
+  });
+
+  it('falls through to inspect help when no target is given', () => {
+    const result = parseCliArgs(['inspect']);
+    expect(result.command).toBe('help');
+    expect(result.helpTarget).toBe('inspect');
+  });
+
+  // ISC-A-5: warden run inspect stays as a run target, not the inspect command
+  it('treats warden run inspect as a run target (ISC-A-5)', () => {
+    const result = parseCliArgs(['run', 'inspect']);
+    expect(result.command).toBe('run');
+    expect(result.options.targets).toContain('inspect');
+  });
+
+  // ISC-A-5: bare targets still fall through to run, not inspect
+  it('bare target does not become inspect command (ISC-A-5)', () => {
+    const result = parseCliArgs(['src/auth.ts']);
+    expect(result.command).toBe('run');
+    expect(result.options.targets).toContain('src/auth.ts');
+  });
 });
 
 describe('CLIOptionsSchema', () => {
