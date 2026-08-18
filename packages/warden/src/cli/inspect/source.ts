@@ -149,6 +149,24 @@ function hydrateFromDisk(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Candidate relative paths for a logged location.
+ *
+ * Some logs store a path that already includes a parent of the repo
+ * (`packages/warden/src/foo.ts` while repoRoot is the monorepo root, or
+ * `warden/src/foo.ts` while cwd is `packages/warden`). Walk suffixes until
+ * one exists under a known base.
+ */
+function locationCandidates(locationPath: string): string[] {
+  const normalized = locationPath.replace(/\\/g, '/').replace(/^\.\/+/, '');
+  const parts = normalized.split('/').filter(Boolean);
+  const candidates: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    candidates.push(parts.slice(i).join('/'));
+  }
+  return candidates;
+}
+
 function resolvePath(
   locationPath: string,
   repoRoot?: string,
@@ -168,14 +186,16 @@ function resolvePath(
   const bases = [repoRoot, cwd, process.cwd()].filter((b): b is string => Boolean(b));
   const seen = new Set<string>();
   for (const base of bases) {
-    const candidate = join(base, locationPath);
-    if (seen.has(candidate)) continue;
-    seen.add(candidate);
-    if (existsSync(candidate)) {
-      return {
-        absolutePath: candidate,
-        relativePath: locationPath,
-      };
+    for (const candidateRel of locationCandidates(locationPath)) {
+      const candidate = join(base, candidateRel);
+      if (seen.has(candidate)) continue;
+      seen.add(candidate);
+      if (existsSync(candidate)) {
+        return {
+          absolutePath: candidate,
+          relativePath: relative(base, candidate) || candidateRel,
+        };
+      }
     }
   }
 

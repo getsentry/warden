@@ -137,6 +137,22 @@ describe('resolveSource', () => {
     expect(result.title).toBe('Source - Snippet');
   });
 
+  it('strips a leading parent directory from location.path', () => {
+    mkdirSync(join(tempDir, 'src'), { recursive: true });
+    writeFileSync(join(tempDir, 'src', 'foo.ts'), 'real file\n');
+
+    const finding = makeFinding({
+      location: { path: 'warden/src/foo.ts', startLine: 1 },
+    });
+    const result = resolveSource(finding, { repoRoot: tempDir });
+
+    expect(result.kind).toBe('file');
+    if (result.kind !== 'file') throw new Error('unreachable');
+    expect(result.title).toBe('Source - File: src/foo.ts');
+    expect(result.relativePath).toBe('src/foo.ts');
+    expect(result.lines).toEqual(['real file']);
+  });
+
   it('falls back to cwd when file is not under repoRoot', () => {
     const subDir = join(tempDir, 'sub');
     mkdirSync(subDir);
