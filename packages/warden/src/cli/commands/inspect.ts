@@ -5,9 +5,8 @@
  * validates that the file exists and is readable, refuses non-TTY environments,
  * then loads the session and hands off to the Ink TUI render hook.
  *
- * The Ink panes are built in a later todo.  This file wires up all the error
- * paths and calls a stub render hook so the rest of the CLI layer can be
- * tested independently.
+ * The default render hook opens an alternate-screen Ink TUI (InspectApp).
+ * Tests may inject a stub render hook via the `render` parameter.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -33,29 +32,39 @@ export interface InspectContext {
   logPath: string;
   repoRoot: string;
   runId: string;
+  /** Working-directory from the JSONL log, used as a secondary source base. */
+  logCwd?: string;
   session: ReturnType<typeof buildInspectSession>;
 }
 
 /**
- * Render hook — swapped out by the TUI implementation in the next todo.
+ * Render hook — injectable for testing; defaults to the Ink TUI.
  * Returns a Promise<number> exit code.
  */
 export type RenderInspect = (ctx: InspectContext) => Promise<number>;
 
 // ---------------------------------------------------------------------------
-// Default stub render hook
+// Default Ink render hook
 // ---------------------------------------------------------------------------
 
 /**
- * Stub render hook used until the Ink TUI lands.
- * Prints a one-line summary so the command is usable for smoke-testing now.
+ * Default render hook: opens the alternate-screen Ink TUI.
  */
-const stubRender: RenderInspect = async (ctx) => {
-  const { session } = ctx;
-  const total = session.unreviewed.length + session.reviewed.length;
-  process.stdout.write(
-    `[inspect stub] ${total} finding(s) loaded from ${ctx.logPath}\n`,
+const inkRender: RenderInspect = async (ctx) => {
+  const { render } = await import('ink');
+  const React = (await import('react')).default;
+  const { InspectApp } = await import('../inspect/app.js');
+
+  const { waitUntilExit } = render(
+    React.createElement(InspectApp, {
+      session: ctx.session,
+      repoRoot: ctx.repoRoot,
+      logCwd: ctx.logCwd,
+    }),
+    { alternateScreen: true, exitOnCtrlC: true },
   );
+
+  await waitUntilExit();
   return 0;
 };
 
@@ -75,7 +84,7 @@ export async function runInspect(
   inspectOptions: InspectOptions,
   options: CLIOptions,
   reporter: Reporter,
-  render: RenderInspect = stubRender,
+  render: RenderInspect = inkRender,
 ): Promise<number> {
   // 1. Non-TTY check — the TUI requires an interactive terminal.
   if (!reporter.mode.isTTY) {
@@ -162,8 +171,8 @@ export async function runInspect(
   // 7. Build the session model.
   const session = buildInspectSession(parsed.reports, reviewFile);
 
-  // 8. Hand off to the render hook (stub for now; replaced by Ink TUI later).
-  return render({ logPath, repoRoot, runId, session });
+  // 8. Hand off to the render hook (Ink TUI by default).
+  return render({ logPath, repoRoot, runId, logCwd: parsed.runMetadata?.cwd, session });
 }
 
 // ---------------------------------------------------------------------------
