@@ -1,0 +1,215 @@
+/**
+ * Source resolver for `warden inspect`.
+ *
+ * Preference order (ISC-6, ISC-11, ISC-12):
+ *   1. `finding.sourceSnippet` already attached to the finding → `kind: 'snippet'`
+ *   2. Readable `finding.location.path` on disk                → `kind: 'file'`
+ *   3. Everything else                                         → `kind: 'empty'`
+ *
+ * This module is pure TypeScript — no Ink, no CLI dispatch.
+ */
+
+import { existsSync, readFileSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
+import type { Finding, SourceSnippet } from '../../types/index.js';
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+/** The source came from `finding.sourceSnippet`. Title: `Source - Snippet` */
+export interface SnippetSource {
+  kind: 'snippet';
+  /** Exact title string required by ISC-6. */
+  title: 'Source - Snippet';
+  snippet: SourceSnippet;
+}
+
+/** The source was hydrated from the working tree. Title: `Source - File: <rel>` */
+export interface FileSource {
+  kind: 'file';
+  /** Exact title string required by ISC-6, e.g. `Source - File: src/foo.ts` */
+  title: string;
+  /** Absolute path that was read. */
+  absolutePath: string;
+  /** Relative path used in the title (relative to repoRoot). */
+  relativePath: string;
+  /** Full file content split into lines (1-indexed via `lines[lineNo - 1]`). */
+  lines: string[];
+  /** 1-based start of the finding range, or undefined when location is absent. */
+  startLine?: number;
+  /** 1-based end of the finding range, or undefined when location is absent. */
+  endLine?: number;
+  /** Language hint from `finding.location.path` extension, or undefined. */
+  language?: string;
+}
+
+/** No source is available (no snippet, unreadable/absent file, no location). */
+export interface EmptySource {
+  kind: 'empty';
+  reason: string;
+}
+
+export type ResolvedSource = SnippetSource | FileSource | EmptySource;
+
+// ---------------------------------------------------------------------------
+// Options
+// ---------------------------------------------------------------------------
+
+export interface ResolveSourceOptions {
+  /**
+   * Repo root used to resolve relative `location.path` values.
+   * Falls back to `cwd` when omitted.
+   */
+  repoRoot?: string;
+  /**
+   * Working directory recorded in the JSONL log (`run.cwd`).
+   * Used as a secondary base when the path cannot be found under `repoRoot`.
+   */
+  cwd?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Resolver
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the source view for a single finding.
+ *
+ * Never throws — if anything goes wrong the result is `kind: 'empty'`.
+ */
+export function resolveSource(
+  finding: Finding,
+  options: ResolveSourceOptions = {},
+): ResolvedSource {
+  // 1. Prefer attached snippet (ISC-6, ISC-11).
+  if (finding.sourceSnippet) {
+    return {
+      kind: 'snippet',
+      title: 'Source - Snippet',
+      snippet: finding.sourceSnippet,
+    };
+  }
+
+  // 2. Hydrate from working tree.
+  if (!finding.location?.path) {
+    return { kind: 'empty', reason: 'No source location available.' };
+  }
+
+  const locationPath = finding.location.path;
+  const resolved = resolvePath(locationPath, options.repoRoot, options.cwd);
+  if (!resolved) {
+    return {
+      kind: 'empty',
+      reason: `Source file not found: ${locationPath}`,
+    };
+  }
+
+  let content: string;
+  try {
+    content = readFileSync(resolved.absolutePath, 'utf-8');
+  } catch {
+    return {
+      kind: 'empty',
+      reason: `Cannot read source file: ${locationPath}`,
+    };
+  }
+
+  const lines = content.split('\n');
+  // Remove a trailing empty element caused by a final newline.
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+
+  const relativePath = resolved.relativePath;
+
+  return {
+    kind: 'file',
+    title: `Source - File: ${relativePath}`,
+    absolutePath: resolved.absolutePath,
+    relativePath,
+    lines,
+    startLine: finding.location.startLine,
+    endLine: finding.location.endLine,
+    language: languageFromPath(locationPath),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function resolvePath(
+  locationPath: string,
+  repoRoot?: string,
+  cwd?: string,
+): { absolutePath: string; relativePath: string } | undefined {
+  // Absolute paths are used as-is.
+  if (isAbsolute(locationPath)) {
+    if (!existsSync(locationPath)) return undefined;
+    const base = repoRoot ?? cwd ?? process.cwd();
+    return {
+      absolutePath: locationPath,
+      relativePath: relative(base, locationPath),
+    };
+  }
+
+  // Try bases in preference order: repoRoot → cwd → process.cwd().
+  const bases = [repoRoot, cwd, process.cwd()].filter((b): b is string => Boolean(b));
+  const seen = new Set<string>();
+  for (const base of bases) {
+    const candidate = join(base, locationPath);
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (existsSync(candidate)) {
+      return {
+        absolutePath: candidate,
+        relativePath: locationPath,
+      };
+    }
+  }
+
+  return undefined;
+}
+
+const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
+  ts: 'typescript',
+  tsx: 'typescript',
+  js: 'javascript',
+  jsx: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  py: 'python',
+  rb: 'ruby',
+  go: 'go',
+  rs: 'rust',
+  java: 'java',
+  kt: 'kotlin',
+  swift: 'swift',
+  c: 'c',
+  cpp: 'cpp',
+  cc: 'cpp',
+  h: 'c',
+  hpp: 'cpp',
+  cs: 'csharp',
+  php: 'php',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  yml: 'yaml',
+  yaml: 'yaml',
+  json: 'json',
+  toml: 'toml',
+  md: 'markdown',
+  sql: 'sql',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  xml: 'xml',
+};
+
+function languageFromPath(filePath: string): string | undefined {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  if (!ext) return undefined;
+  return EXTENSION_LANGUAGE_MAP[ext];
+}
