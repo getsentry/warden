@@ -70,11 +70,11 @@ export function FindingsPane({
   const navActive = isFocused && !modalOpen;
 
   const handleInput = useCallback(
-    (_input: string, key: { upArrow: boolean; downArrow: boolean }) => {
+    (input: string, key: { upArrow: boolean; downArrow: boolean }) => {
       if (!navActive) return;
-      if (key.upArrow) {
+      if (key.upArrow || input === 'k') {
         onSelect(Math.max(0, selectedIndex - 1));
-      } else if (key.downArrow) {
+      } else if (key.downArrow || input === 'j') {
         onSelect(Math.min(total - 1, selectedIndex + 1));
       }
     },

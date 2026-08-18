@@ -74,14 +74,15 @@ export function SourcePane({ source, autoFocus }: SourcePaneProps): React.ReactE
   const { isFocused } = useFocus({ id: 'source', autoFocus });
   const { rows: termRows } = useWindowSize();
 
-  // Reserve rows for the border/title line (top + bottom = 2).
-  const viewHeight = Math.max(4, (termRows ?? 24) - 2 - /* other rows */ 4);
+  // Border (2) + title row (1). The parent Box is sized to the terminal.
+  const viewHeight = Math.max(4, termRows - 3);
 
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [highlighterReady, setHighlighterReady] = useState(false);
 
-  // Prime the highlighter once on mount.
+  // Prime the highlighter once on mount, then re-render so ANSI colors appear.
   useEffect(() => {
-    void primeHighlighter();
+    void primeHighlighter().then(() => setHighlighterReady(true));
   }, []);
 
   // Auto-scroll to marked lines when source changes.
@@ -97,14 +98,14 @@ export function SourcePane({ source, autoFocus }: SourcePaneProps): React.ReactE
   }, [source]);
 
   const handleScroll = useCallback(
-    (_input: string, key: { upArrow: boolean; downArrow: boolean }) => {
+    (input: string, key: { upArrow: boolean; downArrow: boolean }) => {
       if (!isFocused) return;
       if (!source || source.kind === 'empty') return;
       const { lines } = getSourceLines(source);
       const maxOffset = Math.max(0, lines.length - viewHeight);
-      if (key.upArrow) {
+      if (key.upArrow || input === 'k') {
         setScrollOffset((o) => Math.max(0, o - 1));
-      } else if (key.downArrow) {
+      } else if (key.downArrow || input === 'j') {
         setScrollOffset((o) => Math.min(maxOffset, o + 1));
       }
     },
@@ -129,7 +130,9 @@ export function SourcePane({ source, autoFocus }: SourcePaneProps): React.ReactE
     );
   } else {
     const { lines: rawLines, startLine, endLine, language } = getSourceLines(source);
-    const highlightedLines = getHighlightedLines(rawLines, language);
+    const highlightedLines = highlighterReady
+      ? getHighlightedLines(rawLines, language)
+      : rawLines;
 
     // Clamp offset
     const maxOffset = Math.max(0, rawLines.length - viewHeight);
@@ -156,9 +159,9 @@ export function SourcePane({ source, autoFocus }: SourcePaneProps): React.ReactE
                 {lineNoStr} {marked ? '▶' : '│'}{' '}
               </Text>
               {marked ? (
-                <Text bold>{displayLine}</Text>
+                <Text bold wrap="truncate">{displayLine}</Text>
               ) : (
-                <Text>{displayLine}</Text>
+                <Text wrap="truncate">{displayLine}</Text>
               )}
             </Box>
           );

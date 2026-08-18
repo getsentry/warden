@@ -18,7 +18,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Box, useApp, useInput, useFocusManager } from 'ink';
+import { Box, useApp, useInput, useFocusManager, useWindowSize } from 'ink';
 import type { InspectSession } from './session.js';
 import type { ResolvedSource } from './source.js';
 import { resolveSource } from './source.js';
@@ -75,6 +75,7 @@ export function InspectApp({
 }: InspectAppProps): React.ReactElement {
   const { exit } = useApp();
   const { focus } = useFocusManager();
+  const { columns, rows } = useWindowSize();
 
   // Live session state — updated in-memory when verdicts are saved.
   const [session, setSession] = useState<InspectSession>(initialSession);
@@ -187,22 +188,26 @@ export function InspectApp({
     : null;
 
   return (
-    <Box flexDirection="row" width="100%" height="100%">
+    <Box flexDirection="row" width={columns} height={rows}>
       {/* Left column: Source */}
-      <Box width="50%" flexDirection="column" height="100%">
+      <Box width={Math.floor(columns / 2)} flexDirection="column" height={rows}>
         <SourcePane source={resolvedSource} autoFocus />
       </Box>
 
       {/* Right column: Findings (top) + Review (bottom) */}
-      <Box width="50%" flexDirection="column" height="100%">
-        <FindingsPane
-          unreviewed={session.unreviewed}
-          reviewed={session.reviewed}
-          selectedIndex={selectedIndex}
-          onSelect={setSelectedIndex}
-          modalOpen={modal !== null}
-        />
-        <ReviewPane finding={selectedFinding} />
+      <Box width={columns - Math.floor(columns / 2)} flexDirection="column" height={rows}>
+        <Box height={Math.floor(rows / 2)} flexDirection="column">
+          <FindingsPane
+            unreviewed={session.unreviewed}
+            reviewed={session.reviewed}
+            selectedIndex={selectedIndex}
+            onSelect={setSelectedIndex}
+            modalOpen={modal !== null}
+          />
+        </Box>
+        <Box height={rows - Math.floor(rows / 2)} flexDirection="column">
+          <ReviewPane finding={selectedFinding} />
+        </Box>
 
         {/* Verdict modal overlay — rendered as last child on the right column */}
         {modal !== null && modalFinding !== null && (

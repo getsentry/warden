@@ -1,8 +1,8 @@
 /**
  * Syntax-highlight wrapper for the `warden inspect` source pane.
  *
- * Attempts to load `cli-highlight` dynamically.  If the package is absent or
- * the highlight call throws, falls back to returning the line unchanged.
+ * Loads `cli-highlight` dynamically.  If the package is absent or the
+ * highlight call throws, falls back to returning the line unchanged.
  *
  * Callers receive plain strings; this module never leaks the underlying
  * highlighter through `@sentry/warden`'s public exports.

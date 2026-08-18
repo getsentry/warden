@@ -51,6 +51,27 @@ describe('highlightCode', () => {
   });
 });
 
+describe('highlightCode with the installed highlighter', () => {
+  it('returns ANSI-colored TypeScript when cli-highlight is installed', async () => {
+    const previous = process.env['FORCE_COLOR'];
+    process.env['FORCE_COLOR'] = '1';
+    vi.doUnmock('cli-highlight');
+    vi.resetModules();
+    try {
+      const { highlightCode } = await import('./highlight.js');
+      const result = await highlightCode('const x = 1;', { language: 'javascript' });
+      expect(result).toContain('\u001b[');
+      expect(result).toContain('const');
+    } finally {
+      if (previous === undefined) {
+        delete process.env['FORCE_COLOR'];
+      } else {
+        process.env['FORCE_COLOR'] = previous;
+      }
+    }
+  });
+});
+
 describe('highlightCodeSync', () => {
   beforeEach(() => {
     vi.resetModules();
