@@ -100,8 +100,8 @@ export function FindingsPane({
   // Unreviewed groups
   for (const group of groups) {
     rows.push(
-      <Box key={`group-header-${group.severity}`} paddingLeft={1}>
-        <Text bold color={SEVERITY_COLOR[group.severity]}>
+      <Box key={`group-header-${group.severity}`} height={1} flexShrink={0} paddingLeft={1}>
+        <Text bold color={SEVERITY_COLOR[group.severity]} wrap="truncate">
           {group.severity.toUpperCase()}
         </Text>
       </Box>,
@@ -126,8 +126,8 @@ export function FindingsPane({
   // Reviewed group
   if (reviewed.length > 0) {
     rows.push(
-      <Box key="group-header-reviewed" paddingLeft={1} marginTop={1}>
-        <Text bold dimColor>REVIEWED</Text>
+      <Box key="group-header-reviewed" height={1} flexShrink={0} paddingLeft={1} marginTop={1}>
+        <Text bold dimColor wrap="truncate">REVIEWED</Text>
       </Box>,
     );
 
@@ -166,15 +166,12 @@ export function FindingsPane({
       borderColor={borderColor}
       overflow="hidden"
     >
-      <Box>
-        <Text bold color={isFocused ? 'cyan' : undefined}>
-          {' '}Findings{' '}
+      <Box height={1} width={Math.max(1, width - 2)} flexShrink={0}>
+        <Text bold color={isFocused ? 'cyan' : undefined} wrap="truncate">
+          {' Findings'}
         </Text>
-        {isFocused && (
-          <Text dimColor> [j/k or ↑↓ to navigate]</Text>
-        )}
       </Box>
-      <Box flexDirection="column" flexGrow={1}>
+      <Box flexDirection="column" flexGrow={1} overflow="hidden">
         {rows}
       </Box>
     </Box>
@@ -193,32 +190,20 @@ interface FindingRowProps {
 }
 
 function FindingRow({ item, isSelected, verdict }: FindingRowProps): React.ReactElement {
-  const { finding, skill } = item;
+  const { finding } = item;
   const severityColor = SEVERITY_COLOR[finding.severity] as string;
-
-  const locationStr = finding.location
-    ? `${finding.location.path}:${finding.location.startLine ?? ''}`
-    : '';
-
-  const title = truncate(finding.title, 40);
   const prefix = isSelected ? '▶ ' : '  ';
 
   return (
-    <Box paddingLeft={1}>
+    <Box height={1} flexShrink={0} paddingLeft={1}>
       <Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>
         {prefix}
       </Text>
       <Text color={severityColor}>{finding.severity[0]?.toUpperCase() ?? ''} </Text>
-      <Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>
-        {title}
+      <Text color={isSelected ? 'cyan' : undefined} bold={isSelected} wrap="truncate">
+        {truncate(finding.title, 48)}
       </Text>
-      {locationStr ? (
-        <Text dimColor> {truncate(locationStr, 30)}</Text>
-      ) : null}
-      {verdict ? (
-        <Text dimColor> [{verdict}]</Text>
-      ) : null}
-      <Text dimColor> {skill}</Text>
+      {verdict ? <Text dimColor> [{verdict}]</Text> : null}
     </Box>
   );
 }

@@ -65,9 +65,9 @@ export function ReviewPane({ finding, height, width }: ReviewPaneProps): React.R
       borderColor={borderColor}
       overflow="hidden"
     >
-      <Box>
-        <Text bold color={isFocused ? 'cyan' : undefined}>
-          {' '}Review{' '}
+      <Box height={1} width={Math.max(1, width - 2)} flexShrink={0}>
+        <Text bold color={isFocused ? 'cyan' : undefined} wrap="truncate">
+          {' Review'}
         </Text>
       </Box>
       <Box flexDirection="column" paddingLeft={1} flexGrow={1}>

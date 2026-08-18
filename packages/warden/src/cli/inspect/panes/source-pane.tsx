@@ -12,6 +12,7 @@ import { Box, Text, useInput, useFocus } from 'ink';
 import type { ResolvedSource, SnippetSource, FileSource } from '../source.js';
 import { isMarkedLine, scrollToMarked, sourcePaneTitle } from '../grouping.js';
 import { highlightCodeSync, primeHighlighter } from '../highlight.js';
+import { truncate } from '../../output/formatters.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -71,14 +72,18 @@ function getHighlightedLines(rawLines: string[], language: string | undefined): 
 // Component
 // ---------------------------------------------------------------------------
 
-/** ANSI-stripped line number prefix width. */
-const LINE_NO_WIDTH = 5; // e.g. "  42 │"
+/** Visible width of the line-number + marker gutter, e.g. `  42 │ `. */
+const GUTTER_WIDTH = 7;
+/** Rounded border consumes one column on each side. */
+const BORDER_X = 2;
 
 export function SourcePane({ source, autoFocus, height, width }: SourcePaneProps): React.ReactElement {
   const { isFocused } = useFocus({ id: 'source', autoFocus });
 
-  // Border (2) + title row (1).
+  // Border (2) + pinned title row (1).
   const viewHeight = Math.max(1, height - 3);
+  const innerWidth = Math.max(1, width - BORDER_X);
+  const codeWidth = Math.max(8, innerWidth - GUTTER_WIDTH);
 
   const [scrollOffset, setScrollOffset] = useState(0);
   const [highlighterReady, setHighlighterReady] = useState(false);
@@ -154,12 +159,18 @@ export function SourcePane({ source, autoFocus, height, width }: SourcePaneProps
         {visibleRaw.map((_, idx) => {
           const lineNo = lineBase + safeOffset + idx;
           const marked = isMarkedLine(lineNo, startLine, endLine);
-          const displayLine = visibleHighlighted[idx] ?? visibleRaw[idx] ?? '';
-          const lineNoStr = String(lineNo).padStart(LINE_NO_WIDTH - 2, ' ');
+          const rawLine = visibleRaw[idx] ?? '';
+          const highlighted = visibleHighlighted[idx] ?? rawLine;
+          // Clip the raw line first so Yoga measures a one-row width even when
+          // the highlighter injects ANSI sequences.
+          const displayLine = rawLine.length > codeWidth
+            ? truncate(rawLine, codeWidth)
+            : highlighted;
+          const lineNoStr = String(lineNo).padStart(4, ' ');
           return (
-            <Box key={lineNo}>
+            <Box key={lineNo} height={1} width={innerWidth} flexShrink={0}>
               <Text color={marked ? 'yellow' : 'gray'} dimColor={!marked}>
-                {lineNoStr} {marked ? '▶' : '│'}{' '}
+                {lineNoStr}{marked ? '▶' : '│'}
               </Text>
               {marked ? (
                 <Text bold wrap="truncate">{displayLine}</Text>
@@ -183,13 +194,10 @@ export function SourcePane({ source, autoFocus, height, width }: SourcePaneProps
       borderColor={borderColor}
       overflow="hidden"
     >
-      <Box>
-        <Text bold color={isFocused ? 'cyan' : undefined}>
-          {' '}{title}{' '}
+      <Box height={1} width={innerWidth} flexShrink={0}>
+        <Text bold color={isFocused ? 'cyan' : undefined} wrap="truncate">
+          {` ${truncate(title, Math.max(8, innerWidth - 1))}`}
         </Text>
-        {isFocused && (
-          <Text dimColor> [j/k or ↑↓ to scroll]</Text>
-        )}
       </Box>
       {content}
     </Box>
