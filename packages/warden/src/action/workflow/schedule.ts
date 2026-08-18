@@ -26,8 +26,8 @@ import type { FindingProcessingEvent } from '../../sdk/types.js';
 import type { ResolvedServiceOptions } from '../../service/index.js';
 import { Sentry, logger, setRepositoryScope, emitRunMetric } from '../../sentry.js';
 import type { ActionInputs } from '../inputs.js';
-import { buildBaseOutputOptions, buildFindingsOutput } from '../reporting/output.js';
-import type { SkillExecutionMeta } from '../reporting/output.js';
+import { buildBaseOutputOptions, buildFindingsOutput } from '../../reporting/output.js';
+import type { SkillExecutionMeta } from '../../reporting/output.js';
 import { publishActionRunFailOpen, recallActionMemoryFailOpen, resolveActionServiceOptions } from '../service.js';
 import type { ActionMemoryRecall } from '../service.js';
 import {

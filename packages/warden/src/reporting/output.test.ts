@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EventContext, Finding, SkillReport } from '../../types/index.js';
+import type { EventContext, Finding, SkillReport } from '../types/index.js';
 import { buildFindingsOutput, buildResolvedDefaults, FindingsOutputSchema } from './output.js';
 
 describe('findings output schema', () => {

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
-import { FindingsOutputSchema } from '../../action/reporting/output.js';
+import { FindingsOutputSchema } from '../../reporting/output.js';
 import { loadWardenConfigFile } from '../../config/loader.js';
 import { getVersion } from '../../utils/index.js';
 import {

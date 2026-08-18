@@ -13,9 +13,9 @@ import { execFileNonInteractive, execNonInteractive } from '../../utils/exec.js'
 import { isRepoRelativePath, normalizePath } from '../../utils/path.js';
 import { writeFileAtomic } from '../../utils/fs.js';
 import type { EventContext, SkillReport } from '../../types/index.js';
-import type { FindingObservation } from '../reporting/outcomes.js';
-import { buildFindingsOutput } from '../reporting/output.js';
-import type { BuildFindingsOutputOptions } from '../reporting/output.js';
+import type { FindingObservation } from '../../reporting/outcomes.js';
+import { buildFindingsOutput } from '../../reporting/output.js';
+import type { BuildFindingsOutputOptions } from '../../reporting/output.js';
 import { countSeverity } from '../../triggers/matcher.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { ActionInputs } from '../inputs.js';

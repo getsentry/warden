@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ConfidenceSchema, LocationSchema, SeveritySchema } from '../../types/index.js';
-import type { FindingProcessingEvent } from '../../sdk/types.js';
+import { ConfidenceSchema, LocationSchema, SeveritySchema } from '../types/index.js';
+import type { FindingProcessingEvent } from '../sdk/types.js';
 
 const FindingSnapshotSchema = z.object({
   title: z.string(),

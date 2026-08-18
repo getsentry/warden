@@ -49,6 +49,12 @@ describe('npm package contents', () => {
     expect(ignored.ignores('specs/generated-skills.md')).toBe(true);
     expect(ignored.ignores('bin/debug-helper.js')).toBe(true);
     expect(ignored.ignores('bin/warden.js')).toBe(false);
+    // Action runtime stays out of the npm tarball, but shared findings
+    // schema must ship — the CLI service replay path imports it at load time.
+    expect(ignored.ignores('dist/action/index.js')).toBe(true);
+    expect(ignored.ignores('dist/action/reporting/output.js')).toBe(true);
+    expect(ignored.ignores('dist/reporting/output.js')).toBe(false);
+    expect(ignored.ignores('dist/cli/commands/service.js')).toBe(false);
   });
 });
 

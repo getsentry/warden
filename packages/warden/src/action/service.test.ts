@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EventContext, SkillReport } from '../types/index.js';
 import { buildFindingsServiceRunEnvelope } from '../service/index.js';
-import { buildFindingsOutput } from './reporting/output.js';
+import { buildFindingsOutput } from '../reporting/output.js';
 import type { ActionInputs } from './inputs.js';
 import {
   publishActionRunFailOpen,

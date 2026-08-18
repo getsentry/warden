@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { EventContext, SkillReport } from '../../types/index.js';
+import type { EventContext, SkillReport } from '../types/index.js';
 import {
   AuxiliaryUsageAttributionMapSchema,
   AuxiliaryUsageMapSchema,
@@ -10,11 +10,11 @@ import {
   SkillErrorSchema,
   SourceSnippetSchema,
   UsageStatsSchema,
-} from '../../types/index.js';
+} from '../types/index.js';
 import type { DedupeMatchType, FindingObservation } from './outcomes.js';
 import { FindingObservationSchema } from './outcomes.js';
-import { generateContentHash } from '../../output/dedup.js';
-import { getVersion } from '../../utils/version.js';
+import { generateContentHash } from '../output/dedup.js';
+import { getVersion } from '../utils/version.js';
 import {
   buildProvenanceAndDiscarded,
   DiscardedFindingSchema,
@@ -22,7 +22,7 @@ import {
   provenanceKey,
 } from './provenance.js';
 import type { FindingExecutionEvents } from './provenance.js';
-import type { FindingProcessingEvent } from '../../sdk/types.js';
+import type { FindingProcessingEvent } from '../sdk/types.js';
 
 const FindingAttributionSchema = z.object({
   skillExecutionId: z.string().optional(),
