@@ -23,7 +23,7 @@ import {
   writeFindingsOutput,
   writeFindingsOutputLive,
 } from './base.js';
-import { FindingsOutputSchema } from '../reporting/output.js';
+import { FindingsOutputSchema } from '../../reporting/output.js';
 
 const mockExecFile = vi.mocked(execFileNonInteractive);
 const mockExec = vi.mocked(execNonInteractive);

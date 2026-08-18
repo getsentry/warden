@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import type { MemoryRecallResponse } from '@sentry/warden-service-api';
-import type { FindingsOutput } from './reporting/output.js';
+import type { FindingsOutput } from '../reporting/output.js';
 import type { ActionInputs } from './inputs.js';
 import type { ServiceConfig } from '../config/schema.js';
 import type { EventContext } from '../types/index.js';

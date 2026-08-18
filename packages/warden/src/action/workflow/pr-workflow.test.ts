@@ -130,7 +130,7 @@ import {
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { Semaphore } from '../../utils/index.js';
-import { buildFindingsOutput } from '../reporting/output.js';
+import { buildFindingsOutput } from '../../reporting/output.js';
 
 // Type the mocks
 const mockRunSkillTask = vi.mocked(runSkillTask);

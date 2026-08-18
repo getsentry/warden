@@ -25,7 +25,7 @@ import { canUseRuntimeAuth } from '../../sdk/extract.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import type { TriggerResult } from '../triggers/executor.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
-import type { FindingObservation } from '../reporting/outcomes.js';
+import type { FindingObservation } from '../../reporting/outcomes.js';
 import type { ReviewFeedbackGate } from './review-feedback-gate.js';
 
 // -----------------------------------------------------------------------------

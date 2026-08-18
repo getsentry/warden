@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { Finding } from '../../types/index.js';
-import { FindingSchema } from '../../types/index.js';
+import type { Finding } from '../types/index.js';
+import { FindingSchema } from '../types/index.js';
 
 export type FindingOutcome =
   | 'posted'

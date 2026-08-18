@@ -54,7 +54,7 @@ import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
 import { ReviewFeedbackGate } from '../review/review-feedback-gate.js';
 import type { ReviewFeedbackWritability } from '../review/review-feedback-gate.js';
-import type { FindingObservation } from '../reporting/outcomes.js';
+import type { FindingObservation } from '../../reporting/outcomes.js';
 import type { RuntimeName } from '../../sdk/runtimes/index.js';
 import { configureWardenOffline } from '../../sdk/offline.js';
 import { canUseRuntimeAuth } from '../../sdk/extract.js';
@@ -103,7 +103,7 @@ import {
   type ReplayTriggerResult,
   type SkillExecutionMeta,
   type BuildFindingsOutputOptions,
-} from '../reporting/output.js';
+} from '../../reporting/output.js';
 
 // -----------------------------------------------------------------------------
 // Phase Result Types

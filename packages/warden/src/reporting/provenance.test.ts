@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Finding } from '../../types/index.js';
-import type { FindingProcessingEvent } from '../../sdk/types.js';
+import type { Finding } from '../types/index.js';
+import type { FindingProcessingEvent } from '../sdk/types.js';
 import { buildProvenanceAndDiscarded, provenanceKey } from './provenance.js';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {

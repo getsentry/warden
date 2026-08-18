@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FindingsOutput } from '../action/reporting/output.js';
+import type { FindingsOutput } from '../reporting/output.js';
 import type { SkillReport } from '../types/index.js';
 import { getVersion } from '../utils/index.js';
 import type { ResolvedServiceOptions } from './options.js';
