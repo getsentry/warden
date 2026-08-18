@@ -1,4 +1,58 @@
 # Changelog
+## 0.46.2
+
+### New Features ✨
+
+#### Service
+
+- Show first observed on findings by @sentry-junior in [#503](https://github.com/getsentry/warden/pull/503)
+- Add database tracing and typed reads by @gricha in [#499](https://github.com/getsentry/warden/pull/499)
+- Enable hosted memory and source context by @gricha in [#487](https://github.com/getsentry/warden/pull/487)
+
+#### Other
+
+- (skills) Add Warden Service API skill by @gricha in [#476](https://github.com/getsentry/warden/pull/476)
+
+### Bug Fixes 🐛
+
+#### Service
+
+- Explain findings skipped after PR changes by @gricha in [#507](https://github.com/getsentry/warden/pull/507)
+- Preserve finding timestamps in database reads by @gricha in [#505](https://github.com/getsentry/warden/pull/505)
+- Clarify finding detail context by @gricha in [#496](https://github.com/getsentry/warden/pull/496)
+- Skip ineligible memory jobs by @gricha in [#494](https://github.com/getsentry/warden/pull/494)
+- Record extraction calls once by @gricha in [#493](https://github.com/getsentry/warden/pull/493)
+- Apportion memory extraction usage by @gricha in [#492](https://github.com/getsentry/warden/pull/492)
+- Give memory evidence stable identities by @gricha in [#491](https://github.com/getsentry/warden/pull/491)
+- Release migration locks on timeout by @gricha in [#490](https://github.com/getsentry/warden/pull/490)
+- Allow bounded AI jobs to finish by @gricha in [#489](https://github.com/getsentry/warden/pull/489)
+- Run migrations against Vercel database by @gricha in [#488](https://github.com/getsentry/warden/pull/488)
+- Address production dashboard feedback by @gricha in [#486](https://github.com/getsentry/warden/pull/486)
+- Make ingest credentials write-only by @gricha in [#485](https://github.com/getsentry/warden/pull/485)
+- Preserve Vercel request bodies by @gricha in [#484](https://github.com/getsentry/warden/pull/484)
+- Buffer API bodies before authentication by @gricha in [#483](https://github.com/getsentry/warden/pull/483)
+- Keep OAuth redirects on the current origin by @gricha in [#482](https://github.com/getsentry/warden/pull/482)
+- Protect dashboard assets with OAuth by @gricha in [#481](https://github.com/getsentry/warden/pull/481)
+- Stop Vercel rewrite from polluting queries by @gricha in [#480](https://github.com/getsentry/warden/pull/480)
+- Rewrite nested Vercel API paths by @gricha in [#479](https://github.com/getsentry/warden/pull/479)
+- Route nested Vercel API paths by @gricha in [#478](https://github.com/getsentry/warden/pull/478)
+- Use Vercel Node request adapter by @gricha in [#477](https://github.com/getsentry/warden/pull/477)
+
+#### Other
+
+- (cli) Ship findings schema outside npm-ignored action dist by @sentry-junior in [#508](https://github.com/getsentry/warden/pull/508)
+
+### Internal Changes 🔧
+
+#### Service
+
+- Reduce dashboard cost query work by @gricha in [#506](https://github.com/getsentry/warden/pull/506)
+- Simplify dashboard database queries by @gricha in [#502](https://github.com/getsentry/warden/pull/502)
+- Render dashboard filters immediately by @gricha in [#501](https://github.com/getsentry/warden/pull/501)
+- Flatten dashboard data loading by @gricha in [#500](https://github.com/getsentry/warden/pull/500)
+- Speed up dashboard findings feed by @sentry-junior in [#498](https://github.com/getsentry/warden/pull/498)
+- Default findings to last 30 days by @gricha in [#497](https://github.com/getsentry/warden/pull/497)
+
 ## 0.46.1
 
 ### Internal Changes 🔧
