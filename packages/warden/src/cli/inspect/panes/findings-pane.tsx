@@ -23,6 +23,8 @@ export interface FindingsPaneProps {
   reviewed: InspectFinding[];
   selectedIndex: number;
   onSelect: (index: number) => void;
+  /** When true, the modal is open and this pane must not process navigation. */
+  modalOpen?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,25 +59,29 @@ export function FindingsPane({
   reviewed,
   selectedIndex,
   onSelect,
+  modalOpen = false,
 }: FindingsPaneProps): React.ReactElement {
   const { isFocused } = useFocus({ id: 'findings' });
 
   const flat = flatFindingList(unreviewed, reviewed);
   const total = flat.length;
 
+  // Navigation is disabled while the verdict modal is open.
+  const navActive = isFocused && !modalOpen;
+
   const handleInput = useCallback(
     (_input: string, key: { upArrow: boolean; downArrow: boolean }) => {
-      if (!isFocused) return;
+      if (!navActive) return;
       if (key.upArrow) {
         onSelect(Math.max(0, selectedIndex - 1));
       } else if (key.downArrow) {
         onSelect(Math.min(total - 1, selectedIndex + 1));
       }
     },
-    [isFocused, selectedIndex, total, onSelect],
+    [navActive, selectedIndex, total, onSelect],
   );
 
-  useInput(handleInput, { isActive: isFocused });
+  useInput(handleInput, { isActive: navActive });
 
   const borderColor = isFocused ? 'cyan' : 'gray';
 

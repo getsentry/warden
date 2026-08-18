@@ -59,6 +59,8 @@ const inkRender: RenderInspect = async (ctx) => {
     React.createElement(InspectApp, {
       session: ctx.session,
       repoRoot: ctx.repoRoot,
+      runId: ctx.runId,
+      logPath: ctx.logPath,
       logCwd: ctx.logCwd,
     }),
     { alternateScreen: true, exitOnCtrlC: true },

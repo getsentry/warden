@@ -7,10 +7,14 @@
  *   - Review   (bottom-right)
  *
  * Tab / Shift+Tab cycles focus between them (ISC-3).
+ * f / m / t (when modal is closed) open the verdict modal (ISC-8).
  * q / Esc (when no modal is open) exits (ISC-14 / plan §5).
- * No mouse / onClick / SGR mouse tracking (ISC-A-3).
  *
- * The verdict modal is implemented in TODO-004 and will be wired here then.
+ * The modal is an overlay Box in the same Ink tree.  While open, section
+ * focus input is disabled — only the modal's useInput handler is active
+ * (ISC-8 constraint).
+ *
+ * No mouse / onClick / SGR mouse tracking (ISC-A-3).
  */
 
 import React, { useState, useCallback } from 'react';
@@ -22,6 +26,11 @@ import { flatFindingList } from './grouping.js';
 import { SourcePane } from './panes/source-pane.js';
 import { FindingsPane } from './panes/findings-pane.js';
 import { ReviewPane } from './panes/review-pane.js';
+import { VerdictModal, VERDICT_HOTKEYS } from './panes/verdict-modal.js';
+import type { VerdictHotkey } from './panes/verdict-modal.js';
+import type { ReviewVerdict } from './reviews.js';
+import { upsertReview, saveReviews, loadReviews } from './reviews.js';
+import { applyVerdict } from './session.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -30,6 +39,8 @@ import { ReviewPane } from './panes/review-pane.js';
 export interface InspectAppProps {
   session: InspectSession;
   repoRoot: string;
+  runId: string;
+  logPath: string;
   /** Working-directory from the JSONL log, used as a secondary path base. */
   logCwd?: string;
 }
@@ -42,22 +53,40 @@ const FOCUS_IDS = ['source', 'findings', 'review'] as const;
 type FocusId = (typeof FOCUS_IDS)[number];
 
 // ---------------------------------------------------------------------------
+// Modal state
+// ---------------------------------------------------------------------------
+
+interface ModalState {
+  verdict: ReviewVerdict;
+  /** Index into the flat finding list — which finding is being labelled. */
+  findingIndex: number;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function InspectApp({
-  session,
+  session: initialSession,
   repoRoot,
+  runId,
+  logPath,
   logCwd,
 }: InspectAppProps): React.ReactElement {
   const { exit } = useApp();
   const { focus } = useFocusManager();
+
+  // Live session state — updated in-memory when verdicts are saved.
+  const [session, setSession] = useState<InspectSession>(initialSession);
 
   // Selected finding index into the flat list (unreviewed groups + reviewed).
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Current focus pane (for Tab key cycling — mirrors Ink's internal focus).
   const [currentFocusIdx, setCurrentFocusIdx] = useState(0);
+
+  // Modal state: null = closed.
+  const [modal, setModal] = useState<ModalState | null>(null);
 
   const flat = flatFindingList(session.unreviewed, session.reviewed);
   const selectedFinding = flat[selectedIndex] ?? null;
@@ -67,17 +96,20 @@ export function InspectApp({
     ? resolveSource(selectedFinding.finding, { repoRoot, cwd: logCwd })
     : null;
 
-  // Handle Tab / Shift+Tab focus cycling and q/Esc quit.
+  // ---------------------------------------------------------------------------
+  // Global key handler (only when modal is closed)
+  // ---------------------------------------------------------------------------
+
   useInput(
     useCallback(
       (input: string, key: {
         tab: boolean;
         shift: boolean;
         escape: boolean;
-        return: boolean;
-        upArrow: boolean;
-        downArrow: boolean;
       }) => {
+        // Do not process global keys while modal is open.
+        if (modal !== null) return;
+
         if (key.tab) {
           const next = key.shift
             ? (currentFocusIdx - 1 + FOCUS_IDS.length) % FOCUS_IDS.length
@@ -92,16 +124,67 @@ export function InspectApp({
           return;
         }
 
-        // j/k navigation when findings pane is active (handled in FindingsPane
-        // via its own useInput, but also handled at app level for convenience).
+        // Verdict hotkeys: f / m / t
+        if (input in VERDICT_HOTKEYS && selectedFinding !== null) {
+          const flatList = flatFindingList(session.unreviewed, session.reviewed);
+          const idx = flatList.findIndex((f) => f.reviewKey === selectedFinding.reviewKey);
+          setModal({
+            verdict: VERDICT_HOTKEYS[input as VerdictHotkey],
+            findingIndex: idx >= 0 ? idx : selectedIndex,
+          });
+          return;
+        }
       },
-      [currentFocusIdx, exit, focus],
+      [currentFocusIdx, exit, focus, modal, selectedFinding, session, selectedIndex],
     ),
   );
 
-  const handleSelect = useCallback((index: number) => {
-    setSelectedIndex(index);
+  // ---------------------------------------------------------------------------
+  // Modal handlers
+  // ---------------------------------------------------------------------------
+
+  const handleModalConfirm = useCallback(
+    (comment: string) => {
+      if (modal === null || selectedFinding === null) {
+        setModal(null);
+        return;
+      }
+
+      // Load the latest on-disk data so concurrent writers don't race.
+      let reviewFile = loadReviews(repoRoot, runId, logPath);
+      reviewFile = upsertReview(reviewFile, selectedFinding.reviewKey, {
+        findingId: selectedFinding.finding.id,
+        skill: selectedFinding.skill,
+        verdict: modal.verdict,
+        comment,
+      });
+      saveReviews(repoRoot, reviewFile);
+
+      // Build the full review object to apply in-memory.
+      const savedReview = reviewFile.reviews[selectedFinding.reviewKey]!;
+      const nextSession = applyVerdict(session, selectedFinding.reviewKey, savedReview);
+      setSession(nextSession);
+
+      // After moving the finding to Reviewed, keep the cursor in bounds.
+      const nextFlat = flatFindingList(nextSession.unreviewed, nextSession.reviewed);
+      setSelectedIndex((prev) => Math.min(prev, Math.max(0, nextFlat.length - 1)));
+
+      setModal(null);
+    },
+    [modal, selectedFinding, repoRoot, runId, logPath, session],
+  );
+
+  const handleModalCancel = useCallback(() => {
+    setModal(null);
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
+  const modalFinding = modal !== null
+    ? flatFindingList(session.unreviewed, session.reviewed)[modal.findingIndex] ?? selectedFinding
+    : null;
 
   return (
     <Box flexDirection="row" width="100%" height="100%">
@@ -116,9 +199,30 @@ export function InspectApp({
           unreviewed={session.unreviewed}
           reviewed={session.reviewed}
           selectedIndex={selectedIndex}
-          onSelect={handleSelect}
+          onSelect={setSelectedIndex}
+          modalOpen={modal !== null}
         />
         <ReviewPane finding={selectedFinding} />
+
+        {/* Verdict modal overlay — rendered as last child on the right column */}
+        {modal !== null && modalFinding !== null && (
+          <Box
+            position="absolute"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            width="100%"
+            height="100%"
+          >
+            <VerdictModal
+              verdict={modal.verdict}
+              findingTitle={modalFinding.finding.title}
+              onConfirm={handleModalConfirm}
+              onCancel={handleModalCancel}
+              initialComment={modalFinding.review?.comment ?? ''}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );

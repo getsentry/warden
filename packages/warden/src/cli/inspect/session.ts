@@ -12,6 +12,7 @@ import type { Finding, SkillReport } from '../../types/index.js';
 import { SEVERITY_ORDER } from '../../types/index.js';
 import type { FindingReview, ReviewFile } from './reviews.js';
 import { reviewKey } from './reviews.js';
+export type { FindingReview };
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -91,6 +92,48 @@ export function buildInspectSession(
   unreviewed.sort(compareUnreviewed);
 
   return { unreviewed, reviewed };
+}
+
+// ---------------------------------------------------------------------------
+// In-memory verdict application
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply a new verdict to the in-memory session, moving the finding from
+ * `unreviewed` to `reviewed` (or updating it in place when relabelling).
+ *
+ * Returns a new `InspectSession` — the original is not mutated.
+ */
+export function applyVerdict(
+  session: InspectSession,
+  reviewKey: string,
+  review: FindingReview,
+): InspectSession {
+  // Remove from whichever list currently holds the finding.
+  const fromUnreviewed = session.unreviewed.find((f) => f.reviewKey === reviewKey);
+  const fromReviewed = session.reviewed.find((f) => f.reviewKey === reviewKey);
+  const base = fromUnreviewed ?? fromReviewed;
+
+  if (!base) {
+    // Unknown key — nothing to update; return session unchanged.
+    return session;
+  }
+
+  const updatedFinding: InspectFinding = {
+    ...base,
+    review,
+  };
+
+  const newUnreviewed = session.unreviewed.filter((f) => f.reviewKey !== reviewKey);
+  // Re-sort is not necessary: the finding is moving to reviewed.
+
+  const newReviewed = fromReviewed
+    ? // Relabel: replace in-place, preserving original position.
+      session.reviewed.map((f) => (f.reviewKey === reviewKey ? updatedFinding : f))
+    : // New review: append.
+      [...session.reviewed, updatedFinding];
+
+  return { unreviewed: newUnreviewed, reviewed: newReviewed };
 }
 
 // ---------------------------------------------------------------------------
