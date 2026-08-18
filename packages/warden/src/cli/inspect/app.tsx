@@ -18,7 +18,8 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Box, useApp, useInput, useFocusManager, useWindowSize } from 'ink';
+import { Box, useApp, useInput, useFocusManager } from 'ink';
+import { useTerminalSize } from './use-terminal-size.js';
 import type { InspectSession } from './session.js';
 import type { ResolvedSource } from './source.js';
 import { resolveSource } from './source.js';
@@ -75,7 +76,11 @@ export function InspectApp({
 }: InspectAppProps): React.ReactElement {
   const { exit } = useApp();
   const { focus } = useFocusManager();
-  const { columns, rows } = useWindowSize();
+  const { columns, rows } = useTerminalSize();
+  const sourceWidth = Math.max(20, Math.floor(columns / 2));
+  const rightWidth = Math.max(20, columns - sourceWidth);
+  const findingsHeight = Math.max(6, Math.floor(rows / 2));
+  const reviewHeight = Math.max(6, rows - findingsHeight);
 
   // Live session state — updated in-memory when verdicts are saved.
   const [session, setSession] = useState<InspectSession>(initialSession);
@@ -188,25 +193,27 @@ export function InspectApp({
     : null;
 
   return (
-    <Box flexDirection="row" width={columns} height={rows}>
+    <Box flexDirection="row" width={columns} height={rows} flexShrink={0}>
       {/* Left column: Source */}
-      <Box width={Math.floor(columns / 2)} flexDirection="column" height={rows}>
-        <SourcePane source={resolvedSource} autoFocus />
+      <Box width={sourceWidth} height={rows} flexDirection="column" flexShrink={0}>
+        <SourcePane source={resolvedSource} autoFocus height={rows} width={sourceWidth} />
       </Box>
 
       {/* Right column: Findings (top) + Review (bottom) */}
-      <Box width={columns - Math.floor(columns / 2)} flexDirection="column" height={rows}>
-        <Box height={Math.floor(rows / 2)} flexDirection="column">
+      <Box width={rightWidth} height={rows} flexDirection="column" flexShrink={0}>
+        <Box height={findingsHeight} width={rightWidth} flexDirection="column" flexShrink={0}>
           <FindingsPane
             unreviewed={session.unreviewed}
             reviewed={session.reviewed}
             selectedIndex={selectedIndex}
             onSelect={setSelectedIndex}
             modalOpen={modal !== null}
+            height={findingsHeight}
+            width={rightWidth}
           />
         </Box>
-        <Box height={rows - Math.floor(rows / 2)} flexDirection="column">
-          <ReviewPane finding={selectedFinding} />
+        <Box height={reviewHeight} width={rightWidth} flexDirection="column" flexShrink={0}>
+          <ReviewPane finding={selectedFinding} height={reviewHeight} width={rightWidth} />
         </Box>
 
         {/* Verdict modal overlay — rendered as last child on the right column */}

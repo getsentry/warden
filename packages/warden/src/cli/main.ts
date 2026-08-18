@@ -2058,8 +2058,8 @@ export async function main(): Promise<void> {
   loadEnvFiles(envDir);
   initSentry('cli');
 
-  // Show header (unless JSON output or quiet)
-  if (!options.json) {
+  // Show header (unless JSON output, quiet, or inspect — inspect owns the screen).
+  if (!options.json && command !== 'inspect') {
     reporter.header();
   }
 

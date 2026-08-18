@@ -33,13 +33,17 @@ const CONFIDENCE_COLOR: Record<Confidence, string> = {
 
 export interface ReviewPaneProps {
   finding: InspectFinding | null;
+  /** Explicit terminal-backed height so the pane fills its half of the column. */
+  height: number;
+  /** Explicit terminal-backed width. */
+  width: number;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function ReviewPane({ finding }: ReviewPaneProps): React.ReactElement {
+export function ReviewPane({ finding, height, width }: ReviewPaneProps): React.ReactElement {
   const { isFocused } = useFocus({ id: 'review' });
 
   const borderColor = isFocused ? 'cyan' : 'gray';
@@ -54,7 +58,9 @@ export function ReviewPane({ finding }: ReviewPaneProps): React.ReactElement {
   return (
     <Box
       flexDirection="column"
-      flexGrow={1}
+      width={width}
+      height={height}
+      flexShrink={0}
       borderStyle="round"
       borderColor={borderColor}
       overflow="hidden"

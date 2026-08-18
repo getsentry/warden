@@ -25,6 +25,10 @@ export interface FindingsPaneProps {
   onSelect: (index: number) => void;
   /** When true, the modal is open and this pane must not process navigation. */
   modalOpen?: boolean;
+  /** Explicit terminal-backed height so the pane fills its half of the column. */
+  height: number;
+  /** Explicit terminal-backed width. */
+  width: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +64,8 @@ export function FindingsPane({
   selectedIndex,
   onSelect,
   modalOpen = false,
+  height,
+  width,
 }: FindingsPaneProps): React.ReactElement {
   const { isFocused } = useFocus({ id: 'findings' });
 
@@ -153,7 +159,9 @@ export function FindingsPane({
   return (
     <Box
       flexDirection="column"
-      flexGrow={1}
+      width={width}
+      height={height}
+      flexShrink={0}
       borderStyle="round"
       borderColor={borderColor}
       overflow="hidden"

@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Box, Text, useInput, useFocus, useWindowSize } from 'ink';
+import { Box, Text, useInput, useFocus } from 'ink';
 import type { ResolvedSource, SnippetSource, FileSource } from '../source.js';
 import { isMarkedLine, scrollToMarked, sourcePaneTitle } from '../grouping.js';
 import { highlightCodeSync, primeHighlighter } from '../highlight.js';
@@ -21,6 +21,10 @@ export interface SourcePaneProps {
   source: ResolvedSource | null;
   /** Whether this pane starts auto-focused. */
   autoFocus?: boolean;
+  /** Explicit terminal-backed height so the pane fills its column. */
+  height: number;
+  /** Explicit terminal-backed width so long lines truncate instead of wrapping. */
+  width: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,12 +74,11 @@ function getHighlightedLines(rawLines: string[], language: string | undefined): 
 /** ANSI-stripped line number prefix width. */
 const LINE_NO_WIDTH = 5; // e.g. "  42 │"
 
-export function SourcePane({ source, autoFocus }: SourcePaneProps): React.ReactElement {
+export function SourcePane({ source, autoFocus, height, width }: SourcePaneProps): React.ReactElement {
   const { isFocused } = useFocus({ id: 'source', autoFocus });
-  const { rows: termRows } = useWindowSize();
 
-  // Border (2) + title row (1). The parent Box is sized to the terminal.
-  const viewHeight = Math.max(4, termRows - 3);
+  // Border (2) + title row (1).
+  const viewHeight = Math.max(1, height - 3);
 
   const [scrollOffset, setScrollOffset] = useState(0);
   const [highlighterReady, setHighlighterReady] = useState(false);
@@ -95,7 +98,7 @@ export function SourcePane({ source, autoFocus }: SourcePaneProps): React.ReactE
     const next = scrollToMarked(startLine, lines.length, viewHeight, 0);
     setScrollOffset(next);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source]);
+  }, [source, viewHeight]);
 
   const handleScroll = useCallback(
     (input: string, key: { upArrow: boolean; downArrow: boolean }) => {
@@ -173,7 +176,9 @@ export function SourcePane({ source, autoFocus }: SourcePaneProps): React.ReactE
   return (
     <Box
       flexDirection="column"
-      flexGrow={1}
+      width={width}
+      height={height}
+      flexShrink={0}
       borderStyle="round"
       borderColor={borderColor}
       overflow="hidden"
