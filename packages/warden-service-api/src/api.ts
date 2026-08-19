@@ -59,6 +59,20 @@ export const FindingOutcomeSchema = z.enum([
   'revised',
 ]);
 
+export const FindingReviewVerdictSchema = z.enum([
+  'false_positive',
+  'true_positive',
+  'mitigated',
+]);
+export type FindingReviewVerdict = z.infer<typeof FindingReviewVerdictSchema>;
+
+export const FindingReviewSummarySchema = z.object({
+  verdict: FindingReviewVerdictSchema,
+  comment: z.string().max(4_000),
+  updatedAt: TimestampSchema,
+}).strict();
+export type FindingReviewSummary = z.infer<typeof FindingReviewSummarySchema>;
+
 export const FindingFeedItemSchema = z.object({
   id: IdSchema,
   displayId: IdSchema,
@@ -76,6 +90,8 @@ export const FindingFeedItemSchema = z.object({
     endLine: z.number().int().positive().optional(),
   }).strict().optional(),
   outcome: FindingOutcomeSchema.nullable(),
+  /** Current inspect review. Does not replace `outcome`. */
+  review: FindingReviewSummarySchema.optional(),
   /** Earliest observation timestamp for this finding row. */
   firstObservedAt: TimestampSchema.nullable(),
   /** Latest observation timestamp for this finding row. */
@@ -98,6 +114,42 @@ export const FindingListResponseSchema = z.object({
   nextCursor: z.string().trim().min(1).max(512).optional(),
 }).strict();
 export type FindingListResponse = z.infer<typeof FindingListResponseSchema>;
+
+export const FindingListQuerySchema = z.object({
+  review: FindingReviewVerdictSchema.optional(),
+}).strict();
+export type FindingListQuery = z.infer<typeof FindingListQuerySchema>;
+
+export const PublishReviewsItemSchema = z.object({
+  skill: z.string().trim().min(1).max(512),
+  findingId: IdSchema,
+  occurrence: z.number().int().positive(),
+  verdict: FindingReviewVerdictSchema,
+  comment: z.string().max(4_000),
+  updatedAt: TimestampSchema,
+}).strict();
+export type PublishReviewsItem = z.infer<typeof PublishReviewsItemSchema>;
+
+export const PublishReviewsRequestSchema = z.object({
+  reviews: z.array(PublishReviewsItemSchema).max(500),
+}).strict();
+export type PublishReviewsRequest = z.infer<typeof PublishReviewsRequestSchema>;
+
+export const PublishReviewsUnmatchedSchema = z.object({
+  skill: z.string().trim().min(1).max(512),
+  findingId: IdSchema,
+  occurrence: z.number().int().positive(),
+  reason: z.literal('finding_not_found'),
+}).strict();
+export type PublishReviewsUnmatched = z.infer<typeof PublishReviewsUnmatchedSchema>;
+
+export const PublishReviewsResponseSchema = z.object({
+  runId: IdSchema,
+  clientRunId: IdSchema,
+  applied: z.number().int().nonnegative(),
+  unmatched: z.array(PublishReviewsUnmatchedSchema),
+}).strict();
+export type PublishReviewsResponse = z.infer<typeof PublishReviewsResponseSchema>;
 
 export const RunDetailResponseSchema = z.object({
   run: RunSummarySchema,

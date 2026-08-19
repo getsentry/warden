@@ -1,15 +1,17 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 import {
   IngestRunResponseSchema,
+  MemoryRecallRequestSchema,
   MemoryRecallResponseSchema,
+  PublishReviewsRequestSchema,
+  PublishReviewsResponseSchema,
 } from './api.js';
 import type {
   IngestRunResponse,
   MemoryRecallRequest,
   MemoryRecallResponse,
-} from './api.js';
-import {
-  MemoryRecallRequestSchema,
+  PublishReviewsRequest,
+  PublishReviewsResponse,
 } from './api.js';
 import {
   RunEnvelopeV1Schema,
@@ -18,7 +20,7 @@ import {
 import type { RunEnvelopeV1 } from './protocol.js';
 import { sha256Checksum } from './checksum.js';
 
-export type ServiceClientOperation = 'publish_run' | 'recall_memory';
+export type ServiceClientOperation = 'publish_run' | 'publish_reviews' | 'recall_memory';
 export type ServiceClientErrorKind = 'network' | 'timeout' | 'http' | 'invalid_response';
 
 export class ServiceClientError extends Error {
@@ -181,6 +183,29 @@ export function createWardenServiceClient(options: WardenServiceClientOptions) {
       });
       if (response.clientRecallId !== requestBody.clientRecallId) {
         throw new ServiceClientError({ operation: 'recall_memory', kind: 'invalid_response' });
+      }
+      return response;
+    },
+
+    async publishReviews(
+      clientRunId: string,
+      body: PublishReviewsRequest,
+    ): Promise<PublishReviewsResponse> {
+      const runId = z.string().trim().min(1).max(128).parse(clientRunId);
+      const requestBody = PublishReviewsRequestSchema.parse(body);
+      const response = await request({
+        operation: 'publish_reviews',
+        path: `api/v1/runs/${encodeURIComponent(runId)}/reviews`,
+        body: requestBody,
+        responseSchema: PublishReviewsResponseSchema,
+        runId,
+      });
+      if (response.clientRunId !== runId) {
+        throw new ServiceClientError({
+          operation: 'publish_reviews',
+          kind: 'invalid_response',
+          runId,
+        });
       }
       return response;
     },

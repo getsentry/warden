@@ -196,4 +196,65 @@ describe('createWardenServiceClient', () => {
       kind: 'invalid_response',
     });
   });
+
+  it('publishes reviews for an already-ingested run', async () => {
+    const response = {
+      runId: 'stored-run-123',
+      clientRunId: 'run-123',
+      applied: 1,
+      unmatched: [{
+        skill: 'security-review',
+        findingId: 'missing-finding',
+        occurrence: 2,
+        reason: 'finding_not_found',
+      }],
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json(response));
+    const client = createWardenServiceClient({
+      baseUrl: 'https://warden.example.com',
+      token: 'secret-token',
+      fetch: fetchMock,
+    });
+    const body = {
+      reviews: [{
+        skill: 'security-review',
+        findingId: 'finding-1',
+        occurrence: 1,
+        verdict: 'false_positive' as const,
+        comment: 'Test fixture, not a real leak.',
+        updatedAt: '2026-08-19T10:00:00.000Z',
+      }],
+    };
+
+    await expect(client.publishReviews('run-123', body)).resolves.toEqual(response);
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe('https://warden.example.com/api/v1/runs/run-123/reviews');
+    expect(init?.headers).toMatchObject({
+      authorization: 'Bearer secret-token',
+      'cache-control': 'no-store',
+      'idempotency-key': 'run-123',
+    });
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('rejects a reviews response for a different client run', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      runId: 'stored-run-other',
+      clientRunId: 'run-other',
+      applied: 0,
+      unmatched: [],
+    }));
+    const client = createWardenServiceClient({
+      baseUrl: 'https://warden.example.com',
+      token: 'secret-token',
+      fetch: fetchMock,
+    });
+
+    await expect(client.publishReviews('run-123', { reviews: [] })).rejects.toMatchObject({
+      operation: 'publish_reviews',
+      kind: 'invalid_response',
+      runId: 'run-123',
+    });
+  });
 });
