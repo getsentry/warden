@@ -182,6 +182,7 @@ describe('applyVerdict', () => {
     const review = {
       findingId: finding.finding.id,
       skill: finding.skill,
+      occurrence: 1,
       verdict: 'false_positive' as const,
       comment: 'test helper',
       updatedAt: new Date().toISOString(),
@@ -203,6 +204,7 @@ describe('applyVerdict', () => {
     const firstReview = {
       findingId: finding.finding.id,
       skill: finding.skill,
+      occurrence: 1,
       verdict: 'false_positive' as const,
       comment: 'first label',
       updatedAt: new Date().toISOString(),
@@ -213,6 +215,7 @@ describe('applyVerdict', () => {
     const secondReview = {
       findingId: finding.finding.id,
       skill: finding.skill,
+      occurrence: 1,
       verdict: 'true_positive' as const,
       comment: 'relabelled',
       updatedAt: new Date().toISOString(),
@@ -235,6 +238,7 @@ describe('applyVerdict', () => {
     applyVerdict(session, finding.reviewKey, {
       findingId: finding.finding.id,
       skill: finding.skill,
+      occurrence: 1,
       verdict: 'mitigated' as const,
       comment: '',
       updatedAt: new Date().toISOString(),

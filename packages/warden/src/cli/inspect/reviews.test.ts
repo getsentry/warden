@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -41,13 +41,13 @@ describe('loadReviews / saveReviews / upsertReview', () => {
 
   it('returns empty reviews when the sidecar does not exist yet', () => {
     const result = loadReviews(tempDir, 'run-1', '/path/to/log.jsonl');
-    expect(result.schemaVersion).toBe(1);
+    expect(result.schemaVersion).toBe(2);
     expect(result.runId).toBe('run-1');
     expect(result.logPath).toBe('/path/to/log.jsonl');
     expect(result.reviews).toEqual({});
   });
 
-  it('round-trips verdict and comment', () => {
+  it('round-trips verdict, comment, and occurrence (v2)', () => {
     const key = reviewKey('my-skill', 'finding-1', 1);
     let data = loadReviews(tempDir, 'run-1', '/path/to/log.jsonl');
     data = upsertReview(data, key, {
@@ -59,9 +59,11 @@ describe('loadReviews / saveReviews / upsertReview', () => {
     saveReviews(tempDir, data);
 
     const loaded = loadReviews(tempDir, 'run-1', '/path/to/log.jsonl');
+    expect(loaded.schemaVersion).toBe(2);
     expect(loaded.reviews[key]).toMatchObject({
       findingId: 'finding-1',
       skill: 'my-skill',
+      occurrence: 1,
       verdict: 'false_positive',
       comment: 'test helper, not reachable',
     });
@@ -90,6 +92,7 @@ describe('loadReviews / saveReviews / upsertReview', () => {
     const final = loadReviews(tempDir, 'run-1', '/path/to/log.jsonl');
     expect(final.reviews[key]?.verdict).toBe('true_positive');
     expect(final.reviews[key]?.comment).toBe('updated');
+    expect(final.reviews[key]?.occurrence).toBe(1);
   });
 
   it('keeps an empty comment (ISC-13)', () => {
@@ -120,6 +123,75 @@ describe('loadReviews / saveReviews / upsertReview', () => {
     const filePath = reviewFilePath(tempDir, 'run-2');
     expect(existsSync(filePath)).toBe(true);
     const loaded = loadReviews(tempDir, 'run-2', '/log.jsonl');
-    expect(loaded.schemaVersion).toBe(1);
+    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.reviews['skill:id:1']?.occurrence).toBe(1);
+  });
+
+  it('loads a v1 sidecar and parses occurrence from the map key (ISC-11)', () => {
+    const key = reviewKey('security-review', 'abc123', 2);
+    const filePath = reviewFilePath(tempDir, 'run-v1');
+    mkdirSync(join(tempDir, '.warden', 'reviews'), { recursive: true });
+    writeFileSync(
+      filePath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          runId: 'run-v1',
+          logPath: '/old/log.jsonl',
+          updatedAt: '2026-08-18T09:11:07.000Z',
+          reviews: {
+            [key]: {
+              findingId: 'abc123',
+              skill: 'security-review',
+              verdict: 'false_positive',
+              comment: 'legacy sidecar',
+              updatedAt: '2026-08-18T09:11:07.000Z',
+            },
+          },
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf-8',
+    );
+
+    const loaded = loadReviews(tempDir, 'run-v1', '/old/log.jsonl');
+    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.reviews[key]).toMatchObject({
+      findingId: 'abc123',
+      skill: 'security-review',
+      occurrence: 2,
+      verdict: 'false_positive',
+      comment: 'legacy sidecar',
+    });
+  });
+
+  it('throws on an unknown schemaVersion instead of dropping reviews', () => {
+    const filePath = reviewFilePath(tempDir, 'run-future');
+    mkdirSync(join(tempDir, '.warden', 'reviews'), { recursive: true });
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        schemaVersion: 99,
+        runId: 'run-future',
+        logPath: '/log.jsonl',
+        updatedAt: '2026-08-18T09:11:07.000Z',
+        reviews: {
+          'skill:id:1': {
+            findingId: 'id',
+            skill: 'skill',
+            occurrence: 1,
+            verdict: 'true_positive',
+            comment: 'must not be dropped',
+            updatedAt: '2026-08-18T09:11:07.000Z',
+          },
+        },
+      }) + '\n',
+      'utf-8',
+    );
+
+    expect(() => loadReviews(tempDir, 'run-future', '/log.jsonl')).toThrow(
+      /Unsupported review sidecar schemaVersion: 99/,
+    );
   });
 });

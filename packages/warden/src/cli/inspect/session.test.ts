@@ -13,7 +13,7 @@ function makeReport(skill: string, findings: SkillReport['findings']): SkillRepo
 
 function makeReviewFile(reviews: ReviewFile['reviews'] = {}): ReviewFile {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: 'test-run',
     logPath: '/test.jsonl',
     updatedAt: new Date().toISOString(),
@@ -119,6 +119,7 @@ describe('buildInspectSession', () => {
       'skill-a:f1:1': {
         findingId: 'f1',
         skill: 'skill-a',
+        occurrence: 1,
         verdict: 'false_positive',
         comment: '',
         updatedAt: new Date().toISOString(),
@@ -140,6 +141,7 @@ describe('buildInspectSession', () => {
     const reviewEntry = {
       findingId: 'f1',
       skill: 'skill-a',
+      occurrence: 1,
       verdict: 'true_positive' as const,
       comment: 'confirmed',
       updatedAt: new Date().toISOString(),
