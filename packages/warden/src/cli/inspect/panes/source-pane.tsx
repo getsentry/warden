@@ -155,7 +155,7 @@ export function SourcePane({ source, autoFocus, height, width }: SourcePaneProps
         : 1;
 
     content = (
-      <Box flexGrow={1} flexDirection="column" overflow="hidden">
+      <Box flexGrow={1} flexDirection="column" minHeight={0} overflow="hidden">
         {visibleRaw.map((_, idx) => {
           const lineNo = lineBase + safeOffset + idx;
           const marked = isMarkedLine(lineNo, startLine, endLine);
@@ -168,9 +168,19 @@ export function SourcePane({ source, autoFocus, height, width }: SourcePaneProps
             : highlighted;
           const lineNoStr = String(lineNo).padStart(4, ' ');
           return (
-            <Box key={lineNo} height={1} width={innerWidth} flexShrink={0}>
+            <Box
+              key={lineNo}
+              height={1}
+              width={innerWidth}
+              minHeight={1}
+              maxHeight={1}
+              minWidth={innerWidth}
+              maxWidth={innerWidth}
+              flexShrink={0}
+              overflow="hidden"
+            >
               <Text color={marked ? 'yellow' : 'gray'} dimColor={!marked}>
-                {lineNoStr}{marked ? '▶' : '│'}
+                {lineNoStr}{marked ? '▸' : '│'}
               </Text>
               {marked ? (
                 <Text bold wrap="truncate">{displayLine}</Text>
@@ -189,6 +199,10 @@ export function SourcePane({ source, autoFocus, height, width }: SourcePaneProps
       flexDirection="column"
       width={width}
       height={height}
+      minWidth={width}
+      maxWidth={width}
+      minHeight={height}
+      maxHeight={height}
       flexShrink={0}
       borderStyle="round"
       borderColor={borderColor}

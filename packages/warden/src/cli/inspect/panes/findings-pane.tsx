@@ -100,7 +100,7 @@ export function FindingsPane({
   // Unreviewed groups
   for (const group of groups) {
     rows.push(
-      <Box key={`group-header-${group.severity}`} height={1} flexShrink={0} paddingLeft={1}>
+      <Box key={`group-header-${group.severity}`} height={1} minHeight={1} maxHeight={1} flexShrink={0} overflow="hidden" paddingLeft={1}>
         <Text bold color={SEVERITY_COLOR[group.severity]} wrap="truncate">
           {group.severity.toUpperCase()}
         </Text>
@@ -126,7 +126,7 @@ export function FindingsPane({
   // Reviewed group
   if (reviewed.length > 0) {
     rows.push(
-      <Box key="group-header-reviewed" height={1} flexShrink={0} paddingLeft={1} marginTop={1}>
+      <Box key="group-header-reviewed" height={1} minHeight={1} maxHeight={1} flexShrink={0} overflow="hidden" paddingLeft={1} marginTop={1}>
         <Text bold dimColor wrap="truncate">REVIEWED</Text>
       </Box>,
     );
@@ -161,17 +161,21 @@ export function FindingsPane({
       flexDirection="column"
       width={width}
       height={height}
+      minWidth={width}
+      maxWidth={width}
+      minHeight={height}
+      maxHeight={height}
       flexShrink={0}
       borderStyle="round"
       borderColor={borderColor}
       overflow="hidden"
     >
-      <Box height={1} width={Math.max(1, width - 2)} flexShrink={0}>
+      <Box height={1} width={Math.max(1, width - 2)} minHeight={1} maxHeight={1} flexShrink={0} overflow="hidden">
         <Text bold color={isFocused ? 'cyan' : undefined} wrap="truncate">
           {' Findings'}
         </Text>
       </Box>
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      <Box flexDirection="column" flexGrow={1} minHeight={0} overflow="hidden">
         {rows}
       </Box>
     </Box>
@@ -192,10 +196,10 @@ interface FindingRowProps {
 function FindingRow({ item, isSelected, verdict }: FindingRowProps): React.ReactElement {
   const { finding } = item;
   const severityColor = SEVERITY_COLOR[finding.severity] as string;
-  const prefix = isSelected ? '▶ ' : '  ';
+  const prefix = isSelected ? '▸ ' : '  ';
 
   return (
-    <Box height={1} flexShrink={0} paddingLeft={1}>
+    <Box height={1} minHeight={1} maxHeight={1} flexShrink={0} overflow="hidden" paddingLeft={1}>
       <Text color={isSelected ? 'cyan' : undefined} bold={isSelected}>
         {prefix}
       </Text>

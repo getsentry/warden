@@ -193,15 +193,55 @@ export function InspectApp({
     : null;
 
   return (
-    <Box flexDirection="row" width={columns} height={rows} flexShrink={0}>
+    <Box
+      flexDirection="row"
+      width={columns}
+      height={rows}
+      minWidth={columns}
+      minHeight={rows}
+      maxWidth={columns}
+      maxHeight={rows}
+      flexShrink={0}
+      overflow="hidden"
+    >
       {/* Left column: Source */}
-      <Box width={sourceWidth} height={rows} flexDirection="column" flexShrink={0}>
+      <Box
+        width={sourceWidth}
+        height={rows}
+        minWidth={sourceWidth}
+        maxWidth={sourceWidth}
+        minHeight={rows}
+        maxHeight={rows}
+        flexDirection="column"
+        flexShrink={0}
+        overflow="hidden"
+      >
         <SourcePane source={resolvedSource} autoFocus height={rows} width={sourceWidth} />
       </Box>
 
       {/* Right column: Findings (top) + Review (bottom) */}
-      <Box width={rightWidth} height={rows} flexDirection="column" flexShrink={0}>
-        <Box height={findingsHeight} width={rightWidth} flexDirection="column" flexShrink={0}>
+      <Box
+        width={rightWidth}
+        height={rows}
+        minWidth={rightWidth}
+        maxWidth={rightWidth}
+        minHeight={rows}
+        maxHeight={rows}
+        flexDirection="column"
+        flexShrink={0}
+        overflow="hidden"
+      >
+        <Box
+          height={findingsHeight}
+          width={rightWidth}
+          minHeight={findingsHeight}
+          maxHeight={findingsHeight}
+          minWidth={rightWidth}
+          maxWidth={rightWidth}
+          flexDirection="column"
+          flexShrink={0}
+          overflow="hidden"
+        >
           <FindingsPane
             unreviewed={session.unreviewed}
             reviewed={session.reviewed}
@@ -212,7 +252,17 @@ export function InspectApp({
             width={rightWidth}
           />
         </Box>
-        <Box height={reviewHeight} width={rightWidth} flexDirection="column" flexShrink={0}>
+        <Box
+          height={reviewHeight}
+          width={rightWidth}
+          minHeight={reviewHeight}
+          maxHeight={reviewHeight}
+          minWidth={rightWidth}
+          maxWidth={rightWidth}
+          flexDirection="column"
+          flexShrink={0}
+          overflow="hidden"
+        >
           <ReviewPane finding={selectedFinding} height={reviewHeight} width={rightWidth} />
         </Box>
 

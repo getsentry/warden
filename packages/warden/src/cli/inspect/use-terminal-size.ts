@@ -20,22 +20,23 @@ export interface TerminalSize {
 
 function streamSize(stream: NodeJS.WriteStream | undefined): Partial<TerminalSize> {
   if (!stream) return {};
-  const columns = stream.columns && stream.columns > 0 ? stream.columns : undefined;
-  const rows = stream.rows && stream.rows > 0 ? stream.rows : undefined;
-  if (columns && rows) return { columns, rows };
 
+  // Prefer a fresh ioctl. Node caches `.columns` / `.rows` and they go stale
+  // when the host resizes without SIGWINCH (alternate screen, multiplexer).
+  // Writing the live size back keeps Ink's root width on the same numbers.
   if (typeof stream.getWindowSize === 'function') {
     try {
       const [c, r] = stream.getWindowSize();
-      return {
-        columns: columns ?? (c > 0 ? c : undefined),
-        rows: rows ?? (r > 0 ? r : undefined),
-      };
+      if (c > 0) stream.columns = c;
+      if (r > 0) stream.rows = r;
+      if (c > 0 && r > 0) return { columns: c, rows: r };
     } catch {
-      return { columns, rows };
+      // Fall through to the cached properties.
     }
   }
 
+  const columns = stream.columns && stream.columns > 0 ? stream.columns : undefined;
+  const rows = stream.rows && stream.rows > 0 ? stream.rows : undefined;
   return { columns, rows };
 }
 

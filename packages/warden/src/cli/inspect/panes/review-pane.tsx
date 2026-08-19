@@ -60,19 +60,23 @@ export function ReviewPane({ finding, height, width }: ReviewPaneProps): React.R
       flexDirection="column"
       width={width}
       height={height}
+      minWidth={width}
+      maxWidth={width}
+      minHeight={height}
+      maxHeight={height}
       flexShrink={0}
       borderStyle="round"
       borderColor={borderColor}
       overflow="hidden"
     >
-      <Box height={1} width={Math.max(1, width - 2)} flexShrink={0}>
+      <Box height={1} width={Math.max(1, width - 2)} minHeight={1} maxHeight={1} flexShrink={0} overflow="hidden">
         <Text bold color={isFocused ? 'cyan' : undefined} wrap="truncate">
           {' Review'}
         </Text>
       </Box>
-      <Box flexDirection="column" paddingLeft={1} flexGrow={1}>
+      <Box flexDirection="column" paddingLeft={1} flexGrow={1} minHeight={0} overflow="hidden">
         {finding ? (
-          <FindingDetail item={finding} />
+          <FindingDetail item={finding} width={Math.max(1, width - 3)} />
         ) : (
           <Box flexGrow={1} alignItems="center" justifyContent="center">
             <Text dimColor>No finding selected.</Text>
@@ -87,33 +91,33 @@ export function ReviewPane({ finding, height, width }: ReviewPaneProps): React.R
 // Detail sub-component
 // ---------------------------------------------------------------------------
 
-function FindingDetail({ item }: { item: InspectFinding }): React.ReactElement {
+function FindingDetail({ item, width }: { item: InspectFinding; width: number }): React.ReactElement {
   const { finding, skill, review } = item;
 
   return (
     <>
       {/* Header: severity + confidence */}
-      <Box>
-        <Text bold color={SEVERITY_COLOR[finding.severity]}>
+      <Box width={width} minHeight={1} maxHeight={1} overflow="hidden">
+        <Text bold color={SEVERITY_COLOR[finding.severity]} wrap="truncate">
           {finding.severity.toUpperCase()}
         </Text>
         {finding.confidence ? (
-          <Text color={CONFIDENCE_COLOR[finding.confidence]} dimColor>
+          <Text color={CONFIDENCE_COLOR[finding.confidence]} dimColor wrap="truncate">
             {'  '}[{finding.confidence} confidence]
           </Text>
         ) : null}
-        <Text dimColor>{'  '}{skill}</Text>
+        <Text dimColor wrap="truncate">{'  '}{skill}</Text>
       </Box>
 
       {/* Title */}
-      <Box marginTop={1}>
-        <Text bold>{finding.title}</Text>
+      <Box marginTop={1} width={width} overflow="hidden">
+        <Text bold wrap="truncate">{finding.title}</Text>
       </Box>
 
       {/* Location */}
       {finding.location ? (
-        <Box>
-          <Text dimColor>
+        <Box width={width} overflow="hidden">
+          <Text dimColor wrap="truncate">
             {finding.location.path}
             {finding.location.startLine != null
               ? `:${finding.location.startLine}`
@@ -127,14 +131,14 @@ function FindingDetail({ item }: { item: InspectFinding }): React.ReactElement {
       ) : null}
 
       {/* Description */}
-      <Box marginTop={1} flexDirection="column">
+      <Box marginTop={1} flexDirection="column" width={width} overflow="hidden">
         <Text bold dimColor>Description</Text>
         <Text wrap="wrap">{finding.description}</Text>
       </Box>
 
       {/* Verification */}
       {finding.verification ? (
-        <Box marginTop={1} flexDirection="column">
+        <Box marginTop={1} flexDirection="column" width={width} overflow="hidden">
           <Text bold dimColor>Verification</Text>
           <Text wrap="wrap">{finding.verification}</Text>
         </Box>
@@ -142,12 +146,12 @@ function FindingDetail({ item }: { item: InspectFinding }): React.ReactElement {
 
       {/* Current verdict from sidecar */}
       {review ? (
-        <Box marginTop={1} flexDirection="column">
+        <Box marginTop={1} flexDirection="column" width={width} overflow="hidden">
           <Text bold dimColor>Verdict</Text>
-          <Box>
-            <Text color="cyan">{review.verdict.replace('_', ' ')}</Text>
+          <Box width={width} overflow="hidden">
+            <Text color="cyan" wrap="truncate">{review.verdict.replace('_', ' ')}</Text>
             {review.comment ? (
-              <Text dimColor>{'  — '}{review.comment}</Text>
+              <Text dimColor wrap="truncate">{'  — '}{review.comment}</Text>
             ) : null}
           </Box>
         </Box>
