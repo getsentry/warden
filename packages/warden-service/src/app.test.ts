@@ -4,7 +4,7 @@ import type { DatabaseClient, WardenDatabase } from './db/database.js';
 import type { GoogleAuthBridge, GoogleAuthSession } from './google-auth.js';
 
 function readyDatabase(
-  versions: string[] = ['0006_tiny_garia'],
+  versions: string[] = ['0007_finding_reviews'],
 ): WardenDatabase {
   return {
     driver: 'postgres',
@@ -44,9 +44,9 @@ describe('createWardenService', () => {
   it('stays ready when newer backward-compatible migrations are applied', async () => {
     const app = createWardenService({
       database: readyDatabase([
-        '0007_future_migration',
+        '0008_future_migration',
+        '0007_finding_reviews',
         '0006_tiny_garia',
-        '0005_large_mattie_franklin',
       ]),
     });
 
@@ -56,8 +56,8 @@ describe('createWardenService', () => {
     await expect(response.json()).resolves.toEqual({
       status: 'ready',
       database: 'ready',
-      currentVersion: '0007_future_migration',
-      requiredVersion: '0006_tiny_garia',
+      currentVersion: '0008_future_migration',
+      requiredVersion: '0007_finding_reviews',
     });
   });
 
@@ -84,8 +84,8 @@ describe('createWardenService', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ready: true,
-      currentVersion: '0006_tiny_garia',
-      requiredVersion: '0006_tiny_garia',
+      currentVersion: '0007_finding_reviews',
+      requiredVersion: '0007_finding_reviews',
     });
   });
 

@@ -202,6 +202,25 @@ export const findingLocations = pgTable('finding_locations', {
   index('finding_locations_tenant_finding_idx').on(table.tenantId, table.findingId),
 ]);
 
+export const findingReviews = pgTable('finding_reviews', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  runId: uuid('run_id').notNull().references(() => runs.id, { onDelete: 'cascade' }),
+  findingId: uuid('finding_id').notNull().references(() => findings.id, { onDelete: 'cascade' }),
+  verdict: text('verdict').notNull(),
+  comment: text('comment').notNull(),
+  skill: text('skill').notNull(),
+  clientFindingId: text('client_finding_id').notNull(),
+  occurrence: integer('occurrence').notNull(),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('finding_reviews_finding_unique').on(table.findingId),
+  index('finding_reviews_tenant_run_idx').on(table.tenantId, table.runId),
+  check('finding_reviews_verdict_valid', sql`${table.verdict} IN ('false_positive', 'true_positive', 'mitigated')`),
+  check('finding_reviews_comment_length', sql`char_length(${table.comment}) <= 4000`),
+  check('finding_reviews_occurrence_positive', sql`${table.occurrence} >= 1`),
+]);
+
 export const findingObservations = pgTable('finding_observations', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -303,12 +322,16 @@ export const memoryEvidence = pgTable('memory_evidence', {
   memoryId: uuid('memory_id').notNull().references(() => memories.id, { onDelete: 'cascade' }),
   findingId: uuid('finding_id').references(() => findings.id, { onDelete: 'cascade' }),
   observationId: uuid('observation_id').references(() => findingObservations.id, { onDelete: 'cascade' }),
+  reviewId: uuid('review_id').references(() => findingReviews.id, { onDelete: 'cascade' }),
   evidenceKind: text('evidence_kind').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex('memory_evidence_memory_observation_unique')
     .on(table.memoryId, table.observationId)
     .where(sql`${table.observationId} IS NOT NULL`),
+  uniqueIndex('memory_evidence_memory_review_unique')
+    .on(table.memoryId, table.reviewId)
+    .where(sql`${table.reviewId} IS NOT NULL`),
   index('memory_evidence_tenant_idx').on(table.tenantId, table.memoryId),
 ]);
 

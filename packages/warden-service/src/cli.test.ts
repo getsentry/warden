@@ -8,7 +8,7 @@ describe('warden-service CLI', () => {
     let output = '';
     const database = {
       async query() {
-        return { rows: [{ version: '0006_tiny_garia' }], rowCount: 1 };
+        return { rows: [{ version: '0007_finding_reviews' }], rowCount: 1 };
       },
       async close() { closed = true; },
     } as unknown as WardenDatabase;
@@ -18,8 +18,8 @@ describe('warden-service CLI', () => {
     expect(exitCode).toBe(0);
     expect(JSON.parse(output)).toEqual({
       ready: true,
-      currentVersion: '0006_tiny_garia',
-      requiredVersion: '0006_tiny_garia',
+      currentVersion: '0007_finding_reviews',
+      requiredVersion: '0007_finding_reviews',
     });
     expect(closed).toBe(true);
   });
