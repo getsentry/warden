@@ -17,6 +17,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
+import type { PublishReviewsRequest } from '@sentry/warden-service-api';
+import { publishReviewsFailOpen } from '../../service/index.js';
+import type { ResolvedServiceOptions } from '../../service/index.js';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -159,6 +162,46 @@ export function saveReviews(repoRoot: string, data: ReviewFile): void {
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
   renameSync(tmpPath, filePath);
+}
+
+/** Map a loaded sidecar (v2, or v1 already migrated on load) to a reviews POST body. */
+export function reviewsPublishBody(data: ReviewFile): PublishReviewsRequest {
+  return {
+    reviews: Object.values(data.reviews).map((review) => ({
+      skill: review.skill,
+      findingId: review.findingId,
+      occurrence: review.occurrence,
+      verdict: review.verdict,
+      comment: review.comment,
+      updatedAt: review.updatedAt,
+    })),
+  };
+}
+
+/** Fail-open publish of an already-loaded sidecar. No-op without service config. */
+export async function publishSidecarReviews(
+  data: ReviewFile,
+  service: ResolvedServiceOptions | undefined,
+  onWarning?: (message: string) => void,
+): Promise<boolean> {
+  if (!service) return false;
+  const body = reviewsPublishBody(data);
+  if (body.reviews.length === 0) return false;
+  return publishReviewsFailOpen(service, data.runId, body, onWarning);
+}
+
+/**
+ * Write the sidecar first, then fail-open publish. Local save stays authoritative.
+ * No service config skips publish. A later save or replay retries.
+ */
+export async function saveReviewsAndPublish(
+  repoRoot: string,
+  data: ReviewFile,
+  service: ResolvedServiceOptions | undefined,
+  onWarning?: (message: string) => void,
+): Promise<void> {
+  saveReviews(repoRoot, data);
+  await publishSidecarReviews(data, service, onWarning);
 }
 
 /**

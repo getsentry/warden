@@ -12,7 +12,8 @@ import {
 import type { ResolvedServiceOptions } from '../../service/index.js';
 import { parseJsonlReports } from '../output/index.js';
 import type { Reporter } from '../output/index.js';
-import { getRepoName } from '../git.js';
+import { getRepoName, getRepoRoot } from '../git.js';
+import { loadReviews, publishSidecarReviews, reviewFilePath } from '../inspect/reviews.js';
 import type { CLIOptions, ServiceCommandOptions } from '../args.js';
 
 function envelopeFromJsonl(content: string, service: ResolvedServiceOptions, artifactPath: string) {
@@ -102,5 +103,32 @@ export async function runServiceCommand(
   const published = await publishRunFailOpen(service, envelope, (message) => reporter.warning(message));
   if (!published) return 1;
   reporter.success(`Published run ${envelope.clientRunId}.`);
+  await publishReplayReviews(service, envelope.clientRunId, artifactPath, options, reporter);
   return 0;
+}
+
+async function publishReplayReviews(
+  service: ResolvedServiceOptions,
+  clientRunId: string,
+  artifactPath: string,
+  options: CLIOptions,
+  reporter: Reporter,
+): Promise<void> {
+  let repoRoot: string;
+  try {
+    repoRoot = getRepoRoot(options.cwd ?? process.cwd());
+  } catch {
+    repoRoot = process.cwd();
+  }
+  if (!existsSync(reviewFilePath(repoRoot, clientRunId))) return;
+  let reviewFile;
+  try {
+    reviewFile = loadReviews(repoRoot, clientRunId, artifactPath);
+  } catch (err) {
+    reporter.warning(
+      `Could not load review sidecar for run ${clientRunId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return;
+  }
+  await publishSidecarReviews(reviewFile, service, (message) => reporter.warning(message));
 }

@@ -1,4 +1,4 @@
-export { publishRunFailOpen, recallMemoryFailOpen } from './client.js';
+export { publishRunFailOpen, publishReviewsFailOpen, recallMemoryFailOpen } from './client.js';
 export { renderHistoricalMemory } from './memory.js';
 export { buildFindingsServiceRunEnvelope } from './findings.js';
 export { resolveServiceOptions, ServiceDataProfileSchema } from './options.js';

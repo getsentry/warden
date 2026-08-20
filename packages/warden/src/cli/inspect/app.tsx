@@ -30,8 +30,9 @@ import { ReviewPane } from './panes/review-pane.js';
 import { VerdictOverlay, VERDICT_HOTKEYS } from './panes/verdict-modal.js';
 import type { VerdictHotkey } from './panes/verdict-modal.js';
 import type { ReviewVerdict } from './reviews.js';
-import { upsertReview, saveReviews, loadReviews } from './reviews.js';
+import { upsertReview, loadReviews, saveReviewsAndPublish } from './reviews.js';
 import { applyVerdict } from './session.js';
+import type { ResolvedServiceOptions } from '../../service/index.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,6 +45,9 @@ export interface InspectAppProps {
   logPath: string;
   /** Working-directory from the JSONL log, used as a secondary path base. */
   logCwd?: string;
+  /** Absent when no service is configured. Save still writes the local sidecar. */
+  service?: ResolvedServiceOptions;
+  onServiceWarning?: (message: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +77,8 @@ export function InspectApp({
   runId,
   logPath,
   logCwd,
+  service,
+  onServiceWarning,
 }: InspectAppProps): React.ReactElement {
   const { exit } = useApp();
   const { focus } = useFocusManager();
@@ -164,7 +170,7 @@ export function InspectApp({
         verdict: modal.verdict,
         comment,
       });
-      saveReviews(repoRoot, reviewFile);
+      void saveReviewsAndPublish(repoRoot, reviewFile, service, onServiceWarning);
 
       // Build the full review object to apply in-memory.
       const savedReview = reviewFile.reviews[selectedFinding.reviewKey]!;
@@ -177,7 +183,7 @@ export function InspectApp({
 
       setModal(null);
     },
-    [modal, selectedFinding, repoRoot, runId, logPath, session],
+    [modal, selectedFinding, repoRoot, runId, logPath, session, service, onServiceWarning],
   );
 
   const handleModalCancel = useCallback(() => {

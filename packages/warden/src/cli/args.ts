@@ -524,7 +524,14 @@ export function parseCliArgs(argv: string[] = process.argv.slice(2)): ParsedArgs
     }
     return {
       command: 'inspect',
-      options: parseCliOptions(sharedOptions(values, verboseCount)),
+      options: parseCliOptions({
+        ...sharedOptions(values, verboseCount),
+        serviceUrl: typeof values['service-url'] === 'string' ? values['service-url'] : undefined,
+        serviceData: values['service-data'],
+        serviceMemory: serviceMemoryOption(values),
+        serviceTimeoutMs: serviceTimeoutOption(values),
+        noService: values['no-service'] || undefined,
+      }),
       inspectOptions: { target: rest[0] },
     };
   }

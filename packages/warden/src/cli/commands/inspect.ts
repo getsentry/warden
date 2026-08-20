@@ -11,11 +11,14 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { loadWardenConfigFile } from '../../config/loader.js';
 import { getRepoRoot } from '../git.js';
 import { parseJsonlReports } from '../output/index.js';
 import type { Reporter } from '../output/reporter.js';
 import { buildInspectSession } from '../inspect/session.js';
 import { loadReviews } from '../inspect/reviews.js';
+import { resolveServiceOptions } from '../../service/index.js';
+import type { ResolvedServiceOptions } from '../../service/index.js';
 import { resolveLogDir, resolveFileArg } from './runs.js';
 import type { InspectOptions } from '../args.js';
 import type { CLIOptions } from '../args.js';
@@ -35,6 +38,9 @@ export interface InspectContext {
   /** Working-directory from the JSONL log, used as a secondary source base. */
   logCwd?: string;
   session: ReturnType<typeof buildInspectSession>;
+  /** Resolved the same way replay does. Absent when no service is configured. */
+  service?: ResolvedServiceOptions;
+  onServiceWarning?: (message: string) => void;
 }
 
 /**
@@ -62,6 +68,8 @@ const inkRender: RenderInspect = async (ctx) => {
       runId: ctx.runId,
       logPath: ctx.logPath,
       logCwd: ctx.logCwd,
+      service: ctx.service,
+      onServiceWarning: ctx.onServiceWarning,
     }),
     { alternateScreen: true, exitOnCtrlC: true },
   );
@@ -173,8 +181,45 @@ export async function runInspect(
   // 7. Build the session model.
   const session = buildInspectSession(parsed.reports, reviewFile);
 
-  // 8. Hand off to the render hook (Ink TUI by default).
-  return render({ logPath, repoRoot, runId, logCwd: parsed.runMetadata?.cwd, session });
+  // 8. Resolve service options the same way replay does. No config → local sidecar only.
+  const service = resolveInspectService(options, reporter);
+
+  // 9. Hand off to the render hook (Ink TUI by default). Do not publish on startup.
+  return render({
+    logPath,
+    repoRoot,
+    runId,
+    logCwd: parsed.runMetadata?.cwd,
+    session,
+    service,
+    onServiceWarning: (message) => reporter.warning(message),
+  });
+}
+
+function resolveInspectService(
+  options: CLIOptions,
+  reporter: Reporter,
+): ResolvedServiceOptions | undefined {
+  const configPath = resolve(options.cwd ?? process.cwd(), 'warden.toml');
+  let config: ReturnType<typeof loadWardenConfigFile> | undefined;
+  if (existsSync(configPath)) {
+    try {
+      config = loadWardenConfigFile(configPath);
+    } catch {
+      reporter.warning('Could not read warden.toml. Inspecting with the command-line service settings.');
+    }
+  }
+  return resolveServiceOptions({
+    explicit: {
+      url: options.serviceUrl,
+      data: options.serviceData,
+      memory: options.serviceMemory,
+      timeoutMs: options.serviceTimeoutMs,
+      disabled: options.noService,
+    },
+    config: config?.service,
+    onWarning: (message) => reporter.warning(message),
+  });
 }
 
 // ---------------------------------------------------------------------------

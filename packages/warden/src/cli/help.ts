@@ -482,7 +482,15 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
     arguments: [
       { label: 'id', description: 'JSONL path or short run ID (same as warden runs show)' },
     ],
-    options: ['cwd', ...SHARED_COMMAND_OPTIONS],
+    options: [
+      'cwd',
+      'serviceUrl',
+      'serviceData',
+      'serviceMemory',
+      'serviceTimeoutMs',
+      'noService',
+      ...SHARED_COMMAND_OPTIONS,
+    ],
     examples: [
       'warden inspect deadbeef',
       'warden inspect .warden/logs/a1b2c3d4-2026-08-18T09-11-07-000Z.jsonl',

@@ -1,8 +1,9 @@
-import { createWardenServiceClient } from '@sentry/warden-service-api';
-import type { RunEnvelopeV1 } from '@sentry/warden-service-api';
+import { createWardenServiceClient, ServiceClientError } from '@sentry/warden-service-api';
 import type {
   MemoryRecallRequest,
   MemoryRecallResponse,
+  PublishReviewsRequest,
+  RunEnvelopeV1,
 } from '@sentry/warden-service-api';
 import type { ResolvedServiceOptions } from './options.js';
 
@@ -28,6 +29,32 @@ export async function publishRunFailOpen(
     return true;
   } catch {
     onWarning?.(`Warden service could not publish run ${clientRunId}. Local results are unchanged.`);
+    return false;
+  }
+}
+
+/** Publish inspect reviews and isolate every service failure from local sidecar writes. */
+export async function publishReviewsFailOpen(
+  service: ResolvedServiceOptions,
+  clientRunId: string,
+  body: PublishReviewsRequest,
+  onWarning?: (message: string) => void,
+): Promise<boolean> {
+  try {
+    await createWardenServiceClient({
+      baseUrl: service.url,
+      token: service.token,
+      timeoutMs: service.timeoutMs,
+    }).publishReviews(clientRunId, body);
+    return true;
+  } catch (error) {
+    if (error instanceof ServiceClientError && error.kind === 'http' && error.status === 404) {
+      onWarning?.(
+        `Warden service has not published run ${clientRunId} yet. Publish the run first, then save or replay to retry.`,
+      );
+      return false;
+    }
+    onWarning?.(`Warden service could not publish reviews for run ${clientRunId}. Local results are unchanged.`);
     return false;
   }
 }

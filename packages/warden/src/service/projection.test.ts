@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SkillReport } from '../types/index.js';
-import { publishRunFailOpen, recallMemoryFailOpen } from './client.js';
+import { publishReviewsFailOpen, publishRunFailOpen, recallMemoryFailOpen } from './client.js';
 import type { BuildServiceRunProjectionInput } from './projection.js';
 import { buildServiceRunEnvelope } from './projection.js';
 
@@ -259,6 +259,76 @@ describe('publishRunFailOpen', () => {
     expect(warning).toHaveBeenCalledWith(
       'Warden service could not publish run run-oversized. Local results are unchanged.',
     );
+  });
+});
+
+describe('publishReviewsFailOpen', () => {
+  const service = {
+    url: 'https://warden.example.com',
+    token: 'service-secret',
+    data: 'findings' as const,
+    memory: false,
+    timeoutMs: 1_000,
+  };
+  const body = {
+    reviews: [{
+      skill: 'security-review',
+      findingId: 'finding-1',
+      occurrence: 1,
+      verdict: 'false_positive' as const,
+      comment: 'test fixture, not a real leak',
+      updatedAt: '2026-08-19T10:00:00.000Z',
+    }],
+  };
+
+  it('publishes reviews without exposing the token', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({
+      runId: 'stored-run',
+      clientRunId: 'run-123',
+      applied: 1,
+      unmatched: [],
+    }));
+    const warning = vi.fn();
+
+    await expect(publishReviewsFailOpen(service, 'run-123', body, warning)).resolves.toBe(true);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      'https://warden.example.com/api/v1/runs/run-123/reviews',
+    );
+    expect(warning).not.toHaveBeenCalled();
+    fetchMock.mockRestore();
+  });
+
+  it('tells the user to publish the run first on 404 and does not create a run', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'not_found', message: 'unknown run' } }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const warning = vi.fn();
+
+    await expect(publishReviewsFailOpen(service, 'run-missing', body, warning)).resolves.toBe(false);
+    expect(warning).toHaveBeenCalledWith(
+      'Warden service has not published run run-missing yet. Publish the run first, then save or replay to retry.',
+    );
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      'https://warden.example.com/api/v1/runs/run-missing/reviews',
+    ]);
+    fetchMock.mockRestore();
+  });
+
+  it('returns false with a content-safe warning on network failure', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('token=private response body'));
+    const warning = vi.fn();
+
+    await expect(publishReviewsFailOpen({
+      ...service,
+      timeoutMs: 50,
+    }, 'run-123', body, warning)).resolves.toBe(false);
+    expect(warning).toHaveBeenCalledOnce();
+    expect(warning.mock.calls[0]?.[0]).not.toContain('private');
+    expect(warning.mock.calls[0]?.[0]).not.toContain('service-secret');
+    fetchMock.mockRestore();
   });
 });
 

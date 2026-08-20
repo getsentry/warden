@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Reporter } from '../output/index.js';
+import { reviewFilePath } from '../inspect/reviews.js';
 import { buildReplayEnvelope, runServiceCommand } from './service.js';
 
 const serviceOptions = {
@@ -237,5 +238,111 @@ describe('service replay', () => {
     expect(output.warning).toHaveBeenCalledWith(
       'Warden service could not publish run legacy-run-123. Local results are unchanged.',
     );
+  });
+
+  it('publishes the run then pushes an existing sidecar (ISC-9)', async () => {
+    const artifactPath = join(testDir, 'findings.json');
+    writeFileSync(artifactPath, findingsArtifact);
+    mkdirSync(join(testDir, '.warden', 'reviews'), { recursive: true });
+    writeFileSync(
+      reviewFilePath(testDir, 'findings-run-123'),
+      JSON.stringify({
+        schemaVersion: 2,
+        runId: 'findings-run-123',
+        logPath: artifactPath,
+        updatedAt: '2026-08-19T10:00:00.000Z',
+        reviews: {
+          'security:finding-1:1': {
+            findingId: 'finding-1',
+            skill: 'security',
+            occurrence: 1,
+            verdict: 'false_positive',
+            comment: 'test fixture, not a real leak',
+            updatedAt: '2026-08-19T10:00:00.000Z',
+          },
+        },
+      }) + '\n',
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(testDir);
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+    const output = reporter();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/v1/runs/findings-run-123/reviews')) {
+        return Response.json({
+          runId: 'stored-run-123',
+          clientRunId: 'findings-run-123',
+          applied: 1,
+          unmatched: [],
+        });
+      }
+      return Response.json({
+        protocolVersion: 1,
+        runId: 'stored-run-123',
+        checksum: 'a'.repeat(64),
+        created: true,
+      });
+    });
+
+    await expect(runServiceCommand(
+      { subcommand: 'replay', artifact: artifactPath },
+      { serviceUrl: serviceOptions.url } as never,
+      output,
+    )).resolves.toBe(0);
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).toEqual([
+      'https://warden.example.com/api/v1/runs',
+      'https://warden.example.com/api/v1/runs/findings-run-123/reviews',
+    ]);
+    const reviewsBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(reviewsBody).toEqual({
+      reviews: [{
+        skill: 'security',
+        findingId: 'finding-1',
+        occurrence: 1,
+        verdict: 'false_positive',
+        comment: 'test fixture, not a real leak',
+        updatedAt: '2026-08-19T10:00:00.000Z',
+      }],
+    });
+    expect(output.success).toHaveBeenCalledWith('Published run findings-run-123.');
+  });
+
+  it('does not push reviews when run publish fails', async () => {
+    const artifactPath = join(testDir, 'findings.json');
+    writeFileSync(artifactPath, findingsArtifact);
+    mkdirSync(join(testDir, '.warden', 'reviews'), { recursive: true });
+    writeFileSync(
+      reviewFilePath(testDir, 'findings-run-123'),
+      JSON.stringify({
+        schemaVersion: 2,
+        runId: 'findings-run-123',
+        logPath: artifactPath,
+        updatedAt: '2026-08-19T10:00:00.000Z',
+        reviews: {
+          'security:finding-1:1': {
+            findingId: 'finding-1',
+            skill: 'security',
+            occurrence: 1,
+            verdict: 'true_positive',
+            comment: '',
+            updatedAt: '2026-08-19T10:00:00.000Z',
+          },
+        },
+      }) + '\n',
+    );
+    vi.spyOn(process, 'cwd').mockReturnValue(testDir);
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+    const output = reporter();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('private response body'));
+
+    await expect(runServiceCommand(
+      { subcommand: 'replay', artifact: artifactPath },
+      { serviceUrl: serviceOptions.url, serviceTimeoutMs: 500 } as never,
+      output,
+    )).resolves.toBe(1);
+
+    expect(fetchMock.mock.calls.every(([url]) => !String(url).includes('/reviews'))).toBe(true);
   });
 });

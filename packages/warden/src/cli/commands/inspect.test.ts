@@ -69,10 +69,13 @@ describe('runInspect', () => {
     testDir = join(tmpdir(), `warden-inspect-${Date.now()}`);
     logDir = join(testDir, '.warden', 'logs');
     mkdirSync(logDir, { recursive: true });
+    vi.stubEnv('WARDEN_SERVICE_URL', '');
+    vi.stubEnv('WARDEN_SERVICE_TOKEN', 'warden-test-token');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     if (existsSync(testDir)) {
       rmSync(testDir, { recursive: true });
     }
@@ -259,5 +262,105 @@ describe('runInspect', () => {
 
     expect(exitCode).toBe(1);
     expect(errors.some((e) => e.includes('No skill reports'))).toBe(true);
+  });
+
+  it('resolves service options without publishing on inspect startup', async () => {
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+
+    const runId = 'aabbccdd-0000-0000-0000-000000000001';
+    const logPath = writeFixtureLog(
+      logDir,
+      `aabbccdd-2026-08-18T09-11-07-000Z.jsonl`,
+      [
+        {
+          skill: 'security-review',
+          summary: 'Found 1 issue',
+          findings: [
+            {
+              id: 'f1',
+              severity: 'high',
+              title: 'SQL injection',
+              description: 'Unsanitized input used in query',
+            },
+          ],
+        },
+      ],
+      runId,
+    );
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    let capturedCtx: InspectContext | undefined;
+    const fakeRender = async (ctx: InspectContext): Promise<number> => {
+      capturedCtx = ctx;
+      return 0;
+    };
+
+    const reporter = createTTYReporter();
+    vi.spyOn(reporter, 'error').mockImplementation(() => undefined);
+
+    const exitCode = await runInspect(
+      { target: logPath },
+      createDefaultOptions({
+        cwd: testDir,
+        serviceUrl: 'https://warden.example.com',
+        serviceTimeoutMs: 1_000,
+      }),
+      reporter,
+      fakeRender,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(capturedCtx?.service).toMatchObject({
+      url: 'https://warden.example.com',
+      token: 'warden-test-token',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('stays local-only when no service is configured', async () => {
+    vi.spyOn(await import('../git.js'), 'getRepoRoot').mockReturnValue(testDir);
+    vi.stubEnv('WARDEN_SERVICE_URL', '');
+    vi.stubEnv('WARDEN_SERVICE_TOKEN', '');
+
+    const runId = 'aabbccdd-0000-0000-0000-000000000002';
+    const logPath = writeFixtureLog(
+      logDir,
+      `aabbccdd-2026-08-18T09-11-08-000Z.jsonl`,
+      [
+        {
+          skill: 'security-review',
+          summary: 'Found 1 issue',
+          findings: [
+            {
+              id: 'f1',
+              severity: 'high',
+              title: 'SQL injection',
+              description: 'Unsanitized input used in query',
+            },
+          ],
+        },
+      ],
+      runId,
+    );
+
+    let capturedCtx: InspectContext | undefined;
+    const fakeRender = async (ctx: InspectContext): Promise<number> => {
+      capturedCtx = ctx;
+      return 0;
+    };
+
+    const reporter = createTTYReporter();
+    vi.spyOn(reporter, 'error').mockImplementation(() => undefined);
+
+    const exitCode = await runInspect(
+      { target: logPath },
+      createDefaultOptions({ cwd: testDir }),
+      reporter,
+      fakeRender,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(capturedCtx?.service).toBeUndefined();
+    vi.unstubAllEnvs();
   });
 });
