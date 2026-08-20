@@ -29,7 +29,11 @@ export { anthropicUsageToStats, apiUsageToStats } from './pricing.js';
 export type { AnthropicApiUsage } from './pricing.js';
 
 // Re-export prompt building (with legacy alias)
-export { buildHunkSystemPrompt, buildHunkUserPrompt } from './prompt.js';
+export {
+  buildHunkSystemPrompt,
+  buildHunkUserPrompt,
+  selectChangedFilesForPrompt,
+} from './prompt.js';
 export type { PRPromptContext } from './prompt.js';
 // Legacy export for backwards compatibility
 export { buildHunkSystemPrompt as buildSystemPrompt } from './prompt.js';

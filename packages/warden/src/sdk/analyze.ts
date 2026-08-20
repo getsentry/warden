@@ -9,7 +9,12 @@ import { genAiProviderName } from './otel.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
-import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
+import {
+  buildHunkSystemPrompt,
+  buildHunkUserPrompt,
+  selectChangedFilesForPrompt,
+  type PRPromptContext,
+} from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
 import type { ExtractFindingsResult } from './extract.js';
 import { postProcessFindings } from './post-process.js';
@@ -1055,7 +1060,12 @@ async function runSkillAnalysis(
   const isPullRequest = context.pullRequest.number !== 0;
   const prContext: PRPromptContext = {
     repository: context.repository.fullName,
-    changedFiles: isPullRequest ? context.pullRequest.files.map((f) => f.filename) : [],
+    changedFiles: isPullRequest
+      ? selectChangedFilesForPrompt(
+          context.pullRequest.files.map((file) => file.filename),
+          skippedFiles,
+        )
+      : [],
     title: context.pullRequest.title,
     body: context.pullRequest.body,
     maxContextFiles: options.maxContextFiles,

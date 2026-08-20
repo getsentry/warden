@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillDefinition } from '../config/schema.js';
 import { formatHunkForAnalysis, type HunkWithContext } from '../diff/index.js';
+import type { SkippedFile } from '../types/index.js';
 import {
   buildChangedFilesSection,
   buildJsonOutputSection,
@@ -11,6 +12,27 @@ import {
 } from './prompt-sections.js';
 
 export type PRPromptContext = PromptPRContext;
+
+const PROMPT_IRRELEVANT_SKIP_REASONS = new Set<SkippedFile['reason']>([
+  'pattern',
+  'builtin',
+  'ignored:builtin',
+  'ignored:user',
+  'ignored:generated',
+]);
+
+/** Keep reviewable and budget-limited paths while omitting files classified as irrelevant. */
+export function selectChangedFilesForPrompt(
+  changedFiles: string[],
+  skippedFiles: SkippedFile[],
+): string[] {
+  const irrelevantFiles = new Set(
+    skippedFiles
+      .filter((file) => PROMPT_IRRELEVANT_SKIP_REASONS.has(file.reason))
+      .map((file) => file.filename),
+  );
+  return changedFiles.filter((filename) => !irrelevantFiles.has(filename));
+}
 
 /**
  * Builds the system prompt for hunk-based analysis.
