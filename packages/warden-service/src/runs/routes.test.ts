@@ -249,3 +249,247 @@ describe('POST /api/v1/runs', () => {
     expect(text).toContain('internal_error');
   });
 });
+
+const reviewItem = {
+  skill: 'security',
+  findingId: 'finding-1',
+  occurrence: 1,
+  verdict: 'false_positive' as const,
+  comment: 'Test fixture, not a real leak.',
+  updatedAt: '2026-08-19T10:00:00.000Z',
+};
+
+function reviewDatabase(options: {
+  allowlist?: string[] | null;
+  run?: {
+    id: string;
+    clientRunId: string;
+    repositoryId: string;
+    envelopeVersion: number;
+    fullName: string;
+  } | null;
+  findings?: {
+    id: string;
+    client_finding_id: string;
+    reported_id: string | null;
+    skill: string;
+  }[];
+} = {}) {
+  const statements: string[] = [];
+  const reviews = new Map<string, {
+    verdict: string;
+    comment: string;
+    updatedAt: string;
+  }>();
+  const jobs: string[] = [];
+  const run = options.run === undefined
+    ? {
+      id: 'stored-run-id',
+      clientRunId: 'run-123',
+      repositoryId: 'repository-id',
+      envelopeVersion: 1,
+      fullName: 'acme/widgets',
+    }
+    : options.run;
+  const findings = options.findings ?? [{
+    id: 'finding-row-1',
+    client_finding_id: 'finding-1',
+    reported_id: null,
+    skill: 'security',
+  }];
+  const client: DatabaseClient = {
+    async query<TRow extends Record<string, unknown>>(sql: string, values?: readonly unknown[]) {
+      statements.push(sql.replace(/\s+/g, ' ').trim());
+      if (sql.includes('FROM service_tokens')) {
+        return result([{
+          id: 'token-id',
+          tenant_id: 'tenant-id',
+          token_hash: hashServiceToken(token),
+          roles: ['ingest', 'read'],
+          repository_allowlist: options.allowlist ?? ['acme/widgets'],
+        }] as unknown as TRow[]);
+      }
+      if (sql.includes('FROM runs r')) {
+        return result((run ? [{
+          id: run.id,
+          client_run_id: run.clientRunId,
+          repository_id: run.repositoryId,
+          envelope_version: run.envelopeVersion,
+          full_name: run.fullName,
+        }] : []) as unknown as TRow[]);
+      }
+      if (sql.includes('FROM findings f')) {
+        return result(findings as unknown as TRow[]);
+      }
+      if (sql.includes('INSERT INTO finding_reviews')) {
+        const findingId = String(values?.[2]);
+        const incoming = {
+          verdict: String(values?.[3]),
+          comment: String(values?.[4]),
+          updatedAt: String(values?.[8]),
+        };
+        const stored = reviews.get(findingId);
+        if (stored && stored.updatedAt >= incoming.updatedAt) {
+          return result([]);
+        }
+        reviews.set(findingId, incoming);
+        return result([{ id: `review-${reviews.size}` }] as unknown as TRow[]);
+      }
+      if (sql.includes('INSERT INTO jobs')) {
+        jobs.push(String(values?.[5]));
+        return result([]);
+      }
+      return result([]);
+    },
+  };
+  const database = {
+    driver: 'postgres',
+    maxConnections: 3,
+    statementTimeoutMs: 15_000,
+    orm: {},
+    query: client.query,
+    async withClient<T>(operation: (connection: DatabaseClient) => Promise<T>) {
+      return operation(client);
+    },
+    async transaction<T>(operation: (connection: DatabaseClient) => Promise<T>) {
+      return operation(client);
+    },
+    async close() { return undefined; },
+  } as unknown as WardenDatabase;
+  return { database, statements, reviews, jobs };
+}
+
+async function reviewRequest(
+  database: WardenDatabase,
+  body: unknown,
+  clientRunId = 'run-123',
+): Promise<Response> {
+  return createWardenService({ database }).request(`/api/v1/runs/${clientRunId}/reviews`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      'idempotency-key': clientRunId,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+describe('POST /api/v1/runs/:clientRunId/reviews', () => {
+  it('upserts matched reviews, lists unmatched, and enqueues a reviews extract', async () => {
+    const { database, statements, reviews, jobs } = reviewDatabase();
+    const missing = {
+      skill: 'security',
+      findingId: 'missing-finding',
+      occurrence: 1,
+      verdict: 'true_positive' as const,
+      comment: '',
+      updatedAt: '2026-08-19T10:00:00.000Z',
+    };
+    const response = await reviewRequest(database, { reviews: [reviewItem, missing] });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      runId: 'stored-run-id',
+      clientRunId: 'run-123',
+      applied: 1,
+      unmatched: [{
+        skill: 'security',
+        findingId: 'missing-finding',
+        occurrence: 1,
+        reason: 'finding_not_found',
+      }],
+    });
+    expect(reviews.size).toBe(1);
+    expect(reviews.get('finding-row-1')).toMatchObject({
+      verdict: 'false_positive',
+      comment: 'Test fixture, not a real leak.',
+    });
+    expect(jobs).toEqual([
+      `memory_extract:finding_reviews:stored-run-id:${await sha256Checksum([reviewItem])}`,
+    ]);
+    expect(statements.some((statement) => statement.includes('finding_observations'))).toBe(false);
+    expect(statements.some((statement) => statement.includes('envelope_checksum'))).toBe(false);
+    expect(statements.some((statement) => statement.startsWith('INSERT INTO runs'))).toBe(false);
+    expect(statements.some((statement) => statement.startsWith('INSERT INTO findings'))).toBe(false);
+  });
+
+  it('returns 404 for an unknown clientRunId without writing reviews', async () => {
+    const { database, statements, reviews, jobs } = reviewDatabase({ run: null });
+    const response = await reviewRequest(database, { reviews: [reviewItem] }, 'missing-run');
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'not_found' },
+    });
+    expect(reviews.size).toBe(0);
+    expect(jobs).toEqual([]);
+    expect(statements.some((statement) => statement.startsWith('INSERT INTO finding_reviews'))).toBe(false);
+    expect(statements.some((statement) => statement.startsWith('INSERT INTO runs'))).toBe(false);
+  });
+
+  it('overwrites one current review and enqueues a later relabel despite a static HTTP key', async () => {
+    const { database, reviews, jobs } = reviewDatabase();
+    const newer = {
+      ...reviewItem,
+      verdict: 'true_positive' as const,
+      comment: 'Confirmed after a second look.',
+      updatedAt: '2026-08-19T11:00:00.000Z',
+    };
+    const older = {
+      ...reviewItem,
+      verdict: 'mitigated' as const,
+      comment: 'Stale sidecar write.',
+      updatedAt: '2026-08-19T09:00:00.000Z',
+    };
+
+    expect((await reviewRequest(database, { reviews: [reviewItem] })).status).toBe(200);
+    const relabel = await reviewRequest(database, { reviews: [newer] });
+    expect(relabel.status).toBe(200);
+    await expect(relabel.json()).resolves.toMatchObject({ applied: 1, unmatched: [] });
+    const stale = await reviewRequest(database, { reviews: [older] });
+    expect(stale.status).toBe(200);
+    await expect(stale.json()).resolves.toMatchObject({ applied: 0, unmatched: [] });
+
+    expect(reviews.size).toBe(1);
+    expect(reviews.get('finding-row-1')).toEqual({
+      verdict: 'true_positive',
+      comment: 'Confirmed after a second look.',
+      updatedAt: newer.updatedAt,
+    });
+    expect(jobs).toEqual([
+      `memory_extract:finding_reviews:stored-run-id:${await sha256Checksum([reviewItem])}`,
+      `memory_extract:finding_reviews:stored-run-id:${await sha256Checksum([newer])}`,
+    ]);
+  });
+
+  it('matches Action-rewritten ids by reported_id and 1-based occurrence', async () => {
+    const { database, reviews } = reviewDatabase({
+      findings: [{
+        id: 'finding-row-1',
+        client_finding_id: 'internal-1',
+        reported_id: '7MV-5V7',
+        skill: 'security',
+      }, {
+        id: 'finding-row-2',
+        client_finding_id: 'internal-2',
+        reported_id: '7MV-5V7',
+        skill: 'security',
+      }],
+    });
+    const second = {
+      skill: 'security',
+      findingId: '7MV-5V7',
+      occurrence: 2,
+      verdict: 'mitigated' as const,
+      comment: '',
+      updatedAt: '2026-08-19T10:00:00.000Z',
+    };
+    const response = await reviewRequest(database, { reviews: [second] });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ applied: 1, unmatched: [] });
+    expect(reviews.has('finding-row-1')).toBe(false);
+    expect(reviews.get('finding-row-2')).toMatchObject({ verdict: 'mitigated' });
+  });
+});

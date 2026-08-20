@@ -319,7 +319,9 @@ function findingContextQueries(database: WardenReadDatabase) {
     .as('location');
   const observation = database.select({
     outcome: findingObservations.outcome,
-    observed_at: findingObservations.observedAt,
+    // Unique names: node-pg object rows collapse duplicate `observed_at` keys,
+    // then the drizzle proxy maps remaining columns off-by-one.
+    last_observed_at: sql<Date | string | null>`${findingObservations.observedAt}`.as('last_observed_at'),
   })
     .from(findingObservations)
     .where(and(
@@ -331,7 +333,7 @@ function findingContextQueries(database: WardenReadDatabase) {
     .as('observation');
   // Earliest observation is first seen for this finding row (per-run identity today).
   const firstObservation = database.select({
-    observed_at: findingObservations.observedAt,
+    first_observed_at: sql<Date | string | null>`${findingObservations.observedAt}`.as('first_observed_at'),
   })
     .from(findingObservations)
     .where(and(
@@ -394,8 +396,8 @@ export async function listFindings(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
-    first_observed_at: firstObservation.observed_at,
-    observed_at: observation.observed_at,
+    first_observed_at: firstObservation.first_observed_at,
+    observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,
   })
     .from(runs)
@@ -451,8 +453,8 @@ export async function getFindingDetail(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
-    first_observed_at: firstObservation.observed_at,
-    observed_at: observation.observed_at,
+    first_observed_at: firstObservation.first_observed_at,
+    observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,
   })
     .from(findings)

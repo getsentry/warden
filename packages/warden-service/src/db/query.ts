@@ -15,8 +15,9 @@ export function getReadDatabase(database: WardenDatabase): WardenReadDatabase {
   const readDatabase = drizzle(async (text, params, method) => {
     const result = await database.query(text, params);
     return {
-      // Postgres constructs row objects in result-column order. The proxy
-      // driver needs arrays so Drizzle can map them back to typed selections.
+      // Postgres constructs row objects in result-column order. Duplicate
+      // column names collapse in those objects, so selected aliases must be
+      // unique. The proxy driver needs arrays so Drizzle can map them back.
       rows: method === 'all'
         ? result.rows.map((row) => Object.values(row))
         : result.rows,

@@ -173,6 +173,10 @@ describe('history store', () => {
     expect(captured?.sql).toContain('"runs"."tenant_id" =');
     expect(captured?.sql).toContain('POSITION(');
     expect(captured?.sql).toContain('left join lateral');
+    expect(captured?.sql).toContain('"observed_at" as "first_observed_at"');
+    expect(captured?.sql).toContain('"observed_at" as "last_observed_at"');
+    expect(captured?.sql).not.toMatch(/"first_observation"\."observed_at"/);
+    expect(captured?.sql).not.toMatch(/"observation"\."observed_at"/);
     expect(captured?.values).toEqual(expect.arrayContaining([
       context.tenantId,
       'security-review',
@@ -180,6 +184,49 @@ describe('history store', () => {
       'posted',
       'authorization',
     ]));
+  });
+
+  it('maps findings when observations are missing without treating a path as a timestamp', async () => {
+    const database = databaseFor(() => ({
+      rows: [{
+        id: '00000000-0000-0000-0000-000000000020',
+        client_finding_id: 'B7V-ATF',
+        reported_id: null,
+        run_id: '00000000-0000-0000-0000-000000000021',
+        client_run_id: 'run-21',
+        provider: 'local',
+        owner: 'prateek147',
+        name: 'DVIA-v2',
+        full_name: 'prateek147/DVIA-v2',
+        skill: 'security-review',
+        severity: 'high',
+        confidence: 'high',
+        title: 'User password persisted in unencrypted Core Data',
+        description: 'The User entity stores a plaintext password in Core Data.',
+        path: 'DVIA-v2/Model/CoreDataClasses/User+CoreDataProperties.swift',
+        start_line: 21,
+        end_line: null,
+        observation_outcome: null,
+        first_observed_at: null,
+        observed_at: null,
+        completed_at: '2026-08-19T08:38:43.933Z',
+      }],
+      rowCount: 1,
+    }));
+
+    await expect(listFindings(database, context, {})).resolves.toMatchObject({
+      items: [{
+        displayId: 'B7V-ATF',
+        outcome: null,
+        firstObservedAt: null,
+        lastObservedAt: null,
+        completedAt: '2026-08-19T08:38:43.933Z',
+        location: {
+          path: 'DVIA-v2/Model/CoreDataClasses/User+CoreDataProperties.swift',
+          startLine: 21,
+        },
+      }],
+    });
   });
 
   it('returns source and verification context with the latest finding observation', async () => {

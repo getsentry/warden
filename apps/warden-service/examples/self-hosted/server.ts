@@ -45,8 +45,11 @@ const service = createWardenService({
         },
       }),
 });
-const port = Number(process.env['PORT'] ?? 3000);
-const server = serve({ fetch: service.fetch, port });
+const port = Number(process.env['PORT'] ?? 8787);
+const hostname = process.env['HOST'] ?? '127.0.0.1';
+const server = serve({ fetch: service.fetch, port, hostname }, (info) => {
+  process.stderr.write(`Warden service listening on http://${info.address}:${info.port}\n`);
+});
 
 async function stop(): Promise<void> {
   server.close();
